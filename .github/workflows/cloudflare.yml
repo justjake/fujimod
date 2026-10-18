@@ -31,7 +31,7 @@ jobs:
           lfs: true
       - name: Fetch model LFS objects
         run: git lfs pull
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '26.12.0'
           cache: npm
