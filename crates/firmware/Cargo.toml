@@ -8,5 +8,5 @@ publish.workspace = true
 description = "Body-independent Fujifilm update-file decoding"
 
 [dependencies]
-sha2 = "0.10"
+sha2 = "0.11"
 thiserror.workspace = true
