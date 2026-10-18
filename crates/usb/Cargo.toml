@@ -12,7 +12,7 @@ testing = []
 
 [dependencies]
 fujimod-usb-proxy = { path = "../usb-proxy" }
-base64 = "0.22"
+base64 = "0.23"
 fujimod-defs.workspace = true
 thiserror.workspace = true
 futures-lite.workspace = true

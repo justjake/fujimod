@@ -222,7 +222,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31b698c5f9a010f6573133b09e0de5408834d0c82f8d7475a89fc1867a71cd90"
 dependencies = [
  "axum-core",
- "base64",
+ "base64 0.22.1",
  "bytes",
  "form_urlencoded",
  "futures-util",
@@ -281,6 +281,12 @@ name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
+
+[[package]]
+name = "base64"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
 name = "base64ct"
@@ -875,6 +881,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-firmware"
+version = "0.1.0"
+dependencies = [
+ "sha2",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "fujimod-javascript"
 version = "0.1.0"
 dependencies = [
@@ -887,14 +901,6 @@ dependencies = [
  "nusb",
  "wasm-bindgen",
  "wasm-bindgen-futures",
-]
-
-[[package]]
-name = "fujimod-firmware"
-version = "0.1.0"
-dependencies = [
- "sha2",
- "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -917,7 +923,7 @@ dependencies = [
 name = "fujimod-usb"
 version = "0.1.0"
 dependencies = [
- "base64",
+ "base64 0.23.1",
  "fujimod-defs",
  "fujimod-usb-proxy",
  "futures-lite",
@@ -939,7 +945,7 @@ dependencies = [
  "async-net",
  "async-tungstenite",
  "axum",
- "base64",
+ "base64 0.23.1",
  "futures-lite",
  "futures-timer",
  "futures-util",
