@@ -55,7 +55,7 @@ jobs:
         env:
           FUJIMOD_SIGNAL_URL: wss://share.fujimod.com/usb-proxy/signal
       - name: Deploy static site to Cloudflare Workers
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: 1edee8e500839ee3dbf7338f44503075
