@@ -103,5 +103,5 @@ dev = [
   "pytest-asyncio>=1",
   "pytest-cov>=7",
   "ruff>=0.15",
-  "ty>=0.0.1",
+  "ty>=0.0.90",
 ]
