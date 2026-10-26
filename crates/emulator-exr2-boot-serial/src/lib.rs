@@ -499,7 +499,8 @@ impl BootSerialBlocks {
             core: Arc::new(Mutex::new(SerialState::new(options, wiring)?)),
         })
     }
-    pub(crate) fn devices(self) -> Vec<(Option<Mapping>, Box<dyn Device>)> {
+    /// Consumes the blocks into mapped register devices and an unmapped event coordinator.
+    pub fn devices(self) -> Vec<(Option<Mapping>, Box<dyn Device>)> {
         [
             (
                 Some(Mapping {
