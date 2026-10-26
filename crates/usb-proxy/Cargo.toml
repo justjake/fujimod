@@ -36,7 +36,7 @@ aes-gcm = "0.10"
 rand = "0.9"
 if-addrs = "0.15"
 stunclient = "0.4"
-async-tungstenite = { version = "0.34", features = ["smol-runtime", "smol-native-tls"] }
+async-tungstenite = { version = "0.35", features = ["smol-runtime", "smol-native-tls"] }
 axum = { version = "0.8", features = ["ws"], optional = true }
 tokio = { version = "1", features = [
   "macros",
