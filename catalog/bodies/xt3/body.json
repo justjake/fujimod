@@ -1,0 +1,116 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "xt3",
+  "soc_id": "xp4",
+  "dram_bytes": 536870912,
+  "nand": null,
+  "sensor": null,
+  "lens": null,
+  "display": null,
+  "microcontroller": null,
+  "power_control": null,
+  "card_slot": null,
+  "control_bus_chips": [],
+  "connections": [
+    {
+      "id": "flash-storage",
+      "kind": "control",
+      "signals": []
+    },
+    {
+      "id": "xt3-power-registers-bus",
+      "kind": "power-control",
+      "signals": []
+    },
+    {
+      "id": "xt3-power-registers-select",
+      "kind": "power-control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 5,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "thermal-0",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 0,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "thermal-8",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 8,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "thermal-10",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 10,
+          "threshold": null
+        }
+      ]
+    }
+  ],
+  "parts": [
+    "xt3-serial-nor",
+    "xt3-power-registers",
+    "xt3-image-sensor"
+  ],
+  "wiring": [
+    {
+      "source_id": "serial-flash",
+      "target_id": "xt3-serial-nor",
+      "signal": "storage"
+    },
+    {
+      "source_id": "spi1",
+      "target_id": "xt3-power-registers",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "xt3-image-sensor",
+      "target_id": "imaging-receiver",
+      "signal": "image_data"
+    }
+  ],
+  "hardware": {
+    "serial_attachments": [
+      {
+        "part_id": "xt3-power-registers",
+        "controller_id": "spi1",
+        "connection_id": "xt3-power-registers-bus",
+        "select_connection_id": "xt3-power-registers-select"
+      }
+    ],
+    "gpio_feedback": [],
+    "keypad_samples": {},
+    "thermal_connection_ids": [
+      "thermal-0",
+      "thermal-8",
+      "thermal-10"
+    ],
+    "profiles": {
+      "xt3-discovery": {
+        "dram_basis": "Declared catalog input."
+      }
+    }
+  }
+}

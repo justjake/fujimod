@@ -1,0 +1,631 @@
+{
+  "$defs": {
+    "RehearsalCallbackTable": {
+      "additionalProperties": false,
+      "description": "Declared callback table facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "evidence": {
+          "description": "Declared evidence.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "hex": {
+          "description": "Declared hex.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "address",
+        "evidence",
+        "hex"
+      ],
+      "type": "object"
+    },
+    "RehearsalCapture": {
+      "additionalProperties": false,
+      "description": "Declared capture facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "method": {
+          "description": "Declared method.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "method",
+        "name",
+        "size"
+      ],
+      "type": "object"
+    },
+    "RehearsalCodeChecks": {
+      "additionalProperties": false,
+      "description": "Declared code checks facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Declared sha256.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "name",
+        "sha256",
+        "size"
+      ],
+      "type": "object"
+    },
+    "RehearsalConfiguration": {
+      "additionalProperties": false,
+      "description": "Declared configuration facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cached_address": {
+          "description": "Declared cached address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_read": {
+          "description": "Declared max read.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ram_reply_basis": {
+          "description": "Declared ram reply basis.",
+          "type": "string"
+        },
+        "ram_reply_bytes": {
+          "description": "Declared ram reply bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "cached_address",
+        "max_read",
+        "ram_reply_basis",
+        "ram_reply_bytes",
+        "size"
+      ],
+      "type": "object"
+    },
+    "RehearsalGuard": {
+      "additionalProperties": false,
+      "description": "Declared guard facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "callback_table": {
+          "$ref": "#/$defs/RehearsalCallbackTable",
+          "description": "Declared callback table."
+        },
+        "code_checks": {
+          "description": "Declared code checks.",
+          "items": {
+            "$ref": "#/$defs/RehearsalCodeChecks"
+          },
+          "type": "array"
+        },
+        "expected_stock_word": {
+          "description": "Declared expected stock word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "description": "Declared kind.",
+          "type": "string"
+        },
+        "manifest": {
+          "$ref": "#/$defs/RehearsalManifest",
+          "description": "Declared manifest."
+        },
+        "output_state": {
+          "$ref": "#/$defs/RehearsalOutputState",
+          "description": "Declared output state."
+        },
+        "payloads": {
+          "description": "Declared payloads.",
+          "items": {
+            "$ref": "#/$defs/RehearsalPayloads"
+          },
+          "type": "array"
+        },
+        "pointer_context": {
+          "$ref": "#/$defs/RehearsalPointerContext",
+          "description": "Declared pointer context."
+        },
+        "quiet": {
+          "$ref": "#/$defs/RehearsalQuiet",
+          "description": "Declared quiet."
+        },
+        "region_precondition": {
+          "$ref": "#/$defs/RehearsalRegionPrecondition",
+          "description": "Declared region precondition."
+        },
+        "state_words": {
+          "description": "Declared state words.",
+          "items": {
+            "$ref": "#/$defs/RehearsalStateWords"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "address",
+        "callback_table",
+        "code_checks",
+        "expected_stock_word",
+        "kind",
+        "manifest",
+        "output_state",
+        "payloads",
+        "pointer_context",
+        "quiet",
+        "region_precondition",
+        "state_words"
+      ],
+      "type": "object"
+    },
+    "RehearsalIdentity": {
+      "additionalProperties": false,
+      "description": "Declared identity facts.",
+      "properties": {
+        "internal_versions": {
+          "description": "Declared internal versions.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "products": {
+          "description": "Declared products.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sections": {
+          "description": "Declared sections.",
+          "items": {
+            "$ref": "#/$defs/RehearsalCodeChecks"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "internal_versions",
+        "products",
+        "sections"
+      ],
+      "type": "object"
+    },
+    "RehearsalManifest": {
+      "additionalProperties": false,
+      "description": "Declared manifest facts.",
+      "properties": {
+        "path": {
+          "description": "Declared path.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Declared sha256.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "RehearsalOutputState": {
+      "additionalProperties": false,
+      "description": "Declared output state facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "evidence": {
+          "description": "Declared evidence.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "evidence",
+        "size"
+      ],
+      "type": "object"
+    },
+    "RehearsalPayloads": {
+      "additionalProperties": false,
+      "description": "Declared payloads facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "evidence": {
+          "description": "Declared evidence.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "limit": {
+          "description": "Declared limit.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "evidence",
+        "name",
+        "size"
+      ],
+      "type": "object"
+    },
+    "RehearsalPointerContext": {
+      "additionalProperties": false,
+      "description": "Declared pointer context facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "evidence": {
+          "description": "Declared evidence.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "hex": {
+          "description": "Declared hex.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Declared sha256.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "address",
+        "evidence",
+        "hex",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "RehearsalQuiet": {
+      "additionalProperties": false,
+      "description": "Declared quiet facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "evidence": {
+          "description": "Declared evidence.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Declared value.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "evidence",
+        "size",
+        "value"
+      ],
+      "type": "object"
+    },
+    "RehearsalRegionPrecondition": {
+      "additionalProperties": false,
+      "description": "Declared region precondition facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "evidence": {
+          "description": "Declared evidence.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "description": "Declared kind.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "basis",
+        "evidence",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "RehearsalReview": {
+      "additionalProperties": false,
+      "description": "Declared review facts.",
+      "properties": {
+        "evidence": {
+          "description": "Declared evidence.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "scope": {
+          "description": "Declared scope.",
+          "type": "string"
+        },
+        "status": {
+          "description": "Declared status.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence",
+        "scope",
+        "status"
+      ],
+      "type": "object"
+    },
+    "RehearsalStateWords": {
+      "additionalProperties": false,
+      "description": "Declared state words facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "evidence": {
+          "description": "Declared evidence.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "limit": {
+          "description": "Declared limit.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Declared value.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "evidence",
+        "name",
+        "value"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/emulator-rehearsal.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Declared rehearsal facts.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/emulator-rehearsal.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "bulk": {
+      "description": "Declared bulk.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "camera_operations_authorized": {
+      "description": "Declared camera operations authorized.",
+      "type": "boolean"
+    },
+    "capture": {
+      "description": "Declared capture.",
+      "items": {
+        "$ref": "#/$defs/RehearsalCapture"
+      },
+      "type": "array"
+    },
+    "configuration": {
+      "$ref": "#/$defs/RehearsalConfiguration",
+      "description": "Declared configuration."
+    },
+    "execution_scope": {
+      "description": "Declared execution scope.",
+      "type": "string"
+    },
+    "firmware_id": {
+      "description": "Declared firmware id.",
+      "type": "string"
+    },
+    "firmware_sha256": {
+      "description": "Declared firmware sha256.",
+      "type": "string"
+    },
+    "guard": {
+      "$ref": "#/$defs/RehearsalGuard",
+      "description": "Declared guard."
+    },
+    "identity": {
+      "$ref": "#/$defs/RehearsalIdentity",
+      "description": "Declared identity."
+    },
+    "limits": {
+      "description": "Declared limits.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "manual_exit_steps": {
+      "description": "Declared manual exit steps.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "ram_alias": {
+      "description": "Declared ram alias.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "ready_for_hardware": {
+      "description": "Declared ready for hardware.",
+      "type": "boolean"
+    },
+    "review": {
+      "$ref": "#/$defs/RehearsalReview",
+      "description": "Declared review."
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema",
+    "$schema",
+    "camera_operations_authorized",
+    "capture",
+    "configuration",
+    "execution_scope",
+    "firmware_id",
+    "firmware_sha256",
+    "guard",
+    "identity",
+    "limits",
+    "manual_exit_steps",
+    "ram_alias",
+    "ready_for_hardware",
+    "review"
+  ],
+  "title": "Rehearsal",
+  "type": "object"
+}

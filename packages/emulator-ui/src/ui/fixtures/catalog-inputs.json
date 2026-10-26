@@ -1,0 +1,2026 @@
+{
+ "x100s-121": [
+  {
+   "id": "shutter_button",
+   "label": "Shutter button",
+   "kind": "shutter",
+   "supported": true,
+   "stages": [
+    {
+     "id": "half",
+     "label": "half"
+    },
+    {
+     "id": "full",
+     "label": "full"
+    }
+   ]
+  },
+  {
+   "id": "fn_button",
+   "label": "Fn (Function) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "playback_button",
+   "label": "a (playback) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "ae_button",
+   "label": "AE (autoexposure) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "command_control.decrease",
+   "label": "Command control / decrease",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "command_control.increase",
+   "label": "Command control / increase",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "command_control.press",
+   "label": "Command control / press",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "command_dial.decrease",
+   "label": "Command dial / decrease",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "command_dial.increase",
+   "label": "Command dial / increase",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "command_dial.press",
+   "label": "Command dial / press",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "af_ae_lock_button",
+   "label": "AFL/AEL (focus lock/exposure) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "disp_back_button",
+   "label": "DISP (display)/BACK button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "menu_ok_button",
+   "label": "MENU/OK button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "exposure_compensation_dial",
+   "label": "Exposure compensation dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "shutter_speed_dial",
+   "label": "Shutter speed dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "focus_mode_selector",
+   "label": "Focus mode selector",
+   "kind": "switch",
+   "supported": false,
+   "unavailable": "Declared position has no electrical realization: MF"
+  },
+  {
+   "id": "aperture_ring",
+   "label": "Aperture ring",
+   "kind": "ring",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "focus_ring",
+   "label": "Focus ring",
+   "kind": "ring",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: F_RING+"
+  },
+  {
+   "id": "front_ring",
+   "label": "Front ring",
+   "kind": "ring",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "viewfinder_selector",
+   "label": "Viewfinder selector",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "power_switch",
+   "label": "ON/OFF switch",
+   "kind": "switch",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: POWER"
+  },
+  {
+   "id": "diopter_adjustment_control",
+   "label": "Diopter adjustment control",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "drive_button",
+   "label": "DRIVE button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "view_mode_button",
+   "label": "VIEW MODE button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: EVF_LCD"
+  },
+  {
+   "id": "quick_menu_button",
+   "label": "Q (quick menu) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "battery_chamber_cover_latch",
+   "label": "Battery-chamber cover latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "battery_latch",
+   "label": "Battery latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  }
+ ],
+ "x20-103": [
+  {
+   "id": "shutter_button",
+   "label": "Shutter button",
+   "kind": "shutter",
+   "supported": true,
+   "stages": [
+    {
+     "id": "half",
+     "label": "half"
+    },
+    {
+     "id": "full",
+     "label": "full"
+    }
+   ]
+  },
+  {
+   "id": "fn_button",
+   "label": "Fn (Function) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "playback_button",
+   "label": "a (playback) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "ae_button",
+   "label": "AE (autoexposure) button / k (playback zoom in) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "white_balance_button",
+   "label": "WB (white balance) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "af_ae_lock_button",
+   "label": "AEL/AFL (autoexposure/autofocus lock) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "disp_back_button",
+   "label": "DISP (display)/BACK button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.down",
+   "label": "Selector button / down",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.left",
+   "label": "Selector button / left",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.press",
+   "label": "Selector button / press",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.right",
+   "label": "Selector button / right",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.up",
+   "label": "Selector button / up",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "exposure_compensation_dial",
+   "label": "Exposure compensation dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "mode_dial",
+   "label": "Mode dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: SR"
+  },
+  {
+   "id": "focus_mode_selector",
+   "label": "Focus mode selector",
+   "kind": "switch",
+   "supported": false,
+   "unavailable": "Declared position has no electrical realization: M"
+  },
+  {
+   "id": "zoom_ring",
+   "label": "Zoom ring (ON/OFF switch)",
+   "kind": "ring",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: TELE"
+  },
+  {
+   "id": "main_command_dial",
+   "label": "Main-command dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "sub_command_dial",
+   "label": "Sub-command dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "diopter_adjustment_control",
+   "label": "Diopter adjustment control",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "flash_pop_up_switch",
+   "label": "N (flash pop-up) switch",
+   "kind": "switch",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "continuous_shooting_button",
+   "label": "I (continuous shooting) button / n (playback zoom out) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "quick_menu_button",
+   "label": "Q button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "battery_chamber_cover_latch",
+   "label": "Battery-chamber cover latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "battery_latch",
+   "label": "Battery latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  }
+ ],
+ "x70-110": [
+  {
+   "id": "exposure_compensation_dial",
+   "label": "Exposure compensation dial",
+   "kind": "dial",
+   "supported": true,
+   "initial": "0",
+   "positions": [
+    {
+     "id": "+3",
+     "label": "+3"
+    },
+    {
+     "id": "8/3",
+     "label": "8/3"
+    },
+    {
+     "id": "7/3",
+     "label": "7/3"
+    },
+    {
+     "id": "+2",
+     "label": "+2"
+    },
+    {
+     "id": "5/3",
+     "label": "5/3"
+    },
+    {
+     "id": "4/3",
+     "label": "4/3"
+    },
+    {
+     "id": "+1",
+     "label": "+1"
+    },
+    {
+     "id": "2/3",
+     "label": "2/3"
+    },
+    {
+     "id": "1/3",
+     "label": "1/3"
+    },
+    {
+     "id": "0",
+     "label": "0"
+    },
+    {
+     "id": "-1/3",
+     "label": "-1/3"
+    },
+    {
+     "id": "-2/3",
+     "label": "-2/3"
+    },
+    {
+     "id": "−1",
+     "label": "−1"
+    },
+    {
+     "id": "-4/3",
+     "label": "-4/3"
+    },
+    {
+     "id": "-5/3",
+     "label": "-5/3"
+    },
+    {
+     "id": "−2",
+     "label": "−2"
+    },
+    {
+     "id": "-7/3",
+     "label": "-7/3"
+    },
+    {
+     "id": "-8/3",
+     "label": "-8/3"
+    },
+    {
+     "id": "−3",
+     "label": "−3"
+    }
+   ]
+  },
+  {
+   "id": "drive_button",
+   "label": "DRIVE button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "auto_mode_selector_lever",
+   "label": "Auto mode selector lever",
+   "kind": "lever",
+   "supported": true,
+   "initial": "manual",
+   "positions": [
+    {
+     "id": "manual",
+     "label": "manual"
+    },
+    {
+     "id": "AUTO",
+     "label": "AUTO"
+    }
+   ]
+  },
+  {
+   "id": "shutter_speed_dial",
+   "label": "Shutter speed dial",
+   "kind": "dial",
+   "supported": true,
+   "initial": "A",
+   "positions": [
+    {
+     "id": "A",
+     "label": "A"
+    },
+    {
+     "id": "4000",
+     "label": "4000"
+    },
+    {
+     "id": "2000",
+     "label": "2000"
+    },
+    {
+     "id": "1000",
+     "label": "1000"
+    },
+    {
+     "id": "500",
+     "label": "500"
+    },
+    {
+     "id": "250",
+     "label": "250"
+    },
+    {
+     "id": "125",
+     "label": "125"
+    },
+    {
+     "id": "60",
+     "label": "60"
+    },
+    {
+     "id": "30",
+     "label": "30"
+    },
+    {
+     "id": "15",
+     "label": "15"
+    },
+    {
+     "id": "8",
+     "label": "8"
+    },
+    {
+     "id": "4",
+     "label": "4"
+    },
+    {
+     "id": "2",
+     "label": "2"
+    },
+    {
+     "id": "1",
+     "label": "1"
+    },
+    {
+     "id": "T",
+     "label": "T"
+    },
+    {
+     "id": "B",
+     "label": "B"
+    }
+   ]
+  },
+  {
+   "id": "control_ring_options_button",
+   "label": "Control ring options button / Function button (Fn7)",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "focus_mode_selector",
+   "label": "Focus mode selector",
+   "kind": "switch",
+   "supported": true,
+   "initial": "S",
+   "positions": [
+    {
+     "id": "S",
+     "label": "S"
+    },
+    {
+     "id": "C",
+     "label": "C"
+    },
+    {
+     "id": "M",
+     "label": "M"
+    }
+   ]
+  },
+  {
+   "id": "aperture_ring",
+   "label": "Aperture ring",
+   "kind": "ring",
+   "supported": true,
+   "initial": "A",
+   "positions": [
+    {
+     "id": "A",
+     "label": "A"
+    },
+    {
+     "id": "2.8",
+     "label": "2.8"
+    },
+    {
+     "id": "F3.2",
+     "label": "F3.2"
+    },
+    {
+     "id": "F3.6",
+     "label": "F3.6"
+    },
+    {
+     "id": "4",
+     "label": "4"
+    },
+    {
+     "id": "F4.5",
+     "label": "F4.5"
+    },
+    {
+     "id": "F5",
+     "label": "F5"
+    },
+    {
+     "id": "5.6",
+     "label": "5.6"
+    },
+    {
+     "id": "F6.4",
+     "label": "F6.4"
+    },
+    {
+     "id": "F7.1",
+     "label": "F7.1"
+    },
+    {
+     "id": "8",
+     "label": "8"
+    },
+    {
+     "id": "F9",
+     "label": "F9"
+    },
+    {
+     "id": "F10",
+     "label": "F10"
+    },
+    {
+     "id": "11",
+     "label": "11"
+    },
+    {
+     "id": "F13",
+     "label": "F13"
+    },
+    {
+     "id": "F14",
+     "label": "F14"
+    },
+    {
+     "id": "16",
+     "label": "16"
+    }
+   ]
+  },
+  {
+   "id": "shutter_button",
+   "label": "Shutter button",
+   "kind": "shutter",
+   "supported": true,
+   "stages": [
+    {
+     "id": "half",
+     "label": "half"
+    },
+    {
+     "id": "full",
+     "label": "full"
+    }
+   ]
+  },
+  {
+   "id": "movie_record_button",
+   "label": "Movie-record button / Function button (Fn1)",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "delete_button",
+   "label": "b (delete) button / Function button (Fn8)",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "playback_button",
+   "label": "a (playback) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "command_control.decrease",
+   "label": "Command control / decrease",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "command_control.increase",
+   "label": "Command control / increase",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "command_control.press",
+   "label": "Command control / press",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "af_ae_lock_button",
+   "label": "AF-L/AE-L (autofocus/autoexposure lock) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "disp_back_button",
+   "label": "DISP (display)/BACK button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "menu_ok_button",
+   "label": "MENU/OK button / X (control lock) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "quick_menu_button",
+   "label": "Q (quick menu) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.down",
+   "label": "Selector/function buttons / down",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.left",
+   "label": "Selector/function buttons / left",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.right",
+   "label": "Selector/function buttons / right",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.up",
+   "label": "Selector/function buttons / up",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "wifi_button",
+   "label": "Wi-Fi button / Function button (Fn6)",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "lcd_tilt_switch",
+   "label": "LCD tilt switch",
+   "kind": "switch",
+   "supported": true,
+   "initial": "normal",
+   "positions": [
+    {
+     "id": "normal",
+     "label": "normal"
+    },
+    {
+     "id": "selfie",
+     "label": "selfie"
+    }
+   ]
+  },
+  {
+   "id": "control_ring",
+   "label": "Control ring",
+   "kind": "rotary",
+   "supported": true,
+   "relative": true
+  },
+  {
+   "id": "power_switch",
+   "label": "ON/OFF switch",
+   "kind": "switch",
+   "supported": true,
+   "initial": "ON",
+   "positions": [
+    {
+     "id": "ON",
+     "label": "ON"
+    },
+    {
+     "id": "OFF",
+     "label": "OFF"
+    }
+   ]
+  },
+  {
+   "id": "touchscreen",
+   "label": "LCD monitor (touchscreen)",
+   "kind": "touch",
+   "supported": true,
+   "width": 720,
+   "height": 480
+  },
+  {
+   "id": "front_ring",
+   "label": "Front ring",
+   "kind": "ring",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "battery_chamber_cover_latch",
+   "label": "Battery-chamber cover latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "battery_latch",
+   "label": "Battery latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  }
+ ],
+ "xa1-150": [
+  {
+   "id": "shutter_button",
+   "label": "Shutter button",
+   "kind": "shutter",
+   "supported": true,
+   "stages": [
+    {
+     "id": "half",
+     "label": "half"
+    },
+    {
+     "id": "full",
+     "label": "full"
+    }
+   ]
+  },
+  {
+   "id": "fn_button",
+   "label": "Fn (function) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "playback_button",
+   "label": "a (playback) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "main_command_dial",
+   "label": "Main command",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "mode_dial",
+   "label": "Mode dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "power_switch",
+   "label": "ON/OFF switch",
+   "kind": "switch",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: POWER"
+  },
+  {
+   "id": "lens_release_button",
+   "label": "Lens release button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "battery_chamber_cover_latch",
+   "label": "Battery-chamber cover latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "battery_latch",
+   "label": "Battery latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "sub_command_dial",
+   "label": "Sub-command dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "flash_pop_up_button",
+   "label": "N (flash pop-up) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "movie_record_button",
+   "label": "t (movie recording) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "menu_ok_button",
+   "label": "MENU/OK button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "selector",
+   "label": "Selector",
+   "kind": "joystick",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "quick_menu_button",
+   "label": "Q (quick menu) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "disp_back_button",
+   "label": "DISP (display)/BACK button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  }
+ ],
+ "xa2-130": [
+  {
+   "id": "shutter_button",
+   "label": "Shutter button",
+   "kind": "shutter",
+   "supported": true,
+   "stages": [
+    {
+     "id": "half",
+     "label": "half"
+    },
+    {
+     "id": "full",
+     "label": "full"
+    }
+   ]
+  },
+  {
+   "id": "fn_button",
+   "label": "Fn (function) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "playback_button",
+   "label": "a (playback) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "main_command_dial",
+   "label": "Main command dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "mode_dial",
+   "label": "Mode dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "power_switch",
+   "label": "ON/OFF switch",
+   "kind": "switch",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: POWER"
+  },
+  {
+   "id": "lens_release_button",
+   "label": "Lens release button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "sub_command_dial",
+   "label": "Sub-command dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "flash_pop_up_button",
+   "label": "N (flash pop-up) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "movie_record_button",
+   "label": "t (movie recording) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "menu_ok_button",
+   "label": "MENU/OK button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "selector",
+   "label": "Selector",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "quick_menu_button",
+   "label": "Q (quick menu) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "disp_back_button",
+   "label": "DISP (display)/BACK button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "battery_chamber_cover_latch",
+   "label": "Battery-chamber cover latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "battery_latch",
+   "label": "Battery latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  }
+ ],
+ "xe2-411": [
+  {
+   "id": "shutter_button",
+   "label": "Shutter button",
+   "kind": "shutter",
+   "supported": true,
+   "stages": [
+    {
+     "id": "half",
+     "label": "half"
+    },
+    {
+     "id": "full",
+     "label": "full"
+    }
+   ]
+  },
+  {
+   "id": "focus_mode_selector",
+   "label": "Focus mode selector",
+   "kind": "switch",
+   "supported": true,
+   "initial": "S",
+   "positions": [
+    {
+     "id": "S",
+     "label": "S"
+    },
+    {
+     "id": "C",
+     "label": "C"
+    },
+    {
+     "id": "M",
+     "label": "M"
+    }
+   ]
+  },
+  {
+   "id": "quick_menu_button",
+   "label": "Q (quick menu) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.down",
+   "label": "Selector / Function button (Fn3—Fn6) / down",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.left",
+   "label": "Selector / Function button (Fn3—Fn6) / left",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.right",
+   "label": "Selector / Function button (Fn3—Fn6) / right",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.up",
+   "label": "Selector / Function button (Fn3—Fn6) / up",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "ae_lock_button",
+   "label": "AE-L (exposure lock) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "af_lock_button",
+   "label": "AF-L (focus lock) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "disp_back_button",
+   "label": "DISP (display)/BACK button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "menu_ok_button",
+   "label": "MENU/OK button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "exposure_compensation_dial",
+   "label": "Exposure compensation dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "shutter_speed_dial",
+   "label": "Shutter speed dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "power_switch",
+   "label": "ON/OFF switch",
+   "kind": "switch",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: POWER"
+  },
+  {
+   "id": "fn7_button",
+   "label": "Function button (Fn7)",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "command_dial",
+   "label": "Command dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "diopter_adjustment_control",
+   "label": "Diopter adjustment control",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "flash_pop_up_button",
+   "label": "N (flash pop-up) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "fn2_button",
+   "label": "Function button (Fn2)",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "fn1_button",
+   "label": "Function button (Fn1)",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "drive_button",
+   "label": "DRIVE button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "playback_button",
+   "label": "a (playback) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "Electrical predicate is unresolved"
+  },
+  {
+   "id": "battery_chamber_cover_latch",
+   "label": "Battery-chamber cover latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "battery_latch",
+   "label": "Battery latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  }
+ ],
+ "xe2s-111": [
+  {
+   "id": "shutter_button",
+   "label": "Shutter button",
+   "kind": "shutter",
+   "supported": true,
+   "stages": [
+    {
+     "id": "half",
+     "label": "half"
+    },
+    {
+     "id": "full",
+     "label": "full"
+    }
+   ]
+  },
+  {
+   "id": "focus_mode_selector",
+   "label": "Focus mode selector",
+   "kind": "switch",
+   "supported": true,
+   "initial": "S",
+   "positions": [
+    {
+     "id": "S",
+     "label": "S"
+    },
+    {
+     "id": "C",
+     "label": "C"
+    },
+    {
+     "id": "M",
+     "label": "M"
+    }
+   ]
+  },
+  {
+   "id": "quick_menu_button",
+   "label": "Q (quick menu) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.down",
+   "label": "Selector / down",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.left",
+   "label": "Selector / left",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.right",
+   "label": "Selector / right",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.up",
+   "label": "Selector / up",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "command_dial",
+   "label": "Command dial",
+   "kind": "button",
+   "supported": true,
+   "relative": true
+  },
+  {
+   "id": "ae_lock_button",
+   "label": "AE-L (exposure lock) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "af_lock_button",
+   "label": "AF-L (focus lock) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "disp_back_button",
+   "label": "DISP (display)/BACK button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "menu_ok_button",
+   "label": "MENU/OK button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "exposure_compensation_dial",
+   "label": "Exposure compensation dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "shutter_speed_dial",
+   "label": "Shutter speed dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "lens_release_button",
+   "label": "Lens release button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "power_switch",
+   "label": "ON/OFF switch",
+   "kind": "switch",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: POWER"
+  },
+  {
+   "id": "fn7_button",
+   "label": "Function button (Fn7)",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "diopter_adjustment_control",
+   "label": "Diopter adjustment control",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "flash_pop_up_button",
+   "label": "N (flash pop-up) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "fn2_button",
+   "label": "Function button (Fn2)",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "fn1_button",
+   "label": "Function button (Fn1)",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "drive_button",
+   "label": "DRIVE button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: DRIVE"
+  },
+  {
+   "id": "playback_button",
+   "label": "a (playback) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "Electrical predicate is unresolved"
+  },
+  {
+   "id": "battery_chamber_cover_latch",
+   "label": "Battery-chamber cover latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "battery_latch",
+   "label": "Battery latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  }
+ ],
+ "xm1-150": [
+  {
+   "id": "shutter_button",
+   "label": "Shutter button",
+   "kind": "shutter",
+   "supported": true,
+   "stages": [
+    {
+     "id": "half",
+     "label": "half"
+    },
+    {
+     "id": "full",
+     "label": "full"
+    }
+   ]
+  },
+  {
+   "id": "fn_button",
+   "label": "Fn (function) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "playback_button",
+   "label": "a (playback) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "main_command_dial",
+   "label": "Main command",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "mode_dial",
+   "label": "Mode dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "power_switch",
+   "label": "ON/OFF switch",
+   "kind": "switch",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: POWER"
+  },
+  {
+   "id": "sub_command_dial",
+   "label": "Sub-command dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "lens_release_button",
+   "label": "Lens release button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "battery_chamber_cover_latch",
+   "label": "Battery-chamber cover latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "battery_latch",
+   "label": "Battery latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "flash_pop_up_button",
+   "label": "N (flash pop-up) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "movie_record_button",
+   "label": "t (movie recording) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "menu_ok_button",
+   "label": "MENU/OK button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "selector",
+   "label": "Selector",
+   "kind": "joystick",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "quick_menu_button",
+   "label": "Q (quick menu) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "disp_back_button",
+   "label": "DISP (display)/BACK button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  }
+ ],
+ "xq1-121": [
+  {
+   "id": "shutter_button",
+   "label": "Shutter button",
+   "kind": "shutter",
+   "supported": true,
+   "stages": [
+    {
+     "id": "half",
+     "label": "half"
+    },
+    {
+     "id": "full",
+     "label": "full"
+    }
+   ]
+  },
+  {
+   "id": "zoom_control.tele",
+   "label": "Zoom control / tele",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "zoom_control.wide",
+   "label": "Zoom control / wide",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.down",
+   "label": "Selector button / down",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.left",
+   "label": "Selector button / left",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.right",
+   "label": "Selector button / right",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.up",
+   "label": "Selector button / up",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "disp_back_button",
+   "label": "DISP/BACK button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "menu_ok_button",
+   "label": "MENU/OK button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "movie_record_button",
+   "label": "● (movie recording) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "mode_dial",
+   "label": "Mode dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "power_button",
+   "label": "ON/OFF button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: POWER"
+  },
+  {
+   "id": "control_ring",
+   "label": "Control ring",
+   "kind": "ring",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: CRING+"
+  },
+  {
+   "id": "command_dial",
+   "label": "Command dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "playback_button",
+   "label": "▶ (playback) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: K_PLAY"
+  },
+  {
+   "id": "e_fn_button",
+   "label": "E-Fn (extended function) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "flash_pop_up_switch",
+   "label": "Flash pop-up switch",
+   "kind": "switch",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "battery_chamber_cover_latch",
+   "label": "Battery-chamber cover latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "battery_latch",
+   "label": "Battery latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  }
+ ],
+ "xq2-101": [
+  {
+   "id": "shutter_button",
+   "label": "Shutter button",
+   "kind": "shutter",
+   "supported": true,
+   "stages": [
+    {
+     "id": "half",
+     "label": "half"
+    },
+    {
+     "id": "full",
+     "label": "full"
+    }
+   ]
+  },
+  {
+   "id": "zoom_control.tele",
+   "label": "Zoom control / tele",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "zoom_control.wide",
+   "label": "Zoom control / wide",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.down",
+   "label": "Selector button / down",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.left",
+   "label": "Selector button / left",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.right",
+   "label": "Selector button / right",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "selector.up",
+   "label": "Selector button / up",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "disp_back_button",
+   "label": "DISP (display)/BACK button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "menu_ok_button",
+   "label": "MENU/OK button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "movie_record_button",
+   "label": "t (movie recording) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "mode_dial",
+   "label": "Mode dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "power_button",
+   "label": "ON/OFF button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: POWER"
+  },
+  {
+   "id": "control_ring",
+   "label": "Control ring",
+   "kind": "ring",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: CRING+"
+  },
+  {
+   "id": "command_dial",
+   "label": "Command dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "playback_button",
+   "label": "a (playback) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: K_PLAY"
+  },
+  {
+   "id": "e_fn_button",
+   "label": "E-Fn (extended function) button; Wi-Fi button (playback mode)",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: WLAN"
+  },
+  {
+   "id": "flash_pop_up_switch",
+   "label": "N (flash pop-up) Switch",
+   "kind": "switch",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "battery_chamber_cover_latch",
+   "label": "Battery-chamber cover latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "battery_latch",
+   "label": "Battery latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  }
+ ],
+ "xt10-131": [
+  {
+   "id": "shutter_button",
+   "label": "Shutter button",
+   "kind": "shutter",
+   "supported": true,
+   "stages": [
+    {
+     "id": "half",
+     "label": "half"
+    },
+    {
+     "id": "full",
+     "label": "full"
+    }
+   ]
+  },
+  {
+   "id": "focus_mode_selector",
+   "label": "Focus mode selector",
+   "kind": "switch",
+   "supported": true,
+   "initial": "C",
+   "positions": [
+    {
+     "id": "S",
+     "label": "S"
+    },
+    {
+     "id": "C",
+     "label": "C"
+    },
+    {
+     "id": "M",
+     "label": "M"
+    }
+   ]
+  },
+  {
+   "id": "delete_button",
+   "label": "b (delete) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "playback_button",
+   "label": "a (playback) button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "view_mode_button",
+   "label": "VIEW button",
+   "kind": "button",
+   "supported": true
+  },
+  {
+   "id": "exposure_compensation_dial",
+   "label": "Exposure compensation dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "auto_mode_selector_lever",
+   "label": "Auto mode selector lever",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "shutter_speed_dial",
+   "label": "Shutter speed dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "drive_dial",
+   "label": "DRIVE dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "flash_pop_up_lever",
+   "label": "N (flash pop-up) lever",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "lens_release_button",
+   "label": "Lens release button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "front_command_dial",
+   "label": "Front command dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "A declared action or position has no physical key"
+  },
+  {
+   "id": "power_switch",
+   "label": "ON/OFF switch",
+   "kind": "switch",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: POWER"
+  },
+  {
+   "id": "movie_record_button",
+   "label": "Movie-record button (Function button (Fn1))",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: MOVIE_REC"
+  },
+  {
+   "id": "diopter_adjustment_control",
+   "label": "Diopter adjustment control",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "ae_lock_button",
+   "label": "AE-L (exposure lock) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: AE-LOCK"
+  },
+  {
+   "id": "rear_command_dial",
+   "label": "Rear command dial",
+   "kind": "dial",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: CMD_LEFT"
+  },
+  {
+   "id": "af_lock_button",
+   "label": "AF-L (focus lock) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "Physical key has no electrical source: AF-LOCK"
+  },
+  {
+   "id": "quick_menu_button",
+   "label": "Q (quick menu) button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "selector",
+   "label": "Selector/function buttons",
+   "kind": "joystick",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "menu_ok_button",
+   "label": "MENU/OK button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "fn7_button",
+   "label": "Function button (Fn7)",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "disp_back_button",
+   "label": "DISP (display)/BACK button",
+   "kind": "button",
+   "supported": false,
+   "unavailable": "ADC calibration bytes are unavailable"
+  },
+  {
+   "id": "battery_chamber_cover_latch",
+   "label": "Battery-chamber cover latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  },
+  {
+   "id": "battery_latch",
+   "label": "Battery latch",
+   "kind": "lever",
+   "supported": false,
+   "unavailable": "No electronic action or position is established"
+  }
+ ]
+}

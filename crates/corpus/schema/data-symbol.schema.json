@@ -3,15 +3,7 @@
   "$id": "https://fujimod.com/schemas/corpus-data-symbol.schema.json",
   "title": "Named corpus data range",
   "type": "object",
-  "required": [
-    "firmware",
-    "unit",
-    "address",
-    "length",
-    "name",
-    "kind",
-    "source"
-  ],
+  "required": ["firmware", "unit", "address", "length", "name", "kind", "source"],
   "additionalProperties": false,
   "properties": {
     "firmware": {

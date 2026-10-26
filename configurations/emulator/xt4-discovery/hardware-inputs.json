@@ -1,0 +1,141 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "xt4-discovery",
+  "body_id": "xt4",
+  "reset": {
+    "kernel_unit": "kernel",
+    "loader_handoff": {
+      "address": 9437184,
+      "size": 1484,
+      "fill": 0,
+      "words": [
+        {
+          "offset": 320,
+          "value": 4,
+          "name": "cold boot reason"
+        }
+      ],
+      "basis": "Declared catalog input."
+    },
+    "spi_inputs": {
+      "1": {
+        "level": "low",
+        "basis": "Declared catalog input.",
+        "power_registers": {
+          "chip_select": {
+            "port": 12,
+            "pin": 5,
+            "active_high": true
+          },
+          "inputs": {
+            "0": 0,
+            "1": 0,
+            "2": 0,
+            "3": 512,
+            "16": 0,
+            "32": 0,
+            "34": 0,
+            "35": 0,
+            "4": 0,
+            "5": 0,
+            "6": 0
+          },
+          "rtc_ticks_per_second": 54000000,
+          "rtc_basis": "Explicit unset RTC: control32=0 (stopped), low/high seconds34/35=0. 10a3398 stops32, loads34/35, then starts32 with0x8000;10a3344 reads a stable low/high pair. After a guest start the counter advances from guest ticks at the declared54MHz timebase. Counter writes while running and unsupported alarm interrupts refuse; no software date globals are supplied.",
+          "ambient_celsius": 25,
+          "basis": "Declared catalog input."
+        }
+      },
+      "4": {
+        "level": "low",
+        "basis": "Declared catalog input."
+      },
+      "5": {
+        "level": "low",
+        "basis": "Declared catalog input."
+      }
+    },
+    "serial_flash": {
+      "contents": "registered-update",
+      "jedec_id": 0,
+      "geometry": {
+        "erase_bytes": 131072,
+        "page_bytes": 256,
+        "erase_ticks": 4096,
+        "page_ticks": 512,
+        "basis": "Declared catalog input."
+      },
+      "basis": "Declared catalog input."
+    },
+    "adc_input": {
+      "samples": [
+        2048,
+        0,
+        0,
+        4095,
+        0,
+        0,
+        0,
+        0,
+        2048,
+        0,
+        2048,
+        0
+      ],
+      "ambient_celsius": 25,
+      "thermal_channels": [
+        0,
+        8,
+        10
+      ],
+      "basis": "Declared catalog input."
+    },
+    "gpio_input": {
+      "levels": [
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "basis": "Declared catalog input."
+    },
+    "temperature_input": {
+      "millicelsius": 25000,
+      "basis": "Declared catalog input."
+    },
+    "processed_frame_input": {
+      "frame_period_ticks": 900900,
+      "luma": 128,
+      "basis": "Declared catalog input."
+    },
+    "sensor_input": {
+      "frame_period_ticks": 900900,
+      "frame_active_ticks": 450450,
+      "read_gate": {
+        "register": 81,
+        "mask": 8
+      },
+      "statistics_scene": {
+        "name": "functional uniform grey",
+        "luma": 2048,
+        "samples_per_cell": 1024,
+        "black_level": 1024,
+        "signal_shift": 2
+      },
+      "basis": "Declared catalog input."
+    }
+  }
+}

@@ -26,12 +26,11 @@ that exact version and `--locked --root target/tooling` from the repository root
 
 `WASM_BINDGEN` can select an explicitly installed CLI executable. By default,
 the build script uses `target/tooling/bin/wasm-bindgen` from the repository root.
-`pkg/`, `dist/` and `node_modules/` are generated and ignored. The package remains
-private while APIs and release metadata are being prepared; these commands do
-not publish it or change `apps/web`.
+`pkg/`, `dist/` and `node_modules/` are generated and ignored. The package is not
+yet published to npm; these commands do not publish it or change `apps/web`.
 
 Tests run compiled Wasm in Node. Instrumented tests exercise the real protocol
-core with synthetic endpoints. Production tests exclude that instrumentation
+core with scripted endpoints. Production tests exclude that instrumentation
 and exercise nusb's WebUSB backend against a fake `navigator.usb` device,
 including descriptors, interface/alternate selection, endpoint numbers, data
 transfers, picker cancellation and a stalled control transfer. No test opens
@@ -45,6 +44,76 @@ npm run test:browser
 
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` can select an explicitly installed Chromium
 binary. Permission UI and physical camera integration remain unvalidated.
+
+For worker CPU profiling and boot timing, see
+[browser performance](../../crates/emulator/BROWSER_PERFORMANCE.md).
+
+## Emulator runtime
+
+The `fujimod/emulator` entry loads the emulator module and exports its `Camera`
+class and types. The Rust crate in `emulator/` declares that interface once:
+wasm-bindgen generates the class and its glue from `#[wasm_bindgen]` items, and
+tsify generates the TypeScript types of the serde values they exchange. Emscripten
+links the crate with Unicorn and runs wasm-bindgen on the result
+(`-sWASM_BINDGEN`). A loaded module is configured once with its execution policy
+and JIT tier, then constructs cameras with `Camera.fromGraph`, `fromPrepared`,
+`fromResolved` or `fromSnapshot`. Failures throw `Error`; once the guest has
+failed, their name is `GuestExecutionError`.
+
+The build writes the generated declarations to `emulator/camera.generated.ts`,
+which is checked in so TypeScript consumers type-check without an Emscripten
+build. Commit it with any change to the Rust interface; never edit it.
+
+A staged package contains the generated `camera.mjs` and `camera.wasm` beside
+that entry, so a browser can load them with `loadBundledEmulatorModule()`. The
+Node-only `fujimod/emulator/node` entry loads an explicit module path and its
+adjacent Wasm file with `loadNodeModule()`, or opens a camera with `openCamera()`,
+`openPreparedCamera()` or `openSnapshot()`. Node filesystem APIs are kept out of
+the browser entry.
+
+Build and stage the runtime with the pinned Mise toolchain:
+
+```sh
+mise install
+npm --prefix bindings/javascript run setup:tooling
+mise run javascript-emulator-build
+```
+
+The builder defaults to ignored `target/emulator/` output and stages runtime
+assets under `bindings/javascript/dist/emulator/`. Use
+`npm run build:emulator -- --out DIR` to choose another output directory. The
+generated `build.json` records the toolchain and artifact hashes. Runtime input
+manifests remain the caller's responsibility. Guest conformance scripts can run against a built module with
+`npm run test:emulator:guest` and `npm run test:emulator:devices`; each accepts
+an optional path to `camera.mjs`.
+
+Run the emulator in a dedicated browser worker. The runtime uses shared Wasm
+memory and two persistent device threads; serve the page and runtime assets with
+`Cross-Origin-Opener-Policy: same-origin` and
+`Cross-Origin-Embedder-Policy: require-corp`. The generated module is also the
+pthread worker entry, so keep its URL reachable alongside the Wasm binary.
+
+Module loading defaults to `executionPolicy: 'interactive'`, the same board/CPU
+policy used by native clients. Use `{ executionPolicy: 'exact' }` for native
+fingerprint comparisons and deterministic replay. A runtime manifest can select
+the same policy with `executionPolicy`. The policy is selected before the reset
+checkpoint, so power cycling preserves it. Interactive Undo restores a stopped
+checkpoint and may replay approximately.
+
+Device jobs own frozen inputs and staging bytes. They cannot access the bus,
+live guest RAM, processor state or clocks. Only the owner publishes their output;
+checkpointing materializes pending results without publishing device effects.
+Still color development, warp resampling and JPEG work use this executor;
+Exact mode executes the same arithmetic inline.
+
+The [mod installation helpers](../../crates/mod-install/README.md) expose
+`usb.InstallQueries` for guarded borrowed callback batches,
+`usb.CommandSequence.verifiedWrites` for packet-sized write/readback batches,
+and `usb.OwnedUpload` for padded images within caller-owned allocations.
+`session.uploadOwned` borrows and restores the qualified stock destination;
+`session.verifyOwned` compares the complete image through a qualified bulk
+window. Callers provide firmware addresses, ownership and accepted status pairs,
+then publish hooks or run initialization only after successful verification.
 
 ## Connect and identify
 
@@ -107,7 +176,7 @@ Higher-level operations live in their own groups:
 - `usb.data.readChunks(session, window, address, length)` streams E1 ranges;
   `DataWindow` requires an explicit base, aperture, capacity and offset mode.
 - `usb.data.upload(session, bytes, pieceBytes, mode)` owns setup, E0 pieces and
-  E8 as one operation, preserving raw setup fields and final acknowledgement.
+  E8 as one operation, preserving raw setup fields and final acknowledgment.
 - `usb.app80` supplies distinct one-byte command IDs, requests and an explicit
   mailbox carrier. Codes and result meanings come from the selected firmware.
 - `usb.research` supplies distinct ff80 command IDs and unclassified request
@@ -130,7 +199,7 @@ Completed chunks stay with the caller on failure. A failed bulk command's valid
 partial data remains in `error.partial`. A currently pending pull must finish
 before `close()`; explicitly abandon its session to stop host processing.
 
-The [command catalogue](../../crates/usb/PROTOCOL.md) defines effects and the
+The [command catalog](../../crates/usb/PROTOCOL.md) defines effects and the
 boundary between direct mechanisms, nested protocols and compositions. Debug
 activation, safe exit, callbacks, allocation, persistent settings and mod
 installation belong in firmware-qualified application code.
@@ -178,23 +247,23 @@ Python in Pyodide can use this same initialized module. Call
 [`bindings/python`](../python/PYODIDE.md). `session.cancelPending()` and chunk
 iterators' `cancelPending()` cancel host work without abandoning the session.
 Await the pending Promise before reusing ownership; the session is fenced if
-an exchange was incomplete. Cancelling before dispatch leaves it ready. Host
-cancellation rejects with `ErrorKind.Cancelled`; it never stops camera code.
+an exchange was incomplete. Canceling before dispatch leaves it ready. Host
+cancellation rejects with `ErrorKind.Canceled`; it never stops camera code.
 `abandon()` remains the distinct terminal action.
 
 ## Firmware-selected service controls
 
-`defs` loads the shared firmware data. `usb.app80` exposes typed command factories
+`catalog` loads the shared firmware data. `usb.app80` exposes typed command factories
 and executes their invocations through the same Rust codecs as native Python:
 
 ```ts
-import { defs, usb } from 'fujimod';
+import { catalog, usb } from 'fujimod';
 
-const identity = new defs.FirmwareIdentity(firmwareId, firmwareSha256);
-const definition = defs.service.Definition.fromJson(definitionJson, identity);
+const identity = new catalog.FirmwareIdentity(firmwareId, firmwareSha256);
+const definition = catalog.service.Definition.fromJson(definitionJson, identity);
 const service = new usb.app80.Service(definition);
 const invocation = service.prepare(
-  new defs.service.ServiceModes(currentServiceFlags),
+  new catalog.service.ServiceModes(currentServiceFlags),
   usb.app80.Command.readPins(new usb.app80.PinBank(0)),
 );
 const reply = await usb.app80.execute(session, invocation);
@@ -216,7 +285,7 @@ reply values use immutable unions tagged by enums; TypeScript narrows payload
 fields using their `kind`. Raw mailbox getters return independent `Uint8Array`
 copies. `invocation.decode(raw)` supports offline decoding without a session.
 
-`defs.isError(error)` exposes a typed `DefinitionFailure` in `error.reason`;
+`catalog.isError(error)` exposes a typed `DefinitionFailure` in `error.reason`;
 `usb.app80.isError(error)` similarly exposes `CommandFailure`. Unsupported,
 ambiguous, disabled or unreviewed controls do not fall back to another body.
 Research remains explicit through `service.prepareResearch(code, modes, bytes)`.
@@ -266,13 +335,12 @@ requests a control-line action whose enable path also increments a counter.
 `Command.radioControl`. `Command.signalStrength(new PeerAddress(bytes))` owns
 six bytes and returns opaque `rawValue`, which can include unchanged or
 uninitialized firmware output. `Command.iperf()` uses stored configuration text
-and returns opaque `rawResult`; firmware service acknowledgement can precede
+and returns opaque `rawResult`; firmware service acknowledgment can precede
 running the test. Neither result starts a host poll or certifies a measurement.
 
 Service enums, checked quantities, command/action factories, structured replies
 and public registrations come from the [shared Rust generator](../generator/README.md).
 Builds regenerate them automatically; validation remains in the core.
-
 
 WPS and station controls use `Command.wps(WpsAction.start(target))` and
 `Command.station(StationAction.startStored())`. WPS targets are
@@ -306,3 +374,62 @@ remain in `events`. Both share sequence numbers and one event/byte budget.
 completion, failure or cancellation. Protocol records carry the actual request
 and reply bytes, including rejected replies. Tracing never decides completion,
 retries work or invokes user callbacks during an exchange.
+
+## Browser device ownership
+
+`usb.discover(filter)` and `usb.requestDevice(filter)` return per-device handles
+backed by one page-lifetime Rust nusb owner. Discovery opens each selected owner
+once; `await device.open()` is idempotent and verifies that handle is still open
+and present. Rediscovery reuses its stable `device.id`. `discoverProxy` handles
+also expose IDs, sessions, presence events and Rust-decoded traffic. Their IDs
+are scoped to the host, credential and device route; they observe the remote
+owner rather than opening a browser USB device. A read-only inventory monitor
+updates remote presence. Sharing remains exclusive to locally owned devices.
+
+- `await device.acquireSession(selection, limits, options, tool?)` acquires the owner's
+  exclusive logical session lock and opens FF80. `await session.close()` sends
+  C4 and releases that lock. The optional tool name tags local session and log
+  events. An abandoned/uncertain session fences the owner.
+- `device.share()` enables sharing and returns a Rust `Exporter` for this device.
+  Pass it to ShareHost. `device.stopSharing()` disables remote access; it does
+  not shut down the device or release its persistent physical interface.
+- `device.status` is a `DeviceState` snapshot: `id`, `present`, `open`, `sharing`,
+  `sessionOwner` (`null`, `{kind: 'local', tool?}`, or `{kind: 'remote', controller}`),
+  and `fenced`. `present`, `sharing`, and `sessionOwner` also have direct getters.
+- `device.watch()` returns `DeviceEvents`. `await events.next()` yields the
+  initial state, then every ownership/presence/sharing transition in order.
+  `events.close()` wakes pending reads; `next()` returns `undefined` once drained.
+  Free the subscription handle when finished. Hotplug events come from nusb.
+- `await device.close()` stops sharing, waits for a local session to finish and
+  awaits physical interface release. Close or abandon active sessions first.
+  `await device.open()` reopens a cleanly shut down owner without reopening USB.
+
+Local and remote clients share the same lock. A busy acquisition refuses without
+USB traffic. Sharing on/off does not acquire that lock, close FF80 or reopen USB.
+Stopping a share with an unfinished remote session conservatively fences the
+owner. Keep the device handle connected independently of any network share.
+
+`Exporter.execute(controllerId, encodedExecute)` returns the encoded proxy Result.
+`inventoryJson`, `busy(id)`, `owns(controllerId, id)`, `fenced(id)` and
+`abandon(controllerId)` support transport routing. `Exporter.stopSharing()`
+detaches its devices; `shutdown()` explicitly shuts them down. Freeing an
+exporter wrapper does not close or release the page's Rust device owner.
+`usb.Exporter.discover()`/`requestDevice()` select and share all permitted devices
+for the `/usb-proxy/` relay page. Device IDs and events remain per-device.
+
+`device.watchLog()` returns a `LogEvents` subscription with `next()` and `close()`.
+It emits exactly one `Ff80Exchange` after each FF80 control-envelope/bulk phase,
+for both direct local sessions and remote controllers. D0 and D1 are separate
+exchanges; D1 carries the decoded request's address/selector context. Events
+include `deviceId`, `holder`, sequence/time, operation, command/function,
+address/selector/page/length, requested/transferred lengths, the 12-byte
+`envelope` and raw payload `data` as `Uint8Array`, plus error/truncation fields.
+Selectors and command fields contain wire values. `consoleData` contains the
+submitted console command on D0 function 6 or an output chunk on D1 function 7,
+with the protocol lengths checked in Rust; other events contain `null`. A model
+can decode this byte slice as text without duplicating the FF80 decoder.
+The observer never changes USB execution. Capture is limited to 8 MiB per
+exchange; exact transferred counts and `truncated` describe a longer payload.
+A subscriber exceeding 128 queued events or 16 MiB closes and rejects `next()`
+after its captured events drain, reporting overflow rather than silently losing
+log entries. Close and free subscriptions when finished.

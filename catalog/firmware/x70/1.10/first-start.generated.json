@@ -1,0 +1,189 @@
+{
+  "$schema": "https://fujimod.com/schemas/first-start.generated.schema.json",
+  "schema": 1,
+  "id": "x70-110-first-start",
+  "firmware_id": "x70-110",
+  "menu_node": 11071476,
+  "cursor": 13175048,
+  "children_offset": 24,
+  "row_bytes": 8,
+  "date_kind": 77,
+  "date_editor": 13375920,
+  "languages": [
+    {
+      "key": 1,
+      "value": 1,
+      "name": "BKUP_LANGUAGE_ENGLISH"
+    },
+    {
+      "key": 2,
+      "value": 3,
+      "name": "BKUP_LANGUAGE_FRENCH"
+    },
+    {
+      "key": 3,
+      "value": 2,
+      "name": "BKUP_LANGUAGE_GERMAN"
+    },
+    {
+      "key": 4,
+      "value": 4,
+      "name": "BKUP_LANGUAGE_SPANISH"
+    },
+    {
+      "key": 10,
+      "value": 8,
+      "name": "BKUP_LANGUAGE_PORTUGUESE"
+    },
+    {
+      "key": 5,
+      "value": 11,
+      "name": "BKUP_LANGUAGE_ITALY"
+    },
+    {
+      "key": 11,
+      "value": 9,
+      "name": "BKUP_LANGUAGE_NEDERLANDS"
+    },
+    {
+      "key": 9,
+      "value": 7,
+      "name": "BKUP_LANGUAGE_RUSSIAN"
+    },
+    {
+      "key": 22,
+      "value": 22,
+      "name": "BKUP_LANGUAGE_ARABIA"
+    },
+    {
+      "key": 6,
+      "value": 5,
+      "name": "BKUP_LANGUAGE_CHINA"
+    },
+    {
+      "key": 7,
+      "value": 6,
+      "name": "BKUP_LANGUAGE_CHINA2"
+    },
+    {
+      "key": 8,
+      "value": 12,
+      "name": "BKUP_LANGUAGE_KOREAN"
+    },
+    {
+      "key": 0,
+      "value": 0,
+      "name": "BKUP_LANGUAGE_JAPANESE"
+    },
+    {
+      "key": 12,
+      "value": 10,
+      "name": "BKUP_LANGUAGE_TURKISH"
+    },
+    {
+      "key": 19,
+      "value": 19,
+      "name": "BKUP_LANGUAGE_DENMARK"
+    },
+    {
+      "key": 18,
+      "value": 18,
+      "name": "BKUP_LANGUAGE_NORWAY"
+    },
+    {
+      "key": 16,
+      "value": 17,
+      "name": "BKUP_LANGUAGE_SWEDEN"
+    },
+    {
+      "key": 20,
+      "value": 20,
+      "name": "BKUP_LANGUAGE_FINLAND"
+    },
+    {
+      "key": 15,
+      "value": 16,
+      "name": "BKUP_LANGUAGE_POLAND"
+    },
+    {
+      "key": 14,
+      "value": 15,
+      "name": "BKUP_LANGUAGE_HUNGRAY"
+    },
+    {
+      "key": 13,
+      "value": 14,
+      "name": "BKUP_LANGUAGE_CZECH"
+    },
+    {
+      "key": 21,
+      "value": 21,
+      "name": "BKUP_LANGUAGE_SLOVAKIA"
+    },
+    {
+      "key": 25,
+      "value": 23,
+      "name": "BKUP_LANGUAGE_UKRAINE"
+    },
+    {
+      "key": 23,
+      "value": 24,
+      "name": "BKUP_LANGUAGE_LIETUVOS"
+    },
+    {
+      "key": 24,
+      "value": 25,
+      "name": "BKUP_LANGUAGE_GREECE"
+    },
+    {
+      "key": 17,
+      "value": 13,
+      "name": "BKUP_LANGUAGE_THAI"
+    },
+    {
+      "key": 26,
+      "value": 26,
+      "name": "BKUP_LANGUAGE_PERSIA"
+    },
+    {
+      "key": 27,
+      "value": 27,
+      "name": "BKUP_LANGUAGE_INDONESIA"
+    },
+    {
+      "key": 28,
+      "value": 28,
+      "name": "BKUP_LANGUAGE_ROMANIA"
+    },
+    {
+      "key": 29,
+      "value": 29,
+      "name": "BKUP_LANGUAGE_VIETNAM"
+    },
+    {
+      "key": 30,
+      "value": 30,
+      "name": "BKUP_LANGUAGE_HEBRAER"
+    },
+    {
+      "key": 31,
+      "value": 31,
+      "name": "BKUP_LANGUAGE_LATVIA"
+    },
+    {
+      "key": 32,
+      "value": 32,
+      "name": "BKUP_LANGUAGE_BULGARIA"
+    },
+    {
+      "key": 33,
+      "value": 33,
+      "name": "BKUP_LANGUAGE_SERBIA"
+    },
+    {
+      "key": 34,
+      "value": 34,
+      "name": "BKUP_LANGUAGE_KAZAKHSTAN"
+    }
+  ]
+}

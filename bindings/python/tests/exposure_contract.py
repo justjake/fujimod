@@ -1,10 +1,13 @@
 """Native/Pyodide contract for adjustment status, exposure and packet commands."""
 
+from contract_assertions import expect
+from fujimod.usb import app80
 
-def check_exposure_values():
+
+def check_exposure_values() -> bool:
     import json
 
-    from fujimod import defs
+    from fujimod import catalog
     from fujimod.usb import app80 as a
 
     layouts = [
@@ -40,20 +43,24 @@ def check_exposure_values():
         ],
     }
     service = a.Service(
-        defs.service.Definition.from_json(
-            json.dumps(doc), defs.FirmwareIdentity("exposure-b", "ab" * 32)
+        catalog.service.Definition.from_json(
+            json.dumps(doc), catalog.FirmwareIdentity("exposure-b", "ab" * 32)
         )
     )
-    modes = defs.service.ServiceModes(4)
+    modes = catalog.service.ServiceModes(4)
 
-    def prepare(command, codec, expected):
+    def prepare(
+        command: app80.Command, codec: str, expected: list[int]
+    ) -> app80.Invocation:
         prepared = service.prepare(modes, command)
         assert [prepared.raw[1 + i] for i in slots[codec]] == expected
         return prepared
 
-    def decode(prepared, codec, values):
+    def decode(
+        prepared: app80.Invocation, codec: str, values: list[int]
+    ) -> app80.ReplyValue:
         data = bytearray(prepared.raw)
-        for slot, value in zip(slots[codec], values):
+        for slot, value in zip(slots[codec], values, strict=True):
             data[1 + slot] = value
         reply = prepared.decode(data)
         assert bytes(reply.raw) == bytes(data)
@@ -71,7 +78,7 @@ def check_exposure_values():
         assert isinstance(value, a.ReplyValue.AdjustmentStatusOption)
         assert isinstance(value.value, cls)
         if raw == 255:
-            assert value.value.value == 255
+            assert expect(value.value, a.ExposureStatusOption.Unknown).value == 255
 
     ready = prepare(
         a.Command.ReadAdjustmentReadyOption(), "adjustment_ready_option", [255]
@@ -85,7 +92,7 @@ def check_exposure_values():
         assert isinstance(value, a.ReplyValue.AdjustmentReadyOption)
         assert isinstance(value.value, cls)
         if raw == 255:
-            assert value.value.value == 255
+            assert expect(value.value, a.ExposureReadiness.Unknown).value == 255
 
     for mode, mode_byte in [
         (a.ExposureModeOption.Default, 0),
@@ -194,13 +201,12 @@ def check_exposure_values():
         assert isinstance(value.data, cls)
         actual = value.data.data if hasattr(value.data, "data") else value.data.value
         if isinstance(expected_data, list):
+            assert isinstance(actual, (bytes, tuple))
             assert list(actual) == expected_data
         else:
             assert actual == expected_data
 
-    report = prepare(
-        a.Command.ReportServiceSuccess(), "report_service_success", []
-    )
+    report = prepare(a.Command.ReportServiceSuccess(), "report_service_success", [])
     assert isinstance(report.decode(report.raw).value, a.ReplyValue.NoPayload)
 
     for wrapper, valid_length in [
@@ -212,15 +218,18 @@ def check_exposure_values():
         try:
             wrapper(bytes([0x5A] * (valid_length - 1)))
         except a.CommandError as error:
+            assert isinstance(error.reason, a.CommandFailure.Argument)
             assert error.reason.kind == a.ArgumentKind.AdjustmentPacketLength
         else:
             raise AssertionError("incorrect packet payload length accepted")
 
     for command in [
         lambda: a.Command.RequestExposure(
-            mode=0, duration=a.ExposureDuration(1), option=a.ExposureOption.Enabled
+            mode=0,  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
+            duration=a.ExposureDuration(1),
+            option=a.ExposureOption.Enabled,
         ),
-        lambda: a.AdjustmentPacketAction.Write(packet=1),
+        lambda: a.AdjustmentPacketAction.Write(packet=1),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     ]:
         try:
             command()

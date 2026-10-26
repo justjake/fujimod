@@ -1,6 +1,6 @@
 // TAR fixture created with Python tarfile (USTAR), gzip mtime=0.
 import { gunzipSync } from 'node:zlib';
-import { crc32 } from '../archive';
+import { crc32 } from '@fujimod/emulator-ui/archive';
 import { base64url, type ReportLink } from './report-link';
 export const tar = Uint8Array.from(
   gunzipSync(

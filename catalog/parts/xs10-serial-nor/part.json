@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "xs10-serial-nor",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "serial-nor-flash",
+      "jedec_id": 2145056,
+      "erase_bytes": 65536,
+      "page_bytes": 256
+    }
+  }
+}

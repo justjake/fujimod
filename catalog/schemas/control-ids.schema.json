@@ -1,0 +1,1191 @@
+{
+  "$defs": {
+    "AdcInterval": {
+      "description": "Bounds of one accepted analog interval.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Sample values stored directly in the firmware's input predicate.",
+          "properties": {
+            "kind": {
+              "const": "literal",
+              "type": "string"
+            },
+            "lower": {
+              "description": "Inclusive lower sample value.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "upper": {
+              "description": "Inclusive upper sample value.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "lower",
+            "upper"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Byte offsets of little-endian u16 bounds in the loaded configuration.",
+          "properties": {
+            "kind": {
+              "const": "configuration_u16",
+              "type": "string"
+            },
+            "lower": {
+              "description": "Byte offset of the inclusive lower sample value.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "upper": {
+              "description": "Byte offset of the inclusive upper sample value.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "lower",
+            "upper"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "AddressIdentity": {
+      "additionalProperties": false,
+      "description": "An identified firmware address range without its contents.",
+      "properties": {
+        "address": {
+          "description": "Start address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "SHA-256 of the range.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Byte length.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "ControlInterface": {
+      "description": "Firmware interpretation of a control outside the key scanner.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Power switch sampled through a physical GPIO and serial status field.",
+          "properties": {
+            "connection_id": {
+              "description": "Body connection carrying the switch input.",
+              "type": "string"
+            },
+            "endpoint": {
+              "description": "Firmware serial endpoint selector.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "power_switch",
+              "type": "string"
+            },
+            "mask": {
+              "description": "Mask of status bits interpreted by the firmware.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "off_value": {
+              "description": "Masked status value interpreted as off.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "on_value": {
+              "description": "Masked status value interpreted as on.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "register": {
+              "description": "Firmware-selected status register.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "saved_inputs": {
+              "description": "Firmware address retaining sampled GPIO state.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "saved_inputs",
+            "endpoint",
+            "register",
+            "mask",
+            "on_value",
+            "off_value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Touch reports read through a prefixed control-bus endpoint.",
+          "properties": {
+            "connection_id": {
+              "description": "Body connection carrying control-bus traffic.",
+              "type": "string"
+            },
+            "contacts": {
+              "description": "Maximum simultaneous contacts decoded by the firmware.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "coordinate_bits": {
+              "description": "Number of encoded coordinate bits.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "decoded": {
+              "$ref": "#/$defs/DecodedTouch",
+              "description": "Firmware memory retaining the latest report decoded by the touch task."
+            },
+            "height": {
+              "description": "Firmware logical coordinate height.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "irq": {
+              "description": "Firmware interrupt line selected for reports.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "irq_mode": {
+              "description": "Firmware-selected interrupt mode.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "prefixed_touch",
+              "type": "string"
+            },
+            "mode": {
+              "description": "Firmware control-bus transaction mode.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "offset_tags": {
+              "description": "Configuration-byte offsets for logical coordinate correction.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "priority": {
+              "description": "Firmware-selected interrupt priority.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "register": {
+              "description": "First report register read by the firmware.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "report_bytes": {
+              "description": "Report byte count consumed by the firmware.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "width": {
+              "description": "Firmware logical coordinate width.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "mode",
+            "register",
+            "report_bytes",
+            "contacts",
+            "coordinate_bits",
+            "width",
+            "height",
+            "offset_tags",
+            "irq",
+            "priority",
+            "irq_mode",
+            "decoded"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "DebugKey": {
+      "additionalProperties": false,
+      "description": "One explicitly located command in the firmware's debug transport vocabulary.",
+      "properties": {
+        "event": {
+          "description": "UI event identity delivered by the command.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Exact command token accepted by that transport.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "event"
+      ],
+      "type": "object"
+    },
+    "DecodedTouch": {
+      "additionalProperties": false,
+      "description": "Layout of the touch task's latest decoded report in firmware memory.",
+      "properties": {
+        "address": {
+          "description": "Firmware address of the decoded report.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "contacts": {
+          "description": "Byte offsets of each decoded contact, in report order.",
+          "items": {
+            "$ref": "#/$defs/DecodedTouchContact"
+          },
+          "type": "array"
+        },
+        "count": {
+          "description": "Byte offset of the decoded contact count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "count",
+        "contacts"
+      ],
+      "type": "object"
+    },
+    "DecodedTouchContact": {
+      "additionalProperties": false,
+      "description": "Byte offsets of one decoded contact within the report.",
+      "properties": {
+        "active": {
+          "description": "Byte that is nonzero while the contact is down.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "x": {
+          "description": "Little-endian 16-bit logical x coordinate.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "y": {
+          "description": "Little-endian 16-bit logical y coordinate.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "active",
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "ElectricalInput": {
+      "description": "Located electrical meaning, separate from scanner table operands.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Analog input interpreted using located sample bands or calibration offsets.",
+          "properties": {
+            "callback": {
+              "default": null,
+              "description": "Firmware callback evaluating the input, when present.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "connection_id": {
+              "description": "Body connection carrying this analog input.",
+              "type": "string"
+            },
+            "expected_result": {
+              "default": null,
+              "description": "Callback result interpreted as active, when present.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "intervals": {
+              "description": "Accepted analog intervals and the source of their bounds.",
+              "items": {
+                "$ref": "#/$defs/AdcInterval"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "adc",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "intervals"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Digital contact interpreted by a located scanner predicate.",
+          "properties": {
+            "connection_id": {
+              "description": "Body connection carrying this digital input.",
+              "type": "string"
+            },
+            "expected_level": {
+              "description": "Logic level interpreted as active.",
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "gpio",
+              "type": "string"
+            },
+            "scanner": {
+              "$ref": "#/$defs/GpioScanner",
+              "description": "Firmware interpretation of the contact."
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "expected_level",
+            "scanner"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Physical encoder interpreted by a located quadrature decoder.",
+          "properties": {
+            "connection_id": {
+              "description": "Body connection carrying the encoder phases.",
+              "type": "string"
+            },
+            "decoder_event": {
+              "description": "Decoder-local direction event, distinct from the UI event.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "guard": {
+              "description": "Located decoder guard address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "gpio_quadrature",
+              "type": "string"
+            },
+            "phase_map": {
+              "description": "Decoder phase mapping.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 4,
+              "minItems": 4,
+              "type": "array"
+            },
+            "reset": {
+              "description": "Decoder reset counters and phase state.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 4,
+              "minItems": 4,
+              "type": "array"
+            },
+            "threshold": {
+              "description": "Located decoder activation threshold.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "transitions": {
+              "description": "Decoder transition values.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 16,
+              "minItems": 16,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "phase_map",
+            "transitions",
+            "reset",
+            "decoder_event",
+            "guard",
+            "threshold"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Physical encoder whose firmware counts whole phase cycles, one event per cycle.",
+          "properties": {
+            "connection_id": {
+              "description": "Body connection carrying the encoder phases.",
+              "type": "string"
+            },
+            "cycle_sign": {
+              "description": "Sign of the physical phase cycle that produces this input's event.",
+              "format": "int8",
+              "maximum": 127,
+              "minimum": -128,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "gpio_fixed_cycle",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "cycle_sign"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Contact reported as bits of a serial status register and tested by a scanner callback.",
+          "properties": {
+            "active_value": {
+              "description": "Masked status value while the input is active.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "connection_id": {
+              "description": "Body connection carrying the status bits.",
+              "type": "string"
+            },
+            "endpoint": {
+              "description": "Firmware serial endpoint selector.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "serial_status",
+              "type": "string"
+            },
+            "mask": {
+              "description": "Status bits tested by the firmware.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "register": {
+              "description": "Status register read by the firmware.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "endpoint",
+            "register",
+            "mask",
+            "active_value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "EventTranslation": {
+      "additionalProperties": false,
+      "description": "A located table translating scanner physical keys to UI events.",
+      "properties": {
+        "address": {
+          "description": "Table base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "description": "Translated rows in table order.",
+          "items": {
+            "$ref": "#/$defs/TranslatedKey"
+          },
+          "type": "array"
+        },
+        "sha256": {
+          "description": "SHA-256 of the rows and their terminator.",
+          "type": "string"
+        },
+        "stride": {
+          "description": "Table row size in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "stride",
+        "sha256",
+        "rows"
+      ],
+      "type": "object"
+    },
+    "GpioScanner": {
+      "description": "Firmware scanner predicates used for digital keys.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Direct GPIO comparison using the declared expected logic level.",
+          "properties": {
+            "kind": {
+              "const": "direct",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Combined scanner predicate with its firmware-selected source and bounds.",
+          "properties": {
+            "kind": {
+              "const": "combined",
+              "type": "string"
+            },
+            "lower": {
+              "description": "Lower comparison operand.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "source": {
+              "description": "Scanner source selector.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "upper": {
+              "description": "Upper comparison operand.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "source",
+            "lower",
+            "upper"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "InputReaders": {
+      "additionalProperties": false,
+      "description": "Input routines located in one firmware; a routine the locators did not find is absent.",
+      "properties": {
+        "calibration": {
+          "default": null,
+          "description": "Routine reading 16-bit control calibration values.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "scanner": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScannerReader"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Routine reading stable key scanner state."
+        }
+      },
+      "type": "object"
+    },
+    "InputTarget": {
+      "description": "Ownership of a generated input record without a control alias map.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Input claimed by a canonical physical control identity.",
+          "properties": {
+            "control_id": {
+              "description": "Exact control identity, including a pad direction where applicable.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "control",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "control_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Card, cable, door, or other connection detector.",
+          "properties": {
+            "connection_id": {
+              "description": "Exact connection identity declared by the body.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "connection",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Located firmware input which no documented physical control claims.",
+          "properties": {
+            "kind": {
+              "const": "unclaimed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "LocatedInput": {
+      "additionalProperties": false,
+      "description": "One located input's identity, ownership, and checked electrical predicates.",
+      "properties": {
+        "debug_key": {
+          "default": null,
+          "description": "Exact debug command token for this input, absent for native-only inputs.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "electrical": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElectricalInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Located electrical interpretation, absent when the hardware is not modeled."
+        },
+        "event": {
+          "description": "UI/native event identity established by the locator.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "description": "Stable identity of the located input record.",
+          "type": "string"
+        },
+        "scanner": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocatedScannerRecord"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Scanner row and its source witness, absent for inputs outside that table."
+        },
+        "target": {
+          "$ref": "#/$defs/InputTarget",
+          "description": "Physical control, connection detector, or unclaimed firmware input."
+        }
+      },
+      "required": [
+        "id",
+        "event",
+        "target"
+      ],
+      "type": "object"
+    },
+    "LocatedScannerRecord": {
+      "additionalProperties": false,
+      "description": "One scanner row's identity and located predicate operands.",
+      "properties": {
+        "index": {
+          "description": "Zero-based index within the identified scanner table.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "witness": {
+          "$ref": "#/$defs/ScannerRecordWitness",
+          "description": "Event identity, predicate kind, source selector, and bounds stored in the row."
+        }
+      },
+      "required": [
+        "index",
+        "witness"
+      ],
+      "type": "object"
+    },
+    "NativeKeyName": {
+      "additionalProperties": false,
+      "description": "One named native firmware event.",
+      "properties": {
+        "event": {
+          "description": "Numeric event identity.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Native event name.",
+          "type": "string"
+        },
+        "string_address": {
+          "description": "Address of the native name string.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "event",
+        "name",
+        "string_address"
+      ],
+      "type": "object"
+    },
+    "NativeKeyNames": {
+      "additionalProperties": false,
+      "description": "Native firmware event names and the identity of their source table.",
+      "properties": {
+        "reader": {
+          "description": "Routine used to read the table.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "description": "Native event names and their numeric identities.",
+          "items": {
+            "$ref": "#/$defs/NativeKeyName"
+          },
+          "type": "array"
+        },
+        "sha256": {
+          "description": "SHA-256 of the table.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Table byte length.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "rows",
+        "reader",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "ScannerInputKind": {
+      "description": "Closed firmware scanner predicate discriminator from the scanner row.",
+      "oneOf": [
+        {
+          "const": "kind_0",
+          "description": "Direct analog level predicate.",
+          "type": "string"
+        },
+        {
+          "const": "kind_1",
+          "description": "Calibrated analog interval predicate.",
+          "type": "string"
+        },
+        {
+          "const": "kind_2",
+          "description": "Direct GPIO predicate.",
+          "type": "string"
+        },
+        {
+          "const": "kind_3",
+          "description": "Callback or specialized digital predicate.",
+          "type": "string"
+        },
+        {
+          "const": "kind_4",
+          "description": "Combined-source predicate.",
+          "type": "string"
+        },
+        {
+          "const": "kind_5",
+          "description": "Callback-based scanner predicate.",
+          "type": "string"
+        }
+      ]
+    },
+    "ScannerReader": {
+      "additionalProperties": false,
+      "description": "A firmware scanner state reader.",
+      "properties": {
+        "pressed_value": {
+          "description": "Stored value interpreted as a pressed key.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "released_value": {
+          "description": "Stored value interpreted as a released key.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "routine": {
+          "$ref": "#/$defs/AddressIdentity",
+          "description": "Reader routine identity."
+        },
+        "stable_offset": {
+          "description": "Stable-state field offset within a scanner record.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stable_width": {
+          "description": "Width of the stable-state field in bytes.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "stable_offset",
+        "stable_width",
+        "pressed_value",
+        "released_value",
+        "routine"
+      ],
+      "type": "object"
+    },
+    "ScannerRecordWitness": {
+      "additionalProperties": false,
+      "description": "Checked identity and predicate operands stored in one scanner record.",
+      "properties": {
+        "input_kind": {
+          "$ref": "#/$defs/ScannerInputKind",
+          "description": "Closed predicate kind stored in the scanner record."
+        },
+        "lower": {
+          "description": "Lower comparison operand or calibration-table offset, a 32-bit record word.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "physical_key": {
+          "description": "Physical key identity stored at byte offset zero.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "description": "Source selector stored at byte offset twelve.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "upper": {
+          "description": "Upper comparison operand or calibration-table offset, a 32-bit record word.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "physical_key",
+        "input_kind",
+        "source",
+        "lower",
+        "upper"
+      ],
+      "type": "object"
+    },
+    "ScannerTable": {
+      "additionalProperties": false,
+      "description": "A firmware table used to scan physical input predicates.",
+      "properties": {
+        "base": {
+          "description": "Table base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "count": {
+          "description": "Number of scanner records.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "lookup": {
+          "description": "Routine that looks up scanner entries.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "SHA-256 of the scanner table.",
+          "type": "string"
+        },
+        "stride": {
+          "description": "Scanner record size in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "count",
+        "stride",
+        "lookup",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "TranslatedKey": {
+      "additionalProperties": false,
+      "description": "One physical key and the UI event the firmware delivers for it.",
+      "properties": {
+        "event": {
+          "description": "UI event delivered for that key.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "physical_key": {
+          "description": "Physical key stored in scanner rows.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "physical_key",
+        "event"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/control-ids.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Generated firmware input facts, separate from the body's declarations.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/control-ids.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "debug_keys": {
+      "description": "Exact debug command vocabulary, independent of the native names.",
+      "items": {
+        "$ref": "#/$defs/DebugKey"
+      },
+      "type": "array"
+    },
+    "event_translation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EventTranslation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Physical-key to UI-event table of a processor whose scanner rows hold\nphysical keys; absent when the rows hold UI events directly."
+    },
+    "firmware_id": {
+      "description": "Firmware from which these inputs were located.",
+      "type": "string"
+    },
+    "id": {
+      "description": "Stable document identity referenced by the firmware.",
+      "type": "string"
+    },
+    "input_readers": {
+      "$ref": "#/$defs/InputReaders",
+      "description": "Calibration and stable-state readers located in that firmware."
+    },
+    "inputs": {
+      "description": "Every located scanner or protocol input, including unclaimed connections.",
+      "items": {
+        "$ref": "#/$defs/LocatedInput"
+      },
+      "type": "array"
+    },
+    "interfaces": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ControlInterface"
+      },
+      "description": "Protocols outside the key scanner, keyed by physical body connection ID.",
+      "type": "object"
+    },
+    "native_key_names": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NativeKeyNames"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Native names and their source table identity, when the table was located."
+    },
+    "scanner": {
+      "$ref": "#/$defs/ScannerTable",
+      "description": "Scanner table identity and extent."
+    },
+    "schema": {
+      "description": "Document format version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "undelivered_rows": {
+      "description": "Scanner rows whose physical key has no event-translation row, so the\nfirmware delivers no UI event for them.",
+      "items": {
+        "$ref": "#/$defs/LocatedScannerRecord"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "firmware_id",
+    "scanner",
+    "input_readers",
+    "debug_keys",
+    "inputs",
+    "undelivered_rows",
+    "interfaces"
+  ],
+  "title": "FirmwareControlIds",
+  "type": "object"
+}

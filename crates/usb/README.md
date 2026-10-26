@@ -52,6 +52,16 @@ the negotiated packet limit and the host reply budget, and retains the number
 of successfully returned bytes. Previously returned buffers remain with the
 caller if a later chunk fails.
 
+`Session::sequence` accepts up to 512 `ff80::sequence::SequenceCommand` values:
+bounded memory reads (optionally checking expected bytes), writes, and
+diagnostic queries with explicit accepted status pairs. Every reply must have
+its exact length, command/parameter echoes and expected status or data before
+the next command runs. Over a device share these checks run at the exporter,
+so a dependent sequence waits once. A failed condition discards later work and
+leaves the session in `CompletionUnknown`. Local USB enforces the same checks.
+The sequence is not atomic against device tasks and performs no retries or
+cleanup. It validates all command limits before its first USB exchange.
+
 Use `operations::data::DataReader` to download a CPU address range through E1.
 Supply a `DataWindow` with the diagnostic pointer, allowed address aperture,
 per-command capacity and `OffsetMode::Checked` or `OffsetMode::Wrapping` from
@@ -66,7 +76,7 @@ chunks already returned successfully.
 `operations::data::upload` owns the complete setup/E0/E8 sequence. Supply the
 setup mode and E0 piece size explicitly. It checks the final receive budget
 before setup, stops on a framed setup error, and sends each piece and E8 once.
-Its `UploadReply` preserves the raw setup fields and complete acknowledgement (4 or 32 bytes).
+Its `UploadReply` preserves the raw setup fields and complete acknowledgment (4 or 32 bytes).
 Padding, destination-buffer ownership and readback/retry policy stay above this
 composition. The debug memory packet limit does not constrain E0 data pieces.
 
@@ -75,7 +85,7 @@ validate the longer reply's setup command echo, reserved word and status fields.
 Neither form is a readiness poll or a wait-for-execution API.
 
 The core is tested on native macOS and as Wasm in a JavaScript runtime using
-synthetic exchanges. nusb's WebUSB backend compiles for `wasm32-unknown-unknown`.
+scripted exchanges. nusb's WebUSB backend compiles for `wasm32-unknown-unknown`.
 The [JavaScript bindings](../../bindings/javascript/README.md) expose that
 backend; physical browser/camera integration remains unvalidated. No hardware
 access is part of the test suite. Native Python bindings live
@@ -83,32 +93,33 @@ in `bindings/python/` at the workspace root, with an awaitable API. All Rust pub
 internal test interface does not require `Send` futures.
 
 Protocol references are `fftlib.py` and `ffjlib.py` from
-[tiredboffin/fffw](https://github.com/tiredboffin/fffw/tree/bedc091e0b54a1a34aaf6929dd08e1db36d13b08/ff80), and
-X70 View's existing ff80 callers. The upstream MIT notice is retained in
-[LICENSE.fffw](LICENSE.fffw). No firmware images or private camera data are
-included.
+[tiredboffin/fffw](https://github.com/tiredboffin/fffw/tree/bedc091e0b54a1a34aaf6929dd08e1db36d13b08/ff80).
+The upstream MIT notice is retained in [LICENSE.fffw](LICENSE.fffw).
 
 Run `cargo test --workspace --all-features` from the repository root.
 
-The opt-in `testing` feature supplies strict synthetic exchange scripts through
-the same session implementation. `testing::Peer` supplies synchronous virtual
-endpoint completions for firmware emulators using this same Rust core; it exists
-only in testing builds. These paths do not enumerate or open USB devices.
-Python's test build uses it to verify streaming and ownership across the language
-boundary; regular builds contain only the nusb backend.
+The `testing` module supplies strict exchange scripts through the same session
+implementation. `testing::Peer` supplies synchronous virtual endpoint
+completions for firmware emulators using this same Rust core. These paths do
+not enumerate or open USB devices; sessions reach them only through
+`testing::Script` and `testing::Peer`. Python's tests use them to verify
+streaming and ownership across the language boundary.
 
-App80 has a separate [`app80`](src/app80.rs) wire codec: `CommandCode`, bounded
-`Request` and exact `Reply`. Identifiers and argument meanings come from the
-selected firmware's service table; the codec does not equate command bytes,
-ff80 status words or firmware callback dispositions.
+App80 transport is the separate [`fujimod-usb-app80`](../usb-app80/src/lib.rs)
+crate; command codecs and value types live in
+[`fujimod-usb-app80-types`](../usb-app80-types/src/lib.rs), below USB.
+Its wire codec has `CommandCode`, bounded `Request` and exact `Reply`.
+Identifiers and argument meanings come from the selected firmware's service
+table; the codec does not equate command bytes, ff80 status words or firmware
+callback dispositions.
 
-`operations::app80::Mailbox` composes the ff80 carrier. Supply the selected
+Its `operations::Mailbox` composes the ff80 carrier. Supply the selected
 firmware's page, command-byte offset and configuration limit. `exchange()`
 stages 32 argument bytes, publishes the 33-byte request, awaits that write's
 ff80 reply, then reads the mailbox once. The complete operation's host budget
 is checked before the first write. Firmware asynchronous completion is handled
 by the ff80 exchange; there is no invented mailbox busy bit, automatic poll,
-retry, reset or cleanup. A failed or cancelled USB exchange fences the session.
+retry, reset or cleanup. A failed or canceled USB exchange fences the session.
 Command-specific result decoding and named body APIs belong above this carrier.
 
 `trace::Trace` optionally records the ff80 USB transfers beginning with session
@@ -133,7 +144,7 @@ without treating the table as host timeouts or inferring firmware-specific
 record meanings. A nonzero device status is a completed `DeviceStatus` error;
 a malformed header fences the session.
 
-The [service command catalogue](PROTOCOL.md) lists direct APIs, their effects,
+The [service command catalog](PROTOCOL.md) lists direct APIs, their effects,
 and unclassified operations. `firmware_download_status()` reads state once;
 `clear_firmware_download_status()` explicitly mutates it. Both retain text and
 raw bytes alongside a `FirmwareDownloadState` enum. Writing is application
@@ -154,8 +165,8 @@ Install the Wasm standard library and a wasm-bindgen test runner matching the
 ```sh
 rustup target add wasm32-unknown-unknown
 cargo install wasm-bindgen-cli --version 0.2.129 --locked --root target/tooling
-PATH="$PWD/target/tooling/bin:$PATH" cargo test -p fujimod-usb \
-  --target wasm32-unknown-unknown --features testing --lib --test wasm_core
+PATH="$PWD/target/tooling/bin:$PATH" cargo test -p fujimod-usb -p fujimod-usb-app80 -p fujimod-usb-app80-types \
+  --target wasm32-unknown-unknown --lib --test wasm_core
 ```
 
 Run from the workspace root with Node on `PATH`, or use `mise run rust-wasm-test`
@@ -177,13 +188,18 @@ and `apps/web`. See their README for the static-host build and mock-WebUSB tests
 
 ## Firmware-qualified App80 controls
 
-`fujimod::defs::service::Definition` loads the selected firmware's service data.
-`app80::catalogue::Catalogue` resolves its ordered mode rules and typed codecs;
-`operations::app80::Service` binds those codecs to that definition's ff80
-mailbox. The resulting `Invocation` keeps its request and carrier together.
+`fujimod::catalog_service::Definition` loads the selected firmware's service
+data against a `fujimod::catalog_firmware_identity::FirmwareIdentity`.
+`fujimod_usb_app80_types::catalog::Catalog` resolves its ordered mode rules and
+typed codecs; `fujimod_usb_app80::operations::Service` binds those codecs to
+that definition's ff80 mailbox. The resulting `Invocation` keeps its request
+and carrier together.
 Preparation does no I/O and never changes the camera's service mode.
 
 ```rust,ignore
+use fujimod_usb_app80::operations::Service;
+use fujimod_usb_app80_types::catalog::{Command, PinBank};
+
 let identity = FirmwareIdentity::new(firmware_id, firmware_sha256)?;
 let definition = Definition::from_json(&definition_json, &identity)?;
 let service = Service::new(definition)?;
@@ -214,10 +230,10 @@ known alignment/address windows before I/O. Research replies stay opaque.
 A wrong command echo in a typed nested reply fences the session, preventing
 further requests or implicit close. No polling, retry or cleanup is added.
 
-Run the read-only catalogue inspector with an explicit identity:
+Run the read-only catalog inspector with an explicit identity:
 
 ```sh
-cargo run -p fujimod-usb --example service_catalogue -- definition.json firmware-id SHA256
+cargo run -p fujimod-usb --example service_catalog -- definition.json firmware-id SHA256
 ```
 
 It prints metadata and performs no USB discovery. The native
@@ -225,7 +241,7 @@ It prints metadata and performs no USB discovery. The native
 expose these definitions, enum commands and typed replies through async and
 awaitable adapters. The [JavaScript package](../../bindings/javascript/README.md#firmware-selected-service-controls)
 exposes the same core through typed factories and discriminated reply unions.
-Pyodide exposes the same Python catalogue interface through that JavaScript
+Pyodide exposes the same Python catalog interface through that JavaScript
 module, retaining Rust's selection, request/reply codecs and session ownership.
 
 I²C uses checked `I2cLength`/`I2cPayload` values of 1–10 bytes and enum ports.
@@ -485,7 +501,6 @@ its list before execution. The reply preserves 32 name bytes, with unused tail
 bytes initialized to zero. A full-length name makes the reviewed firmware write
 its terminator through the table's extra key (configuration key zero on the
 studied layout); the host does not add a compensating write.
-
 
 ## Remote USB
 

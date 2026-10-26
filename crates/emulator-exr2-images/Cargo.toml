@@ -1,0 +1,23 @@
+[package]
+name = "fujimod-emulator-exr2-images"
+description = "The image wires and inputs EXR II image models share, as the resources' image part"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-emulator-exr2-resources.workspace = true
+fujimod-emulator-imaging.workspace = true
+fujimod-emulator-devices.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+fujimod-workspace-hack.workspace = true
+
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

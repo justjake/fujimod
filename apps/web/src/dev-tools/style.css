@@ -1,3 +1,12 @@
+/* Dev Tools palette: Matrix green accent, amber warnings. */
+.dev-tools {
+  --phosphor: #00ff41;
+  --phosphor-rgb: 0, 255, 65;
+  --phosphor-mid: #008f11;
+  --phosphor-dim: rgba(0, 255, 65, 0.1);
+  --amber: #ffb340;
+  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+}
 .dev-tools.shell {
   max-width: none;
   height: 100dvh;
@@ -316,6 +325,30 @@
   gap: 4px;
   cursor: pointer;
 }
+/* Fixed-height bar at the foot of the log: the composer when the Console tool
+ * is open, otherwise a status line, so switching tools never shifts the layout. */
+.dt-consolebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 54px;
+}
+.dt-barnotice {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border-top: 1px solid var(--line);
+  background: #101013;
+  color: #9c9ca6;
+  font-size: 12px;
+}
+.dt-bartool {
+  color: #cfcfd6;
+}
+.dt-barnotice .dt-device {
+  margin-left: auto;
+}
 .dt-composer {
   border-top: 1px solid var(--line);
   display: flex;
@@ -428,5 +461,153 @@
   }
   .dt-interface select {
     flex: 1;
+  }
+}
+
+.dt-tools-back {
+  flex: none;
+  align-self: flex-start;
+  margin: 4px 0;
+  padding: 2px 0;
+  background: none;
+  border: 0;
+  color: var(--dim);
+  font:
+    600 11px/1 ui-monospace,
+    'SF Mono',
+    Menlo,
+    monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.dt-tools-back:hover {
+  color: #eee;
+}
+
+.dt-workbench {
+  display: grid;
+  grid-template-columns: 350px minmax(0, 1fr);
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+.dt-tool-column {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px;
+}
+.dev-tools .dt-tool-launchers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0 18px;
+}
+.dt-tool-launchers .td-action,
+.dt-reads .td-action {
+  padding: 14px 12px;
+  font: 700 12px/1.4 var(--mono);
+  text-align: left;
+}
+.dt-reads {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--phosphor-mid);
+  background: #0d0d0d;
+}
+.dt-reads form,
+.dt-reads label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dt-reads form {
+  gap: 12px;
+}
+.dt-reads label {
+  color: var(--dim);
+  font: 12px var(--mono);
+}
+.dt-reads input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  background: #050806;
+  border: 1px solid var(--edge);
+  color: #eafff0;
+  font: 14px var(--mono);
+}
+.dt-reads p {
+  margin: 0;
+  color: var(--dim);
+  font: 12px/1.5 var(--mono);
+  overflow-wrap: anywhere;
+}
+.dt-console[hidden] {
+  display: none;
+}
+.dt-deck-view {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.dt-deck-view > .dt-tool-column {
+  display: flex;
+  flex: 1;
+  padding: 0;
+}
+.dt-workbench .td {
+  padding: 12px 0;
+}
+.dt-workbench .td-hero,
+.dt-workbench .td-grid {
+  grid-template-columns: 1fr;
+}
+.dt-workbench .dm {
+  overflow: visible;
+  padding: 8px 0 24px;
+}
+.dt-workbench .dm-title {
+  font-size: 26px;
+}
+.dt-workbench .dm-lead,
+.dt-workbench .dm-entry,
+.dt-workbench .dm-plan,
+.dt-workbench .dm-check {
+  font-size: 15px;
+}
+.dt-workbench .dm-rail {
+  gap: 3px;
+  letter-spacing: 0;
+}
+.dt-workbench .dm-rail-label {
+  font-size: 9px;
+}
+.dt-workbench .dm-button {
+  font-size: 14px;
+  padding: 12px;
+}
+@media (max-width: 760px) {
+  .dt-workbench {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: max-content minmax(420px, 60dvh);
+    overflow: auto;
+  }
+  .dt-workbench > .dt-tool-column {
+    overflow: visible;
+  }
+  .dt-workbench .dt-console {
+    min-height: 420px;
+  }
+  .dev-tools.shell {
+    height: auto;
+    min-height: 100dvh;
+  }
+  .dt-deck-view .dt-tool-column,
+  .dt-deck-view .td {
+    overflow: visible;
   }
 }

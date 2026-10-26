@@ -1,124 +1,56 @@
 {
-  "hidden": [
-    "ling_filter_21",
-    "ling_filter_glass_22",
-    "LBL_filter_14"
-  ],
+  "hidden": ["ling_filter_21", "ling_filter_glass_22", "LBL_filter_14"],
   "screen": "monitorr_screen_46",
   "inputs": {
-    "shutter": [
-      "shutter_28"
-    ],
-    "shutter_speed": [
-      "shutter_speed_59"
-    ],
-    "exposure_compensation": [
-      "Exposure_27"
-    ],
-    "aperture": [
-      "ring_aperture_24"
-    ],
-    "control_ring": [
-      "ring_control_19"
-    ],
-    "drive": [
-      "drive_37"
-    ],
-    "delete": [
-      "trash_44"
-    ],
-    "play": [
-      "play_45"
-    ],
+    "shutter": ["shutter_28"],
+    "shutter_speed": ["shutter_speed_59"],
+    "exposure_compensation": ["Exposure_27"],
+    "aperture": ["ring_aperture_24"],
+    "control_ring": ["ring_control_19"],
+    "drive": ["drive_37"],
+    "delete": ["trash_44"],
+    "play": ["play_45"],
     "menu_ok": {
-      "nodes": [
-        "menu_frame_48",
-        "menu_sw_49",
-        "LBL_MENU_10"
-      ],
+      "nodes": ["menu_frame_48", "menu_sw_49", "LBL_MENU_10"],
       "split": "four-way"
     },
-    "power": [
-      "on-off_38"
-    ],
-    "auto": [
-      "sw_auto_41"
-    ],
-    "focus_mode": [
-      "MCS_31",
-      "MCS2_52",
-      "MCS3_53"
-    ],
-    "disp": [
-      "LBL_DISP_9"
-    ],
+    "power": ["on-off_38"],
+    "auto": ["sw_auto_41"],
+    "focus_mode": ["MCS_31", "MCS2_52", "MCS3_53"],
+    "disp": ["LBL_DISP_9"],
     "up": {
-      "nodes": [
-        "menu_frame_48",
-        "menu_sw_49"
-      ],
+      "nodes": ["menu_frame_48", "menu_sw_49"],
       "split": "four-way"
     },
     "down": {
-      "nodes": [
-        "menu_frame_48",
-        "menu_sw_49"
-      ],
+      "nodes": ["menu_frame_48", "menu_sw_49"],
       "split": "four-way"
     },
     "left": {
-      "nodes": [
-        "menu_frame_48",
-        "menu_sw_49"
-      ],
+      "nodes": ["menu_frame_48", "menu_sw_49"],
       "split": "four-way"
     },
     "right": {
-      "nodes": [
-        "menu_frame_48",
-        "menu_sw_49"
-      ],
+      "nodes": ["menu_frame_48", "menu_sw_49"],
       "split": "four-way"
     },
-    "q": [
-      "LBL_Q_6"
-    ],
-    "ae_af_lock": [
-      "LBL_AEAF_8"
-    ],
-    "movie": [
-      "rec_29"
-    ],
+    "q": ["LBL_Q_6"],
+    "ae_af_lock": ["LBL_AEAF_8"],
+    "movie": ["rec_29"],
     "command_left": {
-      "nodes": [
-        "zoom_sw_36"
-      ]
+      "nodes": ["zoom_sw_36"]
     },
     "command_right": {
-      "nodes": [
-        "zoom_sw_36"
-      ]
+      "nodes": ["zoom_sw_36"]
     },
     "command_push": {
-      "nodes": [
-        "zoom_sw_36"
-      ]
+      "nodes": ["zoom_sw_36"]
     },
-    "fn7": [
-      "Fn_32"
-    ],
-    "wifi": [
-      "LBL_wifi_11"
-    ],
-    "lcd_touch": [
-      "monitorr_screen_46"
-    ],
-    "lcd_tilt": [
-      "monitorr_screen_46"
-    ],
-    "battery_cover": [
-      "body.bottom_set_50"
-    ]
+    "fn7": ["Fn_32"],
+    "wifi": ["LBL_wifi_11"],
+    "touchscreen": ["monitorr_screen_46"],
+    "lcd_tilt_switch": ["monitorr_screen_46"],
+    "battery_cover": ["body.bottom_set_50"]
   },
   "yaw": 3.141592653589793,
   "regions": {
@@ -170,8 +102,8 @@
     "focus_mode",
     "aperture",
     "control_ring",
-    "lcd_touch",
-    "lcd_tilt",
+    "touchscreen",
+    "lcd_tilt_switch",
     "battery_cover"
   ],
   "credit": {
@@ -180,5 +112,24 @@
     "url": "https://sketchfab.com/3d-models/camera-fujifilm-x70-5fd32c3c004f4fe4aecaaab8e2b89783",
     "authorUrl": "https://sketchfab.com/McCLOUD2101",
     "license": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "materials": {
+    "grip_47": {
+      "color": [0.018, 0.018, 0.02],
+      "metallic": 0,
+      "roughness": 0.9
+    }
+  },
+  "physical_width": 0.113,
+  "optics": {
+    "focus_distance": 3.0,
+    "aperture": 2.8,
+    "focal_length": 0.0185,
+    "sensor_height": 0.01573
+  },
+  "rotaries": {
+    "shutter_speed": ["LBL_shutter_speed_4"],
+    "exposure_compensation": ["LBL_xposure_1"],
+    "aperture": ["LBL_aperture_12"]
   }
 }

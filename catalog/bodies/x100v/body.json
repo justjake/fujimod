@@ -1,0 +1,18 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "x100v",
+  "soc_id": "xp4",
+  "dram_bytes": 536870912,
+  "nand": null,
+  "sensor": null,
+  "lens": null,
+  "display": null,
+  "microcontroller": null,
+  "power_control": null,
+  "card_slot": null,
+  "control_bus_chips": [],
+  "connections": [],
+  "parts": [],
+  "wiring": []
+}

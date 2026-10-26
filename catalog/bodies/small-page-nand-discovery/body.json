@@ -1,0 +1,329 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "small-page-nand-discovery",
+  "soc_id": "exr2",
+  "dram_bytes": 536870912,
+  "nand": null,
+  "sensor": null,
+  "lens": null,
+  "display": null,
+  "microcontroller": null,
+  "power_control": null,
+  "card_slot": null,
+  "control_bus_chips": [
+    {
+      "id": "device-0",
+      "controller_id": "control-bus1",
+      "address": 48,
+      "polarity_selector": 0,
+      "channel": 1
+    },
+    {
+      "id": "device-1",
+      "controller_id": "control-bus0",
+      "address": 24,
+      "polarity_selector": 1,
+      "channel": 0
+    },
+    {
+      "id": "device-2",
+      "controller_id": "control-bus0",
+      "address": 68,
+      "polarity_selector": 0,
+      "channel": 0
+    },
+    {
+      "id": "device-3",
+      "controller_id": "control-bus1",
+      "address": 114,
+      "polarity_selector": 0,
+      "channel": 1
+    },
+    {
+      "id": "device-4",
+      "controller_id": "control-bus0",
+      "address": 25,
+      "polarity_selector": 1,
+      "channel": 0
+    },
+    {
+      "id": "device-5",
+      "controller_id": "control-bus0",
+      "address": 12,
+      "polarity_selector": 1,
+      "channel": 0
+    },
+    {
+      "id": "device-6",
+      "controller_id": "control-bus0",
+      "address": 28,
+      "polarity_selector": 1,
+      "channel": 0
+    }
+  ],
+  "connections": [],
+  "parts": [
+    "banked-lens"
+  ],
+  "wiring": [],
+  "hardware": {
+    "serial_attachments": [],
+    "gpio_feedback": [],
+    "keypad_samples": {},
+    "thermal_connection_ids": [],
+    "profiles": {
+      "exr2-small-page-discovery": {
+        "graph": {
+          "devices": [
+            {
+              "name": "bootcontrols",
+              "kind": "BootControls",
+              "refs": {}
+            },
+            {
+              "name": "kernelinterrupts",
+              "kind": "KernelInterrupts",
+              "refs": {}
+            },
+            {
+              "name": "nandcontroller",
+              "kind": "NandController",
+              "refs": {}
+            },
+            {
+              "name": "fujidecompressor",
+              "kind": "FujiDecompressor",
+              "refs": {}
+            },
+            {
+              "name": "loadermemorydma",
+              "kind": "LoaderMemoryDMA",
+              "refs": {}
+            },
+            {
+              "name": "usbcontrol",
+              "kind": "USBControl",
+              "refs": {
+                "power": "powerdevices"
+              }
+            },
+            {
+              "name": "powerdevices",
+              "kind": "PowerDevices",
+              "refs": {}
+            },
+            {
+              "name": "audio",
+              "kind": "SerialAudioTransmitSink",
+              "refs": {}
+            },
+            {
+              "name": "pulseoutputs",
+              "kind": "PulseOutputs",
+              "refs": {}
+            },
+            {
+              "name": "lensendpoint",
+              "kind": "LensEndpoint",
+              "refs": {}
+            },
+            {
+              "name": "spi2serial",
+              "kind": "SPI2Serial",
+              "refs": {
+                "endpoint": "lensendpoint"
+              }
+            },
+            {
+              "name": "controlbus",
+              "kind": "ControlBus",
+              "refs": {}
+            },
+            {
+              "name": "secondarycontrolbus",
+              "kind": "SecondaryControlBus",
+              "refs": {
+                "power": "powerdevices"
+              }
+            },
+            {
+              "name": "fe80control",
+              "kind": "FE80Control",
+              "refs": {}
+            },
+            {
+              "name": "inputprocessingcontrol",
+              "kind": "InputProcessingControl",
+              "refs": {}
+            },
+            {
+              "name": "inputauxiliarycontrol",
+              "kind": "InputAuxiliaryControl",
+              "refs": {}
+            },
+            {
+              "name": "producercontrol",
+              "kind": "ProducerControl",
+              "refs": {}
+            },
+            {
+              "name": "imageparametercontrol",
+              "kind": "ImageParameterControl",
+              "refs": {}
+            },
+            {
+              "name": "imageworkcontrol",
+              "kind": "ImageWorkControl",
+              "refs": {}
+            },
+            {
+              "name": "faceanalysiscontrol",
+              "kind": "FaceAnalysisControl",
+              "refs": {}
+            },
+            {
+              "name": "hdmisink",
+              "kind": "HDMISink",
+              "refs": {}
+            },
+            {
+              "name": "hdmistartup",
+              "kind": "HDMIStartup",
+              "refs": {
+                "sink": "hdmisink"
+              }
+            },
+            {
+              "name": "outputcontrol",
+              "kind": "OutputControl",
+              "refs": {}
+            },
+            {
+              "name": "graphicsaccelerator",
+              "kind": "GraphicsAccelerator",
+              "refs": {}
+            },
+            {
+              "name": "displayscanout",
+              "kind": "DisplayScanout",
+              "refs": {}
+            },
+            {
+              "name": "displaytiming",
+              "kind": "DisplayTiming",
+              "refs": {}
+            },
+            {
+              "name": "displayformatter",
+              "kind": "DisplayFormatter",
+              "refs": {}
+            }
+          ],
+          "construction_order": [
+            "bootcontrols",
+            "kernelinterrupts",
+            "nandcontroller",
+            "fujidecompressor",
+            "loadermemorydma",
+            "powerdevices",
+            "usbcontrol",
+            "audio",
+            "pulseoutputs",
+            "lensendpoint",
+            "spi2serial",
+            "controlbus",
+            "secondarycontrolbus",
+            "fe80control",
+            "inputprocessingcontrol",
+            "inputauxiliarycontrol",
+            "producercontrol",
+            "imageparametercontrol",
+            "imageworkcontrol",
+            "faceanalysiscontrol",
+            "hdmisink",
+            "hdmistartup",
+            "outputcontrol",
+            "graphicsaccelerator",
+            "displayscanout",
+            "displaytiming",
+            "displayformatter"
+          ],
+          "attachment_order": [
+            "bootcontrols",
+            "kernelinterrupts",
+            "nandcontroller",
+            "fujidecompressor",
+            "loadermemorydma",
+            "usbcontrol",
+            "powerdevices",
+            "audio",
+            "pulseoutputs",
+            "lensendpoint",
+            "spi2serial",
+            "controlbus",
+            "secondarycontrolbus",
+            "fe80control",
+            "inputprocessingcontrol",
+            "inputauxiliarycontrol",
+            "producercontrol",
+            "imageparametercontrol",
+            "imageworkcontrol",
+            "faceanalysiscontrol",
+            "hdmisink",
+            "hdmistartup",
+            "outputcontrol",
+            "graphicsaccelerator",
+            "displayscanout",
+            "displaytiming",
+            "displayformatter"
+          ]
+        },
+        "controllers": {
+          "control_bus0": {
+            "profile": "endpoint7-and9-virtual-write-ack",
+            "transfer_ticks": 4,
+            "sensor": {
+              "address": 28,
+              "reply_model": "write-only",
+              "basis": "Declared catalog input."
+            },
+            "basis": "Declared catalog input."
+          },
+          "display_timing": {
+            "phase_profile": "declared-external-phase-clock-unmeasured",
+            "frame_period_ticks": 400000,
+            "stop_delay_ticks": 2,
+            "basis": "Declared catalog input."
+          },
+          "fe80": {
+            "basis": "Declared catalog input.",
+            "upload_setup_phases": [
+              "disabled"
+            ],
+            "periods": [
+              12,
+              18
+            ]
+          }
+        },
+        "limits": [],
+        "dram_basis": "Declared catalog input.",
+        "attachments": {
+          "serial_part": [
+            "banked-lens"
+          ]
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6"
+        ]
+      }
+    }
+  }
+}

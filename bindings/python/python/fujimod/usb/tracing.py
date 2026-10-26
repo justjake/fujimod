@@ -2,7 +2,13 @@
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from .._bridge import Handle, jsusb, uint, call, snapshot, buffer_out, enum_out
+from typing import TYPE_CHECKING, Self
+
+from .._bridge import Handle, buffer_out, call, enum_out, jsusb, snapshot, uint
+
+if TYPE_CHECKING:
+    from _fujimod_js import JsProtocolTraceEvent as JsProtocolTraceEvent
+    from _fujimod_js import JsTraceEvent as JsTraceEvent
 
 
 class Layer(Enum):
@@ -20,7 +26,7 @@ class Phase(Enum):
     Submitted = auto()
     Completed = auto()
     Failed = auto()
-    Cancelled = auto()
+    Canceled = auto()
 
 
 class RequestKind(Enum):
@@ -57,8 +63,8 @@ class Event:
     error: str | None
 
     @classmethod
-    def _from_js(cls, value):
-        def convert(v):
+    def _from_js(cls, value: JsTraceEvent) -> Self:
+        def convert(v: JsTraceEvent) -> Self:
             request = (
                 enum_out(v.requestKind, RequestKind, "RequestKind")
                 if v.requestKind is not None
@@ -101,28 +107,35 @@ class ProtocolEvent:
     error: str | None
 
     @classmethod
-    def _from_js(cls, value):
-        return snapshot(value, lambda v: cls(
-            int(v.sequence), v.timestampMs / 1000, int(v.exchange),
-            {getattr(jsusb.tracing.Layer, m.name): m for m in Layer}[v.layer],
-            v.command, {getattr(jsusb.tracing.Phase, m.name): m for m in Phase}[v.phase],
-            buffer_out(v.data), v.failureMessage,
-        ))
+    def _from_js(cls, value: JsProtocolTraceEvent) -> Self:
+        return snapshot(
+            value,
+            lambda v: cls(
+                int(v.sequence),
+                v.timestampMs / 1000,
+                int(v.exchange),
+                {getattr(jsusb.tracing.Layer, m.name): m for m in Layer}[v.layer],
+                v.command,
+                {getattr(jsusb.tracing.Phase, m.name): m for m in Phase}[v.phase],
+                buffer_out(v.data),
+                v.failureMessage,
+            ),
+        )
 
 
 @dataclass(frozen=True)
 class Batch:
-    events: tuple
-    protocol_events: tuple
+    events: tuple[Event, ...]
+    protocol_events: tuple[ProtocolEvent, ...]
     dropped_events: int
     dropped_bytes: int
 
 
-class Trace(Handle):
-    def __init__(self, max_events, max_bytes):
+class Trace(Handle["JsTrace"]):
+    def __init__(self, max_events: int, max_bytes: int) -> None:
         self._js = call(jsusb.tracing.Trace.new, uint(max_events), uint(max_bytes))
 
-    def drain(self):
+    def drain(self) -> Batch:
         return snapshot(
             call(self._js.drain),
             lambda v: Batch(
@@ -132,3 +145,7 @@ class Trace(Handle):
                 int(v.droppedBytes),
             ),
         )
+
+
+if TYPE_CHECKING:
+    from _fujimod_js import JsTrace as JsTrace

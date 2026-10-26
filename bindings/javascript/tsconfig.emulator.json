@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "rewriteRelativeImportExtensions": true,
+    "rootDir": ".",
+    "outDir": "dist",
+    "declaration": true,
+    "types": ["node"]
+  },
+  "include": ["emulator/**/*.ts", "emulator/**/*.mts"]
+}

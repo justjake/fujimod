@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/state.generated.schema.json",
+  "schema": 1,
+  "id": "xm5-130-state",
+  "firmware_id": "xm5-130",
+  "regions": [
+    {
+      "name": "dram",
+      "address": 16384,
+      "size": 2147467264,
+      "constant": false
+    },
+    {
+      "name": "boot-sram",
+      "address": 4286578688,
+      "size": 262144,
+      "constant": false
+    }
+  ]
+}

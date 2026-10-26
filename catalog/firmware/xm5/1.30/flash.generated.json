@@ -1,0 +1,74 @@
+{
+  "$schema": "https://fujimod.com/schemas/flash.generated.schema.json",
+  "schema": 1,
+  "id": "xm5-130-flash",
+  "firmware_id": "xm5-130",
+  "device": {
+    "kind": "serial-nand",
+    "jedec_id": "efdc21",
+    "part": "Winbond W35N01JW"
+  },
+  "window": {
+    "address": 4026531840,
+    "size": 134217728
+  },
+  "update_image": {
+    "dat_offset": 700,
+    "xor": 255
+  },
+  "reader": {
+    "symbol": "flash_read",
+    "alignment": 64
+  },
+  "transport": "xp5-cmd-callback",
+  "code_ranges": [
+    {
+      "name": "flash_read",
+      "address": 21578348,
+      "size": 48
+    },
+    {
+      "name": "flash read request",
+      "address": 21578028,
+      "size": 320
+    },
+    {
+      "name": "flash read dispatcher",
+      "address": 21573536,
+      "size": 704
+    },
+    {
+      "name": "flash DMA read",
+      "address": 21569588,
+      "size": 1292
+    },
+    {
+      "name": "flash DMA completion poll",
+      "address": 21569468,
+      "size": 120
+    },
+    {
+      "name": "destination cache maintenance",
+      "address": 22920452,
+      "size": 64
+    }
+  ],
+  "state_checks": [
+    {
+      "name": "serial NAND driver mode",
+      "address": 980416,
+      "size": 4,
+      "value": 1
+    },
+    {
+      "name": "flash driver initialized",
+      "address": 36006176,
+      "size": 4,
+      "value": 2003199317
+    }
+  ],
+  "control": {
+    "offset": 524288,
+    "size": 32768
+  }
+}

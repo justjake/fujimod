@@ -1,0 +1,220 @@
+{
+  "$defs": {
+    "NandByteInput": {
+      "additionalProperties": false,
+      "description": "A checked synthetic NAND byte input, never a RAM patch.",
+      "properties": {
+        "basis": {
+          "type": "string"
+        },
+        "expected": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "expected",
+        "value",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "RunSettingsInput": {
+      "additionalProperties": false,
+      "description": "Settings requested by name; the firmware's catalog settings layout encodes them.",
+      "properties": {
+        "nand": {
+          "description": "The scene NAND that holds the settings bank.",
+          "type": "string"
+        },
+        "requested": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Setting name to value name, such as `debug: on`.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "nand",
+        "requested"
+      ],
+      "type": "object"
+    },
+    "RunSourceCheck": {
+      "additionalProperties": false,
+      "description": "A named and hashed immutable source range; contains no source bytes.",
+      "properties": {
+        "address": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sampling": {
+          "$ref": "#/$defs/RunSourceSampling"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "size",
+        "sha256",
+        "sampling"
+      ],
+      "type": "object"
+    },
+    "RunSourceSampling": {
+      "enum": [
+        "immutable-source"
+      ],
+      "type": "string"
+    },
+    "UsbFirmwareChecks": {
+      "additionalProperties": false,
+      "description": "The USB firmware entry points whose immutable bytes qualify the input recipe.",
+      "properties": {
+        "usb_irq_wiring": {
+          "$ref": "#/$defs/UsbIrqChecks"
+        }
+      },
+      "required": [
+        "usb_irq_wiring"
+      ],
+      "type": "object"
+    },
+    "UsbIrqChecks": {
+      "additionalProperties": false,
+      "properties": {
+        "views": {
+          "items": {
+            "$ref": "#/$defs/RunSourceCheck"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "views"
+      ],
+      "type": "object"
+    },
+    "UsbManifestSelection": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "exr2",
+              "type": "string"
+            },
+            "node": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "node"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$id": "https://fujimod.com/schemas/emulator-firmware-inputs.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A caller-supplied recipe with no embedded firmware contents or input paths.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/emulator-firmware-inputs.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "firmware": {
+      "$ref": "#/$defs/UsbFirmwareChecks"
+    },
+    "firmware_id": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string"
+    },
+    "limits": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "manifest": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/UsbManifestSelection"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nand_inputs": {
+      "items": {
+        "$ref": "#/$defs/NandByteInput"
+      },
+      "type": "array"
+    },
+    "schema": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "settings": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunSettingsInput"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Named camera settings written into the firmware's settings bank before boot."
+    },
+    "source_sha256": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "firmware_id",
+    "source_sha256",
+    "firmware",
+    "nand_inputs",
+    "limits"
+  ],
+  "title": "RunFirmwareInputs",
+  "type": "object"
+}

@@ -1,0 +1,308 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "x100s-121-settings",
+  "firmware_id": "x100s-121",
+  "source": {
+    "flash_offset": 966656,
+    "address": 6407168,
+    "size": 2529600,
+    "sha256": "777bbe8ff18218d48986d14da0ea5ca341ee475224c8d0c0fea5f861b4fd74d6"
+  },
+  "bank": {
+    "descriptor": {
+      "address": 7980360,
+      "size": 12,
+      "sha256": "b39a76fd585e808f28a5a7922bf1efd0ac9030b537e3253f8629ea951faa9b2f"
+    },
+    "kind": 5,
+    "blocks": 320,
+    "first_block": 3546,
+    "logical_first": 0,
+    "bytes": 4194304
+  },
+  "defaults": {
+    "address": 7979728,
+    "size": 504,
+    "sha256": "ce854a38abbb3715de3f44e2ce8dddb19d077b1c562bc886ac42e200c54d8015"
+  },
+  "fields": [
+    {
+      "offset": 256,
+      "bytes": [
+        203,
+        4
+      ],
+      "basis": "Normal USB vendor ID."
+    },
+    {
+      "offset": 380,
+      "bytes": [
+        167,
+        2
+      ],
+      "basis": "Normal USB product ID."
+    },
+    {
+      "offset": 410,
+      "bytes": [
+        88,
+        49,
+        48,
+        48,
+        83,
+        0
+      ],
+      "basis": "Body product name."
+    },
+    {
+      "offset": 514,
+      "bytes": [
+        85,
+        170
+      ],
+      "basis": "Settings bank signature."
+    },
+    {
+      "offset": 516,
+      "bytes": [
+        2,
+        51
+      ],
+      "basis": "Internal version."
+    },
+    {
+      "offset": 38929,
+      "bytes": [
+        1
+      ],
+      "basis": "Explicit synthetic active normal-read accelerometer setting; stock 0x6a664c masks this configuration byte with 0x1f and writes sensor CTRL_REG1 (0x2a). No fast-read mode or physical calibration claim."
+    },
+    {
+      "offset": 112640,
+      "bytes": [
+        0,
+        250,
+        72,
+        238,
+        144,
+        226,
+        216,
+        214,
+        32,
+        203,
+        104,
+        191,
+        176,
+        179,
+        248,
+        167,
+        64,
+        156,
+        136,
+        144,
+        208,
+        132,
+        24,
+        121,
+        96,
+        109,
+        168,
+        97,
+        240,
+        85,
+        56,
+        74,
+        128,
+        62,
+        200,
+        50,
+        16,
+        39
+      ],
+      "basis": "Declared synthetic focus conversion knots: X100S 0x735500 reads 19 little-endian U16 values at 0x1b800 and computes 16777215/value after its fixed first knot; positive decreasing inputs produce strictly increasing spline coordinates. One focal group follows the stock zero-to-one count clamp at 0x731698. Not measured lens calibration."
+    },
+    {
+      "offset": 156416,
+      "bytes": [
+        0,
+        250,
+        72,
+        238,
+        144,
+        226,
+        216,
+        214,
+        32,
+        203,
+        104,
+        191,
+        176,
+        179,
+        248,
+        167,
+        64,
+        156,
+        136,
+        144,
+        208,
+        132,
+        24,
+        121,
+        96,
+        109,
+        168,
+        97,
+        240,
+        85,
+        56,
+        74,
+        128,
+        62,
+        200,
+        50,
+        16,
+        39
+      ],
+      "basis": "Explicit synthetic focus knots in the alternate configuration banks selected by stock offset mapper 0x694928: logical 0x1b800 maps by +0xab00 or +0xea00. Same positive decreasing inputs as the unmapped bank; no measured lens calibration."
+    },
+    {
+      "offset": 172544,
+      "bytes": [
+        0,
+        250,
+        72,
+        238,
+        144,
+        226,
+        216,
+        214,
+        32,
+        203,
+        104,
+        191,
+        176,
+        179,
+        248,
+        167,
+        64,
+        156,
+        136,
+        144,
+        208,
+        132,
+        24,
+        121,
+        96,
+        109,
+        168,
+        97,
+        240,
+        85,
+        56,
+        74,
+        128,
+        62,
+        200,
+        50,
+        16,
+        39
+      ],
+      "basis": "Explicit synthetic focus knots in the alternate configuration banks selected by stock offset mapper 0x694928: logical 0x1b800 maps by +0xab00 or +0xea00. Same positive decreasing inputs as the unmapped bank; no measured lens calibration."
+    }
+  ],
+  "profile": {
+    "header": {
+      "address": 8026032,
+      "size": 16,
+      "sha256": "38a794e7401b001dbf6b6dca49cc69e1427050102dc681eed93757cdf1b93bd7"
+    },
+    "records": {
+      "main": {
+        "block": 3884,
+        "managed_index": 338,
+        "bytes": 512,
+        "defaults": {
+          "address": 8936000,
+          "size": 242,
+          "sha256": "a26783be9da6283b1d1082ccc2984159b41a076dc78e5aaabd2fe1f08517cd68"
+        },
+        "defaults_offset": 40,
+        "parity_offset": 492,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Main record marker after the sequence word."
+          },
+          {
+            "offset": 488,
+            "bytes": [
+              1,
+              33
+            ],
+            "basis": "Stock writer 0x69d094 stamps version bytes from 0x7a75d0/0x7a75d3 into main record +0x1e8/+0x1e9. Reader 0x69dac8 rejects a version below 0x0110 and resets the profile, including setup completion."
+          }
+        ]
+      },
+      "custom": {
+        "block": 3886,
+        "managed_index": 340,
+        "bytes": 116,
+        "defaults": {
+          "address": 8026048,
+          "size": 96,
+          "sha256": "936d8891559a03ab98e5553a1f763396164f2889abd015714a1907bec143f7d2"
+        },
+        "defaults_offset": 4,
+        "parity_offset": 108,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Custom record marker after the sequence word."
+          }
+        ]
+      }
+    }
+  },
+  "settings": {
+    "debug": {
+      "store": "bank",
+      "offset": 247,
+      "values": {
+        "off": [
+          0
+        ],
+        "on": [
+          1
+        ]
+      }
+    },
+    "language": {
+      "store": "main",
+      "offset": 46,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    },
+    "setup": {
+      "store": "header",
+      "offset": 11,
+      "values": {
+        "done": [
+          7
+        ]
+      }
+    }
+  },
+  "sections": []
+}

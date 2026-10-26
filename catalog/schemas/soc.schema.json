@@ -1,0 +1,3352 @@
+{
+  "$defs": {
+    "AddressDecoder": {
+      "additionalProperties": false,
+      "description": "A selectable SoC address decoder.",
+      "properties": {
+        "choices": {
+          "description": "Other supported named decoder states.",
+          "items": {
+            "$ref": "#/$defs/DecoderChoice"
+          },
+          "type": "array"
+        },
+        "id": {
+          "description": "Decoder identity.",
+          "type": "string"
+        },
+        "initial": {
+          "$ref": "#/$defs/DecoderSelection",
+          "description": "Initially selected target IDs."
+        }
+      },
+      "required": [
+        "id",
+        "initial",
+        "choices"
+      ],
+      "type": "object"
+    },
+    "AddressMapping": {
+      "additionalProperties": false,
+      "description": "A processor address-space mapping.",
+      "properties": {
+        "address": {
+          "description": "Address visible to the processor.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "core": {
+          "description": "Processor core using this mapping.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Stable identity used by decoder selections.",
+          "type": "string"
+        },
+        "permissions": {
+          "description": "Read, write and execute permission bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "physical": {
+          "description": "Physical target address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "$ref": "#/$defs/RegionSize",
+          "description": "Mapping extent, including a body DRAM reference when applicable."
+        }
+      },
+      "required": [
+        "id",
+        "core",
+        "address",
+        "physical",
+        "size",
+        "permissions"
+      ],
+      "type": "object"
+    },
+    "ApplicationHardware": {
+      "description": "Family-specific application-processor identification.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "ARMv7-A configuration base and cache capacities.",
+          "properties": {
+            "caches": {
+              "$ref": "#/$defs/CacheGeometry",
+              "description": "Declared cache capacities."
+            },
+            "configuration_base": {
+              "description": "Configuration base address presented to each application core.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "armv7a",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "configuration_base",
+            "caches"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "ARMv8-A processor identity, affinities and architectural timer wiring.",
+          "properties": {
+            "affinities": {
+              "additionalProperties": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "description": "MPIDR_EL1 affinity values, keyed by processor identity.",
+              "type": "object"
+            },
+            "counter_clock_id": {
+              "description": "Clock domain supplying the architectural counter.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "armv8a",
+              "type": "string"
+            },
+            "midr_el1": {
+              "description": "MIDR_EL1 processor identification value.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "physical_timer_irq": {
+              "description": "Physical architectural timer interrupt line.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "pmu_clock_id": {
+              "description": "Clock domain supplying the performance monitor.",
+              "type": "string"
+            },
+            "virtual_timer_irq": {
+              "description": "Virtual architectural timer interrupt line.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "midr_el1",
+            "affinities",
+            "counter_clock_id",
+            "pmu_clock_id",
+            "physical_timer_irq",
+            "virtual_timer_irq"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "BlockHardware": {
+      "description": "Hardware parameters for a named SoC register block.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "DMA channel count and request-multiplexer connection.",
+          "properties": {
+            "channels": {
+              "description": "Number of DMA channels.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "dma",
+              "type": "string"
+            },
+            "request_mux_block_id": {
+              "description": "Request-multiplexer register block identity.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "channels",
+            "request_mux_block_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Serial-flash controller's memory-mapped aperture.",
+          "properties": {
+            "aperture_block_id": {
+              "description": "Flash aperture block identity.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "serial_flash",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "aperture_block_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Imaging input buffer's SRAM banks.",
+          "properties": {
+            "bank_bytes": {
+              "description": "Capacity of one SRAM bank.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "imaging_input_buffer",
+              "type": "string"
+            },
+            "sram_region_id": {
+              "description": "SRAM memory-region identity.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "sram_region_id",
+            "bank_bytes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Display-channel pixel packing declared by the controller contract.",
+          "properties": {
+            "kind": {
+              "const": "display",
+              "type": "string"
+            },
+            "picture_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PictureLayout"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Picture-plane packing, when specified."
+            },
+            "video_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/VideoLayout"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Video-plane packing, when specified."
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Serial-controller DMA request lines.",
+          "properties": {
+            "kind": {
+              "const": "serial_dma",
+              "type": "string"
+            },
+            "receive_request": {
+              "description": "Receive request identifier.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "transmit_request": {
+              "description": "Transmit request identifier.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "receive_request",
+            "transmit_request"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "DMA interrupt range presented to a companion processor.",
+          "properties": {
+            "companion_irq_base": {
+              "description": "First companion interrupt line for the DMA controller.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "companion_dma",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "companion_irq_base"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CacheGeometry": {
+      "additionalProperties": false,
+      "description": "Cache capacities declared for an application processor.",
+      "properties": {
+        "l1_data_bytes": {
+          "description": "Per-core level-one data-cache capacity.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "l1_instruction_bytes": {
+          "description": "Per-core level-one instruction-cache capacity.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "l2_bytes": {
+          "description": "Shared level-two cache capacity.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "l1_data_bytes",
+        "l1_instruction_bytes",
+        "l2_bytes"
+      ],
+      "type": "object"
+    },
+    "ClockDomain": {
+      "additionalProperties": false,
+      "description": "A SoC clock domain.",
+      "properties": {
+        "frequency_hz": {
+          "default": null,
+          "description": "Clock frequency in hertz, when known.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Clock-domain identity.",
+          "type": "string"
+        },
+        "parent_id": {
+          "default": null,
+          "description": "Parent clock-domain identity, when present.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "CompanionHardware": {
+      "additionalProperties": false,
+      "description": "A companion processor's hardware clock and mailbox endpoints.",
+      "properties": {
+        "clock_id": {
+          "description": "Clock domain supplying the companion processor.",
+          "type": "string"
+        },
+        "mailbox": {
+          "$ref": "#/$defs/CompanionMailbox",
+          "description": "Mailbox indices used by the companion link."
+        },
+        "mailbox_block_id": {
+          "description": "SoC mailbox block identity.",
+          "type": "string"
+        },
+        "processor_id": {
+          "description": "Companion processor identity in the SoC processor list.",
+          "type": "string"
+        },
+        "vector_base": {
+          "description": "Vector-table address presented to the companion after reset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "processor_id",
+        "clock_id",
+        "vector_base",
+        "mailbox_block_id",
+        "mailbox"
+      ],
+      "type": "object"
+    },
+    "CompanionMailbox": {
+      "additionalProperties": false,
+      "description": "Mailbox indices used by a companion processor link.",
+      "properties": {
+        "control": {
+          "description": "Control mailbox index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fault": {
+          "description": "Fault mailbox index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reply": {
+          "description": "Reply mailbox index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request": {
+          "description": "Request mailbox index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "description": "Status mailbox index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "request",
+        "control",
+        "reply",
+        "status",
+        "fault"
+      ],
+      "type": "object"
+    },
+    "ControllerInterruptInput": {
+      "additionalProperties": false,
+      "description": "A producer output connected to an input of the programmable interrupt controller.",
+      "properties": {
+        "line": {
+          "description": "Interrupt-controller input line.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output_id": {
+          "description": "Producer output identity, such as a channel or error output.",
+          "type": "string"
+        },
+        "source_block_id": {
+          "description": "Register block producing the interrupt.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_block_id",
+        "output_id",
+        "line"
+      ],
+      "type": "object"
+    },
+    "CoprocessorWrite": {
+      "additionalProperties": false,
+      "description": "A CP15 or CP14 coprocessor register write during reset.",
+      "properties": {
+        "core": {
+          "description": "Processor core receiving the write.",
+          "type": "string"
+        },
+        "cp": {
+          "description": "Coprocessor selector.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "crm": {
+          "description": "CRm selector.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "crn": {
+          "description": "CRn selector.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "opc1": {
+          "description": "Opcode selector 1.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "opc2": {
+          "description": "Opcode selector 2.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "secure": {
+          "description": "Secure-state selector.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "set_bits": {
+          "description": "Bits set in the selected register.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "wide": {
+          "description": "Register width selector.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "core",
+        "cp",
+        "wide",
+        "secure",
+        "crn",
+        "crm",
+        "opc1",
+        "opc2",
+        "set_bits"
+      ],
+      "type": "object"
+    },
+    "CoreRelease": {
+      "additionalProperties": false,
+      "description": "A secondary-core release condition.",
+      "properties": {
+        "mask": {
+          "description": "Register bit set when the core is released.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register": {
+          "description": "Release register address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "description": "Interrupt or reset source used to release the core.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target": {
+          "description": "Reset vector address selected on release.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "register",
+        "mask",
+        "source",
+        "target"
+      ],
+      "type": "object"
+    },
+    "DecoderChoice": {
+      "additionalProperties": false,
+      "description": "A named alternate decoder state.",
+      "properties": {
+        "id": {
+          "description": "Choice identity selected by a hardware strap or control.",
+          "type": "string"
+        },
+        "selection": {
+          "$ref": "#/$defs/DecoderSelection",
+          "description": "Routes enabled by this choice."
+        }
+      },
+      "required": [
+        "id",
+        "selection"
+      ],
+      "type": "object"
+    },
+    "DecoderSelection": {
+      "additionalProperties": false,
+      "description": "The processor and DMA routes selected by a decoder state.",
+      "properties": {
+        "dma_mappings": {
+          "description": "DMA mapping identities selected by this state.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "processors": {
+          "description": "Processor address mappings selected by this state.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "processors",
+        "dma_mappings"
+      ],
+      "type": "object"
+    },
+    "DmaMapping": {
+      "additionalProperties": false,
+      "description": "A DMA address-space mapping.",
+      "properties": {
+        "address": {
+          "description": "DMA-visible address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "description": "Stable identity used by decoder selections.",
+          "type": "string"
+        },
+        "permissions": {
+          "description": "Read, write and execute permission bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "physical": {
+          "description": "Physical target address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "$ref": "#/$defs/RegionSize",
+          "description": "Mapping extent, including a body DRAM reference when applicable."
+        }
+      },
+      "required": [
+        "id",
+        "address",
+        "physical",
+        "size",
+        "permissions"
+      ],
+      "type": "object"
+    },
+    "HardwareAdc": {
+      "additionalProperties": false,
+      "description": "Declared adc facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "sample_ticks": {
+          "description": "Declared sample ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "sample_ticks",
+        "size"
+      ],
+      "type": "object"
+    },
+    "HardwareAtcm": {
+      "additionalProperties": false,
+      "description": "Declared atcm facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "reset_base": {
+          "description": "Declared reset base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reset_enabled": {
+          "description": "Declared reset enabled.",
+          "type": "boolean"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "reset_base",
+        "reset_enabled",
+        "size"
+      ],
+      "type": "object"
+    },
+    "HardwareBlockParameters": {
+      "additionalProperties": false,
+      "description": "Declared windows options facts.",
+      "properties": {
+        "command_latency_us": {
+          "description": "Declared command latency us.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "companion_irq_base": {
+          "description": "Declared companion irq base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "receive_request": {
+          "description": "Declared receive request.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "source_hz": {
+          "description": "Declared source hz.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "ticks_per_second": {
+          "description": "Declared ticks per second.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "transmit_request": {
+          "description": "Declared transmit request.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "HardwareBootImage": {
+      "additionalProperties": false,
+      "description": "Declared images facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "offset": {
+          "description": "Declared offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "name",
+        "offset",
+        "size"
+      ],
+      "type": "object"
+    },
+    "HardwareBootRom": {
+      "additionalProperties": false,
+      "description": "Declared boot rom facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Declared sha256.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "sha256",
+        "size"
+      ],
+      "type": "object"
+    },
+    "HardwareControlRequests": {
+      "additionalProperties": false,
+      "description": "Declared control requests facts.",
+      "properties": {
+        "ack_ticks": {
+          "description": "Declared ack ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "registers": {
+          "description": "Declared registers.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "ack_ticks",
+        "basis",
+        "registers"
+      ],
+      "type": "object"
+    },
+    "HardwareCoreWindow": {
+      "additionalProperties": false,
+      "description": "Declared private mmio facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size"
+      ],
+      "type": "object"
+    },
+    "HardwareDecompressor": {
+      "additionalProperties": false,
+      "description": "Declared decompressor facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "irq_route": {
+          "description": "Declared irq route.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "base"
+      ],
+      "type": "object"
+    },
+    "HardwareDiagnosticHeaders": {
+      "additionalProperties": false,
+      "description": "Declared diagnostic headers facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "offset": {
+          "description": "Declared offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "name",
+        "offset"
+      ],
+      "type": "object"
+    },
+    "HardwareDiscoveryWindow": {
+      "additionalProperties": false,
+      "description": "Declared discovery mmio facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "basis",
+        "size"
+      ],
+      "type": "object"
+    },
+    "HardwareDma": {
+      "additionalProperties": false,
+      "description": "Declared dma facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "channels": {
+          "description": "Declared channels.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq_routes": {
+          "description": "Declared irq routes.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "native_dependencies": {
+          "description": "Declared native dependencies.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "request_mux": {
+          "description": "Declared request mux.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "timing": {
+          "description": "Declared timing.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "channels",
+        "irq_routes",
+        "native_dependencies",
+        "request_mux",
+        "timing"
+      ],
+      "type": "object"
+    },
+    "HardwareDmp": {
+      "additionalProperties": false,
+      "description": "Declared dmp facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "irq_route": {
+          "description": "Declared irq route.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "irq_route",
+        "size"
+      ],
+      "type": "object"
+    },
+    "HardwareFlashController": {
+      "additionalProperties": false,
+      "description": "Declared memory-mapped flash controller facts.",
+      "properties": {
+        "aperture": {
+          "description": "Read aperture base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "base": {
+          "description": "Controller register base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Read aperture size in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "aperture",
+        "size",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "HardwareGic": {
+      "additionalProperties": false,
+      "description": "Declared gic facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "cpu_interface": {
+          "description": "Declared cpu interface.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "distributor": {
+          "description": "Declared distributor.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "lines": {
+          "description": "Declared lines.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "cpu_interface",
+        "distributor",
+        "lines"
+      ],
+      "type": "object"
+    },
+    "HardwareGpio": {
+      "additionalProperties": false,
+      "description": "Declared gpio facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "size"
+      ],
+      "type": "object"
+    },
+    "HardwareImagingRegisters": {
+      "additionalProperties": false,
+      "description": "Declared register maps imaging facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "command_base": {
+          "description": "Declared command base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "command_ticks": {
+          "description": "Declared command ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "error_irqs": {
+          "description": "Declared error irqs.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "input_buffer": {
+          "$ref": "#/$defs/HardwareInputBuffer",
+          "description": "Declared input buffer."
+        },
+        "normal_irqs": {
+          "description": "Declared normal irqs.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "receiver_base": {
+          "description": "Declared receiver base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reset_ticks": {
+          "description": "Declared reset ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "timing_irqs": {
+          "description": "Declared timing irqs.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "command_base",
+        "command_ticks",
+        "error_irqs",
+        "input_buffer",
+        "normal_irqs",
+        "receiver_base",
+        "reset_ticks",
+        "timing_irqs"
+      ],
+      "type": "object"
+    },
+    "HardwareInputBuffer": {
+      "additionalProperties": false,
+      "description": "Declared input buffer facts.",
+      "properties": {
+        "bank_size": {
+          "description": "Declared bank size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "irq": {
+          "description": "Declared irq.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reset_ticks": {
+          "description": "Declared reset ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sram_base": {
+          "description": "Declared sram base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bank_size",
+        "base",
+        "basis",
+        "irq",
+        "reset_ticks",
+        "sram_base"
+      ],
+      "type": "object"
+    },
+    "HardwareInstructionRate": {
+      "additionalProperties": false,
+      "description": "Declared instructions per tick facts.",
+      "properties": {
+        "denominator": {
+          "description": "Declared denominator.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "numerator": {
+          "description": "Declared numerator.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "denominator",
+        "numerator"
+      ],
+      "type": "object"
+    },
+    "HardwareInterrupts": {
+      "additionalProperties": false,
+      "description": "Declared interrupts facts.",
+      "properties": {
+        "bases": {
+          "description": "Declared bases.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "timer_base": {
+          "description": "Declared timer base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bases",
+        "timer_base"
+      ],
+      "type": "object"
+    },
+    "HardwareIntervalTimer": {
+      "additionalProperties": false,
+      "description": "Declared interval timer facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "clock": {
+          "description": "Declared clock.",
+          "type": "string"
+        },
+        "layout": {
+          "$ref": "#/$defs/HardwareTimerLayout",
+          "description": "Register layout, which selects the timer implementation."
+        },
+        "routes": {
+          "description": "Declared routes.",
+          "items": {
+            "$ref": "#/$defs/HardwareTimerRoute"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "clock",
+        "layout",
+        "routes"
+      ],
+      "type": "object"
+    },
+    "HardwareIoGroups": {
+      "additionalProperties": false,
+      "description": "Declared io groups facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "HardwareLcdc": {
+      "additionalProperties": false,
+      "description": "Declared lcdc facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "irq_routes": {
+          "description": "Declared irq routes.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "picture_layout": {
+          "description": "Declared picture layout.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pixel_clock_ticks": {
+          "description": "Declared pixel clock ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "video_layout": {
+          "description": "Declared video layout.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "irq_routes",
+        "pixel_clock_ticks"
+      ],
+      "type": "object"
+    },
+    "HardwareLoaderDma": {
+      "additionalProperties": false,
+      "description": "Declared loader dma facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base"
+      ],
+      "type": "object"
+    },
+    "HardwareMovdc": {
+      "additionalProperties": false,
+      "description": "Declared movdc facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq": {
+          "description": "Declared irq.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reset_ticks": {
+          "description": "Declared reset ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "irq",
+        "reset_ticks"
+      ],
+      "type": "object"
+    },
+    "HardwareNandBootLayout": {
+      "additionalProperties": false,
+      "description": "Declared nand layouts facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "entry_labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Declared entry labels.",
+          "type": "object"
+        },
+        "images": {
+          "description": "Declared images.",
+          "items": {
+            "$ref": "#/$defs/HardwareBootImage"
+          },
+          "type": "array"
+        },
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "basis",
+        "entry_labels",
+        "images",
+        "name"
+      ],
+      "type": "object"
+    },
+    "HardwarePl330": {
+      "additionalProperties": false,
+      "description": "Declared PL330 DMA controller facts.",
+      "properties": {
+        "base": {
+          "description": "Register base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "bytes_per_tick": {
+          "description": "Bytes moved per guest tick.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq_routes": {
+          "description": "Interrupt line for each event, by event number.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "setup_ticks": {
+          "description": "Guest ticks before a program's first byte moves.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "timing": {
+          "description": "Declared timing qualification.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base",
+        "irq_routes",
+        "setup_ticks",
+        "bytes_per_tick",
+        "timing",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "HardwarePrimaryBusRegisters": {
+      "additionalProperties": false,
+      "description": "Declared register maps control bus0 facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq": {
+          "description": "Declared irq.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "modes": {
+          "description": "Declared modes.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "offsets": {
+          "description": "Declared offsets.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "base",
+        "irq",
+        "modes",
+        "offsets"
+      ],
+      "type": "object"
+    },
+    "HardwareRegisterLayouts": {
+      "additionalProperties": false,
+      "description": "Declared register maps facts.",
+      "properties": {
+        "adc": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareAdc"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared adc."
+        },
+        "control_bus0": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwarePrimaryBusRegisters"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared control bus0."
+        },
+        "control_bus1": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareSecondaryBusRegistersAddress"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared control bus1."
+        },
+        "control_requests": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareControlRequests"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared control requests."
+        },
+        "decompressor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareDecompressor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared decompressor."
+        },
+        "dma": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareDma"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared dma."
+        },
+        "dmp": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareDmp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared dmp."
+        },
+        "flash_controller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareFlashController"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared flash controller."
+        },
+        "gic": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareGic"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared gic."
+        },
+        "gpio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareGpio"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared gpio."
+        },
+        "imaging": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareImagingRegisters"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared imaging."
+        },
+        "interrupts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareInterrupts"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared interrupts."
+        },
+        "interval_timer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareIntervalTimer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared interval timer."
+        },
+        "io_groups": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareIoGroups"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared io groups."
+        },
+        "lcdc": {
+          "description": "Declared lcdc.",
+          "items": {
+            "$ref": "#/$defs/HardwareLcdc"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "loader_dma": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareLoaderDma"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared loader dma."
+        },
+        "movdc": {
+          "description": "Declared movdc.",
+          "items": {
+            "$ref": "#/$defs/HardwareMovdc"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "nand": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareLoaderDma"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared nand."
+        },
+        "pl330": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwarePl330"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared PL330 DMA controller."
+        },
+        "sd_host_clocks": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareSdHostClocks"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared sd host clocks."
+        },
+        "serial_flash": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareSerialFlash"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared serial flash."
+        },
+        "serial_ports": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareSerialPorts"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared serial ports."
+        },
+        "spi": {
+          "additionalProperties": {
+            "$ref": "#/$defs/HardwareSpi"
+          },
+          "description": "Declared spi.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "temperature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareAdc"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared temperature."
+        },
+        "usb": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareUsbRegisters"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared usb."
+        }
+      },
+      "type": "object"
+    },
+    "HardwareRegisterWindow": {
+      "additionalProperties": false,
+      "description": "Declared windows facts.",
+      "properties": {
+        "attachment": {
+          "description": "Declared attachment.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "description": "Declared kind.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "options": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareBlockParameters"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared options."
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "name",
+        "size"
+      ],
+      "type": "object"
+    },
+    "HardwareResetCheck": {
+      "additionalProperties": false,
+      "description": "A checked word at a secondary processor release destination.",
+      "properties": {
+        "address": {
+          "description": "Address of the expected word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "expected_hex": {
+          "description": "Expected bytes in memory order.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "address",
+        "expected_hex"
+      ],
+      "type": "object"
+    },
+    "HardwareResetRelease": {
+      "additionalProperties": false,
+      "description": "Declared reset release facts.",
+      "properties": {
+        "basis": {
+          "description": "Qualification of the release mechanism for this firmware.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checks": {
+          "description": "Immutable instruction words expected at the release destination.",
+          "items": {
+            "$ref": "#/$defs/HardwareResetCheck"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "mask": {
+          "description": "Declared mask.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register": {
+          "description": "Declared register.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "description": "Declared source.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target": {
+          "description": "Declared target.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mask",
+        "register",
+        "source",
+        "target"
+      ],
+      "type": "object"
+    },
+    "HardwareSdHostClocks": {
+      "additionalProperties": false,
+      "description": "Declared sd host clocks facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "settle_ticks": {
+          "description": "Declared settle ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "words": {
+          "description": "Declared words.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "settle_ticks",
+        "words"
+      ],
+      "type": "object"
+    },
+    "HardwareSecondaryBusRegistersAddress": {
+      "additionalProperties": false,
+      "description": "Declared register maps control bus1 facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq": {
+          "description": "Declared irq.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "irq"
+      ],
+      "type": "object"
+    },
+    "HardwareSerialFlash": {
+      "additionalProperties": false,
+      "description": "Declared serial flash facts.",
+      "properties": {
+        "aperture": {
+          "description": "Declared aperture.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "irq_route": {
+          "description": "Declared irq route.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "native_dependencies": {
+          "description": "Declared native dependencies.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "timing": {
+          "description": "Declared timing.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "aperture",
+        "base",
+        "basis",
+        "irq_route",
+        "native_dependencies",
+        "size",
+        "timing"
+      ],
+      "type": "object"
+    },
+    "HardwareSerialPorts": {
+      "additionalProperties": false,
+      "description": "Declared serial port facts.",
+      "properties": {
+        "bases": {
+          "description": "Register base of each port.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "bases",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "HardwareSpi": {
+      "additionalProperties": false,
+      "description": "Declared spi facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "parent_clock_ticks": {
+          "description": "Declared parent clock ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "parent_clock_ticks"
+      ],
+      "type": "object"
+    },
+    "HardwareTcm": {
+      "additionalProperties": false,
+      "description": "Declared tcm facts.",
+      "properties": {
+        "atcm": {
+          "$ref": "#/$defs/HardwareAtcm",
+          "description": "Declared atcm."
+        },
+        "btcm": {
+          "$ref": "#/$defs/HardwareAtcm",
+          "description": "Declared btcm."
+        }
+      },
+      "required": [
+        "atcm",
+        "btcm"
+      ],
+      "type": "object"
+    },
+    "HardwareTimerLayout": {
+      "description": "Interval-timer register layouts.",
+      "oneOf": [
+        {
+          "const": "xp4",
+          "description": "Eight channels at +0x10 + n*8; control select bits set.",
+          "type": "string"
+        },
+        {
+          "const": "xpp",
+          "description": "Sixteen channels at +0x100 + n*0x10; control select bits clear.",
+          "type": "string"
+        }
+      ]
+    },
+    "HardwareTimerRoute": {
+      "additionalProperties": false,
+      "description": "Declared routes facts.",
+      "properties": {
+        "channel": {
+          "description": "Declared channel.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq": {
+          "description": "Declared irq.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "channel",
+        "irq"
+      ],
+      "type": "object"
+    },
+    "HardwareUpdateBoot": {
+      "additionalProperties": false,
+      "description": "Declared update boot facts.",
+      "properties": {
+        "diagnostic_headers": {
+          "description": "Declared diagnostic headers.",
+          "items": {
+            "$ref": "#/$defs/HardwareDiagnosticHeaders"
+          },
+          "type": "array"
+        },
+        "flash_dat_bias": {
+          "description": "Declared flash dat bias.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "nand_layouts": {
+          "additionalProperties": {
+            "$ref": "#/$defs/HardwareNandBootLayout"
+          },
+          "description": "Declared nand layouts.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "diagnostic_headers",
+        "flash_dat_bias",
+        "nand_layouts"
+      ],
+      "type": "object"
+    },
+    "HardwareUsbRegisters": {
+      "additionalProperties": false,
+      "description": "Declared register maps usb facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "core": {
+          "description": "Declared core.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "dma_irq": {
+          "description": "Declared dma irq.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq": {
+          "description": "Declared irq.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "phy": {
+          "description": "Declared phy.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "core",
+        "dma_irq",
+        "irq",
+        "phy"
+      ],
+      "type": "object"
+    },
+    "InterruptControllerHardware": {
+      "description": "ARM generic interrupt-controller interfaces.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "GICv2 distributor and CPU interface.",
+          "properties": {
+            "cpu_interface_block_id": {
+              "description": "CPU-interface register block identity.",
+              "type": "string"
+            },
+            "distributor_block_id": {
+              "description": "Distributor register block identity.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "gic_v2",
+              "type": "string"
+            },
+            "lines": {
+              "description": "Number of implemented interrupt lines.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "distributor_block_id",
+            "cpu_interface_block_id",
+            "lines"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "GICv3 distributor and per-core redistributors.",
+          "properties": {
+            "distributor_block_id": {
+              "description": "Distributor register block identity.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "gic_v3",
+              "type": "string"
+            },
+            "lines": {
+              "description": "Number of implemented interrupt lines.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "redistributor_block_id": {
+              "description": "Redistributor register block identity.",
+              "type": "string"
+            },
+            "redistributor_stride": {
+              "description": "Distance between adjacent redistributor frames.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "distributor_block_id",
+            "redistributor_block_id",
+            "redistributor_stride",
+            "lines"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "InterruptRoute": {
+      "additionalProperties": false,
+      "description": "A routed interrupt line.",
+      "properties": {
+        "core": {
+          "description": "Processor core receiving the interrupt.",
+          "type": "string"
+        },
+        "line": {
+          "description": "Interrupt line number on the processor core.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output_id": {
+          "default": null,
+          "description": "Named output or channel within the source block, when known.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_block": {
+          "description": "SoC block producing the interrupt.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "core",
+        "line",
+        "source_block"
+      ],
+      "type": "object"
+    },
+    "MProfileState": {
+      "additionalProperties": false,
+      "description": "M-profile processor identification state.",
+      "properties": {
+        "cpuid": {
+          "description": "CPUID register value presented by the processor.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "vector_base": {
+          "description": "Vector-table address after reset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cpuid",
+        "vector_base"
+      ],
+      "type": "object"
+    },
+    "MemoryKind": {
+      "description": "Memory technologies exposed by the SoC.",
+      "oneOf": [
+        {
+          "const": "dram",
+          "description": "Dynamic random-access memory.",
+          "type": "string"
+        },
+        {
+          "const": "rom",
+          "description": "Read-only boot memory.",
+          "type": "string"
+        },
+        {
+          "const": "sram",
+          "description": "Static random-access memory.",
+          "type": "string"
+        },
+        {
+          "const": "tcm",
+          "description": "Tightly coupled processor memory.",
+          "type": "string"
+        }
+      ]
+    },
+    "MemoryRegion": {
+      "additionalProperties": false,
+      "description": "A memory region provided by a SoC.",
+      "properties": {
+        "base": {
+          "description": "Region's physical base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "description": "Region identity within the SoC.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/MemoryKind",
+          "description": "Hardware memory type."
+        },
+        "size": {
+          "$ref": "#/$defs/RegionSize",
+          "description": "Region capacity or a reference to body DRAM capacity."
+        }
+      },
+      "required": [
+        "id",
+        "base",
+        "size",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "PeripheralMapping": {
+      "additionalProperties": false,
+      "description": "A per-core view into a named SoC block.",
+      "properties": {
+        "address": {
+          "description": "Processor-visible address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "block_id": {
+          "description": "SoC block identity exposed through this window.",
+          "type": "string"
+        },
+        "core": {
+          "description": "Processor core using this peripheral window.",
+          "type": "string"
+        },
+        "offset": {
+          "description": "Offset in the selected block for a subwindow, when nonzero.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "core",
+        "block_id",
+        "address"
+      ],
+      "type": "object"
+    },
+    "PictureLayout": {
+      "description": "Picture-plane pixel packing declared by a display controller.",
+      "oneOf": [
+        {
+          "const": "bgra8888-straight",
+          "description": "Blue, green, red and straight-alpha bytes.",
+          "type": "string"
+        }
+      ]
+    },
+    "ProcessorArchitecture": {
+      "description": "A processor architecture described by a system-on-chip record.",
+      "oneOf": [
+        {
+          "const": "arm32",
+          "description": "32-bit ARM processor architecture.",
+          "type": "string"
+        },
+        {
+          "const": "aarch64",
+          "description": "64-bit ARM processor architecture.",
+          "type": "string"
+        }
+      ]
+    },
+    "ProcessorCore": {
+      "additionalProperties": false,
+      "description": "A processor core and its hardware reset state.",
+      "properties": {
+        "id": {
+          "description": "Core identity within its SoC.",
+          "type": "string"
+        },
+        "model": {
+          "$ref": "#/$defs/ProcessorModel",
+          "description": "Implemented processor model."
+        },
+        "mprofile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MProfileState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional M-profile hardware state."
+        },
+        "registers": {
+          "description": "Initial architectural register values.",
+          "items": {
+            "$ref": "#/$defs/RegisterValue"
+          },
+          "type": "array"
+        },
+        "released": {
+          "default": null,
+          "description": "Whether this core leaves reset when the SoC starts, when known.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "rprofile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RProfileState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional R-profile hardware state."
+        }
+      },
+      "required": [
+        "id",
+        "model",
+        "registers"
+      ],
+      "type": "object"
+    },
+    "ProcessorModel": {
+      "description": "A processor core model supported by the current catalog.",
+      "oneOf": [
+        {
+          "const": "cortex-r5f",
+          "description": "Cortex-R5F family processor.",
+          "type": "string"
+        },
+        {
+          "const": "cortex-a7",
+          "description": "Cortex-A7 family processor.",
+          "type": "string"
+        },
+        {
+          "const": "cortex-a53",
+          "description": "Cortex-A53 family processor.",
+          "type": "string"
+        },
+        {
+          "const": "cortex-m4",
+          "description": "Cortex-M4 family processor.",
+          "type": "string"
+        }
+      ]
+    },
+    "ProcessorRegister": {
+      "description": "Architectural registers explicitly initialized by a catalog record.",
+      "oneOf": [
+        {
+          "const": "pc",
+          "description": "Program counter.",
+          "type": "string"
+        },
+        {
+          "const": "sp",
+          "description": "Stack pointer.",
+          "type": "string"
+        },
+        {
+          "const": "pstate",
+          "description": "Program status register.",
+          "type": "string"
+        },
+        {
+          "const": "cpsr",
+          "description": "Current program status register.",
+          "type": "string"
+        }
+      ]
+    },
+    "RProfileState": {
+      "additionalProperties": false,
+      "description": "R-profile processor identification and TCM state.",
+      "properties": {
+        "atcm": {
+          "$ref": "#/$defs/TcmState",
+          "description": "ATCM state after reset."
+        },
+        "btcm": {
+          "$ref": "#/$defs/TcmState",
+          "description": "BTCM state after reset."
+        },
+        "cp14_identity": {
+          "description": "CP14 processor identity register value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cp14_identity",
+        "atcm",
+        "btcm"
+      ],
+      "type": "object"
+    },
+    "RegionSize": {
+      "description": "A memory extent with no repeated body-specific capacity.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A fixed byte length owned by the SoC.",
+          "properties": {
+            "bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "bytes",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "bytes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The selected body's declared DRAM capacity.",
+          "properties": {
+            "kind": {
+              "const": "body_dram",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "RegisterValue": {
+      "additionalProperties": false,
+      "description": "An initial value for an architectural register.",
+      "properties": {
+        "register": {
+          "$ref": "#/$defs/ProcessorRegister",
+          "description": "Register selected for initialization."
+        },
+        "value": {
+          "description": "Initial register value.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "register",
+        "value"
+      ],
+      "type": "object"
+    },
+    "SocBlock": {
+      "additionalProperties": false,
+      "description": "A named register or address block.",
+      "properties": {
+        "base": {
+          "description": "Physical base address of the block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "clock_id": {
+          "default": null,
+          "description": "Clock domain supplying this block, when specified.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Block identity used by bodies and run inputs.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/SocBlockKind",
+          "description": "Block's modeled hardware category."
+        },
+        "processor_core_id": {
+          "description": "Processor core directly served by this block, for per-core interrupt controllers.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "size": {
+          "description": "Addressable block size in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "base",
+        "size",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "SocBlockKind": {
+      "description": "Hardware block categories represented in the catalog.",
+      "oneOf": [
+        {
+          "const": "gpio",
+          "description": "General-purpose input/output controller.",
+          "type": "string"
+        },
+        {
+          "const": "adc",
+          "description": "Analog-to-digital converter.",
+          "type": "string"
+        },
+        {
+          "const": "interrupt-controller",
+          "description": "Interrupt controller.",
+          "type": "string"
+        },
+        {
+          "const": "timer",
+          "description": "Timer controller.",
+          "type": "string"
+        },
+        {
+          "const": "dma",
+          "description": "Direct-memory-access controller.",
+          "type": "string"
+        },
+        {
+          "const": "control-bus",
+          "description": "Serial control-bus controller.",
+          "type": "string"
+        },
+        {
+          "const": "serial-controller",
+          "description": "General-purpose serial controller.",
+          "type": "string"
+        },
+        {
+          "const": "nand-controller",
+          "description": "Nonvolatile memory controller.",
+          "type": "string"
+        },
+        {
+          "const": "sd-card-controller",
+          "description": "Removable-card controller.",
+          "type": "string"
+        },
+        {
+          "const": "usb-controller",
+          "description": "USB controller.",
+          "type": "string"
+        },
+        {
+          "const": "display-controller",
+          "description": "Display controller.",
+          "type": "string"
+        },
+        {
+          "const": "imaging-controller",
+          "description": "Imaging controller.",
+          "type": "string"
+        },
+        {
+          "const": "reset-controller",
+          "description": "System reset controller.",
+          "type": "string"
+        },
+        {
+          "const": "clock-controller",
+          "description": "Clock controller.",
+          "type": "string"
+        },
+        {
+          "const": "address-window",
+          "description": "Addressable register window with no assigned functional category.",
+          "type": "string"
+        }
+      ]
+    },
+    "SocHardware": {
+      "additionalProperties": false,
+      "description": "Additional hardware parameters whose meaning depends on the processor family.",
+      "properties": {
+        "application": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ApplicationHardware"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Application-processor identification and cache topology, when declared."
+        },
+        "blocks": {
+          "additionalProperties": {
+            "$ref": "#/$defs/BlockHardware"
+          },
+          "description": "Additional block parameters, keyed by the block's identity.",
+          "type": "object"
+        },
+        "companion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompanionHardware"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Companion-processor clock and mailbox connections, when present."
+        },
+        "interrupt_controller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InterruptControllerHardware"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Hardware interrupt-controller interfaces."
+        },
+        "interrupt_inputs": {
+          "description": "Inputs to a programmable interrupt controller; core routing is selected by its registers.",
+          "items": {
+            "$ref": "#/$defs/ControllerInterruptInput"
+          },
+          "type": "array"
+        },
+        "profiles": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SocProfile"
+          },
+          "description": "Named hardware profiles, selected explicitly by a run preset.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "interrupt_inputs",
+        "blocks"
+      ],
+      "type": "object"
+    },
+    "SocProfile": {
+      "additionalProperties": false,
+      "description": "Declared soc profile facts.",
+      "properties": {
+        "board_ticks_per_second": {
+          "description": "Declared board ticks per second.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "boot_rom": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareBootRom"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared boot rom."
+        },
+        "cache_basis": {
+          "description": "Qualification of the declared processor cache capacities.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cpu_model": {
+          "description": "Declared cpu model.",
+          "type": "string"
+        },
+        "discovery_mmio": {
+          "description": "Declared discovery mmio.",
+          "items": {
+            "$ref": "#/$defs/HardwareDiscoveryWindow"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "engines": {
+          "description": "Declared engines.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "instructions_per_tick": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareInstructionRate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared instructions per tick."
+        },
+        "limits": {
+          "description": "Declared limits.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "mmu": {
+          "description": "Declared mmu.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "private_mmio": {
+          "description": "Declared private mmio.",
+          "items": {
+            "$ref": "#/$defs/HardwareCoreWindow"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "register_maps": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareRegisterLayouts"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared register maps."
+        },
+        "reset_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareResetRelease"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared reset release."
+        },
+        "runtime_abi": {
+          "description": "Declared runtime abi.",
+          "type": "string"
+        },
+        "tcm": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareTcm"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared tcm."
+        },
+        "update_boot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareUpdateBoot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared update boot."
+        },
+        "windows": {
+          "description": "Declared windows.",
+          "items": {
+            "$ref": "#/$defs/HardwareRegisterWindow"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "cpu_model",
+        "limits",
+        "runtime_abi"
+      ],
+      "type": "object"
+    },
+    "SocReset": {
+      "additionalProperties": false,
+      "description": "Hardware state applied when a SoC leaves reset.",
+      "properties": {
+        "coprocessor_writes": {
+          "description": "Coprocessor register writes applied during reset.",
+          "items": {
+            "$ref": "#/$defs/CoprocessorWrite"
+          },
+          "type": "array"
+        },
+        "release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoreRelease"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional secondary-core release register."
+        }
+      },
+      "required": [
+        "coprocessor_writes"
+      ],
+      "type": "object"
+    },
+    "TcmState": {
+      "additionalProperties": false,
+      "description": "A tightly coupled memory reset state.",
+      "properties": {
+        "bytes": {
+          "description": "TCM capacity in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reset_address": {
+          "description": "Address selected by the processor at reset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bytes",
+        "reset_address"
+      ],
+      "type": "object"
+    },
+    "VideoLayout": {
+      "description": "Video-plane pixel packing declared by a display controller.",
+      "oneOf": [
+        {
+          "const": "yycbcr422",
+          "description": "Two luma samples followed by shared chroma samples.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$id": "https://fujimod.com/schemas/soc.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A named system-on-chip record.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/soc.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "architecture": {
+      "$ref": "#/$defs/ProcessorArchitecture",
+      "description": "CPU execution architecture implemented by the SoC."
+    },
+    "blocks": {
+      "description": "Address and register blocks exposed by the SoC.",
+      "items": {
+        "$ref": "#/$defs/SocBlock"
+      },
+      "type": "array"
+    },
+    "clocks": {
+      "description": "Clock domains exposed by the SoC.",
+      "items": {
+        "$ref": "#/$defs/ClockDomain"
+      },
+      "type": "array"
+    },
+    "decoders": {
+      "description": "Named hardware-decoder states and supported selections.",
+      "items": {
+        "$ref": "#/$defs/AddressDecoder"
+      },
+      "type": "array"
+    },
+    "dma_mappings": {
+      "description": "DMA address-space mappings used to construct a processor graph.",
+      "items": {
+        "$ref": "#/$defs/DmaMapping"
+      },
+      "type": "array"
+    },
+    "hardware": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SocHardware"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Additional family-specific hardware parameters, when specified."
+    },
+    "id": {
+      "description": "Stable SoC identity.",
+      "type": "string"
+    },
+    "interrupts": {
+      "description": "Interrupt routes between SoC blocks and processor cores.",
+      "items": {
+        "$ref": "#/$defs/InterruptRoute"
+      },
+      "type": "array"
+    },
+    "mappings": {
+      "description": "CPU address-space mappings used to construct a processor graph.",
+      "items": {
+        "$ref": "#/$defs/AddressMapping"
+      },
+      "type": "array"
+    },
+    "memory_regions": {
+      "description": "Addressable memory regions owned by this SoC.",
+      "items": {
+        "$ref": "#/$defs/MemoryRegion"
+      },
+      "type": "array"
+    },
+    "peripherals": {
+      "description": "Per-core peripheral mappings into named SoC blocks.",
+      "items": {
+        "$ref": "#/$defs/PeripheralMapping"
+      },
+      "type": "array"
+    },
+    "processors": {
+      "description": "Processor cores and their hardware reset configuration.",
+      "items": {
+        "$ref": "#/$defs/ProcessorCore"
+      },
+      "type": "array"
+    },
+    "reset": {
+      "$ref": "#/$defs/SocReset",
+      "description": "Hardware reset and coprocessor setup facts."
+    },
+    "schema": {
+      "description": "SoC record version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "architecture",
+    "processors",
+    "memory_regions",
+    "blocks",
+    "interrupts",
+    "clocks",
+    "mappings",
+    "dma_mappings",
+    "decoders",
+    "peripherals",
+    "reset"
+  ],
+  "title": "Soc",
+  "type": "object"
+}

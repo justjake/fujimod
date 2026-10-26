@@ -3,5 +3,5 @@
 from media_contract import check_media_values
 
 
-def test_media_values():
+def test_media_values() -> None:
     assert check_media_values()

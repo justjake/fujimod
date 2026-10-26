@@ -1,0 +1,35 @@
+body {
+  margin: 0;
+  padding: 16px;
+  background: #18181a;
+  color: #eee;
+  font:
+    14px system-ui,
+    sans-serif;
+}
+#power-combos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 343px), 343px));
+  gap: 16px;
+}
+h1 {
+  grid-column: 1 / -1;
+  font-size: 20px;
+}
+.phone {
+  box-sizing: border-box;
+  width: 343px;
+  max-width: 100%;
+  padding: 16px;
+  border: 1px solid #444;
+  border-radius: 12px;
+  background: #242426;
+}
+.phone h2 {
+  margin: 0 0 20px;
+  font-size: 14px;
+}
+.phone p {
+  color: #aaa;
+  margin: 0;
+}

@@ -1,0 +1,2033 @@
+{
+  "$schema": "https://fujimod.com/schemas/control-ids.schema.json",
+  "schema": 1,
+  "id": "x100s-121-control-ids",
+  "firmware_id": "x100s-121",
+  "scanner": {
+    "base": 8442900,
+    "count": 66,
+    "stride": 28,
+    "lookup": 6908208,
+    "sha256": "47961f6d1685e793dab71630f4e93c745d6baaa2385947013771ce48da25a5c9"
+  },
+  "input_readers": {
+    "calibration": null,
+    "scanner": {
+      "stable_offset": 21,
+      "stable_width": 1,
+      "pressed_value": 1,
+      "released_value": 0,
+      "routine": {
+        "address": 6908644,
+        "size": 64,
+        "sha256": "ec65f0eefd1d95986e2488de4a38b31ebfae5e45cb0be52751ea8be62e25d9d3"
+      }
+    }
+  },
+  "native_key_names": null,
+  "event_translation": null,
+  "debug_keys": [
+    {
+      "name": "EXE_M",
+      "event": 1
+    },
+    {
+      "name": "UP",
+      "event": 2
+    },
+    {
+      "name": "DOWN",
+      "event": 3
+    },
+    {
+      "name": "LEFT",
+      "event": 4
+    },
+    {
+      "name": "RIGHT",
+      "event": 5
+    },
+    {
+      "name": "POWER",
+      "event": 6
+    },
+    {
+      "name": "S1",
+      "event": 7
+    },
+    {
+      "name": "S2",
+      "event": 8
+    },
+    {
+      "name": "BARR_OP",
+      "event": 13
+    },
+    {
+      "name": "BARR_CL",
+      "event": 14
+    },
+    {
+      "name": "BARRIER",
+      "event": 12
+    },
+    {
+      "name": "CRADLE",
+      "event": 532
+    },
+    {
+      "name": "ADAPTER",
+      "event": 15
+    },
+    {
+      "name": "USB",
+      "event": 16
+    },
+    {
+      "name": "DOOR",
+      "event": 528
+    },
+    {
+      "name": "CARD",
+      "event": 17
+    },
+    {
+      "name": "FMODE",
+      "event": 10
+    },
+    {
+      "name": "EXP",
+      "event": 18
+    },
+    {
+      "name": "METER",
+      "event": 541
+    },
+    {
+      "name": "TELE2",
+      "event": 21
+    },
+    {
+      "name": "WIDE2",
+      "event": 22
+    },
+    {
+      "name": "TELE",
+      "event": 19
+    },
+    {
+      "name": "WIDE",
+      "event": 20
+    },
+    {
+      "name": "AF",
+      "event": 23
+    },
+    {
+      "name": "VIDEO",
+      "event": 25
+    },
+    {
+      "name": "HDTV",
+      "event": 26
+    },
+    {
+      "name": "CONT",
+      "event": 27
+    },
+    {
+      "name": "AS_MODE",
+      "event": 785
+    },
+    {
+      "name": "DISP_B",
+      "event": 9
+    },
+    {
+      "name": "K_HOME",
+      "event": 539
+    },
+    {
+      "name": "K_PLAY",
+      "event": 11
+    },
+    {
+      "name": "FACE",
+      "event": 529
+    },
+    {
+      "name": "CRD_P",
+      "event": 533
+    },
+    {
+      "name": "CRD_U",
+      "event": 534
+    },
+    {
+      "name": "MET_SP",
+      "event": 525
+    },
+    {
+      "name": "MET_AV",
+      "event": 527
+    },
+    {
+      "name": "MET_MU",
+      "event": 526
+    },
+    {
+      "name": "HVS_0",
+      "event": 512
+    },
+    {
+      "name": "HVS_90",
+      "event": 513
+    },
+    {
+      "name": "HVS_180",
+      "event": 514
+    },
+    {
+      "name": "HVS_270",
+      "event": 515
+    },
+    {
+      "name": "POP",
+      "event": 28
+    },
+    {
+      "name": "C_DIAL+",
+      "event": 29
+    },
+    {
+      "name": "C_DIAL-",
+      "event": 30
+    },
+    {
+      "name": "W_DIAL+",
+      "event": 519
+    },
+    {
+      "name": "W_DIAL-",
+      "event": 520
+    },
+    {
+      "name": "MF_AF_A",
+      "event": 31
+    },
+    {
+      "name": "MF_AF_C",
+      "event": 32
+    },
+    {
+      "name": "MF_AF_M",
+      "event": 33
+    },
+    {
+      "name": "1P_AF+",
+      "event": 34
+    },
+    {
+      "name": "F_RING+",
+      "event": 521
+    },
+    {
+      "name": "F_RING-",
+      "event": 522
+    },
+    {
+      "name": "Z_RING+",
+      "event": 35
+    },
+    {
+      "name": "Z_RING-",
+      "event": 36
+    },
+    {
+      "name": "AE-LOCK",
+      "event": 37
+    },
+    {
+      "name": "EVF_LCD",
+      "event": 38
+    },
+    {
+      "name": "INFO",
+      "event": 540
+    },
+    {
+      "name": "AEAF_LOCK",
+      "event": 49
+    },
+    {
+      "name": "WB",
+      "event": 46
+    },
+    {
+      "name": "K_PS",
+      "event": 531
+    },
+    {
+      "name": "AE",
+      "event": 47
+    },
+    {
+      "name": "VIEW",
+      "event": 535
+    },
+    {
+      "name": "RAW",
+      "event": 48
+    },
+    {
+      "name": "EVF_OVF",
+      "event": 41
+    },
+    {
+      "name": "MACRO",
+      "event": 530
+    },
+    {
+      "name": "CMD_PUSH",
+      "event": 43
+    },
+    {
+      "name": "CMD_LEFT",
+      "event": 44
+    },
+    {
+      "name": "CMD_RIGHT",
+      "event": 45
+    },
+    {
+      "name": "MOVIE_REC",
+      "event": 52
+    },
+    {
+      "name": "EYE_SEN",
+      "event": 51
+    },
+    {
+      "name": "RING_OFF",
+      "event": 516
+    },
+    {
+      "name": "RING_STB",
+      "event": 517
+    },
+    {
+      "name": "RING_ON",
+      "event": 518
+    },
+    {
+      "name": "FUNCTION2",
+      "event": 537
+    },
+    {
+      "name": "FUNCTION",
+      "event": 40
+    },
+    {
+      "name": "WLAN",
+      "event": 55
+    },
+    {
+      "name": "PLAY",
+      "event": 768
+    },
+    {
+      "name": "REC",
+      "event": 769
+    },
+    {
+      "name": "AUTO",
+      "event": 770
+    },
+    {
+      "name": "QUICK",
+      "event": 771
+    },
+    {
+      "name": "SP",
+      "event": 772
+    },
+    {
+      "name": "SP2",
+      "event": 773
+    },
+    {
+      "name": "SR",
+      "event": 774
+    },
+    {
+      "name": "PORTRAIT",
+      "event": 775
+    },
+    {
+      "name": "LANDSCAPE",
+      "event": 776
+    },
+    {
+      "name": "SPORTS",
+      "event": 777
+    },
+    {
+      "name": "NIGHT",
+      "event": 778
+    },
+    {
+      "name": "BLURRE",
+      "event": 780
+    },
+    {
+      "name": "NATURAL",
+      "event": 779
+    },
+    {
+      "name": "PROGRAM",
+      "event": 782
+    },
+    {
+      "name": "SHUTTER",
+      "event": 783
+    },
+    {
+      "name": "APERTURE",
+      "event": 784
+    },
+    {
+      "name": "MANUAL",
+      "event": 786
+    },
+    {
+      "name": "N_FLASH",
+      "event": 781
+    },
+    {
+      "name": "C1",
+      "event": 791
+    },
+    {
+      "name": "C2",
+      "event": 792
+    },
+    {
+      "name": "C3",
+      "event": 793
+    },
+    {
+      "name": "FSB",
+      "event": 794
+    },
+    {
+      "name": "ISO",
+      "event": 39
+    },
+    {
+      "name": "ADVANCE",
+      "event": 796
+    },
+    {
+      "name": "SETUP",
+      "event": 789
+    },
+    {
+      "name": "M_SEL",
+      "event": 786
+    },
+    {
+      "name": "VOICE",
+      "event": 787
+    },
+    {
+      "name": "MOVIE",
+      "event": 788
+    },
+    {
+      "name": "JIG",
+      "event": 825
+    },
+    {
+      "name": "EXR",
+      "event": 795
+    },
+    {
+      "name": "VREC",
+      "event": 787
+    },
+    {
+      "name": "MJPEG",
+      "event": 788
+    },
+    {
+      "name": "SCEN_P",
+      "event": 772
+    },
+    {
+      "name": "SCEN_S",
+      "event": 772
+    },
+    {
+      "name": "MMOD_P",
+      "event": 782
+    },
+    {
+      "name": "MMOD_S",
+      "event": 783
+    },
+    {
+      "name": "MMOD_A",
+      "event": 784
+    },
+    {
+      "name": "MMOD_M",
+      "event": 786
+    },
+    {
+      "name": "APERT",
+      "event": 18
+    }
+  ],
+  "inputs": [
+    {
+      "id": "row-0",
+      "event": 1537,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 0,
+        "witness": {
+          "physical_key": 1537,
+          "input_kind": "kind_0",
+          "source": 5,
+          "lower": 0,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-1",
+      "event": 1538,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 1,
+        "witness": {
+          "physical_key": 1538,
+          "input_kind": "kind_0",
+          "source": 5,
+          "lower": 0,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-2",
+      "event": 1539,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 2,
+        "witness": {
+          "physical_key": 1539,
+          "input_kind": "kind_0",
+          "source": 5,
+          "lower": 0,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-3",
+      "event": 1536,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 3,
+        "witness": {
+          "physical_key": 1536,
+          "input_kind": "kind_0",
+          "source": 5,
+          "lower": 0,
+          "upper": 1023
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-4",
+      "event": 15,
+      "debug_key": "ADAPTER",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 4,
+        "witness": {
+          "physical_key": 15,
+          "input_kind": "kind_0",
+          "source": 5,
+          "lower": 0,
+          "upper": 1023
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 0,
+            "upper": 1023
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-5",
+      "event": 7,
+      "debug_key": "S1",
+      "target": {
+        "kind": "control",
+        "control_id": "shutter_button"
+      },
+      "scanner": {
+        "index": 5,
+        "witness": {
+          "physical_key": 7,
+          "input_kind": "kind_4",
+          "source": 2,
+          "lower": 1,
+          "upper": 30
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-0-2",
+        "expected_level": false,
+        "scanner": {
+          "kind": "combined",
+          "source": 2,
+          "lower": 1,
+          "upper": 30
+        }
+      }
+    },
+    {
+      "id": "row-6",
+      "event": 8,
+      "debug_key": "S2",
+      "target": {
+        "kind": "control",
+        "control_id": "shutter_button"
+      },
+      "scanner": {
+        "index": 6,
+        "witness": {
+          "physical_key": 8,
+          "input_kind": "kind_4",
+          "source": 3,
+          "lower": 1,
+          "upper": 32
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-0-3",
+        "expected_level": false,
+        "scanner": {
+          "kind": "combined",
+          "source": 3,
+          "lower": 1,
+          "upper": 32
+        }
+      }
+    },
+    {
+      "id": "row-7",
+      "event": 40,
+      "debug_key": "FUNCTION",
+      "target": {
+        "kind": "control",
+        "control_id": "fn_button"
+      },
+      "scanner": {
+        "index": 7,
+        "witness": {
+          "physical_key": 40,
+          "input_kind": "kind_2",
+          "source": 262148,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-4-4",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-8",
+      "event": 47,
+      "debug_key": "AE",
+      "target": {
+        "kind": "control",
+        "control_id": "ae_button"
+      },
+      "scanner": {
+        "index": 8,
+        "witness": {
+          "physical_key": 47,
+          "input_kind": "kind_2",
+          "source": 131084,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-2-12",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-9",
+      "event": 24,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 9,
+        "witness": {
+          "physical_key": 24,
+          "input_kind": "kind_2",
+          "source": 131083,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-10",
+      "event": 6,
+      "debug_key": "POWER",
+      "target": {
+        "kind": "control",
+        "control_id": "power_switch"
+      },
+      "scanner": {
+        "index": 10,
+        "witness": {
+          "physical_key": 6,
+          "input_kind": "kind_5",
+          "source": 6905256,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-11",
+      "event": 2,
+      "debug_key": "UP",
+      "target": {
+        "kind": "control",
+        "control_id": "selector.up"
+      },
+      "scanner": {
+        "index": 11,
+        "witness": {
+          "physical_key": 2,
+          "input_kind": "kind_0",
+          "source": 8,
+          "lower": 783,
+          "upper": 825
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-8",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 783,
+            "upper": 825
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-12",
+      "event": 3,
+      "debug_key": "DOWN",
+      "target": {
+        "kind": "control",
+        "control_id": "selector.down"
+      },
+      "scanner": {
+        "index": 12,
+        "witness": {
+          "physical_key": 3,
+          "input_kind": "kind_0",
+          "source": 8,
+          "lower": 571,
+          "upper": 624
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-8",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 571,
+            "upper": 624
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-13",
+      "event": 4,
+      "debug_key": "LEFT",
+      "target": {
+        "kind": "control",
+        "control_id": "selector.left"
+      },
+      "scanner": {
+        "index": 13,
+        "witness": {
+          "physical_key": 4,
+          "input_kind": "kind_0",
+          "source": 8,
+          "lower": 372,
+          "upper": 424
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-8",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 372,
+            "upper": 424
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-14",
+      "event": 5,
+      "debug_key": "RIGHT",
+      "target": {
+        "kind": "control",
+        "control_id": "selector.right"
+      },
+      "scanner": {
+        "index": 14,
+        "witness": {
+          "physical_key": 5,
+          "input_kind": "kind_0",
+          "source": 8,
+          "lower": 180,
+          "upper": 221
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-8",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 180,
+            "upper": 221
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-15",
+      "event": 50,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 15,
+        "witness": {
+          "physical_key": 50,
+          "input_kind": "kind_0",
+          "source": 9,
+          "lower": 783,
+          "upper": 825
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-16",
+      "event": 9,
+      "debug_key": "DISP_B",
+      "target": {
+        "kind": "control",
+        "control_id": "disp_back_button"
+      },
+      "scanner": {
+        "index": 16,
+        "witness": {
+          "physical_key": 9,
+          "input_kind": "kind_0",
+          "source": 9,
+          "lower": 571,
+          "upper": 624
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-9",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 571,
+            "upper": 624
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-17",
+      "event": 1,
+      "debug_key": "EXE_M",
+      "target": {
+        "kind": "control",
+        "control_id": "menu_ok_button"
+      },
+      "scanner": {
+        "index": 17,
+        "witness": {
+          "physical_key": 1,
+          "input_kind": "kind_0",
+          "source": 9,
+          "lower": 372,
+          "upper": 424
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-9",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 372,
+            "upper": 424
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-18",
+      "event": 49,
+      "debug_key": "AEAF_LOCK",
+      "target": {
+        "kind": "control",
+        "control_id": "af_ae_lock_button"
+      },
+      "scanner": {
+        "index": 18,
+        "witness": {
+          "physical_key": 49,
+          "input_kind": "kind_0",
+          "source": 9,
+          "lower": 180,
+          "upper": 221
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-9",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 180,
+            "upper": 221
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-19",
+      "event": 535,
+      "debug_key": "VIEW",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 19,
+        "witness": {
+          "physical_key": 535,
+          "input_kind": "kind_2",
+          "source": 262149,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-4-5",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-20",
+      "event": 17,
+      "debug_key": "CARD",
+      "target": {
+        "kind": "connection",
+        "connection_id": "sd-card-detect"
+      },
+      "scanner": {
+        "index": 20,
+        "witness": {
+          "physical_key": 17,
+          "input_kind": "kind_2",
+          "source": 786439,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "sd-card-detect",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-21",
+      "event": 11,
+      "debug_key": "K_PLAY",
+      "target": {
+        "kind": "control",
+        "control_id": "playback_button"
+      },
+      "scanner": {
+        "index": 21,
+        "witness": {
+          "physical_key": 11,
+          "input_kind": "kind_2",
+          "source": 131081,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-2-9",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-22",
+      "event": 41,
+      "debug_key": "EVF_OVF",
+      "target": {
+        "kind": "control",
+        "control_id": "viewfinder_selector"
+      },
+      "scanner": {
+        "index": 22,
+        "witness": {
+          "physical_key": 41,
+          "input_kind": "kind_2",
+          "source": 196621,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-3-13",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-23",
+      "event": 43,
+      "debug_key": "CMD_PUSH",
+      "target": {
+        "kind": "control",
+        "control_id": "command_control"
+      },
+      "scanner": {
+        "index": 23,
+        "witness": {
+          "physical_key": 43,
+          "input_kind": "kind_2",
+          "source": 196618,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-3-10",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-24",
+      "event": 44,
+      "debug_key": "CMD_LEFT",
+      "target": {
+        "kind": "control",
+        "control_id": "command_control"
+      },
+      "scanner": {
+        "index": 24,
+        "witness": {
+          "physical_key": 44,
+          "input_kind": "kind_2",
+          "source": 196616,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-3-8",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-25",
+      "event": 45,
+      "debug_key": "CMD_RIGHT",
+      "target": {
+        "kind": "control",
+        "control_id": "command_control"
+      },
+      "scanner": {
+        "index": 25,
+        "witness": {
+          "physical_key": 45,
+          "input_kind": "kind_2",
+          "source": 196617,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-3-9",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-26",
+      "event": 33,
+      "debug_key": "MF_AF_M",
+      "target": {
+        "kind": "control",
+        "control_id": "focus_mode_selector"
+      },
+      "scanner": {
+        "index": 26,
+        "witness": {
+          "physical_key": 33,
+          "input_kind": "kind_2",
+          "source": 196614,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-3-6",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-27",
+      "event": 31,
+      "debug_key": "MF_AF_A",
+      "target": {
+        "kind": "control",
+        "control_id": "focus_mode_selector"
+      },
+      "scanner": {
+        "index": 27,
+        "witness": {
+          "physical_key": 31,
+          "input_kind": "kind_2",
+          "source": 196615,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-3-7",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-28",
+      "event": 32,
+      "debug_key": "MF_AF_C",
+      "target": {
+        "kind": "control",
+        "control_id": "focus_mode_selector"
+      },
+      "scanner": {
+        "index": 28,
+        "witness": {
+          "physical_key": 32,
+          "input_kind": "kind_2",
+          "source": 196615,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-3-7",
+        "expected_level": true,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-29",
+      "event": 53,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 29,
+        "witness": {
+          "physical_key": 53,
+          "input_kind": "kind_2",
+          "source": 720898,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-30",
+      "event": 798,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 30,
+        "witness": {
+          "physical_key": 798,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14082,
+          "upper": 14080
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-31",
+      "event": 799,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 31,
+        "witness": {
+          "physical_key": 799,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14086,
+          "upper": 14084
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-32",
+      "event": 800,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 32,
+        "witness": {
+          "physical_key": 800,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14090,
+          "upper": 14088
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-33",
+      "event": 801,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 33,
+        "witness": {
+          "physical_key": 801,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14094,
+          "upper": 14092
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-34",
+      "event": 802,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 34,
+        "witness": {
+          "physical_key": 802,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14098,
+          "upper": 14096
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-35",
+      "event": 803,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 35,
+        "witness": {
+          "physical_key": 803,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14102,
+          "upper": 14100
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-36",
+      "event": 804,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 36,
+        "witness": {
+          "physical_key": 804,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14106,
+          "upper": 14104
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-37",
+      "event": 805,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 37,
+        "witness": {
+          "physical_key": 805,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14110,
+          "upper": 14108
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-38",
+      "event": 806,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 38,
+        "witness": {
+          "physical_key": 806,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14114,
+          "upper": 14112
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-39",
+      "event": 807,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 39,
+        "witness": {
+          "physical_key": 807,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14118,
+          "upper": 14116
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-40",
+      "event": 808,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 40,
+        "witness": {
+          "physical_key": 808,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14122,
+          "upper": 14120
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-41",
+      "event": 809,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 41,
+        "witness": {
+          "physical_key": 809,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14126,
+          "upper": 14124
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-42",
+      "event": 810,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 42,
+        "witness": {
+          "physical_key": 810,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14130,
+          "upper": 14128
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-43",
+      "event": 811,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 43,
+        "witness": {
+          "physical_key": 811,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14134,
+          "upper": 14132
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-44",
+      "event": 812,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 44,
+        "witness": {
+          "physical_key": 812,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14146,
+          "upper": 14144
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-45",
+      "event": 813,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 45,
+        "witness": {
+          "physical_key": 813,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14150,
+          "upper": 14148
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-46",
+      "event": 814,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 46,
+        "witness": {
+          "physical_key": 814,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14154,
+          "upper": 14152
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-47",
+      "event": 815,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 47,
+        "witness": {
+          "physical_key": 815,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14158,
+          "upper": 14156
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-48",
+      "event": 816,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 48,
+        "witness": {
+          "physical_key": 816,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14162,
+          "upper": 14160
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-49",
+      "event": 817,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 49,
+        "witness": {
+          "physical_key": 817,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14166,
+          "upper": 14164
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-50",
+      "event": 818,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 50,
+        "witness": {
+          "physical_key": 818,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14170,
+          "upper": 14168
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-51",
+      "event": 819,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 51,
+        "witness": {
+          "physical_key": 819,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14174,
+          "upper": 14172
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-52",
+      "event": 820,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 52,
+        "witness": {
+          "physical_key": 820,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14178,
+          "upper": 14176
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-53",
+      "event": 821,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 53,
+        "witness": {
+          "physical_key": 821,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14182,
+          "upper": 14180
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-54",
+      "event": 822,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 54,
+        "witness": {
+          "physical_key": 822,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14186,
+          "upper": 14184
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-55",
+      "event": 823,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 55,
+        "witness": {
+          "physical_key": 823,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14190,
+          "upper": 14188
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-56",
+      "event": 824,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 56,
+        "witness": {
+          "physical_key": 824,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14194,
+          "upper": 14192
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-57",
+      "event": 1280,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 57,
+        "witness": {
+          "physical_key": 1280,
+          "input_kind": "kind_5",
+          "source": 6905420,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-58",
+      "event": 1281,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 58,
+        "witness": {
+          "physical_key": 1281,
+          "input_kind": "kind_5",
+          "source": 6905440,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-59",
+      "event": 1282,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 59,
+        "witness": {
+          "physical_key": 1282,
+          "input_kind": "kind_5",
+          "source": 6905460,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-60",
+      "event": 1283,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 60,
+        "witness": {
+          "physical_key": 1283,
+          "input_kind": "kind_5",
+          "source": 6905480,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-61",
+      "event": 1284,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 61,
+        "witness": {
+          "physical_key": 1284,
+          "input_kind": "kind_5",
+          "source": 6905500,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-62",
+      "event": 1285,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 62,
+        "witness": {
+          "physical_key": 1285,
+          "input_kind": "kind_5",
+          "source": 6905520,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-63",
+      "event": 1286,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 63,
+        "witness": {
+          "physical_key": 1286,
+          "input_kind": "kind_5",
+          "source": 6905540,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-64",
+      "event": 1287,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 64,
+        "witness": {
+          "physical_key": 1287,
+          "input_kind": "kind_5",
+          "source": 6905560,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-65",
+      "event": 54,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 65,
+        "witness": {
+          "physical_key": 54,
+          "input_kind": "kind_2",
+          "source": 196608,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "encoder-519",
+      "event": 519,
+      "debug_key": "W_DIAL+",
+      "target": {
+        "kind": "control",
+        "control_id": "command_dial"
+      },
+      "scanner": null,
+      "electrical": {
+        "kind": "gpio_fixed_cycle",
+        "connection_id": "controls-encoder-3-11-3-12",
+        "cycle_sign": 1
+      }
+    },
+    {
+      "id": "encoder-520",
+      "event": 520,
+      "debug_key": "W_DIAL-",
+      "target": {
+        "kind": "control",
+        "control_id": "command_dial"
+      },
+      "scanner": null,
+      "electrical": {
+        "kind": "gpio_fixed_cycle",
+        "connection_id": "controls-encoder-3-11-3-12",
+        "cycle_sign": -1
+      }
+    },
+    {
+      "id": "debug-38",
+      "event": 38,
+      "debug_key": "EVF_LCD",
+      "target": {
+        "kind": "control",
+        "control_id": "view_mode_button"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-521",
+      "event": 521,
+      "debug_key": "F_RING+",
+      "target": {
+        "kind": "control",
+        "control_id": "focus_ring"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-522",
+      "event": 522,
+      "debug_key": "F_RING-",
+      "target": {
+        "kind": "control",
+        "control_id": "focus_ring"
+      },
+      "scanner": null,
+      "electrical": null
+    }
+  ],
+  "undelivered_rows": [],
+  "interfaces": {}
+}

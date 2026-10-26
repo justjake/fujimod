@@ -95,7 +95,7 @@ impl ResearchReply {
 }
 #[wasm_bindgen]
 pub struct App80CommandCode {
-    inner: usb::app80::CommandCode,
+    inner: fujimod_usb_app80_types::CommandCode,
 }
 #[wasm_bindgen]
 impl App80CommandCode {
@@ -106,7 +106,7 @@ impl App80CommandCode {
         let value = error::integer(value, u8::MAX.into())? as u8;
         Ok({
             Self {
-                inner: usb::app80::CommandCode(value),
+                inner: fujimod_usb_app80_types::CommandCode(value),
             }
         })
     }
@@ -118,7 +118,7 @@ impl App80CommandCode {
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct App80Request {
-    pub(crate) inner: usb::app80::Request,
+    pub(crate) inner: fujimod_usb_app80_types::Request,
 }
 #[wasm_bindgen]
 impl App80Request {
@@ -129,9 +129,9 @@ impl App80Request {
     ) -> Result<Self, JsValue> {
         let arguments = error::buffer(arguments)?;
 
-        usb::app80::Request::new(code.inner, &arguments)
+        fujimod_usb_app80_types::Request::new(code.inner, &arguments)
             .map(|inner| Self { inner })
-            .map_err(error)
+            .map_err(|source| error::fail(error::ErrorKind::InvalidArgument, &source.to_string()))
     }
     #[wasm_bindgen(getter, unchecked_return_type = "Uint8Array")]
     pub fn raw(&self) -> JsValue {
@@ -141,7 +141,7 @@ impl App80Request {
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
 pub struct Mailbox {
-    pub(crate) inner: usb::operations::app80::Mailbox,
+    pub(crate) inner: fujimod_usb_app80::operations::Mailbox,
 }
 #[wasm_bindgen]
 impl Mailbox {
@@ -155,7 +155,7 @@ impl Mailbox {
         let offset = error::integer(offset, u32::MAX)?;
         let configuration_limit = error::integer(configuration_limit, u32::MAX)?;
 
-        usb::operations::app80::Mailbox::new(page, offset, nz(configuration_limit)?)
+        fujimod_usb_app80::operations::Mailbox::new(page, offset, nz(configuration_limit)?)
             .map(|inner| Self { inner })
             .map_err(error)
     }
@@ -210,8 +210,8 @@ impl UploadReply {
         }
     }
     #[wasm_bindgen(getter, unchecked_return_type = "Uint8Array")]
-    pub fn acknowledgement(&self) -> JsValue {
-        bytes(&self.inner.acknowledgement)
+    pub fn acknowledgment(&self) -> JsValue {
+        bytes(&self.inner.acknowledgment)
     }
     #[wasm_bindgen(getter,js_name=bytesWritten)]
     pub fn bytes_written(&self) -> u32 {

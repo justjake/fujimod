@@ -9,9 +9,9 @@ pub(crate) struct InspectionCache {
     pub signatures: HashMap<(String, Architecture, [u8; 32]), usize>,
     pub strings: HashMap<(String, String), usize>,
     pub code: HashMap<(String, String), Vec<(u64, u64)>>,
-    pub bodies: RwLock<HashMap<usize, Option<String>>>,
     pub tables: RwLock<HashMap<usize, Vec<DataWitness>>>,
     pub anchors: RwLock<HashMap<usize, BTreeSet<[u8; 32]>>>,
+    pub candidate_shapes: RwLock<HashMap<String, HashMap<(Architecture, [u8; 32]), Vec<usize>>>>,
 }
 impl InspectionCache {
     pub fn new(functions: &[Function]) -> Self {
@@ -72,7 +72,7 @@ impl Index {
         let mut found = BTreeSet::new();
         if let Some(f) = self.functions.get(id) {
             for &(_, target) in &f.calls {
-                if let Some(i) = self.resolve(id, target) {
+                if let Some(i) = self.callee(id, target) {
                     let c = &self.functions[i];
                     if c.instructions >= 4
                         && self.inspection.signatures.get(&(
@@ -108,9 +108,8 @@ impl Index {
         let same_arch = x.architecture == y.architecture;
         let normalized = same_arch && x.signature == y.signature;
         if normalized {
-            out.exact_body_bytes = self
-                .body_sha256(a)
-                .is_some_and(|h| self.body_sha256(b) == Some(h));
+            out.exact_body_bytes = infallible(self.body_sha256(a))
+                .is_some_and(|h| infallible(self.body_sha256(b)) == Some(h));
             out.shared_rare_strings = x
                 .strings
                 .intersection(&y.strings)

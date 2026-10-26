@@ -1,3 +1,8 @@
+# The Python extension uses the stable ABI, so PyO3 needs no interpreter. Without
+# this, its build script follows PATH and rebuilds whenever a shell's PATH differs.
+[env]
+PYO3_NO_PYTHON = "1"
+
 [target.wasm32-unknown-unknown]
 # nusb's WebUSB backend uses web-sys's gated USB bindings.
 rustflags = ["--cfg=web_sys_unstable_apis"]

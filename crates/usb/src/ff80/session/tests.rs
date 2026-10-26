@@ -104,7 +104,7 @@ fn direct_read_performs_one_command_and_returns_only_data() {
 }
 
 #[test]
-fn direct_write_requires_a_matching_acknowledgement() {
+fn direct_write_requires_a_matching_acknowledgment() {
     let command = WriteMemory::new(
         Address(4),
         vec![1, 2, 3, 4],
@@ -491,7 +491,7 @@ fn research_statuses_do_not_drive_wait_retry_or_cleanup() {
 }
 
 #[test]
-fn cancelled_research_exchange_owns_the_unfinished_reply() {
+fn canceled_research_exchange_owns_the_unfinished_reply() {
     use crate::ff80::commands::research::{CommandCode, Request};
     let request = Request::new(CommandCode(0x1a0001), vec![0; 16], nz(32)).unwrap();
     let mut script = command_steps(request.encode(), 32, Ok(vec![]));

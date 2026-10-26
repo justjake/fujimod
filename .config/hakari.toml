@@ -1,0 +1,15 @@
+# Unifies third-party features across the workspace so every package selection
+# (`cargo test -p ...`, Maturin, the worker) reuses the same dependency builds.
+# Regenerate with `mise run rust-hack`.
+hakari-package = "fujimod-workspace-hack"
+dep-format-version = "4"
+resolver = "2"
+workspace-hack-line-style = "workspace-dotted"
+
+# Native development and CI hosts, plus the browser targets.
+platforms = [
+  "aarch64-apple-darwin",
+  "x86_64-unknown-linux-gnu",
+  "wasm32-unknown-unknown",
+  "wasm32-unknown-emscripten",
+]

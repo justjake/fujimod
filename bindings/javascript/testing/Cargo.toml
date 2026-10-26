@@ -1,0 +1,24 @@
+[package]
+name = "fujimod-javascript-testing"
+description = "The FujiMod JavaScript bindings with synthetic USB endpoints, for tests only"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+test = false
+doctest = false
+crate-type = ["cdylib"]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+fujimod-javascript = { path = ".." }
+fujimod-usb.workspace = true
+nusb.workspace = true
+js-sys.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+
+[dependencies]
+fujimod-workspace-hack.workspace = true

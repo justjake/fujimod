@@ -1,0 +1,2451 @@
+{
+  "$schema": "https://fujimod.com/schemas/control-ids.schema.json",
+  "schema": 1,
+  "id": "xs10-311-control-ids",
+  "firmware_id": "xs10-311",
+  "scanner": {
+    "base": 24860756,
+    "count": 56,
+    "stride": 32,
+    "lookup": 19065280,
+    "sha256": "bb0176784109ca945992f00e5af486171f4b894a6acae32615c8672f8aa28ffd"
+  },
+  "input_readers": {
+    "calibration": null,
+    "scanner": null
+  },
+  "native_key_names": null,
+  "event_translation": {
+    "address": 22630888,
+    "stride": 6,
+    "sha256": "589f4f530a9d6ed0a221156689b7bb9f9742b96167809af71357f20ec0b85d6e",
+    "rows": [
+      {
+        "physical_key": 8,
+        "event": 7
+      },
+      {
+        "physical_key": 9,
+        "event": 8
+      },
+      {
+        "physical_key": 10,
+        "event": 7
+      },
+      {
+        "physical_key": 11,
+        "event": 8
+      },
+      {
+        "physical_key": 82,
+        "event": 7
+      },
+      {
+        "physical_key": 83,
+        "event": 8
+      },
+      {
+        "physical_key": 12,
+        "event": 7
+      },
+      {
+        "physical_key": 13,
+        "event": 8
+      },
+      {
+        "physical_key": 14,
+        "event": 6
+      },
+      {
+        "physical_key": 16,
+        "event": 10
+      },
+      {
+        "physical_key": 18,
+        "event": 17
+      },
+      {
+        "physical_key": 46,
+        "event": 12290
+      },
+      {
+        "physical_key": 47,
+        "event": 12298
+      },
+      {
+        "physical_key": 48,
+        "event": 12299
+      },
+      {
+        "physical_key": 49,
+        "event": 12300
+      },
+      {
+        "physical_key": 50,
+        "event": 12302
+      },
+      {
+        "physical_key": 51,
+        "event": 12307
+      },
+      {
+        "physical_key": 52,
+        "event": 12308
+      },
+      {
+        "physical_key": 53,
+        "event": 12309
+      },
+      {
+        "physical_key": 54,
+        "event": 12310
+      },
+      {
+        "physical_key": 55,
+        "event": 12304
+      },
+      {
+        "physical_key": 56,
+        "event": 12314
+      },
+      {
+        "physical_key": 57,
+        "event": 12292
+      },
+      {
+        "physical_key": 15,
+        "event": 1
+      },
+      {
+        "physical_key": 17,
+        "event": 9
+      },
+      {
+        "physical_key": 59,
+        "event": 33
+      },
+      {
+        "physical_key": 58,
+        "event": 8253
+      },
+      {
+        "physical_key": 19,
+        "event": 43
+      },
+      {
+        "physical_key": 22,
+        "event": 55
+      },
+      {
+        "physical_key": 21,
+        "event": 8227
+      },
+      {
+        "physical_key": 20,
+        "event": 8230
+      },
+      {
+        "physical_key": 31,
+        "event": 66
+      },
+      {
+        "physical_key": 32,
+        "event": 58
+      },
+      {
+        "physical_key": 33,
+        "event": 62
+      },
+      {
+        "physical_key": 34,
+        "event": 60
+      },
+      {
+        "physical_key": 35,
+        "event": 64
+      },
+      {
+        "physical_key": 36,
+        "event": 59
+      },
+      {
+        "physical_key": 37,
+        "event": 61
+      },
+      {
+        "physical_key": 39,
+        "event": 63
+      },
+      {
+        "physical_key": 38,
+        "event": 65
+      },
+      {
+        "physical_key": 43,
+        "event": 38
+      },
+      {
+        "physical_key": 42,
+        "event": 37
+      },
+      {
+        "physical_key": 45,
+        "event": 68
+      },
+      {
+        "physical_key": 44,
+        "event": 67
+      },
+      {
+        "physical_key": 40,
+        "event": 69
+      },
+      {
+        "physical_key": 41,
+        "event": 70
+      },
+      {
+        "physical_key": 60,
+        "event": 21
+      },
+      {
+        "physical_key": 84,
+        "event": 11
+      },
+      {
+        "physical_key": 4,
+        "event": 14
+      },
+      {
+        "physical_key": 2,
+        "event": 50
+      },
+      {
+        "physical_key": 3,
+        "event": 54
+      },
+      {
+        "physical_key": 7,
+        "event": 19
+      },
+      {
+        "physical_key": 6,
+        "event": 13
+      },
+      {
+        "physical_key": 23,
+        "event": 94
+      },
+      {
+        "physical_key": 24,
+        "event": 96
+      },
+      {
+        "physical_key": 25,
+        "event": 95
+      },
+      {
+        "physical_key": 26,
+        "event": 97
+      },
+      {
+        "physical_key": 100,
+        "event": 83
+      },
+      {
+        "physical_key": 101,
+        "event": 84
+      },
+      {
+        "physical_key": 102,
+        "event": 85
+      },
+      {
+        "physical_key": 27,
+        "event": 8233
+      },
+      {
+        "physical_key": 29,
+        "event": 47
+      },
+      {
+        "physical_key": 232,
+        "event": 8233
+      },
+      {
+        "physical_key": 28,
+        "event": 8235
+      },
+      {
+        "physical_key": 30,
+        "event": 48
+      },
+      {
+        "physical_key": 108,
+        "event": 8273
+      },
+      {
+        "physical_key": 109,
+        "event": 8275
+      },
+      {
+        "physical_key": 110,
+        "event": 8272
+      },
+      {
+        "physical_key": 111,
+        "event": 8274
+      },
+      {
+        "physical_key": 77,
+        "event": 116
+      },
+      {
+        "physical_key": 237,
+        "event": 7
+      },
+      {
+        "physical_key": 238,
+        "event": 8
+      },
+      {
+        "physical_key": 239,
+        "event": 45
+      },
+      {
+        "physical_key": 235,
+        "event": 8277
+      },
+      {
+        "physical_key": 236,
+        "event": 8279
+      },
+      {
+        "physical_key": 233,
+        "event": 8276
+      },
+      {
+        "physical_key": 234,
+        "event": 8278
+      }
+    ]
+  },
+  "debug_keys": [
+    {
+      "name": "EXE_M",
+      "event": 1
+    },
+    {
+      "name": "UP",
+      "event": 2
+    },
+    {
+      "name": "DOWN",
+      "event": 3
+    },
+    {
+      "name": "LEFT",
+      "event": 4
+    },
+    {
+      "name": "RIGHT",
+      "event": 5
+    },
+    {
+      "name": "POWER",
+      "event": 6
+    },
+    {
+      "name": "S1",
+      "event": 7
+    },
+    {
+      "name": "S2",
+      "event": 8
+    },
+    {
+      "name": "BARR_OP",
+      "event": 8270
+    },
+    {
+      "name": "BARR_CL",
+      "event": 8271
+    },
+    {
+      "name": "CRADLE",
+      "event": 8244
+    },
+    {
+      "name": "ADAPTER",
+      "event": 11
+    },
+    {
+      "name": "USB",
+      "event": 13
+    },
+    {
+      "name": "DOOR",
+      "event": 8240
+    },
+    {
+      "name": "CARD",
+      "event": 14
+    },
+    {
+      "name": "FMODE",
+      "event": 8280
+    },
+    {
+      "name": "EXP",
+      "event": 16
+    },
+    {
+      "name": "METER",
+      "event": 8257
+    },
+    {
+      "name": "TELE2",
+      "event": 8274
+    },
+    {
+      "name": "WIDE2",
+      "event": 8275
+    },
+    {
+      "name": "TELE",
+      "event": 8272
+    },
+    {
+      "name": "WIDE",
+      "event": 8273
+    },
+    {
+      "name": "ND",
+      "event": 8281
+    },
+    {
+      "name": "AF",
+      "event": 8282
+    },
+    {
+      "name": "DRIVE",
+      "event": 17
+    },
+    {
+      "name": "VIDEO",
+      "event": 18
+    },
+    {
+      "name": "HDTV",
+      "event": 19
+    },
+    {
+      "name": "CONT",
+      "event": 20
+    },
+    {
+      "name": "AS_MODE",
+      "event": 12301
+    },
+    {
+      "name": "DISP_B",
+      "event": 9
+    },
+    {
+      "name": "K_HOME",
+      "event": 8255
+    },
+    {
+      "name": "K_PLAY",
+      "event": 10
+    },
+    {
+      "name": "FACE",
+      "event": 8241
+    },
+    {
+      "name": "CRD_P",
+      "event": 8245
+    },
+    {
+      "name": "CRD_U",
+      "event": 8246
+    },
+    {
+      "name": "MET_SP",
+      "event": 8236
+    },
+    {
+      "name": "MET_AV",
+      "event": 8238
+    },
+    {
+      "name": "MET_MU",
+      "event": 8237
+    },
+    {
+      "name": "MET_CN",
+      "event": 8239
+    },
+    {
+      "name": "HVS_0",
+      "event": 8192
+    },
+    {
+      "name": "HVS_90",
+      "event": 8193
+    },
+    {
+      "name": "HVS_180",
+      "event": 8194
+    },
+    {
+      "name": "HVS_270",
+      "event": 8195
+    },
+    {
+      "name": "POP",
+      "event": 21
+    },
+    {
+      "name": "C_DIAL+",
+      "event": 22
+    },
+    {
+      "name": "C_DIAL-",
+      "event": 23
+    },
+    {
+      "name": "W_DIAL+",
+      "event": 8199
+    },
+    {
+      "name": "W_DIAL-",
+      "event": 8200
+    },
+    {
+      "name": "MF_AF_A",
+      "event": 24
+    },
+    {
+      "name": "MF_AF_C",
+      "event": 25
+    },
+    {
+      "name": "MF_AF_M",
+      "event": 26
+    },
+    {
+      "name": "1P_AF+",
+      "event": 27
+    },
+    {
+      "name": "F_RING+",
+      "event": 8201
+    },
+    {
+      "name": "F_RING-",
+      "event": 8202
+    },
+    {
+      "name": "Z_RING+",
+      "event": 28
+    },
+    {
+      "name": "Z_RING-",
+      "event": 29
+    },
+    {
+      "name": "AE-LOCK",
+      "event": 30
+    },
+    {
+      "name": "AF-LOCK",
+      "event": 8209
+    },
+    {
+      "name": "AF-ON",
+      "event": 8210
+    },
+    {
+      "name": "EVF_LCD",
+      "event": 31
+    },
+    {
+      "name": "INFO",
+      "event": 8256
+    },
+    {
+      "name": "AEAF_LOCK",
+      "event": 8229
+    },
+    {
+      "name": "WB",
+      "event": 39
+    },
+    {
+      "name": "K_PS",
+      "event": 8243
+    },
+    {
+      "name": "AE",
+      "event": 40
+    },
+    {
+      "name": "VIEW",
+      "event": 8247
+    },
+    {
+      "name": "K_Q",
+      "event": 43
+    },
+    {
+      "name": "EVF_OVF",
+      "event": 34
+    },
+    {
+      "name": "MACRO",
+      "event": 8242
+    },
+    {
+      "name": "CMD_PUSH",
+      "event": 36
+    },
+    {
+      "name": "CMD_LEFT",
+      "event": 37
+    },
+    {
+      "name": "CMD_RIGHT",
+      "event": 38
+    },
+    {
+      "name": "MOVIE_REC",
+      "event": 45
+    },
+    {
+      "name": "EYE_SEN",
+      "event": 44
+    },
+    {
+      "name": "RING_OFF",
+      "event": 8196
+    },
+    {
+      "name": "RING_STB",
+      "event": 8197
+    },
+    {
+      "name": "RING_ON",
+      "event": 8198
+    },
+    {
+      "name": "FUNCTION2",
+      "event": 8253
+    },
+    {
+      "name": "FUNCTION",
+      "event": 33
+    },
+    {
+      "name": "WLAN",
+      "event": 49
+    },
+    {
+      "name": "CRING+",
+      "event": 8206
+    },
+    {
+      "name": "CRING-",
+      "event": 8207
+    },
+    {
+      "name": "CRING_MF",
+      "event": 8208
+    },
+    {
+      "name": "CR_TELE2",
+      "event": 8267
+    },
+    {
+      "name": "CR_WIDE2",
+      "event": 8269
+    },
+    {
+      "name": "CR_TELE",
+      "event": 8266
+    },
+    {
+      "name": "CR_WIDE",
+      "event": 8268
+    },
+    {
+      "name": "FOCUS",
+      "event": 8259
+    },
+    {
+      "name": "DELETE",
+      "event": 8260
+    },
+    {
+      "name": "CMD2_PUSH",
+      "event": 8223
+    },
+    {
+      "name": "CMD2_L",
+      "event": 67
+    },
+    {
+      "name": "CMD2_R",
+      "event": 68
+    },
+    {
+      "name": "EXTFUNC",
+      "event": 8261
+    },
+    {
+      "name": "GRIP_C_L",
+      "event": 8262
+    },
+    {
+      "name": "GRIP_C_R",
+      "event": 8263
+    },
+    {
+      "name": "GRIP_C2_L",
+      "event": 8264
+    },
+    {
+      "name": "GRIP_C2_R",
+      "event": 8265
+    },
+    {
+      "name": "8DIR_U",
+      "event": 58
+    },
+    {
+      "name": "8DIR_R_U",
+      "event": 59
+    },
+    {
+      "name": "8DIR_R",
+      "event": 60
+    },
+    {
+      "name": "8DIR_R_D",
+      "event": 61
+    },
+    {
+      "name": "8DIR_D",
+      "event": 62
+    },
+    {
+      "name": "8DIR_L_D",
+      "event": 63
+    },
+    {
+      "name": "8DIR_L",
+      "event": 64
+    },
+    {
+      "name": "8DIR_L_U",
+      "event": 65
+    },
+    {
+      "name": "8DIR_PUSH",
+      "event": 66
+    },
+    {
+      "name": "PLAY",
+      "event": 12288
+    },
+    {
+      "name": "REC",
+      "event": 12289
+    },
+    {
+      "name": "AUTO",
+      "event": 12290
+    },
+    {
+      "name": "QUICK",
+      "event": 12291
+    },
+    {
+      "name": "SP",
+      "event": 12292
+    },
+    {
+      "name": "SP2",
+      "event": 12293
+    },
+    {
+      "name": "SR",
+      "event": 12294
+    },
+    {
+      "name": "PORTRAIT",
+      "event": 12295
+    },
+    {
+      "name": "LANDSCAPE",
+      "event": 12296
+    },
+    {
+      "name": "SPORTS",
+      "event": 12297
+    },
+    {
+      "name": "NIGHT",
+      "event": 8285
+    },
+    {
+      "name": "BLURRE",
+      "event": 8287
+    },
+    {
+      "name": "NATURAL",
+      "event": 8286
+    },
+    {
+      "name": "PROGRAM",
+      "event": 12298
+    },
+    {
+      "name": "SHUTTER",
+      "event": 12299
+    },
+    {
+      "name": "APERTURE",
+      "event": 12300
+    },
+    {
+      "name": "MANUAL",
+      "event": 12302
+    },
+    {
+      "name": "N_FLASH",
+      "event": 8288
+    },
+    {
+      "name": "C1",
+      "event": 12307
+    },
+    {
+      "name": "C2",
+      "event": 12308
+    },
+    {
+      "name": "C3",
+      "event": 12309
+    },
+    {
+      "name": "FSB",
+      "event": 12311
+    },
+    {
+      "name": "ISO",
+      "event": 32
+    },
+    {
+      "name": "ADVANCE",
+      "event": 12313
+    },
+    {
+      "name": "FILTER",
+      "event": 12314
+    },
+    {
+      "name": "PANORAMA",
+      "event": 12315
+    },
+    {
+      "name": "S-A",
+      "event": 12317
+    },
+    {
+      "name": "S-1/8000",
+      "event": 12318
+    },
+    {
+      "name": "S-1/4000",
+      "event": 12319
+    },
+    {
+      "name": "S-1/2000",
+      "event": 12320
+    },
+    {
+      "name": "S-1/1000",
+      "event": 12321
+    },
+    {
+      "name": "S-1/500",
+      "event": 12322
+    },
+    {
+      "name": "S-1/250",
+      "event": 12323
+    },
+    {
+      "name": "S-1/125",
+      "event": 12325
+    },
+    {
+      "name": "S-1/60",
+      "event": 12326
+    },
+    {
+      "name": "S-1/30",
+      "event": 12327
+    },
+    {
+      "name": "S-1/15",
+      "event": 12328
+    },
+    {
+      "name": "S-1/8",
+      "event": 12329
+    },
+    {
+      "name": "S-1/4",
+      "event": 12330
+    },
+    {
+      "name": "S-1/2",
+      "event": 12331
+    },
+    {
+      "name": "S-1/1",
+      "event": 12332
+    },
+    {
+      "name": "S-T",
+      "event": 12333
+    },
+    {
+      "name": "S-B",
+      "event": 12334
+    },
+    {
+      "name": "E-D+3.0",
+      "event": 12335
+    },
+    {
+      "name": "E-D+2.7",
+      "event": 12336
+    },
+    {
+      "name": "E-D+2.3",
+      "event": 12337
+    },
+    {
+      "name": "E-D+2.0",
+      "event": 12338
+    },
+    {
+      "name": "E-D+1.7",
+      "event": 12339
+    },
+    {
+      "name": "E-D+1.3",
+      "event": 12339
+    },
+    {
+      "name": "E-D+1.0",
+      "event": 12341
+    },
+    {
+      "name": "E-D+0.7",
+      "event": 12342
+    },
+    {
+      "name": "E-D+0.3",
+      "event": 12343
+    },
+    {
+      "name": "E-D=0",
+      "event": 12344
+    },
+    {
+      "name": "E-D-0.3",
+      "event": 12345
+    },
+    {
+      "name": "E-D-0.7",
+      "event": 12346
+    },
+    {
+      "name": "E-D-1.0",
+      "event": 12347
+    },
+    {
+      "name": "E-D-1.3",
+      "event": 12349
+    },
+    {
+      "name": "E-D-1.7",
+      "event": 12349
+    },
+    {
+      "name": "E-D-2.0",
+      "event": 12350
+    },
+    {
+      "name": "E-D-2.3",
+      "event": 12351
+    },
+    {
+      "name": "E-D-2.7",
+      "event": 12352
+    },
+    {
+      "name": "E-D-3.0",
+      "event": 12353
+    },
+    {
+      "name": "E-D=C",
+      "event": 12354
+    },
+    {
+      "name": "ISO_A",
+      "event": 20503
+    },
+    {
+      "name": "ISO_L",
+      "event": 20504
+    },
+    {
+      "name": "I200",
+      "event": 20506
+    },
+    {
+      "name": "I200_1_3",
+      "event": 20507
+    },
+    {
+      "name": "I200_2_3",
+      "event": 20508
+    },
+    {
+      "name": "I400",
+      "event": 20509
+    },
+    {
+      "name": "I400_1_3",
+      "event": 20510
+    },
+    {
+      "name": "I400_2_3",
+      "event": 20511
+    },
+    {
+      "name": "I800",
+      "event": 20512
+    },
+    {
+      "name": "I800_1_3",
+      "event": 20513
+    },
+    {
+      "name": "I800_2_3",
+      "event": 20514
+    },
+    {
+      "name": "I1600",
+      "event": 20515
+    },
+    {
+      "name": "I1600_1_3",
+      "event": 20516
+    },
+    {
+      "name": "I1600_2_3",
+      "event": 20517
+    },
+    {
+      "name": "I3200",
+      "event": 20518
+    },
+    {
+      "name": "I3200_1_3",
+      "event": 20519
+    },
+    {
+      "name": "I3200_2_3",
+      "event": 20520
+    },
+    {
+      "name": "I6400",
+      "event": 20521
+    },
+    {
+      "name": "I6400_1_3",
+      "event": 20522
+    },
+    {
+      "name": "I6400_2_3",
+      "event": 20523
+    },
+    {
+      "name": "I12800",
+      "event": 20524
+    },
+    {
+      "name": "ISO_H1",
+      "event": 20525
+    },
+    {
+      "name": "ISO_H2",
+      "event": 20526
+    },
+    {
+      "name": "DRV-PANO",
+      "event": 20528
+    },
+    {
+      "name": "DRV-ADV",
+      "event": 20529
+    },
+    {
+      "name": "DRV-MULTI",
+      "event": 20530
+    },
+    {
+      "name": "DRV-ONE",
+      "event": 20531
+    },
+    {
+      "name": "DRV-C_L",
+      "event": 20532
+    },
+    {
+      "name": "DRV-C_M",
+      "event": 20533
+    },
+    {
+      "name": "DRV-C_H",
+      "event": 20534
+    },
+    {
+      "name": "DRV-BKT",
+      "event": 20535
+    },
+    {
+      "name": "DRV-MOV",
+      "event": 20538
+    },
+    {
+      "name": "I-M_A",
+      "event": 16384
+    },
+    {
+      "name": "I-M_F16",
+      "event": 20480
+    },
+    {
+      "name": "I-M_F11",
+      "event": 20483
+    },
+    {
+      "name": "I-M_F8.0",
+      "event": 20486
+    },
+    {
+      "name": "I-M_F5.6",
+      "event": 20489
+    },
+    {
+      "name": "I-M_F4.0",
+      "event": 20492
+    },
+    {
+      "name": "I-M_F2.8",
+      "event": 20495
+    },
+    {
+      "name": "I-M_F2.0",
+      "event": 20498
+    },
+    {
+      "name": "I-M_POS30",
+      "event": 16415
+    },
+    {
+      "name": "I-M_POS29",
+      "event": 16414
+    },
+    {
+      "name": "I-M_POS28",
+      "event": 16413
+    },
+    {
+      "name": "I-M_POS27",
+      "event": 16412
+    },
+    {
+      "name": "I-M_POS26",
+      "event": 16411
+    },
+    {
+      "name": "I-M_POS25",
+      "event": 16410
+    },
+    {
+      "name": "I-M_POS24",
+      "event": 16409
+    },
+    {
+      "name": "I-M_POS23",
+      "event": 16408
+    },
+    {
+      "name": "I-M_POS22",
+      "event": 16407
+    },
+    {
+      "name": "I-M_POS21",
+      "event": 16406
+    },
+    {
+      "name": "I-M_POS20",
+      "event": 16405
+    },
+    {
+      "name": "I-M_POS19",
+      "event": 16404
+    },
+    {
+      "name": "I-M_POS18",
+      "event": 16403
+    },
+    {
+      "name": "I-M_POS17",
+      "event": 16402
+    },
+    {
+      "name": "I-M_POS16",
+      "event": 16401
+    },
+    {
+      "name": "I-M_POS15",
+      "event": 16400
+    },
+    {
+      "name": "I-M_POS14",
+      "event": 16399
+    },
+    {
+      "name": "I-M_POS13",
+      "event": 16398
+    },
+    {
+      "name": "I-M_POS12",
+      "event": 16397
+    },
+    {
+      "name": "I-M_POS11",
+      "event": 16396
+    },
+    {
+      "name": "I-M_POS10",
+      "event": 16395
+    },
+    {
+      "name": "I-M_POS9",
+      "event": 16394
+    },
+    {
+      "name": "I-M_POS8",
+      "event": 16393
+    },
+    {
+      "name": "I-M_POS7",
+      "event": 16392
+    },
+    {
+      "name": "I-M_POS6",
+      "event": 16391
+    },
+    {
+      "name": "I-M_POS5",
+      "event": 16390
+    },
+    {
+      "name": "I-M_POS4",
+      "event": 16389
+    },
+    {
+      "name": "I-M_POS3",
+      "event": 16388
+    },
+    {
+      "name": "I-M_POS2",
+      "event": 16387
+    },
+    {
+      "name": "I-M_POS1",
+      "event": 16386
+    },
+    {
+      "name": "I-M_POS0",
+      "event": 16385
+    },
+    {
+      "name": "F_R_+4",
+      "event": 4097
+    },
+    {
+      "name": "F_R_+3",
+      "event": 4098
+    },
+    {
+      "name": "F_R_+2",
+      "event": 4099
+    },
+    {
+      "name": "F_R_+1",
+      "event": 4100
+    },
+    {
+      "name": "F_R_STOP",
+      "event": 4101
+    },
+    {
+      "name": "F_R_-1",
+      "event": 4102
+    },
+    {
+      "name": "F_R_-2",
+      "event": 4103
+    },
+    {
+      "name": "F_R_-3",
+      "event": 4104
+    },
+    {
+      "name": "F_R_-4",
+      "event": 4105
+    },
+    {
+      "name": "SETUP",
+      "event": 12305
+    },
+    {
+      "name": "M_SEL",
+      "event": 12302
+    },
+    {
+      "name": "VOICE",
+      "event": 12303
+    },
+    {
+      "name": "MOVIE",
+      "event": 12304
+    },
+    {
+      "name": "JIG",
+      "event": 12355
+    },
+    {
+      "name": "EXR",
+      "event": 12312
+    },
+    {
+      "name": "VREC",
+      "event": 12303
+    },
+    {
+      "name": "MJPEG",
+      "event": 12304
+    },
+    {
+      "name": "SCEN_P",
+      "event": 12292
+    },
+    {
+      "name": "SCEN_S",
+      "event": 12292
+    },
+    {
+      "name": "MMOD_P",
+      "event": 12298
+    },
+    {
+      "name": "MMOD_S",
+      "event": 12299
+    },
+    {
+      "name": "MMOD_A",
+      "event": 12300
+    },
+    {
+      "name": "MMOD_M",
+      "event": 12302
+    },
+    {
+      "name": "APERT",
+      "event": 16
+    }
+  ],
+  "inputs": [
+    {
+      "id": "row-0",
+      "event": 50,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 0,
+        "witness": {
+          "physical_key": 2,
+          "input_kind": "kind_2",
+          "source": 11,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-1",
+      "event": 54,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 1,
+        "witness": {
+          "physical_key": 3,
+          "input_kind": "kind_5",
+          "source": 19069128,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-2",
+      "event": 14,
+      "debug_key": "CARD",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 2,
+        "witness": {
+          "physical_key": 4,
+          "input_kind": "kind_2",
+          "source": 655364,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-4",
+      "event": 7,
+      "debug_key": "S1",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 4,
+        "witness": {
+          "physical_key": 8,
+          "input_kind": "kind_4",
+          "source": 0,
+          "lower": 1,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-5",
+      "event": 8,
+      "debug_key": "S2",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 5,
+        "witness": {
+          "physical_key": 9,
+          "input_kind": "kind_4",
+          "source": 1,
+          "lower": 1,
+          "upper": 2
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-6",
+      "event": 48,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 6,
+        "witness": {
+          "physical_key": 30,
+          "input_kind": "kind_5",
+          "source": 19069036,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-7",
+      "event": 62,
+      "debug_key": "8DIR_D",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 7,
+        "witness": {
+          "physical_key": 33,
+          "input_kind": "kind_1",
+          "source": 9,
+          "lower": 14357,
+          "upper": 14355
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-8",
+      "event": 64,
+      "debug_key": "8DIR_L",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 8,
+        "witness": {
+          "physical_key": 35,
+          "input_kind": "kind_1",
+          "source": 9,
+          "lower": 14361,
+          "upper": 14359
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-9",
+      "event": 60,
+      "debug_key": "8DIR_R",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 9,
+        "witness": {
+          "physical_key": 34,
+          "input_kind": "kind_1",
+          "source": 9,
+          "lower": 14369,
+          "upper": 14367
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-10",
+      "event": 58,
+      "debug_key": "8DIR_U",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 10,
+        "witness": {
+          "physical_key": 32,
+          "input_kind": "kind_1",
+          "source": 9,
+          "lower": 14377,
+          "upper": 14375
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-11",
+      "event": 59,
+      "debug_key": "8DIR_R_U",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 11,
+        "witness": {
+          "physical_key": 36,
+          "input_kind": "kind_1",
+          "source": 9,
+          "lower": 14385,
+          "upper": 14383
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-12",
+      "event": 61,
+      "debug_key": "8DIR_R_D",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 12,
+        "witness": {
+          "physical_key": 37,
+          "input_kind": "kind_1",
+          "source": 9,
+          "lower": 14373,
+          "upper": 14371
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-13",
+      "event": 65,
+      "debug_key": "8DIR_L_U",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 13,
+        "witness": {
+          "physical_key": 38,
+          "input_kind": "kind_1",
+          "source": 9,
+          "lower": 14381,
+          "upper": 14379
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-14",
+      "event": 63,
+      "debug_key": "8DIR_L_D",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 14,
+        "witness": {
+          "physical_key": 39,
+          "input_kind": "kind_1",
+          "source": 9,
+          "lower": 14365,
+          "upper": 14363
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-15",
+      "event": 66,
+      "debug_key": "8DIR_PUSH",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 15,
+        "witness": {
+          "physical_key": 31,
+          "input_kind": "kind_5",
+          "source": 19067372,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-16",
+      "event": 1,
+      "debug_key": "EXE_M",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 16,
+        "witness": {
+          "physical_key": 15,
+          "input_kind": "kind_1",
+          "source": 5,
+          "lower": 72514,
+          "upper": 72512
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-17",
+      "event": 9,
+      "debug_key": "DISP_B",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 17,
+        "witness": {
+          "physical_key": 17,
+          "input_kind": "kind_1",
+          "source": 5,
+          "lower": 72510,
+          "upper": 72508
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-18",
+      "event": 17,
+      "debug_key": "DRIVE",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 18,
+        "witness": {
+          "physical_key": 18,
+          "input_kind": "kind_2",
+          "source": 524293,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-19",
+      "event": 10,
+      "debug_key": "K_PLAY",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 19,
+        "witness": {
+          "physical_key": 16,
+          "input_kind": "kind_2",
+          "source": 524294,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-20",
+      "event": 55,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 20,
+        "witness": {
+          "physical_key": 22,
+          "input_kind": "kind_2",
+          "source": 589827,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-21",
+      "event": 8227,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 21,
+        "witness": {
+          "physical_key": 21,
+          "input_kind": "kind_2",
+          "source": 524296,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-22",
+      "event": 8230,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 22,
+        "witness": {
+          "physical_key": 20,
+          "input_kind": "kind_2",
+          "source": 589828,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-23",
+      "event": 94,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 23,
+        "witness": {
+          "physical_key": 23,
+          "input_kind": "kind_5",
+          "source": 19067352,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-24",
+      "event": 96,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 24,
+        "witness": {
+          "physical_key": 24,
+          "input_kind": "kind_5",
+          "source": 19067332,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-25",
+      "event": 95,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 25,
+        "witness": {
+          "physical_key": 25,
+          "input_kind": "kind_5",
+          "source": 19067312,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-26",
+      "event": 97,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 26,
+        "witness": {
+          "physical_key": 26,
+          "input_kind": "kind_5",
+          "source": 19067292,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-27",
+      "event": 6,
+      "debug_key": "POWER",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 27,
+        "witness": {
+          "physical_key": 14,
+          "input_kind": "kind_5",
+          "source": 19064900,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-28",
+      "event": 43,
+      "debug_key": "K_Q",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 28,
+        "witness": {
+          "physical_key": 19,
+          "input_kind": "kind_2",
+          "source": 13,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-29",
+      "event": 8253,
+      "debug_key": "FUNCTION2",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 29,
+        "witness": {
+          "physical_key": 58,
+          "input_kind": "kind_2",
+          "source": 524297,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-30",
+      "event": 33,
+      "debug_key": "FUNCTION",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 30,
+        "witness": {
+          "physical_key": 59,
+          "input_kind": "kind_2",
+          "source": 14,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-31",
+      "event": 21,
+      "debug_key": "POP",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 31,
+        "witness": {
+          "physical_key": 60,
+          "input_kind": "kind_2",
+          "source": 524292,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-32",
+      "event": 12290,
+      "debug_key": "AUTO",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 32,
+        "witness": {
+          "physical_key": 46,
+          "input_kind": "kind_1",
+          "source": 6,
+          "lower": 13986,
+          "upper": 13984
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-33",
+      "event": 12298,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 33,
+        "witness": {
+          "physical_key": 47,
+          "input_kind": "kind_1",
+          "source": 6,
+          "lower": 13990,
+          "upper": 13988
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-34",
+      "event": 12299,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 34,
+        "witness": {
+          "physical_key": 48,
+          "input_kind": "kind_1",
+          "source": 6,
+          "lower": 13994,
+          "upper": 13992
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-35",
+      "event": 12300,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 35,
+        "witness": {
+          "physical_key": 49,
+          "input_kind": "kind_1",
+          "source": 6,
+          "lower": 13998,
+          "upper": 13996
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-36",
+      "event": 12302,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 36,
+        "witness": {
+          "physical_key": 50,
+          "input_kind": "kind_1",
+          "source": 6,
+          "lower": 14002,
+          "upper": 14000
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-37",
+      "event": 12307,
+      "debug_key": "C1",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 37,
+        "witness": {
+          "physical_key": 51,
+          "input_kind": "kind_1",
+          "source": 6,
+          "lower": 14006,
+          "upper": 14004
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-38",
+      "event": 12308,
+      "debug_key": "C2",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 38,
+        "witness": {
+          "physical_key": 52,
+          "input_kind": "kind_1",
+          "source": 6,
+          "lower": 14010,
+          "upper": 14008
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-39",
+      "event": 12309,
+      "debug_key": "C3",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 39,
+        "witness": {
+          "physical_key": 53,
+          "input_kind": "kind_1",
+          "source": 6,
+          "lower": 14014,
+          "upper": 14012
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-40",
+      "event": 12310,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 40,
+        "witness": {
+          "physical_key": 54,
+          "input_kind": "kind_1",
+          "source": 6,
+          "lower": 14018,
+          "upper": 14016
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-41",
+      "event": 12304,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 41,
+        "witness": {
+          "physical_key": 55,
+          "input_kind": "kind_1",
+          "source": 6,
+          "lower": 14022,
+          "upper": 14020
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-42",
+      "event": 12314,
+      "debug_key": "FILTER",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 42,
+        "witness": {
+          "physical_key": 56,
+          "input_kind": "kind_1",
+          "source": 6,
+          "lower": 14026,
+          "upper": 14024
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-43",
+      "event": 12292,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 43,
+        "witness": {
+          "physical_key": 57,
+          "input_kind": "kind_1",
+          "source": 6,
+          "lower": 14030,
+          "upper": 14028
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-44",
+      "event": 7,
+      "debug_key": "S1",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 44,
+        "witness": {
+          "physical_key": 10,
+          "input_kind": "kind_5",
+          "source": 19066976,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-45",
+      "event": 8,
+      "debug_key": "S2",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 45,
+        "witness": {
+          "physical_key": 11,
+          "input_kind": "kind_5",
+          "source": 19066848,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-46",
+      "event": 47,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 46,
+        "witness": {
+          "physical_key": 29,
+          "input_kind": "kind_5",
+          "source": 19065208,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-47",
+      "event": 7,
+      "debug_key": "S1",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 47,
+        "witness": {
+          "physical_key": 12,
+          "input_kind": "kind_5",
+          "source": 19072352,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-48",
+      "event": 8,
+      "debug_key": "S2",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 48,
+        "witness": {
+          "physical_key": 13,
+          "input_kind": "kind_5",
+          "source": 19064940,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-49",
+      "event": 8276,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 49,
+        "witness": {
+          "physical_key": 233,
+          "input_kind": "kind_5",
+          "source": 19064984,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-50",
+      "event": 8278,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 50,
+        "witness": {
+          "physical_key": 234,
+          "input_kind": "kind_5",
+          "source": 19065016,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-51",
+      "event": 8277,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 51,
+        "witness": {
+          "physical_key": 235,
+          "input_kind": "kind_5",
+          "source": 19065048,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-52",
+      "event": 8279,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 52,
+        "witness": {
+          "physical_key": 236,
+          "input_kind": "kind_5",
+          "source": 19065080,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-53",
+      "event": 7,
+      "debug_key": "S1",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 53,
+        "witness": {
+          "physical_key": 237,
+          "input_kind": "kind_5",
+          "source": 19065112,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-54",
+      "event": 8,
+      "debug_key": "S2",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 54,
+        "witness": {
+          "physical_key": 238,
+          "input_kind": "kind_5",
+          "source": 19065144,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-55",
+      "event": 45,
+      "debug_key": "MOVIE_REC",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 55,
+        "witness": {
+          "physical_key": 239,
+          "input_kind": "kind_5",
+          "source": 19065176,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    }
+  ],
+  "undelivered_rows": [
+    {
+      "index": 3,
+      "witness": {
+        "physical_key": 5,
+        "input_kind": "kind_2",
+        "source": 4294967295,
+        "lower": 1,
+        "upper": 0
+      }
+    }
+  ],
+  "interfaces": {}
+}

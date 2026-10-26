@@ -1,0 +1,40 @@
+{
+  "$id": "https://fujimod.com/schemas/emulator-factory-inputs.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Caller-owned locations for optional factory inputs, kept outside run policy.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/emulator-factory-inputs.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "firmware_id": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string"
+    },
+    "producer_data_fixture": {
+      "type": "string"
+    },
+    "schema": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "source_sha256": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "firmware_id",
+    "source_sha256",
+    "producer_data_fixture"
+  ],
+  "title": "RunFactoryInputs",
+  "type": "object"
+}

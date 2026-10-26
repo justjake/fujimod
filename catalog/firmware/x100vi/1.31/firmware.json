@@ -1,0 +1,305 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "x100vi-131",
+  "body_id": "x100vi",
+  "version": "1.31",
+  "update": {
+    "size": 109251576,
+    "sha256": "0d48d2ae26ac7ebab9b0e4cac56324807ec1ea8ae30df06b0b9e79066dc0a14a"
+  },
+  "boot_rom": null,
+  "installation": {
+    "flash_offset": 700,
+    "entry_labels": {
+      "0x9920c": "EL1 handoff"
+    },
+    "loader_validation": null,
+    "image_sections": [
+      {
+        "name": "unit-0",
+        "address": 528384,
+        "size": 123584,
+        "sha256": "05caba32b0b698706d3af4ccc87fd90b1ae66ee7f4a072b5bb2b6e0df0c54a09",
+        "native_flash_offset": 786432
+      },
+      {
+        "name": "unit-3",
+        "address": 6819840,
+        "size": 7587656,
+        "sha256": "8b200f477797764f843379338fc8611a7269a663e32a74e540e7fa99289b6edc",
+        "native_flash_offset": 45481984
+      },
+      {
+        "name": "unit-4",
+        "address": 16388096,
+        "size": 688086,
+        "sha256": "da5ad2a9b725b51d0f4162bbf5cd680194a84c898bb1e49008853d418c0d5a28",
+        "native_flash_offset": 50331648
+      },
+      {
+        "name": "unit-6",
+        "address": 18616320,
+        "size": 11673600,
+        "sha256": "77456fe5c9808ce5e638b1a5f6f12d9e8e40c1751e1f9b4640134fde662e09d4",
+        "native_flash_offset": 10223616
+      },
+      {
+        "name": "unit-7",
+        "address": 45674496,
+        "size": 22253568,
+        "sha256": "14b0557bd724fa74b51ff641fcd5481da5b3ac64146d4fc69375086dafcfb174",
+        "native_flash_offset": 17694720
+      },
+      {
+        "name": "unit-8",
+        "address": 94887936,
+        "size": 22253568,
+        "sha256": "b752cb7b3b146377ed36346055feeac14bdc9e87857012c62c5c42653c075db7",
+        "native_flash_offset": 27394048
+      }
+    ]
+  },
+  "generated_facts": null,
+  "layouts": {
+    "profiles": {
+      "x100vi-131": {
+        "flash_image": {
+          "dat_origin": 700,
+          "xor": 255
+        },
+        "preload": [
+          {
+            "address": 262144,
+            "dat_offset": 6554300,
+            "length": 2048,
+            "sha256": "d55ffeba4c687cb7f408ecc34ad3369bd074d71f1627f0f37574049c773f9ff2"
+          },
+          {
+            "address": 264192,
+            "dat_offset": 1180348,
+            "length": 2048,
+            "sha256": "947069208f12faaed7f51d931640e41235e5e26039cd58d9f1c4c6d8e435f33a"
+          },
+          {
+            "address": 102352,
+            "words": [
+              65534,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535
+            ],
+            "word_size": 4
+          },
+          {
+            "address": 102432,
+            "value": 1398031684,
+            "size": 4
+          },
+          {
+            "address": 102560,
+            "value": 1398031684,
+            "size": 4
+          },
+          {
+            "address": 102688,
+            "value": 4,
+            "size": 4
+          },
+          {
+            "address": 102692,
+            "value": 0,
+            "size": 4
+          },
+          {
+            "address": 102696,
+            "words": [
+              0,
+              3392536576
+            ],
+            "word_size": 4
+          },
+          {
+            "address": 102804,
+            "value": 0,
+            "size": 4
+          },
+          {
+            "address": 102808,
+            "words": [
+              0,
+              0,
+              0,
+              98304,
+              0
+            ],
+            "word_size": 4
+          },
+          {
+            "address": 103836,
+            "value": 0,
+            "size": 4
+          },
+          {
+            "address": 103840,
+            "value": 0,
+            "size": 4
+          },
+          {
+            "address": 103844,
+            "value": 0,
+            "size": 4
+          },
+          {
+            "address": 103848,
+            "value": 267,
+            "size": 4
+          },
+          {
+            "address": 103852,
+            "value": 2145056,
+            "size": 4
+          },
+          {
+            "address": 103856,
+            "value": 0,
+            "size": 4
+          }
+        ],
+        "cpu": [
+          {
+            "id": 0,
+            "pc": 627212,
+            "cpsr": 964,
+            "running": true,
+            "regs": {
+              "x19": 0,
+              "x20": 22733360,
+              "x21": 102352
+            },
+            "sysregs": {
+              "ICC_PMR_EL1": 255,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "VBAR_EL1": 632832,
+              "SCTLR_EL1": 818939904,
+              "CPACR_EL1": 3145728,
+              "SP_EL0": 132544,
+              "SP_EL1": 132544
+            }
+          },
+          {
+            "id": 1,
+            "pc": 627212,
+            "cpsr": 964,
+            "running": true,
+            "regs": {
+              "x19": 1,
+              "x20": 22733360,
+              "x21": 102352
+            },
+            "sysregs": {
+              "ICC_PMR_EL1": 255,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "VBAR_EL1": 632832,
+              "SCTLR_EL1": 818939904,
+              "CPACR_EL1": 3145728,
+              "SP_EL0": 161216,
+              "SP_EL1": 161216
+            }
+          },
+          {
+            "id": 2,
+            "pc": 627212,
+            "cpsr": 964,
+            "running": true,
+            "regs": {
+              "x19": 2,
+              "x20": 22733360,
+              "x21": 102352
+            },
+            "sysregs": {
+              "ICC_PMR_EL1": 255,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "VBAR_EL1": 632832,
+              "SCTLR_EL1": 818939904,
+              "CPACR_EL1": 3145728,
+              "SP_EL0": 189888,
+              "SP_EL1": 189888
+            }
+          },
+          {
+            "id": 3,
+            "pc": 627212,
+            "cpsr": 964,
+            "running": true,
+            "regs": {
+              "x19": 3,
+              "x20": 22733360,
+              "x21": 102352
+            },
+            "sysregs": {
+              "ICC_PMR_EL1": 255,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "VBAR_EL1": 632832,
+              "SCTLR_EL1": 818939904,
+              "CPACR_EL1": 3145728,
+              "SP_EL0": 218560,
+              "SP_EL1": 218560
+            }
+          }
+        ],
+        "gic_initial": {
+          "0x0": 7
+        },
+        "gic_redistributor_initial": [
+          {
+            "core": 0,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 1,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 2,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 3,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          }
+        ],
+        "limits": []
+      }
+    },
+    "views": {}
+  }
+}

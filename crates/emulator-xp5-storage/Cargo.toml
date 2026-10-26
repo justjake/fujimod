@@ -1,0 +1,21 @@
+[package]
+name = "fujimod-emulator-xp5-storage"
+description = "XP5 flash storage and its DMA"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-emulator-devices.workspace = true
+fujimod-emulator-ip.workspace = true
+serde_json = "1"
+serde = { version = "1", features = ["derive", "rc"] }
+fujimod-workspace-hack.workspace = true
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

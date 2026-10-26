@@ -116,7 +116,7 @@ impl<S: BorrowMut<Session>> DataReader<S> {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UploadReply {
     pub setup: crate::ff80::commands::diagnostic::DiagnosticReply,
-    pub acknowledgement: Vec<u8>,
+    pub acknowledgment: Vec<u8>,
     pub bytes_written: u32,
 }
 
@@ -150,11 +150,11 @@ pub async fn upload(
     for part in data.chunks(piece_bytes.get() as usize) {
         session.write_data(part).await?;
     }
-    let acknowledgement = session.empty_response().await?;
-    if acknowledgement.len() == 32 {
+    let acknowledgment = session.empty_response().await?;
+    if acknowledgment.len() == 32 {
         // X70 hardware also returns the setup command's complete reply on E8.
         // A framed refusal is completed; malformed ownership/status framing is not.
-        if let Err(error) = crate::ff80::commands::status(&acknowledgement, 0x760001, 32) {
+        if let Err(error) = crate::ff80::commands::status(&acknowledgment, 0x760001, 32) {
             if matches!(error, Error::Protocol(_)) {
                 session.invalidate_completion();
             }
@@ -163,7 +163,7 @@ pub async fn upload(
     }
     Ok(UploadReply {
         setup,
-        acknowledgement,
+        acknowledgment,
         bytes_written: length.get(),
     })
 }

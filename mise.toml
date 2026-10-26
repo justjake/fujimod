@@ -2,7 +2,25 @@
 node = "26.12.0"
 python = "3.14.8"
 uv = "0.13.1"
-rust = { version = "1.99.1", profile = "minimal", components = ["rustfmt", "clippy"] }
+rust = [
+  { version = "1.99.1", profile = "minimal", components = ["rustfmt", "clippy"] },
+  { version = "nightly-2026-10-10", profile = "minimal", components = ["rust-src"] },
+]
+emsdk = "6.0.13"
+cmake = "4.4.4"
+ninja = "1.13.2"
+
+[tasks.commit]
+description = "Commit chosen paths or hunks to the checked-out branch and push"
+run = "python scripts/git/commit.py"
+
+[tasks.land]
+description = "Land an approved worktree's branch on main as a fast-forward"
+run = "python scripts/git/land.py"
+
+[tasks.hooks-install]
+description = "Install the worktree guard and LFS Git hooks"
+run = "python scripts/git/install_hooks.py"
 
 [tasks.web-build]
 dir = "{{config_root}}/apps/web"
@@ -29,17 +47,29 @@ dir = "{{config_root}}/apps/web"
 run = "npm run preview -- --mode local-preview --port 5190 --strictPort"
 
 [tasks.rust-test]
-run = "cargo test --workspace --all-features"
+run = "cargo test --workspace --all-features --locked"
 
 [tasks.rust-check]
 run = "cargo clippy --workspace --all-targets --all-features -- -D warnings"
 
+[tasks.rust-hack]
+description = "Regenerate the workspace-hack crate after dependency changes"
+run = ["cargo hakari generate", "cargo hakari manage-deps --yes"]
+
+[tasks.rust-hack-check]
+description = "Check that the workspace-hack crate matches the dependency graph"
+run = ["cargo hakari generate --diff", "cargo hakari manage-deps --dry-run", "cargo hakari verify"]
+
 [tasks.rust-wasm-test]
-run = 'PATH="$PWD/target/tooling/bin:$PATH" cargo test -p fujimod-usb --target wasm32-unknown-unknown --features testing --lib --test wasm_core'
+run = 'PATH="$PWD/target/tooling/bin:$PATH" cargo test -p fujimod-usb -p fujimod-usb-app80 --target wasm32-unknown-unknown --lib --test wasm_core'
 
 [tasks.javascript-build]
 dir = "{{config_root}}/bindings/javascript"
 run = "npm run build"
+
+[tasks.javascript-emulator-build]
+dir = "{{config_root}}/bindings/javascript"
+run = "npm run stage:emulator"
 
 [tasks.javascript-test]
 dir = "{{config_root}}/bindings/javascript"
@@ -56,11 +86,27 @@ run = "uv run --locked ruff check ."
 run = "uv run --locked ruff format --check ."
 
 [tasks.python-typecheck]
-run = "uv run --locked ty check --error-on-warning"
+run = ["mise run python-binding-types", "uv run --locked ty check --error-on-warning"]
+
+[tasks.python-binding-types]
+run = [
+  "npm --prefix bindings/javascript run build",
+  "node scripts/ci/javascript-python-types.ts",
+  "cargo run --locked -p fujimod-bindgen -- --python-types target/python-types",
+  "mise run catalog-types-check",
+]
+
+[tasks.catalog-types]
+description = "Generate Python catalog types from Rust schemas"
+run = "cargo run --locked -p fujimod-bindgen -- --catalog-types catalog/schemas bindings/python/python/fujimod/emulator/_catalog_types.py"
+
+[tasks.catalog-types-check]
+description = "Check generated Python catalog types against Rust schemas"
+run = "cargo run --locked -p fujimod-bindgen -- --check-catalog-types catalog/schemas bindings/python/python/fujimod/emulator/_catalog_types.py"
 
 [tasks.python-build-test]
 run = [
-  "uv run --locked maturin develop --manifest-path bindings/python/Cargo.toml --features testing --locked",
+  "uv run --locked python scripts/python_extension.py",
   "uv run --locked python -c 'from fujimod.usb import testing'",
 ]
 
@@ -87,4 +133,4 @@ run = "cargo llvm-cov --workspace --all-features --locked --no-report"
 
 [tasks.web-coverage]
 dir = "{{config_root}}/apps/web"
-run = "npm test -- --coverage --coverage.reportOnFailure --coverage.provider=v8 --coverage.reporter=text --coverage.reporter=lcov --coverage.reporter=html --coverage.reporter=json-summary --coverage.reportsDirectory=../../target/coverage/web --coverage.include='src/**/*.{ts,tsx,mjs}' --coverage.include='devices/**/*.ts' --coverage.include='scripts/**/*.mjs' --coverage.exclude='**/*.test.*' --coverage.exclude='**/*.d.ts' --coverage.exclude='**/*.fixture.*'"
+run = "npm test -- --coverage --coverage.reportOnFailure --coverage.provider=v8 --coverage.reporter=text --coverage.reporter=lcov --coverage.reporter=html --coverage.reporter=json-summary --coverage.reportsDirectory=../../target/coverage/web --coverage.include='src/**/*.{ts,tsx}' --coverage.include='devices/**/*.ts' --coverage.include='scripts/**/*.ts' --coverage.exclude='**/*.test.*' --coverage.exclude='**/*.d.ts' --coverage.exclude='**/*.fixture.*'"

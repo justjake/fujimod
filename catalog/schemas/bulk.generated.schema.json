@@ -1,0 +1,356 @@
+{
+  "$defs": {
+    "BulkRange": {
+      "additionalProperties": false,
+      "description": "An address range.",
+      "properties": {
+        "address": {
+          "description": "First address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size"
+      ],
+      "type": "object"
+    },
+    "BulkSource": {
+      "description": "The stock routine that prepares the E1 source.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A stock diagnostic query sets the source to `base`; offsets are\nrelative to it. The callback slot, `callback_offset` bytes into the\ntable that `callback_table` points to, must hold `stock_callback`.",
+          "properties": {
+            "base": {
+              "description": "Source base the query sets.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "callback_offset": {
+              "description": "Byte offset of the query callback in that table.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "callback_table": {
+              "description": "Address of the pointer to the diagnostic callback table.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "capacities": {
+              "description": "Capacities the query may report.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "mechanism": {
+              "const": "query",
+              "type": "string"
+            },
+            "source_state": {
+              "description": "Address of the 32-bit source pointer and capacity.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stock_callback": {
+              "description": "Stock callback value.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "tag": {
+              "description": "Diagnostic query tag.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "wrapping": {
+              "description": "Offsets wrap modulo 2^32 rather than only counting upward.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "mechanism",
+            "tag",
+            "callback_table",
+            "callback_offset",
+            "stock_callback",
+            "base",
+            "source_state",
+            "capacities",
+            "wrapping"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Stock pattern setup points the 32-bit source at the registered\ndiagnostic scratch; offsets wrap from its base.",
+          "properties": {
+            "capacity": {
+              "description": "Bytes the stock setup writes and each E1 request may return.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "mechanism": {
+              "const": "pattern",
+              "type": "string"
+            },
+            "registered_buffer": {
+              "description": "Address of the registered scratch pointer and capacity.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "source_state": {
+              "description": "Address of the 32-bit source pointer and capacity.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "mechanism",
+            "registered_buffer",
+            "source_state",
+            "capacity"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Stock pattern setup with a 64-bit source; the source base is then set\nto zero so offsets are addresses, and restored after each read.",
+          "properties": {
+            "capacity": {
+              "description": "Bytes the stock setup writes and each E1 request may return.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "mechanism": {
+              "const": "pattern_zero_base",
+              "type": "string"
+            },
+            "registered_buffer": {
+              "description": "Address of the registered 64-bit scratch pointer and capacity.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "source_state": {
+              "description": "Address of the 64-bit source pointer and 32-bit capacity.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "mechanism",
+            "registered_buffer",
+            "source_state",
+            "capacity"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CaptureScope": {
+      "additionalProperties": false,
+      "description": "Ranges captured together, such as a quick scope while a control is held\nand a full scope once per session.",
+      "properties": {
+        "basis": {
+          "description": "What the scope covers and what is not established about it.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Scope name.",
+          "type": "string"
+        },
+        "ranges": {
+          "description": "Ranges in capture order.",
+          "items": {
+            "$ref": "#/$defs/NamedRange"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "basis",
+        "ranges"
+      ],
+      "type": "object"
+    },
+    "CodeCheck": {
+      "additionalProperties": false,
+      "description": "Stock code bytes identified by their SHA-256.",
+      "properties": {
+        "address": {
+          "description": "First address, before `code_alias`.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Routine or region name.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Lowercase hexadecimal SHA-256 of the stock bytes.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "NamedRange": {
+      "additionalProperties": false,
+      "description": "A named address range.",
+      "properties": {
+        "address": {
+          "description": "First address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Range name.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "size"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/bulk.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Located bulk-read mechanism and capture scopes for one firmware.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/bulk.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "code_alias": {
+      "description": "Uncached RAM alias: added to code-check, mapped-probe and callback-table\naddresses that the firmware stores in their cached form.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "code_checks": {
+      "description": "Stock code that must match before any bulk read.",
+      "items": {
+        "$ref": "#/$defs/CodeCheck"
+      },
+      "type": "array"
+    },
+    "firmware_id": {
+      "description": "Firmware whose stock code provides this path.",
+      "type": "string"
+    },
+    "id": {
+      "description": "Stable document identity.",
+      "type": "string"
+    },
+    "internal_version": {
+      "description": "Internal version the camera reports.",
+      "type": "string"
+    },
+    "mapped_probe": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CodeCheck"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "A larger bulk read of code, at `address + code_alias`, checked against the update's bytes."
+    },
+    "probes": {
+      "description": "Ranges read by both bulk and slow reads and compared.",
+      "items": {
+        "$ref": "#/$defs/BulkRange"
+      },
+      "type": "array"
+    },
+    "product": {
+      "description": "Product name the camera reports.",
+      "type": "string"
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "scopes": {
+      "description": "Named sets of ranges captured together.",
+      "items": {
+        "$ref": "#/$defs/CaptureScope"
+      },
+      "type": "array"
+    },
+    "source": {
+      "$ref": "#/$defs/BulkSource",
+      "description": "Stock routine that points E1 reads at memory."
+    },
+    "window": {
+      "$ref": "#/$defs/BulkRange",
+      "description": "Addresses bulk reads may cover."
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "firmware_id",
+    "product",
+    "internal_version",
+    "code_alias",
+    "source",
+    "window",
+    "code_checks",
+    "probes",
+    "scopes"
+  ],
+  "title": "FirmwareBulk",
+  "type": "object"
+}

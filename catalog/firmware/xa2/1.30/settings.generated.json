@@ -1,0 +1,160 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "xa2-130-settings",
+  "firmware_id": "xa2-130",
+  "source": {
+    "flash_offset": 1441792,
+    "address": 6407168,
+    "size": 2452832,
+    "sha256": "de93659e222385b8a9d262ea27b796400ff7f6aef7e96990929c2a67bae18061"
+  },
+  "bank": {
+    "descriptor": {
+      "address": 7984748,
+      "size": 12,
+      "sha256": "a32853ed7e2af917d6ce82c44f0781692dd9ff13dc7c0809423a24359880ad81"
+    },
+    "kind": 2,
+    "blocks": 40,
+    "first_block": 937,
+    "logical_first": 41,
+    "bytes": 4325376
+  },
+  "defaults": {
+    "address": 7984088,
+    "size": 508,
+    "sha256": "de745007a0a0867aa9e239702a0b9a8143383ab49d6057609d394ba0b1a4fa27"
+  },
+  "fields": [
+    {
+      "offset": 256,
+      "bytes": [
+        203,
+        4
+      ],
+      "basis": "Normal USB vendor ID."
+    },
+    {
+      "offset": 318,
+      "bytes": [
+        198,
+        2
+      ],
+      "basis": "Normal USB product ID."
+    },
+    {
+      "offset": 348,
+      "bytes": [
+        88,
+        45,
+        65,
+        50,
+        0
+      ],
+      "basis": "Body product name."
+    },
+    {
+      "offset": 514,
+      "bytes": [
+        85,
+        170
+      ],
+      "basis": "Settings bank signature."
+    },
+    {
+      "offset": 516,
+      "bytes": [
+        1,
+        49
+      ],
+      "basis": "Internal version."
+    }
+  ],
+  "profile": {
+    "header": {
+      "address": 7995804,
+      "size": 16,
+      "sha256": "38a794e7401b001dbf6b6dca49cc69e1427050102dc681eed93757cdf1b93bd7"
+    },
+    "records": {
+      "main": {
+        "block": 982,
+        "managed_index": 86,
+        "bytes": 512,
+        "defaults": {
+          "address": 8859200,
+          "size": 280,
+          "sha256": "ef007586c7d2fdc727fe614334f325edb5873c4784a1ce5a4bc3833d28457f13"
+        },
+        "defaults_offset": 40,
+        "parity_offset": 492,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Main record marker after the sequence word."
+          }
+        ]
+      },
+      "custom": {
+        "block": 984,
+        "managed_index": 88,
+        "bytes": 52,
+        "defaults": {
+          "address": 7995820,
+          "size": 40,
+          "sha256": "1f50f5aa7452a84f8f41505dae299803da47d2c73f2080603534d33f00a18b9d"
+        },
+        "defaults_offset": 4,
+        "parity_offset": 44,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Custom record marker after the sequence word."
+          }
+        ]
+      }
+    }
+  },
+  "settings": {
+    "debug": {
+      "store": "bank",
+      "offset": 247,
+      "values": {
+        "off": [
+          0
+        ],
+        "on": [
+          1
+        ]
+      }
+    },
+    "language": {
+      "store": "main",
+      "offset": 57,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    },
+    "setup": {
+      "store": "header",
+      "offset": 11,
+      "values": {
+        "done": [
+          7
+        ]
+      }
+    }
+  },
+  "sections": []
+}

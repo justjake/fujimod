@@ -1,0 +1,754 @@
+{
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema": {
+      "const": 1
+    },
+    "body": {
+      "type": "string",
+      "minLength": 1
+    },
+    "firmware": {
+      "type": "string",
+      "minLength": 1
+    },
+    "update": {
+      "type": "object",
+      "properties": {
+        "size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "size",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "flash_offset": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "boot_rom": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "object",
+          "properties": {
+            "size": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "size",
+            "sha256"
+          ],
+          "additionalProperties": false
+        },
+        "address": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "content",
+        "address"
+      ],
+      "additionalProperties": false
+    },
+    "quantum": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "execution": {
+      "type": "object",
+      "properties": {
+        "processors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "enum": [
+                  "cortex-r5f",
+                  "cortex-m4",
+                  "armv8a",
+                  "cortex-a7"
+                ]
+              },
+              "registers": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2
+                }
+              },
+              "released": {
+                "type": "boolean"
+              },
+              "mprofile": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "rprofile": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "model",
+              "registers",
+              "released",
+              "mprofile",
+              "rprofile"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "ram": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "base": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "base",
+              "size"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "mappings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "core": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "address": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "physical": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "permissions": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 7
+              }
+            },
+            "required": [
+              "core",
+              "address",
+              "physical",
+              "size",
+              "permissions"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "peripherals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "core": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "address": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "physical": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "core",
+              "address",
+              "physical",
+              "size"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "dma_mappings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "address": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "physical": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "permissions": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 7
+              }
+            },
+            "required": [
+              "address",
+              "physical",
+              "size",
+              "permissions"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "instructions_per_tick": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "decoders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "initial": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "choices": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "processors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "core": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "address": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "physical": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "size": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "permissions": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 7
+                          }
+                        },
+                        "required": [
+                          "core",
+                          "address",
+                          "physical",
+                          "size",
+                          "permissions"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "dma": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "address": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "physical": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "size": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "permissions": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 7
+                          }
+                        },
+                        "required": [
+                          "address",
+                          "physical",
+                          "size",
+                          "permissions"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "processors",
+                    "dma"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "initial",
+              "choices"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "processors",
+        "ram",
+        "mappings",
+        "peripherals",
+        "dma_mappings",
+        "instructions_per_tick",
+        "decoders"
+      ],
+      "additionalProperties": false
+    },
+    "devices": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": 1
+        },
+        "boot_entry": {
+          "enum": [
+            "rom",
+            "loader"
+          ]
+        },
+        "wires": {
+          "type": "object"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "boot_entries": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "rom",
+                    "loader"
+                  ]
+                }
+              },
+              "windows": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "base": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "size": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "required": [
+                    "base",
+                    "size"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "dependencies": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "model": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "name",
+              "boot_entries",
+              "windows",
+              "dependencies",
+              "model"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "schema",
+        "boot_entry",
+        "wires",
+        "nodes"
+      ],
+      "additionalProperties": false
+    },
+    "scene": {
+      "type": "object"
+    },
+    "generated_assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "pattern": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "minItems": 1
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "name",
+          "pattern",
+          "size"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "mcu": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string",
+          "minLength": 1
+        },
+        "route": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "first_register": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        }
+      },
+      "required": [
+        "node",
+        "route",
+        "first_register"
+      ],
+      "additionalProperties": false
+    },
+    "reset_coprocessors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "core": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "register": {
+            "type": "object",
+            "properties": {
+              "cp": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "wide": {
+                "type": "boolean"
+              },
+              "secure": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "crn": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "crm": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "opc1": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "opc2": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "cp",
+              "wide",
+              "secure",
+              "crn",
+              "crm",
+              "opc1",
+              "opc2"
+            ],
+            "additionalProperties": false
+          },
+          "set_bits": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "core",
+          "register",
+          "set_bits"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "observation": {
+      "type": "object",
+      "properties": {
+        "ui_mode": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "system_mode": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "menu_active": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pending_mode": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "menu_node": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rec_mode": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "setup_mode": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "instance": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "scanout": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readiness": {
+          "type": "object",
+          "properties": {
+            "category_one": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "category_two": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "input_pending": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "override_address": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "excluded_mask": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "operation_alert_timer": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            }
+          },
+          "required": [
+            "category_one",
+            "category_two",
+            "input_pending",
+            "override_address",
+            "excluded_mask",
+            "operation_alert_timer"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "ui_mode",
+        "system_mode",
+        "menu_active",
+        "pending_mode",
+        "menu_node",
+        "rec_mode",
+        "setup_mode",
+        "instance",
+        "scanout",
+        "readiness"
+      ],
+      "additionalProperties": false
+    },
+    "first_start": {
+      "type": "object",
+      "properties": {
+        "channel": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "calibration_pointer": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lower_offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "upper_offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "adc": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hold_ticks": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "settle_ticks": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_presses": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "channel",
+        "calibration_pointer",
+        "lower_offset",
+        "upper_offset",
+        "adc",
+        "hold_ticks",
+        "settle_ticks",
+        "max_presses"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "body",
+    "firmware",
+    "update",
+    "flash_offset",
+    "boot_rom",
+    "quantum",
+    "execution",
+    "devices",
+    "scene",
+    "generated_assets",
+    "mcu",
+    "reset_coprocessors",
+    "observation",
+    "first_start"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fujimod.com/schemas/emulator-runtime.schema.json",
+  "title": "Standalone emulator runtime",
+  "description": "Processor graph, physical device parameters, external scene generation and host boot observations. Device model variants are checked by the Rust Plan parser."
+}

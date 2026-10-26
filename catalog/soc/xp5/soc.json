@@ -1,0 +1,1384 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc.schema.json",
+  "schema": 1,
+  "id": "xp5",
+  "architecture": "aarch64",
+  "processors": [
+    {
+      "id": "core0",
+      "model": "cortex-a53",
+      "released": null,
+      "registers": [],
+      "mprofile": null,
+      "rprofile": null
+    },
+    {
+      "id": "core1",
+      "model": "cortex-a53",
+      "released": null,
+      "registers": [],
+      "mprofile": null,
+      "rprofile": null
+    },
+    {
+      "id": "core2",
+      "model": "cortex-a53",
+      "released": null,
+      "registers": [],
+      "mprofile": null,
+      "rprofile": null
+    },
+    {
+      "id": "core3",
+      "model": "cortex-a53",
+      "released": null,
+      "registers": [],
+      "mprofile": null,
+      "rprofile": null
+    },
+    {
+      "id": "core4",
+      "model": "cortex-m4",
+      "released": null,
+      "registers": [],
+      "mprofile": null,
+      "rprofile": null
+    }
+  ],
+  "memory_regions": [
+    {
+      "id": "dram",
+      "base": 0,
+      "size": {
+        "kind": "body_dram"
+      },
+      "kind": "dram"
+    },
+    {
+      "id": "companion-sram",
+      "base": 4196401152,
+      "size": {
+        "kind": "bytes",
+        "bytes": 1048576
+      },
+      "kind": "sram"
+    }
+  ],
+  "blocks": [
+    {
+      "id": "gic-distributor",
+      "base": 4194304000,
+      "size": 65536,
+      "kind": "interrupt-controller",
+      "clock_id": null
+    },
+    {
+      "id": "gic-redistributor",
+      "base": 4194828288,
+      "size": 524288,
+      "kind": "interrupt-controller",
+      "clock_id": null
+    },
+    {
+      "id": "timer",
+      "base": 4287660032,
+      "size": 4096,
+      "kind": "timer",
+      "clock_id": null
+    },
+    {
+      "id": "extended-timer",
+      "base": 4287664128,
+      "size": 4096,
+      "kind": "timer",
+      "clock_id": null
+    },
+    {
+      "id": "flash-aperture",
+      "base": 4026531840,
+      "size": 134217728,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "flash",
+      "base": 4287668224,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "flash-dma",
+      "base": 4287860736,
+      "size": 4096,
+      "kind": "dma",
+      "clock_id": null
+    },
+    {
+      "id": "clock-gates",
+      "base": 4287676416,
+      "size": 4096,
+      "kind": "clock-controller",
+      "clock_id": null
+    },
+    {
+      "id": "power-gates",
+      "base": 4287680512,
+      "size": 4096,
+      "kind": "clock-controller",
+      "clock_id": null
+    },
+    {
+      "id": "clock-banks",
+      "base": 4288675840,
+      "size": 131072,
+      "kind": "clock-controller",
+      "clock_id": null
+    },
+    {
+      "id": "dma",
+      "base": 4287823872,
+      "size": 32768,
+      "kind": "dma",
+      "clock_id": null
+    },
+    {
+      "id": "spi8",
+      "base": 4287725568,
+      "size": 4096,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "output-link",
+      "base": 4288286720,
+      "size": 28,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "pin-control",
+      "base": 4287643648,
+      "size": 4096,
+      "kind": "gpio",
+      "clock_id": null
+    },
+    {
+      "id": "temperature",
+      "base": 4287647744,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "adc",
+      "base": 4287651840,
+      "size": 4096,
+      "kind": "adc",
+      "clock_id": null
+    },
+    {
+      "id": "gpio",
+      "base": 4287655936,
+      "size": 4096,
+      "kind": "gpio",
+      "clock_id": null
+    },
+    {
+      "id": "gpio3",
+      "base": 4287672320,
+      "size": 4096,
+      "kind": "gpio",
+      "clock_id": null
+    },
+    {
+      "id": "spi0",
+      "base": 4287692800,
+      "size": 4096,
+      "kind": "serial-controller",
+      "clock_id": "serial-source"
+    },
+    {
+      "id": "i2c1",
+      "base": 4287778816,
+      "size": 4096,
+      "kind": "control-bus",
+      "clock_id": null
+    },
+    {
+      "id": "lz",
+      "base": 4288151552,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "pixel-pll0",
+      "base": 4288745472,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "pixel-pll1",
+      "base": 4288749568,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "pixel-pll2",
+      "base": 4288753664,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "pixel-pll3",
+      "base": 4288757760,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "display0",
+      "base": 4288217088,
+      "size": 4096,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
+      "id": "display1",
+      "base": 4288282624,
+      "size": 4096,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
+      "id": "spi9",
+      "base": 4287729664,
+      "size": 4096,
+      "kind": "serial-controller",
+      "clock_id": "serial-source"
+    },
+    {
+      "id": "renderer",
+      "base": 4287873024,
+      "size": 12288,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
+      "id": "sensor",
+      "base": 4287922176,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "receiver0",
+      "base": 4287889408,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "receiver1",
+      "base": 4287893504,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "phy",
+      "base": 4287905792,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "input",
+      "base": 4287913984,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "input-reset",
+      "base": 4287954944,
+      "size": 4096,
+      "kind": "reset-controller",
+      "clock_id": null
+    },
+    {
+      "id": "movdc0",
+      "base": 4288086016,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "movdc1",
+      "base": 4288090112,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "movdc2",
+      "base": 4288094208,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "movdc-reset",
+      "base": 4288098304,
+      "size": 4096,
+      "kind": "reset-controller",
+      "clock_id": null
+    },
+    {
+      "id": "resize",
+      "base": 4288159744,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "statistics",
+      "base": 4286578688,
+      "size": 60224,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "paf",
+      "base": 4288110592,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "preview",
+      "base": 4288102400,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "rifp-io",
+      "base": 4291825664,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "rifp",
+      "base": 4291829760,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "spi3",
+      "base": 4287705088,
+      "size": 4096,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "spi4",
+      "base": 4287709184,
+      "size": 4096,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "spi5",
+      "base": 4287713280,
+      "size": 4096,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "mailbox",
+      "base": 4287684864,
+      "size": 36,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "serial",
+      "base": 4287696896,
+      "size": 4096,
+      "kind": "serial-controller",
+      "clock_id": "serial-source"
+    },
+    {
+      "id": "capture0",
+      "base": 4287791104,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "capture1",
+      "base": 4287795200,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "dma-address-high",
+      "base": 4287686472,
+      "size": 64,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "dma-routes",
+      "base": 4287685888,
+      "size": 32,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "bus-drain-68000000",
+      "base": 1744830464,
+      "size": 4,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "bus-drain-80000000",
+      "base": 2147483648,
+      "size": 4,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "bus-drain-1c0000000",
+      "base": 7516192768,
+      "size": 4,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-ff000000",
+      "base": 4278190080,
+      "size": 16777216,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fa000000",
+      "base": 4194304000,
+      "size": 1048576,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-f0000000",
+      "base": 4026531840,
+      "size": 134217728,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-faf05000",
+      "base": 4210053120,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-faf15000",
+      "base": 4210118656,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-faf25000",
+      "base": 4210184192,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-faf35000",
+      "base": 4210249728,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-f8000000",
+      "base": 4160749568,
+      "size": 4,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-f9100000",
+      "base": 4178575360,
+      "size": 4,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-faa80010",
+      "base": 4205314064,
+      "size": 4,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fae00000",
+      "base": 4208984064,
+      "size": 12288,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fae60000",
+      "base": 4209377280,
+      "size": 147456,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-faf08000",
+      "base": 4210065408,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-68000000",
+      "base": 1744830464,
+      "size": 4,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-80000000",
+      "base": 2147483648,
+      "size": 4,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-1c0000000",
+      "base": 7516192768,
+      "size": 4,
+      "kind": "address-window",
+      "clock_id": null
+    }
+  ],
+  "interrupts": [],
+  "clocks": [
+    {
+      "id": "counter",
+      "frequency_hz": 1000000000,
+      "parent_id": null
+    },
+    {
+      "id": "pmu",
+      "frequency_hz": 1000000000,
+      "parent_id": null
+    },
+    {
+      "id": "companion",
+      "frequency_hz": 600000000,
+      "parent_id": null
+    },
+    {
+      "id": "serial-source",
+      "frequency_hz": 48000000,
+      "parent_id": null
+    }
+  ],
+  "mappings": [
+    {
+      "id": "companion-map-0",
+      "core": "core4",
+      "address": 0,
+      "physical": 4196401152,
+      "size": {
+        "kind": "bytes",
+        "bytes": 1048576
+      },
+      "permissions": 7
+    },
+    {
+      "id": "companion-map-1",
+      "core": "core4",
+      "address": 1749495808,
+      "physical": 138883072,
+      "size": {
+        "kind": "bytes",
+        "bytes": 5754880
+      },
+      "permissions": 7
+    },
+    {
+      "id": "companion-map-2",
+      "core": "core4",
+      "address": 1650708480,
+      "physical": 40095744,
+      "size": {
+        "kind": "bytes",
+        "bytes": 266240
+      },
+      "permissions": 7
+    }
+  ],
+  "dma_mappings": [],
+  "decoders": [],
+  "peripherals": [
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-ff000000",
+      "address": 4278190080
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fa000000",
+      "address": 4194304000
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-f0000000",
+      "address": 4026531840
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-faf05000",
+      "address": 4210053120
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-faf15000",
+      "address": 4210118656
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-faf25000",
+      "address": 4210184192
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-faf35000",
+      "address": 4210249728
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-f8000000",
+      "address": 4160749568
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-f9100000",
+      "address": 4178575360
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-faa80010",
+      "address": 4205314064
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fae00000",
+      "address": 4208984064
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fae60000",
+      "address": 4209377280
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-faf08000",
+      "address": 4210065408
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-68000000",
+      "address": 1744830464
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-80000000",
+      "address": 2147483648
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-1c0000000",
+      "address": 7516192768
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-ff000000",
+      "address": 4278190080
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fa000000",
+      "address": 4194304000
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-f0000000",
+      "address": 4026531840
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-faf05000",
+      "address": 4210053120
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-faf15000",
+      "address": 4210118656
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-faf25000",
+      "address": 4210184192
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-faf35000",
+      "address": 4210249728
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-f8000000",
+      "address": 4160749568
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-f9100000",
+      "address": 4178575360
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-faa80010",
+      "address": 4205314064
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fae00000",
+      "address": 4208984064
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fae60000",
+      "address": 4209377280
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-faf08000",
+      "address": 4210065408
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-68000000",
+      "address": 1744830464
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-80000000",
+      "address": 2147483648
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-1c0000000",
+      "address": 7516192768
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-ff000000",
+      "address": 4278190080
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-fa000000",
+      "address": 4194304000
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-f0000000",
+      "address": 4026531840
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-faf05000",
+      "address": 4210053120
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-faf15000",
+      "address": 4210118656
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-faf25000",
+      "address": 4210184192
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-faf35000",
+      "address": 4210249728
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-f8000000",
+      "address": 4160749568
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-f9100000",
+      "address": 4178575360
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-faa80010",
+      "address": 4205314064
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-fae00000",
+      "address": 4208984064
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-fae60000",
+      "address": 4209377280
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-faf08000",
+      "address": 4210065408
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-68000000",
+      "address": 1744830464
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-80000000",
+      "address": 2147483648
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-1c0000000",
+      "address": 7516192768
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-ff000000",
+      "address": 4278190080
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-fa000000",
+      "address": 4194304000
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-f0000000",
+      "address": 4026531840
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-faf05000",
+      "address": 4210053120
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-faf15000",
+      "address": 4210118656
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-faf25000",
+      "address": 4210184192
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-faf35000",
+      "address": 4210249728
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-f8000000",
+      "address": 4160749568
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-f9100000",
+      "address": 4178575360
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-faa80010",
+      "address": 4205314064
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-fae00000",
+      "address": 4208984064
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-fae60000",
+      "address": 4209377280
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-faf08000",
+      "address": 4210065408
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-68000000",
+      "address": 1744830464
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-80000000",
+      "address": 2147483648
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-1c0000000",
+      "address": 7516192768
+    },
+    {
+      "core": "core4",
+      "block_id": "peripheral-window-ff000000",
+      "address": 1593835520
+    }
+  ],
+  "reset": {
+    "release": null,
+    "coprocessor_writes": []
+  },
+  "hardware": {
+    "application": {
+      "kind": "armv8a",
+      "midr_el1": 1091555380,
+      "affinities": {
+        "core0": 0,
+        "core1": 1,
+        "core2": 2,
+        "core3": 3
+      },
+      "counter_clock_id": "counter",
+      "pmu_clock_id": "pmu",
+      "physical_timer_irq": 30,
+      "virtual_timer_irq": 27
+    },
+    "interrupt_controller": {
+      "kind": "gic_v3",
+      "distributor_block_id": "gic-distributor",
+      "redistributor_block_id": "gic-redistributor",
+      "redistributor_stride": 131072,
+      "lines": 512
+    },
+    "interrupt_inputs": [],
+    "companion": {
+      "processor_id": "core4",
+      "clock_id": "companion",
+      "vector_base": 0,
+      "mailbox_block_id": "mailbox",
+      "mailbox": {
+        "request": 55,
+        "control": 58,
+        "reply": 141,
+        "status": 142,
+        "fault": 143
+      }
+    },
+    "blocks": {
+      "dma": {
+        "kind": "companion_dma",
+        "companion_irq_base": 83
+      },
+      "serial": {
+        "kind": "serial_dma",
+        "receive_request": 2,
+        "transmit_request": 3
+      }
+    },
+    "profiles": {
+      "xp5": {
+        "cpu_model": "Cortex-A53",
+        "runtime_abi": "armv8a-shared-v1",
+        "limits": [],
+        "windows": [
+          {
+            "name": "timer",
+            "base": 4287660032,
+            "size": 4096,
+            "attachment": "timer"
+          },
+          {
+            "name": "extended_timer",
+            "base": 4287664128,
+            "size": 4096,
+            "kind": "timer-extended"
+          },
+          {
+            "name": "flash_aperture",
+            "base": 4026531840,
+            "size": 134217728,
+            "kind": "flash-storage"
+          },
+          {
+            "name": "flash",
+            "base": 4287668224,
+            "size": 4096,
+            "kind": "flash-storage-controller"
+          },
+          {
+            "name": "flash_dma",
+            "base": 4287860736,
+            "size": 4096,
+            "kind": "flash-storage-dma"
+          },
+          {
+            "name": "clock_gates",
+            "base": 4287676416,
+            "size": 4096,
+            "kind": "clock-gates"
+          },
+          {
+            "name": "power_gates",
+            "base": 4287680512,
+            "size": 4096,
+            "kind": "power-gates"
+          },
+          {
+            "name": "clock_banks",
+            "base": 4288675840,
+            "size": 131072,
+            "kind": "clock-banks"
+          },
+          {
+            "name": "dma",
+            "base": 4287823872,
+            "size": 32768,
+            "kind": "general-dma",
+            "options": {
+              "companion_irq_base": 83
+            }
+          },
+          {
+            "name": "spi8",
+            "base": 4287725568,
+            "size": 4096,
+            "attachment": "spi8"
+          },
+          {
+            "name": "output_link",
+            "base": 4288286720,
+            "size": 28,
+            "kind": "display-output-link"
+          },
+          {
+            "name": "pin_control",
+            "base": 4287643648,
+            "size": 4096,
+            "kind": "pin-control"
+          },
+          {
+            "name": "temperature",
+            "base": 4287647744,
+            "size": 4096,
+            "kind": "soc-temperature"
+          },
+          {
+            "name": "adc",
+            "base": 4287651840,
+            "size": 4096,
+            "kind": "adc"
+          },
+          {
+            "name": "gpio",
+            "base": 4287655936,
+            "size": 4096,
+            "kind": "gpio"
+          },
+          {
+            "name": "gpio3",
+            "base": 4287672320,
+            "size": 4096,
+            "kind": "gpio-port3"
+          },
+          {
+            "name": "spi0",
+            "base": 4287692800,
+            "size": 4096,
+            "kind": "spi-controller",
+            "options": {
+              "source_hz": 48000000
+            }
+          },
+          {
+            "name": "i2c1",
+            "base": 4287778816,
+            "size": 4096,
+            "kind": "battery-i2c"
+          },
+          {
+            "name": "lz",
+            "base": 4288151552,
+            "size": 4096,
+            "kind": "lz"
+          },
+          {
+            "name": "pixel_pll0",
+            "base": 4288745472,
+            "size": 4096,
+            "kind": "panel-pll"
+          },
+          {
+            "name": "pixel_pll1",
+            "base": 4288749568,
+            "size": 4096,
+            "kind": "panel-pll"
+          },
+          {
+            "name": "pixel_pll2",
+            "base": 4288753664,
+            "size": 4096,
+            "kind": "panel-pll"
+          },
+          {
+            "name": "pixel_pll3",
+            "base": 4288757760,
+            "size": 4096,
+            "kind": "panel-pll"
+          },
+          {
+            "name": "display0",
+            "base": 4288217088,
+            "size": 4096,
+            "kind": "display"
+          },
+          {
+            "name": "display1",
+            "base": 4288282624,
+            "size": 4096,
+            "kind": "display"
+          },
+          {
+            "name": "spi9",
+            "base": 4287729664,
+            "size": 4096,
+            "kind": "panel-spi",
+            "options": {
+              "source_hz": 48000000
+            }
+          },
+          {
+            "name": "renderer",
+            "base": 4287873024,
+            "size": 12288,
+            "kind": "renderer"
+          },
+          {
+            "name": "sensor",
+            "base": 4287922176,
+            "size": 4096,
+            "kind": "imaging-sensor",
+            "options": {
+              "command_latency_us": 1
+            }
+          },
+          {
+            "name": "receiver0",
+            "base": 4287889408,
+            "size": 4096,
+            "kind": "imaging-receiver"
+          },
+          {
+            "name": "receiver1",
+            "base": 4287893504,
+            "size": 4096,
+            "kind": "imaging-receiver"
+          },
+          {
+            "name": "phy",
+            "base": 4287905792,
+            "size": 4096,
+            "kind": "imaging-phy"
+          },
+          {
+            "name": "input",
+            "base": 4287913984,
+            "size": 4096,
+            "kind": "imaging-input"
+          },
+          {
+            "name": "input_reset",
+            "base": 4287954944,
+            "size": 4096,
+            "kind": "imaging-reset"
+          },
+          {
+            "name": "movdc0",
+            "base": 4288086016,
+            "size": 4096,
+            "kind": "movdc"
+          },
+          {
+            "name": "movdc1",
+            "base": 4288090112,
+            "size": 4096,
+            "kind": "movdc"
+          },
+          {
+            "name": "movdc2",
+            "base": 4288094208,
+            "size": 4096,
+            "kind": "movdc"
+          },
+          {
+            "name": "movdc_reset",
+            "base": 4288098304,
+            "size": 4096,
+            "kind": "imaging-reset"
+          },
+          {
+            "name": "resize",
+            "base": 4288159744,
+            "size": 4096,
+            "kind": "imaging-resize"
+          },
+          {
+            "name": "statistics",
+            "base": 4286578688,
+            "size": 60224,
+            "kind": "imaging-statistics"
+          },
+          {
+            "name": "paf",
+            "base": 4288110592,
+            "size": 4096,
+            "kind": "imaging-paf"
+          },
+          {
+            "name": "preview",
+            "base": 4288102400,
+            "size": 4096,
+            "kind": "imaging-preview"
+          },
+          {
+            "name": "rifp_io",
+            "base": 4291825664,
+            "size": 4096,
+            "kind": "imaging-rifp-io"
+          },
+          {
+            "name": "rifp",
+            "base": 4291829760,
+            "size": 4096,
+            "kind": "imaging-rifp"
+          },
+          {
+            "name": "spi3",
+            "base": 4287705088,
+            "size": 4096,
+            "attachment": "spi3"
+          },
+          {
+            "name": "spi4",
+            "base": 4287709184,
+            "size": 4096,
+            "attachment": "spi4"
+          },
+          {
+            "name": "spi5",
+            "base": 4287713280,
+            "size": 4096,
+            "attachment": "spi5"
+          },
+          {
+            "name": "mailbox",
+            "base": 4287684864,
+            "size": 36,
+            "kind": "interprocessor-mailbox"
+          },
+          {
+            "name": "serial",
+            "base": 4287696896,
+            "size": 4096,
+            "kind": "pl022",
+            "options": {
+              "source_hz": 48000000,
+              "ticks_per_second": 1000000000,
+              "receive_request": 2,
+              "transmit_request": 3
+            }
+          },
+          {
+            "name": "capture0",
+            "base": 4287791104,
+            "size": 4096,
+            "kind": "input-capture"
+          },
+          {
+            "name": "capture1",
+            "base": 4287795200,
+            "size": 4096,
+            "kind": "input-capture"
+          },
+          {
+            "name": "dma_address_high",
+            "base": 4287686472,
+            "size": 64,
+            "kind": "dma-address-high"
+          },
+          {
+            "name": "dma_routes",
+            "base": 4287685888,
+            "size": 32,
+            "kind": "dma-request-routing"
+          },
+          {
+            "name": "bus_drain_68000000",
+            "base": 1744830464,
+            "size": 4,
+            "kind": "unmodeled-bus-drain"
+          },
+          {
+            "name": "bus_drain_80000000",
+            "base": 2147483648,
+            "size": 4,
+            "kind": "unmodeled-bus-drain"
+          },
+          {
+            "name": "bus_drain_1c0000000",
+            "base": 7516192768,
+            "size": 4,
+            "kind": "unmodeled-bus-drain"
+          }
+        ],
+        "engines": [
+          "hypervisor"
+        ],
+        "instructions_per_tick": {
+          "numerator": 1,
+          "denominator": 1
+        },
+        "board_ticks_per_second": 1000000000
+      }
+    }
+  }
+}

@@ -1,0 +1,344 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "x100vi",
+  "soc_id": "xp5",
+  "dram_bytes": 1744830464,
+  "nand": null,
+  "sensor": null,
+  "lens": null,
+  "display": null,
+  "microcontroller": null,
+  "power_control": null,
+  "card_slot": null,
+  "control_bus_chips": [],
+  "connections": [
+    {
+      "id": "focus-actuator-bus",
+      "kind": "lens",
+      "signals": []
+    },
+    {
+      "id": "iris-actuator-bus",
+      "kind": "lens",
+      "signals": []
+    },
+    {
+      "id": "audio-serial-output-bus",
+      "kind": "control",
+      "signals": []
+    },
+    {
+      "id": "imaging-serial-output-bus",
+      "kind": "sensor",
+      "signals": []
+    },
+    {
+      "id": "power-controller-bus",
+      "kind": "power-control",
+      "signals": []
+    },
+    {
+      "id": "power-controller-select",
+      "kind": "power-control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 10,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "serial-calibration-bus",
+      "kind": "control",
+      "signals": []
+    },
+    {
+      "id": "serial-calibration-select",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 8,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "bis-configuration-bus",
+      "kind": "control",
+      "signals": []
+    },
+    {
+      "id": "bis-configuration-select",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 11,
+          "pin": 5,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "lsm6ds-bus",
+      "kind": "control",
+      "signals": []
+    },
+    {
+      "id": "lsm6ds-select",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 11,
+          "pin": 3,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "display-select",
+      "kind": "display",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 15,
+          "pin": 13,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "gpio-input-0-0",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 0,
+          "active_level": false
+        },
+        {
+          "kind": "interrupt",
+          "controller_id": "gic-distributor",
+          "line": 116
+        }
+      ]
+    },
+    {
+      "id": "gpio-input-0-1",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 1,
+          "active_level": false
+        },
+        {
+          "kind": "interrupt",
+          "controller_id": "gic-distributor",
+          "line": 117
+        }
+      ]
+    },
+    {
+      "id": "feedback-0-output",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 4,
+          "pin": 4,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "feedback-0-input",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 4,
+          "pin": 4,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "controls-encoder-1-0-1-1",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 1,
+          "pin": 0,
+          "active_level": true
+        },
+        {
+          "kind": "gpio",
+          "port": 1,
+          "pin": 1,
+          "active_level": true
+        }
+      ]
+    }
+  ],
+  "parts": [
+    "focus-actuator",
+    "iris-actuator",
+    "audio-serial-output",
+    "imaging-serial-output",
+    "power-controller",
+    "serial-calibration",
+    "bis-configuration",
+    "lsm6ds",
+    "x100vi-serial-nor"
+  ],
+  "wiring": [
+    {
+      "source_id": "spi4",
+      "target_id": "focus-actuator",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "spi5",
+      "target_id": "iris-actuator",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "spi8",
+      "target_id": "audio-serial-output",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "spi3",
+      "target_id": "imaging-serial-output",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "focus-actuator",
+      "target_id": "timer",
+      "signal": "pulse"
+    },
+    {
+      "source_id": "spi0",
+      "target_id": "power-controller",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "spi0",
+      "target_id": "serial-calibration",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "serial",
+      "target_id": "bis-configuration",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "serial",
+      "target_id": "lsm6ds",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "flash",
+      "target_id": "x100vi-serial-nor",
+      "signal": "storage"
+    }
+  ],
+  "hardware": {
+    "serial_attachments": [
+      {
+        "part_id": "focus-actuator",
+        "controller_id": "spi4",
+        "connection_id": "focus-actuator-bus",
+        "select_connection_id": null
+      },
+      {
+        "part_id": "iris-actuator",
+        "controller_id": "spi5",
+        "connection_id": "iris-actuator-bus",
+        "select_connection_id": null
+      },
+      {
+        "part_id": "audio-serial-output",
+        "controller_id": "spi8",
+        "connection_id": "audio-serial-output-bus",
+        "select_connection_id": null
+      },
+      {
+        "part_id": "imaging-serial-output",
+        "controller_id": "spi3",
+        "connection_id": "imaging-serial-output-bus",
+        "select_connection_id": null
+      },
+      {
+        "part_id": "power-controller",
+        "controller_id": "spi0",
+        "connection_id": "power-controller-bus",
+        "select_connection_id": "power-controller-select"
+      },
+      {
+        "part_id": "serial-calibration",
+        "controller_id": "spi0",
+        "connection_id": "serial-calibration-bus",
+        "select_connection_id": "serial-calibration-select"
+      },
+      {
+        "part_id": "bis-configuration",
+        "controller_id": "serial",
+        "connection_id": "bis-configuration-bus",
+        "select_connection_id": "bis-configuration-select"
+      },
+      {
+        "part_id": "lsm6ds",
+        "controller_id": "serial",
+        "connection_id": "lsm6ds-bus",
+        "select_connection_id": "lsm6ds-select"
+      }
+    ],
+    "gpio_feedback": [
+      {
+        "output_connection_id": "feedback-0-output",
+        "input_connection_id": "feedback-0-input"
+      }
+    ],
+    "keypad_samples": {
+      "menu": 3472,
+      "back": 2227,
+      "menu_back": 1999,
+      "up": 1558,
+      "down": 3409,
+      "left": 2829,
+      "right": 2068
+    },
+    "thermal_connection_ids": [],
+    "profiles": {
+      "x100vi": {
+        "limits": [],
+        "dram_basis": "Declared catalog input."
+      }
+    }
+  },
+  "ram_regions": [
+    {
+      "id": "dram-0",
+      "base": 0,
+      "bytes": 1073741824,
+      "kind": "dram"
+    },
+    {
+      "id": "dram-1",
+      "base": 1073741824,
+      "bytes": 671088640,
+      "kind": "dram"
+    }
+  ]
+}

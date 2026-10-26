@@ -1,4 +1,6 @@
 {
+  "schema": 1,
+  "body": "xm1",
   "detentSounds": {
     "subcommand": "compact"
   },
@@ -20,23 +22,19 @@
           "kind": "control",
           "id": "play",
           "variant": "key",
-          "icon": "play"
+          "icon": "playback"
         },
         {
           "kind": "control",
           "id": "q",
           "variant": "key",
-          "face": [
-            "Q"
-          ]
+          "face": ["Q"]
         },
         {
           "kind": "control",
           "id": "fn",
           "variant": "key",
-          "face": [
-            "Fn"
-          ]
+          "face": ["Fn"]
         }
       ]
     },
@@ -45,10 +43,7 @@
     },
     {
       "kind": "dpad",
-      "face": [
-        "MENU",
-        "OK"
-      ],
+      "face": ["MENU", "OK"],
       "bindings": {
         "up": "up",
         "down": "down",
@@ -67,19 +62,13 @@
           "kind": "control",
           "id": "disp",
           "variant": "key",
-          "face": [
-            "DISP",
-            "BACK"
-          ]
+          "face": ["DISP", "BACK"]
         },
         {
           "kind": "control",
           "id": "command_push",
           "variant": "key",
-          "face": [
-            "DIAL",
-            "PUSH"
-          ]
+          "face": ["DIAL", "PUSH"]
         }
       ]
     },

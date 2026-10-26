@@ -1,0 +1,27 @@
+[package]
+name = "fujimod-usb-app80"
+description = "App80 command mailboxes and firmware-qualified service commands over ff80"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-usb.workspace = true
+fujimod-usb-app80-types.workspace = true
+fujimod-catalog-service.workspace = true
+thiserror.workspace = true
+fujimod-workspace-hack.workspace = true
+
+[dev-dependencies]
+fujimod-catalog-firmware-identity.workspace = true
+serde_json.workspace = true
+futures-lite.workspace = true
+nusb.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test.workspace = true

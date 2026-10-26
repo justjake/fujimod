@@ -7,6 +7,9 @@ repository.workspace = true
 publish.workspace = true
 description = "Transport-level USB forwarding between native or Wasm controllers and WebUSB exporters"
 
+[lib]
+doctest = false
+
 [features]
 relay = ["dep:axum", "dep:tokio"]
 
@@ -19,19 +22,30 @@ futures-lite.workspace = true
 futures-timer.workspace = true
 futures-util = { version = "0.3", features = ["sink"] }
 base64 = "0.23"
+postcard = { version = "1", default-features = false, features = ["alloc"] }
+serde_bytes = "0.11"
+fujimod-workspace-hack.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 str0m = { version = "0.24", default-features = false, features = ["rust-crypto"] }
 async-net = "2"
 async-io = "2"
 async-channel = "2"
+socket2 = "0.6"
 aes-gcm = "0.10"
 rand = "0.9"
 if-addrs = "0.15"
 stunclient = "0.4"
 async-tungstenite = { version = "0.34", features = ["smol-runtime", "smol-native-tls"] }
 axum = { version = "0.8", features = ["ws"], optional = true }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "time", "signal"], optional = true }
+tokio = { version = "1", features = [
+  "macros",
+  "rt-multi-thread",
+  "net",
+  "sync",
+  "time",
+  "signal",
+], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen.workspace = true

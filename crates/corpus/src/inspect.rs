@@ -56,7 +56,7 @@ impl Index {
                     {
                         "cross-isa"
                     } else {
-                        match self.grade(a, b) {
+                        match self.grade_ids(a, b) {
                             Grade::Identical => "identical",
                             Grade::SameCode => "same-code",
                             Grade::CallSite => "call-site",
@@ -79,8 +79,8 @@ impl Index {
                     .into_sorted_vec()
                     .into_iter()
                     .map(|(_, a, b)| LinkSample {
-                        left: self.view(a),
-                        right: self.view(b),
+                        left: self.shown(a),
+                        right: self.shown(b),
                         pair: if grade == "weak" {
                             self.weak_pair(a, b)
                         } else {
@@ -90,20 +90,6 @@ impl Index {
                     .collect();
                 (grade, SampleGroup { population, links })
             })
-            .collect()
-    }
-    pub fn find_strings(
-        &self,
-        strings: &std::collections::BTreeSet<String>,
-        firmware: Option<&str>,
-    ) -> Vec<FunctionView> {
-        self.functions
-            .iter()
-            .enumerate()
-            .filter(|(_, f)| {
-                firmware.is_none_or(|fw| f.key.firmware == fw) && !f.strings.is_disjoint(strings)
-            })
-            .map(|(i, _)| self.view(i))
             .collect()
     }
     pub fn add_name(&mut self, id: usize, name: String, source: String) -> Result<()> {
@@ -125,68 +111,12 @@ impl Index {
         if !f.annotations.contains(&annotation) {
             f.annotations.push(annotation.clone());
         }
-        if let Some(b) = self
-            .units
-            .iter_mut()
-            .find(|u| u.input.firmware == f.key.firmware && u.input.unit == f.key.unit)
-            .and_then(|u| {
-                u.input
-                    .functions
-                    .iter_mut()
-                    .find(|b| b.address == f.key.address)
-            })
-        {
-            if !b.names.contains(&name) {
-                b.names.push(name);
-            }
-            if !b.annotations.contains(&annotation) {
-                b.annotations.push(annotation.clone());
-            }
-        }
         if let Some(&family) = self.membership.get(id)
             && !self.families[family].annotations.contains(&annotation)
         {
             self.families[family].annotations.push(annotation);
         }
         Ok(())
-    }
-    pub fn string_frequencies(
-        &self,
-        strings: &std::collections::BTreeSet<String>,
-    ) -> BTreeMap<String, BTreeMap<String, usize>> {
-        let mut counts = BTreeMap::<String, BTreeMap<String, usize>>::new();
-        for f in &self.functions {
-            for s in f.strings.intersection(strings) {
-                *counts
-                    .entry(s.clone())
-                    .or_default()
-                    .entry(f.key.firmware.clone())
-                    .or_default() += 1;
-            }
-        }
-        counts
-    }
-    pub fn body_sha256(&self, id: usize) -> Option<String> {
-        if let Some(found) = self.inspection.bodies.read().unwrap().get(&id) {
-            return found.clone();
-        }
-        let f = self.functions.get(id)?;
-        let u = self
-            .units
-            .iter()
-            .find(|u| u.input.firmware == f.key.firmware && u.input.unit == f.key.unit)?;
-        let mut hash = Sha256::new();
-        for &(lo, hi) in &f.ranges {
-            hash.update((hi - lo).to_le_bytes());
-            hash.update(u.read(lo, (hi - lo) as usize)?);
-        }
-        let result = Some(hash.finalize().iter().map(|b| format!("{b:02x}")).collect());
-        self.inspection
-            .bodies
-            .write()
-            .unwrap()
-            .insert(id, result.clone());
-        result
     }
     /// Fixed-size non-pointer tables are a witness separate from instruction normalization.
     pub fn data_witnesses(&self, id: usize, length: usize) -> Vec<DataWitness> {
@@ -198,11 +128,7 @@ impl Index {
         let Some(f) = self.functions.get(id) else {
             return vec![];
         };
-        let Some(u) = self
-            .units
-            .iter()
-            .find(|u| u.input.firmware == f.key.firmware && u.input.unit == f.key.unit)
-        else {
+        let Some(u) = self.unit(&f.key.firmware, &f.key.unit) else {
             return vec![];
         };
         if length < 16 || !length.is_multiple_of(4) || length > 4096 {

@@ -1,0 +1,196 @@
+/* Dev Tools' Files pane, pinned to the bottom of the tools column. */
+.files {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--wb-line-2, #2e2e33);
+  background: var(--wb-panel, #121214);
+  --file-row: 26px;
+  --file-dim: var(--wb-dim, #8e8e93);
+  --file-line: var(--wb-line-2, #2e2e33);
+}
+.files-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.files-head span {
+  color: var(--wb-dim, #8e8e93);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+/* A fixed height: adding files scrolls the list and never moves the tools above. */
+.files-list {
+  height: 196px;
+  overflow: auto;
+  font-size: 12.5px;
+}
+.files-list .tree {
+  font-size: 12.5px;
+}
+.files-empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  color: var(--wb-faint, #5f5f65);
+  font-size: 12px;
+}
+.files-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.files-actions .wb-btn {
+  gap: 6px;
+}
+
+/* The Contribute dialog, shared by Dev Tools and the bug report page. */
+.contribute {
+  width: min(460px, calc(100% - 28px));
+  max-height: calc(100dvh - 28px);
+  padding: 16px;
+  border: 1px solid #2e2e33;
+  border-radius: 10px;
+  background: #121214;
+  color: #e6e6e8;
+  font:
+    13px/1.5 -apple-system,
+    'SF Pro Text',
+    system-ui,
+    sans-serif;
+  box-shadow: 0 18px 50px #000c;
+  --file-row: 26px;
+  --file-dim: #8e8e93;
+  --file-line: #2e2e33;
+}
+.contribute[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.contribute::backdrop {
+  background: rgba(0, 0, 0, 0.62);
+}
+.contribute p {
+  margin: 0;
+}
+.contribute .tree {
+  height: 156px;
+  overflow: auto;
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid #232327;
+  border-radius: 6px;
+  background: #0e0e10;
+  font-size: 12.5px;
+}
+.contribute .cd-field {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #8e8e93;
+  font-size: 11.5px;
+}
+.contribute .cd-field textarea {
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+  height: 64px;
+  resize: none;
+  padding: 7px 8px;
+  border: 1px solid #2e2e33;
+  border-radius: 5px;
+  background: #0a0a0b;
+  color: #e6e6e8;
+  font: 12.5px/1.45 inherit;
+  font-family: inherit;
+}
+.contribute .cd-field textarea:focus {
+  outline: none;
+  border-color: rgba(61, 220, 106, 0.7);
+}
+.contribute .cd-field textarea:disabled {
+  opacity: 0.55;
+}
+/* One fixed-height row: status left, buttons right, so state changes never reflow. */
+.cd-foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  flex: none;
+}
+.cd-status {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  color: #8e8e93;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.cd-status.ok {
+  color: #3ddc6a;
+}
+.cd-status.error {
+  color: #ff5f57;
+}
+.cd-status a {
+  color: inherit;
+}
+.cd-clip {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.cd-progress {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: #2e2e33;
+}
+.cd-progress i {
+  display: block;
+  height: 100%;
+  background: #3ddc6a;
+}
+.cd-buttons {
+  display: flex;
+  gap: 8px;
+}
+.contribute .cd-btn {
+  margin: 0;
+  width: 92px;
+  height: 28px;
+  border: 1px solid #2e2e33;
+  border-radius: 5px;
+  background: #1b1b1e;
+  color: #e6e6e8;
+  font: 500 12px inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+.contribute .cd-btn.primary {
+  border-color: rgba(61, 220, 106, 0.55);
+  background: #16211a;
+  color: #d9f7e1;
+}
+.contribute .cd-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.cd-public {
+  color: #ffd60a;
+}
+.contribute .cd-check {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

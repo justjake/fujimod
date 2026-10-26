@@ -2,13 +2,14 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "fujimod-usb-sharing",
   "account_id": "1edee8e500839ee3dbf7338f44503075",
-  "main": "worker.mjs",
+  "main": "worker.ts",
   "compatibility_date": "2026-10-17",
   "workers_dev": false,
   "routes": [{ "pattern": "share.fujimod.com", "custom_domain": true }],
-  "observability": { "enabled": false },
+  "observability": { "enabled": true },
   "durable_objects": {
     "bindings": [
+      { "name": "CONTRIBUTIONS", "class_name": "Contributions" },
       { "name": "ISSUES", "class_name": "IssueReports" },
       { "name": "ROOMS", "class_name": "ShareRoom" },
       { "name": "TURN_BUDGET", "class_name": "TurnBudget" },
@@ -17,10 +18,21 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["ShareRoom", "TurnBudget"] },
     { "tag": "v2", "new_sqlite_classes": ["IssueReports"] },
+    { "tag": "v3", "new_sqlite_classes": ["Contributions"] },
   ],
   "r2_buckets": [{ "binding": "ISSUE_REPORTS", "bucket_name": "fujimod-issue-reports" }],
+  "d1_databases": [
+    {
+      "binding": "REPORTS_INDEX",
+      "database_name": "fujimod-reports",
+      "database_id": "73658419-4432-430f-9ac8-53fa5a87d19b",
+      "migrations_dir": "migrations",
+    },
+  ],
   "ratelimits": [
+    { "name": "CONTRIBUTION_LIMIT", "namespace_id": "1004", "simple": { "limit": 60, "period": 60 } },
     { "name": "ISSUE_LIMIT", "namespace_id": "1002", "simple": { "limit": 5, "period": 60 } },
+    { "name": "ERROR_LIMIT", "namespace_id": "1003", "simple": { "limit": 30, "period": 60 } },
     { "name": "CONNECTIONS", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
   ],
   "vars": {

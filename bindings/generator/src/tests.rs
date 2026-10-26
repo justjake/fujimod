@@ -237,3 +237,30 @@ fn multiple_integer_quantity_constructors_keep_names_and_validate_each_argument(
     assert_eq!(quantity["parameters"][1]["name"], "observed_count");
     assert_eq!(quantity["parameters"][1]["input"], "u8");
 }
+
+#[test]
+fn python_types_include_checked_inputs_and_nested_result_fields() {
+    let api = Api::from_sources([r#"
+        pub enum NewChoice {First,Second}
+        pub enum NewResult {Done,Unknown(u8)}
+        pub struct NewBytes(Vec<u8>);
+        impl NewBytes {
+            pub fn new(data:&[u8])->Result<Self,CommandError>{panic!()}
+            pub fn data(&self)->&[u8] { &self.0 }
+        }
+    "#])
+    .unwrap();
+    let out = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/generator-tests")
+        .join(format!("python-{}", std::process::id()));
+    api.write_python_types(&out).unwrap();
+    let path = out.join("_fujimod_service_values.pyi");
+    let first = fs::read_to_string(&path).unwrap();
+    assert!(first.contains("class NewChoice(Enum):"));
+    assert!(first.contains("class Unknown(NewResult):\n        raw_status: int"));
+    assert!(first.contains("def __init__(self, data: Buffer) -> None"));
+    assert!(first.contains("def data(self) -> bytes"));
+    api.write_python_types(&out).unwrap();
+    assert_eq!(first, fs::read_to_string(&path).unwrap());
+    fs::remove_dir_all(&out).unwrap();
+}

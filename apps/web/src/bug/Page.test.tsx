@@ -2,15 +2,13 @@ import { Blob as NodeBlob } from 'node:buffer';
 import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
 import { expect, test, vi } from 'vite-plus/test';
-import { BugReport } from './Page';
+import BugReport from './Page';
 import { base64url } from './report-link';
 import { tar, link, hash } from './fixtures.test-helper';
 import type { UploadReport } from './upload';
 import type { ReportConnection } from './usb';
 vi.mock('../dev-tools/Page', () => ({
-  DevTools: (props: { connectOnMount: boolean }) => (
-    <p>Dev Tools {props.connectOnMount ? 'connected' : ''}</p>
-  ),
+  default: () => <p>Dev Tools connected</p>,
 }));
 const receipt = {
   id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -33,10 +31,26 @@ function mount(props: Parameters<typeof BugReport>[0]) {
 function button(host: HTMLElement, name: string) {
   return [...host.querySelectorAll('button')].find((n) => n.textContent === name)!;
 }
-function submit(host: HTMLElement) {
-  host
-    .querySelector('form')!
-    .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+  this.open = true;
+};
+HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+  this.open = false;
+};
+const dialog = (host: HTMLElement) => host.querySelector<HTMLDialogElement>('dialog.contribute')!;
+/** Opens the Contribute dialog and presses Upload, with an optional message. */
+function contribute(host: HTMLElement, message?: string) {
+  if (!dialog(host).open) {
+    button(host, 'Contribute').click();
+    flush();
+  }
+  if (message !== undefined) {
+    const textarea = dialog(host).querySelector('textarea')!;
+    textarea.value = message;
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    flush();
+  }
+  button(dialog(host), 'Upload').click();
 }
 test('two acquisition paths remain available; upload is disabled until an archive is read', async () => {
   const upload = vi.fn();
@@ -61,9 +75,9 @@ test('two acquisition paths remain available; upload is disabled until an archiv
     );
     expect(host.textContent).toContain('Chrome or Edge');
     expect(host.textContent).toContain('ready to upload your error report over USB');
-    expect(button(host, 'Upload this information').disabled).toBe(true);
-    expect((host.querySelector('input[type=checkbox]') as HTMLInputElement).disabled).toBe(true);
-    submit(host);
+    expect(button(host, 'Contribute').disabled).toBe(true);
+    expect(button(host, 'Download all').disabled).toBe(true);
+    expect(host.querySelector('input[type=checkbox]')).toBeNull();
     expect(upload).not.toHaveBeenCalled();
   } finally {
     dispose();
@@ -83,19 +97,19 @@ test('inline report lists real entries locally and uploads only on explicit acti
   try {
     await vi.waitFor(() => {
       flush();
-      expect(button(host, 'Upload this information').disabled).toBe(false);
+      expect(button(host, 'Contribute').disabled).toBe(false);
     });
-    expect(host.querySelectorAll('.bug-inventory li').length).toBeGreaterThan(0);
+    expect(host.querySelectorAll('.bug-contents > .tree .r').length).toBeGreaterThan(0);
     expect(choose).not.toHaveBeenCalled();
     expect(upload).not.toHaveBeenCalled();
-    const textarea = host.querySelector('textarea')!;
-    textarea.value = 'Frozen menu';
-    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    button(host, 'Contribute').click();
     flush();
-    submit(host);
+    expect(dialog(host).textContent).toContain('Your message will be posted publicly on GitHub.');
+    expect(dialog(host).querySelector('input[type=checkbox]')).toBeNull();
+    contribute(host, 'Frozen menu');
     await vi.waitFor(() => {
       flush();
-      expect(host.textContent).toContain('Report saved:');
+      expect(dialog(host).textContent).toContain('View GitHub issue');
     });
     expect(upload.mock.calls[0]?.[2]).toBe('Frozen menu');
     expect(remove).not.toHaveBeenCalled();
@@ -103,16 +117,16 @@ test('inline report lists real entries locally and uploads only on explicit acti
     dispose();
   }
 });
-test('failed upload retains USB report; retry reuses ID and deletes only after durable acknowledgement', async () => {
+test('failed upload retains USB report; retry reuses ID and deletes only after durable acknowledgment', async () => {
   const remove = vi.fn(async () => {}),
-    devTools = vi.fn(() => ({}));
+    handOff = vi.fn(async () => {});
   const upload = vi.fn().mockRejectedValueOnce(Error('Offline')).mockResolvedValue(receipt);
   const connection = {
     initialize: async () => {},
     choose: async () => ({ name: 'Camera', interfaces: [{ id: 0, label: 'USB' }] }),
     read: async () => new Blob([tar]),
     remove,
-    devTools,
+    handOff,
     dispose: vi.fn(),
   } as unknown as ReportConnection;
   const { host, dispose } = mount({ hash: hash(), supported: true, connection, upload });
@@ -126,23 +140,32 @@ test('failed upload retains USB report; retry reuses ID and deletes only after d
       flush();
       expect(host.textContent).toContain('Report retrieved from camera.');
     });
-    expect((host.querySelector('input[type=checkbox]') as HTMLInputElement).disabled).toBe(false);
+    button(host, 'Contribute').click();
+    flush();
+    expect((dialog(host).querySelector('input[type=checkbox]') as HTMLInputElement).checked).toBe(
+      true,
+    );
     expect(remove).not.toHaveBeenCalled();
-    submit(host);
+    contribute(host);
     await vi.waitFor(() => {
       flush();
-      expect(host.textContent).toContain('Offline');
+      expect(dialog(host).querySelector('.cd-status')!.textContent).toContain('Offline');
     });
     expect(remove).not.toHaveBeenCalled();
-    submit(host);
+    contribute(host);
     await vi.waitFor(() => {
       flush();
       expect(remove).toHaveBeenCalledOnce();
     });
     expect(upload.mock.calls[0][3]).toBe(upload.mock.calls[1][3]);
-    button(host, 'Open Dev Tools').click();
+    button(dialog(host), 'Close').click();
     flush();
-    expect(host.textContent).toContain('Dev Tools connected');
+    button(host, 'Open Dev Tools').click();
+    await vi.waitFor(() => {
+      flush();
+      expect(host.textContent).toContain('Dev Tools connected');
+    });
+    expect(handOff).toHaveBeenCalledOnce();
   } finally {
     dispose();
   }

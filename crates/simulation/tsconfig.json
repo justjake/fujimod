@@ -1,0 +1,4 @@
+{
+  "extends": "../../scripts/ci/tsconfig.json",
+  "include": ["build-web.ts"]
+}

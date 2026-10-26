@@ -1,0 +1,131 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "x100t-rec",
+  "body_id": "x100t",
+  "reset": {
+    "inputs": {
+      "gpio": {
+        "gpio_inputs": {
+          "0": 3116,
+          "2": 6656,
+          "3": 841,
+          "12": 128,
+          "11": 0,
+          "4": 32,
+          "5": 2560
+        },
+        "profile_name": "Synthetic X100T: FUNCTION, DRIVE, PLAY, VIEW and EVF/OVF lever contacts released; remaining lines borrowed. AF-S GPIO3.6=1/3.7=0."
+      },
+      "power": {
+        "profile_name": "Synthetic boot reason0; ADC8=1023 releases rear keys; ADC9=1023 aperture AUTO; remaining ADC levels borrowed.",
+        "adc_samples": [
+          0,
+          0,
+          1023,
+          63,
+          534,
+          640,
+          512,
+          825,
+          1023,
+          1023,
+          0,
+          0
+        ],
+        "boot_reply": 0,
+        "spi0_input_profile": "absent-hot-shoe-flash-fixed-low-miso",
+        "panel_contract": [
+          [
+            131296,
+            32
+          ],
+          [
+            11,
+            3,
+            0,
+            12,
+            3,
+            1
+          ],
+          [
+            16,
+            null,
+            null
+          ],
+          1
+        ]
+      },
+      "mcu_packet_hex": "00000000d00700ff008000040000aafc",
+      "usb_connected": false
+    },
+    "autofocus_gate": {
+      "first_boot_instructions": 100000000,
+      "restart_instructions": 120000000,
+      "scan_instructions": 80000000,
+      "setup_keys": [
+        "EXE_M",
+        "EXE_M"
+      ],
+      "key_hold_ticks": 2400000,
+      "key_release_ticks": 6000000,
+      "scene_settle_ticks": 1200000,
+      "completion_hold_ticks": 1200000,
+      "shutter": {
+        "port": 0,
+        "pin": 2,
+        "active_level": 0
+      },
+      "card": {
+        "sd_card_profile": "declared-blank-sdhc-default-speed-unmeasured",
+        "sd_card_present": true,
+        "sd_card_sectors": 16777216,
+        "sd_card_format": {
+          "filesystem": "fat32",
+          "label": "CAMERA",
+          "partition_start": 8192,
+          "sectors_per_cluster": 64
+        }
+      },
+      "firmwares": {
+        "x100t-111": {
+          "ui": 13336052,
+          "system": 13254596,
+          "rec_ui": 3,
+          "primary_states": 23249112,
+          "complete_state": 8,
+          "code_witnesses": [
+            {
+              "address": 17888516,
+              "sha256": "e6f915a1c9fba60ca8132e6114739ee9b8ffb0fcc7cd1b43f3be2511b67034b0",
+              "bytes": 96
+            }
+          ],
+          "sample_slots": [
+            23242404,
+            23242452
+          ],
+          "diagnostics": [
+            {
+              "name": "target_position",
+              "address": 24619892,
+              "size": 2
+            },
+            {
+              "name": "target_correction",
+              "address": 24619920,
+              "size": 2
+            },
+            {
+              "name": "direction_correction",
+              "address": 24619922,
+              "size": 2
+            }
+          ]
+        }
+      },
+      "control_overrides": {}
+    },
+    "execution_scope": "offline-boot-development"
+  }
+}

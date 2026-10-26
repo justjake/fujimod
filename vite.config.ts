@@ -11,6 +11,7 @@ const generated = [
   'apps/web/public/runtime/**',
   'apps/web/public/artifacts/**',
   'mods/lib/settings/upstream/**',
+  '**/*.generated.*',
 ];
 
 export default defineConfig({

@@ -1,0 +1,478 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "xq-rec",
+  "body_id": "xq",
+  "reset": {
+    "inputs": {
+      "gpio": {
+        "gpio_inputs": {
+          "0": 3692,
+          "2": 4608,
+          "3": 776,
+          "12": 128,
+          "11": 0
+        },
+        "profile_name": "Declared released S1/S2 at GPIO0.2/3=1 from stock XQ key input table; remaining borrowed acquisition inputs unmeasured."
+      },
+      "power": {
+        "profile_name": "Declared XQ normal MCU status0x43 (POWER and PLAY released); SPI1 CS12.3 with panel CS12.1 inactive, from XQ1 table0x840600 and native GPIO writes. Selector ADC8=0 releases the flag10 ladder below101; rear-key ADC9=1023 releases the flag40 ladder. Zoom lever ADC4=1023 released; remaining ADC and MCU packet borrowed. MCU R60 is an external status input; writes are unmeasured commands, not button loopback.",
+        "adc_samples": [
+          0,
+          0,
+          1023,
+          63,
+          1023,
+          640,
+          0,
+          825,
+          0,
+          1023,
+          0,
+          0
+        ],
+        "boot_reply": 67,
+        "spi0_input_profile": "absent-hot-shoe-flash-fixed-low-miso",
+        "panel_contract": [
+          [
+            224,
+            6
+          ],
+          [
+            12,
+            1,
+            0,
+            12,
+            3,
+            1
+          ],
+          [
+            16,
+            null,
+            null
+          ],
+          1
+        ],
+        "spi_endpoints": [
+          [
+            0,
+            196612,
+            [
+              12,
+              3,
+              0,
+              12,
+              1,
+              1
+            ],
+            false,
+            [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                0
+              ],
+              [
+                3,
+                0
+              ],
+              [
+                4,
+                0
+              ],
+              [
+                5,
+                0
+              ],
+              [
+                6,
+                0
+              ],
+              [
+                7,
+                0
+              ],
+              [
+                8,
+                0
+              ],
+              [
+                9,
+                0
+              ],
+              [
+                10,
+                0
+              ],
+              [
+                11,
+                0
+              ],
+              [
+                12,
+                0
+              ],
+              [
+                13,
+                0
+              ],
+              [
+                14,
+                0
+              ],
+              [
+                15,
+                0
+              ],
+              [
+                16,
+                0
+              ],
+              [
+                18,
+                0
+              ],
+              [
+                19,
+                0
+              ],
+              [
+                23,
+                0
+              ],
+              [
+                24,
+                0
+              ],
+              [
+                25,
+                0
+              ],
+              [
+                26,
+                0
+              ],
+              [
+                27,
+                0
+              ],
+              [
+                28,
+                0
+              ],
+              [
+                29,
+                0
+              ],
+              [
+                30,
+                0
+              ],
+              [
+                31,
+                0
+              ],
+              [
+                32,
+                0
+              ],
+              [
+                33,
+                0
+              ],
+              [
+                34,
+                0
+              ],
+              [
+                35,
+                0
+              ],
+              [
+                36,
+                0
+              ],
+              [
+                37,
+                0
+              ],
+              [
+                38,
+                0
+              ],
+              [
+                39,
+                0
+              ],
+              [
+                40,
+                0
+              ],
+              [
+                41,
+                0
+              ],
+              [
+                42,
+                0
+              ],
+              [
+                43,
+                0
+              ],
+              [
+                44,
+                0
+              ],
+              [
+                45,
+                0
+              ],
+              [
+                46,
+                0
+              ],
+              [
+                47,
+                0
+              ]
+            ]
+          ],
+          [
+            9,
+            6,
+            [
+              12,
+              3,
+              0,
+              12,
+              1,
+              1
+            ],
+            true,
+            [
+              [
+                65,
+                0
+              ],
+              [
+                66,
+                0
+              ],
+              [
+                67,
+                0
+              ],
+              [
+                68,
+                0
+              ],
+              [
+                69,
+                0
+              ],
+              [
+                70,
+                0
+              ],
+              [
+                73,
+                0
+              ],
+              [
+                74,
+                0
+              ],
+              [
+                75,
+                0
+              ],
+              [
+                76,
+                0
+              ],
+              [
+                78,
+                0
+              ],
+              [
+                80,
+                0
+              ],
+              [
+                81,
+                0
+              ],
+              [
+                82,
+                0
+              ],
+              [
+                83,
+                0
+              ],
+              [
+                84,
+                0
+              ],
+              [
+                85,
+                0
+              ],
+              [
+                86,
+                0
+              ],
+              [
+                87,
+                0
+              ],
+              [
+                88,
+                0
+              ],
+              [
+                89,
+                0
+              ],
+              [
+                90,
+                0
+              ],
+              [
+                91,
+                0
+              ],
+              [
+                92,
+                0
+              ],
+              [
+                93,
+                0
+              ],
+              [
+                94,
+                0
+              ],
+              [
+                95,
+                0
+              ],
+              [
+                96,
+                0
+              ],
+              [
+                104,
+                0
+              ],
+              [
+                105,
+                0
+              ],
+              [
+                106,
+                0
+              ]
+            ]
+          ]
+        ],
+        "mcu_registers": [
+          9,
+          96,
+          80
+        ],
+        "spi_status_registers": [
+          [
+            9,
+            96
+          ]
+        ]
+      },
+      "mcu_packet_hex": "00000000d00700ff008000040000aafc",
+      "usb_connected": false
+    },
+    "autofocus_gate": {
+      "first_boot_instructions": 100000000,
+      "restart_instructions": 120000000,
+      "scan_instructions": 80000000,
+      "setup_keys": [
+        "EXE_M",
+        "EXE_M",
+        "EXE_M"
+      ],
+      "key_hold_ticks": 2400000,
+      "key_release_ticks": 6000000,
+      "scene_settle_ticks": 1200000,
+      "completion_hold_ticks": 1200000,
+      "shutter": {
+        "port": 0,
+        "pin": 2,
+        "active_level": 0
+      },
+      "card": {
+        "sd_card_profile": "declared-blank-sdhc-default-speed-unmeasured",
+        "sd_card_present": true,
+        "sd_card_sectors": 16777216,
+        "sd_card_format": {
+          "filesystem": "fat32",
+          "label": "CAMERA",
+          "partition_start": 8192,
+          "sectors_per_cluster": 64
+        }
+      },
+      "firmwares": {
+        "xq1-121": {
+          "ui": 10454296,
+          "system": 10373248,
+          "rec_ui": 3,
+          "primary_states": 24279292,
+          "complete_state": 9,
+          "code_witnesses": [
+            {
+              "address": 15144092,
+              "sha256": "2dc97fcd493f3f4f416ffea3f04403b4665e323e06ac5002159c5626cb8a6356",
+              "bytes": 96
+            }
+          ],
+          "sample_slots": [
+            23722052,
+            23722100
+          ],
+          "diagnostics": [
+            {
+              "name": "direction_distance",
+              "pointer": 10349776,
+              "offset": 98552,
+              "size": 2
+            }
+          ]
+        },
+        "xq2-101": {
+          "ui": 10471544,
+          "system": 10390496,
+          "rec_ui": 3,
+          "primary_states": 23083836,
+          "complete_state": 9,
+          "code_witnesses": [
+            {
+              "address": 15161584,
+              "sha256": "f80d90f41e1213def966e468127bd1cbc369d9ee56c43eda422d10c70924e70d",
+              "bytes": 96
+            }
+          ],
+          "sample_slots": [
+            23077260,
+            23077308
+          ]
+        }
+      },
+      "control_overrides": {}
+    },
+    "execution_scope": "offline-boot-development"
+  }
+}

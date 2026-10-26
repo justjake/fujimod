@@ -1,0 +1,335 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "xt10-131-settings",
+  "firmware_id": "xt10-131",
+  "source": {
+    "flash_offset": 1441792,
+    "address": 9044992,
+    "size": 3522720,
+    "sha256": "8b8e0cfc5729523da8078a4fc311265fd0ba0c87ed79837fd6da78751075d9c4"
+  },
+  "bank": {
+    "descriptor": {
+      "address": 11580296,
+      "size": 12,
+      "sha256": "324cd67e633dc7d4f9fb8de449632dd2938ffe7d7159d77fee4c462131eb34e2"
+    },
+    "kind": 2,
+    "blocks": 40,
+    "first_block": 931,
+    "logical_first": 41,
+    "bytes": 4325376
+  },
+  "defaults": {
+    "address": 11579608,
+    "size": 536,
+    "sha256": "e2504a13c918877e33bea39589179934b6f79782a09597449ecd1e4981ec88be"
+  },
+  "fields": [
+    {
+      "offset": 256,
+      "bytes": [
+        203,
+        4
+      ],
+      "basis": "Normal USB vendor ID."
+    },
+    {
+      "offset": 318,
+      "bytes": [
+        200,
+        2
+      ],
+      "basis": "Normal USB product ID."
+    },
+    {
+      "offset": 348,
+      "bytes": [
+        88,
+        45,
+        84,
+        49,
+        48,
+        0
+      ],
+      "basis": "Body product name."
+    },
+    {
+      "offset": 514,
+      "bytes": [
+        85,
+        170
+      ],
+      "basis": "Settings bank signature."
+    },
+    {
+      "offset": 516,
+      "bytes": [
+        1,
+        82
+      ],
+      "basis": "Internal version."
+    },
+    {
+      "offset": 4536,
+      "bytes": [
+        229,
+        37,
+        0,
+        255,
+        255,
+        255,
+        0,
+        0,
+        0,
+        0,
+        88,
+        2,
+        82,
+        3,
+        17,
+        0,
+        12,
+        32,
+        57,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "basis": "Explicit synthetic proximity-controller configuration using the fallback byte column of the checked 27-row stock table 0xb1ea2c. Getter 0x96a7a8 normally reads these configuration offsets. Includes the supported E5 command; zeros are not valid command bytes. These are declared external inputs, not an executed defaults routine."
+    },
+    {
+      "offset": 38929,
+      "bytes": [
+        1
+      ],
+      "basis": "Explicit synthetic active normal-read accelerometer setting; stock 0x950e20 masks this configuration byte with 0x1f and writes sensor CTRL_REG1 (0x2a). No fast-read mode or physical calibration claim."
+    }
+  ],
+  "profile": {
+    "header": {
+      "address": 11620132,
+      "size": 16,
+      "sha256": "342cdfa6f02b2b2a507d081fe33a17facc02468faec5647f40b36ef0c0f571a2"
+    },
+    "records": {
+      "main": {
+        "block": 976,
+        "managed_index": 86,
+        "bytes": 4096,
+        "defaults": {
+          "address": 12563472,
+          "size": 3700,
+          "sha256": "58eb9fd874894157d4403395755a2a72d710835f84a75556e75754d7b3c7a68f"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 3964,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Main record marker after the sequence word."
+          },
+          {
+            "offset": 132,
+            "bytes": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ],
+            "basis": "Erased main record bytes before the pages."
+          }
+        ]
+      },
+      "custom": {
+        "block": 978,
+        "managed_index": 88,
+        "bytes": 4096,
+        "defaults": {
+          "address": 11620148,
+          "size": 1792,
+          "sha256": "d926b5c3bfb770287049c1e6de1505bf963b17958cc9ead6ffc79a3944bac776"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 3964,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Custom record marker after the sequence word."
+          }
+        ]
+      }
+    }
+  },
+  "settings": {
+    "debug": {
+      "store": "bank",
+      "offset": 247,
+      "values": {
+        "off": [
+          0
+        ],
+        "on": [
+          1
+        ]
+      }
+    },
+    "language": {
+      "store": "main",
+      "offset": 340,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    },
+    "setup": {
+      "store": "header",
+      "offset": 11,
+      "values": {
+        "done": [
+          7
+        ]
+      }
+    }
+  },
+  "sections": []
+}

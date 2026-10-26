@@ -1,0 +1,210 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "x20-103-settings",
+  "firmware_id": "x20-103",
+  "source": {
+    "flash_offset": 966656,
+    "address": 6407168,
+    "size": 2729376,
+    "sha256": "113fbe8e40aa799ed4a87b2f4e62ae87c7919d4ffc6a64ba9256b7584b824b07"
+  },
+  "bank": {
+    "descriptor": {
+      "address": 8192192,
+      "size": 12,
+      "sha256": "b39a76fd585e808f28a5a7922bf1efd0ac9030b537e3253f8629ea951faa9b2f"
+    },
+    "kind": 5,
+    "blocks": 320,
+    "first_block": 3546,
+    "logical_first": 0,
+    "bytes": 4194304
+  },
+  "defaults": {
+    "address": 8191560,
+    "size": 504,
+    "sha256": "6e537b735b9e129a73e6d3f2e8d3f4b0a8de76478d895aa056eb03e8bbe1b2d0"
+  },
+  "fields": [
+    {
+      "offset": 256,
+      "bytes": [
+        203,
+        4
+      ],
+      "basis": "Normal USB vendor ID."
+    },
+    {
+      "offset": 380,
+      "bytes": [
+        166,
+        2
+      ],
+      "basis": "Normal USB product ID."
+    },
+    {
+      "offset": 410,
+      "bytes": [
+        88,
+        50,
+        48,
+        0
+      ],
+      "basis": "Body product name."
+    },
+    {
+      "offset": 514,
+      "bytes": [
+        85,
+        170
+      ],
+      "basis": "Settings bank signature."
+    },
+    {
+      "offset": 516,
+      "bytes": [
+        2,
+        25
+      ],
+      "basis": "Internal version."
+    },
+    {
+      "offset": 38929,
+      "bytes": [
+        1
+      ],
+      "basis": "Explicit synthetic active normal-read accelerometer setting; stock 0x6a9164 masks this configuration byte with 0x1f and writes sensor CTRL_REG1 (0x2a). No fast-read mode or physical calibration claim."
+    },
+    {
+      "offset": 123904,
+      "bytes": [
+        0,
+        250,
+        72,
+        238,
+        144,
+        226,
+        216,
+        214,
+        32,
+        203,
+        104,
+        191,
+        176,
+        179,
+        248,
+        167,
+        64,
+        156,
+        136,
+        144,
+        208,
+        132,
+        24,
+        121,
+        96,
+        109,
+        168,
+        97,
+        240,
+        85,
+        56,
+        74,
+        128,
+        62,
+        200,
+        50,
+        16,
+        39
+      ],
+      "basis": "Declared synthetic focus conversion knots: X20 0x737c18 reads 19 little-endian U16 values here and computes 16777215/value after its fixed first knot; positive decreasing inputs produce strictly increasing spline coordinates. One focal group follows the stock zero-to-one count clamp at 0x733be0. Not measured lens calibration."
+    }
+  ],
+  "profile": {
+    "header": {
+      "address": 8235596,
+      "size": 16,
+      "sha256": "0aafa100b4c3326627759df7f6af5ce87b24dd2f0cfa826a57258506820ca7bd"
+    },
+    "records": {
+      "main": {
+        "block": 3884,
+        "managed_index": 338,
+        "bytes": 512,
+        "defaults": {
+          "address": 9135776,
+          "size": 242,
+          "sha256": "9c27df02dc723b5b244b6096a620182fc23e8d8475a59d8de5ec8ba428d627d6"
+        },
+        "defaults_offset": 40,
+        "parity_offset": 492,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Main record marker after the sequence word."
+          }
+        ]
+      },
+      "custom": {
+        "block": 3886,
+        "managed_index": 340,
+        "bytes": 84,
+        "defaults": {
+          "address": 8235612,
+          "size": 64,
+          "sha256": "f9bc87e5e9c0c8662a6b138d4ab94b2abaea0c475267ab796c7dc68bb39ec970"
+        },
+        "defaults_offset": 4,
+        "parity_offset": 76,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Custom record marker after the sequence word."
+          }
+        ]
+      }
+    }
+  },
+  "settings": {
+    "debug": {
+      "store": "bank",
+      "offset": 247,
+      "values": {
+        "off": [
+          0
+        ],
+        "on": [
+          1
+        ]
+      }
+    },
+    "language": {
+      "store": "main",
+      "offset": 45,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    },
+    "setup": {
+      "store": "header",
+      "offset": 11,
+      "values": {
+        "done": [
+          7
+        ]
+      }
+    }
+  },
+  "sections": []
+}

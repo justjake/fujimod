@@ -1,0 +1,33 @@
+[package]
+name = "fujimod-emulator-image-codecs"
+description = "JPEG and H.264 image codecs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-catalog-construction.workspace = true
+serde = { version = "1", features = ["derive", "rc"] }
+rusty_h264-encoder = { version = "=0.16.1", default-features = false, features = ["libm"] }
+rusty_h264-common = { version = "=0.16.1", default-features = false, features = ["libm"] }
+fujimod-workspace-hack.workspace = true
+
+[dev-dependencies]
+zune-jpeg = { version = "0.5", default-features = false, features = ["std"] }
+zune-core = { version = "0.5", default-features = false, features = ["std"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-cf = { version = "0.11", default-features = false, features = ["cm", "cv", "iosurface"] }
+futures-lite = "2"
+videotoolbox = { version = "0.21", features = ["async"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+openh264 = "=0.9.3"
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

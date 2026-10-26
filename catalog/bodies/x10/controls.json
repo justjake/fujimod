@@ -1,0 +1,637 @@
+{
+  "$schema": "https://fujimod.com/schemas/physical-controls.schema.json",
+  "schema": 1,
+  "id": "x10-controls",
+  "body_id": "x10",
+  "manual": {
+    "url": "https://dl.fujifilm-x.com/support/manual/x/fujifilm_x10_manual_en.pdf",
+    "title": "FUJIFILM X10 Owner’s Manual",
+    "pages": [
+      2,
+      3,
+      4,
+      6,
+      15,
+      19,
+      20,
+      21,
+      23,
+      35,
+      37,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      51,
+      55,
+      101,
+      102
+    ]
+  },
+  "analog_levels": null,
+  "controls": {
+    "shutter_button": {
+      "name": "Shutter button",
+      "location": "top",
+      "manual_page": 20,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Half-press to set focus and exposure; press the rest of the way down to take a picture.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "shutter",
+        "stages": {
+          "half_press": null,
+          "full_press": null
+        }
+      },
+      "positions": [],
+      "short_name": "SHUTTER"
+    },
+    "exposure_compensation_dial": {
+      "name": "Exposure compensation dial",
+      "location": "top",
+      "manual_page": 44,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Set exposure compensation.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "–2 EV – +2 EV in increments of 1/3 EV",
+              "key": null,
+              "asserted": null
+            }
+          ]
+        },
+        "press": null,
+        "endless": null
+      },
+      "positions": [
+        {
+          "id": "–2 EV – +2 EV in increments of 1/3 EV",
+          "label": "–2 EV – +2 EV in increments of 1/3 EV",
+          "description": null
+        }
+      ],
+      "short_name": "EV"
+    },
+    "mode_dial": {
+      "name": "Mode dial",
+      "location": "top",
+      "manual_page": 23,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Choose the shooting mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "B (AUTO)",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "P",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "S",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "A",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "M",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "C1",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "C2",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "EXR",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "Adv.",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "SP",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "F (MOVIE)",
+              "key": null,
+              "asserted": null
+            }
+          ]
+        },
+        "press": null,
+        "endless": null
+      },
+      "positions": [
+        {
+          "id": "B (AUTO)",
+          "label": "B (AUTO)",
+          "description": null
+        },
+        {
+          "id": "P",
+          "label": "P",
+          "description": null
+        },
+        {
+          "id": "S",
+          "label": "S",
+          "description": null
+        },
+        {
+          "id": "A",
+          "label": "A",
+          "description": null
+        },
+        {
+          "id": "M",
+          "label": "M",
+          "description": null
+        },
+        {
+          "id": "C1",
+          "label": "C1",
+          "description": null
+        },
+        {
+          "id": "C2",
+          "label": "C2",
+          "description": null
+        },
+        {
+          "id": "EXR",
+          "label": "EXR",
+          "description": null
+        },
+        {
+          "id": "Adv.",
+          "label": "Adv.",
+          "description": null
+        },
+        {
+          "id": "SP",
+          "label": "SP",
+          "description": null
+        },
+        {
+          "id": "F (MOVIE)",
+          "label": "F (MOVIE)",
+          "description": null
+        }
+      ],
+      "short_name": "MODE"
+    },
+    "focus_mode_selector": {
+      "name": "Focus mode selector",
+      "location": "front",
+      "manual_page": 46,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Choose single autofocus, continuous autofocus, or manual focus.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch",
+        "positions": [
+          {
+            "id": "AF-S",
+            "key": null,
+            "asserted": null
+          },
+          {
+            "id": "AF-C",
+            "key": null,
+            "asserted": null
+          },
+          {
+            "id": "MF",
+            "key": null,
+            "asserted": null
+          }
+        ]
+      },
+      "positions": [
+        {
+          "id": "AF-S",
+          "label": "AF-S",
+          "description": null
+        },
+        {
+          "id": "AF-C",
+          "label": "AF-C",
+          "description": null
+        },
+        {
+          "id": "MF",
+          "label": "MF",
+          "description": null
+        }
+      ],
+      "short_name": "FOCUS"
+    },
+    "zoom_ring": {
+      "name": "Zoom ring",
+      "location": "lens",
+      "manual_page": 19,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Zoom the lens to frame the picture.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "ring",
+        "motion": {
+          "kind": "steps",
+          "decrease": null,
+          "increase": null
+        },
+        "press": null,
+        "endless": null
+      },
+      "positions": [],
+      "short_name": "ZOOM"
+    },
+    "power_switch": {
+      "name": "ON/OFF switch",
+      "location": "lens",
+      "manual_page": 15,
+      "face": "ON/OFF",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Turn the camera on by rotating the zoom ring from OFF; rotate it to OFF to turn the camera off.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch",
+        "positions": [
+          {
+            "id": "OFF",
+            "key": null,
+            "asserted": null
+          },
+          {
+            "id": "ON",
+            "key": null,
+            "asserted": null
+          }
+        ]
+      },
+      "positions": [
+        {
+          "id": "OFF",
+          "label": "OFF",
+          "description": null
+        },
+        {
+          "id": "ON",
+          "label": "ON",
+          "description": null
+        }
+      ]
+    },
+    "fn_button": {
+      "name": "Fn (Function) button",
+      "location": "top",
+      "manual_page": 51,
+      "face": "Fn",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": true,
+      "pushable": true,
+      "default_function": "Select the flash mode by default; its role can be assigned to another listed function.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": null
+      },
+      "positions": []
+    },
+    "main_command_dial": {
+      "name": "Main-command dial",
+      "location": "top",
+      "manual_page": 4,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Set aperture or shutter speed, or select items; press the center for operations such as changing the setting item in M mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "steps",
+          "decrease": null,
+          "increase": null
+        },
+        "press": null,
+        "endless": null
+      },
+      "positions": [],
+      "short_name": "MAIN DIAL"
+    },
+    "diopter_adjustment_control": {
+      "name": "Diopter adjustment control",
+      "location": "rear",
+      "manual_page": 4,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Adjust the viewfinder display for individual differences in vision.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "lever",
+        "positions": [],
+        "momentary": null
+      },
+      "positions": [],
+      "short_name": "DIOPTER"
+    },
+    "flash_pop_up_switch": {
+      "name": "Flash pop-up switch",
+      "location": "rear",
+      "manual_page": 37,
+      "face": null,
+      "icon": "flash",
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Raise the flash.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch",
+        "positions": []
+      },
+      "positions": []
+    },
+    "playback_button": {
+      "name": "Playback button",
+      "location": "rear",
+      "manual_page": 15,
+      "face": null,
+      "icon": "playback",
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Start playback; when the camera is off, press for about a second to turn on in playback mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": null
+      },
+      "positions": []
+    },
+    "ae_button": {
+      "name": "AE (autoexposure) button",
+      "location": "rear",
+      "manual_page": 45,
+      "face": "AE",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Choose the exposure metering method.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": null
+      },
+      "positions": []
+    },
+    "af_button": {
+      "name": "AF (autofocus) button",
+      "location": "rear",
+      "manual_page": 48,
+      "face": "AF",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Set the focus frame or focus point; with focus check, use it with the selector to scroll the magnified area.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": null
+      },
+      "positions": []
+    },
+    "wb_button": {
+      "name": "WB (white balance) button",
+      "location": "rear",
+      "manual_page": 49,
+      "face": "WB",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Choose the white balance setting.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": null
+      },
+      "positions": []
+    },
+    "afl_ael_button": {
+      "name": "AFL/AEL (autoexposure/autofocus lock) button",
+      "location": "rear",
+      "manual_page": 35,
+      "face": "AFL/AEL",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": true,
+      "pushable": true,
+      "default_function": "Lock exposure by default; setup options can select exposure lock, focus lock, or both and set press behavior.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": null
+      },
+      "positions": []
+    },
+    "selector_button": {
+      "name": "Selector button",
+      "location": "rear",
+      "manual_page": 3,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Move the cursor; up is DRIVE/delete, left is macro, right is flash, down is self-timer, and the center is MENU/OK.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": null
+      },
+      "positions": [],
+      "short_name": "SELECTOR"
+    },
+    "sub_command_dial": {
+      "name": "Sub-command dial",
+      "location": "rear",
+      "manual_page": 4,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Set aperture or shutter speed, select items, and adjust manual focus distance.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "steps",
+          "decrease": null,
+          "increase": null
+        },
+        "press": null,
+        "endless": null
+      },
+      "positions": [],
+      "short_name": "SUB DIAL"
+    },
+    "raw_button": {
+      "name": "RAW button",
+      "location": "rear",
+      "manual_page": 55,
+      "face": "RAW",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": true,
+      "pushable": true,
+      "default_function": "Change the recording format to include RAW; its role can be assigned to another listed function.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": null
+      },
+      "positions": []
+    },
+    "disp_back_button": {
+      "name": "DISP (display)/BACK button",
+      "location": "rear",
+      "manual_page": 6,
+      "face": "DISP/BACK",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Cycle display modes and return to the previous screen; hold to toggle silent mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": null
+      },
+      "positions": []
+    },
+    "battery_chamber_cover_latch": {
+      "name": "Battery-chamber cover latch",
+      "location": "bottom",
+      "manual_page": 11,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Slide to open or close the battery-chamber cover.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "lever",
+        "positions": [],
+        "momentary": null
+      },
+      "positions": [],
+      "short_name": "COVER"
+    },
+    "battery_latch": {
+      "name": "Battery latch",
+      "location": "bottom",
+      "manual_page": 11,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Press to the side to release the battery.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "lever",
+        "positions": [],
+        "momentary": null
+      },
+      "positions": [],
+      "short_name": "BATTERY"
+    }
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "$defs": {
+    "PixelFormat": {
+      "description": "Implemented scanout encodings.",
+      "enum": [
+        "bgra8888"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/remote-scanout.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A located framebuffer and its live selection pointer.",
+  "properties": {
+    "address": {
+      "description": "Address.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "address_mask": {
+      "description": "Address mask.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "channel": {
+      "description": "Channel.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "height": {
+      "description": "Height.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "instance": {
+      "description": "Instance.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "layer": {
+      "description": "Layer.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "pixel_format": {
+      "$ref": "#/$defs/PixelFormat",
+      "description": "Pixel format."
+    },
+    "pointer_address": {
+      "description": "Pointer address.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "stride_bytes": {
+      "description": "Stride bytes.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "width": {
+      "description": "Width.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "address",
+    "width",
+    "height",
+    "pixel_format",
+    "stride_bytes",
+    "instance",
+    "layer",
+    "channel",
+    "pointer_address",
+    "address_mask"
+  ],
+  "title": "Scanout",
+  "type": "object"
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/state.generated.schema.json",
+  "schema": 1,
+  "id": "x20-103-state",
+  "firmware_id": "x20-103",
+  "regions": [
+    {
+      "name": "dram",
+      "address": 1073741824,
+      "size": 536870912,
+      "constant": false
+    },
+    {
+      "name": "boot-rom",
+      "address": 2147483648,
+      "size": 16384,
+      "constant": true
+    }
+  ]
+}

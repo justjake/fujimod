@@ -13,7 +13,7 @@ arbitrary calls to the external `nusb` crate.
 ```text
 Rust / Python / Pyodide controller
   → WebSocket relay on the development machine
-  → WebSocket exporter in the laptop browser
+  → Rust/Wasm exporter in the laptop browser
   → browser-permitted USB devices
 ```
 
@@ -71,7 +71,8 @@ Native Python and Pyodide use the same async interface:
 from fujimod import usb
 
 devices = await usb.discover_proxy(
-    "wss://your-host.ts.net:8795/usb-proxy/ws", token,
+    "wss://your-host.ts.net:8795/usb-proxy/ws",
+    token,
     usb.DeviceFilter.Diagnostic,
 )
 choices = await usb.interfaces(devices[0])
@@ -93,45 +94,60 @@ physical host topology is unavailable.
 
 ## Low-level controllers
 
-`Client::connect(url, token)`, `devices()` and `request(device_id, operation,
-timeout)` expose the camera-independent transport. Operations are `Open`
-(explicit configuration/interface/alternate), `Close` (host resources only),
-`ControlIn/Out`, `TransferIn/Out` and `ClearHalt`. Endpoint addresses include
-the direction bit. `Completion` preserves payload, actual count and WebUSB
-status/DOMException error. Binary data uses base64 in versioned JSON frames.
-A request carries an integer ID; every reply must match it. Descriptors and
-routes are scoped to the current exporter connection and are not persistent IDs.
+`Client::connect(url, token)`, `devices()`, `submit(device_id, operation,
+timeout)`, `expect(of, offset, bytes, mask, length, alternatives)`, `sync()` and `request(device_id,
+operation, timeout)` expose the camera-independent transport. Operations are
+`Open` (explicit configuration/interface/alternate), `Close` (host resources
+only), `ControlIn/Out`, `TransferIn/Out` and `ClearHalt`. Endpoint addresses
+include the direction bit. `Completion` preserves payload, actual count and
+WebUSB status/DOMException error.
 
-The relay reserves a device for one controller socket before forwarding Open.
-Other sockets cannot interleave transfers. One controller can lease several
-devices; it serializes its RPCs. The exporter serializes operations per device.
-No transfer is retried. An error, timeout, cancelled future or mismatched reply
-fences the client. A timed-out browser transfer stays in its queue until the
-actual USB promise settles; a new request cannot overtake it. On disconnect,
-host-only close is queued after existing work. If that close is uncertain, the
-lease remains unavailable until the exporter disconnects. Reload/reconnect is
-explicit and does not assert that the camera stopped executing. FujiMod's own
-session additionally retains its `CompletionUnknown` behavior and USB tracing.
+Transfers are pipelined like the Postgres extended-query protocol
+([PIPELINE.md](PIPELINE.md)). `submit` and `expect` send at once without waiting;
+the exporter runs operations strictly in order and streams a result for each;
+`sync` waits for every outcome. A failed operation or expectation makes the
+exporter discard everything after it, without touching USB, until the sync.
+`request` is one operation and its sync. A controller keeps at most 4096
+operations and 1 MiB of payload in flight.
 
-Remote waits add a measured network allowance to the caller's USB budget.
-Before the first device operation, three USB-free `Probe` echoes measure the full
-controller-to-exporter route. Active connections refresh with one probe after
-five seconds; changing device routes starts a fresh average. The last eight
-samples determine the mean RTT plus a jitter margin (four mean absolute
-deviations, at least 100 ms). Until sampled, the allowance is two seconds.
-The relay measures its exporter leg from the same probes and adds that allowance
-to its forwarding deadline. The controller reserves both network allowances and
-two seconds of scheduling slack. USB execution time is excluded from RTT samples;
-the original transfer timeout is passed unchanged to the USB host. Probes never
-claim or access USB. Failed or cancelled probes fence the connection like other
-requests, and no USB operation is retried.
+Every message is one [postcard](https://postcard.jamesmunns.com/wire-format)
+value: varints, length-prefixed strings and byte strings, one-varint enum tags.
+Payloads are inline byte strings and never pass through JSON, UTF-8 or base64.
+Both WebRTC and WebSocket transports carry the same messages; a `Hello` of another
+version is rejected. `web/vectors.json`, generated from the Rust types, holds
+the byte-exact vectors the TypeScript codec is tested against.
+
+The relay reserves a device for one controller socket before forwarding Open,
+and routes each controller as its own stream to the exporter, passing the
+pipeline through without waiting. Other sockets cannot interleave transfers.
+No transfer is retried. A USB error ends the connection after its result; an
+expired deadline, canceled call or unexpected message fences the client.
+Each operation's USB deadline goes unchanged to the exporter; the controller
+waits that long plus 60 seconds for its result. A timed-out browser transfer
+stays in its queue until the actual USB promise settles; a new request cannot
+overtake it. On disconnect, host-only close is queued after existing work. If
+that close is uncertain, the lease remains unavailable until the exporter
+disconnects. Reload/reconnect is explicit and does not assert that the camera
+stopped executing. FujiMod's own session additionally retains its
+`CompletionUnknown` behavior and USB tracing.
 
 Transfers are bounded to 8 MiB and USB budgets to 120 seconds. WebUSB cannot cancel
 an in-flight transfer: a host deadline is not evidence of device completion.
-This version favors simple serialized exchanges over pipelined USB throughput.
 There is no automatic reconnect, recovery, persistence or hardware validation.
 
+Run `npm ci` from the repository root before building the relay or Wasm target.
+Cargo type-checks the TypeScript transport, then bundles each browser entry
+(`peer.ts` for the Wasm controller, `exporter.ts` for the relay page) with
+Rolldown into one self-contained module in ignored `web/build/`; generated
+JavaScript is never committed.
+
 Run `cargo test -p fujimod-usb-proxy --features relay` for relay/client checks,
-and `node --test crates/usb-proxy/web/exporter.test.mjs` for exporter checks.
-The browser integration test is `crates/usb-proxy/web/browser.mjs`; it uses the
-real relay and bindings with synthetic WebUSB only. No test accesses a camera.
+and `node --test bindings/javascript/tests/ownership.test.ts` (after building the binding) for exporter ownership checks.
+The browser integration test is `crates/usb-proxy/web/browser.ts`; it uses the
+real relay and bindings with a scripted WebUSB device. No test accesses a camera.
+
+The browser exporter executes in Rust/Wasm on the same nusb owner used by direct
+local sessions. JavaScript routes wire messages only. Build the JavaScript binding
+before serving the relay page (`npm --prefix bindings/javascript run build`).
+The relay serves generated SDK assets from `bindings/javascript/`; deployments
+can set `FUJIMOD_USB_PROXY_BINDINGS` to that built directory.

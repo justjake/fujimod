@@ -1,0 +1,724 @@
+{
+  "$defs": {
+    "AnnotationKind": {
+      "description": "Reference categories that accept supplemental evidence.",
+      "oneOf": [
+        {
+          "const": "soc",
+          "description": "System on chip.",
+          "type": "string"
+        },
+        {
+          "const": "part",
+          "description": "Installed component.",
+          "type": "string"
+        },
+        {
+          "const": "body",
+          "description": "Camera body.",
+          "type": "string"
+        },
+        {
+          "const": "firmware",
+          "description": "Firmware installation.",
+          "type": "string"
+        },
+        {
+          "const": "firmware_view",
+          "description": "Firmware table layout.",
+          "type": "string"
+        },
+        {
+          "const": "firmware_facts",
+          "description": "Located firmware observations and their source evidence.",
+          "type": "string"
+        }
+      ]
+    },
+    "AnnotationSubject": {
+      "additionalProperties": false,
+      "description": "Logical record selected independently of a document location.",
+      "properties": {
+        "id": {
+          "description": "Stable identity within that category.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/AnnotationKind",
+          "description": "Reference record category."
+        },
+        "profile_id": {
+          "description": "Named hardware or firmware layout profile when applicable.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "type": "object"
+    },
+    "FirmwareBlob": {
+      "additionalProperties": false,
+      "description": "A firmware slice identified without embedding executable contents.",
+      "properties": {
+        "native_flash_offset": {
+          "description": "Byte offset in the installed flash image.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "SHA-256 of the image.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Image length.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "native_flash_offset",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "FirmwarePersistentInputsGeometry": {
+      "additionalProperties": false,
+      "description": "Declared persistent inputs geometry facts.",
+      "properties": {
+        "bytes": {
+          "description": "Declared bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_bytes": {
+          "description": "Declared page bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pages_per_block": {
+          "description": "Declared pages per block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "spare_bytes": {
+          "description": "Declared spare bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bytes",
+        "page_bytes",
+        "pages_per_block",
+        "spare_bytes"
+      ],
+      "type": "object"
+    },
+    "HardwareResetCheck": {
+      "additionalProperties": false,
+      "description": "A checked word at a secondary processor release destination.",
+      "properties": {
+        "address": {
+          "description": "Address of the expected word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "expected_hex": {
+          "description": "Expected bytes in memory order.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "address",
+        "expected_hex"
+      ],
+      "type": "object"
+    },
+    "InputAssetLocation": {
+      "additionalProperties": false,
+      "description": "An explicit input-file slice supplied by the caller.",
+      "properties": {
+        "file_offset": {
+          "description": "Byte offset of the selected input within that file.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "description": "Input-file location.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "file_offset"
+      ],
+      "type": "object"
+    },
+    "InputManifest": {
+      "additionalProperties": false,
+      "description": "A caller-selected firmware manifest, optionally hash-qualified.",
+      "properties": {
+        "path": {
+          "description": "Manifest location supplied by the caller.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Manifest content identity when recorded.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "PersistentAsset": {
+      "additionalProperties": false,
+      "description": "A bounded source window verified before and after normalization.",
+      "properties": {
+        "bytes": {
+          "description": "Exact source window length in bytes.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "normalized_sha256": {
+          "description": "SHA-256 after applying the declared edits.",
+          "type": "string"
+        },
+        "patches": {
+          "description": "Explicit edits applied only to an exact source identity.",
+          "items": {
+            "$ref": "#/$defs/PersistentPatch"
+          },
+          "type": "array"
+        },
+        "sha256": {
+          "description": "SHA-256 of the supplied source window.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "bytes",
+        "sha256",
+        "normalized_sha256",
+        "patches"
+      ],
+      "type": "object"
+    },
+    "PersistentInputs": {
+      "additionalProperties": false,
+      "description": "Declared source windows and selected placements, independent of file locations.",
+      "properties": {
+        "assets": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PersistentAsset"
+          },
+          "description": "Source window identities and explicit normalization edits.",
+          "type": "object"
+        },
+        "sets": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PersistentSet"
+          },
+          "description": "Named, independently selected input sets.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "assets",
+        "sets"
+      ],
+      "type": "object"
+    },
+    "PersistentJournalAppend": {
+      "additionalProperties": false,
+      "description": "Explicit journal-record construction and destination.",
+      "properties": {
+        "checksum_offset": {
+          "description": "XOR checksum offset in the record.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parity_offset": {
+          "description": "Parity bitmap offset in the record.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "payload_asset": {
+          "description": "Source payload asset identity.",
+          "type": "string"
+        },
+        "payload_bytes": {
+          "description": "Payload length.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "payload_offset": {
+          "description": "Source payload offset.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "physical_offset": {
+          "description": "Destination offset in the NAND main area.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "record_asset": {
+          "description": "Source record asset identity.",
+          "type": "string"
+        },
+        "record_payload_offset": {
+          "description": "Payload destination offset in the record.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "record_asset",
+        "payload_asset",
+        "payload_offset",
+        "payload_bytes",
+        "record_payload_offset",
+        "parity_offset",
+        "checksum_offset",
+        "physical_offset"
+      ],
+      "type": "object"
+    },
+    "PersistentPacket": {
+      "description": "A complete packet or a bounded source window, never a file path.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Explicit packet bytes.",
+          "properties": {
+            "bytes": {
+              "description": "Packet content.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "bytes",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "bytes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Packet extracted from an identity-checked asset.",
+          "properties": {
+            "asset": {
+              "description": "Asset identity.",
+              "type": "string"
+            },
+            "bytes": {
+              "description": "Window length.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "window",
+              "type": "string"
+            },
+            "offset": {
+              "description": "Byte offset in that asset.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "asset",
+            "offset",
+            "bytes"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "PersistentPatch": {
+      "additionalProperties": false,
+      "description": "An explicit byte edit within a source window.",
+      "properties": {
+        "bytes": {
+          "description": "Replacement bytes.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "offset": {
+          "description": "Byte offset within the source window.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "bytes"
+      ],
+      "type": "object"
+    },
+    "PersistentPlacement": {
+      "additionalProperties": false,
+      "description": "Place a bounded source window into the selected body's NAND.",
+      "properties": {
+        "asset": {
+          "description": "Source asset identity.",
+          "type": "string"
+        },
+        "bytes": {
+          "description": "Number of main-area bytes.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "managed_index": {
+          "description": "First logical managed-block index, if synthetic tags are requested.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "physical_offset": {
+          "description": "Main-area offset within the selected NAND.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_offset": {
+          "description": "Starting byte within the source asset.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "asset",
+        "source_offset",
+        "bytes",
+        "physical_offset"
+      ],
+      "type": "object"
+    },
+    "PersistentSet": {
+      "additionalProperties": false,
+      "description": "External NAND and MCU state selected together by identity.",
+      "properties": {
+        "append": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PersistentJournalAppend"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit journal append, when selected."
+        },
+        "mcu_packet": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PersistentPacket"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional persistent MCU packet source."
+        },
+        "placements": {
+          "description": "NAND main-area windows and their optional managed block tags.",
+          "items": {
+            "$ref": "#/$defs/PersistentPlacement"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "placements"
+      ],
+      "type": "object"
+    },
+    "SourceAnnotations": {
+      "additionalProperties": false,
+      "description": "Text evidence and explicitly qualified inputs for one source record.",
+      "properties": {
+        "boot_unit_manifests": {
+          "additionalProperties": {
+            "$ref": "#/$defs/InputManifest"
+          },
+          "description": "Hash-qualified manifests for the named firmware execution units.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "device_blobs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/FirmwareBlob"
+          },
+          "description": "Hash-identified auxiliary firmware images.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "input_assets": {
+          "additionalProperties": {
+            "$ref": "#/$defs/InputAssetLocation"
+          },
+          "description": "Explicit caller file locations for the named input assets.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "input_manifest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InputManifest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Manifest identity and its explicit caller-selected location."
+        },
+        "nondefault_records": {
+          "additionalProperties": {
+            "items": {
+              "$ref": "#/$defs/StorageSignature"
+            },
+            "type": "array"
+          },
+          "description": "Explicit synthetic byte fields in additional persistent records.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "notes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/TextNote"
+          },
+          "description": "Source-field paths and their recorded qualification or citations.",
+          "type": "object"
+        },
+        "persistent_geometry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwarePersistentInputsGeometry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Geometry of the persistent medium used by these inputs."
+        },
+        "persistent_inputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PersistentInputs"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Persistent input contents and placement recipes, without file locations."
+        },
+        "reset_checks": {
+          "description": "Checked secondary-core release words, when supplied by the caller.",
+          "items": {
+            "$ref": "#/$defs/HardwareResetCheck"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "source_documents": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SourceDocument"
+          },
+          "description": "Hash-qualified source documents retained as evidence, never execution inputs.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "storage_signature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StorageSignature"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit synthetic configuration signature bytes."
+        },
+        "subject": {
+          "$ref": "#/$defs/AnnotationSubject",
+          "description": "Logical record and optional execution profile qualified by these notes."
+        }
+      },
+      "required": [
+        "subject",
+        "notes"
+      ],
+      "type": "object"
+    },
+    "SourceDocument": {
+      "additionalProperties": false,
+      "description": "A complete source inventory retained independently of its execution projection.",
+      "properties": {
+        "format": {
+          "$ref": "#/$defs/SourceDocumentFormat",
+          "description": "Source format whose fields the evidence preserves."
+        },
+        "path": {
+          "description": "Caller-selected source location.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "SHA-256 of the complete source document.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "format"
+      ],
+      "type": "object"
+    },
+    "SourceDocumentFormat": {
+      "description": "Formats of retained source evidence.",
+      "oneOf": [
+        {
+          "const": "located-facts-v2",
+          "description": "Located observations and their proof spans.",
+          "type": "string"
+        }
+      ]
+    },
+    "StorageSignature": {
+      "additionalProperties": false,
+      "description": "A synthetic signature placed in a configuration block.",
+      "properties": {
+        "bytes": {
+          "description": "Explicit signature bytes.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "offset": {
+          "description": "Destination offset within the configuration block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "bytes"
+      ],
+      "type": "object"
+    },
+    "TextNote": {
+      "anyOf": [
+        {
+          "description": "One recorded qualification.",
+          "type": "string"
+        },
+        {
+          "description": "Ordered qualifications or source citations.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      ],
+      "description": "Recorded prose or a list of prose citations."
+    }
+  },
+  "$id": "https://fujimod.com/schemas/catalog-annotations.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Evidence that accompanies catalog records without changing their public identities.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/catalog-annotations.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "records": {
+      "additionalProperties": {
+        "$ref": "#/$defs/SourceAnnotations"
+      },
+      "description": "Source labels and their qualified evidence.",
+      "type": "object"
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "records"
+  ],
+  "title": "CatalogAnnotations",
+  "type": "object"
+}

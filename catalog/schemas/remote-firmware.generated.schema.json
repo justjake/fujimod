@@ -1,0 +1,1072 @@
+{
+  "$defs": {
+    "AddressIdentity": {
+      "additionalProperties": false,
+      "description": "An identified firmware address range without its contents.",
+      "properties": {
+        "address": {
+          "description": "Start address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "SHA-256 of the range.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Byte length.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "BitmapLayout": {
+      "additionalProperties": false,
+      "description": "Bitmap record fields, with explicit widths.",
+      "properties": {
+        "data_bytes": {
+          "description": "Data bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "data_offset": {
+          "description": "Data offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "height_bytes": {
+          "description": "Height bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "height_offset": {
+          "description": "Height offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind_bytes": {
+          "description": "Kind bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind_offset": {
+          "description": "Kind offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width_bytes": {
+          "description": "Width bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width_offset": {
+          "description": "Width offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "data_bytes",
+        "data_offset",
+        "height_bytes",
+        "height_offset",
+        "kind_bytes",
+        "kind_offset",
+        "width_bytes",
+        "width_offset"
+      ],
+      "type": "object"
+    },
+    "BitmapResources": {
+      "additionalProperties": false,
+      "description": "Native bitmap descriptor table layout.",
+      "properties": {
+        "final_first_index": {
+          "description": "Final first index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "final_table": {
+          "description": "Final table.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "last_index": {
+          "description": "Last index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "last_record": {
+          "description": "Last record.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "layout": {
+          "$ref": "#/$defs/BitmapLayout",
+          "description": "Layout."
+        },
+        "stride": {
+          "description": "Stride.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "table": {
+          "description": "Table.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "table",
+        "stride",
+        "final_table",
+        "final_first_index",
+        "last_index",
+        "last_record",
+        "layout"
+      ],
+      "type": "object"
+    },
+    "ConfigurationLocation": {
+      "description": "A configuration block addressed directly or through a firmware pointer.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Firmware address containing a configuration-block pointer.",
+          "properties": {
+            "address": {
+              "description": "Pointer address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "pointer",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "address"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Fixed configuration-block base address.",
+          "properties": {
+            "address": {
+              "description": "Block address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "direct",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "address"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CursorFields": {
+      "additionalProperties": false,
+      "description": "Live cursor word offsets.",
+      "properties": {
+        "cursor": {
+          "description": "Cursor.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "filtered_count": {
+          "description": "Filtered count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pointer": {
+          "description": "Pointer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "raw_count": {
+          "description": "Raw count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "subcursor": {
+          "description": "Subcursor.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value_cursor": {
+          "description": "Value cursor.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "visible_count": {
+          "description": "Visible count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pointer",
+        "cursor",
+        "subcursor",
+        "visible_count",
+        "value_cursor",
+        "raw_count",
+        "filtered_count"
+      ],
+      "type": "object"
+    },
+    "CursorLayout": {
+      "additionalProperties": false,
+      "description": "Live menu cursor and status-array offsets.",
+      "properties": {
+        "fields": {
+          "$ref": "#/$defs/CursorFields",
+          "description": "Cursor word offsets."
+        },
+        "size": {
+          "description": "Cursor byte size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status_offset": {
+          "description": "Status offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status_stride": {
+          "description": "Status stride.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status_width": {
+          "description": "Status width.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "fields",
+        "status_offset",
+        "status_stride",
+        "status_width"
+      ],
+      "type": "object"
+    },
+    "FirmwareObservation": {
+      "additionalProperties": false,
+      "description": "Firmware addresses used by a supported run observer.",
+      "properties": {
+        "menu_active": {
+          "description": "Firmware address containing the menu-active flag.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_node": {
+          "description": "Firmware address containing the current menu node.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pending_mode": {
+          "description": "Firmware address containing the pending UI mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "readiness": {
+          "$ref": "#/$defs/ReadinessAddresses",
+          "description": "Readiness observer addresses."
+        },
+        "rec_mode": {
+          "description": "REC mode value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setup_mode": {
+          "description": "Setup mode value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "system_mode": {
+          "description": "Firmware address containing the system mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ui_mode": {
+          "description": "Firmware address containing the UI mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ui_mode",
+        "system_mode",
+        "menu_active",
+        "pending_mode",
+        "menu_node",
+        "rec_mode",
+        "setup_mode",
+        "readiness"
+      ],
+      "type": "object"
+    },
+    "GlyphResources": {
+      "additionalProperties": false,
+      "description": "Registry layout locating the native icon font resource.",
+      "properties": {
+        "data_address_offset": {
+          "description": "Byte offset of the font data pointer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "data_size_offset": {
+          "description": "Byte offset of the font byte length.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "icon_index": {
+          "description": "Icon font record index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "record_size": {
+          "description": "Registry record size in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "registry_address": {
+          "description": "Resource registry base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "registry_address",
+        "record_size",
+        "icon_index",
+        "data_address_offset",
+        "data_size_offset"
+      ],
+      "type": "object"
+    },
+    "MenuFields": {
+      "additionalProperties": false,
+      "description": "Native menu descriptor word offsets.",
+      "properties": {
+        "flags_word": {
+          "description": "Flags word.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "handlers_pointer": {
+          "description": "Handlers pointer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_array": {
+          "description": "Item array.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_id": {
+          "description": "Menu id.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parent_pointer": {
+          "description": "Parent pointer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows_per_page": {
+          "description": "Rows per page.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setting_id": {
+          "description": "Setting id.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type_code": {
+          "description": "Type code.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "menu_id",
+        "type_code",
+        "setting_id",
+        "rows_per_page",
+        "flags_word",
+        "parent_pointer",
+        "item_array",
+        "handlers_pointer"
+      ],
+      "type": "object"
+    },
+    "MenuLayout": {
+      "additionalProperties": false,
+      "description": "Offsets within a native menu descriptor and row.",
+      "properties": {
+        "caption_words": {
+          "description": "Caption words.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fields": {
+          "$ref": "#/$defs/MenuFields",
+          "description": "Node word offsets."
+        },
+        "max_kind": {
+          "description": "Max kind.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "nowrap_flags": {
+          "description": "Nowrap flags.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row_child": {
+          "description": "Row child.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row_key": {
+          "description": "Row key.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row_size": {
+          "description": "Row size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sentinel": {
+          "description": "Sentinel.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Node byte size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "fields",
+        "row_size",
+        "row_key",
+        "row_child",
+        "caption_words",
+        "sentinel",
+        "max_kind",
+        "nowrap_flags"
+      ],
+      "type": "object"
+    },
+    "MenuNavigation": {
+      "additionalProperties": false,
+      "description": "Native menu tab bounds.",
+      "properties": {
+        "setup_first_tab": {
+          "description": "Setup first tab.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shooting_first_tab": {
+          "description": "Shooting first tab.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shooting_last_tab": {
+          "description": "Shooting last tab.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "shooting_first_tab",
+        "shooting_last_tab",
+        "setup_first_tab"
+      ],
+      "type": "object"
+    },
+    "MenuTables": {
+      "additionalProperties": false,
+      "description": "Live menu roots, row descriptors and navigation.",
+      "properties": {
+        "cursor": {
+          "$ref": "#/$defs/CursorLayout",
+          "description": "Cursor and row status layout."
+        },
+        "cursor_address": {
+          "description": "Cursor structure base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "layout": {
+          "$ref": "#/$defs/MenuLayout",
+          "description": "Node and row layout."
+        },
+        "navigation": {
+          "$ref": "#/$defs/MenuNavigation",
+          "description": "Tab navigation bounds."
+        },
+        "page_tabs": {
+          "additionalProperties": false,
+          "description": "Root indices mapped to first tab keys.",
+          "patternProperties": {
+            "^\\d+$": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "q_grid": {
+          "$ref": "#/$defs/QuickGrid",
+          "description": "Quick menu geometry and menu ID."
+        },
+        "roles": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Named root indices.",
+          "type": "object"
+        },
+        "root_count": {
+          "description": "Number of root pointers.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "root_routes": {
+          "additionalProperties": false,
+          "description": "Declared root entry strategies.",
+          "patternProperties": {
+            "^\\d+$": {
+              "$ref": "#/$defs/RootRoute"
+            }
+          },
+          "type": "object"
+        },
+        "root_titles": {
+          "additionalProperties": false,
+          "description": "Root indices mapped to caption resource IDs.",
+          "patternProperties": {
+            "^\\d+$": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "roots_address": {
+          "description": "Address of the root pointer table.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "roots_address",
+        "root_count",
+        "roles",
+        "root_titles",
+        "root_routes",
+        "page_tabs",
+        "navigation",
+        "layout",
+        "cursor_address",
+        "cursor",
+        "q_grid"
+      ],
+      "type": "object"
+    },
+    "PixelFormat": {
+      "description": "Implemented scanout encodings.",
+      "enum": [
+        "bgra8888"
+      ],
+      "type": "string"
+    },
+    "QuickGrid": {
+      "additionalProperties": false,
+      "description": "Quick menu dimensions.",
+      "properties": {
+        "columns": {
+          "description": "Columns.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_code": {
+          "description": "Menu code.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "description": "Rows.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "rows",
+        "columns",
+        "menu_code"
+      ],
+      "type": "object"
+    },
+    "ReadinessAddresses": {
+      "additionalProperties": false,
+      "description": "Addresses used to check REC readiness.",
+      "properties": {
+        "category_one": {
+          "description": "Firmware address for readiness category one.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "category_two": {
+          "description": "Firmware address for readiness category two.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "excluded_mask": {
+          "description": "Mask of readiness bits excluded from the check.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "input_pending": {
+          "description": "Firmware address for pending input state.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operation_alert_timer": {
+          "description": "Firmware address for the operation-alert timer.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "override_address": {
+          "description": "Firmware address used to override readiness.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "category_one",
+        "category_two",
+        "input_pending",
+        "excluded_mask",
+        "operation_alert_timer",
+        "override_address"
+      ],
+      "type": "object"
+    },
+    "Resources": {
+      "additionalProperties": false,
+      "description": "Native text and bitmap resource table layouts.",
+      "properties": {
+        "bitmaps": {
+          "$ref": "#/$defs/BitmapResources",
+          "description": "Bitmaps."
+        },
+        "glyph_first": {
+          "description": "Glyph first.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "glyph_last": {
+          "description": "Glyph last.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "glyphs": {
+          "$ref": "#/$defs/GlyphResources",
+          "description": "Registry layout locating the icon font in live memory."
+        },
+        "language": {
+          "$ref": "#/$defs/ConfigurationLocation",
+          "description": "Language."
+        },
+        "last_caption": {
+          "description": "Last caption.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "private_text_bias": {
+          "description": "Private text bias.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "private_text_first": {
+          "description": "Private text first.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "private_text_last": {
+          "description": "Private text last.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "supplementary_address": {
+          "description": "Supplementary address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "supplementary_first": {
+          "description": "Supplementary first.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "supplementary_max_units": {
+          "description": "Supplementary max units.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "supplementary_stride": {
+          "description": "Supplementary stride.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_max_units": {
+          "description": "Text max units.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_metrics_offset": {
+          "description": "Text metrics offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_pointer_offset": {
+          "description": "Text pointer offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_record_size": {
+          "description": "Text record size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_unit_bytes": {
+          "description": "Text unit bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_variants_offset": {
+          "description": "Text variants offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "language",
+        "text_record_size",
+        "text_variants_offset",
+        "text_metrics_offset",
+        "text_pointer_offset",
+        "text_unit_bytes",
+        "text_max_units",
+        "private_text_first",
+        "private_text_last",
+        "private_text_bias",
+        "glyph_first",
+        "glyph_last",
+        "supplementary_address",
+        "supplementary_first",
+        "last_caption",
+        "supplementary_stride",
+        "supplementary_max_units",
+        "bitmaps",
+        "glyphs"
+      ],
+      "type": "object"
+    },
+    "RootRoute": {
+      "additionalProperties": false,
+      "description": "A root menu entry strategy.",
+      "properties": {
+        "entry": {
+          "description": "Navigation role used to open the root.",
+          "type": "string"
+        },
+        "tab": {
+          "default": null,
+          "description": "Optional tab key.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "entry"
+      ],
+      "type": "object"
+    },
+    "Scanout": {
+      "additionalProperties": false,
+      "description": "A located framebuffer and its live selection pointer.",
+      "properties": {
+        "address": {
+          "description": "Address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "address_mask": {
+          "description": "Address mask.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "channel": {
+          "description": "Channel.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "height": {
+          "description": "Height.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "instance": {
+          "description": "Instance.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "layer": {
+          "description": "Layer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pixel_format": {
+          "$ref": "#/$defs/PixelFormat",
+          "description": "Pixel format."
+        },
+        "pointer_address": {
+          "description": "Pointer address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stride_bytes": {
+          "description": "Stride bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width": {
+          "description": "Width.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "width",
+        "height",
+        "pixel_format",
+        "stride_bytes",
+        "instance",
+        "layer",
+        "channel",
+        "pointer_address",
+        "address_mask"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/remote-firmware.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Firmware-specific remote inputs, without snapshots of live tables.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/remote-firmware.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "body_id": {
+      "description": "Physical body identity.",
+      "type": "string"
+    },
+    "configuration": {
+      "$ref": "#/$defs/ConfigurationLocation",
+      "description": "Settings block location."
+    },
+    "firmware_id": {
+      "description": "Firmware identity.",
+      "type": "string"
+    },
+    "firmware_sha256": {
+      "description": "Update content digest.",
+      "type": "string"
+    },
+    "identity_checks": {
+      "description": "Firmware content checks.",
+      "items": {
+        "$ref": "#/$defs/AddressIdentity"
+      },
+      "type": "array"
+    },
+    "menus": {
+      "$ref": "#/$defs/MenuTables",
+      "description": "Live menu tables and cursor layout."
+    },
+    "resources": {
+      "$ref": "#/$defs/Resources",
+      "description": "Live text and glyph resource layout."
+    },
+    "scanout": {
+      "$ref": "#/$defs/Scanout",
+      "description": "Scanout memory layout."
+    },
+    "schema": {
+      "description": "Format version; currently 1.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/FirmwareObservation",
+      "description": "UI mode and readiness addresses."
+    },
+    "uncached_alias": {
+      "description": "Alias applied to physical RAM reads.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "firmware_id",
+    "firmware_sha256",
+    "body_id",
+    "uncached_alias",
+    "identity_checks",
+    "configuration",
+    "state",
+    "menus",
+    "scanout",
+    "resources"
+  ],
+  "title": "FirmwareFacts",
+  "type": "object"
+}

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xe2s-111-rehearsal",
+  "configuration_id": "xe2s-111",
+  "change": {
+    "kind": "preset",
+    "preset": {
+      "factory_options": {
+        "storage_profile": "erased",
+        "irq_tie_profile": "kernel-active-scan-order",
+        "copy_profile": "vg-32bpp-untile-unrotated",
+        "clear_profile": "declared-vg-ui-primitives-unmeasured",
+        "instructions_per_tick": 24
+      },
+      "execution": {
+        "mode": "strict",
+        "engine": "unicorn",
+        "quantum": 1000,
+        "instructions_per_tick": {
+          "numerator": 24,
+          "denominator": 1
+        }
+      },
+      "execution_scope": "emulator-only",
+      "purpose": "rehearsal",
+      "hardware_selection": {
+        "soc_profile_id": "exr2-service-transports",
+        "body_profile_id": "xe2s-service-session"
+      },
+      "hardware_inputs_id": "xe2s-service-session",
+      "firmware_profile_id": "xe2s-111-service-session"
+    }
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "$schema": "https://fujimod.com/schemas/flash.generated.schema.json",
+  "schema": 1,
+  "id": "xq1-121-flash",
+  "firmware_id": "xq1-121",
+  "device": {
+    "kind": "raw-nand"
+  },
+  "window": {
+    "address": 0,
+    "size": 134217728
+  },
+  "update_image": {
+    "dat_offset": 604,
+    "xor": 255
+  },
+  "reader": {
+    "symbol": "nand_read_transfer",
+    "alignment": 2048,
+    "nand": {
+      "page_bytes": 2048,
+      "pages_per_block": 64,
+      "destination_alignment": 32,
+      "controller_mode": 0,
+      "event_mode": 0,
+      "timeout_ms": 2000,
+      "max_pages_per_call": 1,
+      "lock": 7518064,
+      "unlock": 7518088
+    }
+  },
+  "transport": "exr2-query-heap",
+  "code_ranges": [
+    {
+      "name": "nand_read_transfer",
+      "address": 7475444,
+      "size": 1568
+    },
+    {
+      "name": "NAND correction mode",
+      "address": 7463676,
+      "size": 52
+    },
+    {
+      "name": "NAND correction gate",
+      "address": 7397444,
+      "size": 40
+    },
+    {
+      "name": "NAND completion polling",
+      "address": 7473220,
+      "size": 84
+    },
+    {
+      "name": "NAND read command bytes",
+      "address": 7396280,
+      "size": 48
+    },
+    {
+      "name": "NAND read trigger",
+      "address": 7396040,
+      "size": 32
+    },
+    {
+      "name": "NAND corrected status",
+      "address": 7395976,
+      "size": 32
+    },
+    {
+      "name": "NAND driver lock",
+      "address": 7518064,
+      "size": 24
+    },
+    {
+      "name": "NAND driver unlock",
+      "address": 7518088,
+      "size": 20
+    },
+    {
+      "name": "NAND geometry initialization",
+      "address": 7518352,
+      "size": 244
+    },
+    {
+      "name": "NAND page geometry query",
+      "address": 7518280,
+      "size": 72
+    },
+    {
+      "name": "NAND receive DMA acquisition",
+      "address": 7463952,
+      "size": 188
+    },
+    {
+      "name": "NAND DMA handle allocation",
+      "address": 7030948,
+      "size": 168
+    },
+    {
+      "name": "NAND DMA handle table reference",
+      "address": 7464140,
+      "size": 4
+    },
+    {
+      "name": "selected NAND geometry record",
+      "address": 9131332,
+      "size": 24
+    }
+  ],
+  "state_checks": [
+    {
+      "name": "NAND receive DMA channel available",
+      "address": 10363452,
+      "size": 4,
+      "value": 0
+    },
+    {
+      "name": "selected NAND geometry",
+      "address": 10148604,
+      "size": 4,
+      "value": 3
+    }
+  ],
+  "control": {
+    "offset": 262144,
+    "size": 32768
+  }
+}

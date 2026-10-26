@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "x100v-301",
+  "body_id": "x100v",
+  "version": "3.01",
+  "update": {
+    "size": 50137164,
+    "sha256": "18351a9a552c06ec9c70483abca1b74ab2a29fa139f19aef244e178045323591"
+  },
+  "boot_rom": {
+    "content": {
+      "size": 32768,
+      "sha256": "2a8b69986dd3fad0b73808c44e0834fa95c7b4e4f84e6c8664d4b0a82f7b24a4"
+    },
+    "address": 4293918720
+  },
+  "installation": null,
+  "generated_facts": null
+}

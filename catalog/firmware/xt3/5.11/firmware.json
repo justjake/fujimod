@@ -1,0 +1,82 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xt3-511",
+  "body_id": "xt3",
+  "version": "5.11",
+  "update": {
+    "size": 50136252,
+    "sha256": "9f2c75fd8a16a1d71b9218f6dbd3144b1f11820bcecd3a9608c8cda9f25f95a3"
+  },
+  "boot_rom": null,
+  "installation": {
+    "flash_offset": 628,
+    "entry_labels": {
+      "0x400c8": "ThreadX scheduler",
+      "0x41f6c": "ThreadX kernel enter",
+      "0x441ac": "ThreadX thread create",
+      "0x578a8": "kernel entry",
+      "0x1147a4c": "initial application thread"
+    },
+    "loader_validation": null,
+    "image_sections": [
+      {
+        "name": "unit-0",
+        "address": 262144,
+        "size": 111232,
+        "sha256": "7357d741111e8367643795a5cf34666812fe09f91d3265e093dbff29bac5e71f",
+        "native_flash_offset": 393216
+      },
+      {
+        "name": "unit-1",
+        "address": 1966080,
+        "size": 5759544,
+        "sha256": "a7db8fd4ccbba79a7b47efd86accd5ed8bf42a220e23632c4216ee6e1c3ef0a7",
+        "native_flash_offset": 25165824
+      },
+      {
+        "name": "unit-2",
+        "address": 8257536,
+        "size": 671421,
+        "sha256": "748de5756e3114a56ce6baeb86fd321e3ff2a036dd882a654d53c96534f8f844",
+        "native_flash_offset": 31195136
+      },
+      {
+        "name": "unit-3",
+        "address": 13763584,
+        "size": 175296,
+        "sha256": "4c92151d95163748e3bf1d21dd4e2c4b3cb66315d8ba6d5fda19ca5b2e8e2a23",
+        "native_flash_offset": 1441792
+      },
+      {
+        "name": "unit-4",
+        "address": 14812160,
+        "size": 175296,
+        "sha256": "e70a3991014bc2e2a970f910a5d49dd43f1c5669636d93eadd82ec2a91745304",
+        "native_flash_offset": 1966080
+      },
+      {
+        "name": "unit-5",
+        "address": 15863808,
+        "size": 6193152,
+        "sha256": "7cd5f9f8cce57fc3d9100bf303ac01ae74735e5daa7392138ef73759a343d673",
+        "native_flash_offset": 2490368
+      },
+      {
+        "name": "unit-6",
+        "address": 28631040,
+        "size": 8224768,
+        "sha256": "caa261813993aa407a9a7de5c6ebaa3f187c3926834fcb63a2b309681a50740a",
+        "native_flash_offset": 5505024
+      },
+      {
+        "name": "unit-7",
+        "address": 54202368,
+        "size": 8224768,
+        "sha256": "72178b9fff8a9931cc352d6400a578dad9483dedff317eb31b96b50f5cf9208a",
+        "native_flash_offset": 10223616
+      }
+    ]
+  },
+  "generated_facts": null
+}

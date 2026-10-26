@@ -1,26 +1,25 @@
 """The same public value contract runs on native Python and real Pyodide."""
 
 import json
+from collections.abc import Callable
 
-from fujimod import defs
-from fujimod.defs import service as peripheral_definitions
+from fujimod import catalog
+from fujimod.catalog import service as peripheral_definitions
 from fujimod.usb import app80
 
 
-def check_peripheral_values():
+def check_peripheral_values() -> bool:
     slots = {}
     entries = []
-    for index, (codec, count) in enumerate(
-        [
-            ("register_control", 7),
-            ("i2c", 14),
-            ("accumulator", 7),
-            ("peripheral_report", 8),
-            ("battery_control", 2),
-            ("initialize_display", 1),
-            ("display_pattern", 5),
-        ]
-    ):
+    for index, (codec, count) in enumerate([
+        ("register_control", 7),
+        ("i2c", 14),
+        ("accumulator", 7),
+        ("peripheral_report", 8),
+        ("battery_control", 2),
+        ("initialize_display", 1),
+        ("display_pattern", 5),
+    ]):
         slots[codec] = [(n * 5 + 7) % 32 for n in range(count)]
         entries.append(
             dict(
@@ -48,26 +47,28 @@ def check_peripheral_values():
     )
     definition = peripheral_definitions.Definition.from_json(
         json.dumps(document),
-        defs.FirmwareIdentity("synthetic-peripheral-v2", "ab" * 32),
+        catalog.FirmwareIdentity("synthetic-peripheral-v2", "ab" * 32),
     )
     service = app80.Service(definition)
     modes = peripheral_definitions.ServiceModes(4)
 
-    def prepare(command):
+    def prepare(command: app80.Command) -> app80.Invocation:
         return service.prepare(modes, command)
 
-    def logical(invocation, codec):
+    def logical(invocation: app80.Invocation, codec: str) -> list[int]:
         return [invocation.raw[1 + s] for s in slots[codec]]
 
-    def decode(invocation, codec, values):
+    def decode(
+        invocation: app80.Invocation, codec: str, values: list[int]
+    ) -> app80.ReplyValue:
         raw = bytearray(invocation.raw)
-        for slot, value in zip(slots[codec], values):
+        for slot, value in zip(slots[codec], values, strict=True):
             raw[1 + slot] = value
         reply = invocation.decode(raw)
         assert reply.raw == raw
         return reply.value
 
-    def failure(function):
+    def failure(function: Callable[[], object]) -> None:
         try:
             function()
         except app80.CommandError as error:
@@ -98,8 +99,8 @@ def check_peripheral_values():
         )
 
     for length in [0, 11]:
-        failure(lambda: app80.I2cLength(length))
-        failure(lambda: app80.I2cPayload(bytes(length)))
+        failure(lambda length=length: app80.I2cLength(length))
+        failure(lambda length=length: app80.I2cPayload(bytes(length)))
     assert app80.I2cLength(10).value == 10
     assert len(app80.I2cPayload(bytes(10)).data) == 10
     assert not hasattr(app80.I2cPort, "Port3")
@@ -139,7 +140,7 @@ def check_peripheral_values():
         invocation.decode(invocation.raw).value, app80.ReplyValue.NoPayload
     )
     try:
-        app80.I2cAction.Read(port=3, command=0xA5, length=app80.I2cLength(1))
+        app80.I2cAction.Read(port=3, command=0xA5, length=app80.I2cLength(1))  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     except TypeError:
         pass
     else:
@@ -191,8 +192,8 @@ def check_peripheral_values():
             decode(invocation, "display_pattern", [255] * 5), app80.ReplyValue.NoPayload
         )
     for create in [
-        lambda: app80.Command.BatteryControl(action=1),
-        lambda: app80.Command.DisplayPattern(action=app80.BatteryAction.ResetPending),
+        lambda: app80.Command.BatteryControl(action=1),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
+        lambda: app80.Command.DisplayPattern(action=app80.BatteryAction.ResetPending),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     ]:
         try:
             create()

@@ -1,24 +1,101 @@
 # FujiMod Python package
 
-This directory builds the `fujimod` Python distribution. PyO3 source lives in
-`src/`; the USB implementation lives in the workspace's `crates/usb/`.
-Python source lives in `python/fujimod/` inside this same distribution. Native
-wheels include the private `fujimod._native` extension; Pyodide uses the same
-public `fujimod.usb` namespace through the [WebUSB adapter](PYODIDE.md).
+This directory holds the `fujimod` Python package. Its PyO3 bindings are
+crates by area, which compile in parallel: `catalog/`, `usb/`, `recording/`,
+`remote/`, `emulator/` (boards and run configurations), `host-image/`,
+`graphics/` and `xp4/`, over the shared errors and values in `base/`.
+`module/` links them into `fujimod._native`. The USB implementation lives in
+the workspace's `crates/usb/`. Python source lives in `python/fujimod/`. Native Python loads the compiled
+`fujimod._native` extension; Pyodide uses the same public `fujimod.usb`
+namespace through the [WebUSB adapter](PYODIDE.md).
 
-Build from the repository root with maturin:
+Build and install the extension from the repository root:
 
 ```sh
-maturin build --manifest-path bindings/python/Cargo.toml --out target/wheels
+uv run --locked python scripts/python_extension.py
 ```
 
-Install the wheel in the consuming project's uv environment. Source consumers
-can use `uv add /path/to/fujimod/bindings/python` and rebuild after Rust changes.
+It compiles `fujimod._native` with Cargo's release profile, checks that it
+loads, replaces `python/fujimod/_native.abi3.so` and puts `python/` on the
+environment's path. Rerun it after Rust changes.
+
+## Native execution
+
+The native extension also exposes `fujimod.emulator`. For a resolved graph, build a
+`Definition` from its execution graph, device plan and identified assets, then
+pass the matching bytes to `make_board`. Declared images are loaded into mapped
+memory before execution.
+
+For a catalog runtime, `Board.from_inputs` takes explicit paths to the update
+file, real boot ROM and selected Unicorn library. Optional NAND and settings
+files are separate keyword arguments. Body and firmware identifiers select
+the runtime facts; they never select or derive an input path:
+
+```python
+from pathlib import Path
+
+from fujimod.emulator import Board
+
+with Board.from_inputs(
+    configuration_id="x70-110-rec",
+    overlays=("x70-110-rec-usb",),
+    update=Path("/inputs/update.dat"),
+    boot_rom=Path("/inputs/boot.rom"),
+    unicorn=Path("/libraries/libunicorn.dylib"),
+    nand=Path("/inputs/nand.bin"),
+    settings=Path("/inputs/settings.bin"),
+) as board:
+    report = board.boot_to_rec()
+```
+
+Omit `nand` or `settings` when those files are not supplied. The required
+configuration ID selects its body, firmware and execution policy; optional
+overlay IDs select declared changes in order. Input paths remain
+caller-selected.
+The board owns its native execution session. It exposes processor, memory,
+checkpoint and state operations, and supports `with` or an explicit `close()`.
+Closing is safe to repeat; methods that need an active session raise
+`RuntimeError` after close.
+`board.session` provides typed ADC, GPIO, logical-input, physical-control and
+display capabilities over that same native owner. Use `set_adc_samples`,
+`gpio_input`, `input_level`, `set_position` and `rotate` to select external
+inputs; use the corresponding state methods to inspect their modeled results.
+`session.scanout` returns a `ScanoutFrame` with raw bytes, optional RGB pixels,
+dimensions and state metadata without advancing guest time. `session.screenshot`
+returns a PNG for catalog runtimes after a display frame is configured.
+`session.set_image_rgb` supplies a caller-owned RGB image to a named scene input;
+`board.read_physical_many` observes several physical memory spans at the same
+stopped execution point.
+Graph-backed boards expose a typed `execution_policy` property and
+`set_execution_policy`, which accepts `"exact"` or `"interactive"`. `exact`
+preserves requested instruction boundaries; `interactive` allows
+backend-defined block-boundary overshoot. Set the policy explicitly when
+needed; construction does not start guest execution or override the native
+default. Policy changes require a stopped board.
+`boot_to_rec` returns a typed `BootReport`. Its `status` is `"rec"`,
+`"instruction-limit"` or `"stopped"`; the report also includes instruction and
+guest-time counters, observed mode and menu values, setup status and presses,
+plus an optional failure message.
+
+The checked identity catalog is available through
+`fujimod.emulator.catalog`. `resolve_reference(body_id, firmware_id)` returns a
+`ResolvedSelection` containing the resolved `Soc`, `Body`, `Firmware` and
+`Part` records; `resolve_firmware(firmware_id)` derives the referenced body
+and SoC. `resolve_configuration(configuration_id)` returns the validated run
+configuration with its resolved hardware reference. The generated `TypedDict`
+models mirror the Rust catalog schemas and provide field-level editor and
+type-checker support. They describe identity records, not local file locations.
+
+The update and ROM files are checked against the selected runtime's recorded
+size and SHA-256. A settings file is a 16-byte persistent packet with its
+checksum and marker. NAND accepts an emulator-exported committed image or a
+complete raw medium whose firmware prefix matches the selected update.
 
 The default USB API is awaitable and runs directly on `asyncio`:
 
 ```python
 from fujimod import usb
+
 
 async def identify(device, interface, firmware_limits):
     session = await usb.Session.open(device, interface, firmware_limits)
@@ -27,6 +104,7 @@ async def identify(device, interface, firmware_limits):
     finally:
         if session.state == usb.SessionState.Ready:
             await session.close()
+
 
 async def download(session, address, length, consume):
     async with usb.memory.read_chunks(session, address, length) as reader:
@@ -40,6 +118,28 @@ operations, `usb.data.upload` and `usb.app80.exchange` are awaitable. Chunk
 factories acquire ownership synchronously and return async iterators. Use
 `async with` or `await reader.aclose()` when ending iteration early.
 
+Use `usb.CommandSequence()` and `await session.execute_sequence(sequence)` for
+bounded dependent reads, writes and diagnostic queries. `read(address, length,
+expected=None)`, `write(address, data)` and `query(tag, statuses=None)` return
+indices into the resulting list of byte strings; write results are empty.
+`statuses` is a list of accepted `(primary, secondary)` pairs, defaulting to
+`[(0, 0)]`. Reads check their full expected data when supplied. Guards run
+beside USB even over a share; a failed guard prevents later commands and fences
+the session. Native and Pyodide use the same Rust implementation.
+
+The [mod installation helpers](../../crates/mod-install/README.md) add
+`usb.InstallQueries(callback, stock, output, original)` for checked borrowed
+callback batches. `call(callback, tag, statuses, output)` returns query/output
+indices; `finish()` returns a `CommandSequence`. Use
+`usb.CommandSequence.verified_writes(address, data, limits, packet_bytes)` for
+bounded write/readback batches. `usb.OwnedUpload(allocation_address,
+allocation_size, address, data, piece_bytes, alignment)` validates padding inside
+an owned allocation; `await session.upload_owned(image, pointer, original,
+capacity_address, capacity)` borrows, uploads and restores its stock destination.
+`await session.verify_owned(image, window)` checks every image byte before the
+caller publishes hooks or runs initialization. Addresses and ownership must be
+qualified by the caller; the helpers never infer them from a camera name.
+
 Python cancellation drops the actual Rust operation. An interrupted exchange
 restores a session fenced as `CompletionUnknown`; it sends no cleanup or retry.
 A pending operation reports `InFlight`, and another operation fails with
@@ -47,7 +147,7 @@ A pending operation reports `InFlight`, and another operation fails with
 the fenced session. `aclose()` can cancel a pending chunk and awaits release of
 ownership; `session.abandon()` cancels pending host work and leaves `Abandoned`.
 Neither operation can stop camera execution. Creating an unawaited coroutine
-sends nothing; discarding or cancelling it before dispatch leaves the session
+sends nothing; discarding or canceling it before dispatch leaves the session
 available.
 
 The native binding uses PyO3's `experimental-async` coroutine support and nusb's
@@ -95,12 +195,11 @@ releases host resources without issuing C4 or cleanup. Its terminal state is
 `Abandoned`, and all further I/O is rejected. Abandoning cannot stop firmware
 execution. Close or cancel an owned range reader with `await reader.aclose()`.
 
-For Python protocol/ownership tests, build an instrumented wheel with
-`maturin build --manifest-path bindings/python/Cargo.toml --features testing`.
-Install it in the test environment, then run `pytest bindings/python/tests`.
-These tests replay synthetic USB exchanges through the production Rust session,
-including streaming, ownership, protocol errors and disconnects. The `testing`
-module is excluded from ordinary builds. No test opens a camera. Tests also cover
+Python protocol/ownership tests use `fujimod.usb.testing`; build the extension
+with `scripts/python_extension.py`, then run `pytest bindings/python/tests`.
+These tests replay scripted USB exchanges through the production Rust session,
+including streaming, ownership, protocol errors and disconnects. No test opens a
+camera. Tests also cover
 asyncio wakeups, cancellation during I/O, concurrent calls and async iterators.
 
 Use `async with usb.data.read_chunks(session, window, address, length)` for a streamed
@@ -150,11 +249,11 @@ call Python callbacks.
 
 `await usb.data.upload(session, data, piece_bytes=..., mode=usb.DataWriteMode.Preserve)`
 holds exclusive session ownership across the setup, every E0 piece and final E8. It returns
-an immutable `UploadReply` with `setup`, `acknowledgement` and `bytes_written`.
+an immutable `UploadReply` with `setup`, `acknowledgment` and `bytes_written`.
 Mode and piece size are required inputs. The operation sends data unchanged,
 without padding, readback, retries or destination-buffer policy. A refused setup
 is a structured `DeviceCommandError`; a failed exchange fences the session.
-A four-byte acknowledgement remains opaque. A 32-byte reply is validated against
+A four-byte acknowledgment remains opaque. A 32-byte reply is validated against
 the upload setup command and status fields. Neither certifies application completion.
 
 `session.prepare_capabilities()` returns immutable `usb.CapabilitiesReply`
@@ -175,18 +274,18 @@ header and needs at least 16 bytes. The reply exposes typed status, primary and
 secondary values, a distinct command identifier, body and raw bytes. Only the
 common header is validated; the selected firmware supplies other semantics.
 There is no implicit padding, polling, data transfer, retry or cleanup. The
-[command catalogue](../../crates/usb/PROTOCOL.md) describes effects and limits.
+[command catalog](../../crates/usb/PROTOCOL.md) describes effects and limits.
 
 ## Firmware-selected service controls
 
-Both native Python and Pyodide expose the shared JSON loader through `fujimod.defs`.
+Both native Python and Pyodide expose the shared JSON loader through `fujimod.catalog`.
 Definitions and command codecs execute in Rust; Python selects typed inputs:
 
 ```python
-from fujimod import defs, usb
-from fujimod.defs import service as data
+from fujimod import catalog, usb
+from fujimod.catalog import service as data
 
-identity = defs.FirmwareIdentity(firmware_id, firmware_sha256)
+identity = catalog.FirmwareIdentity(firmware_id, firmware_sha256)
 definition = data.Definition.from_json(definition_json, identity)
 service = usb.app80.Service(definition)
 invocation = service.prepare(
@@ -208,8 +307,8 @@ with payload variants. Construct `Command.ProfileByte(action=ProfileAction.Read(
 or `ProfileAction.Write(...)`; reset is the explicit `ProfileAction.Reset()`.
 Quantities use checked `PinBank`, `ProfileIndex` and `WordAddress` types. Selection
 errors raise `app80.CommandError` with a typed `CommandFailure` in `.reason`.
-Definition errors similarly expose `defs.DefinitionFailure` through
-`defs.DefinitionError.reason`.
+Definition errors similarly expose `catalog.DefinitionFailure` through
+`catalog.DefinitionError.reason`.
 Missing, ambiguous and unreviewed controls do not fall back to another body.
 
 The returned `CommandReply` keeps all 33 raw bytes. Save failure and unknown
@@ -273,7 +372,6 @@ validated signal units or a host poll.
 Service enums, checked quantities, command/action factories, structured replies
 and public registrations come from the [shared Rust generator](../generator/README.md).
 Builds regenerate them automatically; validation remains in the core.
-
 
 WPS and station controls use `Command.Wps(action=...)` and
 `Command.Station(action=...)`. Their action enums are `WpsAction` and

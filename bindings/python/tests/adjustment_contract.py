@@ -1,10 +1,13 @@
 """Native/Pyodide contract for direct adjustment requests and snapshots."""
 
+from contract_assertions import expect
+from fujimod.usb import app80
 
-def check_adjustment_values():
+
+def check_adjustment_values() -> bool:
     import json
 
-    from fujimod import defs
+    from fujimod import catalog
     from fujimod.usb import app80 as a
 
     layouts = [
@@ -44,20 +47,22 @@ def check_adjustment_values():
         ],
     }
     service = a.Service(
-        defs.service.Definition.from_json(
-            json.dumps(doc), defs.FirmwareIdentity("adjustment-b", "ab" * 32)
+        catalog.service.Definition.from_json(
+            json.dumps(doc), catalog.FirmwareIdentity("adjustment-b", "ab" * 32)
         )
     )
-    modes = defs.service.ServiceModes(4)
+    modes = catalog.service.ServiceModes(4)
 
-    def prepare(command, codec, expected):
+    def prepare(
+        command: app80.Command, codec: str, expected: list[int]
+    ) -> app80.Invocation:
         p = service.prepare(modes, command)
         assert [p.raw[1 + i] for i in slots[codec]] == expected
         return p
 
-    def decode(p, codec, values):
+    def decode(p: app80.Invocation, codec: str, values: list[int]) -> app80.ReplyValue:
         data = bytearray(p.raw)
-        for slot, byte in zip(slots[codec], values):
+        for slot, byte in zip(slots[codec], values, strict=True):
             data[1 + slot] = byte
         reply = p.decode(data)
         assert reply.raw == data
@@ -89,7 +94,10 @@ def check_adjustment_values():
         )
         assert value.encoded_value == 255
         if raw == 255:
-            assert value.flag.raw_status == 255
+            assert (
+                expect(value.flag, a.LensCompletionParameterFlag.Unknown).raw_status
+                == 255
+            )
     for position, argument in [(0, 255), (255, 0), (18, 52)]:
         p = prepare(
             a.Command.LensBoundedPosition(position=position, value=argument),
@@ -106,9 +114,16 @@ def check_adjustment_values():
                 value.range, cls
             )
             if raw == 255:
-                assert value.range.raw_status == 255
+                assert (
+                    expect(value.range, a.LensPositionRange.Unknown).raw_status == 255
+                )
     p = prepare(a.Command.LensFixedPosition(), "lens_fixed_position", [255])
-    assert decode(p, "lens_fixed_position", [0]).raw_value == 0
+    assert (
+        expect(
+            decode(p, "lens_fixed_position", [0]), a.ReplyValue.LensOperation
+        ).raw_value
+        == 0
+    )
     for command, codec in [
         (
             a.Command.InvokePrimaryParameterCallback(parameter=255),
@@ -144,10 +159,12 @@ def check_adjustment_values():
         )
         assert value.raw_value == 0x89AB
         if raw == 255:
-            assert value.status.raw_status == 255
+            assert (
+                expect(value.status, a.AdjustmentOptionStatus.Unknown).raw_status == 255
+            )
     for create in [
-        lambda: a.Command.QueryAdjustmentOption(option=1),
-        lambda: a.Command.QueryAdjustmentOption(option=a.TransferPayloadByte(1)),
+        lambda: a.Command.QueryAdjustmentOption(option=1),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
+        lambda: a.Command.QueryAdjustmentOption(option=a.TransferPayloadByte(1)),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     ]:
         try:
             create()

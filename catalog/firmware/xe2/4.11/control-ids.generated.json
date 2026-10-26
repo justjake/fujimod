@@ -1,0 +1,5418 @@
+{
+  "$schema": "https://fujimod.com/schemas/control-ids.schema.json",
+  "schema": 1,
+  "id": "xe2-411-control-ids",
+  "firmware_id": "xe2-411",
+  "scanner": {
+    "base": 12076600,
+    "count": 66,
+    "stride": 28,
+    "lookup": 9695080,
+    "sha256": "c11c870bbea75a0e584f0ac6452844bcee928f5bcadba42d6bf4721fcb2a2393"
+  },
+  "input_readers": {
+    "calibration": null,
+    "scanner": {
+      "stable_offset": 21,
+      "stable_width": 1,
+      "pressed_value": 1,
+      "released_value": 0,
+      "routine": {
+        "address": 9695240,
+        "size": 64,
+        "sha256": "909584acd7e0024d9de0f68fbbf99bd7177b5fb4c26e560d7ebb36f17c88e86b"
+      }
+    }
+  },
+  "native_key_names": {
+    "rows": [
+      {
+        "event": 1,
+        "name": "KEY_OK",
+        "string_address": 10768264
+      },
+      {
+        "event": 2,
+        "name": "KEY_UP",
+        "string_address": 10768316
+      },
+      {
+        "event": 3,
+        "name": "KEY_DOWN",
+        "string_address": 10768328
+      },
+      {
+        "event": 4,
+        "name": "KEY_LEFT",
+        "string_address": 10768360
+      },
+      {
+        "event": 5,
+        "name": "KEY_RIGHT",
+        "string_address": 10768344
+      },
+      {
+        "event": 6,
+        "name": "KEY_POWER",
+        "string_address": 10673912
+      },
+      {
+        "event": 7,
+        "name": "KEY_S1",
+        "string_address": 10768292
+      },
+      {
+        "event": 8,
+        "name": "KEY_S2",
+        "string_address": 10768304
+      },
+      {
+        "event": 9,
+        "name": "KEY_DISP_BACK",
+        "string_address": 10673924
+      },
+      {
+        "event": 10,
+        "name": "KEY_FMODE",
+        "string_address": 10768408
+      },
+      {
+        "event": 11,
+        "name": "KEY_PLAY",
+        "string_address": 10768740
+      },
+      {
+        "event": 12,
+        "name": "KEY_BARRIER_OPEN",
+        "string_address": 10768768
+      },
+      {
+        "event": 13,
+        "name": "KEY_BARRIER_CLOSE",
+        "string_address": 10768792
+      },
+      {
+        "event": 14,
+        "name": "KEY_ADP_DET",
+        "string_address": 10673940
+      },
+      {
+        "event": 15,
+        "name": "KEY_USB",
+        "string_address": 10769968
+      },
+      {
+        "event": 16,
+        "name": "KEY_CARD_DET",
+        "string_address": 10768900
+      },
+      {
+        "event": 17,
+        "name": "KEY_EXPOSURE",
+        "string_address": 10768472
+      },
+      {
+        "event": 18,
+        "name": "KEY_ZOOM_TELE",
+        "string_address": 10673952
+      },
+      {
+        "event": 19,
+        "name": "KEY_ZOOM_WIDE",
+        "string_address": 10673968
+      },
+      {
+        "event": 20,
+        "name": "KEY_ZOOM_TELE2",
+        "string_address": 10673984
+      },
+      {
+        "event": 21,
+        "name": "KEY_ZOOM_WIDE2",
+        "string_address": 10674000
+      },
+      {
+        "event": 22,
+        "name": "KEY_AF",
+        "string_address": 10768424
+      },
+      {
+        "event": 23,
+        "name": "KEY_DRIVE",
+        "string_address": 10770768
+      },
+      {
+        "event": 24,
+        "name": "KEY_VIDEO",
+        "string_address": 10674016
+      },
+      {
+        "event": 25,
+        "name": "KEY_HDTV",
+        "string_address": 10674028
+      },
+      {
+        "event": 26,
+        "name": "KEY_CONTINUOUS",
+        "string_address": 10768436
+      },
+      {
+        "event": 27,
+        "name": "KEY_FLASH_POPUP",
+        "string_address": 10768624
+      },
+      {
+        "event": 28,
+        "name": "KEY_DIAL_UP",
+        "string_address": 10770056
+      },
+      {
+        "event": 29,
+        "name": "KEY_DIAL_DOWN",
+        "string_address": 10770072
+      },
+      {
+        "event": 30,
+        "name": "KEY_FOCUS_AF",
+        "string_address": 10769996
+      },
+      {
+        "event": 31,
+        "name": "KEY_FOCUS_CAF",
+        "string_address": 10770036
+      },
+      {
+        "event": 32,
+        "name": "KEY_FOCUS_MF",
+        "string_address": 10770016
+      },
+      {
+        "event": 33,
+        "name": "KEY_ONEPUSH_AF",
+        "string_address": 10768572
+      },
+      {
+        "event": 34,
+        "name": "KEY_ZOOMRING_UP",
+        "string_address": 10770184
+      },
+      {
+        "event": 35,
+        "name": "KEY_ZOOMRING_DOWN",
+        "string_address": 10770204
+      },
+      {
+        "event": 36,
+        "name": "KEY_AE_LOCK",
+        "string_address": 10768592
+      },
+      {
+        "event": 37,
+        "name": "KEY_EVF_LCD",
+        "string_address": 10768644
+      },
+      {
+        "event": 38,
+        "name": "KEY_ISO",
+        "string_address": 10768856
+      },
+      {
+        "event": 39,
+        "name": "KEY_FUNCTION",
+        "string_address": 10769236
+      },
+      {
+        "event": 40,
+        "name": "KEY_EVF_OVF",
+        "string_address": 10770692
+      },
+      {
+        "event": 41,
+        "name": "KEY_AF_CSM",
+        "string_address": 10769080
+      },
+      {
+        "event": 42,
+        "name": "KEY_CMDL_PUSH",
+        "string_address": 10770708
+      },
+      {
+        "event": 43,
+        "name": "KEY_CMDL_LEFT",
+        "string_address": 10770728
+      },
+      {
+        "event": 44,
+        "name": "KEY_CMDL_RIGHT",
+        "string_address": 10770748
+      },
+      {
+        "event": 45,
+        "name": "KEY_WB",
+        "string_address": 10769048
+      },
+      {
+        "event": 46,
+        "name": "KEY_AE",
+        "string_address": 10770652
+      },
+      {
+        "event": 47,
+        "name": "KEY_RAW",
+        "string_address": 10770680
+      },
+      {
+        "event": 48,
+        "name": "KEY_AF_LOCK",
+        "string_address": 10769256
+      },
+      {
+        "event": 49,
+        "name": "KEY_Q",
+        "string_address": 10674040
+      },
+      {
+        "event": 50,
+        "name": "KEY_EYE_SENSOR",
+        "string_address": 10769128
+      },
+      {
+        "event": 51,
+        "name": "KEY_MOVIE_REC",
+        "string_address": 10769012
+      },
+      {
+        "event": 52,
+        "name": "KEY_FLASH_EXT",
+        "string_address": 10769108
+      },
+      {
+        "event": 53,
+        "name": "KEY_EXT_MICROPHONE",
+        "string_address": 10674048
+      },
+      {
+        "event": 54,
+        "name": "KEY_WLAN",
+        "string_address": 10769220
+      },
+      {
+        "event": 55,
+        "name": "KEY_LENS_DET",
+        "string_address": 10772764
+      },
+      {
+        "event": 56,
+        "name": "KEY_MA_MENU",
+        "string_address": 10674068
+      },
+      {
+        "event": 57,
+        "name": "KEY_CTRLRING_ZOOM_TELE",
+        "string_address": 10770340
+      },
+      {
+        "event": 58,
+        "name": "KEY_CTRLRING_ZOOM_TELE2",
+        "string_address": 10770368
+      },
+      {
+        "event": 59,
+        "name": "KEY_CTRLRING_ZOOM_WIDE",
+        "string_address": 10770396
+      },
+      {
+        "event": 60,
+        "name": "KEY_CTRLRING_ZOOM_WIDE2",
+        "string_address": 10770424
+      },
+      {
+        "event": 61,
+        "name": "KEY_FUNCTION3",
+        "string_address": 10674080
+      },
+      {
+        "event": 62,
+        "name": "KEY_ND_FILTER",
+        "string_address": 10674096
+      },
+      {
+        "event": 63,
+        "name": "KEYEVENT_KEY_END",
+        "string_address": 10674112
+      },
+      {
+        "event": 257,
+        "name": "KEY_RING_UP_4",
+        "string_address": 10770800
+      },
+      {
+        "event": 258,
+        "name": "KEY_RING_UP_3",
+        "string_address": 10770820
+      },
+      {
+        "event": 259,
+        "name": "KEY_RING_UP_2",
+        "string_address": 10770840
+      },
+      {
+        "event": 260,
+        "name": "KEY_RING_UP_1",
+        "string_address": 10770860
+      },
+      {
+        "event": 261,
+        "name": "KEY_RING_STOP",
+        "string_address": 10770880
+      },
+      {
+        "event": 262,
+        "name": "KEY_RING_DOWN_1",
+        "string_address": 10770900
+      },
+      {
+        "event": 263,
+        "name": "KEY_RING_DOWN_2",
+        "string_address": 10770920
+      },
+      {
+        "event": 264,
+        "name": "KEY_RING_DOWN_3",
+        "string_address": 10770940
+      },
+      {
+        "event": 265,
+        "name": "KEY_RING_DOWN_4",
+        "string_address": 10770960
+      },
+      {
+        "event": 266,
+        "name": "KEYEVENT_KEY_LXLENS_END",
+        "string_address": 10674132
+      },
+      {
+        "event": 512,
+        "name": "KEY_HVS_0",
+        "string_address": 10674156
+      },
+      {
+        "event": 513,
+        "name": "KEY_HVS_90",
+        "string_address": 10674168
+      },
+      {
+        "event": 514,
+        "name": "KEY_HVS_180",
+        "string_address": 10674180
+      },
+      {
+        "event": 515,
+        "name": "KEY_HVS_270",
+        "string_address": 10674192
+      },
+      {
+        "event": 516,
+        "name": "KEY_RING_OFF",
+        "string_address": 10770092
+      },
+      {
+        "event": 517,
+        "name": "KEY_RING_STDBY",
+        "string_address": 10770112
+      },
+      {
+        "event": 518,
+        "name": "KEY_RING_ON",
+        "string_address": 10770132
+      },
+      {
+        "event": 519,
+        "name": "KEY_WHEELDIAL_CW",
+        "string_address": 10770228
+      },
+      {
+        "event": 520,
+        "name": "KEY_WHEELDIAL_CCW",
+        "string_address": 10770252
+      },
+      {
+        "event": 521,
+        "name": "KEY_RING_UP",
+        "string_address": 10770148
+      },
+      {
+        "event": 522,
+        "name": "KEY_RING_DOWN",
+        "string_address": 10770164
+      },
+      {
+        "event": 523,
+        "name": "KEY_FOCUS_RING_MOVE",
+        "string_address": 10770980
+      },
+      {
+        "event": 524,
+        "name": "KEY_FOCUS_RING_LEFT",
+        "string_address": 10674204
+      },
+      {
+        "event": 525,
+        "name": "KEY_FOCUS_RING_RIGHT",
+        "string_address": 10674224
+      },
+      {
+        "event": 526,
+        "name": "KEY_CTRLRING_CW",
+        "string_address": 10770300
+      },
+      {
+        "event": 527,
+        "name": "KEY_CTRLRING_CCW",
+        "string_address": 10770276
+      },
+      {
+        "event": 528,
+        "name": "KEY_CTRLRING_MF",
+        "string_address": 10770320
+      },
+      {
+        "event": 529,
+        "name": "KEY_AEAF_LOCK",
+        "string_address": 10769060
+      },
+      {
+        "event": 530,
+        "name": "KEY_R1_S1",
+        "string_address": 10674248
+      },
+      {
+        "event": 531,
+        "name": "KEY_R1_S2",
+        "string_address": 10674260
+      },
+      {
+        "event": 532,
+        "name": "KEY_R2_S1",
+        "string_address": 10674272
+      },
+      {
+        "event": 533,
+        "name": "KEY_R2_S2",
+        "string_address": 10674284
+      },
+      {
+        "event": 534,
+        "name": "KEY_STARTFACT_CDW",
+        "string_address": 10674296
+      },
+      {
+        "event": 535,
+        "name": "KEY_STARTFACT_POWER",
+        "string_address": 10674316
+      },
+      {
+        "event": 536,
+        "name": "KEY_STARTFACT_S1",
+        "string_address": 10674336
+      },
+      {
+        "event": 537,
+        "name": "KEY_EXT_TERMINAL_DETECT",
+        "string_address": 10674356
+      },
+      {
+        "event": 538,
+        "name": "KEY_METER_SPOT",
+        "string_address": 10770592
+      },
+      {
+        "event": 539,
+        "name": "KEY_METER_MULTI",
+        "string_address": 10770612
+      },
+      {
+        "event": 540,
+        "name": "KEY_METER_AVE",
+        "string_address": 10770632
+      },
+      {
+        "event": 541,
+        "name": "KEY_DOOR",
+        "string_address": 10674380
+      },
+      {
+        "event": 542,
+        "name": "KEY_FACEDETECT",
+        "string_address": 10768816
+      },
+      {
+        "event": 543,
+        "name": "KEY_MACRO",
+        "string_address": 10768524
+      },
+      {
+        "event": 544,
+        "name": "KEY_PS",
+        "string_address": 10768756
+      },
+      {
+        "event": 545,
+        "name": "KEY_CRD_DET",
+        "string_address": 10674392
+      },
+      {
+        "event": 546,
+        "name": "KEY_CRD_PLAY",
+        "string_address": 10674404
+      },
+      {
+        "event": 547,
+        "name": "KEY_CRD_USB",
+        "string_address": 10674420
+      },
+      {
+        "event": 548,
+        "name": "KEY_VIEW",
+        "string_address": 10770664
+      },
+      {
+        "event": 549,
+        "name": "KEY_EV",
+        "string_address": 10769096
+      },
+      {
+        "event": 550,
+        "name": "KEY_FUNCTION2",
+        "string_address": 10674432
+      },
+      {
+        "event": 551,
+        "name": "KEY_WIFI",
+        "string_address": 10674448
+      },
+      {
+        "event": 552,
+        "name": "KEY_HOME",
+        "string_address": 10768724
+      },
+      {
+        "event": 553,
+        "name": "KEY_INFO",
+        "string_address": 10768540
+      },
+      {
+        "event": 554,
+        "name": "KEY_METER",
+        "string_address": 10768456
+      },
+      {
+        "event": 555,
+        "name": "KEY_LDISP",
+        "string_address": 10674460
+      },
+      {
+        "event": 556,
+        "name": "KEY_FOCUS",
+        "string_address": 10769272
+      },
+      {
+        "event": 557,
+        "name": "KEY_DELETE",
+        "string_address": 10769288
+      },
+      {
+        "event": 558,
+        "name": "KEY_CMD2_LEFT",
+        "string_address": 10770452
+      },
+      {
+        "event": 559,
+        "name": "KEY_CMD2_RIGHT",
+        "string_address": 10770476
+      },
+      {
+        "event": 560,
+        "name": "KEY_EXTFUNCTION",
+        "string_address": 10769304
+      },
+      {
+        "event": 561,
+        "name": "KEY_GRIP_CMDL_LEFT",
+        "string_address": 10770496
+      },
+      {
+        "event": 562,
+        "name": "KEY_GRIP_CMDL_RIGHT",
+        "string_address": 10770520
+      },
+      {
+        "event": 563,
+        "name": "KEY_GRIP_CMD2_LEFT",
+        "string_address": 10770544
+      },
+      {
+        "event": 564,
+        "name": "KEY_GRIP_CMD2_RIGHT",
+        "string_address": 10770568
+      },
+      {
+        "event": 565,
+        "name": "KEY_CMD2_PUSH",
+        "string_address": 10674472
+      },
+      {
+        "event": 566,
+        "name": "KEY_SP_NIGHTVIEW",
+        "string_address": 10769420
+      },
+      {
+        "event": 567,
+        "name": "KEY_SP_NATURALPHOT",
+        "string_address": 10769444
+      },
+      {
+        "event": 568,
+        "name": "KEY_SP_BLURREDUCTION",
+        "string_address": 10674488
+      },
+      {
+        "event": 569,
+        "name": "KEY_SP_NATURALANDFLASH_MODE",
+        "string_address": 10769688
+      },
+      {
+        "event": 570,
+        "name": "KEYEVENT_KEY_UNUSED_END",
+        "string_address": 10674512
+      },
+      {
+        "event": 768,
+        "name": "KEY_PLAY_MODE",
+        "string_address": 10769928
+      },
+      {
+        "event": 769,
+        "name": "KEY_REC_MODE",
+        "string_address": 10769948
+      },
+      {
+        "event": 770,
+        "name": "KEY_AUTO_MODE",
+        "string_address": 10674536
+      },
+      {
+        "event": 771,
+        "name": "KEY_QUICK_MODE",
+        "string_address": 10674552
+      },
+      {
+        "event": 772,
+        "name": "KEY_SP_MODE",
+        "string_address": 10674568
+      },
+      {
+        "event": 773,
+        "name": "KEY_SP2_MODE",
+        "string_address": 10769720
+      },
+      {
+        "event": 774,
+        "name": "KEY_SR_AUTO_MODE",
+        "string_address": 10769792
+      },
+      {
+        "event": 775,
+        "name": "KEY_SP_PORTRAIT",
+        "string_address": 10769356
+      },
+      {
+        "event": 776,
+        "name": "KEY_SP_LANDSCAPE",
+        "string_address": 10769376
+      },
+      {
+        "event": 777,
+        "name": "KEY_SP_SPORTS",
+        "string_address": 10769400
+      },
+      {
+        "event": 778,
+        "name": "KEY_PROGRAM_MODE",
+        "string_address": 10674580
+      },
+      {
+        "event": 779,
+        "name": "KEY_SHUTTER_MODE",
+        "string_address": 10674600
+      },
+      {
+        "event": 780,
+        "name": "KEY_APERTURE_MODE",
+        "string_address": 10674620
+      },
+      {
+        "event": 781,
+        "name": "KEY_AS_MODE",
+        "string_address": 10674640
+      },
+      {
+        "event": 782,
+        "name": "KEY_MANUAL_MODE",
+        "string_address": 10674652
+      },
+      {
+        "event": 783,
+        "name": "KEY_VOICE_MODE",
+        "string_address": 10674668
+      },
+      {
+        "event": 784,
+        "name": "KEY_MOVIE_MODE",
+        "string_address": 10674684
+      },
+      {
+        "event": 785,
+        "name": "KEY_SETUP_MODE",
+        "string_address": 10769560
+      },
+      {
+        "event": 786,
+        "name": "KEY_PSAM_MODE",
+        "string_address": 10674700
+      },
+      {
+        "event": 787,
+        "name": "KEY_C1_MODE",
+        "string_address": 10769740
+      },
+      {
+        "event": 788,
+        "name": "KEY_C2_MODE",
+        "string_address": 10769756
+      },
+      {
+        "event": 789,
+        "name": "KEY_C3_MODE",
+        "string_address": 10769884
+      },
+      {
+        "event": 790,
+        "name": "KEY_FSB_MODE",
+        "string_address": 10769772
+      },
+      {
+        "event": 791,
+        "name": "KEY_EXR_MODE",
+        "string_address": 10769816
+      },
+      {
+        "event": 792,
+        "name": "KEY_ADVANCE_MODE",
+        "string_address": 10769836
+      },
+      {
+        "event": 793,
+        "name": "KEY_ADVANCE_FILTER_MODE",
+        "string_address": 10769900
+      },
+      {
+        "event": 794,
+        "name": "KEY_PANORAMA_MODE",
+        "string_address": 10769860
+      },
+      {
+        "event": 795,
+        "name": "KEY_SHUTTER_DIAL_A",
+        "string_address": 10771004
+      },
+      {
+        "event": 796,
+        "name": "KEY_SHUTTER_DIAL_1_4000",
+        "string_address": 10771028
+      },
+      {
+        "event": 797,
+        "name": "KEY_SHUTTER_DIAL_1_2000",
+        "string_address": 10771056
+      },
+      {
+        "event": 798,
+        "name": "KEY_SHUTTER_DIAL_1_1000",
+        "string_address": 10771084
+      },
+      {
+        "event": 799,
+        "name": "KEY_SHUTTER_DIAL_1_500",
+        "string_address": 10771112
+      },
+      {
+        "event": 800,
+        "name": "KEY_SHUTTER_DIAL_1_250",
+        "string_address": 10771140
+      },
+      {
+        "event": 801,
+        "name": "KEY_SHUTTER_DIAL_1_180",
+        "string_address": 10771168
+      },
+      {
+        "event": 802,
+        "name": "KEY_SHUTTER_DIAL_1_125",
+        "string_address": 10771196
+      },
+      {
+        "event": 803,
+        "name": "KEY_SHUTTER_DIAL_1_60",
+        "string_address": 10771224
+      },
+      {
+        "event": 804,
+        "name": "KEY_SHUTTER_DIAL_1_30",
+        "string_address": 10771252
+      },
+      {
+        "event": 805,
+        "name": "KEY_SHUTTER_DIAL_1_15",
+        "string_address": 10771280
+      },
+      {
+        "event": 806,
+        "name": "KEY_SHUTTER_DIAL_1_8",
+        "string_address": 10771308
+      },
+      {
+        "event": 807,
+        "name": "KEY_SHUTTER_DIAL_1_4",
+        "string_address": 10771336
+      },
+      {
+        "event": 808,
+        "name": "KEY_SHUTTER_DIAL_1_2",
+        "string_address": 10771364
+      },
+      {
+        "event": 809,
+        "name": "KEY_SHUTTER_DIAL_1_1",
+        "string_address": 10771392
+      },
+      {
+        "event": 810,
+        "name": "KEY_SHUTTER_DIAL_T",
+        "string_address": 10771420
+      },
+      {
+        "event": 811,
+        "name": "KEY_SHUTTER_DIAL_B",
+        "string_address": 10771444
+      },
+      {
+        "event": 812,
+        "name": "KEY_EXP_DIAL_P3",
+        "string_address": 10771468
+      },
+      {
+        "event": 813,
+        "name": "KEY_EXP_DIAL_P8_3",
+        "string_address": 10771488
+      },
+      {
+        "event": 814,
+        "name": "KEY_EXP_DIAL_P7_3",
+        "string_address": 10771512
+      },
+      {
+        "event": 815,
+        "name": "KEY_EXP_DIAL_P2",
+        "string_address": 10771536
+      },
+      {
+        "event": 816,
+        "name": "KEY_EXP_DIAL_P5_3",
+        "string_address": 10771556
+      },
+      {
+        "event": 817,
+        "name": "KEY_EXP_DIAL_P4_3",
+        "string_address": 10771580
+      },
+      {
+        "event": 818,
+        "name": "KEY_EXP_DIAL_P1",
+        "string_address": 10771604
+      },
+      {
+        "event": 819,
+        "name": "KEY_EXP_DIAL_P2_3",
+        "string_address": 10771624
+      },
+      {
+        "event": 820,
+        "name": "KEY_EXP_DIAL_P1_3",
+        "string_address": 10771648
+      },
+      {
+        "event": 821,
+        "name": "KEY_EXP_DIAL_0",
+        "string_address": 10771672
+      },
+      {
+        "event": 822,
+        "name": "KEY_EXP_DIAL_M1_3",
+        "string_address": 10771692
+      },
+      {
+        "event": 823,
+        "name": "KEY_EXP_DIAL_M2_3",
+        "string_address": 10771716
+      },
+      {
+        "event": 824,
+        "name": "KEY_EXP_DIAL_M1",
+        "string_address": 10771740
+      },
+      {
+        "event": 825,
+        "name": "KEY_EXP_DIAL_M4_3",
+        "string_address": 10771760
+      },
+      {
+        "event": 826,
+        "name": "KEY_EXP_DIAL_M5_3",
+        "string_address": 10771784
+      },
+      {
+        "event": 827,
+        "name": "KEY_EXP_DIAL_M2",
+        "string_address": 10771808
+      },
+      {
+        "event": 828,
+        "name": "KEY_EXP_DIAL_M7_3",
+        "string_address": 10771828
+      },
+      {
+        "event": 829,
+        "name": "KEY_EXP_DIAL_M8_3",
+        "string_address": 10771852
+      },
+      {
+        "event": 830,
+        "name": "KEY_EXP_DIAL_M3",
+        "string_address": 10771876
+      },
+      {
+        "event": 831,
+        "name": "KEY_JIGBOOT",
+        "string_address": 10674716
+      },
+      {
+        "event": 832,
+        "name": "KEYEVENT_MODE_END",
+        "string_address": 10674728
+      },
+      {
+        "event": 1024,
+        "name": "KEY_M_IRIS_A",
+        "string_address": 10771896
+      },
+      {
+        "event": 1025,
+        "name": "KEY_M_IRIS_0",
+        "string_address": 10772056
+      },
+      {
+        "event": 1026,
+        "name": "KEY_M_IRIS_1",
+        "string_address": 10772076
+      },
+      {
+        "event": 1027,
+        "name": "KEY_M_IRIS_2",
+        "string_address": 10772096
+      },
+      {
+        "event": 1028,
+        "name": "KEY_M_IRIS_3",
+        "string_address": 10772116
+      },
+      {
+        "event": 1029,
+        "name": "KEY_M_IRIS_4",
+        "string_address": 10772136
+      },
+      {
+        "event": 1030,
+        "name": "KEY_M_IRIS_5",
+        "string_address": 10772156
+      },
+      {
+        "event": 1031,
+        "name": "KEY_M_IRIS_6",
+        "string_address": 10772176
+      },
+      {
+        "event": 1032,
+        "name": "KEY_M_IRIS_7",
+        "string_address": 10772196
+      },
+      {
+        "event": 1033,
+        "name": "KEY_M_IRIS_8",
+        "string_address": 10772216
+      },
+      {
+        "event": 1034,
+        "name": "KEY_M_IRIS_9",
+        "string_address": 10772236
+      },
+      {
+        "event": 1035,
+        "name": "KEY_M_IRIS_10",
+        "string_address": 10772256
+      },
+      {
+        "event": 1036,
+        "name": "KEY_M_IRIS_11",
+        "string_address": 10772276
+      },
+      {
+        "event": 1037,
+        "name": "KEY_M_IRIS_12",
+        "string_address": 10772296
+      },
+      {
+        "event": 1038,
+        "name": "KEY_M_IRIS_13",
+        "string_address": 10772316
+      },
+      {
+        "event": 1039,
+        "name": "KEY_M_IRIS_14",
+        "string_address": 10772336
+      },
+      {
+        "event": 1040,
+        "name": "KEY_M_IRIS_15",
+        "string_address": 10772356
+      },
+      {
+        "event": 1041,
+        "name": "KEY_M_IRIS_16",
+        "string_address": 10772376
+      },
+      {
+        "event": 1042,
+        "name": "KEY_M_IRIS_17",
+        "string_address": 10772396
+      },
+      {
+        "event": 1043,
+        "name": "KEY_M_IRIS_18",
+        "string_address": 10772416
+      },
+      {
+        "event": 1044,
+        "name": "KEY_M_IRIS_19",
+        "string_address": 10772436
+      },
+      {
+        "event": 1045,
+        "name": "KEY_M_IRIS_20",
+        "string_address": 10772456
+      },
+      {
+        "event": 1046,
+        "name": "KEY_M_IRIS_21",
+        "string_address": 10772476
+      },
+      {
+        "event": 1047,
+        "name": "KEY_M_IRIS_22",
+        "string_address": 10772496
+      },
+      {
+        "event": 1048,
+        "name": "KEY_M_IRIS_23",
+        "string_address": 10772516
+      },
+      {
+        "event": 1049,
+        "name": "KEY_M_IRIS_24",
+        "string_address": 10772536
+      },
+      {
+        "event": 1050,
+        "name": "KEY_M_IRIS_25",
+        "string_address": 10772556
+      },
+      {
+        "event": 1051,
+        "name": "KEY_M_IRIS_26",
+        "string_address": 10772576
+      },
+      {
+        "event": 1052,
+        "name": "KEY_M_IRIS_27",
+        "string_address": 10772596
+      },
+      {
+        "event": 1053,
+        "name": "KEY_M_IRIS_28",
+        "string_address": 10772616
+      },
+      {
+        "event": 1054,
+        "name": "KEY_M_IRIS_29",
+        "string_address": 10772636
+      },
+      {
+        "event": 1055,
+        "name": "KEY_M_IRIS_30",
+        "string_address": 10772656
+      },
+      {
+        "event": 1056,
+        "name": "LENS_POWER_ON",
+        "string_address": 10678980
+      },
+      {
+        "event": 1057,
+        "name": "LENS_POWER_OFF",
+        "string_address": 10678960
+      },
+      {
+        "event": 1058,
+        "name": "LENS_MA",
+        "string_address": 10674748
+      },
+      {
+        "event": 1059,
+        "name": "KEY_OIS",
+        "string_address": 10674756
+      },
+      {
+        "event": 1060,
+        "name": "KEY_IRIS_RING_MOVE",
+        "string_address": 10772676
+      },
+      {
+        "event": 1061,
+        "name": "KEY_IRIS_AUTO",
+        "string_address": 10772700
+      },
+      {
+        "event": 1062,
+        "name": "KEY_FOCUS_DIST",
+        "string_address": 10772720
+      },
+      {
+        "event": 1063,
+        "name": "KEY_FOCUS_RING_POS",
+        "string_address": 10772740
+      },
+      {
+        "event": 1067,
+        "name": "KEYEVENT_MODE_LXLENS_END",
+        "string_address": 10674764
+      },
+      {
+        "event": 1280,
+        "name": "KEY_M_IRIS_F16",
+        "string_address": 10771916
+      },
+      {
+        "event": 1281,
+        "name": "KEY_M_IRIS_F14",
+        "string_address": 10674792
+      },
+      {
+        "event": 1282,
+        "name": "KEY_M_IRIS_F13",
+        "string_address": 10674808
+      },
+      {
+        "event": 1283,
+        "name": "KEY_M_IRIS_F11",
+        "string_address": 10771936
+      },
+      {
+        "event": 1284,
+        "name": "KEY_M_IRIS_F10",
+        "string_address": 10674824
+      },
+      {
+        "event": 1285,
+        "name": "KEY_M_IRIS_F9",
+        "string_address": 10674840
+      },
+      {
+        "event": 1286,
+        "name": "KEY_M_IRIS_F8",
+        "string_address": 10771956
+      },
+      {
+        "event": 1287,
+        "name": "KEY_M_IRIS_F7_1",
+        "string_address": 10674856
+      },
+      {
+        "event": 1288,
+        "name": "KEY_M_IRIS_F6_4",
+        "string_address": 10674872
+      },
+      {
+        "event": 1289,
+        "name": "KEY_M_IRIS_F5_6",
+        "string_address": 10771976
+      },
+      {
+        "event": 1290,
+        "name": "KEY_M_IRIS_F5_0",
+        "string_address": 10674888
+      },
+      {
+        "event": 1291,
+        "name": "KEY_M_IRIS_F4_5",
+        "string_address": 10674904
+      },
+      {
+        "event": 1292,
+        "name": "KEY_M_IRIS_F4_0",
+        "string_address": 10771996
+      },
+      {
+        "event": 1293,
+        "name": "KEY_M_IRIS_F3_6",
+        "string_address": 10674920
+      },
+      {
+        "event": 1294,
+        "name": "KEY_M_IRIS_F3_2",
+        "string_address": 10674936
+      },
+      {
+        "event": 1295,
+        "name": "KEY_M_IRIS_F2_8",
+        "string_address": 10772016
+      },
+      {
+        "event": 1296,
+        "name": "KEY_M_IRIS_F2_5",
+        "string_address": 10674952
+      },
+      {
+        "event": 1297,
+        "name": "KEY_M_IRIS_F2_2",
+        "string_address": 10674968
+      },
+      {
+        "event": 1298,
+        "name": "KEY_M_IRIS_F2_0",
+        "string_address": 10772036
+      },
+      {
+        "event": 1299,
+        "name": "KEY_LCD_BACKFACE",
+        "string_address": 10674984
+      },
+      {
+        "event": 1300,
+        "name": "KEY_LCD_FRONTFACE",
+        "string_address": 10675004
+      },
+      {
+        "event": 1301,
+        "name": "KEY_LCD_TILT",
+        "string_address": 10675024
+      },
+      {
+        "event": 1302,
+        "name": "KEY_LCD_OFF",
+        "string_address": 10675040
+      },
+      {
+        "event": 1303,
+        "name": "KEY_ISO_A",
+        "string_address": 10772784
+      },
+      {
+        "event": 1304,
+        "name": "KEY_ISO_L",
+        "string_address": 10772800
+      },
+      {
+        "event": 1305,
+        "name": "KEY_ISO_200",
+        "string_address": 10772816
+      },
+      {
+        "event": 1306,
+        "name": "KEY_ISO_200_1_3",
+        "string_address": 10772832
+      },
+      {
+        "event": 1307,
+        "name": "KEY_ISO_200_2_3",
+        "string_address": 10772852
+      },
+      {
+        "event": 1308,
+        "name": "KEY_ISO_400",
+        "string_address": 10772872
+      },
+      {
+        "event": 1309,
+        "name": "KEY_ISO_400_1_3",
+        "string_address": 10772888
+      },
+      {
+        "event": 1310,
+        "name": "KEY_ISO_400_2_3",
+        "string_address": 10772908
+      },
+      {
+        "event": 1311,
+        "name": "KEY_ISO_800",
+        "string_address": 10772928
+      },
+      {
+        "event": 1312,
+        "name": "KEY_ISO_800_1_3",
+        "string_address": 10772944
+      },
+      {
+        "event": 1313,
+        "name": "KEY_ISO_800_2_3",
+        "string_address": 10772964
+      },
+      {
+        "event": 1314,
+        "name": "KEY_ISO_1600",
+        "string_address": 10772984
+      },
+      {
+        "event": 1315,
+        "name": "KEY_ISO_1600_1_3",
+        "string_address": 10773004
+      },
+      {
+        "event": 1316,
+        "name": "KEY_ISO_1600_2_3",
+        "string_address": 10773028
+      },
+      {
+        "event": 1317,
+        "name": "KEY_ISO_3200",
+        "string_address": 10773052
+      },
+      {
+        "event": 1318,
+        "name": "KEY_ISO_3200_1_3",
+        "string_address": 10773072
+      },
+      {
+        "event": 1319,
+        "name": "KEY_ISO_3200_2_3",
+        "string_address": 10773096
+      },
+      {
+        "event": 1320,
+        "name": "KEY_ISO_6400",
+        "string_address": 10773120
+      },
+      {
+        "event": 1321,
+        "name": "KEY_ISO_H1",
+        "string_address": 10773140
+      },
+      {
+        "event": 1322,
+        "name": "KEY_ISO_H2",
+        "string_address": 10773156
+      },
+      {
+        "event": 1323,
+        "name": "KEY_DRIVE_PANORAMA",
+        "string_address": 10773172
+      },
+      {
+        "event": 1324,
+        "name": "KEY_DRIVE_ADV_FILTER",
+        "string_address": 10773196
+      },
+      {
+        "event": 1325,
+        "name": "KEY_DRIVE_MULTIPLAYING",
+        "string_address": 10773224
+      },
+      {
+        "event": 1326,
+        "name": "KEY_DRIVE_ONESHOT",
+        "string_address": 10773252
+      },
+      {
+        "event": 1327,
+        "name": "KEY_DRIVE_CONT_LOW",
+        "string_address": 10773276
+      },
+      {
+        "event": 1328,
+        "name": "KEY_DRIVE_CONT_HIGH",
+        "string_address": 10773300
+      },
+      {
+        "event": 1329,
+        "name": "KEY_DRIVE_BKT",
+        "string_address": 10773324
+      },
+      {
+        "event": 1330,
+        "name": "KEY_DRIVE_ADV_FILTER2",
+        "string_address": 10675052
+      },
+      {
+        "event": 1331,
+        "name": "KEY_DRIVE_BKT2",
+        "string_address": 10675076
+      },
+      {
+        "event": 1332,
+        "name": "KEY_RECL_AUTO",
+        "string_address": 10675092
+      },
+      {
+        "event": 1333,
+        "name": "KEY_RECL_MANUAL",
+        "string_address": 10675108
+      },
+      {
+        "event": 1334,
+        "name": "KEYEVENT_MODE_UNUSED_END",
+        "string_address": 10675124
+      },
+      {
+        "event": 1536,
+        "name": "BATT_HIGH",
+        "string_address": 10675152
+      },
+      {
+        "event": 1537,
+        "name": "BATT_HALF",
+        "string_address": 10675164
+      },
+      {
+        "event": 1538,
+        "name": "BATT_PREEND",
+        "string_address": 10675176
+      },
+      {
+        "event": 1539,
+        "name": "BATT_END",
+        "string_address": 10675188
+      },
+      {
+        "event": 1540,
+        "name": "KEYEVENT_BATT_END",
+        "string_address": 10675200
+      },
+      {
+        "event": 1792,
+        "name": "USB_BUSY",
+        "string_address": 10675220
+      },
+      {
+        "event": 1793,
+        "name": "USB_UNMOUNT",
+        "string_address": 10675232
+      },
+      {
+        "event": 1794,
+        "name": "USB_MEDIA_ACCESS_START",
+        "string_address": 10675244
+      },
+      {
+        "event": 1795,
+        "name": "USB_MEDIA_ACCESS_STOP",
+        "string_address": 10675268
+      },
+      {
+        "event": 2048,
+        "name": "STRB_READY",
+        "string_address": 10675292
+      },
+      {
+        "event": 2049,
+        "name": "STRB_NOT_READY",
+        "string_address": 10675304
+      },
+      {
+        "event": 2050,
+        "name": "STRB_DISABLE",
+        "string_address": 10675320
+      },
+      {
+        "event": 2051,
+        "name": "DPOF_BUSY",
+        "string_address": 10675336
+      },
+      {
+        "event": 2052,
+        "name": "DPOF_READY",
+        "string_address": 10675348
+      },
+      {
+        "event": 2053,
+        "name": "WARN_AE",
+        "string_address": 10675360
+      },
+      {
+        "event": 2054,
+        "name": "WARN_AE_OFF",
+        "string_address": 10675368
+      },
+      {
+        "event": 2055,
+        "name": "WARN_AF",
+        "string_address": 10675380
+      },
+      {
+        "event": 2056,
+        "name": "WARN_AF_OFF",
+        "string_address": 10665552
+      },
+      {
+        "event": 2057,
+        "name": "WARN_HAND",
+        "string_address": 10675388
+      },
+      {
+        "event": 2058,
+        "name": "WARN_HAND_OFF",
+        "string_address": 10665432
+      },
+      {
+        "event": 2059,
+        "name": "WARN_UNDER",
+        "string_address": 10675400
+      },
+      {
+        "event": 2060,
+        "name": "WARN_UNDER_OFF",
+        "string_address": 10675412
+      },
+      {
+        "event": 2061,
+        "name": "WARN_OVER",
+        "string_address": 10675428
+      },
+      {
+        "event": 2062,
+        "name": "WARN_OVER_OFF",
+        "string_address": 10675440
+      },
+      {
+        "event": 2063,
+        "name": "LEVEL_SENS_UPDATE",
+        "string_address": 10675456
+      },
+      {
+        "event": 2064,
+        "name": "CMOSTEMP_NORMAL",
+        "string_address": 10769152
+      },
+      {
+        "event": 2065,
+        "name": "CMOSTEMP_HIGH",
+        "string_address": 10769176
+      },
+      {
+        "event": 2066,
+        "name": "CMOSTEMP_LIMIT",
+        "string_address": 10769200
+      },
+      {
+        "event": 2067,
+        "name": "FLASH_EXT_CHARGE_EMPTY",
+        "string_address": 10675476
+      },
+      {
+        "event": 2068,
+        "name": "FLASH_EXT_CHARGE_HALF",
+        "string_address": 10675500
+      },
+      {
+        "event": 2069,
+        "name": "FLASH_EXT_CHARGE_FULL",
+        "string_address": 10675524
+      },
+      {
+        "event": 2070,
+        "name": "COMPLETE",
+        "string_address": 10675724
+      },
+      {
+        "event": 2071,
+        "name": "DISP_DONE",
+        "string_address": 10675548
+      },
+      {
+        "event": 2072,
+        "name": "DISP_END",
+        "string_address": 10675560
+      },
+      {
+        "event": 2073,
+        "name": "REC_DONE",
+        "string_address": 10675572
+      },
+      {
+        "event": 2074,
+        "name": "REC_HEATING",
+        "string_address": 10675584
+      },
+      {
+        "event": 2075,
+        "name": "REC_ABORT",
+        "string_address": 10675596
+      },
+      {
+        "event": 2076,
+        "name": "ENABLE_REC",
+        "string_address": 10675608
+      },
+      {
+        "event": 2077,
+        "name": "ENABLE_KEY",
+        "string_address": 10675620
+      },
+      {
+        "event": 2078,
+        "name": "READ_DONE",
+        "string_address": 10675632
+      },
+      {
+        "event": 2079,
+        "name": "PLAY_DONE",
+        "string_address": 10675644
+      },
+      {
+        "event": 2080,
+        "name": "PLAY_APP2_DONE",
+        "string_address": 10675656
+      },
+      {
+        "event": 2081,
+        "name": "FILE_SEARCH_READY",
+        "string_address": 10675672
+      },
+      {
+        "event": 2082,
+        "name": "WRITING",
+        "string_address": 10675692
+      },
+      {
+        "event": 2083,
+        "name": "WRITING_COMPLETE",
+        "string_address": 10675700
+      },
+      {
+        "event": 2084,
+        "name": "OVERCOMPLETE",
+        "string_address": 10675720
+      },
+      {
+        "event": 2085,
+        "name": "OVER_COMPLETE",
+        "string_address": 10675736
+      },
+      {
+        "event": 2086,
+        "name": "NOSET_COMPLETE",
+        "string_address": 10675752
+      },
+      {
+        "event": 2087,
+        "name": "S1_AF_FOCALIZE",
+        "string_address": 10675768
+      },
+      {
+        "event": 2088,
+        "name": "S1_COMPLETE",
+        "string_address": 10675784
+      },
+      {
+        "event": 2089,
+        "name": "MULTIPLYING",
+        "string_address": 10675796
+      },
+      {
+        "event": 2090,
+        "name": "EXPOSURE_DONE",
+        "string_address": 10675808
+      },
+      {
+        "event": 2091,
+        "name": "PINP_FRAME_ON",
+        "string_address": 10675824
+      },
+      {
+        "event": 2092,
+        "name": "PINP_FRAME_OFF",
+        "string_address": 10675840
+      },
+      {
+        "event": 2093,
+        "name": "UPDATE_PB",
+        "string_address": 10675856
+      },
+      {
+        "event": 2094,
+        "name": "UPDATE_REC",
+        "string_address": 10675868
+      },
+      {
+        "event": 2095,
+        "name": "UPDATE_MEDIA",
+        "string_address": 10675880
+      },
+      {
+        "event": 2096,
+        "name": "UPDATE_SYS",
+        "string_address": 10675896
+      },
+      {
+        "event": 2097,
+        "name": "UPDATE_UPDATE",
+        "string_address": 10675908
+      },
+      {
+        "event": 2098,
+        "name": "UPDATE_GPS",
+        "string_address": 10675924
+      },
+      {
+        "event": 2099,
+        "name": "UPDATE_BATT",
+        "string_address": 10675936
+      },
+      {
+        "event": 2100,
+        "name": "UPDATE_EYEFI",
+        "string_address": 10675948
+      },
+      {
+        "event": 2101,
+        "name": "UPDATE_USB_CHARGE",
+        "string_address": 10675964
+      },
+      {
+        "event": 2102,
+        "name": "STARTUP_START",
+        "string_address": 10675984
+      },
+      {
+        "event": 2103,
+        "name": "REC_DISP_START",
+        "string_address": 10676000
+      },
+      {
+        "event": 2104,
+        "name": "REC_DISP_STOP",
+        "string_address": 10676016
+      },
+      {
+        "event": 2105,
+        "name": "ACCEPT",
+        "string_address": 10820100
+      },
+      {
+        "event": 2106,
+        "name": "REJECT",
+        "string_address": 10676032
+      },
+      {
+        "event": 2107,
+        "name": "S2_COUNT_START",
+        "string_address": 10676040
+      },
+      {
+        "event": 2108,
+        "name": "S2_SHADE_START",
+        "string_address": 10676056
+      },
+      {
+        "event": 2109,
+        "name": "S2_COMPLETE",
+        "string_address": 10676072
+      },
+      {
+        "event": 2110,
+        "name": "MOVIE_START",
+        "string_address": 10754740
+      },
+      {
+        "event": 2111,
+        "name": "CAMERA_READY",
+        "string_address": 10676084
+      },
+      {
+        "event": 2112,
+        "name": "RELEASE_READY",
+        "string_address": 10676100
+      },
+      {
+        "event": 2113,
+        "name": "PRE_PLAY_READY",
+        "string_address": 10676116
+      },
+      {
+        "event": 2114,
+        "name": "CHARGE_START",
+        "string_address": 10745576
+      },
+      {
+        "event": 2115,
+        "name": "CHARGE_STOP",
+        "string_address": 10676132
+      },
+      {
+        "event": 2116,
+        "name": "VIEW_START",
+        "string_address": 10676144
+      },
+      {
+        "event": 2117,
+        "name": "VIEW_CHANGE",
+        "string_address": 10676428
+      },
+      {
+        "event": 2118,
+        "name": "VIEW_READY",
+        "string_address": 10676156
+      },
+      {
+        "event": 2119,
+        "name": "VIEW_ABORT",
+        "string_address": 10676168
+      },
+      {
+        "event": 2120,
+        "name": "VIEW_STOP",
+        "string_address": 10676180
+      },
+      {
+        "event": 2121,
+        "name": "VIEW_AUTO_FACE_REGIST",
+        "string_address": 10676192
+      },
+      {
+        "event": 2122,
+        "name": "ABORT_RECEIVED",
+        "string_address": 10676216
+      },
+      {
+        "event": 2123,
+        "name": "WRITING_START",
+        "string_address": 10676232
+      },
+      {
+        "event": 2124,
+        "name": "WRITING_STOP",
+        "string_address": 10676248
+      },
+      {
+        "event": 2125,
+        "name": "DUST_REDUCTION_START",
+        "string_address": 10676264
+      },
+      {
+        "event": 2126,
+        "name": "DUST_REDUCTION_STOP",
+        "string_address": 10676288
+      },
+      {
+        "event": 2127,
+        "name": "HEATING",
+        "string_address": 10675588
+      },
+      {
+        "event": 2128,
+        "name": "MOVIE_ABORT",
+        "string_address": 10676308
+      },
+      {
+        "event": 2129,
+        "name": "OPENING_READY",
+        "string_address": 10676320
+      },
+      {
+        "event": 2130,
+        "name": "COPY_READY",
+        "string_address": 10676336
+      },
+      {
+        "event": 2131,
+        "name": "RED_EYE_DETECT_START",
+        "string_address": 10676348
+      },
+      {
+        "event": 2132,
+        "name": "RED_EYE_CORRECT_START",
+        "string_address": 10676372
+      },
+      {
+        "event": 2133,
+        "name": "RED_EYE_CORRECT_STOP",
+        "string_address": 10676396
+      },
+      {
+        "event": 2134,
+        "name": "RED_EYE_VIEW_CHANGE",
+        "string_address": 10676420
+      },
+      {
+        "event": 2135,
+        "name": "FACE_RECOG_COMPLETE",
+        "string_address": 10676440
+      },
+      {
+        "event": 2136,
+        "name": "FACE_RECOG_FAILS",
+        "string_address": 10676460
+      },
+      {
+        "event": 2137,
+        "name": "MICRO_FRAME",
+        "string_address": 10676480
+      },
+      {
+        "event": 2138,
+        "name": "MULTI_FRAME",
+        "string_address": 10676492
+      },
+      {
+        "event": 2139,
+        "name": "SYNTHESIS_START",
+        "string_address": 10676504
+      },
+      {
+        "event": 2140,
+        "name": "SYNTHESIS_STOP",
+        "string_address": 10676520
+      },
+      {
+        "event": 2141,
+        "name": "AUTO_SHUTTER_ENABLE",
+        "string_address": 10676536
+      },
+      {
+        "event": 2142,
+        "name": "MATCHING_FAIL",
+        "string_address": 10676556
+      },
+      {
+        "event": 2143,
+        "name": "ERR_MATCHING_ERROR",
+        "string_address": 10676572
+      },
+      {
+        "event": 2144,
+        "name": "BEAF_REC_START",
+        "string_address": 10676592
+      },
+      {
+        "event": 2145,
+        "name": "WRITING_ABORT_READY",
+        "string_address": 10676608
+      },
+      {
+        "event": 2146,
+        "name": "UPDATE_FILE",
+        "string_address": 10676628
+      },
+      {
+        "event": 2147,
+        "name": "HOLD_IMAGE",
+        "string_address": 10676640
+      },
+      {
+        "event": 2148,
+        "name": "START_AFL",
+        "string_address": 10676652
+      },
+      {
+        "event": 2149,
+        "name": "FOCUS_PRIORITY_REC_ENABLE",
+        "string_address": 10676664
+      },
+      {
+        "event": 2150,
+        "name": "IMAGE_READY",
+        "string_address": 10676692
+      },
+      {
+        "event": 2151,
+        "name": "AF_CHASE_OSD_START",
+        "string_address": 10676704
+      },
+      {
+        "event": 2152,
+        "name": "AF_CHASE_OSD_END",
+        "string_address": 10676724
+      },
+      {
+        "event": 2153,
+        "name": "EXWIFI_ABORT",
+        "string_address": 10676744
+      },
+      {
+        "event": 2154,
+        "name": "EXWIFI_APOFF",
+        "string_address": 10676760
+      },
+      {
+        "event": 2155,
+        "name": "EXWIFI_COMPLETE",
+        "string_address": 10676776
+      },
+      {
+        "event": 2156,
+        "name": "EXWIFI_PICTURE_SAVE_COMPLETE",
+        "string_address": 10676792
+      },
+      {
+        "event": 2157,
+        "name": "EXWIFI_AUTO_POWOFF_COMPLETE",
+        "string_address": 10676824
+      },
+      {
+        "event": 2158,
+        "name": "UPDATE_DPS_PAPER",
+        "string_address": 10676852
+      },
+      {
+        "event": 2159,
+        "name": "UPDATE_DPS_STATUS",
+        "string_address": 10676872
+      },
+      {
+        "event": 2160,
+        "name": "UPDATE_DPS_CAPABILITY",
+        "string_address": 10676892
+      },
+      {
+        "event": 2161,
+        "name": "FILE_ID_BUSY",
+        "string_address": 10676916
+      },
+      {
+        "event": 2162,
+        "name": "FILE_ID_READY",
+        "string_address": 10676932
+      },
+      {
+        "event": 2163,
+        "name": "IRDA_UPDATE_PROGRESS",
+        "string_address": 10676948
+      },
+      {
+        "event": 2164,
+        "name": "PCSH_EV_CAPTURE_IMAGE",
+        "string_address": 10676972
+      },
+      {
+        "event": 2165,
+        "name": "PCSH_EV_START_LIVE_IMAGE",
+        "string_address": 10676996
+      },
+      {
+        "event": 2166,
+        "name": "PCSH_EV_STOP_LIVE_IMAGE",
+        "string_address": 10677024
+      },
+      {
+        "event": 2167,
+        "name": "PCSH_EV_GET_DEV_PROP_DESC",
+        "string_address": 10677048
+      },
+      {
+        "event": 2168,
+        "name": "PCSH_EV_GET_DEV_PROP_VALUE",
+        "string_address": 10677076
+      },
+      {
+        "event": 2169,
+        "name": "PCSH_EV_SET_DEV_PROP_VALUE",
+        "string_address": 10677104
+      },
+      {
+        "event": 2170,
+        "name": "PCSH_EV_RESET_DEV_PROP_VALUE",
+        "string_address": 10677132
+      },
+      {
+        "event": 2171,
+        "name": "PCSH_EV_GET_STORAGE_INFO",
+        "string_address": 10677164
+      },
+      {
+        "event": 2172,
+        "name": "PCSH_EV_GET_IMAGE_INFO",
+        "string_address": 10677192
+      },
+      {
+        "event": 2173,
+        "name": "PCSH_EV_DEL_IMAGE",
+        "string_address": 10677216
+      },
+      {
+        "event": 2174,
+        "name": "PCSH_EV_RECEIVE_FIRMWARE",
+        "string_address": 10677236
+      },
+      {
+        "event": 2175,
+        "name": "PCSH_EV_UPDATE_FIRMWARE",
+        "string_address": 10677264
+      },
+      {
+        "event": 2176,
+        "name": "PCSH_EV_ADD_IMAGE",
+        "string_address": 10677288
+      },
+      {
+        "event": 2177,
+        "name": "PCSH_EV_CLEAR_IMAGE",
+        "string_address": 10677308
+      },
+      {
+        "event": 2178,
+        "name": "PCSH_EV_NOTIFY_DEV_PROP_CHG",
+        "string_address": 10677328
+      },
+      {
+        "event": 2179,
+        "name": "UPDATE_WIFI_STATUS",
+        "string_address": 10677356
+      },
+      {
+        "event": 2180,
+        "name": "WLAN_PROC_START",
+        "string_address": 10711016
+      },
+      {
+        "event": 2181,
+        "name": "WLAN_REMOTE_GET_PARAM_ALL",
+        "string_address": 10677376
+      },
+      {
+        "event": 2182,
+        "name": "WLAN_REMOTE_DEVICE_STATUS_CURRENT",
+        "string_address": 10677404
+      },
+      {
+        "event": 2183,
+        "name": "WLAN_REMOTE_SETPARAM",
+        "string_address": 10711040
+      },
+      {
+        "event": 2184,
+        "name": "WLAN_REMOTE_START_LIVE_VIEW",
+        "string_address": 10711072
+      },
+      {
+        "event": 2185,
+        "name": "WLAN_REMOTE_END_LIVE_VIEW",
+        "string_address": 10711108
+      },
+      {
+        "event": 2186,
+        "name": "WLAN_REMOTE_STEP_ZOOM",
+        "string_address": 10711144
+      },
+      {
+        "event": 2187,
+        "name": "WLAN_REMOTE_START_ZOOM",
+        "string_address": 10711176
+      },
+      {
+        "event": 2188,
+        "name": "WLAN_REMOTE_STOP_ZOOM",
+        "string_address": 10711208
+      },
+      {
+        "event": 2189,
+        "name": "WLAN_REMOTE_S1_LOCK",
+        "string_address": 10711240
+      },
+      {
+        "event": 2190,
+        "name": "WLAN_REMOTE_S1_LOCK_OFF",
+        "string_address": 10711268
+      },
+      {
+        "event": 2191,
+        "name": "WLAN_REMOTE_REC_CAPUTURE",
+        "string_address": 10677440
+      },
+      {
+        "event": 2192,
+        "name": "WLAN_REMOTE_CANCEL_SELFTIMER",
+        "string_address": 10711388
+      },
+      {
+        "event": 2193,
+        "name": "WLAN_REMOTE_START_MOVIE",
+        "string_address": 10711428
+      },
+      {
+        "event": 2194,
+        "name": "WLAN_REMOTE_STOP_MOVIE",
+        "string_address": 10711460
+      },
+      {
+        "event": 2195,
+        "name": "WLAN_REMOTE_CHANGE_SHUTTERSPEED",
+        "string_address": 10711492
+      },
+      {
+        "event": 2196,
+        "name": "WLAN_REMOTE_CHANGE_FNUMBER",
+        "string_address": 10711532
+      },
+      {
+        "event": 2197,
+        "name": "WLAN_REMOTE_CHANGE_EXPOSURE",
+        "string_address": 10711568
+      },
+      {
+        "event": 2198,
+        "name": "INTERVAL_SHOOT_TRIGGER",
+        "string_address": 10677468
+      },
+      {
+        "event": 2560,
+        "name": "USER1",
+        "string_address": 10677492
+      },
+      {
+        "event": 2561,
+        "name": "USER2",
+        "string_address": 10677500
+      },
+      {
+        "event": 2562,
+        "name": "USER3",
+        "string_address": 10677508
+      },
+      {
+        "event": 2563,
+        "name": "USER4",
+        "string_address": 10677516
+      },
+      {
+        "event": 2564,
+        "name": "USER5",
+        "string_address": 10677524
+      },
+      {
+        "event": 2816,
+        "name": "TP_TOUCH_ON",
+        "string_address": 10677532
+      },
+      {
+        "event": 2817,
+        "name": "TP_TOUCH_OFF",
+        "string_address": 10677544
+      },
+      {
+        "event": 2818,
+        "name": "TP_TOUCH_MOVE",
+        "string_address": 10677560
+      },
+      {
+        "event": 2819,
+        "name": "TP_TOUCH_REPEAT",
+        "string_address": 10677576
+      },
+      {
+        "event": 2820,
+        "name": "TP_TOUCH_SWEEP",
+        "string_address": 10677592
+      },
+      {
+        "event": 2821,
+        "name": "TP_TOUCH_2_ON",
+        "string_address": 10677608
+      },
+      {
+        "event": 2822,
+        "name": "TP_TOUCH_2_OFF",
+        "string_address": 10677624
+      },
+      {
+        "event": 2823,
+        "name": "TP_TOUCH_2_MOVE",
+        "string_address": 10677640
+      },
+      {
+        "event": 2824,
+        "name": "TP_TOUCH_2_REPEAT",
+        "string_address": 10677656
+      },
+      {
+        "event": 2825,
+        "name": "TP_TOUCH_2_SWEEP",
+        "string_address": 10677676
+      },
+      {
+        "event": 2826,
+        "name": "TP_TOUCH_MULTI_GESTURE",
+        "string_address": 10677696
+      },
+      {
+        "event": 2827,
+        "name": "TP_START_CALIBRATION",
+        "string_address": 10677720
+      },
+      {
+        "event": 3072,
+        "name": "FLASH_UIPEER",
+        "string_address": 10677744
+      },
+      {
+        "event": 3073,
+        "name": "FLASH_PLAYERAPP",
+        "string_address": 10677760
+      },
+      {
+        "event": 3074,
+        "name": "PLAYPEER_DECOMP",
+        "string_address": 10677776
+      },
+      {
+        "event": 3075,
+        "name": "PLAYPEER_ABORT",
+        "string_address": 10677792
+      },
+      {
+        "event": 3076,
+        "name": "PLAYPEER_BOOK",
+        "string_address": 10677808
+      },
+      {
+        "event": 3077,
+        "name": "PLAYPEER_CURRENT",
+        "string_address": 10677824
+      },
+      {
+        "event": 3078,
+        "name": "PLAYPEER_MULTI",
+        "string_address": 10677844
+      },
+      {
+        "event": 3079,
+        "name": "PLAYPEER_SEARCH",
+        "string_address": 10677860
+      }
+    ],
+    "reader": 9173276,
+    "size": 9112,
+    "sha256": "949a11b8c7c944818982b19f431932f63f21dd860b81affe2c2505149f4963b0"
+  },
+  "event_translation": null,
+  "debug_keys": [
+    {
+      "name": "EXE_M",
+      "event": 1
+    },
+    {
+      "name": "UP",
+      "event": 2
+    },
+    {
+      "name": "DOWN",
+      "event": 3
+    },
+    {
+      "name": "LEFT",
+      "event": 4
+    },
+    {
+      "name": "RIGHT",
+      "event": 5
+    },
+    {
+      "name": "POWER",
+      "event": 6
+    },
+    {
+      "name": "S1",
+      "event": 7
+    },
+    {
+      "name": "S2",
+      "event": 8
+    },
+    {
+      "name": "BARR_OP",
+      "event": 12
+    },
+    {
+      "name": "BARR_CL",
+      "event": 13
+    },
+    {
+      "name": "CRADLE",
+      "event": 545
+    },
+    {
+      "name": "ADAPTER",
+      "event": 14
+    },
+    {
+      "name": "USB",
+      "event": 15
+    },
+    {
+      "name": "DOOR",
+      "event": 541
+    },
+    {
+      "name": "CARD",
+      "event": 16
+    },
+    {
+      "name": "FMODE",
+      "event": 10
+    },
+    {
+      "name": "EXP",
+      "event": 17
+    },
+    {
+      "name": "METER",
+      "event": 554
+    },
+    {
+      "name": "TELE2",
+      "event": 20
+    },
+    {
+      "name": "WIDE2",
+      "event": 21
+    },
+    {
+      "name": "TELE",
+      "event": 18
+    },
+    {
+      "name": "WIDE",
+      "event": 19
+    },
+    {
+      "name": "AF",
+      "event": 22
+    },
+    {
+      "name": "DRIVE",
+      "event": 23
+    },
+    {
+      "name": "VIDEO",
+      "event": 24
+    },
+    {
+      "name": "HDTV",
+      "event": 25
+    },
+    {
+      "name": "CONT",
+      "event": 26
+    },
+    {
+      "name": "AS_MODE",
+      "event": 781
+    },
+    {
+      "name": "DISP_B",
+      "event": 9
+    },
+    {
+      "name": "K_HOME",
+      "event": 552
+    },
+    {
+      "name": "K_PLAY",
+      "event": 11
+    },
+    {
+      "name": "FACE",
+      "event": 542
+    },
+    {
+      "name": "CRD_P",
+      "event": 546
+    },
+    {
+      "name": "CRD_U",
+      "event": 547
+    },
+    {
+      "name": "MET_SP",
+      "event": 538
+    },
+    {
+      "name": "MET_AV",
+      "event": 540
+    },
+    {
+      "name": "MET_MU",
+      "event": 539
+    },
+    {
+      "name": "HVS_0",
+      "event": 512
+    },
+    {
+      "name": "HVS_90",
+      "event": 513
+    },
+    {
+      "name": "HVS_180",
+      "event": 514
+    },
+    {
+      "name": "HVS_270",
+      "event": 515
+    },
+    {
+      "name": "POP",
+      "event": 27
+    },
+    {
+      "name": "C_DIAL+",
+      "event": 28
+    },
+    {
+      "name": "C_DIAL-",
+      "event": 29
+    },
+    {
+      "name": "W_DIAL+",
+      "event": 519
+    },
+    {
+      "name": "W_DIAL-",
+      "event": 520
+    },
+    {
+      "name": "MF_AF_A",
+      "event": 30
+    },
+    {
+      "name": "MF_AF_C",
+      "event": 31
+    },
+    {
+      "name": "MF_AF_M",
+      "event": 32
+    },
+    {
+      "name": "1P_AF+",
+      "event": 33
+    },
+    {
+      "name": "F_RING+",
+      "event": 521
+    },
+    {
+      "name": "F_RING-",
+      "event": 522
+    },
+    {
+      "name": "Z_RING+",
+      "event": 34
+    },
+    {
+      "name": "Z_RING-",
+      "event": 35
+    },
+    {
+      "name": "AE-LOCK",
+      "event": 36
+    },
+    {
+      "name": "AF-LOCK",
+      "event": 48
+    },
+    {
+      "name": "EVF_LCD",
+      "event": 37
+    },
+    {
+      "name": "INFO",
+      "event": 553
+    },
+    {
+      "name": "AEAF_LOCK",
+      "event": 529
+    },
+    {
+      "name": "WB",
+      "event": 45
+    },
+    {
+      "name": "K_PS",
+      "event": 544
+    },
+    {
+      "name": "AE",
+      "event": 46
+    },
+    {
+      "name": "VIEW",
+      "event": 548
+    },
+    {
+      "name": "K_Q",
+      "event": 49
+    },
+    {
+      "name": "EVF_OVF",
+      "event": 40
+    },
+    {
+      "name": "MACRO",
+      "event": 543
+    },
+    {
+      "name": "CMD_PUSH",
+      "event": 42
+    },
+    {
+      "name": "CMD_LEFT",
+      "event": 43
+    },
+    {
+      "name": "CMD_RIGHT",
+      "event": 44
+    },
+    {
+      "name": "MOVIE_REC",
+      "event": 51
+    },
+    {
+      "name": "EYE_SEN",
+      "event": 50
+    },
+    {
+      "name": "RING_OFF",
+      "event": 516
+    },
+    {
+      "name": "RING_STB",
+      "event": 517
+    },
+    {
+      "name": "RING_ON",
+      "event": 518
+    },
+    {
+      "name": "FUNCTION2",
+      "event": 550
+    },
+    {
+      "name": "FUNCTION",
+      "event": 39
+    },
+    {
+      "name": "WLAN",
+      "event": 54
+    },
+    {
+      "name": "CRING+",
+      "event": 526
+    },
+    {
+      "name": "CRING-",
+      "event": 527
+    },
+    {
+      "name": "CRING_MF",
+      "event": 528
+    },
+    {
+      "name": "CR_TELE2",
+      "event": 58
+    },
+    {
+      "name": "CR_WIDE2",
+      "event": 60
+    },
+    {
+      "name": "CR_TELE",
+      "event": 57
+    },
+    {
+      "name": "CR_WIDE",
+      "event": 59
+    },
+    {
+      "name": "FOCUS",
+      "event": 556
+    },
+    {
+      "name": "DELETE",
+      "event": 557
+    },
+    {
+      "name": "CMD2_L",
+      "event": 558
+    },
+    {
+      "name": "CMD2_R",
+      "event": 559
+    },
+    {
+      "name": "EXTFUNC",
+      "event": 560
+    },
+    {
+      "name": "GRIP_C_L",
+      "event": 561
+    },
+    {
+      "name": "GRIP_C_R",
+      "event": 562
+    },
+    {
+      "name": "GRIP_C2_L",
+      "event": 563
+    },
+    {
+      "name": "GRIP_C2_R",
+      "event": 564
+    },
+    {
+      "name": "PLAY",
+      "event": 768
+    },
+    {
+      "name": "REC",
+      "event": 769
+    },
+    {
+      "name": "AUTO",
+      "event": 770
+    },
+    {
+      "name": "QUICK",
+      "event": 771
+    },
+    {
+      "name": "SP",
+      "event": 772
+    },
+    {
+      "name": "SP2",
+      "event": 773
+    },
+    {
+      "name": "SR",
+      "event": 774
+    },
+    {
+      "name": "PORTRAIT",
+      "event": 775
+    },
+    {
+      "name": "LANDSCAPE",
+      "event": 776
+    },
+    {
+      "name": "SPORTS",
+      "event": 777
+    },
+    {
+      "name": "NIGHT",
+      "event": 566
+    },
+    {
+      "name": "BLURRE",
+      "event": 568
+    },
+    {
+      "name": "NATURAL",
+      "event": 567
+    },
+    {
+      "name": "PROGRAM",
+      "event": 778
+    },
+    {
+      "name": "SHUTTER",
+      "event": 779
+    },
+    {
+      "name": "APERTURE",
+      "event": 780
+    },
+    {
+      "name": "MANUAL",
+      "event": 782
+    },
+    {
+      "name": "N_FLASH",
+      "event": 569
+    },
+    {
+      "name": "C1",
+      "event": 787
+    },
+    {
+      "name": "C2",
+      "event": 788
+    },
+    {
+      "name": "C3",
+      "event": 789
+    },
+    {
+      "name": "FSB",
+      "event": 790
+    },
+    {
+      "name": "ISO",
+      "event": 38
+    },
+    {
+      "name": "ADVANCE",
+      "event": 792
+    },
+    {
+      "name": "FILTER",
+      "event": 793
+    },
+    {
+      "name": "PANORAMA",
+      "event": 794
+    },
+    {
+      "name": "S-A",
+      "event": 795
+    },
+    {
+      "name": "S-1/4000",
+      "event": 796
+    },
+    {
+      "name": "S-1/2000",
+      "event": 797
+    },
+    {
+      "name": "S-1/1000",
+      "event": 798
+    },
+    {
+      "name": "S-1/500",
+      "event": 799
+    },
+    {
+      "name": "S-1/250",
+      "event": 800
+    },
+    {
+      "name": "S-1/125",
+      "event": 802
+    },
+    {
+      "name": "S-1/60",
+      "event": 803
+    },
+    {
+      "name": "S-1/30",
+      "event": 804
+    },
+    {
+      "name": "S-1/15",
+      "event": 805
+    },
+    {
+      "name": "S-1/8",
+      "event": 806
+    },
+    {
+      "name": "S-1/4",
+      "event": 807
+    },
+    {
+      "name": "S-1/2",
+      "event": 808
+    },
+    {
+      "name": "S-1/1",
+      "event": 809
+    },
+    {
+      "name": "S-T",
+      "event": 810
+    },
+    {
+      "name": "S-B",
+      "event": 811
+    },
+    {
+      "name": "E-D+3.0",
+      "event": 812
+    },
+    {
+      "name": "E-D+2.7",
+      "event": 813
+    },
+    {
+      "name": "E-D+2.3",
+      "event": 814
+    },
+    {
+      "name": "E-D+2.0",
+      "event": 815
+    },
+    {
+      "name": "E-D+1.7",
+      "event": 816
+    },
+    {
+      "name": "E-D+1.3",
+      "event": 816
+    },
+    {
+      "name": "E-D+1.0",
+      "event": 818
+    },
+    {
+      "name": "E-D+0.7",
+      "event": 819
+    },
+    {
+      "name": "E-D+0.3",
+      "event": 820
+    },
+    {
+      "name": "E-D=0",
+      "event": 821
+    },
+    {
+      "name": "E-D-0.3",
+      "event": 822
+    },
+    {
+      "name": "E-D-0.7",
+      "event": 823
+    },
+    {
+      "name": "E-D-1.0",
+      "event": 824
+    },
+    {
+      "name": "E-D-1.3",
+      "event": 826
+    },
+    {
+      "name": "E-D-1.7",
+      "event": 826
+    },
+    {
+      "name": "E-D-2.0",
+      "event": 827
+    },
+    {
+      "name": "E-D-2.3",
+      "event": 828
+    },
+    {
+      "name": "E-D-2.7",
+      "event": 829
+    },
+    {
+      "name": "E-D-3.0",
+      "event": 830
+    },
+    {
+      "name": "ISO_A",
+      "event": 1303
+    },
+    {
+      "name": "ISO_L",
+      "event": 1304
+    },
+    {
+      "name": "I200",
+      "event": 1305
+    },
+    {
+      "name": "I200_1_3",
+      "event": 1306
+    },
+    {
+      "name": "I200_2_3",
+      "event": 1307
+    },
+    {
+      "name": "I400",
+      "event": 1308
+    },
+    {
+      "name": "I400_1_3",
+      "event": 1309
+    },
+    {
+      "name": "I400_2_3",
+      "event": 1310
+    },
+    {
+      "name": "I800",
+      "event": 1311
+    },
+    {
+      "name": "I800_1_3",
+      "event": 1312
+    },
+    {
+      "name": "I800_2_3",
+      "event": 1313
+    },
+    {
+      "name": "I1600",
+      "event": 1314
+    },
+    {
+      "name": "I1600_1_3",
+      "event": 1315
+    },
+    {
+      "name": "I1600_2_3",
+      "event": 1316
+    },
+    {
+      "name": "I3200",
+      "event": 1317
+    },
+    {
+      "name": "I3200_1_3",
+      "event": 1318
+    },
+    {
+      "name": "I3200_2_3",
+      "event": 1319
+    },
+    {
+      "name": "I6400",
+      "event": 1320
+    },
+    {
+      "name": "ISO_H1",
+      "event": 1321
+    },
+    {
+      "name": "ISO_H2",
+      "event": 1322
+    },
+    {
+      "name": "DRV-PANO",
+      "event": 1323
+    },
+    {
+      "name": "DRV-ADV",
+      "event": 1324
+    },
+    {
+      "name": "DRV-MULTI",
+      "event": 1325
+    },
+    {
+      "name": "DRV-ONE",
+      "event": 1326
+    },
+    {
+      "name": "DRV-C_L",
+      "event": 1327
+    },
+    {
+      "name": "DRV-C_H",
+      "event": 1328
+    },
+    {
+      "name": "DRV-BKT",
+      "event": 1329
+    },
+    {
+      "name": "I-M_A",
+      "event": 1024
+    },
+    {
+      "name": "I-M_F16",
+      "event": 1280
+    },
+    {
+      "name": "I-M_F11",
+      "event": 1283
+    },
+    {
+      "name": "I-M_F8.0",
+      "event": 1286
+    },
+    {
+      "name": "I-M_F5.6",
+      "event": 1289
+    },
+    {
+      "name": "I-M_F4.0",
+      "event": 1292
+    },
+    {
+      "name": "I-M_F2.8",
+      "event": 1295
+    },
+    {
+      "name": "I-M_F2.0",
+      "event": 1298
+    },
+    {
+      "name": "I-M_POS30",
+      "event": 1055
+    },
+    {
+      "name": "I-M_POS29",
+      "event": 1054
+    },
+    {
+      "name": "I-M_POS28",
+      "event": 1053
+    },
+    {
+      "name": "I-M_POS27",
+      "event": 1052
+    },
+    {
+      "name": "I-M_POS26",
+      "event": 1051
+    },
+    {
+      "name": "I-M_POS25",
+      "event": 1050
+    },
+    {
+      "name": "I-M_POS24",
+      "event": 1049
+    },
+    {
+      "name": "I-M_POS23",
+      "event": 1048
+    },
+    {
+      "name": "I-M_POS22",
+      "event": 1047
+    },
+    {
+      "name": "I-M_POS21",
+      "event": 1046
+    },
+    {
+      "name": "I-M_POS20",
+      "event": 1045
+    },
+    {
+      "name": "I-M_POS19",
+      "event": 1044
+    },
+    {
+      "name": "I-M_POS18",
+      "event": 1043
+    },
+    {
+      "name": "I-M_POS17",
+      "event": 1042
+    },
+    {
+      "name": "I-M_POS16",
+      "event": 1041
+    },
+    {
+      "name": "I-M_POS15",
+      "event": 1040
+    },
+    {
+      "name": "I-M_POS14",
+      "event": 1039
+    },
+    {
+      "name": "I-M_POS13",
+      "event": 1038
+    },
+    {
+      "name": "I-M_POS12",
+      "event": 1037
+    },
+    {
+      "name": "I-M_POS11",
+      "event": 1036
+    },
+    {
+      "name": "I-M_POS10",
+      "event": 1035
+    },
+    {
+      "name": "I-M_POS9",
+      "event": 1034
+    },
+    {
+      "name": "I-M_POS8",
+      "event": 1033
+    },
+    {
+      "name": "I-M_POS7",
+      "event": 1032
+    },
+    {
+      "name": "I-M_POS6",
+      "event": 1031
+    },
+    {
+      "name": "I-M_POS5",
+      "event": 1030
+    },
+    {
+      "name": "I-M_POS4",
+      "event": 1029
+    },
+    {
+      "name": "I-M_POS3",
+      "event": 1028
+    },
+    {
+      "name": "I-M_POS2",
+      "event": 1027
+    },
+    {
+      "name": "I-M_POS1",
+      "event": 1026
+    },
+    {
+      "name": "I-M_POS0",
+      "event": 1025
+    },
+    {
+      "name": "F_R_+4",
+      "event": 257
+    },
+    {
+      "name": "F_R_+3",
+      "event": 258
+    },
+    {
+      "name": "F_R_+2",
+      "event": 259
+    },
+    {
+      "name": "F_R_+1",
+      "event": 260
+    },
+    {
+      "name": "F_R_STOP",
+      "event": 261
+    },
+    {
+      "name": "F_R_-1",
+      "event": 262
+    },
+    {
+      "name": "F_R_-2",
+      "event": 263
+    },
+    {
+      "name": "F_R_-3",
+      "event": 264
+    },
+    {
+      "name": "F_R_-4",
+      "event": 265
+    },
+    {
+      "name": "SETUP",
+      "event": 785
+    },
+    {
+      "name": "M_SEL",
+      "event": 782
+    },
+    {
+      "name": "VOICE",
+      "event": 783
+    },
+    {
+      "name": "MOVIE",
+      "event": 784
+    },
+    {
+      "name": "JIG",
+      "event": 831
+    },
+    {
+      "name": "EXR",
+      "event": 791
+    },
+    {
+      "name": "VREC",
+      "event": 783
+    },
+    {
+      "name": "MJPEG",
+      "event": 784
+    },
+    {
+      "name": "SCEN_P",
+      "event": 772
+    },
+    {
+      "name": "SCEN_S",
+      "event": 772
+    },
+    {
+      "name": "MMOD_P",
+      "event": 778
+    },
+    {
+      "name": "MMOD_S",
+      "event": 779
+    },
+    {
+      "name": "MMOD_A",
+      "event": 780
+    },
+    {
+      "name": "MMOD_M",
+      "event": 782
+    },
+    {
+      "name": "APERT",
+      "event": 17
+    }
+  ],
+  "inputs": [
+    {
+      "id": "row-0",
+      "event": 14,
+      "debug_key": "ADAPTER",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 0,
+        "witness": {
+          "physical_key": 14,
+          "input_kind": "kind_0",
+          "source": 5,
+          "lower": 0,
+          "upper": 1023
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 0,
+            "upper": 1023
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-1",
+      "event": 7,
+      "debug_key": "S1",
+      "target": {
+        "kind": "control",
+        "control_id": "shutter_button"
+      },
+      "scanner": {
+        "index": 1,
+        "witness": {
+          "physical_key": 7,
+          "input_kind": "kind_4",
+          "source": 2,
+          "lower": 1,
+          "upper": 32
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-0-2",
+        "expected_level": false,
+        "scanner": {
+          "kind": "combined",
+          "source": 2,
+          "lower": 1,
+          "upper": 32
+        }
+      }
+    },
+    {
+      "id": "row-2",
+      "event": 8,
+      "debug_key": "S2",
+      "target": {
+        "kind": "control",
+        "control_id": "shutter_button"
+      },
+      "scanner": {
+        "index": 2,
+        "witness": {
+          "physical_key": 8,
+          "input_kind": "kind_4",
+          "source": 3,
+          "lower": 1,
+          "upper": 34
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-0-3",
+        "expected_level": false,
+        "scanner": {
+          "kind": "combined",
+          "source": 3,
+          "lower": 1,
+          "upper": 34
+        }
+      }
+    },
+    {
+      "id": "row-3",
+      "event": 2,
+      "debug_key": "UP",
+      "target": {
+        "kind": "control",
+        "control_id": "selector.up"
+      },
+      "scanner": {
+        "index": 3,
+        "witness": {
+          "physical_key": 2,
+          "input_kind": "kind_0",
+          "source": 8,
+          "lower": 0,
+          "upper": 255
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-8",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 0,
+            "upper": 255
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-4",
+      "event": 3,
+      "debug_key": "DOWN",
+      "target": {
+        "kind": "control",
+        "control_id": "selector.down"
+      },
+      "scanner": {
+        "index": 4,
+        "witness": {
+          "physical_key": 3,
+          "input_kind": "kind_0",
+          "source": 8,
+          "lower": 256,
+          "upper": 596
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-8",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 256,
+            "upper": 596
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-5",
+      "event": 4,
+      "debug_key": "LEFT",
+      "target": {
+        "kind": "control",
+        "control_id": "selector.left"
+      },
+      "scanner": {
+        "index": 5,
+        "witness": {
+          "physical_key": 4,
+          "input_kind": "kind_0",
+          "source": 8,
+          "lower": 597,
+          "upper": 724
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-8",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 597,
+            "upper": 724
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-6",
+      "event": 5,
+      "debug_key": "RIGHT",
+      "target": {
+        "kind": "control",
+        "control_id": "selector.right"
+      },
+      "scanner": {
+        "index": 6,
+        "witness": {
+          "physical_key": 5,
+          "input_kind": "kind_0",
+          "source": 8,
+          "lower": 725,
+          "upper": 895
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-8",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 725,
+            "upper": 895
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-7",
+      "event": 1,
+      "debug_key": "EXE_M",
+      "target": {
+        "kind": "control",
+        "control_id": "menu_ok_button"
+      },
+      "scanner": {
+        "index": 7,
+        "witness": {
+          "physical_key": 1,
+          "input_kind": "kind_0",
+          "source": 9,
+          "lower": 0,
+          "upper": 255
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-9",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 0,
+            "upper": 255
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-8",
+      "event": 36,
+      "debug_key": "AE-LOCK",
+      "target": {
+        "kind": "control",
+        "control_id": "ae_lock_button"
+      },
+      "scanner": {
+        "index": 8,
+        "witness": {
+          "physical_key": 36,
+          "input_kind": "kind_0",
+          "source": 9,
+          "lower": 256,
+          "upper": 596
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-9",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 256,
+            "upper": 596
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-9",
+      "event": 9,
+      "debug_key": "DISP_B",
+      "target": {
+        "kind": "control",
+        "control_id": "disp_back_button"
+      },
+      "scanner": {
+        "index": 9,
+        "witness": {
+          "physical_key": 9,
+          "input_kind": "kind_0",
+          "source": 9,
+          "lower": 597,
+          "upper": 724
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-9",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 597,
+            "upper": 724
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-10",
+      "event": 48,
+      "debug_key": "AF-LOCK",
+      "target": {
+        "kind": "control",
+        "control_id": "af_lock_button"
+      },
+      "scanner": {
+        "index": 10,
+        "witness": {
+          "physical_key": 48,
+          "input_kind": "kind_0",
+          "source": 9,
+          "lower": 725,
+          "upper": 895
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-9",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 725,
+            "upper": 895
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-11",
+      "event": 38,
+      "debug_key": "ISO",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 11,
+        "witness": {
+          "physical_key": 38,
+          "input_kind": "kind_5",
+          "source": 9691948,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 733,
+            "upper": 760
+          },
+          {
+            "kind": "literal",
+            "lower": 391,
+            "upper": 430
+          },
+          {
+            "kind": "literal",
+            "lower": 131,
+            "upper": 166
+          }
+        ],
+        "callback": 9691948,
+        "expected_result": 1
+      }
+    },
+    {
+      "id": "row-12",
+      "event": 46,
+      "debug_key": "AE",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 12,
+        "witness": {
+          "physical_key": 46,
+          "input_kind": "kind_5",
+          "source": 9692040,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 834,
+            "upper": 860
+          },
+          {
+            "kind": "literal",
+            "lower": 533,
+            "upper": 580
+          },
+          {
+            "kind": "literal",
+            "lower": 206,
+            "upper": 255
+          }
+        ],
+        "callback": 9692040,
+        "expected_result": 1
+      }
+    },
+    {
+      "id": "row-13",
+      "event": 11,
+      "debug_key": "K_PLAY",
+      "target": {
+        "kind": "control",
+        "control_id": "playback_button"
+      },
+      "scanner": {
+        "index": 13,
+        "witness": {
+          "physical_key": 11,
+          "input_kind": "kind_5",
+          "source": 9692132,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 881,
+            "upper": 905
+          },
+          {
+            "kind": "literal",
+            "lower": 619,
+            "upper": 675
+          },
+          {
+            "kind": "literal",
+            "lower": 268,
+            "upper": 325
+          }
+        ],
+        "callback": 9692132,
+        "expected_result": 1
+      }
+    },
+    {
+      "id": "row-14",
+      "event": 49,
+      "debug_key": "K_Q",
+      "target": {
+        "kind": "control",
+        "control_id": "quick_menu_button"
+      },
+      "scanner": {
+        "index": 14,
+        "witness": {
+          "physical_key": 49,
+          "input_kind": "kind_2",
+          "source": 262149,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-4-5",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-15",
+      "event": 16,
+      "debug_key": "CARD",
+      "target": {
+        "kind": "connection",
+        "connection_id": "sd-card-detect"
+      },
+      "scanner": {
+        "index": 15,
+        "witness": {
+          "physical_key": 16,
+          "input_kind": "kind_2",
+          "source": 786439,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "sd-card-detect",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-16",
+      "event": 32,
+      "debug_key": "MF_AF_M",
+      "target": {
+        "kind": "control",
+        "control_id": "focus_mode_selector"
+      },
+      "scanner": {
+        "index": 16,
+        "witness": {
+          "physical_key": 32,
+          "input_kind": "kind_0",
+          "source": 6,
+          "lower": 733,
+          "upper": 935
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 733,
+            "upper": 935
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-17",
+      "event": 30,
+      "debug_key": "MF_AF_A",
+      "target": {
+        "kind": "control",
+        "control_id": "focus_mode_selector"
+      },
+      "scanner": {
+        "index": 17,
+        "witness": {
+          "physical_key": 30,
+          "input_kind": "kind_0",
+          "source": 6,
+          "lower": 391,
+          "upper": 730
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 391,
+            "upper": 730
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-18",
+      "event": 31,
+      "debug_key": "MF_AF_C",
+      "target": {
+        "kind": "control",
+        "control_id": "focus_mode_selector"
+      },
+      "scanner": {
+        "index": 18,
+        "witness": {
+          "physical_key": 31,
+          "input_kind": "kind_0",
+          "source": 6,
+          "lower": 131,
+          "upper": 385
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "literal",
+            "lower": 131,
+            "upper": 385
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-19",
+      "event": 6,
+      "debug_key": "POWER",
+      "target": {
+        "kind": "control",
+        "control_id": "power_switch"
+      },
+      "scanner": {
+        "index": 19,
+        "witness": {
+          "physical_key": 6,
+          "input_kind": "kind_5",
+          "source": 9691868,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-20",
+      "event": 557,
+      "debug_key": "DELETE",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 20,
+        "witness": {
+          "physical_key": 557,
+          "input_kind": "kind_2",
+          "source": 131081,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-2-9",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-21",
+      "event": 39,
+      "debug_key": "FUNCTION",
+      "target": {
+        "kind": "control",
+        "control_id": "fn7_button"
+      },
+      "scanner": {
+        "index": 21,
+        "witness": {
+          "physical_key": 39,
+          "input_kind": "kind_2",
+          "source": 11,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-0-11",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-22",
+      "event": 42,
+      "debug_key": "CMD_PUSH",
+      "target": {
+        "kind": "control",
+        "control_id": "command_dial"
+      },
+      "scanner": {
+        "index": 22,
+        "witness": {
+          "physical_key": 42,
+          "input_kind": "kind_2",
+          "source": 10,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-0-10",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-23",
+      "event": 27,
+      "debug_key": "POP",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 23,
+        "witness": {
+          "physical_key": 27,
+          "input_kind": "kind_2",
+          "source": 196610,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-3-2",
+        "expected_level": true,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-24",
+      "event": 52,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 24,
+        "witness": {
+          "physical_key": 52,
+          "input_kind": "kind_2",
+          "source": 720898,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-11-2",
+        "expected_level": true,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-25",
+      "event": 55,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 25,
+        "witness": {
+          "physical_key": 55,
+          "input_kind": "kind_2",
+          "source": 4,
+          "lower": 1,
+          "upper": 0
+        }
+      },
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-0-4",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
+    },
+    {
+      "id": "row-26",
+      "event": 56,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 26,
+        "witness": {
+          "physical_key": 56,
+          "input_kind": "kind_5",
+          "source": 9692472,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-27",
+      "event": 53,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 27,
+        "witness": {
+          "physical_key": 53,
+          "input_kind": "kind_5",
+          "source": 9691708,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-28",
+      "event": 530,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 28,
+        "witness": {
+          "physical_key": 530,
+          "input_kind": "kind_5",
+          "source": 9691776,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-29",
+      "event": 531,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 29,
+        "witness": {
+          "physical_key": 531,
+          "input_kind": "kind_5",
+          "source": 9691824,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-30",
+      "event": 532,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 30,
+        "witness": {
+          "physical_key": 532,
+          "input_kind": "kind_5",
+          "source": 9692348,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-31",
+      "event": 533,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 31,
+        "witness": {
+          "physical_key": 533,
+          "input_kind": "kind_5",
+          "source": 9692224,
+          "lower": 0,
+          "upper": 1
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-32",
+      "event": 811,
+      "debug_key": "S-B",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 32,
+        "witness": {
+          "physical_key": 811,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14082,
+          "upper": 14080
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14082,
+            "upper": 14080
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-33",
+      "event": 810,
+      "debug_key": "S-T",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 33,
+        "witness": {
+          "physical_key": 810,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14086,
+          "upper": 14084
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14086,
+            "upper": 14084
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-34",
+      "event": 807,
+      "debug_key": "S-1/4",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 34,
+        "witness": {
+          "physical_key": 807,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14090,
+          "upper": 14088
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14090,
+            "upper": 14088
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-35",
+      "event": 806,
+      "debug_key": "S-1/8",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 35,
+        "witness": {
+          "physical_key": 806,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14094,
+          "upper": 14092
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14094,
+            "upper": 14092
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-36",
+      "event": 805,
+      "debug_key": "S-1/15",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 36,
+        "witness": {
+          "physical_key": 805,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14098,
+          "upper": 14096
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14098,
+            "upper": 14096
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-37",
+      "event": 804,
+      "debug_key": "S-1/30",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 37,
+        "witness": {
+          "physical_key": 804,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14102,
+          "upper": 14100
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14102,
+            "upper": 14100
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-38",
+      "event": 803,
+      "debug_key": "S-1/60",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 38,
+        "witness": {
+          "physical_key": 803,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14106,
+          "upper": 14104
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14106,
+            "upper": 14104
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-39",
+      "event": 802,
+      "debug_key": "S-1/125",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 39,
+        "witness": {
+          "physical_key": 802,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14110,
+          "upper": 14108
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14110,
+            "upper": 14108
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-40",
+      "event": 801,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 40,
+        "witness": {
+          "physical_key": 801,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14114,
+          "upper": 14112
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14114,
+            "upper": 14112
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-41",
+      "event": 800,
+      "debug_key": "S-1/250",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 41,
+        "witness": {
+          "physical_key": 800,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14118,
+          "upper": 14116
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14118,
+            "upper": 14116
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-42",
+      "event": 799,
+      "debug_key": "S-1/500",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 42,
+        "witness": {
+          "physical_key": 799,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14122,
+          "upper": 14120
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14122,
+            "upper": 14120
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-43",
+      "event": 798,
+      "debug_key": "S-1/1000",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 43,
+        "witness": {
+          "physical_key": 798,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14126,
+          "upper": 14124
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14126,
+            "upper": 14124
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-44",
+      "event": 797,
+      "debug_key": "S-1/2000",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 44,
+        "witness": {
+          "physical_key": 797,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14130,
+          "upper": 14128
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14130,
+            "upper": 14128
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-45",
+      "event": 796,
+      "debug_key": "S-1/4000",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 45,
+        "witness": {
+          "physical_key": 796,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14134,
+          "upper": 14132
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14134,
+            "upper": 14132
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-46",
+      "event": 795,
+      "debug_key": "S-A",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 46,
+        "witness": {
+          "physical_key": 795,
+          "input_kind": "kind_1",
+          "source": 3,
+          "lower": 14138,
+          "upper": 14136
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14138,
+            "upper": 14136
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-47",
+      "event": 830,
+      "debug_key": "E-D-3.0",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 47,
+        "witness": {
+          "physical_key": 830,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14146,
+          "upper": 14144
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14146,
+            "upper": 14144
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-48",
+      "event": 829,
+      "debug_key": "E-D-2.7",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 48,
+        "witness": {
+          "physical_key": 829,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14150,
+          "upper": 14148
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14150,
+            "upper": 14148
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-49",
+      "event": 828,
+      "debug_key": "E-D-2.3",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 49,
+        "witness": {
+          "physical_key": 828,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14154,
+          "upper": 14152
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14154,
+            "upper": 14152
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-50",
+      "event": 827,
+      "debug_key": "E-D-2.0",
+      "target": {
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
+      },
+      "scanner": {
+        "index": 50,
+        "witness": {
+          "physical_key": 827,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14158,
+          "upper": 14156
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14158,
+            "upper": 14156
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-51",
+      "event": 826,
+      "debug_key": null,
+      "target": {
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
+      },
+      "scanner": {
+        "index": 51,
+        "witness": {
+          "physical_key": 826,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14162,
+          "upper": 14160
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14162,
+            "upper": 14160
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-52",
+      "event": 825,
+      "debug_key": null,
+      "target": {
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
+      },
+      "scanner": {
+        "index": 52,
+        "witness": {
+          "physical_key": 825,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14166,
+          "upper": 14164
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14166,
+            "upper": 14164
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-53",
+      "event": 824,
+      "debug_key": "E-D-1.0",
+      "target": {
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
+      },
+      "scanner": {
+        "index": 53,
+        "witness": {
+          "physical_key": 824,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14170,
+          "upper": 14168
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14170,
+            "upper": 14168
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-54",
+      "event": 823,
+      "debug_key": "E-D-0.7",
+      "target": {
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
+      },
+      "scanner": {
+        "index": 54,
+        "witness": {
+          "physical_key": 823,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14174,
+          "upper": 14172
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14174,
+            "upper": 14172
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-55",
+      "event": 822,
+      "debug_key": "E-D-0.3",
+      "target": {
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
+      },
+      "scanner": {
+        "index": 55,
+        "witness": {
+          "physical_key": 822,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14178,
+          "upper": 14176
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14178,
+            "upper": 14176
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-56",
+      "event": 821,
+      "debug_key": "E-D=0",
+      "target": {
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
+      },
+      "scanner": {
+        "index": 56,
+        "witness": {
+          "physical_key": 821,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14182,
+          "upper": 14180
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14182,
+            "upper": 14180
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-57",
+      "event": 820,
+      "debug_key": "E-D+0.3",
+      "target": {
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
+      },
+      "scanner": {
+        "index": 57,
+        "witness": {
+          "physical_key": 820,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14186,
+          "upper": 14184
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14186,
+            "upper": 14184
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-58",
+      "event": 819,
+      "debug_key": "E-D+0.7",
+      "target": {
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
+      },
+      "scanner": {
+        "index": 58,
+        "witness": {
+          "physical_key": 819,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14190,
+          "upper": 14188
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14190,
+            "upper": 14188
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-59",
+      "event": 818,
+      "debug_key": "E-D+1.0",
+      "target": {
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
+      },
+      "scanner": {
+        "index": 59,
+        "witness": {
+          "physical_key": 818,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14194,
+          "upper": 14192
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14194,
+            "upper": 14192
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-60",
+      "event": 817,
+      "debug_key": null,
+      "target": {
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
+      },
+      "scanner": {
+        "index": 60,
+        "witness": {
+          "physical_key": 817,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14198,
+          "upper": 14196
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14198,
+            "upper": 14196
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-61",
+      "event": 816,
+      "debug_key": null,
+      "target": {
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
+      },
+      "scanner": {
+        "index": 61,
+        "witness": {
+          "physical_key": 816,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14202,
+          "upper": 14200
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14202,
+            "upper": 14200
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-62",
+      "event": 815,
+      "debug_key": "E-D+2.0",
+      "target": {
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
+      },
+      "scanner": {
+        "index": 62,
+        "witness": {
+          "physical_key": 815,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14206,
+          "upper": 14204
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14206,
+            "upper": 14204
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-63",
+      "event": 814,
+      "debug_key": "E-D+2.3",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 63,
+        "witness": {
+          "physical_key": 814,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14210,
+          "upper": 14208
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14210,
+            "upper": 14208
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-64",
+      "event": 813,
+      "debug_key": "E-D+2.7",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 64,
+        "witness": {
+          "physical_key": 813,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14214,
+          "upper": 14212
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14214,
+            "upper": 14212
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "row-65",
+      "event": 812,
+      "debug_key": "E-D+3.0",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 65,
+        "witness": {
+          "physical_key": 812,
+          "input_kind": "kind_1",
+          "source": 4,
+          "lower": 14218,
+          "upper": 14216
+        }
+      },
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14218,
+            "upper": 14216
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
+    },
+    {
+      "id": "encoder-43",
+      "event": 43,
+      "debug_key": "CMD_LEFT",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "encoder-44",
+      "event": 44,
+      "debug_key": "CMD_RIGHT",
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-23",
+      "event": 23,
+      "debug_key": "DRIVE",
+      "target": {
+        "kind": "control",
+        "control_id": "drive_button"
+      },
+      "scanner": null,
+      "electrical": null
+    }
+  ],
+  "undelivered_rows": [],
+  "interfaces": {}
+}

@@ -1,0 +1,191 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+  "schema": 1,
+  "id": "x100vi-131",
+  "purpose": "rom_boot",
+  "body_id": "x100vi",
+  "firmware_id": "x100vi-131",
+  "start": {
+    "kind": "loader"
+  },
+  "execution": {
+    "mode": "strict",
+    "engine": "hypervisor",
+    "quantum": 1000,
+    "instructions_per_tick": {
+      "numerator": 1,
+      "denominator": 1
+    }
+  },
+  "inputs": {
+    "kind": "xp5",
+    "ticks_per_second": 1000000000,
+    "blocks": [
+      {
+        "kind": "adc",
+        "block_id": "adc",
+        "samples": [
+          2712,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          2241,
+          4095,
+          4095,
+          2712,
+          4095,
+          4095,
+          4095,
+          4095
+        ]
+      },
+      {
+        "kind": "gpio",
+        "block_id": "gpio",
+        "levels": [],
+        "outputs": [
+          {
+            "port": 12,
+            "levels": 256
+          }
+        ]
+      },
+      {
+        "kind": "flash",
+        "block_id": "flash-aperture",
+        "part_id": "x100vi-serial-nor",
+        "source": "firmware_update",
+        "erased_tail": 255,
+        "seeds": [
+          {
+            "offset": 6684919,
+            "value": 3
+          }
+        ]
+      }
+    ],
+    "parts": [
+      {
+        "kind": "clock",
+        "part_id": "power-controller",
+        "seconds": 845151906,
+        "valid": true
+      },
+      {
+        "kind": "idle_level",
+        "part_id": "serial-calibration",
+        "high": false
+      },
+      {
+        "kind": "bis_revision",
+        "part_id": "bis-configuration",
+        "revision": [
+          0,
+          0
+        ],
+        "idle_high": false
+      }
+    ],
+    "timings": [
+      {
+        "kind": "delay",
+        "block_ids": [
+          "resize"
+        ],
+        "operation": "complete",
+        "ticks": 1000000
+      },
+      {
+        "kind": "delay",
+        "block_ids": [
+          "rifp"
+        ],
+        "operation": "complete",
+        "ticks": 1000000
+      },
+      {
+        "kind": "delay",
+        "block_ids": [
+          "sensor"
+        ],
+        "operation": "command",
+        "ticks": 1000
+      }
+    ]
+  },
+  "scene": {
+    "kind": "xp5",
+    "frames": [
+      {
+        "block_ids": [
+          "receiver0"
+        ],
+        "period_ticks": 1000000000,
+        "active_ticks": 10000000,
+        "luma": null
+      },
+      {
+        "block_ids": [
+          "receiver1"
+        ],
+        "period_ticks": 1000000000,
+        "active_ticks": null,
+        "luma": null
+      },
+      {
+        "block_ids": [
+          "movdc0"
+        ],
+        "period_ticks": 1000000000,
+        "active_ticks": null,
+        "luma": 128
+      },
+      {
+        "block_ids": [
+          "movdc1"
+        ],
+        "period_ticks": 1000000000,
+        "active_ticks": null,
+        "luma": 128
+      },
+      {
+        "block_ids": [
+          "movdc2"
+        ],
+        "period_ticks": 1000000000,
+        "active_ticks": null,
+        "luma": 128
+      },
+      {
+        "block_ids": [
+          "preview"
+        ],
+        "period_ticks": 1000000000,
+        "active_ticks": null,
+        "luma": 128
+      }
+    ],
+    "statistics": [],
+    "command_images": [
+      {
+        "block_ids": [
+          "rifp"
+        ],
+        "luma": 128
+      }
+    ]
+  },
+  "overlays": [],
+  "preset": {
+    "factory_options": {},
+    "hardware_selection": {
+      "soc_profile_id": "xp5",
+      "body_profile_id": "x100vi"
+    },
+    "hardware_inputs_id": "x100vi",
+    "firmware_profile_id": "x100vi-131"
+  }
+}

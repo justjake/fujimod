@@ -1,0 +1,17 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xt10-131-rec-hardware",
+  "configuration_id": "xt10-131",
+  "change": {
+    "kind": "preset",
+    "preset": {
+      "factory_options": {},
+      "hardware_selection": {
+        "soc_profile_id": "exr2-service-transports",
+        "body_profile_id": "xt10-rec"
+      },
+      "hardware_inputs_id": "xt10-rec"
+    }
+  }
+}

@@ -1,0 +1,353 @@
+{
+  "$defs": {
+    "BitmapLayout": {
+      "additionalProperties": false,
+      "description": "Bitmap record fields, with explicit widths.",
+      "properties": {
+        "data_bytes": {
+          "description": "Data bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "data_offset": {
+          "description": "Data offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "height_bytes": {
+          "description": "Height bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "height_offset": {
+          "description": "Height offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind_bytes": {
+          "description": "Kind bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind_offset": {
+          "description": "Kind offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width_bytes": {
+          "description": "Width bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width_offset": {
+          "description": "Width offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "data_bytes",
+        "data_offset",
+        "height_bytes",
+        "height_offset",
+        "kind_bytes",
+        "kind_offset",
+        "width_bytes",
+        "width_offset"
+      ],
+      "type": "object"
+    },
+    "BitmapResources": {
+      "additionalProperties": false,
+      "description": "Native bitmap descriptor table layout.",
+      "properties": {
+        "final_first_index": {
+          "description": "Final first index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "final_table": {
+          "description": "Final table.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "last_index": {
+          "description": "Last index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "last_record": {
+          "description": "Last record.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "layout": {
+          "$ref": "#/$defs/BitmapLayout",
+          "description": "Layout."
+        },
+        "stride": {
+          "description": "Stride.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "table": {
+          "description": "Table.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "table",
+        "stride",
+        "final_table",
+        "final_first_index",
+        "last_index",
+        "last_record",
+        "layout"
+      ],
+      "type": "object"
+    },
+    "ConfigurationLocation": {
+      "description": "A configuration block addressed directly or through a firmware pointer.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Firmware address containing a configuration-block pointer.",
+          "properties": {
+            "address": {
+              "description": "Pointer address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "pointer",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "address"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Fixed configuration-block base address.",
+          "properties": {
+            "address": {
+              "description": "Block address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "direct",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "address"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "GlyphResources": {
+      "additionalProperties": false,
+      "description": "Registry layout locating the native icon font resource.",
+      "properties": {
+        "data_address_offset": {
+          "description": "Byte offset of the font data pointer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "data_size_offset": {
+          "description": "Byte offset of the font byte length.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "icon_index": {
+          "description": "Icon font record index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "record_size": {
+          "description": "Registry record size in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "registry_address": {
+          "description": "Resource registry base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "registry_address",
+        "record_size",
+        "icon_index",
+        "data_address_offset",
+        "data_size_offset"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/remote-resources.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Native text and bitmap resource table layouts.",
+  "properties": {
+    "bitmaps": {
+      "$ref": "#/$defs/BitmapResources",
+      "description": "Bitmaps."
+    },
+    "glyph_first": {
+      "description": "Glyph first.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "glyph_last": {
+      "description": "Glyph last.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "glyphs": {
+      "$ref": "#/$defs/GlyphResources",
+      "description": "Registry layout locating the icon font in live memory."
+    },
+    "language": {
+      "$ref": "#/$defs/ConfigurationLocation",
+      "description": "Language."
+    },
+    "last_caption": {
+      "description": "Last caption.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "private_text_bias": {
+      "description": "Private text bias.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "private_text_first": {
+      "description": "Private text first.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "private_text_last": {
+      "description": "Private text last.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "supplementary_address": {
+      "description": "Supplementary address.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "supplementary_first": {
+      "description": "Supplementary first.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "supplementary_max_units": {
+      "description": "Supplementary max units.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "supplementary_stride": {
+      "description": "Supplementary stride.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "text_max_units": {
+      "description": "Text max units.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "text_metrics_offset": {
+      "description": "Text metrics offset.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "text_pointer_offset": {
+      "description": "Text pointer offset.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "text_record_size": {
+      "description": "Text record size.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "text_unit_bytes": {
+      "description": "Text unit bytes.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "text_variants_offset": {
+      "description": "Text variants offset.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "language",
+    "text_record_size",
+    "text_variants_offset",
+    "text_metrics_offset",
+    "text_pointer_offset",
+    "text_unit_bytes",
+    "text_max_units",
+    "private_text_first",
+    "private_text_last",
+    "private_text_bias",
+    "glyph_first",
+    "glyph_last",
+    "supplementary_address",
+    "supplementary_first",
+    "last_caption",
+    "supplementary_stride",
+    "supplementary_max_units",
+    "bitmaps",
+    "glyphs"
+  ],
+  "title": "Resources",
+  "type": "object"
+}

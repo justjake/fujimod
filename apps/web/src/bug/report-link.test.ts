@@ -1,5 +1,5 @@
 import { expect, test } from 'vite-plus/test';
-import { crc32 } from '../archive';
+import { crc32 } from '@fujimod/emulator-ui/archive';
 import { parseReportLink, validateReport, decode64, base64url } from './report-link';
 import { tar, link, hash } from './fixtures.test-helper';
 test('decodes the fragment locally and preserves the entire inline TAR', async () => {

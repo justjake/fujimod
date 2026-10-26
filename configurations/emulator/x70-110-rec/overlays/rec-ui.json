@@ -1,0 +1,58 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "rec-ui",
+  "configuration_id": "x70-110-rec",
+  "change": {
+    "kind": "preset",
+    "preset": {
+      "factory_options": {
+        "quantum": 1000,
+        "storage_profile": "erased",
+        "graphics_profile": "mode1-abgr8888-straight",
+        "backdrop_profile": "declared-black-canvas-unmeasured",
+        "copy_profile": "vg-32bpp-untile-unrotated",
+        "clear_profile": "declared-vg-ui-primitives-unmeasured",
+        "irq_tie_profile": "kernel-active-scan-order",
+        "display_frame_ticks": 400000,
+        "phase_profile": "configured-clocked",
+        "control_bus_profile": "endpoint7-stationary-and9-heartbeat-latched-irq-unmeasured",
+        "secondary_bus_profile": "usbcharge-disconnected-pwic-startup-tagged",
+        "input_processing_profile": "stock-mode0-81-packed-writes",
+        "input_phase_profile": "stock-inactive-phase2-ack",
+        "input_event_profile": "declared-rec-display-close-reentry-plus-one-ready-source0-edge-unmeasured",
+        "input_event_ticks": 400000,
+        "counter_input_profile": "declared-lens-step-feedback-unmeasured",
+        "auxiliary_control_profile": "stock-control3-bit0-clear-ack-unmeasured",
+        "auxiliary_control_ticks": 2,
+        "producer_stop_profile": "stock-idle-stop-handshakes-unmeasured",
+        "producer_stop_ticks": 2,
+        "producer_data_ticks": 400000,
+        "producer_ack_ticks": 2,
+        "spi0_input_profile": "absent-hot-shoe-flash-fixed-low-miso",
+        "image_work_stop_profile": "stock-idle-image-banks-bit0-stop-ack-unmeasured",
+        "image_work_stop_ticks": 2,
+        "image_work_data_profile": "declared-postisp-yycbcr-scene-unmeasured",
+        "histogram_profile": "declared-postisp-histogram256-u32-unmeasured",
+        "histogram_data_ticks": 400000,
+        "movrsz_profile": "declared-packed-yycbcr-pyramid-unmeasured",
+        "movrsz_ticks": 400000,
+        "wifi_sdio_profile": "declared-wifi-sdio-one-function-enumeration-unmeasured",
+        "wifi_sdio_transfer_ticks": 100,
+        "instructions_per_tick": 24,
+        "lens_response_profile": "declared-lens-startup-homing-lattice-unmeasured",
+        "lens_response_ticks": 400000,
+        "face_register_mode": "retained_words"
+      },
+      "execution": {
+        "mode": "strict",
+        "engine": "unicorn",
+        "quantum": 1000,
+        "instructions_per_tick": {
+          "numerator": 24,
+          "denominator": 1
+        }
+      }
+    }
+  }
+}

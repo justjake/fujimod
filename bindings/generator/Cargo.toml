@@ -5,7 +5,11 @@ edition.workspace = true
 rust-version.workspace = true
 publish = false
 
+[lib]
+doctest = false
+
 [dependencies]
 syn = { version = "3", features = ["full"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+fujimod-workspace-hack.workspace = true

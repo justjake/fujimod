@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/state.generated.schema.json",
+  "schema": 1,
+  "id": "x100v-301-state",
+  "firmware_id": "x100v-301",
+  "regions": [
+    {
+      "name": "dram",
+      "address": 0,
+      "size": 536870912,
+      "constant": false
+    },
+    {
+      "name": "boot-rom",
+      "address": 4293918720,
+      "size": 32768,
+      "constant": true
+    }
+  ]
+}

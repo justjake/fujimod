@@ -1,0 +1,421 @@
+{
+  "$defs": {
+    "CursorFields": {
+      "additionalProperties": false,
+      "description": "Live cursor word offsets.",
+      "properties": {
+        "cursor": {
+          "description": "Cursor.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "filtered_count": {
+          "description": "Filtered count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pointer": {
+          "description": "Pointer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "raw_count": {
+          "description": "Raw count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "subcursor": {
+          "description": "Subcursor.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value_cursor": {
+          "description": "Value cursor.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "visible_count": {
+          "description": "Visible count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pointer",
+        "cursor",
+        "subcursor",
+        "visible_count",
+        "value_cursor",
+        "raw_count",
+        "filtered_count"
+      ],
+      "type": "object"
+    },
+    "CursorLayout": {
+      "additionalProperties": false,
+      "description": "Live menu cursor and status-array offsets.",
+      "properties": {
+        "fields": {
+          "$ref": "#/$defs/CursorFields",
+          "description": "Cursor word offsets."
+        },
+        "size": {
+          "description": "Cursor byte size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status_offset": {
+          "description": "Status offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status_stride": {
+          "description": "Status stride.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status_width": {
+          "description": "Status width.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "fields",
+        "status_offset",
+        "status_stride",
+        "status_width"
+      ],
+      "type": "object"
+    },
+    "MenuFields": {
+      "additionalProperties": false,
+      "description": "Native menu descriptor word offsets.",
+      "properties": {
+        "flags_word": {
+          "description": "Flags word.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "handlers_pointer": {
+          "description": "Handlers pointer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_array": {
+          "description": "Item array.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_id": {
+          "description": "Menu id.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parent_pointer": {
+          "description": "Parent pointer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows_per_page": {
+          "description": "Rows per page.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setting_id": {
+          "description": "Setting id.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type_code": {
+          "description": "Type code.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "menu_id",
+        "type_code",
+        "setting_id",
+        "rows_per_page",
+        "flags_word",
+        "parent_pointer",
+        "item_array",
+        "handlers_pointer"
+      ],
+      "type": "object"
+    },
+    "MenuLayout": {
+      "additionalProperties": false,
+      "description": "Offsets within a native menu descriptor and row.",
+      "properties": {
+        "caption_words": {
+          "description": "Caption words.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fields": {
+          "$ref": "#/$defs/MenuFields",
+          "description": "Node word offsets."
+        },
+        "max_kind": {
+          "description": "Max kind.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "nowrap_flags": {
+          "description": "Nowrap flags.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row_child": {
+          "description": "Row child.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row_key": {
+          "description": "Row key.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row_size": {
+          "description": "Row size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sentinel": {
+          "description": "Sentinel.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Node byte size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "fields",
+        "row_size",
+        "row_key",
+        "row_child",
+        "caption_words",
+        "sentinel",
+        "max_kind",
+        "nowrap_flags"
+      ],
+      "type": "object"
+    },
+    "MenuNavigation": {
+      "additionalProperties": false,
+      "description": "Native menu tab bounds.",
+      "properties": {
+        "setup_first_tab": {
+          "description": "Setup first tab.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shooting_first_tab": {
+          "description": "Shooting first tab.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shooting_last_tab": {
+          "description": "Shooting last tab.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "shooting_first_tab",
+        "shooting_last_tab",
+        "setup_first_tab"
+      ],
+      "type": "object"
+    },
+    "QuickGrid": {
+      "additionalProperties": false,
+      "description": "Quick menu dimensions.",
+      "properties": {
+        "columns": {
+          "description": "Columns.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_code": {
+          "description": "Menu code.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "description": "Rows.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "rows",
+        "columns",
+        "menu_code"
+      ],
+      "type": "object"
+    },
+    "RootRoute": {
+      "additionalProperties": false,
+      "description": "A root menu entry strategy.",
+      "properties": {
+        "entry": {
+          "description": "Navigation role used to open the root.",
+          "type": "string"
+        },
+        "tab": {
+          "default": null,
+          "description": "Optional tab key.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "entry"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/remote-menus.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Live menu roots, row descriptors and navigation.",
+  "properties": {
+    "cursor": {
+      "$ref": "#/$defs/CursorLayout",
+      "description": "Cursor and row status layout."
+    },
+    "cursor_address": {
+      "description": "Cursor structure base.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "layout": {
+      "$ref": "#/$defs/MenuLayout",
+      "description": "Node and row layout."
+    },
+    "navigation": {
+      "$ref": "#/$defs/MenuNavigation",
+      "description": "Tab navigation bounds."
+    },
+    "page_tabs": {
+      "additionalProperties": false,
+      "description": "Root indices mapped to first tab keys.",
+      "patternProperties": {
+        "^\\d+$": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "q_grid": {
+      "$ref": "#/$defs/QuickGrid",
+      "description": "Quick menu geometry and menu ID."
+    },
+    "roles": {
+      "additionalProperties": {
+        "format": "uint32",
+        "minimum": 0,
+        "type": "integer"
+      },
+      "description": "Named root indices.",
+      "type": "object"
+    },
+    "root_count": {
+      "description": "Number of root pointers.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "root_routes": {
+      "additionalProperties": false,
+      "description": "Declared root entry strategies.",
+      "patternProperties": {
+        "^\\d+$": {
+          "$ref": "#/$defs/RootRoute"
+        }
+      },
+      "type": "object"
+    },
+    "root_titles": {
+      "additionalProperties": false,
+      "description": "Root indices mapped to caption resource IDs.",
+      "patternProperties": {
+        "^\\d+$": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "roots_address": {
+      "description": "Address of the root pointer table.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "roots_address",
+    "root_count",
+    "roles",
+    "root_titles",
+    "root_routes",
+    "page_tabs",
+    "navigation",
+    "layout",
+    "cursor_address",
+    "cursor",
+    "q_grid"
+  ],
+  "title": "MenuTables",
+  "type": "object"
+}

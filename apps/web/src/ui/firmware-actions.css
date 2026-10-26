@@ -1,0 +1,19 @@
+.firmware-actions {
+  width: min(580px, calc(100% - 28px));
+  color: #eee;
+  background: #1c1c1e;
+  border: 1px solid var(--edge);
+  border-radius: 16px;
+  padding: 20px;
+}
+.firmware-actions::backdrop {
+  background: rgb(0 0 0 / 65%);
+}
+.firmware-actions h3 {
+  margin-top: 0;
+}
+.firmware-actions .act {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

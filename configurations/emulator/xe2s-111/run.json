@@ -1,0 +1,25 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+  "schema": 1,
+  "id": "xe2s-111",
+  "purpose": "rom_boot",
+  "body_id": "xe2s",
+  "firmware_id": "xe2s-111",
+  "start": {
+    "kind": "rom"
+  },
+  "execution": null,
+  "inputs": null,
+  "scene": null,
+  "overlays": [],
+  "preset": {
+    "factory_options": {},
+    "execution_scope": "isolated-driver",
+    "hardware_selection": {
+      "soc_profile_id": "exr2",
+      "body_profile_id": "xe2s"
+    },
+    "hardware_inputs_id": "xe2s",
+    "firmware_profile_id": "xe2s-111"
+  }
+}

@@ -19,11 +19,16 @@ From this directory:
 
 ```sh
 npm ci
-npx wrangler login
+cf auth login
 npm test
 npm run check
 npm run deploy
 ```
+
+`npm run deploy` uses the Cloudflare CLI's sign-in (see
+[`scripts/cloudflare/wrangler.ts`](../../scripts/cloudflare/wrangler.ts)). It fails
+until R2 is enabled for the account, because `wrangler.jsonc` binds the private
+[issue-report](ISSUE_REPORTS.md) bucket.
 
 The production endpoint is `wss://share.fujimod.com/usb-proxy/signal`.
 The Cloudflare release workflow passes this public URL to the static build.
@@ -37,6 +42,33 @@ comma-separated. Production allows `https://fujimod.com` and
 Origin and are accepted. Origin filtering is browser policy, not authentication.
 Room IDs and the URL fragment's separate encryption key remain the share
 capability; the Worker never receives that encryption key.
+
+## Website error logs
+
+`POST /error-logs` receives errors from visitors' browsers on the website:
+uncaught errors, unhandled rejections, `console.error` calls and emulator faults
+([client](../web/src/error-log.ts)). The Worker validates each record (allowed
+origin, at most 16 KiB, 30 per minute per IP) and writes it to Workers Logs with
+`console.log`; nothing is stored elsewhere. Observability is enabled in
+`wrangler.jsonc`.
+
+In the dashboard, open Workers & Pages › `fujimod-usb-sharing` › Logs and filter
+on `source = website-client`. Each entry describes one browser, not the Worker:
+
+- `message`: `[browser 3f2a9c10 · Safari 27.0.1 · iOS 390×844] error on
+  /dev-tools/: TypeError: …`. The bracketed ID is the first eight characters of
+  the page-load session.
+- `client`: `session` (one per page load), `page` (origin and path only),
+  `build`, `userAgent`, `country`, `reportedAt`, `secondsSinceLoad` and
+  `device`: browser, OS, mobile, screen size, pixel ratio and orientation,
+  viewport, touch points, CPU cores, memory (Chromium), language, time zone,
+  color scheme, home-screen install, network type, cross-origin isolation, and
+  WebUSB and WebGPU availability.
+- `error`: `kind` (`error`, `rejection`, `console` or `fault`), the full
+  `message`, `stack` and, for emulator faults, the `fault` record.
+
+A page sends at most 20 distinct errors. Workers Logs keeps entries for the
+plan's retention period only.
 
 ## Enable Cloudflare TURN
 
@@ -63,13 +95,13 @@ Worker does not add WebSocket USB fallback or resend USB commands.
 
 Configuration defaults:
 
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `TURN_TTL_SECONDS` | 86400 | Maximum share-room lifetime and temporary credential TTL, 60–86400 seconds |
-| `TURN_DAILY_ISSUE_LIMIT` | 50 | Global credential issuance reservations per UTC day; failures count |
-| `CONNECTIONS` rate limit | 60/minute/IP | WebSocket upgrade requests |
-| Room sockets | 17 | One owner and up to 16 controllers, including pending handshakes |
-| Signaling frames | 60/minute/socket | Bounded encrypted connection setup, maximum 64 KiB |
+| Setting                  | Default          | Meaning                                                                    |
+| ------------------------ | ---------------- | -------------------------------------------------------------------------- |
+| `TURN_TTL_SECONDS`       | 86400            | Maximum share-room lifetime and temporary credential TTL, 60–86400 seconds |
+| `TURN_DAILY_ISSUE_LIMIT` | 50               | Global credential issuance reservations per UTC day; failures count        |
+| `CONNECTIONS` rate limit | 60/minute/IP     | WebSocket upgrade requests                                                 |
+| Room sockets             | 17               | One owner and up to 16 controllers, including pending handshakes           |
+| Signaling frames         | 60/minute/socket | Bounded encrypted connection setup, maximum 64 KiB                         |
 
 The issuance quota is **not a bandwidth or billing cap**. Public clients receive
 temporary relay access, so configure the quota for the intended audience and
@@ -90,10 +122,10 @@ The browser integration uses the built JS and native Python bindings and a named
 HTTPS development preview. From this directory:
 
 ```sh
-FUJIMOD_WEB_URL=<named HTTPS URL> PYTHON=<Python with FujiMod installed> node peer.browser.mjs
+FUJIMOD_WEB_URL=<named HTTPS URL> PYTHON=<Python with FujiMod installed> node peer.browser.ts
 ```
 
-It runs a local Workers runtime, exports synthetic WebUSB, transfers 2 MiB in
+It runs a local Workers runtime, exports a scripted WebUSB device, transfers 2 MiB in
 both directions through native Python, connects a browser controller, and checks
 exclusive ownership. It never accesses physical USB. To force TURN, run a local
 TURN server listening on loopback with test-only credentials and loopback

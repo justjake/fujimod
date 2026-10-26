@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "allowJs": false,
+    "noEmitOnError": true,
+    "rewriteRelativeImportExtensions": true,
+    "declaration": true,
+    "outDir": "build",
+    "lib": ["ES2022", "DOM"],
+    "types": []
+  },
+  "include": [
+    "peer.ts",
+    "wire.ts",
+    "pipeline.ts",
+    "share-traffic.ts",
+    "exporter.ts",
+    "types.ts",
+    "webusb.ts"
+  ]
+}

@@ -115,7 +115,7 @@ impl RangeReader {
             .reader
             .take()
             .expect("idle open range owns its core reader");
-        let (cancel, mut cancelled) = oneshot::channel();
+        let (cancel, mut canceled) = oneshot::channel();
         state.cancel = Some(cancel);
         state.busy = true;
         let mut lease = ChunkLease {
@@ -126,7 +126,7 @@ impl RangeReader {
         Ok(wasm_bindgen_futures::future_to_promise(async move {
             let result = futures_lite::future::or(
                 async {
-                    Err((&mut cancelled)
+                    Err((&mut canceled)
                         .await
                         .unwrap_or(Cancellation::Abandoned)
                         .error())

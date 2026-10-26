@@ -2,7 +2,7 @@ use crate::*;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 // SequenceMatcher's no-junk longest-block alignment. Tie order is earliest A, then B.
-fn blocks(a: &[u32], b: &[u32]) -> Vec<(usize, usize, usize)> {
+pub(crate) fn blocks(a: &[u32], b: &[u32]) -> Vec<(usize, usize, usize)> {
     let mut positions = HashMap::<u32, Vec<usize>>::new();
     for (j, &t) in b.iter().enumerate() {
         positions.entry(t).or_default().push(j);
@@ -234,7 +234,7 @@ impl Index {
                     continue;
                 }
                 for (x, y) in aligned(&self.functions[a], &self.functions[b]) {
-                    let (Some(x), Some(y)) = (self.resolve(a, x), self.resolve(b, y)) else {
+                    let (Some(x), Some(y)) = (self.callee(a, x), self.callee(b, y)) else {
                         continue;
                     };
                     if groups.root(x) == groups.root(y) {
@@ -361,27 +361,6 @@ impl Index {
         out.sort_by(|a, b| a.reference.cmp(&b.reference));
         out
     }
-    pub(crate) fn grade(&self, a: usize, b: usize) -> Grade {
-        let (x, y) = (&self.functions[a], &self.functions[b]);
-        if x.architecture != y.architecture || x.signature != y.signature {
-            Grade::CallSite
-        } else {
-            let calls: HashMap<usize, u64> = y.calls.iter().copied().collect();
-            if x.calls.iter().all(|&(p, target)| {
-                let (Some(i), Some(j)) = (
-                    self.resolve(a, target),
-                    calls.get(&p).and_then(|&t| self.resolve(b, t)),
-                ) else {
-                    return false;
-                };
-                self.membership[i] == self.membership[j]
-            }) {
-                Grade::Identical
-            } else {
-                Grade::SameCode
-            }
-        }
-    }
     pub(crate) fn weak_pair(&self, a: usize, b: usize) -> Pair {
         Pair {
             reference: self.functions[a].key.clone(),
@@ -395,7 +374,7 @@ impl Index {
         Pair {
             reference: x.key.clone(),
             other: y.key.clone(),
-            grade: self.grade(a, b),
+            grade: self.grade_ids(a, b),
             similarity: similarity(x, y),
         }
     }

@@ -3,7 +3,7 @@ import {
   newTicket,
   shareUrl,
   parseShare,
-} from '../../../../crates/usb-proxy/web/peer.js';
+} from '../../../../crates/usb-proxy/web/peer.ts';
 export { ShareHost, newTicket, shareUrl };
 export function sharingConfigured(): boolean {
   return (

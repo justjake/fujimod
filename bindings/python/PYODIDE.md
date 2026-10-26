@@ -7,19 +7,24 @@ and nusb WebUSB. The Python and USB Wasm modules have separate memories. Buffers
 are copied across that boundary before I/O; no Python-memory view survives a
 request. This adapter contains no USB framing or firmware policy.
 
+The browser-only wheel omits `fujimod.emulator`, which is available in native
+Python wheels.
+
 Build the two artifacts from the repository root:
 
 ```sh
+npm ci
 npm --prefix bindings/javascript ci
 npm --prefix bindings/javascript run build
-python3 bindings/python/scripts/build_web_wheel.py
+node bindings/python/scripts/build-web-wheel.ts
 ```
 
-The wheel builder requires Python 3.11+. It creates the `fujimod` distribution
+The wheel builder uses the pinned Node toolchain. It creates the `fujimod` distribution
 with the `py3-none-pyemscripten_2026_0_wasm32` tag in `target/web-wheels/`, for
 Pyodide 314.x. It does not ship a desktop binary or claim desktop compatibility.
-Native wheels are built with maturin from the same package. Keep the Python
-wheel and JavaScript package from the same version together.
+Native Python uses the same package with the extension that
+`scripts/python_extension.py` builds. Keep the Python wheel and JavaScript
+package from the same version together.
 
 After loading Pyodide, initialize and register the JavaScript package:
 
@@ -44,9 +49,9 @@ paths or device addresses, so those metadata properties are `None`.
 
 The adapter supports async commands, compositions, owned chunk iterators and
 bounded trace snapshots. Use `async with` around a reader when stopping early.
-Cancelling a command or pending chunk requests host cancellation in Rust and
+Canceling a command or pending chunk requests host cancellation in Rust and
 awaits its outcome before returning ownership. An incomplete exchange leaves
-`CompletionUnknown`; it does not send C4 or recovery. Cancelling an open waits
+`CompletionUnknown`; it does not send C4 or recovery. Canceling an open waits
 for the open outcome, then abandons a session if one was created. Explicit
 abandonment remains terminal and cannot stop camera execution.
 
@@ -65,7 +70,7 @@ compiled Rust and the real nusb backend against fake WebUSB devices. Tests
 cover buffers, enums, uploads, iterator ownership, structured failures, tracing,
 timeouts and cancellation. No test contacts hardware or validates permission UI.
 
-The wheel also exposes shared firmware definitions as `fujimod.defs` and typed
+The wheel also exposes shared firmware definitions as `fujimod.catalog` and typed
 service controls as `fujimod.usb.app80`, using the
 [same Python interface](README.md#firmware-selected-service-controls) as native
 builds. `registerPyodide` registers both namespaces. JSON validation, ordered

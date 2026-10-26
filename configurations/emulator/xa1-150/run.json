@@ -1,0 +1,15 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+  "schema": 1,
+  "id": "xa1-150",
+  "purpose": "rom_boot",
+  "body_id": "xa1",
+  "firmware_id": "xa1-150",
+  "start": {
+    "kind": "rom"
+  },
+  "execution": null,
+  "inputs": null,
+  "scene": null,
+  "overlays": []
+}

@@ -1,0 +1,136 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "x30-rec",
+  "body_id": "x30",
+  "reset": {
+    "inputs": {
+      "gpio": {
+        "gpio_inputs": {
+          "0": 3116,
+          "2": 6656,
+          "3": 777,
+          "12": 128,
+          "11": 1,
+          "4": 32
+        },
+        "profile_name": "X30 discovery: released DRIVE GPIO2.11 and FUNCTION2 GPIO11.0; Q, shutter and remaining inputs borrowed from X-E2S REC."
+      },
+      "power": {
+        "profile_name": "X30 discovery: normal boot class0x40, ring contact enabled in MCU60 bit0, ADC9=0 selects RING_ON and ADC3=640 selects PROGRAM; remaining inputs borrowed.",
+        "adc_samples": [
+          0,
+          0,
+          1023,
+          640,
+          534,
+          640,
+          512,
+          825,
+          1023,
+          0,
+          0,
+          0
+        ],
+        "boot_reply": 65,
+        "spi0_input_profile": "absent-hot-shoe-flash-fixed-low-miso",
+        "spi_status_registers": [
+          [
+            9,
+            96
+          ]
+        ],
+        "panel_contract": [
+          [
+            224,
+            6
+          ],
+          [
+            11,
+            3,
+            0,
+            12,
+            3,
+            1
+          ],
+          [
+            16,
+            null,
+            null
+          ],
+          1
+        ]
+      },
+      "mcu_packet_hex": "00000000d00700ff008000040000aafc",
+      "usb_connected": false
+    },
+    "autofocus_gate": {
+      "first_boot_instructions": 100000000,
+      "restart_instructions": 120000000,
+      "scan_instructions": 80000000,
+      "setup_keys": [
+        "EXE_M",
+        "EXE_M",
+        "EXE_M"
+      ],
+      "key_hold_ticks": 2400000,
+      "key_release_ticks": 6000000,
+      "scene_settle_ticks": 1200000,
+      "completion_hold_ticks": 1200000,
+      "shutter": {
+        "port": 0,
+        "pin": 2,
+        "active_level": 0
+      },
+      "card": {
+        "sd_card_profile": "declared-blank-sdhc-default-speed-unmeasured",
+        "sd_card_present": true,
+        "sd_card_sectors": 16777216,
+        "sd_card_format": {
+          "filesystem": "fat32",
+          "label": "CAMERA",
+          "partition_start": 8192,
+          "sectors_per_cluster": 64
+        }
+      },
+      "firmwares": {
+        "x30-103": {
+          "ui": 13584700,
+          "system": 13503236,
+          "rec_ui": 3,
+          "primary_states": 23452588,
+          "complete_state": 8,
+          "code_witnesses": [
+            {
+              "address": 18143856,
+              "sha256": "12aef778832186910cbcc09314fd6c3a344f21e51de379c73a9636a42b7ae641",
+              "bytes": 96
+            }
+          ],
+          "sample_slots": [
+            23445892,
+            23445940
+          ]
+        }
+      },
+      "control_overrides": {
+        "menu_ok_button": {
+          "input": {
+            "EXE_M": [
+              {
+                "kind": "adc",
+                "channel": 8,
+                "interval": {
+                  "kind": "configuration_u16",
+                  "lower": 14316,
+                  "upper": 14314
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "execution_scope": "offline-boot-development"
+  }
+}

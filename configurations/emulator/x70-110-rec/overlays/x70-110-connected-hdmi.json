@@ -1,0 +1,98 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "x70-110-connected-hdmi",
+  "configuration_id": "x70-110-rec",
+  "change": {
+    "kind": "preset",
+    "preset": {
+      "factory_options": {
+        "entry": "loader",
+        "quantum": 10000,
+        "storage_profile": "settings",
+        "sd_card_profile": "declared-blank-sdhc-default-speed-unmeasured",
+        "sd_card_present": true,
+        "graphics_profile": "mode1-abgr8888-straight",
+        "copy_profile": "vg-32bpp-untile-unrotated",
+        "clear_profile": "declared-vg-ui-primitives-unmeasured",
+        "irq_tie_profile": "kernel-active-scan-order",
+        "display_frame_ticks": 400000,
+        "phase_profile": "configured-clocked",
+        "control_bus_profile": "endpoint7-stationary-and9-heartbeat-latched-irq-unmeasured",
+        "secondary_bus_profile": "usbcharge-disconnected-pwic-startup-tagged",
+        "sensor_frame_clock": "sensor",
+        "input_processing_profile": "stock-mode0-81-packed-writes",
+        "input_phase_profile": "declared-enabled-or-inactive-phase2-stop-ack-unmeasured",
+        "input_event_profile": "declared-rec-display-close-reentry-plus-one-ready-source0-edge-unmeasured",
+        "counter_input_profile": "declared-lens-step-feedback-unmeasured",
+        "image_work_stop_profile": "stock-idle-image-banks-bit0-stop-ack-unmeasured",
+        "image_work_data_profile": "declared-postisp-yycbcr-scene-unmeasured",
+        "histogram_profile": "declared-postisp-histogram256-u32-unmeasured",
+        "movrsz_profile": "declared-packed-yycbcr-pyramid-unmeasured",
+        "auxiliary_control_profile": "stock-control3-bit0-clear-ack-unmeasured",
+        "producer_stop_profile": "stock-idle-stop-handshakes-unmeasured",
+        "producer_data_ticks": 1024,
+        "spi0_input_profile": "absent-hot-shoe-flash-fixed-low-miso",
+        "instructions_per_tick": 24,
+        "backdrop_profile": "declared-black-canvas-unmeasured",
+        "jpeg_decode_profile": "declared-channel9-libjpeg-yycbcr-playback-unmeasured",
+        "sd_card_sectors": 16777216,
+        "face_register_mode": "retained_words",
+        "hdmi_sink": {
+          "connected": false,
+          "basis": "Declared catalog input.",
+          "edid": {
+            "id": "synthetic-hdmi-1080p60",
+            "size": 256,
+            "sha256": "e1ec4bdbd82d73cb750d6955bb068a80b4a5fea810b2b065877fe38c8416930a"
+          }
+        }
+      },
+      "execution": {
+        "mode": "strict",
+        "engine": "unicorn",
+        "quantum": 10000,
+        "instructions_per_tick": {
+          "numerator": 24,
+          "denominator": 1
+        }
+      },
+      "execution_scope": "emulator-only",
+      "initial_gpio": [
+        {
+          "port": 1,
+          "pin": 1,
+          "level": true,
+          "basis": "Declared catalog input."
+        },
+        {
+          "port": 0,
+          "pin": 1,
+          "level": true,
+          "basis": "Declared catalog input."
+        }
+      ],
+      "limits": [],
+      "browser_camera": {
+        "virtual_card": {
+          "filesystem": "fat32",
+          "label": "CAMERA",
+          "partition_start": 8192,
+          "sectors_per_cluster": 64,
+          "sectors": 16777216
+        },
+        "still_capture": "register-capture-readonly-card-observation",
+        "preview": {
+          "frames_per_second": 10,
+          "statistics_every_frames": 1,
+          "basis": "Declared catalog input.",
+          "active_statistics_every_frames": 1,
+          "statistics_profile": "declared-x70-external-s1-statistics-divider-unmeasured"
+        },
+        "sensor": {
+          "frames": "x70-110-rec.capture-sensor"
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,7 @@
 .DS_Store
+/build/
 /target/
+/crates/*/target/
 /bindings/javascript/pkg/
 /bindings/javascript/dist/
 /bindings/javascript/node_modules/
@@ -10,4 +12,9 @@ __pycache__/
 .venv/
 /node_modules/
 /bindings/python/python/fujimod/_native*.so
+/bindings/python/python/fujimod/_native*.so.*
+/bindings/python/python/fujimod/._native*
 /bindings/python/python/fujimod/_native*.pyd
+
+# Local build directories and scratch, at any depth.
+.tools/

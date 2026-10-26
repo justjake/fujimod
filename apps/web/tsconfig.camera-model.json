@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/dev-tools/usb-camera-model.ts",
+    "src/dev-tools/usb-camera-model.test.ts",
+    "src/dev-tools/dev-share.test.tsx",
+    "src/dev-tools/page-camera-model.test.tsx"
+  ]
+}

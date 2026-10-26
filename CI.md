@@ -3,7 +3,7 @@
 [CI](.github/workflows/ci.yml) runs on every push and pull request, without path
 filters. Its five jobs check Python, JavaScript/TypeScript and Rust independently
 and run the native and browser suites. `CI required` fails if any job fails,
-is cancelled or is skipped. Select **CI required** as a required status check in
+is canceled or is skipped. Select **CI required** as a required status check in
 the repository's branch rules to enforce it on merges.
 
 ## Language policy
@@ -23,7 +23,7 @@ the repository's branch rules to enforce it on merges.
   stubs or typed protocols; disabling import diagnostics would conceal gaps.
 - Ruff also checks Pyflakes, pycodestyle's syntax/error groups, pyupgrade,
   bugbear, simplify, import sorting and stub hygiene. Ruff formats Python.
-  The package's declared minimum is Python 3.10, so static checks target 3.10;
+  The package's minimum is Python 3.14, including template-string support;
   repository tooling and native tests run on the Python 3.14 pinned in Mise.
 - JavaScript/TypeScript uses [Vite+](https://viteplus.dev/guide/lint) with its
   Oxlint correctness rules, type-aware rules, full TypeScript checking and
@@ -33,10 +33,16 @@ the repository's branch rules to enforce it on merges.
 - Rust uses rustfmt and the standard [Clippy](https://doc.rust-lang.org/clippy/)
   lint set across every workspace target and feature, with warnings denied.
   Pedantic/restriction lints are not enabled wholesale.
+- `rust-hack-check` fails when the generated `fujimod-workspace-hack` crate no
+  longer matches the dependency graph; `rust-hack` regenerates it.
 
 No violation baselines, changed-lines-only filters or test-file typing exemptions
-are used. Adding CI does not make existing source satisfy these rules: failures
-remain visible until the source is corrected.
+are used. `python-typecheck` builds the JavaScript binding and generates Python
+protocols from its checked TypeScript declarations, then generates service value
+declarations from Rust. Generated types stay in `target/python-types`. The
+`typescript-api` dependency provides the TypeScript compiler API; TypeScript 7
+checks maintained source. `typing_contract.py` checks quantity boundaries, enum
+groups, immutable properties and asynchronous return types.
 
 ## Run locally
 
@@ -47,6 +53,7 @@ mise install
 uv sync --locked
 npm ci
 npm --prefix bindings/javascript ci
+npm --prefix packages/emulator-ui ci
 npm --prefix apps/web ci
 npm --prefix apps/usb-sharing ci
 rustup target add wasm32-unknown-unknown
@@ -63,10 +70,13 @@ mise run web-check
 mise run javascript-format-check
 ```
 
-`mise run python-test` builds the native binding with its `testing` feature,
-then runs pytest discovery throughout the repository. This includes Python
-bindings, source-archive tests, simulation asset preparation and CI tooling.
-Install ffmpeg to exercise walkthrough media tests. Tests use synthetic USB
+The emulator crate builds and statically links its pinned Unicorn source.
+The default Python emulator feature also needs libjpeg development headers.
+
+`mise run python-test` builds the native binding, then runs pytest discovery
+throughout the repository. This includes Python bindings, Wasm transport tests,
+simulation asset preparation and CI tooling.
+Install ffmpeg to exercise walkthrough media tests. Tests use scripted USB
 transcripts and peers, not physical cameras.
 
 `mise run javascript-node-test` runs the proxy/exporter, asset staging and Worker
@@ -82,23 +92,21 @@ production build, prerender checks, developer-tools browser checks and Worker
 build validation. Pyodide also needs its pure Python wheel:
 
 ```sh
-uv run --locked python bindings/python/scripts/build_web_wheel.py --output target/web-wheels
+node bindings/python/scripts/build-web-wheel.ts --out target/web-wheels
 npm --prefix apps/web exec -- playwright install --with-deps chromium webkit
 mise run javascript-browser-test
 npm --prefix bindings/javascript run test:pyodide:browser
 mise run web-coverage
 mise run web-build
-node scripts/ci/package-tests.mjs apps/web
+node scripts/ci/package-tests.ts apps/web
 ```
 
 The web integration runner executes every declared `test:*` package script
 except interactive `*:watch` commands, so new one-shot suites join CI when added.
 
-Browser scripts requiring private firmware DATs, emulator bundles, an externally
-served camera session or physical hardware cannot run from this public checkout.
-They remain explicit rehearsals with their documented inputs. This CI does not
-certify firmware boots, compiled mod choices or illustrated mod walkthroughs.
-Those release requirements still need their own firmware/evidence pipeline.
+Browser scripts that take a firmware update file, a simulator bundle, a served
+camera session or a connected camera run only when given those inputs; CI does
+not run them.
 
 ## Coverage
 
@@ -132,7 +140,7 @@ mise run rust-coverage
 source <(cargo llvm-cov show-env --sh)
 mise run python-test
 mkdir -p target/coverage/rust
-cargo llvm-cov report --all-features --lcov --output-path target/coverage/rust/lcov.info
-cargo llvm-cov report --all-features --html --output-dir target/coverage/rust
+cargo llvm-cov report --lcov --output-path target/coverage/rust/lcov.info
+cargo llvm-cov report --html --output-dir target/coverage/rust
 uv run --locked python scripts/ci/coverage_summary.py
 ```

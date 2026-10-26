@@ -1,0 +1,22 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "x70-110-browser-usb",
+  "configuration_id": "x70-110-rec",
+  "change": {
+    "kind": "preset",
+    "preset": {
+      "factory_options": {
+        "video_encoder_backend": "software",
+        "secondary_bus_profile": "disabled"
+      },
+      "limits": [],
+      "usb_connected": true,
+      "firmware_inputs_id": "x70-110-browser-usb-catalog-inputs",
+      "hardware_selection": {
+        "soc_profile_id": "exr2-service-transports",
+        "body_profile_id": "x70-110-browser-usb"
+      }
+    }
+  }
+}

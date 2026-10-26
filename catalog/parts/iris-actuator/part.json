@@ -1,0 +1,11 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "iris-actuator",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "iris-actuator"
+    }
+  }
+}

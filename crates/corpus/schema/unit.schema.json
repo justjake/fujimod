@@ -3,13 +3,7 @@
   "$id": "https://fujimod.com/schemas/corpus-unit.schema.json",
   "title": "Corpus unit input",
   "type": "object",
-  "required": [
-    "firmware",
-    "unit",
-    "architecture",
-    "address_ranges",
-    "functions"
-  ],
+  "required": ["firmware", "unit", "architecture", "address_ranges", "functions"],
   "properties": {
     "$schema": {
       "type": "string"
@@ -23,10 +17,7 @@
       "minLength": 1
     },
     "architecture": {
-      "enum": [
-        "arm32",
-        "aarch64"
-      ]
+      "enum": ["arm32", "aarch64"]
     },
     "address_ranges": {
       "type": "array",
@@ -82,11 +73,7 @@
     },
     "annotation": {
       "type": "object",
-      "required": [
-        "kind",
-        "text",
-        "source"
-      ],
+      "required": ["kind", "text", "source"],
       "properties": {
         "kind": {
           "type": "string"
@@ -102,11 +89,7 @@
     },
     "reference": {
       "type": "object",
-      "required": [
-        "site",
-        "target",
-        "kind"
-      ],
+      "required": ["site", "target", "kind"],
       "properties": {
         "site": {
           "$ref": "#/$defs/address"
@@ -118,20 +101,14 @@
           "type": "string"
         },
         "text": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       },
       "additionalProperties": false
     },
     "function": {
       "type": "object",
-      "required": [
-        "address",
-        "ranges"
-      ],
+      "required": ["address", "ranges"],
       "properties": {
         "address": {
           "$ref": "#/$defs/address"

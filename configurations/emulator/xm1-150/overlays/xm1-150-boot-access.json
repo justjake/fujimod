@@ -1,0 +1,29 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xm1-150-boot-access",
+  "configuration_id": "xm1-150",
+  "change": {
+    "kind": "preset",
+    "preset": {
+      "factory_options": {
+        "storage_profile": "erased",
+        "irq_tie_profile": "kernel-active-scan-order",
+        "copy_profile": "vg-32bpp-untile-unrotated",
+        "clear_profile": "declared-vg-ui-primitives-unmeasured",
+        "instructions_per_tick": 24
+      },
+      "execution": {
+        "mode": "strict",
+        "engine": "unicorn",
+        "quantum": 1000,
+        "instructions_per_tick": {
+          "numerator": 24,
+          "denominator": 1
+        }
+      },
+      "execution_scope": "emulator-only",
+      "purpose": "boot_access"
+    }
+  }
+}

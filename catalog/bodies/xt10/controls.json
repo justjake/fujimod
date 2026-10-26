@@ -1,0 +1,710 @@
+{
+  "$schema": "https://fujimod.com/schemas/physical-controls.schema.json",
+  "schema": 1,
+  "id": "xt10-controls",
+  "body_id": "xt10",
+  "manual": {
+    "url": "https://fujifilm-dsc.com/en/manual/x-t10/x-t10_omw_en_s_f_02.pdf",
+    "title": "FUJIFILM X-T10 Owner’s Manual",
+    "pages": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      11,
+      12,
+      13,
+      16,
+      22,
+      25,
+      26,
+      27,
+      31,
+      32,
+      36,
+      37,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      62,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      71,
+      72,
+      73,
+      78,
+      81,
+      99,
+      110,
+      117,
+      118,
+      146,
+      147
+    ]
+  },
+  "analog_levels": 1024,
+  "boot": {
+    "sd": {
+      "hold": [
+        {
+          "id": "rear_command_dial.press"
+        },
+        {
+          "id": "delete_button"
+        }
+      ]
+    },
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
+    }
+  },
+  "controls": {
+    "ae_lock_button": {
+      "name": "AE-L (exposure lock) button",
+      "location": "rear",
+      "manual_page": 81,
+      "face": "AE-L",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": true,
+      "default_function": "Locks exposure while pressed, or until pressed again when AE&AF ON/OFF SWITCH is selected.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "AE-LOCK"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "af_lock_button": {
+      "name": "AF-L (focus lock) button",
+      "location": "rear",
+      "manual_page": 81,
+      "face": "AF-L",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": true,
+      "default_function": "Locks focus while pressed; in manual focus, can autofocus on the selected subject.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "AF-LOCK"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "auto_mode_selector_lever": {
+      "name": "Auto mode selector lever",
+      "location": "top",
+      "manual_page": 5,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-9"
+      ],
+      "assignable": false,
+      "default_function": "Switches between manual exposure modes and auto mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "lever",
+        "positions": [
+          {
+            "id": "manual",
+            "key": {
+              "kind": "native_input",
+              "name": "KEY_RECL_MANUAL"
+            },
+            "asserted": true
+          },
+          {
+            "id": "AUTO",
+            "key": {
+              "kind": "native_input",
+              "name": "KEY_RECL_AUTO"
+            },
+            "asserted": true
+          }
+        ],
+        "momentary": false
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "manual",
+          "label": "icon",
+          "description": "Select from P (program AE), S (shutter-priority AE), A (aperture-priority AE), and M (manual) modes."
+        },
+        {
+          "id": "AUTO",
+          "label": "AUTO",
+          "description": null
+        }
+      ],
+      "short_name": "AUTO"
+    },
+    "battery_chamber_cover_latch": {
+      "name": "Battery-chamber cover latch",
+      "location": "bottom",
+      "manual_page": 18,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Slide to open the battery-chamber cover.",
+      "role": null,
+      "mechanical": true,
+      "behavior": null,
+      "pushable": false,
+      "positions": []
+    },
+    "battery_latch": {
+      "name": "Battery latch",
+      "location": "bottom",
+      "manual_page": 18,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Press to the side to release the battery for removal.",
+      "role": null,
+      "mechanical": true,
+      "behavior": null,
+      "pushable": false,
+      "positions": []
+    },
+    "delete_button": {
+      "name": "Delete button",
+      "location": "rear",
+      "manual_page": 36,
+      "face": null,
+      "icon": "delete",
+      "connection_ids": [
+        "controls-gpio-0-11"
+      ],
+      "assignable": false,
+      "default_function": "Deletes pictures in playback mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "DELETE"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "diopter_adjustment_control": {
+      "name": "Diopter adjustment control",
+      "location": "rear",
+      "manual_page": 26,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Adjusts viewfinder focus for individual vision; range −4 to +2 m⁻¹.",
+      "role": null,
+      "mechanical": true,
+      "behavior": null,
+      "pushable": false,
+      "positions": []
+    },
+    "disp_back_button": {
+      "name": "DISP (display)/BACK button",
+      "location": "rear",
+      "manual_page": 27,
+      "face": "DISP/BACK",
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-8"
+      ],
+      "assignable": false,
+      "default_function": "Changes display indicators and backs out of menus; press and hold to choose function-button roles.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "DISP_B"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "drive_dial": {
+      "name": "DRIVE dial",
+      "location": "top",
+      "manual_page": 64,
+      "face": "DRIVE",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Selects bracketing, high-speed or low-speed burst, single frame, advanced filter, multiple exposure, or panorama shooting.",
+      "role": null,
+      "mechanical": false,
+      "behavior": null,
+      "pushable": false,
+      "positions": []
+    },
+    "exposure_compensation_dial": {
+      "name": "Exposure compensation dial",
+      "location": "top",
+      "manual_page": 62,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Adjusts exposure compensation.",
+      "role": null,
+      "mechanical": false,
+      "behavior": null,
+      "pushable": false,
+      "positions": [],
+      "short_name": "EV"
+    },
+    "flash_pop_up_lever": {
+      "name": "Flash pop-up lever",
+      "location": "top",
+      "manual_page": 47,
+      "face": null,
+      "icon": "flash",
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Raises the built-in flash for use.",
+      "role": null,
+      "mechanical": false,
+      "behavior": null,
+      "pushable": false,
+      "positions": []
+    },
+    "fn7_button": {
+      "name": "Function button (Fn7)",
+      "location": "rear",
+      "manual_page": 43,
+      "face": "Fn7",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": true,
+      "default_function": "Opens wireless options.",
+      "role": null,
+      "mechanical": false,
+      "behavior": null,
+      "pushable": false,
+      "positions": []
+    },
+    "focus_mode_selector": {
+      "name": "Focus mode selector",
+      "location": "front",
+      "manual_page": 71,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-7"
+      ],
+      "assignable": false,
+      "default_function": "Selects single AF, continuous AF, or manual focus.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch",
+        "positions": [
+          {
+            "id": "S",
+            "key": {
+              "kind": "debug_key",
+              "name": "MF_AF_A"
+            },
+            "asserted": true
+          },
+          {
+            "id": "C",
+            "key": {
+              "kind": "debug_key",
+              "name": "MF_AF_C"
+            },
+            "asserted": true
+          },
+          {
+            "id": "M",
+            "key": {
+              "kind": "debug_key",
+              "name": "MF_AF_M"
+            },
+            "asserted": true
+          }
+        ]
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "S",
+          "label": "S",
+          "description": null
+        },
+        {
+          "id": "C",
+          "label": "C",
+          "description": null
+        },
+        {
+          "id": "M",
+          "label": "M",
+          "description": null
+        }
+      ],
+      "short_name": "FOCUS"
+    },
+    "front_command_dial": {
+      "name": "Front command dial",
+      "location": "front",
+      "manual_page": 6,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": true,
+      "default_function": "Rotation selects program shift, fine-tunes shutter speed, or views other pictures in playback; pressing the center activates Fn2, AF mode by default.",
+      "role": null,
+      "mechanical": false,
+      "behavior": null,
+      "pushable": false,
+      "positions": [],
+      "short_name": "FRONT DIAL"
+    },
+    "lens_release_button": {
+      "name": "Lens release button",
+      "location": "front",
+      "manual_page": 16,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Releases the attached lens for removal.",
+      "role": null,
+      "mechanical": true,
+      "behavior": null,
+      "pushable": false,
+      "positions": []
+    },
+    "menu_ok_button": {
+      "name": "MENU/OK button",
+      "location": "rear",
+      "manual_page": 4,
+      "face": "MENU/OK",
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-8"
+      ],
+      "assignable": false,
+      "default_function": "Selects highlighted items; press and hold to toggle control lock.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "EXE_M"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "movie_record_button": {
+      "name": "Movie-record button (Function button (Fn1))",
+      "location": "top",
+      "manual_page": 44,
+      "face": null,
+      "icon": "record",
+      "connection_ids": [],
+      "assignable": true,
+      "default_function": "Starts or stops movie recording.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "MOVIE_REC"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "playback_button": {
+      "name": "Playback button",
+      "location": "rear",
+      "manual_page": 32,
+      "face": null,
+      "icon": "playback",
+      "connection_ids": [
+        "controls-gpio-2-9"
+      ],
+      "assignable": false,
+      "default_function": "Starts playback.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "K_PLAY"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "power_switch": {
+      "name": "ON/OFF switch",
+      "location": "top",
+      "manual_page": 22,
+      "face": "ON/OFF",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Turns the camera on or off.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch",
+        "positions": [
+          {
+            "id": "ON",
+            "key": {
+              "kind": "debug_key",
+              "name": "POWER"
+            },
+            "asserted": true
+          },
+          {
+            "id": "OFF",
+            "key": {
+              "kind": "debug_key",
+              "name": "POWER"
+            },
+            "asserted": false
+          }
+        ]
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "ON",
+          "label": "ON",
+          "description": null
+        },
+        {
+          "id": "OFF",
+          "label": "OFF",
+          "description": null
+        }
+      ]
+    },
+    "quick_menu_button": {
+      "name": "Q (quick menu) button",
+      "location": "rear",
+      "manual_page": 40,
+      "face": "Q",
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-8"
+      ],
+      "assignable": false,
+      "default_function": "Displays the quick menu; press and hold to edit quick-menu items.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "K_Q"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "rear_command_dial": {
+      "name": "Rear command dial",
+      "location": "rear",
+      "manual_page": 6,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-gpio-0-10"
+      ],
+      "assignable": true,
+      "default_function": "Rotation adjusts aperture, selects quick-menu options, changes focus-frame size, zooms in or out in playback, or selects a scene in auto mode; pressing the center zooms the selected focus area or active playback focus point, and holding it in manual focus selects a focus display.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "steps",
+          "decrease": {
+            "kind": "debug_key",
+            "name": "CMD_LEFT"
+          },
+          "increase": {
+            "kind": "debug_key",
+            "name": "CMD_RIGHT"
+          }
+        },
+        "press": {
+          "kind": "debug_key",
+          "name": "CMD_PUSH"
+        },
+        "endless": true
+      },
+      "pushable": true,
+      "positions": [],
+      "short_name": "REAR DIAL"
+    },
+    "selector": {
+      "name": "Selector/function buttons",
+      "location": "rear",
+      "manual_page": 4,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-8"
+      ],
+      "assignable": true,
+      "default_function": "Directions highlight items; by default up/right/down/left are Fn3/Fn4/Fn5/Fn6 for bracketing, film simulation, flash mode, and focus-frame selection. Selector buttons can instead position the focus area.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "pad",
+        "directions": {
+          "up": {
+            "kind": "debug_key",
+            "name": "UP"
+          },
+          "down": {
+            "kind": "debug_key",
+            "name": "DOWN"
+          },
+          "left": {
+            "kind": "debug_key",
+            "name": "LEFT"
+          },
+          "right": {
+            "kind": "debug_key",
+            "name": "RIGHT"
+          }
+        },
+        "press": null
+      },
+      "pushable": false,
+      "positions": [],
+      "short_name": "SELECTOR"
+    },
+    "shutter_button": {
+      "name": "Shutter button",
+      "location": "top",
+      "manual_page": 31,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-gpio-0-2",
+        "controls-gpio-0-3"
+      ],
+      "assignable": false,
+      "default_function": "Half-press to lock focus and exposure; press all the way down to take a picture.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "shutter",
+        "stages": {
+          "half_press": [
+            {
+              "kind": "debug_key",
+              "name": "S1"
+            }
+          ],
+          "full_press": [
+            {
+              "kind": "debug_key",
+              "name": "S1"
+            },
+            {
+              "kind": "debug_key",
+              "name": "S2"
+            }
+          ]
+        }
+      },
+      "pushable": true,
+      "positions": [],
+      "short_name": "SHUTTER"
+    },
+    "shutter_speed_dial": {
+      "name": "Shutter speed dial",
+      "location": "top",
+      "manual_page": 52,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Selects shutter speed; A selects automatic shutter speed, T selects time exposure, and B selects bulb exposure.",
+      "role": null,
+      "mechanical": false,
+      "behavior": null,
+      "pushable": false,
+      "positions": [],
+      "short_name": "SPEED"
+    },
+    "view_mode_button": {
+      "name": "VIEW button",
+      "location": "rear",
+      "manual_page": 25,
+      "face": "VIEW",
+      "icon": null,
+      "connection_ids": [
+        "controls-gpio-3-10"
+      ],
+      "assignable": false,
+      "default_function": "Cycles through EVF and LCD display modes.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "VIEW"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    }
+  }
+}

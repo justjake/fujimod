@@ -13,12 +13,30 @@ bound initial abuse; monitor the budget before increasing it.
 
 The client keeps a random idempotency key across retries. R2 receives
 `<id>/report.tar` and `<id>/metadata.json` before GitHub is contacted. A successful
-response is a durable storage acknowledgement, so the browser can then request
+response is a durable storage acknowledgment, so the browser can then request
 camera deletion. An ambiguous GitHub response returns 202 with the report ID,
 retains the archive and never automatically repeats the GitHub request. Retrieve
 that ID from the private bucket to reconcile it manually. There is no public
 archive download endpoint. Records and archives persist until maintainers delete
 them; there is no automatic retention policy yet.
+
+## Index
+
+Every object written to the bucket also has a row in the `fujimod-reports` D1
+database (`objects` table: key, kind, item ID, state, size, content type,
+summary, metadata JSON, start and stored times). The row is written as
+`uploading` before any bytes go to R2 and marked `stored`, with its size, when
+the upload finishes, so abandoned uploads stay visible. [`bucket.ts`](bucket.ts)
+is the only module that writes the bucket; `bucket.test.ts` fails on any other
+direct write. Query it with the Cloudflare CLI:
+
+```sh
+cf d1 query 73658419-4432-430f-9ac8-53fa5a87d19b \
+  --sql "SELECT started_at, state, kind, id, summary FROM objects ORDER BY started_at DESC LIMIT 20"
+```
+
+Schema changes go in `migrations/`; apply them with
+`node ../../scripts/cloudflare/wrangler.ts d1 migrations apply fujimod-reports --remote`.
 
 ## Deployment
 
@@ -43,5 +61,5 @@ Maintainers can retrieve a report with their Cloudflare credentials:
 npx wrangler r2 object get fujimod-issue-reports/REPORT_ID/report.tar --remote --file report.tar
 ```
 
-Run `node --test worker.test.mjs issue-reports.test.mjs`. Tests use a real local
+Run `node --test worker.test.ts issue-reports.test.ts`. Tests use a real local
 Worker/R2/Durable Object runtime and intercept GitHub; no actual issues are posted.

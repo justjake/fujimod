@@ -1,0 +1,22 @@
+#!/bin/sh
+# Installed by scripts/git/install_hooks.py. Work happens in the main checkout;
+# a new worktree is kept only when FUJIMOD_WORKTREE_APPROVED names the
+# approval for it. Approved creations are logged in the common Git directory.
+if command -v git-lfs >/dev/null 2>&1; then
+  git lfs post-checkout "$@" || exit $?
+fi
+[ "$1" = 0000000000000000000000000000000000000000 ] || exit 0
+common=$(git rev-parse --path-format=absolute --git-common-dir)
+[ "$(git rev-parse --path-format=absolute --git-dir)" != "$common" ] || exit 0
+worktree=$(git rev-parse --show-toplevel)
+if [ -n "$FUJIMOD_WORKTREE_APPROVED" ]; then
+  printf '%s\t%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$worktree" "$2" \
+    "$FUJIMOD_WORKTREE_APPROVED" >>"$common/fujimod-worktrees.log"
+  exit 0
+fi
+cd "$common" && git worktree remove --force "$worktree"
+printf >&2 '\n%s\n%s\n%s\n\n' \
+  "New worktrees are refused; removed $worktree." \
+  "Work and commit in the main checkout: mise run commit -- -m MESSAGE PATHS..." \
+  "With the owner's approval for this worktree, set FUJIMOD_WORKTREE_APPROVED to the reason."
+exit 1

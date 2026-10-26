@@ -1,0 +1,145 @@
+{
+  "$schema": "https://fujimod.com/schemas/bulk.generated.schema.json",
+  "schema": 1,
+  "id": "xm5-130-bulk",
+  "firmware_id": "xm5-130",
+  "product": "X-M5",
+  "internal_version": "2.06",
+  "code_alias": 0,
+  "source": {
+    "mechanism": "pattern_zero_base",
+    "registered_buffer": 71435752,
+    "source_state": 77236016,
+    "capacity": 65536
+  },
+  "window": {
+    "address": 16384,
+    "size": 2147467264
+  },
+  "code_checks": [
+    {
+      "name": "bulk_30eedfc",
+      "address": 51310076,
+      "size": 180,
+      "sha256": "a82ef2eb578771098c0e526fe9c74f3831304c408571370806ab0463a901190c"
+    },
+    {
+      "name": "bulk_30ef830",
+      "address": 51312688,
+      "size": 184,
+      "sha256": "408402b172bdbc4cab8625e925d1d2f34bb2830c18ad074fae03097bc093aa8f"
+    },
+    {
+      "name": "bulk_30f068c",
+      "address": 51316364,
+      "size": 196,
+      "sha256": "3121d9048bb70d2cf0269a01f97b0a0b480251519e564fffccd998d8ce6f0ed5"
+    },
+    {
+      "name": "bulk_30efae8",
+      "address": 51313384,
+      "size": 80,
+      "sha256": "896cc17a2d2780e76891b19610b8e3642af144ac2743b34ddd92248891d5fbbf"
+    },
+    {
+      "name": "bulk_15a6150",
+      "address": 22700368,
+      "size": 40,
+      "sha256": "c2b38b716b84658692cf4e99922b55e22b1fa9b3e05c7e43736fb037d68a6761"
+    },
+    {
+      "name": "bulk_15a6334",
+      "address": 22700852,
+      "size": 44,
+      "sha256": "cbafafb852caaa7530975bbf9ca2ebbd5a25c08bbd7c6e2e3ee2443708f09f46"
+    },
+    {
+      "name": "bulk_15a60c4",
+      "address": 22700228,
+      "size": 84,
+      "sha256": "71b0546c7bc5752ac6d99639a15325853b29f5d1b8a8ef5a013b4e07dd6a7915"
+    },
+    {
+      "name": "bulk_3189cbc",
+      "address": 51944636,
+      "size": 224,
+      "sha256": "8653a6a53f2c34b874a7dddfb7ff12a3eefa0dc526e55b5de37b5278467e90c7"
+    },
+    {
+      "name": "bulk_1608a58",
+      "address": 23104088,
+      "size": 40,
+      "sha256": "844de08ac7df35d7bfe363e14e058d99e9dbfa87fbfc4dc405ba7c93ab4600c2"
+    },
+    {
+      "name": "bulk_1608b3c",
+      "address": 23104316,
+      "size": 12,
+      "sha256": "1b25a90bbc60485b81ff38035e782cecad5b75f41580095027fdb8d517bda799"
+    },
+    {
+      "name": "bulk_30f0884",
+      "address": 51316868,
+      "size": 192,
+      "sha256": "64d25d925881fccc5da3b41499696a0883714955f558b92a2efbb7046f70bcda"
+    },
+    {
+      "name": "bulk_30f0944",
+      "address": 51317060,
+      "size": 388,
+      "sha256": "43b8bd08449d50d66352a313c3269bba4bc627d95ea5bbf873dd400f617e22cc"
+    },
+    {
+      "name": "bulk_3189b98",
+      "address": 51944344,
+      "size": 264,
+      "sha256": "a160ea38e9b52a7c1cee94a1cba12948b940944a31c86ea3e20b41b8e7e2934f"
+    },
+    {
+      "name": "bulk_15acbf8",
+      "address": 22727672,
+      "size": 284,
+      "sha256": "5617f3b45b92cc34efe881d25636085e0386e9a69c765b5b4adf875102d8877c"
+    }
+  ],
+  "probes": [
+    {
+      "address": 51310076,
+      "size": 128
+    },
+    {
+      "address": 51312688,
+      "size": 128
+    }
+  ],
+  "mapped_probe": {
+    "name": "bulk_mapped_probe",
+    "address": 51306496,
+    "size": 4096,
+    "sha256": "1e345a268b1b8b8a8d9592b787010143dbadb5dff9715f3235ae92ff24168948"
+  },
+  "scopes": [
+    {
+      "name": "quick",
+      "basis": "Mapped update ranges in the RAM window through the highest located transfer-state address, rounded to 1 MiB. Static BSS and heap extents beyond it are not established.",
+      "ranges": [
+        {
+          "name": "firmware",
+          "address": 16384,
+          "size": 77578240
+        }
+      ]
+    },
+    {
+      "name": "full",
+      "basis": "The recorded RAM capture window; its first 16 KiB and high SRAM are excluded.",
+      "ranges": [
+        {
+          "name": "ram",
+          "address": 16384,
+          "size": 2147467264
+        }
+      ]
+    }
+  ]
+}

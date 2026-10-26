@@ -39,4 +39,4 @@ body:
       description: Drag and drop the downloaded simulator report ZIP here to upload it before submitting this issue.
     validations:
       required: true
-      accept: ".zip"
+      accept: '.zip'

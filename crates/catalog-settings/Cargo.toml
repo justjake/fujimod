@@ -1,0 +1,26 @@
+[package]
+name = "fujimod-catalog-settings"
+description = "Firmware settings layouts and the persistent inputs a run supplies"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-catalog-identity.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+schemars.workspace = true
+sha2.workspace = true
+tsify.workspace = true
+serde-wasm-bindgen.workspace = true
+wasm-bindgen.workspace = true
+fujimod-workspace-hack.workspace = true
+
+[features]
+# JSON Schema derives, used only to generate and check the committed schemas.
+schema = []

@@ -5,11 +5,11 @@
   "compatibility_date": "2026-10-17",
   "workers_dev": false,
   "assets": {
-    "directory": "./dist",
-    "not_found_handling": "404-page"
+    "directory": "./dist/client",
+    "not_found_handling": "404-page",
   },
   "routes": [
     { "pattern": "fujimod.com", "custom_domain": true },
-    { "pattern": "www.fujimod.com", "custom_domain": true }
-  ]
+    { "pattern": "www.fujimod.com", "custom_domain": true },
+  ],
 }
