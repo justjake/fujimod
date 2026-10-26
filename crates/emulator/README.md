@@ -59,6 +59,14 @@ returns a stopped report while retaining the session for inspection. No Python
 runtime is required. The Python package exposes the same construction through
 `fujimod.emulator.Board.from_inputs`.
 
+## Generic SDHC embedding
+
+`fujimod_emulator_ip::sdhci::host::SdHost` takes `Options` and `Wiring { card, contacts, irq }`; `SdHost::new_polled` accepts an unconnected interrupt output. Register base, protocol, transfer and clock ticks, RCA, and RAM extent are caller inputs. `Card` bounds sector access and dirty storage; the host bounds DMA and PIO transfers and supports multi-block data CRC faults through `inject_data_fault`.
+
+`Options.initialization_fault` is a typed `InitializationFault` policy, defaulting to `None` when omitted from constructor JSON. `RejectCmd8` makes a valid CMD8 finish after `transfer_ticks` with Command Timeout Error (`0x32` bit 0) and Error Interrupt (`0x30` bit 15), without Command Complete or a new response. Error status and signal enables control the routed IRQ. W1C clears the latched statuses; resetting the controller or retrying CMD8 does not remove the policy. Checkpoints retain pending command timing and reject a receiving host with a different policy. Diagnostic state and fingerprints include the policy.
+
+Physical contacts remain independent: clone `fujimod_emulator_devices::parts::card_contacts::Contacts` for host and board wiring, and use `Contacts::set(present, protected)` to change them. An initialization fault does not change card detect, write protection, or media content. Present State reports presence; protected writes, absent-card commands, and contact changes during a transfer refuse execution. `replace_card` requires an idle host and advances the medium revision. EXR II `Model::SdHost.options` and XP5 SD `controller` options accept `initialization_fault: "reject_cmd8"` without changing their contact or interrupt wiring. Session card presence/protection controls remain separate from this construction-time policy.
+
 ## Durable snapshots
 
 `session.checkpoint(None)?.export()?` returns a versioned binary archive that can

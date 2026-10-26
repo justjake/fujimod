@@ -38,6 +38,7 @@ impl Controller {
             clock_ticks: options.clock_ticks,
             rca: options.rca,
             ram_bytes: options.ram_bytes,
+            initialization_fault: host::InitializationFault::None,
         };
         let host = if let Some(irq) = irq {
             SdHost::new(

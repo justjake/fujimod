@@ -23,6 +23,14 @@ pub enum Protocol {
     Application,
     Rom,
 }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InitializationFault {
+    #[default]
+    None,
+    /// CMD8 completes with Command Timeout Error and no response.
+    RejectCmd8,
+}
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
@@ -32,8 +40,11 @@ pub struct Options {
     pub clock_ticks: u64,
     pub rca: u16,
     pub ram_bytes: u64,
+    #[serde(default)]
+    pub initialization_fault: InitializationFault,
 }
 const MAX_DATA_FAULTS: usize = 32;
+const COMMAND_TIMEOUT_ERROR: u16 = 1;
 const DATA_CRC_ERROR: u16 = 0x20;
 const ERROR_INTERRUPT: u16 = 0x8000;
 pub struct Wiring {
@@ -652,6 +663,12 @@ impl SdHost {
             self.request = Some(r);
             return Err("SD contacts changed during transfer".into());
         }
+        if r.command == 8 && self.options.initialization_fault == InitializationFault::RejectCmd8 {
+            self.regs
+                .set(0x32, self.regs.get(0x32) | COMMAND_TIMEOUT_ERROR);
+            self.regs.set(0x30, self.regs.get(0x30) | ERROR_INTERRUPT);
+            return self.signal(cx);
+        }
         r.due = None;
         self.response = r.response;
         if r.quantity == 0 {
@@ -1024,6 +1041,7 @@ struct Snapshot {
     card: Card,
     reads: StorageReads,
     contacts: u8,
+    initialization_fault: InitializationFault,
     regs: Registers,
     clocks: Clocks,
     state: State,
@@ -1057,6 +1075,7 @@ impl Device for SdHost {
             card: &'a Card,
             reads: &'a StorageReads,
             contacts: u8,
+            initialization_fault: InitializationFault,
             regs: &'a Registers,
             clocks: &'a Clocks,
             state: State,
@@ -1079,6 +1098,7 @@ impl Device for SdHost {
                 card: &self.card,
                 reads: &self.reads,
                 contacts: self.contacts.checkpoint_level(),
+                initialization_fault: self.options.initialization_fault,
                 regs: &self.regs,
                 clocks: &self.clocks,
                 state: self.state,
@@ -1101,6 +1121,9 @@ impl Device for SdHost {
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
         let state: Snapshot = saved.decode(self.name())?;
+        if state.initialization_fault != self.options.initialization_fault {
+            return Err("SD initialization fault policy differs".into());
+        }
         state
             .reads
             .validate(u64::from(state.card.sectors()) * 512)?;
@@ -1152,7 +1175,7 @@ impl Device for SdHost {
             "clocks":self.clocks.save(),"state":self.state,"app":self.app,"block_length":self.block_length,"bus_width":self.bus_width,
             "response":self.response,"request":request,"fifo":fujimod_emulator_devices::fingerprint::bytes(&fifo),"scratch":fujimod_emulator_devices::fingerprint::bytes(&self.scratch),
             "fifo_position":fifo_position,"rom_fifo_ready":self.rom_fifo_ready,
-            "faults":self.faults,"fault_history":self.fault_history}),
+            "initialization_fault":self.options.initialization_fault,"faults":self.faults,"fault_history":self.fault_history}),
         )
     }
     fn name(&self) -> &'static str {
@@ -1248,7 +1271,8 @@ impl Device for SdHost {
             "busy":self.busy(), "response":self.response, "registers":self.regs.0.as_slice(),
             "request":self.request.as_ref().map(|r| serde_json::json!({"command":r.command,
                 "cursor":r.cursor,"quantity":r.quantity,"deadline":r.due})),
-            "clocks":self.clocks.save(), "data_faults":self.faults, "fault_history":self.fault_history
+            "clocks":self.clocks.save(), "initialization_fault":self.options.initialization_fault,
+            "data_faults":self.faults, "fault_history":self.fault_history
         })
     }
     fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
@@ -1321,6 +1345,7 @@ mod tests {
                 clock_ticks: 2,
                 rca: 0x1234,
                 ram_bytes: 0x10000,
+                initialization_fault: InitializationFault::None,
             },
             Wiring {
                 card: Card::new(sd_card::Options {

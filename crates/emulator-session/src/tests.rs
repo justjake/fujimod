@@ -23,6 +23,7 @@ fn card_session() -> Session {
             clock_ticks: 2,
             rca: 0x1234,
             ram_bytes: 0x1000,
+            initialization_fault: sdhc::InitializationFault::None,
         },
         sdhc::Wiring {
             card,
