@@ -6,8 +6,7 @@ selection, C0/C2/C4 session lifecycle, D0/D1 command exchanges, information
 selectors, configuration commands, debug events and console polling, log reads,
 diagnostic queries, capabilities metadata, E0/E1/E8 data transfers and composed memory and diagnostic-data range operations.
 
-`ff80/commands/` encodes one firmware request at a time. `operations/` composes
-commands. nusb handles platform USB access; its adapter has a private test seam.
+`ff80/commands/` encodes one firmware request at a time. `operations/` composes commands. nusb handles platform USB access; `emulator` accepts caller-supplied endpoints below the same protocol implementation.
 Body/firmware definitions supply memory limits explicitly. The session's
 advertised packet size, USB endpoint packet size and the host reply budget
 are separate quantities. The library does not enable debug access or change
@@ -98,12 +97,43 @@ The upstream MIT notice is retained in [LICENSE.fffw](LICENSE.fffw).
 
 Run `cargo test --workspace --all-features` from the repository root.
 
-The `testing` module supplies strict exchange scripts through the same session
-implementation. `testing::Peer` supplies synchronous virtual endpoint
-completions for firmware emulators using this same Rust core. These paths do
-not enumerate or open USB devices; sessions reach them only through
-`testing::Script` and `testing::Peer`. Python's tests use them to verify
-streaming and ownership across the language boundary.
+The `testing` module supplies strict exchange scripts and synchronous `testing::Peer` completions through the same session implementation. Python's tests use them to verify streaming and ownership across the language boundary. Production emulator integrations use the endpoint API below.
+
+## Emulated endpoints
+
+Implement `emulator::EndpointProvider` to advertise `InterfaceDescriptor` values and claim a caller-selected configuration/interface/alternate setting. Each descriptor lists typed endpoint addresses, transfer kinds and nonzero packet sizes. `Connection::open_emulated` rejects missing or duplicate selections and requires exactly one bulk endpoint in each direction before claiming. It never enumerates devices or falls back to physical USB or a proxy.
+
+```rust,no_run
+use std::{num::NonZeroU32, time::Duration};
+use fujimod_usb::{
+    Error, Result,
+    connection::{Connection, TransferOptions},
+    emulator::EndpointProvider,
+    ff80::commands::info::InfoSelector,
+};
+
+async fn identify_emulated(provider: &mut impl EndpointProvider) -> Result<String> {
+    let selection = provider.interfaces().first().ok_or(Error::InvalidInterface)?.selection;
+    let connection = Connection::open_emulated(provider, selection, TransferOptions {
+        timeout: Duration::from_secs(1),
+        max_reply_bytes: NonZeroU32::new(1024).unwrap(),
+    }).await?;
+    let mut session = connection.begin_session(None).await?;
+    let product = session.device_info(InfoSelector::Product).await?;
+    session.close().await?;
+    Ok(product.text)
+}
+```
+
+`claim` returns an owned `Box<dyn Endpoints>`. The connection, then the session, exclusively owns that claim. `Endpoints` receives raw vendor control OUT requests and bulk IN/OUT buffers, not decoded service commands. The existing ff80 layer still supplies framing, codecs, reply validation, traces and `SessionState`. Bulk buffers have the exact requested length; packet sizes are descriptor metadata, not an instruction to round emulated buffers. IN buffers are bounded by the session's host reply budget; OUT buffers borrow the existing encoded request.
+
+Return `Completion { transferred, status }` for each transfer, including partial byte counts on errors and `TransferError::Cancelled` for an explicit cancellation completion. Only the reported IN prefix is returned. Error prefixes are preserved in `Error::Transfer.partial`. Short control/OUT transfers fail; short IN replies go through the existing ff80 decoder. Counts exceeding the supplied buffer capacity fail as `Error::EmulatorCompletion`.
+
+The host applies `TransferOptions.timeout` separately to claim, each transfer and release. Transfer deadlines return `Error::Timeout`; resource failures and deadlines return `Error::EmulatorResource` and `Error::EmulatorResourceTimeout` with a `ResourceOperation`. Pending futures must yield to the executor. A synchronous callback that does not return cannot be interrupted by a future deadline. Native `EndpointFuture` values must be `Send`; Wasm futures need not be `Send`. The owned endpoint object remains `Send + Sync`.
+
+Dropping an in-flight command future, a transfer failure or malformed reply fences the session as `CompletionUnknown`. No later command or protocol close is sent. Dropping a connection/session must release its claim through the endpoint object's `Drop` without protocol traffic. After a successful ff80 close, the host also awaits `Endpoints::release`; `Drop` must still release resources if that future fails, times out or is cancelled. Claim-future cancellation must release resources acquired before completion. Cancellation stops host waiting and does not certify that emulated device work stopped.
+
+## Additional APIs
 
 App80 transport is the separate [`fujimod-usb-app80`](../usb-app80/src/lib.rs)
 crate; command codecs and value types live in

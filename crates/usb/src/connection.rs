@@ -369,6 +369,24 @@ impl Connection {
         })
     }
 
+    /// Claims emulated endpoints without enumerating or opening physical USB devices.
+    pub async fn open_emulated(
+        provider: &mut impl crate::emulator::EndpointProvider,
+        selection: InterfaceSelection,
+        options: TransferOptions,
+    ) -> Result<Self> {
+        if options.timeout.is_zero() {
+            return Err(Error::InvalidTimeout);
+        }
+        check_limit(8, options.max_reply_bytes.get())?;
+        Ok(Self {
+            io: Backend::Emulator(
+                crate::emulator::EmulatorIo::open(provider, selection, options).await?,
+            ),
+            max_reply_bytes: options.max_reply_bytes.get(),
+        })
+    }
+
     /// Label the current local owner lease before its first FF80 exchange.
     pub fn set_tool(&self, tool: String) {
         if let Backend::Usb(io) = &self.io
@@ -390,19 +408,23 @@ impl Connection {
     }
 }
 
-fn bulk_pair(addresses: &[u8]) -> Result<(u8, u8)> {
-    let inputs: Vec<_> = addresses
-        .iter()
-        .copied()
-        .filter(|a| a & 0x80 != 0 && a & 0x0f != 0)
-        .collect();
-    let outputs: Vec<_> = addresses
-        .iter()
-        .copied()
-        .filter(|a| a & 0x80 == 0 && a & 0x0f != 0)
-        .collect();
-    match (inputs.as_slice(), outputs.as_slice()) {
-        ([input], [output]) => Ok((*input, *output)),
+pub(crate) fn bulk_pair<A: std::borrow::Borrow<u8>>(
+    addresses: impl IntoIterator<Item = A>,
+) -> Result<(u8, u8)> {
+    let mut input = None;
+    let mut output = None;
+    for address in addresses {
+        let address = *address.borrow();
+        if address & 0x0f == 0 {
+            continue;
+        }
+        let endpoint = if address & 0x80 != 0 { &mut input } else { &mut output };
+        if endpoint.replace(address).is_some() {
+            return Err(Error::AmbiguousEndpoints);
+        }
+    }
+    match (input, output) {
+        (Some(input), Some(output)) => Ok((input, output)),
         _ => Err(Error::AmbiguousEndpoints),
     }
 }
@@ -435,7 +457,7 @@ pub(crate) struct UsbIo {
     lease: Option<crate::owner::LocalLease>,
 }
 
-async fn deadline<T>(
+pub(crate) async fn deadline<T>(
     timeout: Duration,
     stage: TransferStage,
     task: impl std::future::IntoFuture<Output = T>,
@@ -599,6 +621,7 @@ impl UsbIo {
 pub(crate) enum Backend {
     Usb(UsbIo),
     Proxy(crate::proxy::ProxyIo),
+    Emulator(crate::emulator::EmulatorIo),
     Replay(crate::testing::Script),
     Model(crate::testing::Model),
 }
@@ -607,6 +630,7 @@ impl Io for Backend {
         match self {
             Self::Proxy(io) => io.release().await,
             Self::Usb(io) => io.release().await,
+            Self::Emulator(io) => io.release().await,
             _ => Ok(()),
         }
     }
@@ -614,6 +638,7 @@ impl Io for Backend {
         match self {
             Self::Usb(io) => io.endpoint(stage),
             Self::Proxy(io) => io.endpoint(stage),
+            Self::Emulator(io) => io.endpoint(stage),
             Self::Replay(io) => io.endpoint(stage),
             Self::Model(io) => io.endpoint(stage),
         }
@@ -622,6 +647,7 @@ impl Io for Backend {
         match self {
             Self::Usb(io) => io.control(kind, envelope).await,
             Self::Proxy(io) => io.control(kind, envelope).await,
+            Self::Emulator(io) => io.control(kind, envelope).await,
             Self::Replay(io) => io.control(kind, envelope).await,
             Self::Model(io) => io.control(kind, envelope).await,
         }
@@ -630,6 +656,7 @@ impl Io for Backend {
         match self {
             Self::Usb(io) => io.write(bytes).await,
             Self::Proxy(io) => io.write(bytes).await,
+            Self::Emulator(io) => io.write(bytes).await,
             Self::Replay(io) => io.write(bytes).await,
             Self::Model(io) => io.write(bytes).await,
         }
@@ -638,6 +665,7 @@ impl Io for Backend {
         match self {
             Self::Usb(io) => io.read(maximum).await,
             Self::Proxy(io) => io.read(maximum).await,
+            Self::Emulator(io) => io.read(maximum).await,
             Self::Replay(io) => io.read(maximum).await,
             Self::Model(io) => io.read(maximum).await,
         }

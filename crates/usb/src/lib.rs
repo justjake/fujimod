@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 
 pub mod connection;
+pub mod emulator;
 pub mod error;
 pub mod ff80;
 pub mod operations;

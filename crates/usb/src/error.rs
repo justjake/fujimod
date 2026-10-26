@@ -17,6 +17,19 @@ pub enum Error {
     Proxy(#[from] fujimod_usb_proxy::Error),
     #[error("USB device access failed: {0}")]
     Usb(#[from] nusb::Error),
+    #[error("emulator resource {operation:?} failed: {source}")]
+    EmulatorResource {
+        operation: crate::emulator::ResourceOperation,
+        source: crate::emulator::TransferError,
+    },
+    #[error("emulator resource {0:?} timed out")]
+    EmulatorResourceTimeout(crate::emulator::ResourceOperation),
+    #[error("emulator completion during {stage:?} reported {actual} bytes for capacity {capacity}")]
+    EmulatorCompletion {
+        stage: TransferStage,
+        capacity: usize,
+        actual: usize,
+    },
     #[error("USB transfer failed during {stage:?}: {source} ({transferred:?} bytes transferred)")]
     Transfer {
         stage: TransferStage,
