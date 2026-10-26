@@ -1,0 +1,20 @@
+[package]
+name = "fujimod-unicorn-sys"
+description = "Builds and links the pinned Unicorn ARM and AArch64 static archive"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+links = "unicorn"
+build = "build.rs"
+
+[lib]
+test = false
+doctest = false
+
+[build-dependencies]
+cmake = "0.1"
+
+[dependencies]
+fujimod-workspace-hack.workspace = true

@@ -58,14 +58,12 @@ pub enum Error {
     InvalidLength,
     #[error("argument must be a bounded ASCII token")]
     InvalidToken,
-    #[cfg(feature = "testing")]
     #[error("USB replay differs at exchange {position}")]
     ReplayMismatch {
         position: usize,
         expected: Option<Box<crate::testing::Exchange>>,
         actual: Box<crate::testing::Exchange>,
     },
-    #[cfg(feature = "testing")]
     #[error("virtual USB peer failed: {0}")]
     TestPeer(#[source] Box<dyn std::error::Error + Send + Sync>),
     #[error("bulk read failed after {data_len} bytes: {source}")]
@@ -78,6 +76,7 @@ pub enum Error {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProtocolError {
+    ExpectationMismatch,
     ReplyLength { expected: usize, actual: usize },
     CommandEcho { expected: u32, actual: u32 },
     FunctionEcho { expected: u32, actual: u32 },
@@ -95,7 +94,7 @@ impl From<ProtocolError> for Error {
     }
 }
 
-pub(crate) fn check_limit(requested: u32, limit: u32) -> Result<()> {
+pub fn check_limit(requested: u32, limit: u32) -> Result<()> {
     if requested > limit {
         Err(Error::LengthLimit { requested, limit })
     } else {

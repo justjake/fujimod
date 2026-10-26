@@ -1,0 +1,48 @@
+[package]
+name = "fujimod-emulator-boot"
+description = "Boot assembly and run preparation from the reference catalog and run configurations"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-emulator-session.workspace = true
+fujimod-emulator-exr2-resources.workspace = true
+fujimod-emulator.workspace = true
+fujimod-emulator-cpu.workspace = true
+fujimod-emulator-cpu-unicorn.workspace = true
+fujimod-emulator-devices.workspace = true
+fujimod-emulator-exr2-plan.workspace = true
+fujimod-emulator-preparation.workspace = true
+fujimod-catalog.workspace = true
+fujimod-catalog-configuration.workspace = true
+fujimod-catalog-resolution.workspace = true
+fujimod-catalog-assets.workspace = true
+fujimod-catalog-construction.workspace = true
+fujimod-catalog-controls.workspace = true
+fujimod-catalog-remote.workspace = true
+fujimod-settings.workspace = true
+fujimod-recording.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+tsify.workspace = true
+serde-wasm-bindgen.workspace = true
+wasm-bindgen.workspace = true
+fujimod-workspace-hack.workspace = true
+
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+sha2 = { workspace = true, features = ["asm-aarch64"] }
+
+[dev-dependencies]
+fujimod-catalog-run-inputs.workspace = true
+fujimod-emulator-exr2-board.workspace = true
+fujimod-emulator-models.workspace = true
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

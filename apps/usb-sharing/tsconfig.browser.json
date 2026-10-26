@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.tests.json",
+  "compilerOptions": {
+    "types": ["node", "emscripten"],
+    "typeRoots": ["./node_modules/@types", "../../bindings/javascript/node_modules/@types"]
+  },
+  "include": ["peer.browser.ts"]
+}

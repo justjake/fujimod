@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FujiMod emulator profile",
+  "type": "object",
+  "required": [
+    "$schema",
+    "schema",
+    "firmware_id",
+    "soc",
+    "board",
+    "firmware"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schema": {
+      "const": 1
+    },
+    "firmware_id": {
+      "type": "string"
+    },
+    "soc": {
+      "$ref": "#/$defs/documentReference"
+    },
+    "board": {
+      "$ref": "#/$defs/documentReference"
+    },
+    "firmware": {
+      "$ref": "#/$defs/documentReference"
+    }
+  },
+  "$defs": {
+    "documentReference": {
+      "description": "A catalog document in this repository; Git versions it, so it carries no hash.",
+      "type": "object",
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

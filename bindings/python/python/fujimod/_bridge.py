@@ -1,14 +1,29 @@
 """Language conversions only. Every USB operation executes in the Rust module."""
 
 import asyncio
+from collections.abc import Awaitable, Buffer, Callable
+from contextlib import suppress
 from dataclasses import dataclass
+from enum import Enum
+from typing import TYPE_CHECKING, Protocol, Self, cast
 
 from _fujimod_js import usb as jsusb
 from js import Uint8Array
 from pyodide.ffi import JsException, to_js
 
+if TYPE_CHECKING:
+    from _fujimod_js import JsBytes, JsDefinitionError, JsServiceCommandError
 
-def uint(value, bits=32):
+
+class JsFailure(Protocol):
+    js_error: object
+
+
+class JsFree(Protocol):
+    def free(self) -> None: ...
+
+
+def uint(value: int, bits: int = 32) -> int:
     if type(value) is not int:
         raise TypeError("expected an integer quantity")
     if not 0 <= value < (1 << bits):
@@ -16,7 +31,7 @@ def uint(value, bits=32):
     return value
 
 
-def sint(value, bits):
+def sint(value: int, bits: int) -> int:
     if type(value) is not int:
         raise TypeError("expected an integer quantity")
     if not -(1 << (bits - 1)) <= value < (1 << (bits - 1)):
@@ -24,40 +39,40 @@ def sint(value, bits):
     return value
 
 
-def buffer_in(value):
+def buffer_in(value: Buffer) -> JsBytes:
     # Copy before yielding: JS/Rust must never retain a Python-memory view.
     return Uint8Array.new(to_js(memoryview(value).cast("B"), create_pyproxies=False))
 
 
-def buffer_out(value):
+def buffer_out(value: JsBytes) -> bytes:
     return bytes(value.to_py())
 
 
-def enum_in(value, cls, group=None):
+def enum_in[E: Enum](value: E, cls: type[E], group: str | None = None) -> int:
     if type(value) is not cls:
         raise TypeError(f"expected {cls.__name__}")
-    return getattr(getattr(jsusb, group or cls.__name__), value.name)
+    return cast(int, getattr(getattr(jsusb, group or cls.__name__), value.name))
 
 
-def enum_out(value, cls, group=None):
+def enum_out[E: Enum](value: int, cls: type[E], group: str | None = None) -> E:
     names = getattr(jsusb, group or cls.__name__)
     return {getattr(names, member.name): member for member in cls}[value]
 
 
-def convert_error(value):
+def convert_error(value: object) -> Exception:
     kind = getattr(value, "kind", None)
     kinds = jsusb.ErrorKind
     if kind == kinds.Definition:
-        from .defs import DefinitionError, _failure
+        from .catalog import DefinitionError, _failure
 
         error = DefinitionError(str(getattr(value, "message", value)))
-        error.reason = _failure(value.reason)
+        error.reason = _failure(cast("JsDefinitionError", value).reason)
         return error
     if kind == kinds.ServiceCommand:
-        from .usb._catalogue import CommandError, _command_failure
+        from .usb._catalog import CommandError, _command_failure
 
         error = CommandError(str(getattr(value, "message", value)))
-        error.reason = _command_failure(value.reason)
+        error.reason = _command_failure(cast("JsServiceCommandError", value).reason)
         return error
     from .usb._errors import (
         ClosedSessionError,
@@ -78,9 +93,10 @@ def convert_error(value):
         kinds.Busy: SessionBusyError,
         kinds.Closed: ClosedSessionError,
         kinds.Abandoned: ClosedSessionError,
-        kinds.Cancelled: ClosedSessionError,
+        kinds.Canceled: ClosedSessionError,
     }.get(kind, UsbError)
     error = cls(str(getattr(value, "message", value)))
+    fields: dict[str, object] = {}
     for name in (
         "command",
         "primary",
@@ -96,30 +112,30 @@ def convert_error(value):
     ):
         field = getattr(value, name, None)
         if field is not None:
-            setattr(error, name, field)
+            fields[name] = field
     partial = getattr(value, "partial", None)
     if partial is not None:
-        error.partial = buffer_out(partial)
+        fields["partial"] = buffer_out(partial)
     if cls is TransferError:
-        if not hasattr(error, "partial"):
-            error.partial = b""
-        if not hasattr(error, "transferred"):
-            error.transferred = None
+        fields.setdefault("partial", b"")
+        fields.setdefault("transferred", None)
     cause = getattr(value, "cause", None)
     if cause is not None:
-        error.transfer_error = convert_error(cause)
+        fields["transfer_error"] = convert_error(cause)
+    for name, field in fields.items():
+        setattr(error, name, field)
     return error
 
 
-def call(function, *args):
+def call[**P, T](function: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
     try:
-        return function(*args)
+        return function(*args, **kwargs)
     except JsException as error:
-        raise convert_error(error.js_error) from error
+        raise convert_error(cast(JsFailure, error).js_error) from error
 
 
-async def settled(future):
-    """Finish cancellation cleanup even when the caller is cancelled again."""
+async def settled[T](future: asyncio.Future[T]) -> None:
+    """Finish cancellation cleanup even when the caller is canceled again."""
     while not future.done():
         try:
             await asyncio.shield(future)
@@ -129,15 +145,13 @@ async def settled(future):
             break
     # Retrieve the outcome so a rejected JS Promise never becomes unhandled.
     if not future.cancelled():
-        try:
+        with suppress(Exception):
             future.result()
-        except Exception:
-            pass
 
 
 @dataclass(frozen=True)
-class Success:
-    value: object
+class Success[T]:
+    value: T
 
 
 @dataclass(frozen=True)
@@ -145,8 +159,8 @@ class Failure:
     error: Exception
 
 
-def begin(promise):
-    async def capture():
+def begin[T](promise: Awaitable[T]) -> asyncio.Task[Success[T] | Failure]:
+    async def capture() -> Success[T] | Failure:
         try:
             return Success(await promise)
         except Exception as error:
@@ -157,7 +171,10 @@ def begin(promise):
     return asyncio.create_task(capture())
 
 
-async def wait_pending(future, cancel=None):
+async def wait_pending[T](
+    future: asyncio.Future[Success[T] | Failure],
+    cancel: Callable[[], object] | None = None,
+) -> T:
     try:
         outcome = await asyncio.shield(future)
     except asyncio.CancelledError:
@@ -167,38 +184,44 @@ async def wait_pending(future, cancel=None):
         raise
     if isinstance(outcome, Failure):
         if isinstance(outcome.error, JsException):
-            raise convert_error(outcome.error.js_error) from outcome.error
+            raise convert_error(
+                cast(JsFailure, outcome.error).js_error
+            ) from outcome.error
         raise outcome.error
     return outcome.value
 
 
-async def await_result(promise, cancel=None):
+async def await_result[T](
+    promise: Awaitable[T], cancel: Callable[[], object] | None = None
+) -> T:
     return await wait_pending(begin(promise), cancel)
 
 
-class Handle:
+class Handle[T]:
     """An owned wasm-bindgen object. Destruction releases memory, never USB I/O."""
 
+    _js: T
+
     @classmethod
-    def _wrap(cls, value):
+    def _wrap(cls, value: T) -> Self:
         obj = object.__new__(cls)
-        obj._js = value
+        object.__setattr__(obj, "_js", value)
         return obj
 
-    def __del__(self):
+    def __del__(self) -> None:
         value = getattr(self, "_js", None)
         if value is not None:
             value.free()
 
 
-def snapshot(value, convert):
+def snapshot[U: JsFree, T](value: U, convert: Callable[[U], T]) -> T:
     try:
         return convert(value)
     finally:
         value.free()
 
 
-def unwrap(value, cls):
+def unwrap[T](value: object, cls: type[Handle[T]]) -> T:
     if type(value) is not cls:
         raise TypeError(f"expected {cls.__name__}")
-    return value._js
+    return cast(Handle[T], value)._js

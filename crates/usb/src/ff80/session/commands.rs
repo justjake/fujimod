@@ -71,7 +71,7 @@ impl Session {
     pub async fn write_data(&mut self, bytes: &[u8]) -> Result<()> {
         self.core.write_data(bytes).await
     }
-    /// One E8 acknowledgement: four raw bytes or a 32-byte command reply.
+    /// One E8 acknowledgment: four raw bytes or a 32-byte command reply.
     /// The caller interprets the reply; it does not establish execution completion.
     pub async fn empty_response(&mut self) -> Result<Vec<u8>> {
         self.core.empty_response().await

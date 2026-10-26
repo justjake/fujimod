@@ -1,0 +1,43 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "exr2-small-page-discovery",
+  "body_id": "small-page-nand-discovery",
+  "reset": {
+    "inputs": {
+      "gpio": {
+        "gpio_inputs": {
+          "0": 3116,
+          "2": 4608,
+          "3": 776,
+          "12": 128,
+          "11": 0
+        },
+        "profile_name": "Synthetic normal-power small-page boot with released shutter GPIO0.2/3 high and keypad ADC8/9=1023; remaining lines borrowed/unmeasured.",
+        "boot_source": 0
+      },
+      "power": {
+        "profile_name": "Synthetic normal loader boot reason0x40; remaining ADC borrowed; MCU runtime status still separate rehearsal input",
+        "adc_samples": [
+          0,
+          0,
+          1023,
+          63,
+          534,
+          640,
+          0,
+          825,
+          1023,
+          1023,
+          0,
+          0
+        ],
+        "boot_reply": 64,
+        "spi0_input_profile": "absent-hot-shoe-flash-fixed-low-miso"
+      },
+      "mcu_packet_hex": "00000000d00700ff008000040000aafc",
+      "usb_connected": false
+    },
+    "execution_scope": "offline-boot-development"
+  }
+}

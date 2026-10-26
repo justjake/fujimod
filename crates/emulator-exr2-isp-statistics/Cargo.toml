@@ -1,0 +1,29 @@
+[package]
+name = "fujimod-emulator-exr2-isp-statistics"
+description = "EXR II statistics producer, metering, phase detection and window analysis"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-emulator-exr2-resources.workspace = true
+fujimod-emulator-exr2-images.workspace = true
+fujimod-emulator-image-formation.workspace = true
+fujimod-emulator-image-processing.workspace = true
+fujimod-emulator-exr2-plan.workspace = true
+fujimod-emulator-imaging.workspace = true
+fujimod-emulator-devices.workspace = true
+serde_json = "1"
+serde = { version = "1", features = ["derive", "rc"] }
+fujimod-workspace-hack.workspace = true
+
+[dev-dependencies]
+fujimod-emulator-exr2-isp-testing.workspace = true
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

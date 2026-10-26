@@ -34,8 +34,8 @@ the rendezvous service or WebRTC layer.
 WebRTC carries USB requests and completions on a reliable ordered data channel.
 The native implementation uses [str0m](https://docs.rs/str0m/); Wasm uses the
 browser's RTCPeerConnection through the same crate's bundled JavaScript module.
-A bounded framing layer splits large JSON/base64 transfers into 16,000-byte
-chunks. Transfer capacities and timeout fencing remain the USB proxy's existing
+Messages are postcard values with inline payload bytes, pipelined as described in
+[PIPELINE.md](PIPELINE.md). A bounded framing layer splits them into 16,000-byte chunks. Transfer capacities and timeout fencing remain the USB proxy's existing
 8 MiB and 120-second limits.
 
 WebSockets provide rendezvous, not NAT traversal. The signaling endpoint is
@@ -53,9 +53,7 @@ the Pages app. An unconfigured production build disables Share.
 
 For the local Vite development and preview servers, `/usb-proxy/` forwards to
 the local Rust service. Static deployments must set `FUJIMOD_SIGNAL_URL` at
-build time to a reachable `wss://.../usb-proxy/signal` endpoint. The private
-workspace's installed service and named Tailscale URL are documented in its
-`tools/usb_proxy/README.md`. Viewers must be able to reach the signaling endpoint;
+build time to a reachable `wss://.../usb-proxy/signal` endpoint. Viewers must be able to reach the signaling endpoint;
 a link containing a private tailnet endpoint is limited to that tailnet.
 
 Tickets use independent 256-bit random room IDs and capability keys. The key
@@ -83,38 +81,40 @@ an out-of-band offer/answer exchange or an already reachable peer endpoint.
 
 ## Ownership and failure
 
-Sharing closes the owner's healthy FF80 session before exporting its raw USB
-interface. The owner's console is disabled while shared. The simulator remains
-the same running guest and forwards ordinary USB bus operations through its
-worker; it does not synthesize responses, patch guest RAM or inspect program
-state to authorize hardware effects.
+Rust owns each browser USB device for the page's lifetime, whether it is shared
+or not. Repeated discovery, direct local sessions and the browser's Rust/Wasm
+exporter refer to that same nusb owner. JavaScript routes network messages;
+it never opens, claims, releases or closes a second copy of the physical device.
+The `/usb-proxy/` relay page also runs this Rust exporter.
 
-One remote connection owns the device at a time. Other clients may discover it
-but cannot claim it while occupied. Normal Session.close closes the protocol
-session and then releases the host lease. An error or abandoned claimed
-connection fences the shared device; a new client cannot silently resume it.
-The owner must stop sharing and reconnect. No timeout or disconnect retries a
-camera command, resets USB, changes camera modes, or certifies that firmware
-execution stopped. Stop sharing ends remote access; reconnect locally to resume
-the owner's console.
+Local sessions and remote controllers are clients of one owner. One logical
+session can hold the owner's lock at a time. Local sessions acquire it directly;
+remote proxy Open/Close operations acquire/release the same lock. Physical
+configuration and interface claims persist between logical sessions. A successful
+FF80 Session.close sends C4 and releases the logical claim; only device shutdown
+awaits physical interface release. No export handoff occurs.
 
-The current stock simulator can time out on a subsequent session reopen after
-a remote session has completed. This was observed with either Rust or a browser
-as the later controller. Stop sharing and reconnect the simulator before another
-controller session. The sharing layer reports and fences that failure; it does
-not retry or patch the guest. Physical camera handoff has not been tested.
+Sharing is an independent network attachment. Starting it does not close a local
+session. Stopping it detaches peers and leaves the physical connection available
+for local sessions. A controller holding the session lock can refuse another
+client's acquisition. Abandoning an active session or an uncertain USB completion
+fences that owner until explicitly reconnected; no timeout retries a camera
+command, resets USB, changes camera modes, or certifies firmware execution stopped.
+
+The JavaScript binding exposes per-device state and ordered events rather than
+a global camera slot. See the [binding API](../../bindings/javascript/README.md#browser-device-ownership).
 
 ## Checks
 
 Run Rust protocol, encrypted signaling and relay tests with
 `cargo test -p fujimod-usb-proxy --features relay` and exporter tests with
-`node --test crates/usb-proxy/web/exporter.test.mjs`.
+`node --test bindings/javascript/tests/ownership.test.ts` after building the production binding.
 
-`FUJIMOD_WEB_URL=<named HTTPS app URL> node crates/usb-proxy/web/peer.browser.mjs`
-uses synthetic WebUSB with the real WebRTC/Rust path to test multi-megabyte
+`FUJIMOD_WEB_URL=<named HTTPS app URL> node crates/usb-proxy/web/peer.browser.ts`
+uses a scripted WebUSB device with the real WebRTC/Rust path to test multi-megabyte
 transfers, a Pyodide controller, exclusive ownership and fencing. No physical USB is accessed.
 
-`FUJIMOD_WEB_URL=<named HTTPS app URL> node src/dev-tools/sharing.browser.mjs`
+`FUJIMOD_WEB_URL=<named HTTPS app URL> node src/dev-tools/sharing.browser.ts`
 from `apps/web/` boots the configured stock-firmware simulator, checks the real
 Share popup and clipboard, opens the link in a separate browser context,
 executes a firmware console command remotely, exercises native Python with the
@@ -129,7 +129,7 @@ account credentials are separate from those offline checks.
 
 ## Sharing status in Dev Tools
 
-Agreed design, 2026-10-18; not built yet.
+Sharing is displayed independently of the device connection state.
 
 - **Top bar:** while the camera is shared, the status and Share button become
   one accent **Sharing** chip, with "· N connected" while remote controllers
@@ -148,3 +148,52 @@ Agreed design, 2026-10-18; not built yet.
 - **Clean shutdown:** on page freeze or unload, stop sharing (controllers get a
   clean disconnect) and close the camera session. Switching tabs alone does not
   stop sharing.
+
+## Camera disconnects and battery
+
+Agreed design, 2026-10-18.
+
+- **A share outlives its camera.** The share link (room and key) lasts as long
+  as the owner's tab. When the camera disconnects, the owner stays in the room
+  and reports the device offline with a reason (`battery`, `unplugged`,
+  `not responding`). When a previously approved camera reconnects, the page
+  opens it without a picker if the browser allows, otherwise one click on
+  **Reconnect camera**. Before re-exporting, with no controller attached, it
+  reads the camera's identity (FF80 product name and firmware version, plus a
+  per-body identifier from firmware-specific configuration where one is
+  known) and re-shares on the same link only if it matches. Local-dev
+  registrations stay, marked offline, so the queue keeps the same link.
+- **Battery is read by controllers, not by the sharing page.** FF80 has no
+  battery command; battery comes from firmware-specific RAM (X70 1.10:
+  `tools/x70_battery.py`). Controller tools read it when a session opens,
+  between jobs and periodically during long jobs, and send it to the owner as a
+  status message. The owner shows the latest reading with its age and includes
+  it in the device list every controller sees. The owner's own console reads
+  battery only when it is not sharing.
+- **Battery death is a normal disconnect.** The queue starts no job at or below
+  PREEND ("waiting for charge"). A disconnect after a PREEND or END reading is
+  classified as battery: no alarm, no failure counted, job keeps its place.
+- **Unexpected disconnects alert the owner.** The page alerts for what it sees
+  (camera unplugged or dead with battery fine); a controller sends an
+  attention message for what only it sees (camera present but not
+  answering). The alert is a modal that shakes on arrival with a chime, says
+  what happened and what to do, updates instead of stacking, and closes itself
+  when the problem is fixed; Close dismisses it early. The chime is unlocked by
+  the owner's click on Share or Connect camera. No system notifications.
+
+### Tool progress and owner countdowns
+
+A claimed controller can send `owner_status { message }` or
+`owner_attention { message }` requests on the existing authenticated connection.
+Messages contain 1–512 UTF-8 bytes. Neither operation reaches the USB device.
+The owner logs status as Info, including expected refusals to continue.
+Attention shows a banner and speaks ten through one using browser
+`speechSynthesis`. Its ordinary correlated reply is sent after the ten-second
+countdown completes; controllers must await it before starting the owner step.
+Stopping sharing, losing the camera or disconnecting the controller cancels the
+countdown. Missing owner handlers reject the request rather than claiming success.
+These operations are separate from battery reports and urgent camera alerts.
+
+Rust USB sessions expose `owner_status(message)` and `owner_attention(message)`,
+also available on native Python sessions. Local USB status does nothing; local
+USB attention fails because it has no owner page.

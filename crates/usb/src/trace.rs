@@ -41,7 +41,7 @@ pub enum Action {
         failure: Failure,
     },
     /// The host dropped the transfer future. Camera execution may continue.
-    Cancelled,
+    Canceled,
 }
 impl Action {
     pub fn data(&self) -> &[u8] {
@@ -49,7 +49,7 @@ impl Action {
             Self::Submitted { data, .. }
             | Self::Completed { data, .. }
             | Self::Failed { data, .. } => data,
-            Self::Cancelled => &[],
+            Self::Canceled => &[],
         }
     }
 }
@@ -193,7 +193,7 @@ impl Trace {
         state.records.push_back(make(sequence));
         state.bytes += bytes;
     }
-    pub(crate) fn protocol(&self, layer: Layer, command: u32, data: &[u8]) -> ProtocolSpan {
+    pub fn protocol(&self, layer: Layer, command: u32, data: &[u8]) -> ProtocolSpan {
         let exchange = {
             let mut s = self.inner.lock().expect("trace mutex");
             let id = s.next_transfer;
@@ -241,7 +241,8 @@ impl Trace {
         }
     }
 }
-pub(crate) struct ProtocolSpan {
+/// A protocol exchange being traced; completing it records its result.
+pub struct ProtocolSpan {
     trace: Trace,
     exchange: u64,
     layer: Layer,
@@ -261,7 +262,7 @@ impl ProtocolSpan {
             })
         });
     }
-    pub(crate) fn complete<T>(mut self, result: &Result<T>, data: &[u8]) {
+    pub fn complete<T>(mut self, result: &Result<T>, data: &[u8]) {
         self.finished = true;
         self.record(data.len(), || match result {
             Ok(_) => Action::Completed {
@@ -279,7 +280,7 @@ impl ProtocolSpan {
 impl Drop for ProtocolSpan {
     fn drop(&mut self) {
         if !self.finished {
-            self.record(0, || Action::Cancelled);
+            self.record(0, || Action::Canceled);
         }
     }
 }
@@ -345,7 +346,7 @@ impl Drop for Span {
         if !self.finished {
             self.trace
                 .record(self.transfer, self.stage, self.endpoint, 0, || {
-                    Action::Cancelled
+                    Action::Canceled
                 });
         }
     }
@@ -360,6 +361,9 @@ pub(crate) struct Observed<I> {
 impl<I> Observed<I> {
     pub(crate) fn new(io: I, trace: Option<Trace>) -> Self {
         Self { io, trace }
+    }
+    pub(crate) fn inner_mut(&mut self) -> &mut I {
+        &mut self.io
     }
 }
 impl<I: Io> Io for Observed<I> {

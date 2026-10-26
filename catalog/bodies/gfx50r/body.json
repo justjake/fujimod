@@ -1,0 +1,43 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "gfx50r",
+  "soc_id": "xpp",
+  "dram_bytes": 536870912,
+  "nand": null,
+  "sensor": null,
+  "lens": null,
+  "display": null,
+  "microcontroller": null,
+  "power_control": null,
+  "card_slot": null,
+  "control_bus_chips": [],
+  "connections": [
+    {
+      "id": "flash-storage",
+      "kind": "control",
+      "signals": []
+    }
+  ],
+  "parts": [
+    "gfx50r-flash"
+  ],
+  "wiring": [
+    {
+      "source_id": "flash-controller",
+      "target_id": "gfx50r-flash",
+      "signal": "storage"
+    }
+  ],
+  "hardware": {
+    "serial_attachments": [],
+    "gpio_feedback": [],
+    "keypad_samples": {},
+    "thermal_connection_ids": [],
+    "profiles": {
+      "gfx50r-discovery": {
+        "dram_basis": "Declared discovery input: synthetic 512 MiB physical backing; no measured RAM population or aliases."
+      }
+    }
+  }
+}

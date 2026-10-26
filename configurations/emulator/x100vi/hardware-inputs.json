@@ -1,0 +1,165 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "x100vi",
+  "body_id": "x100vi",
+  "reset": {
+    "application_inputs": {
+      "flash_aperture": {
+        "erased_tail": 255,
+        "seed": [
+          {
+            "offset": 6684919,
+            "value": 3
+          }
+        ]
+      },
+      "flash": {
+        "jedec_id": 2145056
+      },
+      "adc": {
+        "samples": [
+          2712,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          2241,
+          4095,
+          4095,
+          2712,
+          4095,
+          4095,
+          4095,
+          4095
+        ]
+      },
+      "gpio": {
+        "input_irqs": [
+          {
+            "port": 0,
+            "pin": 0,
+            "line": 116,
+            "active_high": false
+          },
+          {
+            "port": 0,
+            "pin": 1,
+            "line": 117,
+            "active_high": false
+          }
+        ],
+        "initial_outputs": [
+          {
+            "port": 12,
+            "levels": 256
+          }
+        ],
+        "feedback": [
+          {
+            "port": 4,
+            "register": 0,
+            "bit": 4,
+            "input_port": 4,
+            "input_pin": 4
+          }
+        ]
+      },
+      "spi0": {
+        "endpoints": [
+          {
+            "select": {
+              "port": 12,
+              "pin": 10,
+              "active_high": true
+            },
+            "part": {
+              "kind": "power-controller",
+              "rtc_seconds": 845151906,
+              "rtc_valid": true
+            }
+          },
+          {
+            "select": {
+              "port": 12,
+              "pin": 8,
+              "active_high": false
+            },
+            "part": {
+              "kind": "serial-calibration-registers",
+              "miso_high": false
+            }
+          }
+        ]
+      },
+      "spi9": {
+        "select_port": 15,
+        "select_pin": 13
+      },
+      "receiver0": {
+        "frame_period_us": 1000000,
+        "frame_active_us": 10000
+      },
+      "receiver1": {
+        "frame_period_us": 1000000
+      },
+      "movdc0": {
+        "frame_period_us": 1000000,
+        "source_luma": 128
+      },
+      "movdc1": {
+        "frame_period_us": 1000000,
+        "source_luma": 128
+      },
+      "movdc2": {
+        "frame_period_us": 1000000,
+        "source_luma": 128
+      },
+      "resize": {
+        "completion_us": 1000
+      },
+      "preview": {
+        "frame_period_us": 1000000,
+        "source_luma": 128
+      },
+      "rifp": {
+        "completion_us": 1000,
+        "source_luma": 128
+      },
+      "serial": {
+        "wire": {
+          "kind": "gpio-selected",
+          "endpoints": [
+            {
+              "select": {
+                "port": 11,
+                "pin": 5,
+                "active_high": false
+              },
+              "part": {
+                "kind": "bis-configuration-registers",
+                "revision": [
+                  0,
+                  0
+                ],
+                "idle_high": false
+              }
+            },
+            {
+              "select": {
+                "port": 11,
+                "pin": 3,
+                "active_high": false
+              },
+              "part": {
+                "kind": "lsm6ds-configuration-registers"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

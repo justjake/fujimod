@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FujiMod body controls",
+  "type": "object",
+  "required": ["$schema", "model", "manual", "controls"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "model": {"type": "string"},
+    "manual": {
+      "type": "object",
+      "required": ["url", "title", "pages"],
+      "properties": {
+        "url": {"type": "string", "format": "uri"},
+        "title": {"type": "string"},
+        "pages": {"type": "array", "items": {"type": "integer", "minimum": 1}}
+      },
+      "additionalProperties": false
+    },
+    "controls": {"type": "array", "items": {"type": "object"}}
+  },
+  "additionalProperties": false
+}

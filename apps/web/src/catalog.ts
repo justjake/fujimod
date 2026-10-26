@@ -1,20 +1,28 @@
-import type { EngineConfig } from './engine/api';
-export interface UsbEmulator {
-  bundle: string;
-  module: string;
-  scenario: { path: string; sha256: string };
-}
+import type { EngineConfig } from '@fujimod/emulator-ui/engine/api';
+import type { DevicePanel } from '@fujimod/emulator-ui/ui/layout';
 export interface Firmware {
   id: string;
   body?: string;
   model: string;
+  processor?: string;
   version: string;
   sha256: string;
   bytes: number;
   download_url: string;
   release_date: string;
-  emulate?: Omit<EngineConfig, 'firmwareId'> & { adapter: string; usb?: UsbEmulator };
+  emulate?: Omit<EngineConfig, 'firmwareId'> & {
+    maturity?: 'early' | 'supported';
+    /** A separately checked USB-connected session graph. */
+    usb?: { bundle: string };
+  };
+  device?: {
+    panel: DevicePanel;
+    initialPositions: Record<string, string>;
+    sdBoot?: boolean;
+  };
   model_asset?: string;
+  camera_table?: string;
+  flash_reader?: string;
 }
 export interface Catalog {
   schema: number;
@@ -39,20 +47,15 @@ export function validateCatalog(value: Catalog): Catalog {
     )
       throw Error('Invalid firmware entry.');
     for (const path of [
+      entry.camera_table,
+      entry.flash_reader,
       entry.emulate?.bundle,
-      entry.emulate?.inputs,
       entry.emulate?.usb?.bundle,
-      entry.emulate?.usb?.scenario.path,
     ])
       if (path && (!/^[a-zA-Z0-9_./-]+$/.test(path) || path.includes('..') || path.startsWith('/')))
         throw Error('Invalid emulator artifact path.');
-    const usb = entry.emulate?.usb;
-    if (
-      usb &&
-      (!/^[a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*$/.test(usb.module) ||
-        !/^[a-f0-9]{64}$/.test(usb.scenario.sha256))
-    )
-      throw Error('Invalid USB emulator configuration.');
+    if (entry.emulate?.maturity && !['early', 'supported'].includes(entry.emulate.maturity))
+      throw Error('Invalid emulation maturity.');
     seen.add(entry.sha256);
   }
   return value;

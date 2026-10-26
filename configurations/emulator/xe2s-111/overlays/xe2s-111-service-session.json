@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xe2s-111-service-session",
+  "configuration_id": "xe2s-111",
+  "change": {
+    "kind": "preset",
+    "preset": {
+      "factory_options": {},
+      "execution_scope": "offline-boot-development",
+      "purpose": "service_session",
+      "hardware_selection": {
+        "soc_profile_id": "exr2-service-transports",
+        "body_profile_id": "xe2s-service-session"
+      },
+      "hardware_inputs_id": "xe2s-service-session",
+      "firmware_profile_id": "xe2s-111-service-session"
+    }
+  }
+}

@@ -1,5 +1,5 @@
 import { expect, test } from 'vite-plus/test';
-import { newTicket, parseShare, shareUrl } from '../../../../crates/usb-proxy/web/peer.js';
+import { newTicket, parseShare, shareUrl } from '../../../../crates/usb-proxy/web/peer.ts';
 import { remoteControlUrl } from './sharing';
 test('share capability stays in the fragment and preserves the current page and query', () => {
   const ticket = newTicket('wss://signal.example/usb-proxy/signal', []);

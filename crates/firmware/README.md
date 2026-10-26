@@ -1,8 +1,7 @@
 # fujimod-firmware
 
 Body-independent update-file mechanisms, with no filesystem or device access.
-Native Rust and `wasm32-unknown-unknown` use the same decoder. Tests contain
-synthetic containers and encoded streams only.
+Native Rust and `wasm32-unknown-unknown` use the same decoder.
 
 - `invert` applies whole-file XOR with `0xff`.
 - `decompress` validates a method-4 stream header and decodes bounded literal
@@ -20,8 +19,8 @@ synthetic containers and encoded streams only.
   Overlay banks are independent units and may share addresses. Mapping sizes
   bound initialized stream bytes; they do not create zero-filled BSS.
 
-The private registry owns source identity, expected hashes, mapping selection,
-expected overlay records and output paths. No camera model or firmware address
+Callers supply source identity, expected hashes, mapping selection, expected
+overlay records and output paths. No camera model or firmware address
 is built into this library. These Rust types are not a serialized file format.
 
 The Python binding exposes `fujimod.firmware` with the same operations. Its

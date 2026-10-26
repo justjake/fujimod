@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "sd-card",
+  "model": {
+    "kind": "sd-card-slot"
+  }
+}

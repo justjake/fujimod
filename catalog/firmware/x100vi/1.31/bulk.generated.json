@@ -1,0 +1,163 @@
+{
+  "$schema": "https://fujimod.com/schemas/bulk.generated.schema.json",
+  "schema": 1,
+  "id": "x100vi-131-bulk",
+  "firmware_id": "x100vi-131",
+  "product": "X100VI",
+  "internal_version": "1.79",
+  "code_alias": 0,
+  "source": {
+    "mechanism": "pattern_zero_base",
+    "registered_buffer": 68425496,
+    "source_state": 74238768,
+    "capacity": 65536
+  },
+  "window": {
+    "address": 16384,
+    "size": 2147467264
+  },
+  "code_checks": [
+    {
+      "name": "bulk_2ec52ac",
+      "address": 49042092,
+      "size": 180,
+      "sha256": "66152b4c3f7f0c45584253cc1e0bf91e0a260d42417cb45107bf02f82fbcf09d"
+    },
+    {
+      "name": "bulk_2ec5ce0",
+      "address": 49044704,
+      "size": 184,
+      "sha256": "fec4334aedc181e834b92937a9b11faef59a69450ee2c665720cc33219b6e63c"
+    },
+    {
+      "name": "bulk_2ec6b3c",
+      "address": 49048380,
+      "size": 196,
+      "sha256": "2698c467dd50115dcf047c0537a9375bc5728fb565d2b727ce2e0b216b8f5efa"
+    },
+    {
+      "name": "bulk_2ec5f98",
+      "address": 49045400,
+      "size": 80,
+      "sha256": "f854ab21539a55fba1da51014c0b05cbdf362298f0cd185e54b8d1aa7f7955e8"
+    },
+    {
+      "name": "bulk_2ec6df4",
+      "address": 49049076,
+      "size": 388,
+      "sha256": "f24c0e2ea175625214d3fd25cdde61af2efb9f45ba5c261f61ba31c5261e0070"
+    },
+    {
+      "name": "bulk_2ec55cc",
+      "address": 49042892,
+      "size": 36,
+      "sha256": "d84cb594b6917f6172a73179c8b78d01d459981d2db215af71b255dfdcdffa5d"
+    },
+    {
+      "name": "bulk_2ec55f0",
+      "address": 49042928,
+      "size": 36,
+      "sha256": "6ad82f4c0c4380a3a90369f25b5f5e1e94a58a3ade0d16e2589f9b90e4907361"
+    },
+    {
+      "name": "bulk_2ec55ac",
+      "address": 49042860,
+      "size": 32,
+      "sha256": "d2653c02c4c4f50b3f302cea05c6b6a943b41a084e799fd5542caccc58b4b11f"
+    },
+    {
+      "name": "bulk_15c9d18",
+      "address": 22846744,
+      "size": 12,
+      "sha256": "9ac060fa0b114fda37020c5479d0cb1ccc80e89b1f23b7c9142ba9d037a5ce4b"
+    },
+    {
+      "name": "bulk_2f5f034",
+      "address": 49672244,
+      "size": 232,
+      "sha256": "1acb7f6b04a3ae26dcffbaf8ed35c38f55b2b08e4c04568a3d3c92b2164911ac"
+    },
+    {
+      "name": "bulk_1569778",
+      "address": 22452088,
+      "size": 40,
+      "sha256": "0575ccdb1ad373a99f8f4a238fb3d7bdcba3045bf7bcf9356144daf093c1fb2d"
+    },
+    {
+      "name": "bulk_1569910",
+      "address": 22452496,
+      "size": 44,
+      "sha256": "c6f6cd018be9c195a5deb2ce60d1694d90ae48cc968d7256607581555cfe13fa"
+    },
+    {
+      "name": "bulk_1569674",
+      "address": 22451828,
+      "size": 184,
+      "sha256": "690ab94a7caa4a0694098fc60d30406bd929424c57bfadf6d8075e6e77347c3f"
+    },
+    {
+      "name": "bulk_156fd10",
+      "address": 22478096,
+      "size": 284,
+      "sha256": "f99447d15d511a1a8ab1d46384d60dc8b05a0b7cd7fa6b376a288287ce713db6"
+    },
+    {
+      "name": "bulk_3098624",
+      "address": 50955812,
+      "size": 56,
+      "sha256": "b785556ae7b0267b4c43d4944115dd046f36ac14613d7f73faae58f5be34af17"
+    },
+    {
+      "name": "bulk_1420620",
+      "address": 21104160,
+      "size": 108,
+      "sha256": "49e1cefa0b8ad7666dd03ed4c3f571447df2f1595d29e41fd53d9cbcb3bf2d45"
+    },
+    {
+      "name": "bulk_142068c",
+      "address": 21104268,
+      "size": 108,
+      "sha256": "6015bfb4d4e73ba58739cc442f5ea8ba0ac27c6d3989887904871b00ce808ab1"
+    }
+  ],
+  "probes": [
+    {
+      "address": 49042092,
+      "size": 128
+    },
+    {
+      "address": 49044704,
+      "size": 128
+    }
+  ],
+  "mapped_probe": {
+    "name": "bulk_mapped_probe",
+    "address": 49041408,
+    "size": 4096,
+    "sha256": "503a0a1f48fc5f2181bcde6ee6d323e0870237a26400a03e2d3fc98d1e41eaa2"
+  },
+  "scopes": [
+    {
+      "name": "quick",
+      "basis": "Mapped update ranges in the RAM window through the highest located transfer-state address, rounded to 1 MiB. Static BSS and heap extents beyond it are not established.",
+      "ranges": [
+        {
+          "name": "firmware",
+          "address": 16384,
+          "size": 74432512
+        }
+      ]
+    },
+    {
+      "name": "full",
+      "basis": "The recorded RAM capture window; its first 16 KiB and high SRAM are excluded.",
+      "ranges": [
+        {
+          "name": "ram",
+          "address": 16384,
+          "size": 2147467264
+        }
+      ]
+    }
+  ]
+}

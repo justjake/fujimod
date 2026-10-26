@@ -1,0 +1,13 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "x70-display-panel",
+  "model": {
+    "kind": "display-panel",
+    "width": null,
+    "height": null,
+    "orientation": null,
+    "serial": "panel",
+    "used_mask": 65408
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xq2-101-rec-hardware",
+  "configuration_id": "xq2-101",
+  "change": {
+    "kind": "preset",
+    "preset": {
+      "factory_options": {},
+      "hardware_selection": {
+        "soc_profile_id": "exr2-service-transports",
+        "body_profile_id": "xq-rec"
+      },
+      "hardware_inputs_id": "xq-rec"
+    }
+  }
+}

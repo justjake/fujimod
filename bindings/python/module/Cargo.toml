@@ -1,0 +1,48 @@
+[package]
+name = "fujimod-python-module"
+description = "The fujimod._native extension module, linking the Python bindings"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "_native"
+crate-type = ["cdylib"]
+test = false
+doctest = false
+
+[features]
+default = ["emulator"]
+emulator = [
+    "dep:fujimod-emulator-exr2-board",
+    "dep:fujimod-python-base",
+    "dep:fujimod-emulator-boot",
+    "dep:fujimod-emulator-session",
+    "dep:serde_json",
+    "dep:fujimod-python-emulator",
+    "dep:fujimod-python-graphics",
+    "dep:fujimod-python-host-image",
+    "dep:fujimod-python-xp4",
+    "fujimod-python-remote/emulator",
+]
+
+[dependencies]
+fujimod-emulator-models.workspace = true
+fujimod-python-catalog = { path = "../catalog" }
+fujimod-python-base = { path = "../base", optional = true }
+fujimod-emulator-boot = { workspace = true, optional = true }
+fujimod-emulator-session = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+fujimod-python-emulator = { path = "../emulator", optional = true }
+fujimod-python-graphics = { path = "../graphics", optional = true }
+fujimod-python-host-image = { path = "../host-image", optional = true }
+fujimod-python-recording = { path = "../recording" }
+fujimod-python-remote = { path = "../remote" }
+fujimod-python-usb = { path = "../usb" }
+fujimod-python-app80 = { path = "../app80" }
+fujimod-python-xp4 = { path = "../xp4", optional = true }
+fujimod-emulator-exr2-board = { path = "../../../crates/emulator-exr2-board", optional = true }
+pyo3.workspace = true
+fujimod-workspace-hack.workspace = true

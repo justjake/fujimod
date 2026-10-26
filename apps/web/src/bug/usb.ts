@@ -1,18 +1,17 @@
 import { initialize, usb, type Device, type Session } from 'fujimod';
-import {
-  Progress,
-  type CameraBackend,
-  type CameraChoice,
-  type CameraLink,
-} from '../dev-tools/camera';
 import { retrieveReport, removeReport } from './transfer';
 import type { ReportLink } from './report-link';
+/** The camera chosen for a report, with its ff80 interfaces. */
+export interface CameraChoice {
+  name: string;
+  interfaces: { id: number; label: string }[];
+}
 export interface ReportConnection {
   initialize(): Promise<void>;
   choose(): Promise<CameraChoice | undefined>;
   read(id: number, link: ReportLink, progress: (bytes: number) => void): Promise<Blob>;
   remove?(link: ReportLink): Promise<void>;
-  devTools(): CameraBackend;
+  handOff(): Promise<void>;
   onDisconnect?(callback: () => void): () => void;
   dispose(): void;
 }
@@ -42,7 +41,7 @@ export class ReportUsb implements ReportConnection {
   }
   async read(id: number, link: ReportLink, progress: (bytes: number) => void) {
     if (!this.device || !this.interfaces[id]) throw Error('Choose a camera interface.');
-    const limits = new usb.FirmwareLimits(16384, 32, 1, 4096),
+    const limits = new usb.FirmwareLimits(16384, 32, 16384, 4096),
       options = new usb.TransferOptions(5000, 65536);
     try {
       this.session = await usb.Session.open(this.device, this.interfaces[id], limits, options);
@@ -89,60 +88,16 @@ export class ReportUsb implements ReportConnection {
     );
     this.verified = undefined;
   }
-  devTools(): CameraBackend {
-    const session = this.session,
-      choice = this.choice,
-      dispose = () => this.dispose();
-    if (!session || !choice) throw Error('The camera is disconnected.');
-    let live = true;
-    const link: CameraLink = {
-      async submit(data) {
-        await session.submitConsole(data);
-      },
-      async poll() {
-        const reply = await session.pollConsole(4096);
-        try {
-          return {
-            progress:
-              reply.progress === usb.ConsoleProgress.Complete
-                ? Progress.Complete
-                : reply.progress === usb.ConsoleProgress.Pending
-                  ? Progress.Pending
-                  : Progress.Unknown,
-            status: reply.status,
-            output: reply.output,
-            unknown: reply.unknownProgress,
-          };
-        } finally {
-          reply.free();
-        }
-      },
-      usable: () => live && session.state === usb.SessionState.Ready,
-      async close() {
-        if (live) {
-          live = false;
-          try {
-            await session.close();
-          } finally {
-            dispose();
-          }
-        }
-      },
-      abandon() {
-        if (live) {
-          live = false;
-          dispose();
-        }
-      },
-    };
-    return {
-      initialize: async () => {},
-      pick: async () => ({ ...choice, interfaces: [{ id: 0, label: 'Connected camera' }] }),
-      open: async () => link,
-      drain: () => [],
-      onDisconnect: (callback) => this.onDisconnect(callback),
-      dispose: () => dispose(),
-    };
+  /** Close this page's report session so Dev Tools can take the camera. */
+  async handOff(): Promise<void> {
+    const session = this.session;
+    this.session = undefined;
+    try {
+      await session?.close();
+    } finally {
+      session?.free();
+      this.dispose();
+    }
   }
   onDisconnect(callback: () => void) {
     const events = (navigator as Navigator & { usb?: EventTarget }).usb;

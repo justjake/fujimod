@@ -1,0 +1,68 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "xa1-rec",
+  "body_id": "xa1",
+  "reset": {
+    "inputs": {
+      "gpio": {
+        "gpio_inputs": {
+          "0": 3692,
+          "2": 4608,
+          "3": 776,
+          "12": 128,
+          "11": 0
+        },
+        "profile_name": "X-M1 synthetic normal power-on and idle acquisition sensors; physical levels unmeasured."
+      },
+      "power": {
+        "profile_name": "Synthetic loader boot reason0; remaining ADC borrowed; MCU runtime status still separate rehearsal input",
+        "adc_samples": [
+          0,
+          0,
+          1023,
+          63,
+          534,
+          640,
+          0,
+          825,
+          1023,
+          1023,
+          0,
+          0
+        ],
+        "boot_reply": 16,
+        "spi0_input_profile": "absent-hot-shoe-flash-fixed-low-miso",
+        "panel_contract": [
+          [
+            224,
+            6
+          ],
+          [
+            11,
+            3,
+            0,
+            12,
+            3,
+            1
+          ],
+          [
+            16,
+            null,
+            null
+          ],
+          1
+        ],
+        "spi_status_registers": [
+          [
+            9,
+            96
+          ]
+        ]
+      },
+      "mcu_packet_hex": "00000000d00700ff008000040000aafc",
+      "usb_connected": false
+    },
+    "execution_scope": "offline-boot-development"
+  }
+}

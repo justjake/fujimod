@@ -1,0 +1,778 @@
+{
+  "$defs": {
+    "BootCombination": {
+      "additionalProperties": false,
+      "properties": {
+        "hold": {
+          "items": {
+            "$ref": "#/$defs/BootHold"
+          },
+          "type": "array"
+        },
+        "usb": {
+          "description": "Required USB cable state, when specified.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "hold"
+      ],
+      "type": "object"
+    },
+    "BootHold": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Control action identity, including a pad direction or dial .press action.",
+          "type": "string"
+        },
+        "stage": {
+          "description": "Shutter stage, when required.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "BoundPosition": {
+      "additionalProperties": false,
+      "description": "A position's printed identity and explicit input selection.",
+      "properties": {
+        "asserted": {
+          "description": "Whether this position asserts that input.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Exact position identity accepted by the physical panel.",
+          "type": "string"
+        },
+        "key": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InputBinding"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit firmware input binding."
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "ControlBehavior": {
+      "description": "The actions offered by a physical control's mechanism.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A momentary button.",
+          "properties": {
+            "kind": {
+              "const": "button",
+              "type": "string"
+            },
+            "press": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Input asserted by a press and deasserted by release."
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A shutter release with named stages.",
+          "properties": {
+            "kind": {
+              "const": "shutter",
+              "type": "string"
+            },
+            "stages": {
+              "additionalProperties": {
+                "items": {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "description": "Inputs asserted at each named shutter stage.",
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "stages"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A directional pad with individually addressable direction identities.",
+          "properties": {
+            "directions": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/InputBinding"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "description": "Inputs asserted by the four directions.",
+              "type": "object"
+            },
+            "kind": {
+              "const": "pad",
+              "type": "string"
+            },
+            "press": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Center press input, when present."
+            }
+          },
+          "required": [
+            "kind",
+            "directions"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A spring-centered control with separate left and right contacts.",
+          "properties": {
+            "decrease": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "increase": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "rocker",
+              "type": "string"
+            },
+            "press": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A dial with positions or relative steps.",
+          "properties": {
+            "endless": {
+              "description": "Whether the mechanism rotates without an end stop.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "dial",
+              "type": "string"
+            },
+            "motion": {
+              "$ref": "#/$defs/ControlMotion",
+              "description": "Documented positions or relative step directions."
+            },
+            "press": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Press input, when the dial is pushable."
+            }
+          },
+          "required": [
+            "kind",
+            "motion"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A ring with positions or relative steps.",
+          "properties": {
+            "endless": {
+              "description": "Whether the mechanism rotates without an end stop.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "ring",
+              "type": "string"
+            },
+            "motion": {
+              "$ref": "#/$defs/ControlMotion",
+              "description": "Documented positions or relative step directions."
+            },
+            "press": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Press input, when the ring is pushable."
+            }
+          },
+          "required": [
+            "kind",
+            "motion"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A switch with named positions.",
+          "properties": {
+            "kind": {
+              "const": "switch",
+              "type": "string"
+            },
+            "positions": {
+              "description": "Inputs selecting each documented position.",
+              "items": {
+                "$ref": "#/$defs/BoundPosition"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "positions"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A lever with named positions.",
+          "properties": {
+            "kind": {
+              "const": "lever",
+              "type": "string"
+            },
+            "momentary": {
+              "description": "Whether releasing the lever returns it to an unasserted rest position.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "positions": {
+              "description": "Inputs selecting each documented position.",
+              "items": {
+                "$ref": "#/$defs/BoundPosition"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "positions"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A touch surface whose protocol is located in the firmware input document.",
+          "properties": {
+            "kind": {
+              "const": "touch",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ControlIcon": {
+      "description": "Printed symbols on a camera control.",
+      "enum": [
+        "playback",
+        "delete",
+        "record",
+        "flash"
+      ],
+      "type": "string"
+    },
+    "ControlMotion": {
+      "description": "A rotary mechanism's mutually exclusive position or step declarations.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Finite, named mechanical detents.",
+          "properties": {
+            "kind": {
+              "const": "positions",
+              "type": "string"
+            },
+            "positions": {
+              "description": "Input and asserted level for each detent.",
+              "items": {
+                "$ref": "#/$defs/BoundPosition"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "positions"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Relative movement in either direction.",
+          "properties": {
+            "decrease": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Input generated by one decreasing step."
+            },
+            "increase": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Input generated by one increasing step."
+            },
+            "kind": {
+              "const": "steps",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ControlPosition": {
+      "additionalProperties": false,
+      "description": "A documented control position, independent of any firmware binding.",
+      "properties": {
+        "description": {
+          "description": "Meaning of an unlabeled position or icon.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Unique manual position identity.",
+          "type": "string"
+        },
+        "label": {
+          "description": "Printed label, when present.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "ControlRole": {
+      "description": "Physical roles that an operation may require from a body.",
+      "oneOf": [
+        {
+          "const": "command_control",
+          "description": "Relative command dial used to change the selected value.",
+          "type": "string"
+        }
+      ]
+    },
+    "ControlSurface": {
+      "description": "Body surfaces used to locate a physical control in a manual.",
+      "oneOf": [
+        {
+          "const": "top",
+          "description": "Upper body surface.",
+          "type": "string"
+        },
+        {
+          "const": "rear",
+          "description": "Rear body surface.",
+          "type": "string"
+        },
+        {
+          "const": "front",
+          "description": "Front surface, including controls on the lens.",
+          "type": "string"
+        },
+        {
+          "const": "bottom",
+          "description": "Lower body surface.",
+          "type": "string"
+        },
+        {
+          "const": "lens",
+          "description": "Controls mounted on the lens barrel.",
+          "type": "string"
+        },
+        {
+          "const": "left",
+          "description": "Left side of the body.",
+          "type": "string"
+        },
+        {
+          "const": "right",
+          "description": "Right side of the body.",
+          "type": "string"
+        }
+      ]
+    },
+    "InputBinding": {
+      "description": "An explicit binding in one of two distinct firmware input vocabularies.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Command name accepted by the firmware's debug transport.",
+          "properties": {
+            "kind": {
+              "const": "debug_key",
+              "type": "string"
+            },
+            "name": {
+              "description": "Exact command token, without conversion from a native event name.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Scanned native input which need not have any debug transport command.",
+          "properties": {
+            "kind": {
+              "const": "native_input",
+              "type": "string"
+            },
+            "name": {
+              "description": "Exact name in the firmware's located native input vocabulary.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ManualReference": {
+      "additionalProperties": false,
+      "description": "A published manual and the pages used to identify controls.",
+      "properties": {
+        "pages": {
+          "description": "Referenced page numbers.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "title": {
+          "description": "Manual title.",
+          "type": "string"
+        },
+        "url": {
+          "description": "Public manual URL.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "title",
+        "pages"
+      ],
+      "type": "object"
+    },
+    "PhysicalControl": {
+      "additionalProperties": false,
+      "description": "A control's documented appearance and declared physical actions.",
+      "properties": {
+        "assignable": {
+          "description": "Whether the control's function can be assigned in the camera.",
+          "type": "boolean"
+        },
+        "behavior": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ControlBehavior"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Actions defined by this control's mechanism; absent for mechanical controls."
+        },
+        "connection_ids": {
+          "description": "Body connections carrying the control's electrical signals.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "default_function": {
+          "default": null,
+          "description": "Documented initial function, when available.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "face": {
+          "default": null,
+          "description": "Text printed on the control, when present.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ControlIcon"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Meaning of a printed icon, when present."
+        },
+        "location": {
+          "$ref": "#/$defs/ControlSurface",
+          "description": "Surface on which the control is located."
+        },
+        "manual_page": {
+          "default": null,
+          "description": "Manual page identifying the control, when available.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "mechanical": {
+          "description": "Whether this control has no electronic action.",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Manual name of the control.",
+          "type": "string"
+        },
+        "positions": {
+          "description": "Documented positions or stages, including controls with no located inputs.",
+          "items": {
+            "$ref": "#/$defs/ControlPosition"
+          },
+          "type": "array"
+        },
+        "pushable": {
+          "description": "Whether the manual documents a press action, independently of its binding.",
+          "type": "boolean"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ControlRole"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Physical role required by a declared cross-body operation."
+        },
+        "short_name": {
+          "default": null,
+          "description": "Short uppercase caption for an unmarked control (at most 10 characters).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "location",
+        "connection_ids",
+        "assignable",
+        "pushable",
+        "positions",
+        "mechanical"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/physical-controls.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Hand-maintained physical controls for one body.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/physical-controls.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "analog_levels": {
+      "description": "Analog sample resolution used by this body's contacts.",
+      "format": "uint16",
+      "maximum": 65535,
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "body_id": {
+      "description": "Body owning the documented controls.",
+      "type": "string"
+    },
+    "boot": {
+      "additionalProperties": false,
+      "description": "Confirmed inputs held while powering on.",
+      "properties": {
+        "firmware_update": {
+          "$ref": "#/$defs/BootCombination"
+        },
+        "sd": {
+          "$ref": "#/$defs/BootCombination"
+        },
+        "service": {
+          "$ref": "#/$defs/BootCombination"
+        }
+      },
+      "type": "object"
+    },
+    "controls": {
+      "additionalProperties": {
+        "$ref": "#/$defs/PhysicalControl"
+      },
+      "description": "Controls keyed by their canonical physical identities.",
+      "type": "object"
+    },
+    "id": {
+      "description": "Stable document identity referenced by the body.",
+      "type": "string"
+    },
+    "manual": {
+      "$ref": "#/$defs/ManualReference",
+      "description": "Published manual identifying the controls."
+    },
+    "schema": {
+      "description": "Document format version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "body_id",
+    "manual",
+    "controls"
+  ],
+  "title": "PhysicalControls",
+  "type": "object"
+}

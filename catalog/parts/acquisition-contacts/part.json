@@ -1,0 +1,85 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "acquisition-contacts",
+  "model": {
+    "kind": "contact-actuator",
+    "positions": [
+      {
+        "drive": 0,
+        "contacts": [
+          true,
+          true
+        ]
+      },
+      {
+        "drive": 1,
+        "contacts": [
+          false,
+          false
+        ]
+      },
+      {
+        "drive": 3,
+        "contacts": [
+          true,
+          true
+        ]
+      }
+    ],
+    "settle_ticks": 3000
+  },
+  "attachment": {
+    "gpio_interrupts": [
+      {
+        "pin": {
+          "port": 0,
+          "pin": 9
+        },
+        "edge": "rising",
+        "outputs": [
+          {
+            "core": 0,
+            "line": 17
+          }
+        ]
+      },
+      {
+        "pin": {
+          "port": 0,
+          "pin": 6
+        },
+        "edge": "falling",
+        "outputs": [
+          {
+            "core": 0,
+            "line": 17
+          }
+        ]
+      }
+    ],
+    "label": "acquisition_contacts",
+    "limits": [],
+    "drive_pins": [
+      {
+        "port": 1,
+        "pin": 1
+      },
+      {
+        "port": 1,
+        "pin": 2
+      }
+    ],
+    "contact_pins": [
+      {
+        "port": 0,
+        "pin": 9
+      },
+      {
+        "port": 0,
+        "pin": 6
+      }
+    ],
+    "initial_position": 0
+  }
+}

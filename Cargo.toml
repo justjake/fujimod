@@ -1,6 +1,113 @@
 [workspace]
-members = ["crates/corpus", "crates/firmware", "crates/usb-proxy", "crates/defs", "crates/fujimod", "crates/usb", "bindings/python", "bindings/javascript", "bindings/generator"]
+members = [
+  "crates/corpus",
+  "crates/virtual-scene",
+  "crates/recording",
+  "crates/remote",
+  "crates/firmware",
+  "crates/recovery",
+  "crates/usb-proxy",
+  "crates/catalog",
+  "crates/catalog-bulk",
+  "crates/catalog-camera",
+  "crates/catalog-firmware-identity",
+  "crates/catalog-configuration",
+  "crates/catalog-resolution",
+  "crates/catalog-construction",
+  "crates/catalog-assets",
+  "crates/catalog-identity",
+  "crates/catalog-controls",
+  "crates/catalog-remote",
+  "crates/catalog-run-inputs",
+  "crates/catalog-schemas",
+  "crates/catalog-service",
+  "crates/catalog-settings",
+  "crates/crate-graph",
+  "crates/emulator",
+  "crates/emulator-boot",
+  "crates/emulator-session",
+  "crates/emulator-cli",
+  "crates/emulator-cpu",
+  "crates/emulator-cpu-hvf",
+  "crates/emulator-cpu-unicorn",
+  "crates/emulator-cpu-unicorn/sys",
+  "crates/emulator-devices",
+  "crates/emulator-models",
+  "crates/emulator-exr2-boot-serial",
+  "crates/emulator-xp4-board",
+  "crates/emulator-imaging",
+  "crates/emulator-image-formation",
+  "crates/emulator-image-processing",
+  "crates/emulator-sensor-input",
+  "crates/emulator-image-codecs",
+  "crates/emulator-exr2-isp-output",
+  "crates/emulator-exr2-isp-statistics",
+  "crates/emulator-exr2-isp-testing",
+  "crates/emulator-exr2-isp-face",
+  "crates/emulator-exr2-isp-input",
+  "crates/emulator-xp4-io",
+  "crates/emulator-xp4-display",
+  "crates/emulator-xp4-storage",
+  "crates/emulator-xpp",
+  "crates/emulator-xp5-board",
+  "crates/emulator-xp5-io",
+  "crates/emulator-xp5-display",
+  "crates/emulator-xp5-storage",
+  "crates/emulator-xp5-imaging",
+  "crates/emulator-parts-io",
+  "crates/emulator-parts-controls",
+  "crates/emulator-parts-sensor",
+  "crates/emulator-parts-lens",
+  "crates/emulator-storage",
+  "crates/emulator-preparation",
+  "crates/emulator-ip",
+  "crates/emulator-ip-dmp",
+  "crates/emulator-ip-arm",
+  "crates/emulator-graphics",
+  "crates/emulator-exr2-io",
+  "crates/emulator-exr2-system",
+  "crates/emulator-exr2-companion",
+  "crates/emulator-exr2-storage",
+  "crates/emulator-exr2-codecs",
+  "crates/emulator-exr2-serial",
+  "crates/emulator-exr2-audio",
+  "crates/emulator-exr2-gpu",
+  "crates/emulator-exr2-i2c",
+  "crates/emulator-exr2-display",
+  "crates/emulator-exr2-board",
+  "crates/emulator-exr2-plan",
+  "crates/emulator-exr2-resources",
+  "crates/emulator-exr2-images",
+  "crates/settings",
+  "crates/fujimod",
+  "crates/usb",
+  "crates/usb-app80",
+  "crates/usb-app80-types",
+  "crates/workflows",
+  "bindings/python/app80",
+  "bindings/python/app80-values",
+  "bindings/python/base",
+  "bindings/python/catalog",
+  "bindings/python/emulator",
+  "bindings/python/host-image",
+  "bindings/python/module",
+  "bindings/python/recording",
+  "bindings/python/remote",
+  "bindings/python/service",
+  "bindings/python/usb",
+  "bindings/python/usb-base",
+  "bindings/python/graphics",
+  "bindings/python/xp4",
+  "bindings/javascript",
+  "bindings/javascript/testing",
+  "bindings/javascript/emulator",
+  "bindings/generator",
+  "crates/workspace-hack",
+]
 resolver = "3"
+# The Bevy simulation is its own workspace with its own lockfile and target
+# directory, so its dependency features never widen the emulator's.
+exclude = ["crates/simulation"]
 
 [workspace.package]
 version = "0.1.0"
@@ -10,22 +117,140 @@ repository = "https://github.com/justjake/fujimod"
 publish = false
 
 [workspace.dependencies]
-fujimod-defs = { path = "crates/defs", version = "0.1.0" }
+fujimod-remote = { path = "crates/remote", version = "0.1.0" }
+fujimod-recording = { path = "crates/recording", version = "0.1.0" }
+fujimod-catalog = { path = "crates/catalog", version = "0.1.0" }
+fujimod-catalog-bulk = { path = "crates/catalog-bulk", version = "0.1.0" }
+fujimod-catalog-camera = { path = "crates/catalog-camera", version = "0.1.0" }
+fujimod-catalog-firmware-identity = { path = "crates/catalog-firmware-identity", version = "0.1.0" }
+fujimod-catalog-configuration = { path = "crates/catalog-configuration", version = "0.1.0" }
+fujimod-catalog-resolution = { path = "crates/catalog-resolution", version = "0.1.0" }
+fujimod-catalog-construction = { path = "crates/catalog-construction", version = "0.1.0" }
+fujimod-catalog-assets = { path = "crates/catalog-assets", version = "0.1.0" }
+fujimod-catalog-identity = { path = "crates/catalog-identity", version = "0.1.0" }
+fujimod-catalog-controls = { path = "crates/catalog-controls", version = "0.1.0" }
+fujimod-catalog-remote = { path = "crates/catalog-remote", version = "0.1.0" }
+fujimod-catalog-run-inputs = { path = "crates/catalog-run-inputs", version = "0.1.0" }
+fujimod-catalog-schemas = { path = "crates/catalog-schemas", version = "0.1.0" }
+fujimod-catalog-service = { path = "crates/catalog-service", version = "0.1.0" }
+fujimod-catalog-settings = { path = "crates/catalog-settings", version = "0.1.0" }
+fujimod-emulator = { path = "crates/emulator", version = "0.1.0" }
+fujimod-emulator-boot = { path = "crates/emulator-boot", version = "0.1.0" }
+fujimod-emulator-session = { path = "crates/emulator-session", version = "0.1.0" }
+fujimod-emulator-devices = { path = "crates/emulator-devices", version = "0.1.0" }
+fujimod-emulator-models = { path = "crates/emulator-models", version = "0.1.0" }
+fujimod-emulator-exr2-boot-serial = { path = "crates/emulator-exr2-boot-serial", version = "0.1.0" }
+fujimod-emulator-xp4-board = { path = "crates/emulator-xp4-board", version = "0.1.0" }
+fujimod-emulator-imaging = { path = "crates/emulator-imaging", version = "0.1.0" }
+fujimod-emulator-image-formation = { path = "crates/emulator-image-formation", version = "0.1.0" }
+fujimod-emulator-image-processing = { path = "crates/emulator-image-processing", version = "0.1.0" }
+fujimod-virtual-scene = { path = "crates/virtual-scene", version = "0.1.0" }
+fujimod-emulator-sensor-input = { path = "crates/emulator-sensor-input", version = "0.1.0" }
+fujimod-emulator-image-codecs = { path = "crates/emulator-image-codecs", version = "0.1.0" }
+fujimod-emulator-exr2-isp-output = { path = "crates/emulator-exr2-isp-output", version = "0.1.0" }
+fujimod-emulator-exr2-isp-statistics = { path = "crates/emulator-exr2-isp-statistics", version = "0.1.0" }
+fujimod-emulator-exr2-isp-testing = { path = "crates/emulator-exr2-isp-testing", version = "0.1.0" }
+fujimod-emulator-exr2-isp-face = { path = "crates/emulator-exr2-isp-face", version = "0.1.0" }
+fujimod-emulator-exr2-isp-input = { path = "crates/emulator-exr2-isp-input", version = "0.1.0" }
+fujimod-emulator-xp4-io = { path = "crates/emulator-xp4-io", version = "0.1.0" }
+fujimod-emulator-xp4-display = { path = "crates/emulator-xp4-display", version = "0.1.0" }
+fujimod-emulator-xp4-storage = { path = "crates/emulator-xp4-storage", version = "0.1.0" }
+fujimod-emulator-xpp = { path = "crates/emulator-xpp", version = "0.1.0" }
+fujimod-emulator-xp5-board = { path = "crates/emulator-xp5-board", version = "0.1.0" }
+fujimod-emulator-xp5-io = { path = "crates/emulator-xp5-io", version = "0.1.0" }
+fujimod-emulator-xp5-display = { path = "crates/emulator-xp5-display", version = "0.1.0" }
+fujimod-emulator-xp5-storage = { path = "crates/emulator-xp5-storage", version = "0.1.0" }
+fujimod-emulator-xp5-imaging = { path = "crates/emulator-xp5-imaging", version = "0.1.0" }
+fujimod-emulator-parts-io = { path = "crates/emulator-parts-io", version = "0.1.0" }
+fujimod-emulator-parts-controls = { path = "crates/emulator-parts-controls", version = "0.1.0" }
+fujimod-emulator-parts-sensor = { path = "crates/emulator-parts-sensor", version = "0.1.0" }
+fujimod-emulator-parts-lens = { path = "crates/emulator-parts-lens", version = "0.1.0" }
+fujimod-emulator-storage = { path = "crates/emulator-storage", version = "0.1.0" }
+fujimod-emulator-preparation = { path = "crates/emulator-preparation", version = "0.1.0" }
+fujimod-emulator-ip = { path = "crates/emulator-ip", version = "0.1.0" }
+fujimod-emulator-ip-dmp = { path = "crates/emulator-ip-dmp", version = "0.1.0" }
+fujimod-emulator-ip-arm = { path = "crates/emulator-ip-arm", version = "0.1.0" }
+fujimod-emulator-graphics = { path = "crates/emulator-graphics", version = "0.1.0" }
+fujimod-emulator-exr2-io = { path = "crates/emulator-exr2-io", version = "0.1.0" }
+fujimod-emulator-exr2-system = { path = "crates/emulator-exr2-system", version = "0.1.0" }
+fujimod-emulator-exr2-companion = { path = "crates/emulator-exr2-companion", version = "0.1.0" }
+fujimod-emulator-exr2-storage = { path = "crates/emulator-exr2-storage", version = "0.1.0" }
+fujimod-emulator-exr2-codecs = { path = "crates/emulator-exr2-codecs", version = "0.1.0" }
+fujimod-emulator-exr2-serial = { path = "crates/emulator-exr2-serial", version = "0.1.0" }
+fujimod-emulator-exr2-audio = { path = "crates/emulator-exr2-audio", version = "0.1.0" }
+fujimod-emulator-exr2-gpu = { path = "crates/emulator-exr2-gpu", version = "0.1.0" }
+fujimod-emulator-exr2-i2c = { path = "crates/emulator-exr2-i2c", version = "0.1.0" }
+fujimod-emulator-exr2-display = { path = "crates/emulator-exr2-display", version = "0.1.0" }
+fujimod-emulator-exr2-board = { path = "crates/emulator-exr2-board", version = "0.1.0" }
+fujimod-emulator-exr2-plan = { path = "crates/emulator-exr2-plan", version = "0.1.0" }
+fujimod-emulator-exr2-resources = { path = "crates/emulator-exr2-resources", version = "0.1.0" }
+fujimod-emulator-exr2-images = { path = "crates/emulator-exr2-images", version = "0.1.0" }
+fujimod-emulator-cpu = { path = "crates/emulator-cpu", version = "0.1.0" }
+fujimod-emulator-cpu-unicorn = { path = "crates/emulator-cpu-unicorn", version = "0.1.0" }
+fujimod-recovery = { path = "crates/recovery", version = "0.1.0" }
+fujimod-firmware = { path = "crates/firmware", version = "0.1.0" }
+fujimod-settings = { path = "crates/settings", version = "0.1.0" }
+fujimod-emulator-cpu-hvf = { path = "crates/emulator-cpu-hvf", version = "0.1.0" }
+fujimod-workspace-hack = { path = "crates/workspace-hack", version = "0.1.0" }
 serde = "1"
 serde_json = "1"
+schemars = "1.2.3"
+ciborium = "0.2"
 fujimod-usb = { path = "crates/usb", version = "0.1.0" }
+fujimod-usb-app80 = { path = "crates/usb-app80", version = "0.1.0" }
+fujimod-usb-app80-types = { path = "crates/usb-app80-types", version = "0.1.0" }
+fujimod-python-app80-values = { path = "bindings/python/app80-values", version = "0.1.0" }
+fujimod-workflows = { path = "crates/workflows", version = "0.1.0" }
 nusb = "0.2.8"
+rusqlite = { version = "0.40", features = ["bundled"] }
+sha2 = "0.10"
 thiserror = "2"
 futures-lite = "2"
 futures-timer = { version = "3", features = ["wasm-bindgen"] }
-pyo3 = { version = "=0.30.1", features = ["extension-module", "abi3-py310"] }
+pyo3 = { version = "=0.30.1", features = ["extension-module", "abi3-py310", "experimental-async", "multiple-pymethods"] }
 
 js-sys = "0.3"
 wasm-bindgen-test = "0.3"
 wasm-bindgen = "0.2"
+tsify = { version = "0.5.8", default-features = false, features = ["js"] }
+serde-wasm-bindgen = "0.6"
 wasm-bindgen-futures = "0.4"
 futures-channel = "0.3"
 
+# Native emulator builds use release optimization for the runtime library.
+# Sixteen codegen units with incremental compilation boot the X70 firmware as
+# fast as one unit did and cut an emulator-device rebuild from about 1,040 to
+# 260 CPU seconds; ThinLTO keeps cross-crate inlining (without it the boot took
+# 7% more CPU). CI's rust-cache disables incremental compilation.
+# Every optimized local build: `cargo build --release`, the Python extension,
+# and the worker share this one set of artifacts. FujiMod crates use
+# opt-level 2 without LTO and with incremental compilation, dependencies
+# opt-level 3. A device edit rebuilds the X70 boot binary in about 9 CPU
+# seconds; ThinLTO would add about 40 seconds of linking to each build for a
+# boot about 5% faster.
+[profile.release]
+opt-level = 2
+lto = "off"
+codegen-units = 256
+incremental = true
+# Release builds carry no debug info; stripping the rest from the 85 MB Python
+# extension took 0.6 s of every rebuild. Published artifacts strip it below.
+strip = "none"
+
+[profile.release.package."*"]
+opt-level = 3
+
+# Published artifacts only (wheels, the web emulator): ThinLTO.
+[profile.dist]
+inherits = "release"
+opt-level = 3
+lto = "thin"
+codegen-units = 16
+strip = "debuginfo"
+
 # Build executables stay unstripped; distribution profiles apply to libraries.
+# The binding generator's build scripts parse the App80 and service sources on
+# every USB or service edit, so they are optimized.
 [profile.release.build-override]
 strip = "none"
+opt-level = 3

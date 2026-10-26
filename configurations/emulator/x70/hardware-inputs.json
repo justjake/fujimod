@@ -1,0 +1,46 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "x70",
+  "body_id": "x70",
+  "reset": {
+    "inputs": {
+      "gpio": {
+        "gpio_inputs": {
+          "0": 3118,
+          "2": 4608,
+          "3": 777,
+          "12": 128,
+          "11": 0
+        },
+        "profile_name": "virtual power switch on / released known buttons including S1/S2 / absent card, hot-shoe flash, HDMI cable and mic/remote plug / manual lever and tilted LCD / unmeasured other pins"
+      },
+      "power": {
+        "profile_name": "virtual normal power-on / idle controls / unresolved MCU and other inputs",
+        "adc_samples": [
+          0,
+          0,
+          1023,
+          63,
+          534,
+          640,
+          0,
+          825,
+          1023,
+          60,
+          0,
+          0
+        ],
+        "boot_reply": 0,
+        "spi_status_registers": [
+          [
+            9,
+            96
+          ]
+        ]
+      },
+      "mcu_packet_hex": "0000000000000000000000000000aa56",
+      "usb_connected": false
+    }
+  }
+}

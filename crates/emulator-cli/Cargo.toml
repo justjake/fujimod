@@ -1,0 +1,41 @@
+[package]
+name = "fujimod-emulator-cli"
+description = "The fujimod-emulator command and the signed emulator worker"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "fujimod-emulator"
+path = "src/bin/fujimod-emulator.rs"
+test = false
+
+[[bin]]
+name = "fujimod-emulator-worker"
+path = "src/bin/fujimod-emulator-worker.rs"
+test = false
+
+[dependencies]
+fujimod-emulator-models = { path = "../../crates/emulator-models" }
+fujimod-emulator-xp5-board = { path = "../../crates/emulator-xp5-board" }
+fujimod-emulator-xp5-io = { path = "../../crates/emulator-xp5-io" }
+fujimod-emulator-xp5-display = { path = "../../crates/emulator-xp5-display" }
+fujimod-emulator-xp5-storage = { path = "../../crates/emulator-xp5-storage" }
+fujimod-emulator-parts-controls = { path = "../../crates/emulator-parts-controls" }
+fujimod-emulator-ip-arm = { path = "../../crates/emulator-ip-arm" }
+fujimod-emulator-graphics = { path = "../../crates/emulator-graphics" }
+fujimod-emulator = { path = "../emulator" }
+fujimod-emulator-boot.workspace = true
+fujimod-emulator-cpu = { path = "../emulator-cpu" }
+fujimod-emulator-cpu-unicorn = { path = "../emulator-cpu-unicorn" }
+fujimod-emulator-devices = { path = "../emulator-devices" }
+fujimod-emulator-exr2-board = { path = "../emulator-exr2-board" }
+fujimod-catalog-assets.workspace = true
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+fujimod-workspace-hack.workspace = true
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

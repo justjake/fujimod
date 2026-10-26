@@ -1,0 +1,32 @@
+{
+  "$defs": {
+    "DebugKey": {
+      "additionalProperties": false,
+      "description": "A name accepted by the stock debug key command.",
+      "properties": {
+        "event": {
+          "description": "Native event number.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Native name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "event"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/remote-debug-keys.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "items": {
+    "$ref": "#/$defs/DebugKey"
+  },
+  "title": "Array_of_DebugKey",
+  "type": "array"
+}

@@ -1,0 +1,78 @@
+{
+  "$defs": {
+    "StateRegion": {
+      "additionalProperties": false,
+      "description": "One safely readable CPU-visible region.",
+      "properties": {
+        "address": {
+          "description": "First CPU address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "constant": {
+          "description": "Read twice and require equal bytes.",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Region identity.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "size",
+        "constant"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/state.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Safely readable regions captured as camera state.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/state.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "firmware_id": {
+      "description": "Firmware whose bytes establish this contract.",
+      "type": "string"
+    },
+    "id": {
+      "description": "Stable document identity.",
+      "type": "string"
+    },
+    "regions": {
+      "description": "Capture order. Device registers with read side effects are excluded.",
+      "items": {
+        "$ref": "#/$defs/StateRegion"
+      },
+      "type": "array"
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "firmware_id",
+    "regions"
+  ],
+  "title": "FirmwareState",
+  "type": "object"
+}

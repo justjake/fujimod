@@ -1,0 +1,115 @@
+{
+  "$defs": {
+    "FirstStartLanguage": {
+      "additionalProperties": false,
+      "description": "One offered stock language and its stored preference value.",
+      "properties": {
+        "key": {
+          "description": "Native menu key; independent of the stored preference value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Exact stock BKUP_LANGUAGE name.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Stored language preference value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "value",
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/first-start.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Stock language rows and the calendar editor observation layout.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/first-start.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "children_offset": {
+      "description": "Child table pointer offset in the menu descriptor.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "cursor": {
+      "description": "Current language row observation address.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "date_editor": {
+      "description": "Calendar editor's year, month, day, hour, minute and selection observation.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "date_kind": {
+      "description": "Calendar menu kind, including its active field nodes.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "firmware_id": {
+      "description": "Firmware that offers these menus.",
+      "type": "string"
+    },
+    "id": {
+      "description": "Stable document identity.",
+      "type": "string"
+    },
+    "languages": {
+      "description": "Offered languages in native row order.",
+      "items": {
+        "$ref": "#/$defs/FirstStartLanguage"
+      },
+      "type": "array"
+    },
+    "menu_node": {
+      "description": "Stock initial language node address.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "row_bytes": {
+      "description": "Child table row size in bytes.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "firmware_id",
+    "menu_node",
+    "cursor",
+    "children_offset",
+    "row_bytes",
+    "languages",
+    "date_kind",
+    "date_editor"
+  ],
+  "title": "FirstStartMenu",
+  "type": "object"
+}

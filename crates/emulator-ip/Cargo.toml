@@ -1,0 +1,24 @@
+[package]
+name = "fujimod-emulator-ip"
+description = "SDHCI clocks, masked GPIO, Socionext XDMAC and DWC3 USB controller blocks"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-emulator-devices.workspace = true
+serde_json = "1"
+serde = { version = "1", features = ["derive", "rc"] }
+fujimod-workspace-hack.workspace = true
+
+[dev-dependencies]
+fujimod-emulator-parts-io.workspace = true
+fujimod-emulator-ip-arm.workspace = true
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

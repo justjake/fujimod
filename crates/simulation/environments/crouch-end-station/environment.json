@@ -1,0 +1,26 @@
+{
+  "id": "crouch-end-station",
+  "title": "Crouch End Station",
+  "author": "artfletch",
+  "source": "https://sketchfab.com/3d-models/crouch-end-station-d2651a5550f34d80b0dba6e971f3a1ae",
+  "license": "https://creativecommons.org/licenses/by/4.0/",
+  "scene": "environments/crouch-end-station/assets/scene.glb",
+  "scale": 1.0,
+  "spawn": [-5.0, 0.0, 0.0],
+  "translation": [0.0, -6.27, 0.0],
+  "rotation": [0.0, 0.0, 0.0],
+  "yaw": -1.3,
+  "unlit": true,
+  "sha256": "e890a706062f55ffa98a943bc9486f90ea58b70ad16cbe181df44ce58bdda862",
+  "source_sha256": "c02427ac0958fb9fe83665964547ac1ddf0f4639d48758d8bc3f83b08129b07e",
+  "preparation": {
+    "tool": "tools/prepare-photogrammetry.ts",
+    "source_faces": 1907352,
+    "runtime_faces": 347393,
+    "runtime_vertices": 512089,
+    "texture_max_dimension": 2048,
+    "position_error_fraction": 0.003,
+    "scale_basis": "Source units treated as metres; ground at source y=-6.27, not a surveyed calibration.",
+    "retained_normals": true
+  }
+}

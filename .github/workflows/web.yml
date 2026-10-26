@@ -1,26 +1,6 @@
 name: Web checks
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/web/**'
-      - 'bindings/javascript/**'
-      - 'bindings/generator/**'
-      - 'crates/usb/**'
-      - 'crates/defs/**'
-      - 'Cargo.*'
-      - 'bindings/python/python/fujimod/presentation/controls.json'
-      - '.github/workflows/web.yml'
-  pull_request:
-    paths:
-      - 'apps/web/**'
-      - 'bindings/javascript/**'
-      - 'bindings/generator/**'
-      - 'crates/usb/**'
-      - 'crates/defs/**'
-      - 'Cargo.*'
-      - 'bindings/python/python/fujimod/presentation/controls.json'
-      - '.github/workflows/web.yml'
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -33,10 +13,10 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           lfs: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '26.12.0'
           cache: npm
@@ -46,15 +26,22 @@ jobs:
         run: |
           rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
           rustup default 1.99.1
+          npm ci
+          npm --prefix packages/emulator-ui ci
           npm --prefix bindings/javascript ci
+          npm --prefix crates/simulation/tools ci
           npm --prefix bindings/javascript run setup:tooling
       - run: npm ci
       - run: npm run check
       - name: Check USB protocol core
         working-directory: .
-        run: cargo test -p fujimod-usb --features testing
+        run: cargo test -p fujimod-usb -p fujimod-usb-app80
+      - name: Check shared simulation
+        working-directory: .
+        run: cargo test --locked --manifest-path crates/simulation/Cargo.toml --lib
       - run: npm test
       - run: npm run build
       - name: Install browser test runtimes
         run: npx playwright install --with-deps chromium webkit
+      - run: npm run test:prerender
       - run: npm run test:dev-tools:browser

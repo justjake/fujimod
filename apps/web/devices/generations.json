@@ -1,11 +1,11 @@
 [
   [
-    { "name": "EXR", "years": "2011", "models": ["X100", "X10", "X-S1"] },
-    { "name": "EXR Pro", "years": "2012", "models": ["X-Pro1", "X-E1"] }
+    { "name": "EXR Processor", "years": "2011", "models": ["X100", "X10", "X-S1"] },
+    { "name": "EXR Processor Pro", "years": "2012", "models": ["X-Pro1", "X-E1"] }
   ],
   [
     {
-      "name": "EXR II",
+      "name": "EXR Processor II",
       "years": "2013–2016",
       "models": [
         "X70",
@@ -13,10 +13,12 @@
         "X100S",
         "XQ1",
         "X-M1",
+        "X-A1",
         "X-E2",
         "X-T1",
         "X30",
         "X100T",
+        "X-A2",
         "XQ2",
         "X-T10",
         "X-E2S"
@@ -34,33 +36,14 @@
     {
       "name": "X-Processor 4",
       "years": "2018–2021",
-      "models": [
-        "X-T3",
-        "X-T30",
-        "X-Pro3",
-        "X100V",
-        "X-T4",
-        "X-S10",
-        "X-E4",
-        "X-T30 II"
-      ]
+      "models": ["X-T3", "X-T30", "X-Pro3", "X100V", "X-T4", "X-S10", "X-E4", "X-T30 II"]
     }
   ],
   [
     {
       "name": "X-Processor 5",
       "years": "2022–",
-      "models": [
-        "X-H2S",
-        "X-H2",
-        "X-T5",
-        "X-S20",
-        "X100VI",
-        "X-T50",
-        "X-M5",
-        "X-E5",
-        "X-T30 III"
-      ]
+      "models": ["X-H2S", "X-H2", "X-T5", "X-S20", "X100VI", "X-T50", "X-M5", "X-E5", "X-T30 III"]
     }
   ]
 ]

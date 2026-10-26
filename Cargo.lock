@@ -3,6 +3,28 @@
 version = 4
 
 [[package]]
+name = "ab_glyph"
+version = "0.2.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01c0457472c38ea5bd1c3b5ada5e368271cb550be7a4ca4a0b4634e9913f6cc2"
+dependencies = [
+ "ab_glyph_rasterizer",
+ "owned_ttf_parser",
+]
+
+[[package]]
+name = "ab_glyph_rasterizer"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "366ffbaa4442f4684d91e2cd7c5ea7c4ed8add41959a31447066e279e432b618"
+
+[[package]]
+name = "adler2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
+
+[[package]]
 name = "aead"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -38,6 +60,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ahash"
+version = "0.8.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
+dependencies = [
+ "cfg-if",
+ "getrandom 0.3.4",
+ "once_cell",
+ "serde",
+ "version_check",
+ "zerocopy",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -45,6 +81,27 @@ checksum = "c982642fa9e8606056828ee9a8505737230110bb1099153c79efe865c59d12ba"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "allocator-api2"
+version = "0.2.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
+
+[[package]]
+name = "apple-cf"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acc8e8f378f5bbd99f5850a95e55cbfd20e14db63d1eee16a060528cf960876e"
+dependencies = [
+ "doom-fish-utils",
+]
+
+[[package]]
+name = "arrayref"
+version = "0.3.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76a2e8124351fda1ef8aaaa3bbd7ebbcb486bbcd4225aca0aa0d84bb2db8fecb"
 
 [[package]]
 name = "arrayvec"
@@ -64,7 +121,7 @@ dependencies = [
  "nom 7.1.3",
  "num-traits",
  "rusticata-macros",
- "thiserror 2.0.21",
+ "thiserror",
  "time",
 ]
 
@@ -122,6 +179,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-lock"
+version = "3.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "290f7f2596bd5b78a9fec8088ccd89180d7f9f55b94b0576823bbbdc72ee8311"
+dependencies = [
+ "event-listener",
+ "event-listener-strategy",
+ "pin-project-lite",
+]
+
+[[package]]
 name = "async-native-tls"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -129,7 +197,7 @@ checksum = "37dd6b179962fe4048a6f81d4c0d7ed419a21fdf49204b4c6b04971693358e79"
 dependencies = [
  "futures-util",
  "native-tls",
- "thiserror 2.0.21",
+ "thiserror",
  "url",
 ]
 
@@ -163,9 +231,9 @@ dependencies = [
 
 [[package]]
 name = "async-tungstenite"
-version = "0.34.1"
+version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8447f02eaa65412035e2d3eeaa3fc82bbb8d7137c84c5976b4af685136012ee9"
+checksum = "d6ab5b7664abf9ccae07576888c72bc93750c7090c1ff4ffee9317cc05d11618"
 dependencies = [
  "async-native-tls",
  "async-net",
@@ -176,7 +244,7 @@ dependencies = [
  "futures-util",
  "log",
  "pin-project-lite",
- "tungstenite",
+ "tungstenite 0.30.0",
 ]
 
 [[package]]
@@ -222,7 +290,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31b698c5f9a010f6573133b09e0de5408834d0c82f8d7475a89fc1867a71cd90"
 dependencies = [
  "axum-core",
- "base64",
+ "base64 0.22.1",
  "bytes",
  "form_urlencoded",
  "futures-util",
@@ -241,7 +309,7 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "serde_urlencoded",
- "sha1",
+ "sha1 0.10.7",
  "sync_wrapper",
  "tokio",
  "tokio-tungstenite",
@@ -283,19 +351,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "base64"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
+
+[[package]]
 name = "base64ct"
 version = "1.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
-name = "bincode"
-version = "1.3.3"
+name = "bit-set"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+checksum = "08807e080ed7f9d5433fa9b275196cfc35414f66a0c79d864dc51a0d825231a3"
 dependencies = [
- "serde",
+ "bit-vec 0.8.0",
 ]
+
+[[package]]
+name = "bit-vec"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
 
 [[package]]
 name = "bit-vec"
@@ -344,6 +424,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "borrow-or-share"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc0b364ead1874514c8c2855ab558056ebfeb775653e7ae45ff72f28f8f3166c"
+
+[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -358,6 +444,18 @@ dependencies = [
  "byteorder",
  "trackable",
 ]
+
+[[package]]
+name = "bytecount"
+version = "0.6.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "175812e0be2bccb6abe50bb8d566126198344f707e304f45c648fd8f2cc0365e"
+
+[[package]]
+name = "bytemuck"
+version = "1.25.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95832e849adfb21180ccb6826a99da14e5d266ae5c2e668e1602cf234f153797"
 
 [[package]]
 name = "byteorder"
@@ -438,16 +536,54 @@ dependencies = [
 ]
 
 [[package]]
+name = "chacha20"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65c35e4b699c7e15ccbe7ee35c005e4fc0a278d22238a2857e6ce2dadeda1b06"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.3.1",
+ "rand_core 0.10.1",
+]
+
+[[package]]
 name = "chacha20poly1305"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "10cd79432192d1c0f4e1a0fef9527696cc039165d729fb41b3f4f4f354c2dc35"
 dependencies = [
  "aead",
- "chacha20",
+ "chacha20 0.9.1",
  "cipher",
  "poly1305",
  "zeroize",
+]
+
+[[package]]
+name = "ciborium"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42e69ffd6f0917f5c029256a24d0161db17cea3997d185db0d35926308770f0e"
+dependencies = [
+ "ciborium-io",
+ "ciborium-ll",
+ "serde",
+]
+
+[[package]]
+name = "ciborium-io"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05afea1e0a06c9be33d539b876f1ce3692f4afea2cb41f740e7743225ed1c757"
+
+[[package]]
+name = "ciborium-ll"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
+dependencies = [
+ "ciborium-io",
+ "half",
 ]
 
 [[package]]
@@ -468,6 +604,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0f78a02292a74a88ac736019ab962ece0bc380e3f977bf72e376c5d78ff0678"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "cobs"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fa961b519f0b462e3a3b4a34b64d119eeaca1d59af726fe450bbba07a9fc0a1"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]
@@ -551,10 +696,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "217698eaf96b4a3f0bc4f3662aaa55bdf913cd54d7204591faa790070c6d0853"
 
 [[package]]
+name = "crc32fast"
+version = "1.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01a7799fd6b852db0e61728dde9a204c423b44d689dbd432522543614b490e78"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
+name = "crossbeam-queue"
+version = "0.3.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03e8bd762f7479489c70ed6c768ddca99d7296857de437a68dcb2a94365b3fae"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "crossbeam-utils"
 version = "0.8.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
+
+[[package]]
+name = "crunchy"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "crypto-bigint"
@@ -707,7 +876,7 @@ dependencies = [
  "arrayvec",
  "aws-lc-rs",
  "ccm",
- "chacha20",
+ "chacha20 0.9.1",
  "chacha20poly1305",
  "der",
  "ecdsa",
@@ -720,7 +889,7 @@ dependencies = [
  "p256",
  "p384",
  "pkcs8",
- "rand",
+ "rand 0.9.5",
  "rand_core 0.6.4",
  "rcgen",
  "sec1",
@@ -745,10 +914,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "doom-fish-utils"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32707dcbfc8b3fd80d134a6d9e63f4f73ab6eece78192f0f213a192f08900c79"
+dependencies = [
+ "crossbeam-queue",
+ "futures-util",
+]
+
+[[package]]
 name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
+name = "dyn-clone"
+version = "1.0.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "ecdsa"
@@ -786,6 +971,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "email_address"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e079f19b08ca6239f47f8ba8509c11cf3ea30095831f7fed61441475edd8c449"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "embedded-io"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef1a6892d9eef45c8fa6b9e0086428a2cca8491aca8f787c534a3d6d0bcb3ced"
+
+[[package]]
+name = "embedded-io"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
+
+[[package]]
+name = "equivalent"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826"
+
+[[package]]
 name = "errno"
 version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -816,10 +1028,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "fallible-iterator"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
+
+[[package]]
+name = "fallible-streaming-iterator"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
+
+[[package]]
+name = "fancy-regex"
+version = "0.19.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d301f5bf187b3c295fce6468d3875037a0bccc5f6b151c63cac2f85babf21912"
+dependencies = [
+ "bit-set",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
+
+[[package]]
+name = "fdeflate"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e6853b52649d4ac5c0bd02320cddc5ba956bdb407c4b75a2c6b75bf51500f8c"
+dependencies = [
+ "simd-adler32",
+]
 
 [[package]]
 name = "ff"
@@ -850,6 +1094,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7ac824320a75a52197e8f2d787f6a38b6718bb6897a35142d749af3c0e8f4fe"
 
 [[package]]
+name = "flate2"
+version = "1.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e634e2e0ebac1ee034020da1ca582e17ffe4e0f5e985823721e168928136dcb"
+dependencies = [
+ "crc32fast",
+ "miniz_oxide 0.9.1",
+ "zlib-rs",
+]
+
+[[package]]
+name = "fluent-uri"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc74ac4d8359ae70623506d512209619e5cf8f347124910440dbc221714b328e"
+dependencies = [
+ "borrow-or-share",
+ "ref-cast",
+ "serde",
+]
+
+[[package]]
+name = "foldhash"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+
+[[package]]
 name = "foreign-types"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -874,6 +1146,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fraction"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e246562084dde8ebbcc943b261c406ce4f68e5032ec28029a251a47d6a295500"
+dependencies = [
+ "num",
+ "num-bigint",
+]
+
+[[package]]
 name = "fs_extra"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -883,58 +1165,1166 @@ checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 name = "fujimod"
 version = "0.1.0"
 dependencies = [
- "fujimod-defs",
+ "fujimod-catalog",
+ "fujimod-catalog-camera",
+ "fujimod-catalog-configuration",
+ "fujimod-catalog-firmware-identity",
+ "fujimod-catalog-resolution",
+ "fujimod-catalog-service",
+ "fujimod-emulator",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-cpu-hvf",
+ "fujimod-emulator-cpu-unicorn",
+ "fujimod-emulator-devices",
+ "fujimod-remote",
  "fujimod-usb",
+ "fujimod-workflows",
+ "fujimod-workspace-hack",
 ]
 
 [[package]]
 name = "fujimod-bindgen"
 version = "0.1.0"
 dependencies = [
+ "fujimod-workspace-hack",
  "serde",
  "serde_json",
  "syn 3.0.9",
 ]
 
 [[package]]
-name = "fujimod-corpus"
+name = "fujimod-catalog"
 version = "0.1.0"
 dependencies = [
- "bincode",
- "capstone",
- "regex",
+ "fujimod-catalog-bulk",
+ "fujimod-catalog-construction",
+ "fujimod-catalog-controls",
+ "fujimod-catalog-identity",
+ "fujimod-catalog-remote",
+ "fujimod-catalog-settings",
+ "fujimod-workspace-hack",
+ "schemars",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
- "sha2 0.11.1",
- "thiserror 2.0.21",
+ "sha2 0.10.9",
+ "tsify",
+ "wasm-bindgen",
 ]
 
 [[package]]
-name = "fujimod-defs"
+name = "fujimod-catalog-assets"
 version = "0.1.0"
 dependencies = [
+ "fujimod-catalog-identity",
+ "fujimod-workspace-hack",
  "serde",
  "serde_json",
- "thiserror 2.0.21",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "fujimod-catalog-bulk"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-identity",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2 0.10.9",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-catalog-camera"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-firmware-identity",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror",
+]
+
+[[package]]
+name = "fujimod-catalog-configuration"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-construction",
+ "fujimod-catalog-identity",
+ "fujimod-catalog-run-inputs",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2 0.10.9",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-catalog-construction"
+version = "0.1.0"
+dependencies = [
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-catalog-controls"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-identity",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2 0.10.9",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-catalog-firmware-identity"
+version = "0.1.0"
+dependencies = [
+ "fujimod-workspace-hack",
+ "thiserror",
+]
+
+[[package]]
+name = "fujimod-catalog-identity"
+version = "0.1.0"
+dependencies = [
+ "fujimod-workspace-hack",
+]
+
+[[package]]
+name = "fujimod-catalog-remote"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-controls",
+ "fujimod-catalog-identity",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2 0.10.9",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-catalog-resolution"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-configuration",
+ "fujimod-catalog-construction",
+ "fujimod-catalog-identity",
+ "fujimod-catalog-run-inputs",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-catalog-run-inputs"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-construction",
+ "fujimod-catalog-identity",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2 0.10.9",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-catalog-schemas"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-bulk",
+ "fujimod-catalog-configuration",
+ "fujimod-catalog-construction",
+ "fujimod-catalog-controls",
+ "fujimod-catalog-remote",
+ "fujimod-catalog-resolution",
+ "fujimod-catalog-run-inputs",
+ "fujimod-catalog-settings",
+ "fujimod-workspace-hack",
+ "jsonschema",
+ "schemars",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-catalog-service"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-firmware-identity",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror",
+]
+
+[[package]]
+name = "fujimod-catalog-settings"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-identity",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2 0.10.9",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-corpus"
+version = "0.1.0"
+dependencies = [
+ "capstone",
+ "fujimod-firmware",
+ "fujimod-workspace-hack",
+ "regex",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "thiserror",
+]
+
+[[package]]
+name = "fujimod-crate-graph"
+version = "0.1.0"
+dependencies = [
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-cpu-hvf",
+ "fujimod-emulator-cpu-unicorn",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-board",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-exr2-system",
+ "fujimod-emulator-ip-arm",
+ "fujimod-emulator-models",
+ "fujimod-workspace-hack",
+ "libc",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "toml",
+]
+
+[[package]]
+name = "fujimod-emulator-boot"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-assets",
+ "fujimod-catalog-configuration",
+ "fujimod-catalog-construction",
+ "fujimod-catalog-controls",
+ "fujimod-catalog-remote",
+ "fujimod-catalog-resolution",
+ "fujimod-catalog-run-inputs",
+ "fujimod-emulator",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-cpu-unicorn",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-board",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-models",
+ "fujimod-emulator-preparation",
+ "fujimod-emulator-session",
+ "fujimod-recording",
+ "fujimod-settings",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2 0.10.9",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-emulator-cli"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-assets",
+ "fujimod-emulator",
+ "fujimod-emulator-boot",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-cpu-unicorn",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-board",
+ "fujimod-emulator-graphics",
+ "fujimod-emulator-ip-arm",
+ "fujimod-emulator-models",
+ "fujimod-emulator-parts-controls",
+ "fujimod-emulator-xp5-board",
+ "fujimod-emulator-xp5-display",
+ "fujimod-emulator-xp5-io",
+ "fujimod-emulator-xp5-storage",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-cpu"
+version = "0.1.0"
+dependencies = [
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-cpu-hvf"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "fujimod-emulator",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-ip-arm",
+ "fujimod-emulator-xp5-io",
+ "fujimod-workspace-hack",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-cpu-unicorn"
+version = "0.1.0"
+dependencies = [
+ "ciborium",
+ "fujimod-emulator-cpu",
+ "fujimod-unicorn-sys",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2 0.10.9",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-emulator-devices"
+version = "0.1.0"
+dependencies = [
+ "apple-cf",
+ "ciborium",
+ "fujimod-emulator-image-codecs",
+ "fujimod-emulator-imaging",
+ "fujimod-workspace-hack",
+ "futures-lite",
+ "libm",
+ "openh264",
+ "rusty_h264-common",
+ "rusty_h264-encoder",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2 0.10.9",
+ "toml",
+ "tsify",
+ "videotoolbox",
+ "wasm-bindgen",
+ "zune-core",
+ "zune-jpeg",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-audio"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-exr2-serial",
+ "fujimod-emulator-parts-io",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-board"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-display",
+ "fujimod-emulator-exr2-i2c",
+ "fujimod-emulator-exr2-images",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-exr2-serial",
+ "fujimod-emulator-exr2-system",
+ "fujimod-emulator-imaging",
+ "fujimod-emulator-ip",
+ "fujimod-emulator-models",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-boot-serial"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-serial",
+ "fujimod-emulator-parts-io",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-codecs"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-images",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-image-codecs",
+ "fujimod-emulator-image-processing",
+ "fujimod-emulator-imaging",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "zune-core",
+ "zune-jpeg",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-companion"
+version = "0.1.0"
+dependencies = [
+ "ciborium",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-images",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-imaging",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-display"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-imaging",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-gpu"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-graphics",
+ "fujimod-emulator-ip-dmp",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-i2c"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-parts-controls",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-images"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-imaging",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-io"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-parts-controls",
+ "fujimod-emulator-parts-io",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-isp-face"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-imaging",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-isp-input"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-images",
+ "fujimod-emulator-exr2-isp-output",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-image-formation",
+ "fujimod-emulator-image-processing",
+ "fujimod-emulator-imaging",
+ "fujimod-emulator-parts-sensor",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-isp-output"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-construction",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-codecs",
+ "fujimod-emulator-exr2-images",
+ "fujimod-emulator-exr2-isp-input",
+ "fujimod-emulator-exr2-isp-statistics",
+ "fujimod-emulator-exr2-isp-testing",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-image-codecs",
+ "fujimod-emulator-image-formation",
+ "fujimod-emulator-image-processing",
+ "fujimod-emulator-imaging",
+ "fujimod-workspace-hack",
+ "openh264",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-isp-statistics"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-images",
+ "fujimod-emulator-exr2-isp-testing",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-image-formation",
+ "fujimod-emulator-image-processing",
+ "fujimod-emulator-imaging",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-isp-testing"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-plan"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-resources"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-serial"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-parts-io",
+ "fujimod-emulator-parts-lens",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-storage"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-ip",
+ "fujimod-emulator-parts-io",
+ "fujimod-emulator-storage",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-system"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-graphics"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+]
+
+[[package]]
+name = "fujimod-emulator-image-codecs"
+version = "0.1.0"
+dependencies = [
+ "apple-cf",
+ "fujimod-catalog-construction",
+ "fujimod-workspace-hack",
+ "futures-lite",
+ "openh264",
+ "rusty_h264-common",
+ "rusty_h264-encoder",
+ "serde",
+ "videotoolbox",
+ "zune-core",
+ "zune-jpeg",
+]
+
+[[package]]
+name = "fujimod-emulator-image-formation"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-imaging",
+ "fujimod-workspace-hack",
+ "libm",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-image-processing"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-image-formation",
+ "fujimod-emulator-imaging",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-imaging"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "libm",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "fujimod-emulator-ip"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-ip-arm",
+ "fujimod-emulator-parts-io",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-ip-arm"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-parts-io",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-ip-dmp"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-javascript"
+version = "0.1.0"
+dependencies = [
+ "ciborium",
+ "fujimod-emulator",
+ "fujimod-emulator-boot",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-cpu-unicorn",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-board",
+ "fujimod-emulator-exr2-images",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-graphics",
+ "fujimod-emulator-imaging",
+ "fujimod-emulator-ip-arm",
+ "fujimod-emulator-models",
+ "fujimod-emulator-parts-controls",
+ "fujimod-emulator-parts-io",
+ "fujimod-emulator-preparation",
+ "fujimod-emulator-session",
+ "fujimod-emulator-storage",
+ "fujimod-emulator-xp5-board",
+ "fujimod-emulator-xp5-display",
+ "fujimod-firmware",
+ "fujimod-workspace-hack",
+ "js-sys",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_bytes",
+ "serde_json",
+ "sha2 0.10.9",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-emulator-models"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-exr2-audio",
+ "fujimod-emulator-exr2-boot-serial",
+ "fujimod-emulator-exr2-codecs",
+ "fujimod-emulator-exr2-companion",
+ "fujimod-emulator-exr2-display",
+ "fujimod-emulator-exr2-gpu",
+ "fujimod-emulator-exr2-i2c",
+ "fujimod-emulator-exr2-io",
+ "fujimod-emulator-exr2-isp-face",
+ "fujimod-emulator-exr2-isp-input",
+ "fujimod-emulator-exr2-isp-output",
+ "fujimod-emulator-exr2-isp-statistics",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-serial",
+ "fujimod-emulator-exr2-storage",
+ "fujimod-emulator-exr2-system",
+ "fujimod-workspace-hack",
+]
+
+[[package]]
+name = "fujimod-emulator-parts-controls"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-parts-io"
+version = "0.1.0"
+dependencies = [
+ "ciborium",
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-emulator-parts-lens"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-parts-io",
+ "fujimod-workspace-hack",
+ "libm",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-parts-sensor"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-image-formation",
+ "fujimod-emulator-image-processing",
+ "fujimod-emulator-imaging",
+ "fujimod-workspace-hack",
+ "libm",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-preparation"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-settings",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-storage",
+ "fujimod-settings",
+ "fujimod-workspace-hack",
+ "ruzstd",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "fujimod-emulator-sensor-input"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-session"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-images",
+ "fujimod-emulator-exr2-io",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-exr2-storage",
+ "fujimod-emulator-imaging",
+ "fujimod-emulator-ip",
+ "fujimod-emulator-storage",
+ "fujimod-recording",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-emulator-storage"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-emulator-xp4-board"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-cpu-unicorn",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-ip",
+ "fujimod-emulator-ip-arm",
+ "fujimod-emulator-ip-dmp",
+ "fujimod-emulator-sensor-input",
+ "fujimod-emulator-storage",
+ "fujimod-emulator-xp4-display",
+ "fujimod-emulator-xp4-io",
+ "fujimod-emulator-xp4-storage",
+ "fujimod-emulator-xpp",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-xp4-display"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-graphics",
+ "fujimod-emulator-imaging",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "fujimod-emulator-xp4-io"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-ip",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-xp4-storage"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-xp5-board"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-configuration",
+ "fujimod-catalog-resolution",
+ "fujimod-emulator",
+ "fujimod-emulator-boot",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-graphics",
+ "fujimod-emulator-ip",
+ "fujimod-emulator-ip-arm",
+ "fujimod-emulator-ip-dmp",
+ "fujimod-emulator-parts-controls",
+ "fujimod-emulator-parts-io",
+ "fujimod-emulator-sensor-input",
+ "fujimod-emulator-session",
+ "fujimod-emulator-storage",
+ "fujimod-emulator-xp5-display",
+ "fujimod-emulator-xp5-imaging",
+ "fujimod-emulator-xp5-io",
+ "fujimod-emulator-xp5-storage",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
+name = "fujimod-emulator-xp5-display"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-graphics",
+ "fujimod-emulator-xp5-io",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "fujimod-emulator-xp5-imaging"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-imaging",
+ "fujimod-emulator-sensor-input",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
+name = "fujimod-emulator-xp5-io"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-parts-controls",
+ "fujimod-emulator-parts-io",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-xp5-storage"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-ip",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-xpp"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-ip",
+ "fujimod-emulator-ip-arm",
+ "fujimod-emulator-storage",
+ "fujimod-emulator-xp4-io",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
 name = "fujimod-firmware"
 version = "0.1.0"
 dependencies = [
+ "fujimod-workspace-hack",
  "sha2 0.11.1",
- "thiserror 2.0.21",
+ "thiserror",
 ]
 
 [[package]]
 name = "fujimod-javascript"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
+ "async-lock",
  "fujimod-bindgen",
- "fujimod-defs",
+ "fujimod-catalog",
+ "fujimod-catalog-bulk",
+ "fujimod-catalog-camera",
+ "fujimod-catalog-firmware-identity",
+ "fujimod-catalog-service",
+ "fujimod-recovery",
  "fujimod-usb",
+ "fujimod-usb-app80",
+ "fujimod-usb-app80-types",
+ "fujimod-usb-proxy",
+ "fujimod-workflows",
+ "fujimod-workspace-hack",
  "futures-channel",
  "futures-lite",
+ "futures-timer",
+ "js-sys",
+ "nusb",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "fujimod-javascript-testing"
+version = "0.1.0"
+dependencies = [
+ "fujimod-javascript",
+ "fujimod-usb",
+ "fujimod-workspace-hack",
  "js-sys",
  "nusb",
  "wasm-bindgen",
@@ -942,14 +2332,185 @@ dependencies = [
 ]
 
 [[package]]
-name = "fujimod-python"
+name = "fujimod-python-app80"
+version = "0.1.0"
+dependencies = [
+ "fujimod-python-app80-values",
+ "fujimod-python-service",
+ "fujimod-python-usb-base",
+ "fujimod-usb-app80",
+ "fujimod-usb-app80-types",
+ "fujimod-workspace-hack",
+ "pyo3",
+]
+
+[[package]]
+name = "fujimod-python-app80-values"
 version = "0.1.0"
 dependencies = [
  "fujimod-bindgen",
+ "fujimod-python-service",
+ "fujimod-usb-app80-types",
+ "fujimod-workspace-hack",
+ "pyo3",
+]
+
+[[package]]
+name = "fujimod-python-base"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-session",
+ "fujimod-workspace-hack",
+ "pyo3",
+]
+
+[[package]]
+name = "fujimod-python-catalog"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-resolution",
  "fujimod-corpus",
- "fujimod-defs",
- "fujimod-firmware",
+ "fujimod-python-service",
+ "fujimod-workspace-hack",
+ "pyo3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-python-emulator"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-assets",
+ "fujimod-catalog-settings",
+ "fujimod-emulator",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-preparation",
+ "fujimod-emulator-session",
+ "fujimod-emulator-storage",
+ "fujimod-emulator-xp5-board",
+ "fujimod-emulator-xpp",
+ "fujimod-python-base",
+ "fujimod-settings",
+ "fujimod-workspace-hack",
+ "pyo3",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "fujimod-python-graphics"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-display",
+ "fujimod-emulator-exr2-gpu",
+ "fujimod-emulator-graphics",
+ "fujimod-emulator-imaging",
+ "fujimod-python-base",
+ "fujimod-workspace-hack",
+ "pyo3",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-python-host-image"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-image-processing",
+ "fujimod-virtual-scene",
+ "fujimod-workspace-hack",
+ "pkg-config",
+ "pyo3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-python-module"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-boot",
+ "fujimod-emulator-exr2-board",
+ "fujimod-emulator-models",
+ "fujimod-emulator-session",
+ "fujimod-python-app80",
+ "fujimod-python-base",
+ "fujimod-python-catalog",
+ "fujimod-python-emulator",
+ "fujimod-python-graphics",
+ "fujimod-python-host-image",
+ "fujimod-python-recording",
+ "fujimod-python-remote",
+ "fujimod-python-usb",
+ "fujimod-python-xp4",
+ "fujimod-workspace-hack",
+ "pyo3",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-python-recording"
+version = "0.1.0"
+dependencies = [
+ "fujimod-recording",
+ "fujimod-workspace-hack",
+ "pyo3",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-python-remote"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-remote",
+ "fujimod-emulator",
+ "fujimod-emulator-session",
+ "fujimod-python-base",
+ "fujimod-python-usb-base",
+ "fujimod-remote",
  "fujimod-usb",
+ "fujimod-workspace-hack",
+ "futures-lite",
+ "pyo3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-python-service"
+version = "0.1.0"
+dependencies = [
+ "fujimod-bindgen",
+ "fujimod-catalog-firmware-identity",
+ "fujimod-catalog-service",
+ "fujimod-workspace-hack",
+ "pyo3",
+]
+
+[[package]]
+name = "fujimod-python-usb"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-camera",
+ "fujimod-catalog-firmware-identity",
+ "fujimod-firmware",
+ "fujimod-python-usb-base",
+ "fujimod-recovery",
+ "fujimod-usb",
+ "fujimod-workflows",
+ "fujimod-workspace-hack",
  "futures-channel",
  "futures-lite",
  "nusb",
@@ -958,19 +2519,131 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-python-usb-base"
+version = "0.1.0"
+dependencies = [
+ "fujimod-usb",
+ "fujimod-workspace-hack",
+ "pyo3",
+]
+
+[[package]]
+name = "fujimod-python-xp4"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-xp4-board",
+ "fujimod-python-base",
+ "fujimod-workspace-hack",
+ "pyo3",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-recording"
+version = "0.1.0"
+dependencies = [
+ "ab_glyph",
+ "fujimod-workspace-hack",
+ "png",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tiny-skia",
+]
+
+[[package]]
+name = "fujimod-recovery"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-firmware",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "fujimod-remote"
+version = "0.1.0"
+dependencies = [
+ "async-io",
+ "fujimod-catalog-controls",
+ "fujimod-catalog-remote",
+ "fujimod-emulator",
+ "fujimod-emulator-session",
+ "fujimod-recording",
+ "fujimod-usb",
+ "fujimod-workspace-hack",
+ "futures-lite",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-settings"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-settings",
+ "fujimod-firmware",
+ "fujimod-workspace-hack",
+]
+
+[[package]]
+name = "fujimod-unicorn-sys"
+version = "0.1.0"
+dependencies = [
+ "cmake",
+ "fujimod-workspace-hack",
+]
+
+[[package]]
 name = "fujimod-usb"
 version = "0.1.0"
 dependencies = [
- "base64",
- "fujimod-defs",
+ "async-channel",
+ "async-lock",
  "fujimod-usb-proxy",
+ "fujimod-workspace-hack",
  "futures-lite",
  "futures-timer",
  "js-sys",
  "nusb",
+ "serde",
  "serde_json",
- "thiserror 2.0.21",
+ "sha2 0.10.9",
+ "thiserror",
  "wasm-bindgen-test",
+]
+
+[[package]]
+name = "fujimod-usb-app80"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-firmware-identity",
+ "fujimod-catalog-service",
+ "fujimod-usb",
+ "fujimod-usb-app80-types",
+ "fujimod-workspace-hack",
+ "futures-lite",
+ "nusb",
+ "serde_json",
+ "thiserror",
+ "wasm-bindgen-test",
+]
+
+[[package]]
+name = "fujimod-usb-app80-types"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-firmware-identity",
+ "fujimod-catalog-service",
+ "fujimod-workspace-hack",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -983,23 +2656,110 @@ dependencies = [
  "async-net",
  "async-tungstenite",
  "axum",
- "base64",
+ "base64 0.23.1",
+ "fujimod-workspace-hack",
  "futures-lite",
  "futures-timer",
  "futures-util",
  "gloo-net",
  "if-addrs",
  "js-sys",
- "rand",
+ "postcard",
+ "rand 0.9.5",
  "serde",
+ "serde_bytes",
  "serde_json",
+ "socket2",
  "str0m",
  "stunclient",
- "thiserror 2.0.21",
+ "thiserror",
  "tokio",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+]
+
+[[package]]
+name = "fujimod-virtual-scene"
+version = "0.1.0"
+dependencies = [
+ "fujimod-workspace-hack",
+ "serde",
+]
+
+[[package]]
+name = "fujimod-workflows"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-bulk",
+ "fujimod-catalog-camera",
+ "fujimod-catalog-firmware-identity",
+ "fujimod-corpus",
+ "fujimod-firmware",
+ "fujimod-usb",
+ "fujimod-workspace-hack",
+ "futures-lite",
+ "nusb",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror",
+]
+
+[[package]]
+name = "fujimod-workspace-hack"
+version = "0.1.0"
+dependencies = [
+ "arrayvec",
+ "bitflags",
+ "bytemuck",
+ "cc",
+ "concurrent-queue",
+ "const-oid 0.9.6",
+ "crossbeam-utils",
+ "crypto-common 0.1.7",
+ "digest 0.10.7",
+ "errno",
+ "fastrand",
+ "form_urlencoded",
+ "futures-core",
+ "futures-io",
+ "futures-sink",
+ "futures-util",
+ "generic-array",
+ "getrandom 0.2.17",
+ "getrandom 0.3.4",
+ "hashbrown 0.17.1",
+ "js-sys",
+ "libc",
+ "linux-raw-sys",
+ "memchr",
+ "num-traits",
+ "once_cell",
+ "percent-encoding",
+ "proc-macro2",
+ "quote",
+ "rand_core 0.6.4",
+ "regex-automata",
+ "regex-syntax",
+ "rustix",
+ "serde",
+ "serde_core",
+ "serde_json",
+ "sha2 0.10.9",
+ "slab",
+ "smallvec",
+ "subtle",
+ "syn 2.0.119",
+ "syn 3.0.9",
+ "tokio",
+ "tracing",
+ "wasm-bindgen",
+ "web-sys",
+ "wide",
+ "zerocopy",
+ "zeroize",
 ]
 
 [[package]]
@@ -1114,9 +2874,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "899def5c37c4fd7b2664648c28120ecec138e4d395b459e5ca34f9cce2dd77fd"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "r-efi 5.3.0",
  "wasip2",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1128,6 +2890,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "r-efi 6.0.0",
+ "rand_core 0.10.1",
 ]
 
 [[package]]
@@ -1142,9 +2905,9 @@ dependencies = [
 
 [[package]]
 name = "gloo-net"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c06f627b1a58ca3d42b45d6104bf1e1a03799df472df00988b6ba21accc10580"
+checksum = "a6420f887c48417e9e86c6cf61274eb231830cccc100e49613f7952e269a1fe1"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -1153,7 +2916,7 @@ dependencies = [
  "http",
  "js-sys",
  "pin-project",
- "thiserror 1.0.69",
+ "thiserror",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -1173,9 +2936,9 @@ dependencies = [
 
 [[package]]
 name = "gloo-utils"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b5555354113b18c547c1d3a98fbf7fb32a9ff4f6fa112ce823a21641a0ba3aa"
+checksum = "4202275d95a142fa209a1e35e91c250a710c5600731372cd3464a39ed01573d6"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
@@ -1191,6 +2954,46 @@ dependencies = [
  "ff",
  "rand_core 0.6.4",
  "subtle",
+]
+
+[[package]]
+name = "half"
+version = "2.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ea2d84b969582b4b1864a92dc5d27cd2b77b622a8d79306834f1be5ba20d84b"
+dependencies = [
+ "cfg-if",
+ "crunchy",
+ "zerocopy",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
+dependencies = [
+ "foldhash",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.17.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+dependencies = [
+ "allocator-api2",
+ "equivalent",
+ "foldhash",
+]
+
+[[package]]
+name = "hashlink"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a596f1b20ed2cc5ecac41a164aaebc7258057060f06c0cf7a2ba3991ee7990fb"
+dependencies = [
+ "hashbrown 0.17.1",
 ]
 
 [[package]]
@@ -1426,12 +3229,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "indexmap"
+version = "2.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
+dependencies = [
+ "equivalent",
+ "hashbrown 0.17.1",
+]
+
+[[package]]
 name = "inout"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "879f10e63c20629ecabbb64a8010319738c66a5cd0c29b02d63d272b03751d01"
 dependencies = [
  "generic-array",
+]
+
+[[package]]
+name = "inventory"
+version = "0.3.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6928282826c822ad91bf1c9a1cb90a30ba1c26770749929b4656cd6be829cd7c"
+dependencies = [
+ "rustversion",
 ]
 
 [[package]]
@@ -1485,6 +3307,59 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonschema"
+version = "0.59.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b320ad34c177093d21622edc9215bb608294c2333ff296672c0c8265a5ee60c"
+dependencies = [
+ "ahash",
+ "bytecount",
+ "data-encoding",
+ "email_address",
+ "fancy-regex",
+ "fraction",
+ "getrandom 0.3.4",
+ "itoa",
+ "jsonschema-regex",
+ "jsonschema-value",
+ "num-cmp",
+ "num-traits",
+ "percent-encoding",
+ "referencing",
+ "regex",
+ "serde",
+ "serde_json",
+ "strum",
+ "unicode-general-category",
+ "uuid-simd",
+]
+
+[[package]]
+name = "jsonschema-regex"
+version = "0.59.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1472f7be79026f79e01a9b172263311e829d7c210d57b39cb57037abc0ce0500"
+dependencies = [
+ "regex-syntax",
+]
+
+[[package]]
+name = "jsonschema-value"
+version = "0.59.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5a7550a7a84787e715ead0b47e01fa8c6bb7c3413630f91a8f2094c06c2078a"
+dependencies = [
+ "ahash",
+ "bytecount",
+ "fraction",
+ "getrandom 0.3.4",
+ "num-cmp",
+ "num-traits",
+ "serde_json",
+ "zmij",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1503,6 +3378,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
+name = "libsqlite3-sys"
+version = "0.38.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1d20bef17f513b9b3004532233187769cd072d790971f4e4da0e346eb6401e8"
+dependencies = [
+ "cc",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1513,6 +3399,15 @@ name = "litemap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
+
+[[package]]
+name = "lock_api"
+version = "0.4.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965"
+dependencies = [
+ "scopeguard",
+]
 
 [[package]]
 name = "log"
@@ -1548,6 +3443,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
+name = "micromap"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2a86d3146ed3995b5913c414f6664344b9617457320782e64f0bb44afd49d74"
+
+[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1570,6 +3471,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
+name = "miniz_oxide"
+version = "0.8.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316"
+dependencies = [
+ "adler2",
+ "simd-adler32",
+]
+
+[[package]]
+name = "miniz_oxide"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b63fbc4a50860e98e7b2aa7804ded1db5cbc3aff9193adaff57a6931bf7c4b4c"
+dependencies = [
+ "adler2",
+ "simd-adler32",
+]
+
+[[package]]
 name = "mio"
 version = "1.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1578,6 +3499,15 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys",
+]
+
+[[package]]
+name = "nasm-rs"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "706bf8a5e8c8ddb99128c3291d31bd21f4bcde17f0f4c20ec678d85c74faa149"
+dependencies = [
+ "log",
 ]
 
 [[package]]
@@ -1626,12 +3556,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "num"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35bd024e8b2ff75562e5f34e7f4905839deb4b22955ef5e73d2fea1b9813cb23"
+dependencies = [
+ "num-bigint",
+ "num-complex",
+ "num-integer",
+ "num-iter",
+ "num-rational",
+ "num-traits",
+]
+
+[[package]]
 name = "num-bigint"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c89e69e7e0f03bea5ef08013795c25018e101932225a656383bd384495ecc367"
 dependencies = [
  "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-cmp"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63335b2e2c34fae2fb0aa2cecfd9f0832a1e24b3b32ecec612c3426d46dc8aaa"
+
+[[package]]
+name = "num-complex"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495"
+dependencies = [
  "num-traits",
 ]
 
@@ -1647,6 +3606,27 @@ version = "0.1.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ce2d95d4b3734dc35aa2f45e1aa22cd416814592a4f9d9205e11affd5b8e10b"
 dependencies = [
+ "num-traits",
+]
+
+[[package]]
+name = "num-iter"
+version = "0.1.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c92800bd69a1eac91786bcfe9da64a897eb72911b8dc3095decbd07429e8048b"
+dependencies = [
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-rational"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f83d14da390562dca69fc84082e73e548e1ad308d24accdedd2720017cb37824"
+dependencies = [
+ "num-bigint",
+ "num-integer",
  "num-traits",
 ]
 
@@ -1712,6 +3692,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
+name = "openh264"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a12b82c14f702c2cece4e0fc28896c6a6bed5317dc13448c86ac41df91a6f82"
+dependencies = [
+ "openh264-sys2",
+ "wide",
+]
+
+[[package]]
+name = "openh264-sys2"
+version = "0.9.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "414f5bd53da84e126dc9449eb6f0003bb6994b2de63c48119b0c9b7a8b28086a"
+dependencies = [
+ "cc",
+ "nasm-rs",
+ "walkdir",
+]
+
+[[package]]
 name = "openssl"
 version = "0.10.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1755,6 +3756,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "outref"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a80800c0488c3a21695ea981a54918fbb37abf04f4d0720c453632255e2ff0e"
+
+[[package]]
+name = "owned_ttf_parser"
+version = "0.25.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36820e9051aca1014ddc75770aab4d68bc1e9e632f0f5627c4086bc216fb583b"
+dependencies = [
+ "ttf-parser",
+]
+
+[[package]]
 name = "p256"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1783,6 +3799,29 @@ name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f38d5652c16fde515bb1ecef450ab0f6a219d619a7274976324d5e377f7dceba"
+
+[[package]]
+name = "parking_lot"
+version = "0.12.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93857453250e3077bd71ff98b6a65ea6621a19bb0f559a85248955ac12c45a1a"
+dependencies = [
+ "lock_api",
+ "parking_lot_core",
+]
+
+[[package]]
+name = "parking_lot_core"
+version = "0.9.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2621685985a2ebf1c516881c026032ac7deafcda1a2c9b7850dc81e3dfcb64c1"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "redox_syscall",
+ "smallvec",
+ "windows-link",
+]
 
 [[package]]
 name = "pem-rfc7468"
@@ -1853,6 +3892,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
+name = "png"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60769b8b31b2a9f263dae2776c37b1b28ae246943cf719eb6946a1db05128a61"
+dependencies = [
+ "bitflags",
+ "crc32fast",
+ "fdeflate",
+ "flate2",
+ "miniz_oxide 0.8.9",
+]
+
+[[package]]
 name = "polling"
 version = "3.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1894,6 +3946,18 @@ name = "portable-atomic"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05c8b63e8d9609db387f0324918f81d68fe27748f084ef092fb35954d0539a85"
+
+[[package]]
+name = "postcard"
+version = "1.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6764c3b5dd454e283a30e6dfe78e9b31096d9e32036b5d1eaac7a6119ccb9a24"
+dependencies = [
+ "cobs",
+ "embedded-io 0.4.0",
+ "embedded-io 0.6.1",
+ "serde",
+]
 
 [[package]]
 name = "potential_utf"
@@ -1943,6 +4007,7 @@ version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "229ca13b8a15bb0d1487b81ab975bfcd97513416499a8312011b6036e42e0de4"
 dependencies = [
+ "inventory",
  "libc",
  "once_cell",
  "portable-atomic",
@@ -2026,6 +4091,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65c9fb96cbc91e3478eaae79a69fcd3f1ae4ad052e471fe6732fff548984b4af"
+dependencies = [
+ "chacha20 0.10.2",
+ "getrandom 0.4.3",
+ "rand_core 0.10.1",
+]
+
+[[package]]
 name = "rand_chacha"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2054,6 +4130,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_core"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
+
+[[package]]
 name = "rcgen"
 version = "0.14.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2064,6 +4146,52 @@ dependencies = [
  "time",
  "x509-parser",
  "yasna",
+]
+
+[[package]]
+name = "redox_syscall"
+version = "0.5.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d"
+dependencies = [
+ "bitflags",
+]
+
+[[package]]
+name = "ref-cast"
+version = "1.0.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e440fb4e4b4147295338efb76001ab9e4efc0e5839df2c47fc5ac2381d365c3"
+dependencies = [
+ "ref-cast-impl",
+]
+
+[[package]]
+name = "ref-cast-impl"
+version = "1.0.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92ecd8964f8453721699a1ed72037b0db49ce2f5a5138486ee89bed6f67cdf3a"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
+]
+
+[[package]]
+name = "referencing"
+version = "0.59.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "473f4dcca28ead7ee0f8e5b5d0bbae2549f4fc4c958fb20af328961b6c174be3"
+dependencies = [
+ "ahash",
+ "fluent-uri",
+ "getrandom 0.3.4",
+ "hashbrown 0.17.1",
+ "itoa",
+ "micromap",
+ "parking_lot",
+ "percent-encoding",
+ "serde_json",
 ]
 
 [[package]]
@@ -2103,6 +4231,31 @@ checksum = "f8dd2a808d456c4a54e300a23e9f5a67e122c3024119acbfd73e3bf664491cb2"
 dependencies = [
  "hmac",
  "subtle",
+]
+
+[[package]]
+name = "rsqlite-vfs"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c51c9ae4df8a7fba42103df5c621fa3c37eccf3a3c650879e90fc48b11cc192c"
+dependencies = [
+ "hashbrown 0.16.1",
+ "thiserror",
+]
+
+[[package]]
+name = "rusqlite"
+version = "0.40.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23f2a97da3e3873c73cb2a2e71b35c40ff95e0b1eefa8d72d8499a6928c3b5b3"
+dependencies = [
+ "bitflags",
+ "fallible-iterator",
+ "fallible-streaming-iterator",
+ "hashlink",
+ "libsqlite3-sys",
+ "smallvec",
+ "sqlite-wasm-rs",
 ]
 
 [[package]]
@@ -2158,10 +4311,50 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
+name = "rusty_h264-common"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b9ab840d02dd582db8dc0a2f5e68fa75e222246ba378af567b578098c2b4cfc"
+dependencies = [
+ "bytemuck",
+ "libm",
+ "once_cell",
+ "portable-atomic",
+ "wide",
+]
+
+[[package]]
+name = "rusty_h264-encoder"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99277b8dcb73a794d7084ee17fa4953ac9845b568d350ceede534fa2984a631e"
+dependencies = [
+ "rusty_h264-common",
+]
+
+[[package]]
+name = "ruzstd"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69e4ce4a039f42bf25920b95667e4d789e98749ab11bbb8d2c2936f788421bb5"
+dependencies = [
+ "twox-hash",
+]
+
+[[package]]
 name = "ryu"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
+
+[[package]]
+name = "safe_arch"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96b02de82ddbe1b636e6170c21be622223aea188ef2e139be0a5b219ec215323"
+dependencies = [
+ "bytemuck",
+]
 
 [[package]]
 name = "same-file"
@@ -2182,6 +4375,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "schemars"
+version = "1.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab508826f74a77ca9d5aba6ff19b522583ee3eaf28a19384ff3d0e5835fadf6e"
+dependencies = [
+ "dyn-clone",
+ "ref-cast",
+ "schemars_derive",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "schemars_derive"
+version = "1.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1c3a92094fa7d61aa124645844facb6b554dfc797136d0f5fd1f890e2bffc69"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde_derive_internals 0.30.0",
+ "syn 3.0.9",
+]
+
+[[package]]
+name = "scopeguard"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
 name = "sctp-proto"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2190,10 +4414,10 @@ dependencies = [
  "bytes",
  "crc",
  "log",
- "rand",
+ "rand 0.9.5",
  "rustc-hash",
  "slab",
- "thiserror 2.0.21",
+ "thiserror",
 ]
 
 [[package]]
@@ -2256,6 +4480,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-wasm-bindgen"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8302e169f0eddcc139c70f139d19d6467353af16f9fce27e8c30158036a1e16b"
+dependencies = [
+ "js-sys",
+ "serde",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "serde_bytes"
+version = "0.11.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5d440709e79d88e51ac01c4b72fc6cb7314017bb7da9eeff678aa94c10e3ea8"
+dependencies = [
+ "serde",
+ "serde_core",
+]
+
+[[package]]
 name = "serde_core"
 version = "1.0.229"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2269,6 +4514,28 @@ name = "serde_derive"
 version = "1.0.229"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
+]
+
+[[package]]
+name = "serde_derive_internals"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18d26a20a969b9e3fdf2fc2d9f21eda6c40e2de84c9408bb5d3b05d499aae711"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "serde_derive_internals"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f852137cce035d6a4df67ccce505ff6b3e9fd3a10e3e52b24dc71e650bb1a9bd"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2300,6 +4567,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_spanned"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e7523beb55eece201a2356bee0bbca0d1ab466c14c07703b2e0ee6d42cb0c2c"
+dependencies = [
+ "serde_core",
+]
+
+[[package]]
 name = "serde_urlencoded"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2323,6 +4599,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha1"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aacc4cc499359472b4abe1bf11d0b12e688af9a805fa5e3016f9a386dc2d0214"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.3.1",
+ "digest 0.11.3",
+]
+
+[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2331,6 +4618,7 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.2.17",
  "digest 0.10.7",
+ "sha2-asm",
 ]
 
 [[package]]
@@ -2342,6 +4630,15 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.3.1",
  "digest 0.11.3",
+]
+
+[[package]]
+name = "sha2-asm"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b845214d6175804686b2bd482bcffe96651bb2d1200742b712003504a2dac1ab"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -2369,6 +4666,12 @@ dependencies = [
  "digest 0.10.7",
  "rand_core 0.6.4",
 ]
+
+[[package]]
+name = "simd-adler32"
+version = "0.3.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a219298ac11a56ea9a6d2120044824d6f01aeb034955e7af7bc16858527deea"
 
 [[package]]
 name = "slab"
@@ -2400,6 +4703,18 @@ checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
 dependencies = [
  "base64ct",
  "der",
+]
+
+[[package]]
+name = "sqlite-wasm-rs"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc3efc0da82635d7e1ced0053bbbfa8c7ab9645d0bf36ceb4f7127bb85315d75"
+dependencies = [
+ "cc",
+ "js-sys",
+ "rsqlite-vfs",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -2461,10 +4776,37 @@ dependencies = [
  "dimpl",
  "hmac",
  "p256",
- "sha1",
+ "sha1 0.10.7",
  "sha2 0.10.9",
  "str0m-proto",
  "time",
+]
+
+[[package]]
+name = "strict-num"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
+
+[[package]]
+name = "strum"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab85eea0270ee17587ed4156089e10b9e6880ee688791d45a905f5b1ca36f664"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -2478,7 +4820,7 @@ dependencies = [
  "crc",
  "hmac",
  "md5",
- "sha1",
+ "sha1 0.10.7",
  "trackable",
 ]
 
@@ -2489,7 +4831,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e579d7f3e1a395521774b72830c867906dbec15cf7696be4e0a30ee01b4046e"
 dependencies = [
  "bytecodec",
- "rand",
+ "rand 0.9.5",
  "stun_codec",
  "tokio",
 ]
@@ -2582,31 +4924,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.69"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
-dependencies = [
- "thiserror-impl 1.0.69",
-]
-
-[[package]]
-name = "thiserror"
 version = "2.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09e52cb86a36cede5cb101bf8908837b3e4c6e5e59fe7fd85c23fb56200d189e"
 dependencies = [
- "thiserror-impl 2.0.21",
-]
-
-[[package]]
-name = "thiserror-impl"
-version = "1.0.69"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
+ "thiserror-impl",
 ]
 
 [[package]]
@@ -2648,6 +4970,31 @@ checksum = "7e689342a48d2ea927c87ea50cabf8594854bf940e9310208848d680d668ed85"
 dependencies = [
  "num-conv",
  "time-core",
+]
+
+[[package]]
+name = "tiny-skia"
+version = "0.11.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83d13394d44dae3207b52a326c0c85a8bf87f1541f23b0d143811088497b09ab"
+dependencies = [
+ "arrayref",
+ "arrayvec",
+ "bytemuck",
+ "cfg-if",
+ "log",
+ "tiny-skia-path",
+]
+
+[[package]]
+name = "tiny-skia-path"
+version = "0.11.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c9e7fc0c2e86a30b117d0462aa261b72b7a99b7ebd7deb3a14ceda95c5bdc93"
+dependencies = [
+ "arrayref",
+ "bytemuck",
+ "strict-num",
 ]
 
 [[package]]
@@ -2696,8 +5043,47 @@ dependencies = [
  "futures-util",
  "log",
  "tokio",
- "tungstenite",
+ "tungstenite 0.29.0",
 ]
+
+[[package]]
+name = "toml"
+version = "0.9.12+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf92845e79fc2e2def6a5d828f0801e29a2f8acc037becc5ab08595c7d5e9863"
+dependencies = [
+ "indexmap",
+ "serde_core",
+ "serde_spanned",
+ "toml_datetime",
+ "toml_parser",
+ "toml_writer",
+ "winnow 0.7.15",
+]
+
+[[package]]
+name = "toml_datetime"
+version = "0.7.5+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92e1cfed4a3038bc5a127e35a2d360f145e1f4b971b551a2ba5fd7aedf7e1347"
+dependencies = [
+ "serde_core",
+]
+
+[[package]]
+name = "toml_parser"
+version = "1.1.5+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baa693a8032d7e1cada7d0041e96126df243179ff061456783ac7f12bda4744c"
+dependencies = [
+ "winnow 1.0.4",
+]
+
+[[package]]
+name = "toml_writer"
+version = "1.1.3+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06bdbd8cfc056b8d2e2e85f29b56a3bdbecb527cef81eb39e3e7b98af4652770"
 
 [[package]]
 name = "tower"
@@ -2779,6 +5165,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "tsify"
+version = "0.5.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea3af6b48c5c5624f7eb3c2f578d1335fadac433321980cae0063e8eb0acaa44"
+dependencies = [
+ "serde",
+ "serde-wasm-bindgen",
+ "tsify-macros",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "tsify-macros"
+version = "0.5.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef1e2e93369379d0a527c7d6632b58c55d52db7a106d8afbde3b354f3a57a9f1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde_derive_internals 0.29.1",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "ttf-parser"
+version = "0.25.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
+
+[[package]]
 name = "tungstenite"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2789,17 +5205,45 @@ dependencies = [
  "http",
  "httparse",
  "log",
- "native-tls",
- "rand",
- "sha1",
- "thiserror 2.0.21",
+ "rand 0.9.5",
+ "sha1 0.10.7",
+ "thiserror",
 ]
+
+[[package]]
+name = "tungstenite"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e48ac77174b19c110a50ab2128b24215ac9cb40e0e12e093fb602d175c569d22"
+dependencies = [
+ "bytes",
+ "data-encoding",
+ "http",
+ "httparse",
+ "log",
+ "native-tls",
+ "rand 0.10.3",
+ "sha1 0.11.0",
+ "thiserror",
+]
+
+[[package]]
+name = "twox-hash"
+version = "2.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86a801b3cea342a06d468c8710662aa29e5e05e4f5c0d62f00bbb7f2ad7941c2"
 
 [[package]]
 name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
+
+[[package]]
+name = "unicode-general-category"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b993bddc193ae5bd0d623b49ec06ac3e9312875fdae725a975c51db1cc1677f"
 
 [[package]]
 name = "unicode-ident"
@@ -2842,6 +5286,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 
 [[package]]
+name = "uuid-simd"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23b082222b4f6619906941c17eb2297fff4c2fb96cb60164170522942a200bd8"
+dependencies = [
+ "outref",
+ "vsimd",
+]
+
+[[package]]
 name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2852,6 +5306,22 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "videotoolbox"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9e3873dc5eb56496b2dc65af88d46bc09ceabdb14d71d17128afe1181f1b0b8"
+dependencies = [
+ "apple-cf",
+ "doom-fish-utils",
+]
+
+[[package]]
+name = "vsimd"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
 
 [[package]]
 name = "walkdir"
@@ -2984,6 +5454,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wide"
+version = "0.7.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ce5da8ecb62bcd8ec8b7ea19f69a51275e91299be594ea5cc6ef7819e16cd03"
+dependencies = [
+ "bytemuck",
+ "safe_arch",
+]
+
+[[package]]
 name = "winapi-util"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3006,6 +5486,18 @@ checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
 dependencies = [
  "windows-link",
 ]
+
+[[package]]
+name = "winnow"
+version = "0.7.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945"
+
+[[package]]
+name = "winnow"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
 
 [[package]]
 name = "wit-bindgen"
@@ -3056,7 +5548,7 @@ dependencies = [
  "nom 7.1.3",
  "oid-registry",
  "rusticata-macros",
- "thiserror 2.0.21",
+ "thiserror",
  "time",
 ]
 
@@ -3066,7 +5558,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5f6765e852b9b4dc8e2a76843e4d64d1cea8e79bcde0b6901aea8e7c7f08282"
 dependencies = [
- "bit-vec",
+ "bit-vec 0.9.1",
  "time",
 ]
 
@@ -3188,7 +5680,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "zlib-rs"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b268e58e7c693d7c271f93ffc4ba3b380412554231c85bf61ca7af91042a4112"
+
+[[package]]
 name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+
+[[package]]
+name = "zune-core"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d56377fd46368984a170bc5aac5567e52ca5da874caa60bea39fcbca78fb658b"
+
+[[package]]
+name = "zune-jpeg"
+version = "0.5.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296"
+dependencies = [
+ "zune-core",
+]

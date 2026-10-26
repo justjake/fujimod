@@ -1,0 +1,660 @@
+{
+  "$defs": {
+    "BankByteValue": {
+      "additionalProperties": false,
+      "description": "One input/output pair in a bank-byte decoding table.",
+      "properties": {
+        "input": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "input",
+        "output"
+      ],
+      "type": "object"
+    },
+    "NamedSetting": {
+      "additionalProperties": false,
+      "description": "A setting a run requests by name, such as `debug` or `language`.",
+      "properties": {
+        "offset": {
+          "description": "Byte offset in that store.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "store": {
+          "description": "Where the setting is stored: `bank`, `header`, or a profile record name.",
+          "type": "string"
+        },
+        "values": {
+          "additionalProperties": {
+            "items": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "description": "Encoded bytes for each value name; all the same length.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "store",
+        "offset",
+        "values"
+      ],
+      "type": "object"
+    },
+    "ProfileField": {
+      "additionalProperties": false,
+      "description": "A stock initialization of a profile field, applied before requested settings.",
+      "properties": {
+        "basis": {
+          "description": "The stock initialization that establishes this field.",
+          "type": "string"
+        },
+        "bytes": {
+          "description": "Field width; mapped sources require exactly one byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "description": "Byte offset in that store.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "$ref": "#/$defs/ProfileFieldSource"
+        },
+        "store": {
+          "description": "A profile record name or `header`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "store",
+        "offset",
+        "bytes",
+        "source",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "ProfileFieldSource": {
+      "description": "A bounded fill, bank copy, or masked byte mapping used by stock initialization.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Repeat a byte across the field, including erased padding.",
+          "properties": {
+            "kind": {
+              "const": "fill",
+              "type": "string"
+            },
+            "value": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Copy an addressed bank window verbatim.",
+          "properties": {
+            "kind": {
+              "const": "bank_copy",
+              "type": "string"
+            },
+            "offset": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "offset"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Replace only masked destination bits with the corresponding bank bits.",
+          "properties": {
+            "kind": {
+              "const": "bank_bits",
+              "type": "string"
+            },
+            "mask": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "offset": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "offset",
+            "mask"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Decode one bank byte and replace only the masked destination bits.",
+          "properties": {
+            "kind": {
+              "const": "bank_map",
+              "type": "string"
+            },
+            "mask": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "offset": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "otherwise": {
+              "description": "Fallback when no input entry matches.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "otherwise_high": {
+              "default": null,
+              "description": "Optional signed-byte fallback for unmatched inputs with bit 7 set.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "values": {
+              "items": {
+                "$ref": "#/$defs/BankByteValue"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "offset",
+            "mask",
+            "values",
+            "otherwise"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ProfileRecord": {
+      "additionalProperties": false,
+      "description": "One journal record: stock defaults and fixed bytes, sealed with one parity\nbit per data word and an XOR checksum of the data words in its last four bytes.",
+      "properties": {
+        "block": {
+          "description": "Physical flash block holding the record at its start.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "bytes": {
+          "description": "Record length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "defaults": {
+          "$ref": "#/$defs/UpdateRange",
+          "description": "Stock defaults copied into the record."
+        },
+        "defaults_offset": {
+          "description": "Record offset of the defaults.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fields": {
+          "description": "Bytes every valid record carries outside the defaults.",
+          "items": {
+            "$ref": "#/$defs/SettingsField"
+          },
+          "type": "array"
+        },
+        "managed_index": {
+          "description": "Managed logical index of that block.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parity_offset": {
+          "description": "Record offset of the parity bitmap; the data words precede it.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block",
+        "managed_index",
+        "bytes",
+        "defaults",
+        "defaults_offset",
+        "parity_offset",
+        "fields"
+      ],
+      "type": "object"
+    },
+    "SectionLength": {
+      "description": "A section's length: fixed, or counted from bytes the bank itself holds.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Always this many bytes.",
+          "properties": {
+            "bytes": {
+              "description": "Byte count.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "fixed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "bytes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Two little-endian 24-bit entry counts at `counts` and `counts + 3`,\n`bits` per entry: the first list rounded up to 64-bit words, the\nsecond to bytes.",
+          "properties": {
+            "bits": {
+              "description": "Bits per entry.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "counts": {
+              "description": "Bank offset of the first count.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "counted",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "counts",
+            "bits"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One little-endian 24-bit entry count at `count`, `bits` per entry,\nrounded up to bytes.",
+          "properties": {
+            "bits": {
+              "description": "Bits per entry.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "count": {
+              "description": "Bank offset of the count.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "counted_list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "count",
+            "bits"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "SettingsBank": {
+      "additionalProperties": false,
+      "description": "The flash blocks holding the settings bank.",
+      "properties": {
+        "blocks": {
+          "description": "Number of flash blocks in the bank.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "bytes": {
+          "description": "Bank content length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "descriptor": {
+          "$ref": "#/$defs/UpdateRange",
+          "description": "The stock bank descriptor `(kind, blocks, first block)` in the update."
+        },
+        "first_block": {
+          "description": "First physical flash block.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "description": "Descriptor kind word.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "logical_first": {
+          "description": "Managed logical index of the first block.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "descriptor",
+        "kind",
+        "blocks",
+        "first_block",
+        "logical_first",
+        "bytes"
+      ],
+      "type": "object"
+    },
+    "SettingsField": {
+      "additionalProperties": false,
+      "description": "Bytes written at a bank or record offset.",
+      "properties": {
+        "basis": {
+          "description": "What the bytes are and where they come from.",
+          "type": "string"
+        },
+        "bytes": {
+          "description": "Bytes written there; at most 128.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "offset": {
+          "description": "Byte offset in the bank or record.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "bytes",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "SettingsProfile": {
+      "additionalProperties": false,
+      "description": "The stock user profile: a sixteen-byte header kept by the power controller\nand journal records in managed flash blocks. Firmware that finds no valid\nheader and records resets the profile to its defaults at startup.",
+      "properties": {
+        "derived_fields": {
+          "default": [],
+          "description": "Fields initialized from the calibration bank or a declared fill.",
+          "items": {
+            "$ref": "#/$defs/ProfileField"
+          },
+          "type": "array"
+        },
+        "header": {
+          "$ref": "#/$defs/UpdateRange",
+          "description": "Stock header defaults. Byte 14 is the marker `0xaa`; byte 15 holds the\nchecksum that makes the sixteen bytes sum to zero."
+        },
+        "records": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ProfileRecord"
+          },
+          "description": "Journal records the stock loader requires, by name.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "header",
+        "records"
+      ],
+      "type": "object"
+    },
+    "SettingsSection": {
+      "additionalProperties": false,
+      "description": "One part of the bank the stock loader reads into its configuration RAM.",
+      "properties": {
+        "basis": {
+          "description": "The loader that reads it.",
+          "type": "string"
+        },
+        "length": {
+          "$ref": "#/$defs/SectionLength",
+          "description": "How many bytes the loader reads."
+        },
+        "name": {
+          "description": "File name part, such as `configuration`.",
+          "type": "string"
+        },
+        "offset": {
+          "description": "Byte offset in the bank.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "offset",
+        "length",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "SettingsSource": {
+      "additionalProperties": false,
+      "description": "A method-4 encoded section of the installed flash image.",
+      "properties": {
+        "address": {
+          "description": "Firmware address of the first decoded byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "flash_offset": {
+          "description": "Offset of the encoded stream in the installed flash image.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "Lowercase hexadecimal SHA-256 of the decoded section.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Decoded length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "flash_offset",
+        "address",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "UpdateRange": {
+      "additionalProperties": false,
+      "description": "Bytes at a firmware address in the decoded update, identified by SHA-256.",
+      "properties": {
+        "address": {
+          "description": "Firmware address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "Lowercase hexadecimal SHA-256 of the stock bytes.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Located settings bank and named settings for one firmware.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/settings.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "bank": {
+      "$ref": "#/$defs/SettingsBank",
+      "description": "Where the bank lives in flash."
+    },
+    "defaults": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/UpdateRange"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Stock default values applied to an otherwise zero bank, when the\nfirmware has a defaults table."
+    },
+    "fields": {
+      "description": "Bytes every valid bank carries: signature, identity, body hardware values.",
+      "items": {
+        "$ref": "#/$defs/SettingsField"
+      },
+      "type": "array"
+    },
+    "firmware_id": {
+      "description": "Firmware whose stock loader reads this bank.",
+      "type": "string"
+    },
+    "id": {
+      "description": "Stable document identity.",
+      "type": "string"
+    },
+    "profile": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SettingsProfile"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The stock user profile, when located."
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "sections": {
+      "description": "Parts of the bank the firmware reads, which a camera's NAND files supply\nby name (`nand-<name>.bin.zst`). Empty when not located.",
+      "items": {
+        "$ref": "#/$defs/SettingsSection"
+      },
+      "type": "array"
+    },
+    "settings": {
+      "additionalProperties": {
+        "$ref": "#/$defs/NamedSetting"
+      },
+      "description": "Settings a run may request by name, each with its named values.",
+      "type": "object"
+    },
+    "source": {
+      "$ref": "#/$defs/SettingsSource",
+      "description": "The decoded update section holding the bank descriptor and defaults table."
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "firmware_id",
+    "source",
+    "bank",
+    "fields",
+    "settings",
+    "sections"
+  ],
+  "title": "FirmwareSettings",
+  "type": "object"
+}

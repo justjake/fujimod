@@ -1,49 +1,14 @@
-[build-system]
-requires = ["maturin>=1.15,<2"]
-build-backend = "maturin"
-
 [project]
 name = "fujimod"
 version = "0.1.0"
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 description = "FujiMod camera tools"
 readme = "README.md"
 license-files = ["NOTICE"]
 
 [project.optional-dependencies]
 test = ["pytest>=9", "pytest-asyncio>=1"]
-walkthroughs = [
-    "pillow>=12.3.0",
-]
-
-[tool.maturin]
-module-name = "fujimod._native"
-python-source = "python"
-
-[tool.uv]
-# Rebuild local installs when either the binding or its Rust implementation changes.
-cache-keys = [
-    { file = "../../crates/firmware/Cargo.toml" },
-    { file = "../../crates/firmware/src/**/*.rs" },
-    { file = "pyproject.toml" },
-    { file = "NOTICE" },
-    { file = "Cargo.toml" },
-    { file = "build.rs" },
-    { file = "../generator/Cargo.toml" },
-    { file = "../generator/src/**/*.rs" },
-    { file = "src/**/*.rs" },
-    { file = "python/**/*.py" },
-    { file = "../../Cargo.toml" },
-    { file = "../../Cargo.lock" },
-    { file = "../../crates/corpus/Cargo.toml" },
-    { file = "../../crates/corpus/src/**/*.rs" },
-    { file = "../../crates/usb-proxy/Cargo.toml" },
-    { file = "../../crates/usb-proxy/src/**/*.rs" },
-    { file = "../../crates/usb/Cargo.toml" },
-    { file = "../../crates/defs/Cargo.toml" },
-    { file = "../../crates/defs/src/**/*.rs" },
-    { file = "../../crates/usb/src/**/*.rs" },
-]
+walkthroughs = ["pillow>=12.3.0"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

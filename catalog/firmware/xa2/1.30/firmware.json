@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xa2-130",
+  "body_id": "xa2",
+  "version": "1.30",
+  "update": {
+    "size": 38405156,
+    "sha256": "1fcde48563d31bf387f65e326592ecff0eb3eebf14f6ba5a8b4145b9cfc722bf"
+  },
+  "boot_rom": null,
+  "installation": null,
+  "generated_facts": null
+}

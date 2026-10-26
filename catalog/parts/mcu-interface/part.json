@@ -1,0 +1,36 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "mcu-interface",
+  "model": {
+    "kind": "microcontroller",
+    "registers": {
+      "first": 65,
+      "count": 43,
+      "width_bytes": 1
+    },
+    "packet_registers": {
+      "first": 80,
+      "count": 16,
+      "width_bytes": 1
+    },
+    "clock_registers": {
+      "first": 65,
+      "count": 4,
+      "width_bytes": 1
+    },
+    "status_register": 96,
+    "initial_registers": [
+      69,
+      70,
+      73,
+      74,
+      75,
+      76,
+      78,
+      104,
+      105,
+      106
+    ]
+  }
+}

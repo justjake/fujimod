@@ -33,7 +33,10 @@ fn verify_hash(data: &[u8], offset: u64, expected: &str) -> Result<()> {
     }
 }
 pub fn sha256(data: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(data))
+    Sha256::digest(data)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 pub fn invert(data: &[u8]) -> Vec<u8> {
     data.iter().map(|b| !b).collect()

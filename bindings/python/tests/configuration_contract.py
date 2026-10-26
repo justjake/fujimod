@@ -1,10 +1,13 @@
 """Shared native/Pyodide configuration command contract."""
 
+from contract_assertions import expect
+from fujimod.usb import app80
 
-def check_configuration_values():
+
+def check_configuration_values() -> bool:
     import json
 
-    from fujimod import defs
+    from fujimod import catalog
     from fujimod.usb import app80 as a
 
     layouts = [
@@ -41,13 +44,15 @@ def check_configuration_values():
         ],
     }
     service = a.Service(
-        defs.service.Definition.from_json(
-            json.dumps(doc), defs.FirmwareIdentity("config-b", "ab" * 32)
+        catalog.service.Definition.from_json(
+            json.dumps(doc), catalog.FirmwareIdentity("config-b", "ab" * 32)
         )
     )
-    modes = defs.service.ServiceModes(4)
+    modes = catalog.service.ServiceModes(4)
 
-    def prepare(command, codec, expected):
+    def prepare(
+        command: app80.Command, codec: str, expected: list[int]
+    ) -> app80.Invocation:
         p = service.prepare(modes, command)
         assert [p.raw[1 + i] for i in slots[codec]] == expected
         return p
@@ -66,7 +71,14 @@ def check_configuration_values():
             expected = bytes([0, 1, 127, 128, 253, 254, 255, 42])
             for i, byte in enumerate(expected):
                 data[1 + slots["configuration_flags"][3 + i]] = byte
-            assert bytes(p.decode(data).value.raw_data) == expected
+            assert (
+                bytes(
+                    expect(
+                        p.decode(data).value, a.ReplyValue.ConfigurationFlags
+                    ).raw_data
+                )
+                == expected
+            )
             p = prepare(
                 a.Command.ApplyConfigurationFlags(bank=bank, option=option),
                 "configuration_flags",
@@ -96,18 +108,28 @@ def check_configuration_values():
     p = prepare(
         a.Command.ReadConfigurationOptions(), "configuration_read_options", [255] * 4
     )
-    assert p.decode(p.raw).value.raw_value == 0xFFFFFFFF
+    assert (
+        expect(p.decode(p.raw).value, a.ReplyValue.ConfigurationOptions).raw_value
+        == 0xFFFFFFFF
+    )
     data = bytearray(p.raw)
     for i, byte in enumerate([137, 171, 205, 239]):
         data[1 + slots["configuration_read_options"][i]] = byte
-    assert p.decode(data).value.raw_value == 0x89ABCDEF
+    assert (
+        expect(p.decode(data).value, a.ReplyValue.ConfigurationOptions).raw_value
+        == 0x89ABCDEF
+    )
     for create in [
-        lambda: a.Command.ReadConfigurationFlags(bank=1, option=a.Toggle.Enabled),
+        lambda: a.Command.ReadConfigurationFlags(bank=1, option=a.Toggle.Enabled),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
         lambda: a.Command.SelectConfigurationMode(
-            flag=a.Toggle.Enabled, mode=a.ConfigurationBank.Bank0
+            flag=a.Toggle.Enabled,
+            mode=a.ConfigurationBank.Bank0,  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
         ),
         lambda: a.Command.PackConfigurationOptions(
-            flag=a.Toggle.Enabled, option=1, upper=0, lower=0
+            flag=a.Toggle.Enabled,
+            option=1,  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
+            upper=0,
+            lower=0,
         ),
     ]:
         try:
@@ -120,6 +142,7 @@ def check_configuration_values():
         try:
             a.AdjustmentDuration(raw)
         except a.CommandError as error:
+            assert isinstance(error.reason, a.CommandFailure.Argument)
             assert error.reason.kind == a.ArgumentKind.AdjustmentDuration
         else:
             raise AssertionError("invalid adjustment duration accepted")
@@ -163,7 +186,10 @@ def check_configuration_values():
             value.state, cls
         )
         if raw == 255:
-            assert value.state.raw_status == 255
+            assert (
+                expect(value.state, a.AdjustmentConfigurationState.Unknown).raw_status
+                == 255
+            )
     for mode, selector in [(a.AdjustmentMode.Mode8, 1), (a.AdjustmentMode.Mode16, 0)]:
         p = prepare(
             a.Command.SelectAdjustmentMode(mode=mode),
@@ -172,7 +198,7 @@ def check_configuration_values():
         )
         assert isinstance(p.decode(p.raw).value, a.ReplyValue.NoPayload)
     try:
-        a.Command.SelectAdjustmentMode(mode=a.ConfigurationMode.Mode0)
+        a.Command.SelectAdjustmentMode(mode=a.ConfigurationMode.Mode0)  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     except TypeError:
         pass
     else:

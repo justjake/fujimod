@@ -1,0 +1,52 @@
+{
+  "xp4": {
+    "file_api": {
+      "mount": 4293927888,
+      "open": 4293928064,
+      "read": 4293928420,
+      "close": 4293928920,
+      "load_address": 4293984256,
+      "workspace": 4294105088
+    },
+    "boot_code_sha256": "2a8b69986dd3fad0b73808c44e0834fa95c7b4e4f84e6c8664d4b0a82f7b24a4",
+    "boot_code_address": 4293918720,
+    "boot_code_size": 32768
+  },
+  "exr": {
+    "boot_rom": {
+      "address": 2147483648,
+      "content": {
+        "size": 16384,
+        "sha256": "7dc7e332a90802d9069d54be4487df0cc731820c9942692245e9ce5a5cec31d7"
+      }
+    },
+    "file_api": {
+      "open": 2147490420,
+      "read": 2147490616,
+      "filesystem": 4293918720
+    }
+  },
+  "exrpro": {
+    "boot_rom": {
+      "address": 2147483648,
+      "content": {
+        "size": 16384,
+        "sha256": "7dc7e332a90802d9069d54be4487df0cc731820c9942692245e9ce5a5cec31d7"
+      }
+    },
+    "file_api": {
+      "open": 2147490420,
+      "read": 2147490616,
+      "filesystem": 4293918720
+    }
+  },
+  "xpp": {
+    "boot_rom": {
+      "address": 4293918720,
+      "content": {
+        "size": 65536,
+        "sha256": "781bd91b2fd60f659016f9070bc03dec5e0325064d649d00f8016f38ead9c1e6"
+      }
+    }
+  }
+}

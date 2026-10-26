@@ -7,18 +7,19 @@ is also the source for the camera's committed, generated C codec. Inline
 TAR over the existing diagnostic USB memory protocol, or accepts a local file.
 All paths validate the complete byte length, CRC32 and TAR headers before
 reporting. The two acquisition paths remain visible side by side, including
-platform-specific SD-card directions. The actual TAR inventory replaces the
-initial data categories after capture. Nothing is sent automatically.
+platform-specific SD-card directions. After capture, the TAR's files replace the
+initial data categories, listed with the shared file list (each file downloads
+on its own). Nothing is sent automatically.
 
-**Upload this information** sends the archive and description to the sharing
-Worker's `/issue-reports` endpoint. The archive stays private in R2; a server-side
-token creates the public GitHub issue without requiring a reporter account.
-The page explains that the description is public. Provisioning, request limits
-and reconciliation are documented in `apps/usb-sharing/ISSUE_REPORTS.md`.
-**Download a copy** remains available independently (local gzip/ZIP).
+**Download all** saves the TAR (local gzip/ZIP). **Contribute** opens the shared
+Contribute dialog, which says the message is posted publicly on GitHub. Its
+Upload sends the archive and message to the sharing Worker's `/issue-reports`
+endpoint. The archive stays private in R2; a server-side token creates the
+public GitHub issue without requiring a reporter account. Provisioning, request
+limits and reconciliation are documented in `apps/usb-sharing/ISSUE_REPORTS.md`.
 
-**Delete from camera after uploading** is checked by default and enabled only
-for a live USB-acquired report. A matching durable storage acknowledgement must
+**Delete from camera after uploading**, in the dialog, is checked by default and
+shown only for a live USB-acquired report. A matching durable storage acknowledgment must
 arrive before deletion. Failed uploads retain the file; repeated upload attempts
 reuse the same idempotency key. Pending GitHub creation still has a durable
 archive receipt and report ID.
@@ -39,8 +40,7 @@ and writes use the established diagnostic USB SDK.
 The 64-byte discovery record advertises a build tag, capacity and pointers to
 the shared request/state/status/path/buffer fields. Open/read/close operations
 are 1/2/3, failed-stream close is 4, existing-file rewrite/write are 5/6, and
-remove is 7. The private source `decomp/mods/lib/session-io/README.md` specifies
-every offset. The browser validates all pointers and detects another operation
+remove is 7. The browser validates all pointers and detects another operation
 intervening. A timeout never frees or reuses a pending camera buffer.
 
 The scanner wakes the existing report worker only for pending file requests.
@@ -64,7 +64,7 @@ intercepted and its exact TAR digest is checked. No outgoing write is allowed
 before the explicit upload click; no real issue is submitted. Set `FUJIMOD_BROWSER=webkit` for the Safari engine.
 
 ```sh
-FUJIMOD_WEB_URL=https://your-host.ts.net/ node src/bug/browser.mjs PATH_TO_GUIDE
+FUJIMOD_WEB_URL=https://your-host.ts.net/ node src/bug/browser.ts PATH_TO_GUIDE
 ```
 
 Screenshots and results are written to ignored `apps/web/build/bug-report/`.

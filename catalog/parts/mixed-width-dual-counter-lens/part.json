@@ -1,0 +1,226 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "mixed-width-dual-counter-lens",
+  "model": {
+    "kind": "lens-mechanism",
+    "protocol": "mixed-width",
+    "motors": [
+      {
+        "initial_position": 0,
+        "travel_limits": [
+          -32767,
+          32767
+        ],
+        "ticks_per_step": 1000,
+        "settle_ticks": 4000,
+        "home": {
+          "threshold": 16,
+          "side": "above"
+        }
+      },
+      {
+        "initial_position": 0,
+        "travel_limits": [
+          -32767,
+          32767
+        ],
+        "ticks_per_step": 1000,
+        "settle_ticks": 4000,
+        "home": {
+          "threshold": 16,
+          "side": "above"
+        }
+      }
+    ],
+    "encoder": {
+      "phase_ticks": null,
+      "rest_phase": 0,
+      "steps_per_phase": 4
+    },
+    "zoom": null,
+    "period_ticks": 16,
+    "motor_counters": [
+      {
+        "motor": 0,
+        "channel": 4,
+        "divider": 2
+      },
+      {
+        "motor": 1,
+        "channel": 2,
+        "divider": 1
+      }
+    ]
+  },
+  "attachment": {
+    "pulse": {
+      "counter_channels": [
+        0,
+        2,
+        4
+      ],
+      "timer_channels": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        9,
+        10,
+        11
+      ],
+      "quadrature": true,
+      "initial_phase": 0,
+      "capture_channel": null
+    },
+    "interrupts": [
+      {
+        "core": 0,
+        "line": 20
+      },
+      {
+        "core": 0,
+        "line": 21
+      },
+      {
+        "core": 0,
+        "line": 22
+      },
+      {
+        "core": 0,
+        "line": 23
+      },
+      {
+        "core": 0,
+        "line": 24
+      },
+      {
+        "core": 0,
+        "line": 25
+      },
+      {
+        "core": 0,
+        "line": 26
+      },
+      {
+        "core": 0,
+        "line": 27
+      },
+      {
+        "core": 0,
+        "line": 28
+      },
+      {
+        "core": 0,
+        "line": 29
+      },
+      {
+        "core": 0,
+        "line": 30
+      },
+      {
+        "core": 0,
+        "line": 31
+      }
+    ],
+    "completion_interrupts": [
+      {
+        "core": 0,
+        "line": 14
+      },
+      {
+        "core": 0,
+        "line": 17
+      }
+    ],
+    "gpio_interrupts": [
+      {
+        "pin": {
+          "port": 0,
+          "pin": 0
+        },
+        "edge": "both",
+        "outputs": [
+          {
+            "core": 0,
+            "line": 8
+          }
+        ]
+      },
+      {
+        "pin": {
+          "port": 0,
+          "pin": 7
+        },
+        "edge": "both",
+        "outputs": [
+          {
+            "core": 0,
+            "line": 15
+          }
+        ]
+      }
+    ],
+    "limits": [],
+    "motor_home_pins": [
+      {
+        "port": 0,
+        "pin": 0
+      },
+      {
+        "port": 0,
+        "pin": 7
+      }
+    ],
+    "encoder_pins": [
+      {
+        "port": 1,
+        "pin": 0
+      },
+      {
+        "port": 1,
+        "pin": 1
+      }
+    ],
+    "position_bridge": {
+      "pulse_channel": 6,
+      "initial_position": 0,
+      "pulse_pin": {
+        "port": 1,
+        "pin": 6
+      },
+      "pulse_function": 1,
+      "position_units_per_step": 64,
+      "clock_interrupt": {
+        "core": 0,
+        "line": 12
+      }
+    },
+    "serial_routes": [
+      {
+        "controller_address": 4294459520,
+        "formats": [
+          {
+            "control": 224,
+            "configuration": 2,
+            "bits": 16,
+            "receive": false
+          }
+        ],
+        "selection": [
+          {
+            "pin": {
+              "port": 13,
+              "pin": 9
+            },
+            "high": false
+          }
+        ],
+        "transfer_ticks": 4,
+        "queue": "single",
+        "endpoint_part_id": "mixed-width-dual-counter-lens"
+      }
+    ]
+  }
+}

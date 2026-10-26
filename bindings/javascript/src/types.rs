@@ -152,6 +152,12 @@ impl TransferOptions {
         self.inner.max_reply_bytes.get()
     }
 }
+impl TransferOptions {
+    /// The trace these options attach to the sessions they open.
+    pub fn trace(&self) -> Option<usb::trace::Trace> {
+        self.trace.clone()
+    }
+}
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
 pub struct InterfaceSelection {

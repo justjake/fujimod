@@ -1,0 +1,11 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "imaging-serial-output",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "imaging-serial-output"
+    }
+  }
+}

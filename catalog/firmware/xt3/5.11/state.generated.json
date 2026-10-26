@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/state.generated.schema.json",
+  "schema": 1,
+  "id": "xt3-511-state",
+  "firmware_id": "xt3-511",
+  "regions": [
+    {
+      "name": "dram",
+      "address": 0,
+      "size": 536870912,
+      "constant": false
+    }
+  ]
+}

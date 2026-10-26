@@ -40,7 +40,7 @@ pub enum TracePhase {
     Submitted,
     Completed,
     Failed,
-    Cancelled,
+    Canceled,
 }
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
@@ -123,7 +123,7 @@ impl ProtocolTraceEvent {
             trace::Action::Submitted { .. } => TracePhase::Submitted,
             trace::Action::Completed { .. } => TracePhase::Completed,
             trace::Action::Failed { .. } => TracePhase::Failed,
-            trace::Action::Cancelled => TracePhase::Cancelled,
+            trace::Action::Canceled => TracePhase::Canceled,
         }
     }
     #[wasm_bindgen(getter, unchecked_return_type = "Uint8Array")]
@@ -213,7 +213,7 @@ impl TraceEvent {
             trace::Action::Submitted { .. } => TracePhase::Submitted,
             trace::Action::Completed { .. } => TracePhase::Completed,
             trace::Action::Failed { .. } => TracePhase::Failed,
-            trace::Action::Cancelled => TracePhase::Cancelled,
+            trace::Action::Canceled => TracePhase::Canceled,
         }
     }
     #[wasm_bindgen(getter,js_name=requestKind)]

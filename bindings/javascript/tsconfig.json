@@ -7,14 +7,9 @@
     "declaration": true,
     "outDir": "dist",
     "rootDir": "src",
-    "lib": [
-      "ES2022",
-      "DOM",
-      "ESNext.Disposable"
-    ],
-    "skipLibCheck": false
+    "lib": ["ES2022", "DOM", "ESNext.Disposable"],
+    "skipLibCheck": false,
+    "allowJs": false
   },
-  "include": [
-    "src/**/*.ts"
-  ]
+  "include": ["src/**/*.ts"]
 }

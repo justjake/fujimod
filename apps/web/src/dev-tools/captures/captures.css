@@ -1,0 +1,139 @@
+.cap-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.cap-title {
+  margin: 0;
+  font: 600 14px var(--wb-sans);
+}
+.cap-dim {
+  color: var(--wb-dim);
+  font-size: 11px;
+}
+.cap-scopes {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 6px;
+}
+.cap-scope,
+.cap-control {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 9px;
+  border: 1px solid var(--wb-line-2);
+  border-radius: 5px;
+  background: var(--wb-raised);
+  text-align: left;
+  cursor: pointer;
+}
+.cap-scope[aria-checked='true'],
+.cap-control[aria-pressed='true'] {
+  border-color: rgba(var(--wb-accent-rgb), 0.6);
+  background: #16211a;
+}
+.cap-scope:disabled,
+.cap-control:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.cap-list,
+.cap-controls,
+.cap-words {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cap-controls {
+  max-height: 260px;
+  overflow-y: auto;
+}
+.cap-control {
+  width: 100%;
+}
+.cap-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 7px 9px;
+  border: 1px solid var(--wb-line);
+  border-radius: 6px;
+  background: var(--wb-panel);
+}
+.cap-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cap-name {
+  flex: 1;
+  min-width: 0;
+}
+.cap-count {
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: rgba(var(--wb-accent-rgb), 0.16);
+  color: #c9f5d5;
+  font: 600 11px var(--wb-mono);
+  text-align: center;
+}
+.cap-photo {
+  position: relative;
+  color: var(--wb-dim);
+  font-size: 11px;
+  cursor: pointer;
+}
+.cap-photo:hover {
+  color: var(--wb-text);
+}
+.cap-photo input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.cap-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cap-steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cap-step {
+  padding: 4px 0;
+  border: 1px solid var(--wb-line);
+  border-radius: 4px;
+  color: var(--wb-faint);
+  font-size: 11px;
+  text-align: center;
+}
+.cap-step.cap-done {
+  border-color: rgba(var(--wb-accent-rgb), 0.45);
+  color: #c9f5d5;
+}
+.cap-step.cap-next {
+  border-color: var(--wb-line-2);
+  color: var(--wb-text);
+}
+.cap-result .cap-words {
+  padding: 6px 10px 8px;
+}
+.cap-words li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}

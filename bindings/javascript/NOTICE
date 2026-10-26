@@ -1,5 +1,11 @@
 FujiMod ff80 protocol adaptations use the MIT-licensed fffw reference.
 
+The generated emulator runtime includes Unicorn Engine. Unicorn Engine is
+licensed under GNU GPL version 2; see the bundled `licenses/` directory for the
+applicable license texts. The source version is identified by `unicorn_commit`
+in the generated `build.json` and is available from the public Unicorn Engine
+project at https://github.com/unicorn-engine/unicorn.
+
 Copyright (c) 2024 tiredboffin@gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining

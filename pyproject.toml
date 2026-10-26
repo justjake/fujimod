@@ -1,26 +1,49 @@
 [project]
 name = "fujimod-development"
 version = "0.0.0"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 
 [tool.uv]
 package = false
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py314"
 preview = true
-extend-exclude = ["target", "node_modules", "dist", "dist-local-preview", "pkg", "mods/lib/settings/upstream"]
+extend-exclude = [
+  "target",
+  "node_modules",
+  "dist",
+  "dist-local-preview",
+  "pkg",
+  "mods/lib/settings/upstream",
+  "crates/emulator-cpu-unicorn/vendor",
+]
 
 [tool.ruff.lint]
 # Astral's recommended core groups, plus complete signatures and stub hygiene.
 select = ["E4", "E7", "E9", "F", "UP", "B", "SIM", "I", "ANN", "PYI", "PGH003", "RUF100"]
 
 [tool.ty.environment]
-python-version = "3.10"
-extra-paths = ["bindings/python/python", "bindings/python/tests", "scripts/ci"]
+python-version = "3.14"
+extra-paths = [
+  "target/python-types",
+  "typings",
+  "bindings/python/python",
+  "bindings/python/tests",
+  "scripts/ci",
+  "scripts/git",
+]
 
 [tool.ty.src]
-exclude = ["target", "**/node_modules", "**/dist", "**/dist-local-preview", "bindings/javascript/pkg", "mods/lib/settings/upstream"]
+exclude = [
+  "target",
+  "**/node_modules",
+  "**/dist",
+  "**/dist-local-preview",
+  "bindings/javascript/pkg",
+  "mods/lib/settings/upstream",
+  "crates/emulator-cpu-unicorn/vendor",
+]
 
 [tool.ty.rules]
 # Astral's stricter-checking guidance; no blanket ignores or untyped returns.
@@ -35,14 +58,30 @@ unused-ignore-comment = "error"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-norecursedirs = [".*", "node_modules", "target", "build", "dist", "dist-local-preview", "pkg", "upstream"]
+norecursedirs = [
+  ".*",
+  "node_modules",
+  "target",
+  "build",
+  "dist",
+  "dist-local-preview",
+  "pkg",
+  "upstream",
+  "crates/emulator-cpu-unicorn/vendor",
+]
 addopts = "--strict-config --strict-markers --continue-on-collection-errors -ra"
 
 [tool.coverage.run]
 branch = true
 relative_files = true
 data_file = "target/coverage/python/.coverage"
-source = ["bindings/python/python/fujimod", "apps/web/src/engine", "crates/simulation/environments", "scripts/ci"]
+source = [
+  "bindings/python/python/fujimod",
+  "apps/web/src/engine",
+  "crates/simulation/environments",
+  "scripts/ci",
+  "scripts/git",
+]
 omit = ["*/test_*.py"]
 
 [tool.coverage.report]
@@ -57,12 +96,12 @@ output = "target/coverage/python/coverage.xml"
 
 [dependency-groups]
 dev = [
-    "maturin>=1.15,<2",
-    "pillow>=12.3",
-    "playwright>=1.64",
-    "pytest>=9",
-    "pytest-asyncio>=1",
-    "pytest-cov>=7",
-    "ruff>=0.15",
-    "ty>=0.0.1",
+  "pillow>=12.3",
+  "playwright>=1.64.1",
+  "pyodide-py>=314.0.7",
+  "pytest>=9",
+  "pytest-asyncio>=1",
+  "pytest-cov>=7",
+  "ruff>=0.15",
+  "ty>=0.0.90",
 ]

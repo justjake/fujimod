@@ -1,0 +1,23 @@
+[package]
+name = "fujimod-emulator-exr2-isp-face"
+description = "EXR II face detector and face results"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-emulator-exr2-resources.workspace = true
+fujimod-emulator-exr2-plan.workspace = true
+fujimod-emulator-imaging.workspace = true
+fujimod-emulator-devices.workspace = true
+serde_json = "1"
+serde = { version = "1", features = ["derive", "rc"] }
+fujimod-workspace-hack.workspace = true
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

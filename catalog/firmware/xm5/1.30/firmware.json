@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xm5-130",
+  "body_id": "xm5",
+  "version": "1.30",
+  "update": {
+    "size": 110561488,
+    "sha256": "0ee53160737b770ca9927b11885140228df1142d2694ba2e8e32b127f205c03c"
+  },
+  "boot_rom": null,
+  "installation": null,
+  "generated_facts": null
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "bis-configuration",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "bis-configuration-registers"
+    }
+  }
+}

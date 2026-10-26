@@ -1,0 +1,4423 @@
+{
+  "$defs": {
+    "AdcInterval": {
+      "description": "Bounds of one accepted analog interval.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Sample values stored directly in the firmware's input predicate.",
+          "properties": {
+            "kind": {
+              "const": "literal",
+              "type": "string"
+            },
+            "lower": {
+              "description": "Inclusive lower sample value.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "upper": {
+              "description": "Inclusive upper sample value.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "lower",
+            "upper"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Byte offsets of little-endian u16 bounds in the loaded configuration.",
+          "properties": {
+            "kind": {
+              "const": "configuration_u16",
+              "type": "string"
+            },
+            "lower": {
+              "description": "Byte offset of the inclusive lower sample value.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "upper": {
+              "description": "Byte offset of the inclusive upper sample value.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "lower",
+            "upper"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "AddressIdentity": {
+      "additionalProperties": false,
+      "description": "An identified firmware address range without its contents.",
+      "properties": {
+        "address": {
+          "description": "Start address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "SHA-256 of the range.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Byte length.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "BindingChoices": {
+      "additionalProperties": false,
+      "description": "Exact binding picker owners.",
+      "properties": {
+        "count": {
+          "description": "Selectable count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mod_owners": {
+          "description": "Curated mod owners.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "native_owners": {
+          "description": "Native prefix owners.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "count",
+        "native_owners",
+        "mod_owners"
+      ],
+      "type": "object"
+    },
+    "BindingLayout": {
+      "additionalProperties": false,
+      "description": "Compiler-produced BindingLayout offsets.",
+      "properties": {
+        "apply": {
+          "description": "Apply.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "binding_size": {
+          "description": "Binding size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "capacity": {
+          "description": "Capacity.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "magic": {
+          "description": "Magic.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "version": {
+          "description": "Version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "magic",
+        "version",
+        "binding_size",
+        "apply",
+        "capacity"
+      ],
+      "type": "object"
+    },
+    "BitmapLayout": {
+      "additionalProperties": false,
+      "description": "Bitmap record fields, with explicit widths.",
+      "properties": {
+        "data_bytes": {
+          "description": "Data bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "data_offset": {
+          "description": "Data offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "height_bytes": {
+          "description": "Height bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "height_offset": {
+          "description": "Height offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind_bytes": {
+          "description": "Kind bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind_offset": {
+          "description": "Kind offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width_bytes": {
+          "description": "Width bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width_offset": {
+          "description": "Width offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "data_bytes",
+        "data_offset",
+        "height_bytes",
+        "height_offset",
+        "kind_bytes",
+        "kind_offset",
+        "width_bytes",
+        "width_offset"
+      ],
+      "type": "object"
+    },
+    "BitmapResources": {
+      "additionalProperties": false,
+      "description": "Native bitmap descriptor table layout.",
+      "properties": {
+        "final_first_index": {
+          "description": "Final first index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "final_table": {
+          "description": "Final table.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "last_index": {
+          "description": "Last index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "last_record": {
+          "description": "Last record.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "layout": {
+          "$ref": "#/$defs/BitmapLayout",
+          "description": "Layout."
+        },
+        "stride": {
+          "description": "Stride.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "table": {
+          "description": "Table.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "table",
+        "stride",
+        "final_table",
+        "final_first_index",
+        "last_index",
+        "last_record",
+        "layout"
+      ],
+      "type": "object"
+    },
+    "BootCombination": {
+      "additionalProperties": false,
+      "properties": {
+        "hold": {
+          "items": {
+            "$ref": "#/$defs/BootHold"
+          },
+          "type": "array"
+        },
+        "usb": {
+          "description": "Required USB cable state, when specified.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "hold"
+      ],
+      "type": "object"
+    },
+    "BootHold": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Control action identity, including a pad direction or dial .press action.",
+          "type": "string"
+        },
+        "stage": {
+          "description": "Shutter stage, when required.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "BoundPosition": {
+      "additionalProperties": false,
+      "description": "A position's printed identity and explicit input selection.",
+      "properties": {
+        "asserted": {
+          "description": "Whether this position asserts that input.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Exact position identity accepted by the physical panel.",
+          "type": "string"
+        },
+        "key": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InputBinding"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit firmware input binding."
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "BuildArtifact": {
+      "additionalProperties": false,
+      "description": "A build output bound to this manifest.",
+      "properties": {
+        "file": {
+          "description": "Relative build file.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Content digest.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Byte length.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "file",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "BuildMemory": {
+      "additionalProperties": false,
+      "description": "A linked address range backed by an installed artifact.",
+      "properties": {
+        "address": {
+          "description": "Address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "file": {
+          "description": "File.",
+          "type": "string"
+        },
+        "offset": {
+          "description": "Offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size",
+        "file",
+        "offset"
+      ],
+      "type": "object"
+    },
+    "BuildMenuManifest": {
+      "additionalProperties": false,
+      "description": "Build-owned menu declarations; never a snapshot of the live menu tree.",
+      "properties": {
+        "$schema": {
+          "description": "Schema identity.",
+          "type": "string"
+        },
+        "artifacts": {
+          "description": "Installed region and changed-section identities.",
+          "items": {
+            "$ref": "#/$defs/BuildArtifact"
+          },
+          "type": "array"
+        },
+        "elf_sha256": {
+          "description": "Digest of the compiler input used to extract declarations.",
+          "type": "string"
+        },
+        "firmware_id": {
+          "description": "Firmware identity.",
+          "type": "string"
+        },
+        "firmware_sha256": {
+          "description": "Firmware content digest.",
+          "type": "string"
+        },
+        "items": {
+          "description": "Declared menu, native and inline owners.",
+          "items": {
+            "$ref": "#/$defs/MenuItem"
+          },
+          "type": "array"
+        },
+        "memory": {
+          "description": "Build-file spans for immutable declaration/artwork reads.",
+          "items": {
+            "$ref": "#/$defs/BuildMemory"
+          },
+          "type": "array"
+        },
+        "owner_constants": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Compiler-produced owner layout constants.",
+          "type": "object"
+        },
+        "schema": {
+          "description": "Format version; currently 1.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "symbols": {
+          "additionalProperties": {
+            "$ref": "#/$defs/LinkedSymbol"
+          },
+          "description": "Linked symbol addresses and extents.",
+          "type": "object"
+        },
+        "walkthrough": {
+          "$ref": "#/$defs/WalkthroughMetadata",
+          "description": "Compiler-derived coverage and observation metadata."
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "firmware_id",
+        "firmware_sha256",
+        "elf_sha256",
+        "artifacts",
+        "items",
+        "symbols",
+        "memory",
+        "owner_constants",
+        "walkthrough"
+      ],
+      "type": "object"
+    },
+    "CanvasHost": {
+      "additionalProperties": false,
+      "description": "Declared canvas screen identities.",
+      "properties": {
+        "identity": {
+          "description": "Owning menu identity.",
+          "type": "string"
+        },
+        "screens": {
+          "description": "Declared screen IDs.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "identity",
+        "screens"
+      ],
+      "type": "object"
+    },
+    "CanvasLayout": {
+      "additionalProperties": false,
+      "description": "Compiler-produced CanvasLayout offsets.",
+      "properties": {
+        "host_size": {
+          "description": "Host size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "description": "Id.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "live_busy": {
+          "description": "Live busy.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "live_host": {
+          "description": "Live host.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "live_screen": {
+          "description": "Live screen.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "magic": {
+          "description": "Magic.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "screen_count": {
+          "description": "Screen count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "screen_size": {
+          "description": "Screen size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "screens": {
+          "description": "Screens.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "version": {
+          "description": "Version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "magic",
+        "version",
+        "host_size",
+        "screens",
+        "screen_count",
+        "screen_size",
+        "id",
+        "live_host",
+        "live_screen",
+        "live_busy"
+      ],
+      "type": "object"
+    },
+    "ConfigurationLocation": {
+      "description": "A configuration block addressed directly or through a firmware pointer.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Firmware address containing a configuration-block pointer.",
+          "properties": {
+            "address": {
+              "description": "Pointer address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "pointer",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "address"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Fixed configuration-block base address.",
+          "properties": {
+            "address": {
+              "description": "Block address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "direct",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "address"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ControlBehavior": {
+      "description": "The actions offered by a physical control's mechanism.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A momentary button.",
+          "properties": {
+            "kind": {
+              "const": "button",
+              "type": "string"
+            },
+            "press": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Input asserted by a press and deasserted by release."
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A shutter release with named stages.",
+          "properties": {
+            "kind": {
+              "const": "shutter",
+              "type": "string"
+            },
+            "stages": {
+              "additionalProperties": {
+                "items": {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "description": "Inputs asserted at each named shutter stage.",
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "stages"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A directional pad with individually addressable direction identities.",
+          "properties": {
+            "directions": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/InputBinding"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "description": "Inputs asserted by the four directions.",
+              "type": "object"
+            },
+            "kind": {
+              "const": "pad",
+              "type": "string"
+            },
+            "press": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Center press input, when present."
+            }
+          },
+          "required": [
+            "kind",
+            "directions"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A spring-centered control with separate left and right contacts.",
+          "properties": {
+            "decrease": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "increase": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "rocker",
+              "type": "string"
+            },
+            "press": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A dial with positions or relative steps.",
+          "properties": {
+            "endless": {
+              "description": "Whether the mechanism rotates without an end stop.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "dial",
+              "type": "string"
+            },
+            "motion": {
+              "$ref": "#/$defs/ControlMotion",
+              "description": "Documented positions or relative step directions."
+            },
+            "press": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Press input, when the dial is pushable."
+            }
+          },
+          "required": [
+            "kind",
+            "motion"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A ring with positions or relative steps.",
+          "properties": {
+            "endless": {
+              "description": "Whether the mechanism rotates without an end stop.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "ring",
+              "type": "string"
+            },
+            "motion": {
+              "$ref": "#/$defs/ControlMotion",
+              "description": "Documented positions or relative step directions."
+            },
+            "press": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Press input, when the ring is pushable."
+            }
+          },
+          "required": [
+            "kind",
+            "motion"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A switch with named positions.",
+          "properties": {
+            "kind": {
+              "const": "switch",
+              "type": "string"
+            },
+            "positions": {
+              "description": "Inputs selecting each documented position.",
+              "items": {
+                "$ref": "#/$defs/BoundPosition"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "positions"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A lever with named positions.",
+          "properties": {
+            "kind": {
+              "const": "lever",
+              "type": "string"
+            },
+            "momentary": {
+              "description": "Whether releasing the lever returns it to an unasserted rest position.",
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "positions": {
+              "description": "Inputs selecting each documented position.",
+              "items": {
+                "$ref": "#/$defs/BoundPosition"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "positions"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A touch surface whose protocol is located in the firmware input document.",
+          "properties": {
+            "kind": {
+              "const": "touch",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ControlIcon": {
+      "description": "Printed symbols on a camera control.",
+      "enum": [
+        "playback",
+        "delete",
+        "record",
+        "flash"
+      ],
+      "type": "string"
+    },
+    "ControlInterface": {
+      "description": "Firmware interpretation of a control outside the key scanner.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Power switch sampled through a physical GPIO and serial status field.",
+          "properties": {
+            "connection_id": {
+              "description": "Body connection carrying the switch input.",
+              "type": "string"
+            },
+            "endpoint": {
+              "description": "Firmware serial endpoint selector.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "power_switch",
+              "type": "string"
+            },
+            "mask": {
+              "description": "Mask of status bits interpreted by the firmware.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "off_value": {
+              "description": "Masked status value interpreted as off.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "on_value": {
+              "description": "Masked status value interpreted as on.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "register": {
+              "description": "Firmware-selected status register.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "saved_inputs": {
+              "description": "Firmware address retaining sampled GPIO state.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "saved_inputs",
+            "endpoint",
+            "register",
+            "mask",
+            "on_value",
+            "off_value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Touch reports read through a prefixed control-bus endpoint.",
+          "properties": {
+            "connection_id": {
+              "description": "Body connection carrying control-bus traffic.",
+              "type": "string"
+            },
+            "contacts": {
+              "description": "Maximum simultaneous contacts decoded by the firmware.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "coordinate_bits": {
+              "description": "Number of encoded coordinate bits.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "decoded": {
+              "$ref": "#/$defs/DecodedTouch",
+              "description": "Firmware memory retaining the latest report decoded by the touch task."
+            },
+            "height": {
+              "description": "Firmware logical coordinate height.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "irq": {
+              "description": "Firmware interrupt line selected for reports.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "irq_mode": {
+              "description": "Firmware-selected interrupt mode.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "prefixed_touch",
+              "type": "string"
+            },
+            "mode": {
+              "description": "Firmware control-bus transaction mode.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "offset_tags": {
+              "description": "Configuration-byte offsets for logical coordinate correction.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "priority": {
+              "description": "Firmware-selected interrupt priority.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "register": {
+              "description": "First report register read by the firmware.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "report_bytes": {
+              "description": "Report byte count consumed by the firmware.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "width": {
+              "description": "Firmware logical coordinate width.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "mode",
+            "register",
+            "report_bytes",
+            "contacts",
+            "coordinate_bits",
+            "width",
+            "height",
+            "offset_tags",
+            "irq",
+            "priority",
+            "irq_mode",
+            "decoded"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ControlMotion": {
+      "description": "A rotary mechanism's mutually exclusive position or step declarations.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Finite, named mechanical detents.",
+          "properties": {
+            "kind": {
+              "const": "positions",
+              "type": "string"
+            },
+            "positions": {
+              "description": "Input and asserted level for each detent.",
+              "items": {
+                "$ref": "#/$defs/BoundPosition"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "positions"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Relative movement in either direction.",
+          "properties": {
+            "decrease": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Input generated by one decreasing step."
+            },
+            "increase": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Input generated by one increasing step."
+            },
+            "kind": {
+              "const": "steps",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ControlPosition": {
+      "additionalProperties": false,
+      "description": "A documented control position, independent of any firmware binding.",
+      "properties": {
+        "description": {
+          "description": "Meaning of an unlabeled position or icon.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Unique manual position identity.",
+          "type": "string"
+        },
+        "label": {
+          "description": "Printed label, when present.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "ControlRole": {
+      "description": "Physical roles that an operation may require from a body.",
+      "oneOf": [
+        {
+          "const": "command_control",
+          "description": "Relative command dial used to change the selected value.",
+          "type": "string"
+        }
+      ]
+    },
+    "ControlSurface": {
+      "description": "Body surfaces used to locate a physical control in a manual.",
+      "oneOf": [
+        {
+          "const": "top",
+          "description": "Upper body surface.",
+          "type": "string"
+        },
+        {
+          "const": "rear",
+          "description": "Rear body surface.",
+          "type": "string"
+        },
+        {
+          "const": "front",
+          "description": "Front surface, including controls on the lens.",
+          "type": "string"
+        },
+        {
+          "const": "bottom",
+          "description": "Lower body surface.",
+          "type": "string"
+        },
+        {
+          "const": "lens",
+          "description": "Controls mounted on the lens barrel.",
+          "type": "string"
+        },
+        {
+          "const": "left",
+          "description": "Left side of the body.",
+          "type": "string"
+        },
+        {
+          "const": "right",
+          "description": "Right side of the body.",
+          "type": "string"
+        }
+      ]
+    },
+    "CursorFields": {
+      "additionalProperties": false,
+      "description": "Live cursor word offsets.",
+      "properties": {
+        "cursor": {
+          "description": "Cursor.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "filtered_count": {
+          "description": "Filtered count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pointer": {
+          "description": "Pointer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "raw_count": {
+          "description": "Raw count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "subcursor": {
+          "description": "Subcursor.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value_cursor": {
+          "description": "Value cursor.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "visible_count": {
+          "description": "Visible count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pointer",
+        "cursor",
+        "subcursor",
+        "visible_count",
+        "value_cursor",
+        "raw_count",
+        "filtered_count"
+      ],
+      "type": "object"
+    },
+    "CursorLayout": {
+      "additionalProperties": false,
+      "description": "Live menu cursor and status-array offsets.",
+      "properties": {
+        "fields": {
+          "$ref": "#/$defs/CursorFields",
+          "description": "Cursor word offsets."
+        },
+        "size": {
+          "description": "Cursor byte size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status_offset": {
+          "description": "Status offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status_stride": {
+          "description": "Status stride.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status_width": {
+          "description": "Status width.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "fields",
+        "status_offset",
+        "status_stride",
+        "status_width"
+      ],
+      "type": "object"
+    },
+    "DebugKey": {
+      "additionalProperties": false,
+      "description": "One explicitly located command in the firmware's debug transport vocabulary.",
+      "properties": {
+        "event": {
+          "description": "UI event identity delivered by the command.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Exact command token accepted by that transport.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "event"
+      ],
+      "type": "object"
+    },
+    "DeclarationLayout": {
+      "additionalProperties": false,
+      "description": "Compiler-produced DeclarationLayout offsets.",
+      "properties": {
+        "activate": {
+          "description": "Activate.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "binding_id": {
+          "description": "Binding id.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cursor_active": {
+          "description": "Cursor active.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "event": {
+          "description": "Event.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fn_action": {
+          "description": "Fn action.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "input": {
+          "description": "Input.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_size": {
+          "description": "Item size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "key": {
+          "description": "Key.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "label": {
+          "description": "Label.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "magic": {
+          "description": "Magic.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "node_size": {
+          "description": "Node size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "open_page": {
+          "description": "Open page.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page": {
+          "description": "Page.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parent": {
+          "description": "Parent.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parent_item": {
+          "description": "Parent item.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "q_assignable": {
+          "description": "Q assignable.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "version": {
+          "description": "Version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "magic",
+        "version",
+        "item_size",
+        "parent",
+        "parent_item",
+        "label",
+        "key",
+        "page",
+        "open_page",
+        "event",
+        "input",
+        "activate",
+        "fn_action",
+        "q_assignable",
+        "node_size",
+        "cursor_active",
+        "binding_id"
+      ],
+      "type": "object"
+    },
+    "DecodedTouch": {
+      "additionalProperties": false,
+      "description": "Layout of the touch task's latest decoded report in firmware memory.",
+      "properties": {
+        "address": {
+          "description": "Firmware address of the decoded report.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "contacts": {
+          "description": "Byte offsets of each decoded contact, in report order.",
+          "items": {
+            "$ref": "#/$defs/DecodedTouchContact"
+          },
+          "type": "array"
+        },
+        "count": {
+          "description": "Byte offset of the decoded contact count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "count",
+        "contacts"
+      ],
+      "type": "object"
+    },
+    "DecodedTouchContact": {
+      "additionalProperties": false,
+      "description": "Byte offsets of one decoded contact within the report.",
+      "properties": {
+        "active": {
+          "description": "Byte that is nonzero while the contact is down.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "x": {
+          "description": "Little-endian 16-bit logical x coordinate.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "y": {
+          "description": "Little-endian 16-bit logical y coordinate.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "active",
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "ElectricalInput": {
+      "description": "Located electrical meaning, separate from scanner table operands.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Analog input interpreted using located sample bands or calibration offsets.",
+          "properties": {
+            "callback": {
+              "default": null,
+              "description": "Firmware callback evaluating the input, when present.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "connection_id": {
+              "description": "Body connection carrying this analog input.",
+              "type": "string"
+            },
+            "expected_result": {
+              "default": null,
+              "description": "Callback result interpreted as active, when present.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "intervals": {
+              "description": "Accepted analog intervals and the source of their bounds.",
+              "items": {
+                "$ref": "#/$defs/AdcInterval"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "adc",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "intervals"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Digital contact interpreted by a located scanner predicate.",
+          "properties": {
+            "connection_id": {
+              "description": "Body connection carrying this digital input.",
+              "type": "string"
+            },
+            "expected_level": {
+              "description": "Logic level interpreted as active.",
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "gpio",
+              "type": "string"
+            },
+            "scanner": {
+              "$ref": "#/$defs/GpioScanner",
+              "description": "Firmware interpretation of the contact."
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "expected_level",
+            "scanner"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Physical encoder interpreted by a located quadrature decoder.",
+          "properties": {
+            "connection_id": {
+              "description": "Body connection carrying the encoder phases.",
+              "type": "string"
+            },
+            "decoder_event": {
+              "description": "Decoder-local direction event, distinct from the UI event.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "guard": {
+              "description": "Located decoder guard address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "gpio_quadrature",
+              "type": "string"
+            },
+            "phase_map": {
+              "description": "Decoder phase mapping.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 4,
+              "minItems": 4,
+              "type": "array"
+            },
+            "reset": {
+              "description": "Decoder reset counters and phase state.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 4,
+              "minItems": 4,
+              "type": "array"
+            },
+            "threshold": {
+              "description": "Located decoder activation threshold.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "transitions": {
+              "description": "Decoder transition values.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 16,
+              "minItems": 16,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "phase_map",
+            "transitions",
+            "reset",
+            "decoder_event",
+            "guard",
+            "threshold"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Physical encoder whose firmware counts whole phase cycles, one event per cycle.",
+          "properties": {
+            "connection_id": {
+              "description": "Body connection carrying the encoder phases.",
+              "type": "string"
+            },
+            "cycle_sign": {
+              "description": "Sign of the physical phase cycle that produces this input's event.",
+              "format": "int8",
+              "maximum": 127,
+              "minimum": -128,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "gpio_fixed_cycle",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "cycle_sign"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Contact reported as bits of a serial status register and tested by a scanner callback.",
+          "properties": {
+            "active_value": {
+              "description": "Masked status value while the input is active.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "connection_id": {
+              "description": "Body connection carrying the status bits.",
+              "type": "string"
+            },
+            "endpoint": {
+              "description": "Firmware serial endpoint selector.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "serial_status",
+              "type": "string"
+            },
+            "mask": {
+              "description": "Status bits tested by the firmware.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "register": {
+              "description": "Status register read by the firmware.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "endpoint",
+            "register",
+            "mask",
+            "active_value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "EventTranslation": {
+      "additionalProperties": false,
+      "description": "A located table translating scanner physical keys to UI events.",
+      "properties": {
+        "address": {
+          "description": "Table base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "description": "Translated rows in table order.",
+          "items": {
+            "$ref": "#/$defs/TranslatedKey"
+          },
+          "type": "array"
+        },
+        "sha256": {
+          "description": "SHA-256 of the rows and their terminator.",
+          "type": "string"
+        },
+        "stride": {
+          "description": "Table row size in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "stride",
+        "sha256",
+        "rows"
+      ],
+      "type": "object"
+    },
+    "FirmwareControlIds": {
+      "additionalProperties": false,
+      "description": "Generated firmware input facts, separate from the body's declarations.",
+      "properties": {
+        "$schema": {
+          "description": "Schema identifying the generated document's closed Rust type.",
+          "type": "string"
+        },
+        "debug_keys": {
+          "description": "Exact debug command vocabulary, independent of the native names.",
+          "items": {
+            "$ref": "#/$defs/DebugKey"
+          },
+          "type": "array"
+        },
+        "event_translation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EventTranslation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Physical-key to UI-event table of a processor whose scanner rows hold\nphysical keys; absent when the rows hold UI events directly."
+        },
+        "firmware_id": {
+          "description": "Firmware from which these inputs were located.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Stable document identity referenced by the firmware.",
+          "type": "string"
+        },
+        "input_readers": {
+          "$ref": "#/$defs/InputReaders",
+          "description": "Calibration and stable-state readers located in that firmware."
+        },
+        "inputs": {
+          "description": "Every located scanner or protocol input, including unclaimed connections.",
+          "items": {
+            "$ref": "#/$defs/LocatedInput"
+          },
+          "type": "array"
+        },
+        "interfaces": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ControlInterface"
+          },
+          "description": "Protocols outside the key scanner, keyed by physical body connection ID.",
+          "type": "object"
+        },
+        "native_key_names": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NativeKeyNames"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Native names and their source table identity, when the table was located."
+        },
+        "scanner": {
+          "$ref": "#/$defs/ScannerTable",
+          "description": "Scanner table identity and extent."
+        },
+        "schema": {
+          "description": "Document format version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "undelivered_rows": {
+          "description": "Scanner rows whose physical key has no event-translation row, so the\nfirmware delivers no UI event for them.",
+          "items": {
+            "$ref": "#/$defs/LocatedScannerRecord"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "id",
+        "firmware_id",
+        "scanner",
+        "input_readers",
+        "debug_keys",
+        "inputs",
+        "undelivered_rows",
+        "interfaces"
+      ],
+      "type": "object"
+    },
+    "FirmwareFacts": {
+      "additionalProperties": false,
+      "description": "Firmware-specific remote inputs, without snapshots of live tables.",
+      "properties": {
+        "$schema": {
+          "description": "Schema identity.",
+          "type": "string"
+        },
+        "body_id": {
+          "description": "Physical body identity.",
+          "type": "string"
+        },
+        "configuration": {
+          "$ref": "#/$defs/ConfigurationLocation",
+          "description": "Settings block location."
+        },
+        "firmware_id": {
+          "description": "Firmware identity.",
+          "type": "string"
+        },
+        "firmware_sha256": {
+          "description": "Update content digest.",
+          "type": "string"
+        },
+        "identity_checks": {
+          "description": "Firmware content checks.",
+          "items": {
+            "$ref": "#/$defs/AddressIdentity"
+          },
+          "type": "array"
+        },
+        "menus": {
+          "$ref": "#/$defs/MenuTables",
+          "description": "Live menu tables and cursor layout."
+        },
+        "resources": {
+          "$ref": "#/$defs/Resources",
+          "description": "Live text and glyph resource layout."
+        },
+        "scanout": {
+          "$ref": "#/$defs/Scanout",
+          "description": "Scanout memory layout."
+        },
+        "schema": {
+          "description": "Format version; currently 1.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "$ref": "#/$defs/FirmwareObservation",
+          "description": "UI mode and readiness addresses."
+        },
+        "uncached_alias": {
+          "description": "Alias applied to physical RAM reads.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "firmware_id",
+        "firmware_sha256",
+        "body_id",
+        "uncached_alias",
+        "identity_checks",
+        "configuration",
+        "state",
+        "menus",
+        "scanout",
+        "resources"
+      ],
+      "type": "object"
+    },
+    "FirmwareObservation": {
+      "additionalProperties": false,
+      "description": "Firmware addresses used by a supported run observer.",
+      "properties": {
+        "menu_active": {
+          "description": "Firmware address containing the menu-active flag.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_node": {
+          "description": "Firmware address containing the current menu node.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pending_mode": {
+          "description": "Firmware address containing the pending UI mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "readiness": {
+          "$ref": "#/$defs/ReadinessAddresses",
+          "description": "Readiness observer addresses."
+        },
+        "rec_mode": {
+          "description": "REC mode value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setup_mode": {
+          "description": "Setup mode value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "system_mode": {
+          "description": "Firmware address containing the system mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ui_mode": {
+          "description": "Firmware address containing the UI mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ui_mode",
+        "system_mode",
+        "menu_active",
+        "pending_mode",
+        "menu_node",
+        "rec_mode",
+        "setup_mode",
+        "readiness"
+      ],
+      "type": "object"
+    },
+    "GlyphResources": {
+      "additionalProperties": false,
+      "description": "Registry layout locating the native icon font resource.",
+      "properties": {
+        "data_address_offset": {
+          "description": "Byte offset of the font data pointer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "data_size_offset": {
+          "description": "Byte offset of the font byte length.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "icon_index": {
+          "description": "Icon font record index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "record_size": {
+          "description": "Registry record size in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "registry_address": {
+          "description": "Resource registry base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "registry_address",
+        "record_size",
+        "icon_index",
+        "data_address_offset",
+        "data_size_offset"
+      ],
+      "type": "object"
+    },
+    "GpioScanner": {
+      "description": "Firmware scanner predicates used for digital keys.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Direct GPIO comparison using the declared expected logic level.",
+          "properties": {
+            "kind": {
+              "const": "direct",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Combined scanner predicate with its firmware-selected source and bounds.",
+          "properties": {
+            "kind": {
+              "const": "combined",
+              "type": "string"
+            },
+            "lower": {
+              "description": "Lower comparison operand.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "source": {
+              "description": "Scanner source selector.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "upper": {
+              "description": "Upper comparison operand.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "source",
+            "lower",
+            "upper"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "InlineChoices": {
+      "additionalProperties": false,
+      "description": "Compiler-declared canvas choice observation.",
+      "properties": {
+        "accepted_values": {
+          "description": "Selectable values.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "callback": {
+          "description": "Callback.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "count": {
+          "description": "Count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "host": {
+          "description": "Host.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "identity": {
+          "description": "identity.",
+          "type": "string"
+        },
+        "last_value": {
+          "description": "Last value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mod": {
+          "description": "owning_mod.",
+          "type": "string"
+        },
+        "name": {
+          "description": "name.",
+          "type": "string"
+        },
+        "owner": {
+          "description": "Owner.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row": {
+          "description": "Row.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "screen": {
+          "description": "Screen.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stride": {
+          "description": "Stride.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "table_count": {
+          "description": "Table count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value_address": {
+          "description": "Value address.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "values": {
+          "description": "Values.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "owner",
+        "host",
+        "screen",
+        "row",
+        "count",
+        "value_address",
+        "callback",
+        "values",
+        "table_count",
+        "stride",
+        "last_value",
+        "name",
+        "mod",
+        "identity",
+        "accepted_values"
+      ],
+      "type": "object"
+    },
+    "InputBinding": {
+      "description": "An explicit binding in one of two distinct firmware input vocabularies.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Command name accepted by the firmware's debug transport.",
+          "properties": {
+            "kind": {
+              "const": "debug_key",
+              "type": "string"
+            },
+            "name": {
+              "description": "Exact command token, without conversion from a native event name.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Scanned native input which need not have any debug transport command.",
+          "properties": {
+            "kind": {
+              "const": "native_input",
+              "type": "string"
+            },
+            "name": {
+              "description": "Exact name in the firmware's located native input vocabulary.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "InputReaders": {
+      "additionalProperties": false,
+      "description": "Input routines located in one firmware; a routine the locators did not find is absent.",
+      "properties": {
+        "calibration": {
+          "default": null,
+          "description": "Routine reading 16-bit control calibration values.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "scanner": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScannerReader"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Routine reading stable key scanner state."
+        }
+      },
+      "type": "object"
+    },
+    "InputTarget": {
+      "description": "Ownership of a generated input record without a control alias map.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Input claimed by a canonical physical control identity.",
+          "properties": {
+            "control_id": {
+              "description": "Exact control identity, including a pad direction where applicable.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "control",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "control_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Card, cable, door, or other connection detector.",
+          "properties": {
+            "connection_id": {
+              "description": "Exact connection identity declared by the body.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "connection",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Located firmware input which no documented physical control claims.",
+          "properties": {
+            "kind": {
+              "const": "unclaimed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "InputTasks": {
+      "additionalProperties": false,
+      "description": "Task-table layout used to observe input consumers without caching live pointers.",
+      "properties": {
+        "address_limit": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "address_mask": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "busy": {
+          "description": "Additional mode-qualified busy registers required at the input boundary.",
+          "items": {
+            "$ref": "#/$defs/ModeBusy"
+          },
+          "type": "array"
+        },
+        "descriptor_offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "descriptor_size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "entries": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "entry_offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "headers": {
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "max_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "receive_state": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state_offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stride": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "headers",
+        "entries",
+        "address_mask",
+        "address_limit",
+        "max_count",
+        "stride",
+        "descriptor_offset",
+        "entry_offset",
+        "descriptor_size",
+        "state_offset",
+        "receive_state",
+        "busy"
+      ],
+      "type": "object"
+    },
+    "LinkedSymbol": {
+      "additionalProperties": false,
+      "description": "Linked symbol identity.",
+      "properties": {
+        "address": {
+          "description": "Linked address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared byte size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size"
+      ],
+      "type": "object"
+    },
+    "LocatedInput": {
+      "additionalProperties": false,
+      "description": "One located input's identity, ownership, and checked electrical predicates.",
+      "properties": {
+        "debug_key": {
+          "default": null,
+          "description": "Exact debug command token for this input, absent for native-only inputs.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "electrical": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ElectricalInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Located electrical interpretation, absent when the hardware is not modeled."
+        },
+        "event": {
+          "description": "UI/native event identity established by the locator.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "description": "Stable identity of the located input record.",
+          "type": "string"
+        },
+        "scanner": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocatedScannerRecord"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Scanner row and its source witness, absent for inputs outside that table."
+        },
+        "target": {
+          "$ref": "#/$defs/InputTarget",
+          "description": "Physical control, connection detector, or unclaimed firmware input."
+        }
+      },
+      "required": [
+        "id",
+        "event",
+        "target"
+      ],
+      "type": "object"
+    },
+    "LocatedScannerRecord": {
+      "additionalProperties": false,
+      "description": "One scanner row's identity and located predicate operands.",
+      "properties": {
+        "index": {
+          "description": "Zero-based index within the identified scanner table.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "witness": {
+          "$ref": "#/$defs/ScannerRecordWitness",
+          "description": "Event identity, predicate kind, source selector, and bounds stored in the row."
+        }
+      },
+      "required": [
+        "index",
+        "witness"
+      ],
+      "type": "object"
+    },
+    "ManualReference": {
+      "additionalProperties": false,
+      "description": "A published manual and the pages used to identify controls.",
+      "properties": {
+        "pages": {
+          "description": "Referenced page numbers.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "title": {
+          "description": "Manual title.",
+          "type": "string"
+        },
+        "url": {
+          "description": "Public manual URL.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "title",
+        "pages"
+      ],
+      "type": "object"
+    },
+    "MenuFields": {
+      "additionalProperties": false,
+      "description": "Native menu descriptor word offsets.",
+      "properties": {
+        "flags_word": {
+          "description": "Flags word.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "handlers_pointer": {
+          "description": "Handlers pointer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_array": {
+          "description": "Item array.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_id": {
+          "description": "Menu id.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parent_pointer": {
+          "description": "Parent pointer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows_per_page": {
+          "description": "Rows per page.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setting_id": {
+          "description": "Setting id.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type_code": {
+          "description": "Type code.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "menu_id",
+        "type_code",
+        "setting_id",
+        "rows_per_page",
+        "flags_word",
+        "parent_pointer",
+        "item_array",
+        "handlers_pointer"
+      ],
+      "type": "object"
+    },
+    "MenuItem": {
+      "additionalProperties": false,
+      "description": "One compiled UI owner with placement and stable option identities.",
+      "properties": {
+        "activate": {
+          "description": "Activate.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "address": {
+          "description": "Address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "binding": {
+          "description": "Binding.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "choice_capacity": {
+          "description": "Declared choice capacity.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "choice_count": {
+          "description": "Selectable choice count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "event": {
+          "description": "Event.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fn_action": {
+          "description": "Fn action.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "identity": {
+          "description": "Identity.",
+          "type": "string"
+        },
+        "inline": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InlineChoices"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Inline."
+        },
+        "input": {
+          "description": "Input.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "key": {
+          "description": "Native row key.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "label": {
+          "description": "Label.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "label_text": {
+          "description": "Declared label.",
+          "type": "string"
+        },
+        "mod": {
+          "description": "Owning_mod.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Name.",
+          "type": "string"
+        },
+        "native": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NativeSetting"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Native."
+        },
+        "open_page": {
+          "description": "Open page.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "options": {
+          "description": "Stable named choices; open catalogs may have unnamed entries.",
+          "items": {
+            "$ref": "#/$defs/MenuOption"
+          },
+          "type": "array"
+        },
+        "page": {
+          "description": "Page.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parent": {
+          "description": "Parent.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parent_item": {
+          "description": "Parent item.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "q_assignable": {
+          "description": "Whether Q assignment is declared.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stock_node": {
+          "description": "Stock node.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "stock_parent_setting": {
+          "description": "Stock parent setting.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "surfaces": {
+          "description": "Declared surfaces.",
+          "items": {
+            "$ref": "#/$defs/Surface"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "mod",
+        "identity",
+        "address",
+        "binding",
+        "parent",
+        "parent_item",
+        "label",
+        "page",
+        "open_page",
+        "event",
+        "input",
+        "activate",
+        "fn_action",
+        "key",
+        "q_assignable",
+        "label_text",
+        "surfaces",
+        "choice_capacity",
+        "choice_count",
+        "options"
+      ],
+      "type": "object"
+    },
+    "MenuLayout": {
+      "additionalProperties": false,
+      "description": "Offsets within a native menu descriptor and row.",
+      "properties": {
+        "caption_words": {
+          "description": "Caption words.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fields": {
+          "$ref": "#/$defs/MenuFields",
+          "description": "Node word offsets."
+        },
+        "max_kind": {
+          "description": "Max kind.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "nowrap_flags": {
+          "description": "Nowrap flags.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row_child": {
+          "description": "Row child.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row_key": {
+          "description": "Row key.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row_size": {
+          "description": "Row size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sentinel": {
+          "description": "Sentinel.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Node byte size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "fields",
+        "row_size",
+        "row_key",
+        "row_child",
+        "caption_words",
+        "sentinel",
+        "max_kind",
+        "nowrap_flags"
+      ],
+      "type": "object"
+    },
+    "MenuNavigation": {
+      "additionalProperties": false,
+      "description": "Native menu tab bounds.",
+      "properties": {
+        "setup_first_tab": {
+          "description": "Setup first tab.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shooting_first_tab": {
+          "description": "Shooting first tab.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shooting_last_tab": {
+          "description": "Shooting last tab.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "shooting_first_tab",
+        "shooting_last_tab",
+        "setup_first_tab"
+      ],
+      "type": "object"
+    },
+    "MenuOption": {
+      "additionalProperties": false,
+      "description": "Stable option identity and native key.",
+      "properties": {
+        "key": {
+          "description": "Native choice key or normalized option index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Stable name supplied by the declaration.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Persisted value when declared.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "key"
+      ],
+      "type": "object"
+    },
+    "MenuTables": {
+      "additionalProperties": false,
+      "description": "Live menu roots, row descriptors and navigation.",
+      "properties": {
+        "cursor": {
+          "$ref": "#/$defs/CursorLayout",
+          "description": "Cursor and row status layout."
+        },
+        "cursor_address": {
+          "description": "Cursor structure base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "layout": {
+          "$ref": "#/$defs/MenuLayout",
+          "description": "Node and row layout."
+        },
+        "navigation": {
+          "$ref": "#/$defs/MenuNavigation",
+          "description": "Tab navigation bounds."
+        },
+        "page_tabs": {
+          "additionalProperties": false,
+          "description": "Root indices mapped to first tab keys.",
+          "patternProperties": {
+            "^\\d+$": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "q_grid": {
+          "$ref": "#/$defs/QuickGrid",
+          "description": "Quick menu geometry and menu ID."
+        },
+        "roles": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Named root indices.",
+          "type": "object"
+        },
+        "root_count": {
+          "description": "Number of root pointers.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "root_routes": {
+          "additionalProperties": false,
+          "description": "Declared root entry strategies.",
+          "patternProperties": {
+            "^\\d+$": {
+              "$ref": "#/$defs/RootRoute"
+            }
+          },
+          "type": "object"
+        },
+        "root_titles": {
+          "additionalProperties": false,
+          "description": "Root indices mapped to caption resource IDs.",
+          "patternProperties": {
+            "^\\d+$": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "roots_address": {
+          "description": "Address of the root pointer table.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "roots_address",
+        "root_count",
+        "roles",
+        "root_titles",
+        "root_routes",
+        "page_tabs",
+        "navigation",
+        "layout",
+        "cursor_address",
+        "cursor",
+        "q_grid"
+      ],
+      "type": "object"
+    },
+    "ModeBusy": {
+      "additionalProperties": false,
+      "description": "A busy register whose nonzero value withholds native input in one UI mode.",
+      "properties": {
+        "address": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mode",
+        "address",
+        "width"
+      ],
+      "type": "object"
+    },
+    "NativeKeyName": {
+      "additionalProperties": false,
+      "description": "One named native firmware event.",
+      "properties": {
+        "event": {
+          "description": "Numeric event identity.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Native event name.",
+          "type": "string"
+        },
+        "string_address": {
+          "description": "Address of the native name string.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "event",
+        "name",
+        "string_address"
+      ],
+      "type": "object"
+    },
+    "NativeKeyNames": {
+      "additionalProperties": false,
+      "description": "Native firmware event names and the identity of their source table.",
+      "properties": {
+        "reader": {
+          "description": "Routine used to read the table.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "description": "Native event names and their numeric identities.",
+          "items": {
+            "$ref": "#/$defs/NativeKeyName"
+          },
+          "type": "array"
+        },
+        "sha256": {
+          "description": "SHA-256 of the table.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Table byte length.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "rows",
+        "reader",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "NativeSetting": {
+      "additionalProperties": false,
+      "description": "Compiler-declared stock choice observation.",
+      "properties": {
+        "canonical": {
+          "description": "Canonical.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "capacity": {
+          "description": "Capacity.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "children": {
+          "description": "Children.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "dynamic_count": {
+          "description": "Dynamic count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "dynamic_key_first": {
+          "description": "Dynamic key first.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "dynamic_value_first": {
+          "description": "Dynamic value first.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "identity": {
+          "description": "identity.",
+          "type": "string"
+        },
+        "key": {
+          "description": "Key.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "keys": {
+          "description": "keys.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "mod": {
+          "description": "owning_mod.",
+          "type": "string"
+        },
+        "name": {
+          "description": "name.",
+          "type": "string"
+        },
+        "node": {
+          "description": "Node.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "owner": {
+          "description": "Owner.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parent": {
+          "description": "Parent.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setting": {
+          "description": "Setting.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "static_count": {
+          "description": "Static count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "static_values": {
+          "description": "Static values.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "surface": {
+          "description": "Surface.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "surface_name": {
+          "description": "surface_name.",
+          "type": "string"
+        },
+        "value_address": {
+          "description": "Value address.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "values": {
+          "description": "values.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "owner",
+        "canonical",
+        "node",
+        "setting",
+        "children",
+        "static_count",
+        "dynamic_count",
+        "dynamic_key_first",
+        "dynamic_value_first",
+        "value_address",
+        "surface",
+        "parent",
+        "key",
+        "static_values",
+        "capacity",
+        "name",
+        "mod",
+        "identity",
+        "surface_name",
+        "keys",
+        "values"
+      ],
+      "type": "object"
+    },
+    "PhysicalControl": {
+      "additionalProperties": false,
+      "description": "A control's documented appearance and declared physical actions.",
+      "properties": {
+        "assignable": {
+          "description": "Whether the control's function can be assigned in the camera.",
+          "type": "boolean"
+        },
+        "behavior": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ControlBehavior"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Actions defined by this control's mechanism; absent for mechanical controls."
+        },
+        "connection_ids": {
+          "description": "Body connections carrying the control's electrical signals.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "default_function": {
+          "default": null,
+          "description": "Documented initial function, when available.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "face": {
+          "default": null,
+          "description": "Text printed on the control, when present.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ControlIcon"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Meaning of a printed icon, when present."
+        },
+        "location": {
+          "$ref": "#/$defs/ControlSurface",
+          "description": "Surface on which the control is located."
+        },
+        "manual_page": {
+          "default": null,
+          "description": "Manual page identifying the control, when available.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "mechanical": {
+          "description": "Whether this control has no electronic action.",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Manual name of the control.",
+          "type": "string"
+        },
+        "positions": {
+          "description": "Documented positions or stages, including controls with no located inputs.",
+          "items": {
+            "$ref": "#/$defs/ControlPosition"
+          },
+          "type": "array"
+        },
+        "pushable": {
+          "description": "Whether the manual documents a press action, independently of its binding.",
+          "type": "boolean"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ControlRole"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Physical role required by a declared cross-body operation."
+        },
+        "short_name": {
+          "default": null,
+          "description": "Short uppercase caption for an unmarked control (at most 10 characters).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "location",
+        "connection_ids",
+        "assignable",
+        "pushable",
+        "positions",
+        "mechanical"
+      ],
+      "type": "object"
+    },
+    "PhysicalControls": {
+      "additionalProperties": false,
+      "description": "Hand-maintained physical controls for one body.",
+      "properties": {
+        "$schema": {
+          "description": "Schema identifying this document's closed Rust type.",
+          "type": "string"
+        },
+        "analog_levels": {
+          "description": "Analog sample resolution used by this body's contacts.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "body_id": {
+          "description": "Body owning the documented controls.",
+          "type": "string"
+        },
+        "boot": {
+          "additionalProperties": false,
+          "description": "Confirmed inputs held while powering on.",
+          "properties": {
+            "firmware_update": {
+              "$ref": "#/$defs/BootCombination"
+            },
+            "sd": {
+              "$ref": "#/$defs/BootCombination"
+            },
+            "service": {
+              "$ref": "#/$defs/BootCombination"
+            }
+          },
+          "type": "object"
+        },
+        "controls": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PhysicalControl"
+          },
+          "description": "Controls keyed by their canonical physical identities.",
+          "type": "object"
+        },
+        "id": {
+          "description": "Stable document identity referenced by the body.",
+          "type": "string"
+        },
+        "manual": {
+          "$ref": "#/$defs/ManualReference",
+          "description": "Published manual identifying the controls."
+        },
+        "schema": {
+          "description": "Document format version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "id",
+        "body_id",
+        "manual",
+        "controls"
+      ],
+      "type": "object"
+    },
+    "PixelFormat": {
+      "description": "Implemented scanout encodings.",
+      "enum": [
+        "bgra8888"
+      ],
+      "type": "string"
+    },
+    "QfnLayout": {
+      "additionalProperties": false,
+      "description": "Compiler-produced QfnLayout offsets.",
+      "properties": {
+        "active": {
+          "description": "Active.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "assignments": {
+          "description": "Assignments.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "binding_size": {
+          "description": "Binding size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "bindings": {
+          "description": "Bindings.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "capacity": {
+          "description": "Capacity.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "choices": {
+          "description": "Choices.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fn_action": {
+          "description": "Fn action.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "magic": {
+          "description": "Magic.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "owner": {
+          "description": "Owner.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "session": {
+          "description": "Session.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setting": {
+          "description": "Setting.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setting_apply": {
+          "description": "Setting apply.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setting_context": {
+          "description": "Setting context.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setting_size": {
+          "description": "Setting size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "staged": {
+          "description": "Staged.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stock_choice": {
+          "description": "Stock choice.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "trigger_phase": {
+          "description": "Trigger phase.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "used": {
+          "description": "Used.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "version": {
+          "description": "Version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "magic",
+        "version",
+        "binding_size",
+        "owner",
+        "choices",
+        "fn_action",
+        "setting",
+        "setting_size",
+        "setting_context",
+        "setting_apply",
+        "used",
+        "bindings",
+        "staged",
+        "active",
+        "session",
+        "trigger_phase",
+        "capacity",
+        "assignments",
+        "stock_choice"
+      ],
+      "type": "object"
+    },
+    "QuickGrid": {
+      "additionalProperties": false,
+      "description": "Quick menu dimensions.",
+      "properties": {
+        "columns": {
+          "description": "Columns.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_code": {
+          "description": "Menu code.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "description": "Rows.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "rows",
+        "columns",
+        "menu_code"
+      ],
+      "type": "object"
+    },
+    "ReadinessAddresses": {
+      "additionalProperties": false,
+      "description": "Addresses used to check REC readiness.",
+      "properties": {
+        "category_one": {
+          "description": "Firmware address for readiness category one.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "category_two": {
+          "description": "Firmware address for readiness category two.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "excluded_mask": {
+          "description": "Mask of readiness bits excluded from the check.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "input_pending": {
+          "description": "Firmware address for pending input state.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operation_alert_timer": {
+          "description": "Firmware address for the operation-alert timer.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "override_address": {
+          "description": "Firmware address used to override readiness.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "category_one",
+        "category_two",
+        "input_pending",
+        "excluded_mask",
+        "operation_alert_timer",
+        "override_address"
+      ],
+      "type": "object"
+    },
+    "Resources": {
+      "additionalProperties": false,
+      "description": "Native text and bitmap resource table layouts.",
+      "properties": {
+        "bitmaps": {
+          "$ref": "#/$defs/BitmapResources",
+          "description": "Bitmaps."
+        },
+        "glyph_first": {
+          "description": "Glyph first.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "glyph_last": {
+          "description": "Glyph last.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "glyphs": {
+          "$ref": "#/$defs/GlyphResources",
+          "description": "Registry layout locating the icon font in live memory."
+        },
+        "language": {
+          "$ref": "#/$defs/ConfigurationLocation",
+          "description": "Language."
+        },
+        "last_caption": {
+          "description": "Last caption.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "private_text_bias": {
+          "description": "Private text bias.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "private_text_first": {
+          "description": "Private text first.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "private_text_last": {
+          "description": "Private text last.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "supplementary_address": {
+          "description": "Supplementary address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "supplementary_first": {
+          "description": "Supplementary first.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "supplementary_max_units": {
+          "description": "Supplementary max units.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "supplementary_stride": {
+          "description": "Supplementary stride.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_max_units": {
+          "description": "Text max units.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_metrics_offset": {
+          "description": "Text metrics offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_pointer_offset": {
+          "description": "Text pointer offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_record_size": {
+          "description": "Text record size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_unit_bytes": {
+          "description": "Text unit bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_variants_offset": {
+          "description": "Text variants offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "language",
+        "text_record_size",
+        "text_variants_offset",
+        "text_metrics_offset",
+        "text_pointer_offset",
+        "text_unit_bytes",
+        "text_max_units",
+        "private_text_first",
+        "private_text_last",
+        "private_text_bias",
+        "glyph_first",
+        "glyph_last",
+        "supplementary_address",
+        "supplementary_first",
+        "last_caption",
+        "supplementary_stride",
+        "supplementary_max_units",
+        "bitmaps",
+        "glyphs"
+      ],
+      "type": "object"
+    },
+    "RootRoute": {
+      "additionalProperties": false,
+      "description": "A root menu entry strategy.",
+      "properties": {
+        "entry": {
+          "description": "Navigation role used to open the root.",
+          "type": "string"
+        },
+        "tab": {
+          "default": null,
+          "description": "Optional tab key.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "entry"
+      ],
+      "type": "object"
+    },
+    "ScannerInputKind": {
+      "description": "Closed firmware scanner predicate discriminator from the scanner row.",
+      "oneOf": [
+        {
+          "const": "kind_0",
+          "description": "Direct analog level predicate.",
+          "type": "string"
+        },
+        {
+          "const": "kind_1",
+          "description": "Calibrated analog interval predicate.",
+          "type": "string"
+        },
+        {
+          "const": "kind_2",
+          "description": "Direct GPIO predicate.",
+          "type": "string"
+        },
+        {
+          "const": "kind_3",
+          "description": "Callback or specialized digital predicate.",
+          "type": "string"
+        },
+        {
+          "const": "kind_4",
+          "description": "Combined-source predicate.",
+          "type": "string"
+        },
+        {
+          "const": "kind_5",
+          "description": "Callback-based scanner predicate.",
+          "type": "string"
+        }
+      ]
+    },
+    "ScannerReader": {
+      "additionalProperties": false,
+      "description": "A firmware scanner state reader.",
+      "properties": {
+        "pressed_value": {
+          "description": "Stored value interpreted as a pressed key.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "released_value": {
+          "description": "Stored value interpreted as a released key.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "routine": {
+          "$ref": "#/$defs/AddressIdentity",
+          "description": "Reader routine identity."
+        },
+        "stable_offset": {
+          "description": "Stable-state field offset within a scanner record.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stable_width": {
+          "description": "Width of the stable-state field in bytes.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "stable_offset",
+        "stable_width",
+        "pressed_value",
+        "released_value",
+        "routine"
+      ],
+      "type": "object"
+    },
+    "ScannerRecordWitness": {
+      "additionalProperties": false,
+      "description": "Checked identity and predicate operands stored in one scanner record.",
+      "properties": {
+        "input_kind": {
+          "$ref": "#/$defs/ScannerInputKind",
+          "description": "Closed predicate kind stored in the scanner record."
+        },
+        "lower": {
+          "description": "Lower comparison operand or calibration-table offset, a 32-bit record word.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "physical_key": {
+          "description": "Physical key identity stored at byte offset zero.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "description": "Source selector stored at byte offset twelve.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "upper": {
+          "description": "Upper comparison operand or calibration-table offset, a 32-bit record word.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "physical_key",
+        "input_kind",
+        "source",
+        "lower",
+        "upper"
+      ],
+      "type": "object"
+    },
+    "ScannerTable": {
+      "additionalProperties": false,
+      "description": "A firmware table used to scan physical input predicates.",
+      "properties": {
+        "base": {
+          "description": "Table base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "count": {
+          "description": "Number of scanner records.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "lookup": {
+          "description": "Routine that looks up scanner entries.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "SHA-256 of the scanner table.",
+          "type": "string"
+        },
+        "stride": {
+          "description": "Scanner record size in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "count",
+        "stride",
+        "lookup",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "Scanout": {
+      "additionalProperties": false,
+      "description": "A located framebuffer and its live selection pointer.",
+      "properties": {
+        "address": {
+          "description": "Address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "address_mask": {
+          "description": "Address mask.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "channel": {
+          "description": "Channel.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "height": {
+          "description": "Height.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "instance": {
+          "description": "Instance.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "layer": {
+          "description": "Layer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pixel_format": {
+          "$ref": "#/$defs/PixelFormat",
+          "description": "Pixel format."
+        },
+        "pointer_address": {
+          "description": "Pointer address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stride_bytes": {
+          "description": "Stride bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width": {
+          "description": "Width.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "width",
+        "height",
+        "pixel_format",
+        "stride_bytes",
+        "instance",
+        "layer",
+        "channel",
+        "pointer_address",
+        "address_mask"
+      ],
+      "type": "object"
+    },
+    "Surface": {
+      "description": "Surfaces on which an owner is available.",
+      "enum": [
+        "menu",
+        "q",
+        "fn"
+      ],
+      "type": "string"
+    },
+    "TranslatedKey": {
+      "additionalProperties": false,
+      "description": "One physical key and the UI event the firmware delivers for it.",
+      "properties": {
+        "event": {
+          "description": "UI event delivered for that key.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "physical_key": {
+          "description": "Physical key stored in scanner rows.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "physical_key",
+        "event"
+      ],
+      "type": "object"
+    },
+    "WalkthroughMetadata": {
+      "additionalProperties": false,
+      "description": "Build-time validated observation layouts and coverage.",
+      "properties": {
+        "binding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BindingLayout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Binding layout."
+        },
+        "binding_choices": {
+          "additionalProperties": false,
+          "description": "Exact binding picker enrollment.",
+          "patternProperties": {
+            "^\\d+$": {
+              "$ref": "#/$defs/BindingChoices"
+            }
+          },
+          "type": "object"
+        },
+        "canvas": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanvasLayout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Canvas layout."
+        },
+        "canvas_hosts": {
+          "additionalProperties": false,
+          "description": "Enrolled host screen identities.",
+          "patternProperties": {
+            "^\\d+$": {
+              "$ref": "#/$defs/CanvasHost"
+            }
+          },
+          "type": "object"
+        },
+        "choice_sets": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Shared choice storage identities.",
+          "type": "object"
+        },
+        "menu": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeclarationLayout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Menu layout."
+        },
+        "option_requirements": {
+          "description": "Required selections.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "qfn": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QfnLayout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Qfn layout."
+        },
+        "requirements": {
+          "description": "Required surface observations.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "$ref": "#/$defs/Surface"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "screen_requirements": {
+          "description": "Required screen observations.",
+          "items": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "choice_sets",
+        "binding_choices",
+        "canvas_hosts",
+        "requirements",
+        "option_requirements",
+        "screen_requirements"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/remote-facts.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "All inputs required to resolve remote references.",
+  "properties": {
+    "control_ids": {
+      "$ref": "#/$defs/FirmwareControlIds",
+      "description": "Located inputs of the selected firmware."
+    },
+    "firmware": {
+      "$ref": "#/$defs/FirmwareFacts",
+      "description": "Selected firmware layouts and inputs."
+    },
+    "input_tasks": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/InputTasks"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional task receive boundary required by native input consumers."
+    },
+    "menu_manifest": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BuildMenuManifest"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Installed build declarations, absent for stock firmware."
+    },
+    "physical_controls": {
+      "$ref": "#/$defs/PhysicalControls",
+      "description": "Physical control identities."
+    }
+  },
+  "required": [
+    "physical_controls",
+    "control_ids",
+    "firmware"
+  ],
+  "title": "Facts",
+  "type": "object"
+}

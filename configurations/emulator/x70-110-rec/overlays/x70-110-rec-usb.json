@@ -1,0 +1,10 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "x70-110-rec-usb",
+  "configuration_id": "x70-110-rec",
+  "change": {
+    "kind": "usb_connection",
+    "connected": true
+  }
+}

@@ -1,0 +1,15 @@
+[package]
+name = "fujimod-catalog-identity"
+description = "Identifier and digest syntax shared by every catalog document"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+test = false
+doctest = false
+
+[dependencies]
+fujimod-workspace-hack.workspace = true

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "spi1-word-output",
+  "model": {
+    "kind": "display-panel",
+    "width": null,
+    "height": null,
+    "orientation": null,
+    "serial": "panel",
+    "used_mask": 65535
+  },
+  "attachment": {
+    "label": "serial_spi1",
+    "basis": "Declared catalog input.",
+    "limits": [],
+    "serial_routes": [
+      {
+        "controller_address": 4294459456,
+        "formats": [
+          {
+            "control": 224,
+            "configuration": 48,
+            "bits": 16,
+            "receive": false
+          }
+        ],
+        "selection": [
+          {
+            "pin": {
+              "port": 11,
+              "pin": 1
+            },
+            "high": false
+          }
+        ],
+        "transfer_ticks": 4,
+        "queue": "single",
+        "endpoint_part_id": "spi1-word-output"
+      }
+    ]
+  }
+}

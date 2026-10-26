@@ -26,4 +26,4 @@ body:
       label: Crash report
     validations:
       required: true
-      accept: ".zip,.json,.log,.txt"
+      accept: '.zip,.json,.log,.txt'

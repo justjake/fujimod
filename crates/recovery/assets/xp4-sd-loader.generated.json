@@ -1,0 +1,109 @@
+{
+  "ffinit": {
+    "symbols": {
+      "ffinit_boot_header": 1956,
+      "ffinit_config": 1920,
+      "ffinit_counter_read": 868,
+      "ffinit_counter_start": 848,
+      "ffinit_counter_stop": 876,
+      "ffinit_crc32": 344,
+      "ffinit_crc_table": 896,
+      "ffinit_dram_ready": 800,
+      "ffinit_enter_ram": 832,
+      "ffinit_entry": 768,
+      "ffinit_halt": 840,
+      "ffinit_load": 408,
+      "ffinit_prepare": 28,
+      "ffinit_progress": 4028,
+      "ffinit_resume_setup": 824,
+      "ffinit_setup_data": 4004
+    },
+    "text": {
+      "offset": 0,
+      "size": 896
+    },
+    "suffix": {
+      "offset": 896,
+      "size": 20
+    },
+    "fixups": [
+      [
+        4,
+        43,
+        4028
+      ],
+      [
+        8,
+        44,
+        4028
+      ],
+      [
+        332,
+        2,
+        1956
+      ],
+      [
+        336,
+        2,
+        4028
+      ],
+      [
+        340,
+        2,
+        1920
+      ],
+      [
+        404,
+        2,
+        896
+      ],
+      [
+        752,
+        2,
+        1920
+      ],
+      [
+        756,
+        2,
+        4028
+      ],
+      [
+        760,
+        2,
+        4008
+      ],
+      [
+        764,
+        2,
+        4016
+      ],
+      [
+        796,
+        2,
+        -1
+      ],
+      [
+        820,
+        2,
+        -1
+      ],
+      [
+        828,
+        2,
+        -2
+      ]
+    ]
+  },
+  "card": {
+    "address": 1703936,
+    "offset": 916,
+    "size": 548,
+    "symbols": {
+      "card_firmware_copy": 0,
+      "card_firmware_bytes": 320,
+      "card_firmware_bootstrap": 276,
+      "card_firmware_config": 516,
+      "card_firmware_indexed": 352
+    }
+  }
+}

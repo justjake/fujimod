@@ -1,0 +1,662 @@
+.dial {
+  position: relative;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--key);
+  overflow: hidden;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.7),
+    inset 0 -1px 0 #2c2c2e;
+}
+.dial .vals {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  height: 100%;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.dial .vals span {
+  color: #5a5a5e;
+  font-size: 13px;
+}
+.dial .vals span.on {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+.dial .vals span[data-value='A'] {
+  color: #f00;
+}
+.dial:before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, var(--key), transparent 30%, transparent 70%, var(--key));
+  z-index: 1;
+  pointer-events: none;
+}
+.dial:after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: #fff;
+  z-index: 2;
+}
+.dial.ticks .vals {
+  background: repeating-linear-gradient(90deg, #636366 0 1px, transparent 1px 8px);
+  height: 14px;
+  margin-top: 13px;
+  width: 100%;
+}
+.seg {
+  position: relative;
+  height: 38px;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  background: #141416;
+  border-radius: 11px;
+  padding: 3px;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.85),
+    inset 0 -1px 0 #2a2a2d;
+}
+.seg > button {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  padding: 0 10px;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #6e6e73;
+  white-space: nowrap;
+}
+.seg > button.on {
+  color: #fff;
+}
+.seg > button.on:before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 8px;
+  background: linear-gradient(#4a4a4e, #38383b);
+  box-shadow:
+    0 1px 0 #5c5c60 inset,
+    0 2px 5px rgba(0, 0, 0, 0.6);
+}
+.seg.wide {
+  display: grid;
+}
+.key {
+  --d: 40px;
+  width: var(--d);
+  height: var(--d);
+  border-radius: 50%;
+  flex: none;
+  background: linear-gradient(#4a4a4e, #38383b);
+  border: 0;
+  box-shadow:
+    0 1px 0 #5c5c60 inset,
+    0 3px 7px rgba(0, 0, 0, 0.65);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+.key.sm {
+  font-size: 8.5px;
+}
+.key .two {
+  line-height: 1.05;
+  text-align: center;
+  font-size: 8.5px;
+}
+.dpad {
+  position: relative;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  background: #161618;
+  box-shadow:
+    0 1px 0 #5c5c60 inset,
+    0 4px 10px rgba(0, 0, 0, 0.7);
+}
+.dpad .a {
+  /* Each key box bounds only its own wedge, so its center lies on the wedge
+     rather than on MENU/OK; it turns about the pad center. */
+  position: absolute;
+  left: 20px;
+  top: 0;
+  width: 92px;
+  height: 44px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: linear-gradient(#4a4a4e, #333336);
+  box-shadow: none;
+  clip-path: path(
+    'M 0.74 18.62 A 65.5 65.5 0 0 1 91.26 18.62 L 66.51 43.37 A 30.5 30.5 0 0 0 25.49 43.37 Z'
+  );
+  transform-origin: 46px 66px;
+  transform: rotate(var(--turn));
+  color: #c7c7cc;
+  font-size: 11px;
+}
+.dpad .a span {
+  position: absolute;
+  top: 17px;
+  left: 0;
+  width: 100%;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  transform: rotate(calc(-1 * var(--turn)));
+}
+.dpad .a.active,
+.dpad .a:active {
+  background: #252528;
+  box-shadow: none;
+}
+.dpad .a:focus-visible {
+  background: #626269;
+}
+.dpad .u {
+  --turn: 0deg;
+}
+.dpad .d {
+  --turn: 180deg;
+}
+.dpad .l {
+  --turn: 270deg;
+}
+.dpad .r {
+  --turn: 90deg;
+}
+.dpad .ok {
+  position: absolute;
+  left: 38px;
+  top: 38px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(#55555a, #3e3e42);
+  box-shadow:
+    0 1px 0 #6e6e73 inset,
+    0 3px 6px rgba(0, 0, 0, 0.7);
+  display: grid;
+  place-items: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.1;
+}
+.cmd {
+  width: min(168px, 100%);
+}
+.knurl {
+  position: relative;
+  height: 44px;
+  border-radius: 22px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr 48px 1fr;
+  align-items: center;
+  background: repeating-linear-gradient(90deg, #3a3a3d 0 2px, #232326 2px 5px);
+  box-shadow:
+    0 3px 7px rgba(0, 0, 0, 0.65),
+    0 0 0 3px #141416,
+    0 0 0 4px #222224,
+    inset 0 1px 0 #5c5c60;
+}
+.knurl:before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.65),
+    transparent 35%,
+    transparent 65%,
+    rgba(0, 0, 0, 0.65)
+  );
+}
+.knurl .side {
+  position: relative;
+  text-align: center;
+  font-size: 11px;
+  color: #c7c7cc;
+  width: 100%;
+  height: 44px;
+  border-radius: 0;
+  box-shadow: none;
+}
+.knurl .side.l {
+  border-radius: 22px 0 0 22px;
+}
+.knurl .side.r {
+  border-radius: 0 22px 22px 0;
+}
+.knurl button:focus-visible {
+  outline-offset: -3px;
+}
+.knurl .tab {
+  position: relative;
+  height: 30px;
+  width: 40px;
+  justify-self: center;
+  border-radius: 7px;
+  background: linear-gradient(#55555a, #3e3e42);
+  box-shadow:
+    0 1px 0 #6e6e73 inset,
+    0 2px 4px rgba(0, 0, 0, 0.6);
+}
+.slide {
+  position: relative;
+  height: 38px;
+  border-radius: 11px;
+  background: #141416;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.85),
+    inset 0 -1px 0 #2a2a2d;
+}
+.slide .end {
+  position: absolute;
+  right: 14px;
+  top: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #5a5a5e;
+}
+.slide .thumb {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  bottom: 3px;
+  width: 64px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  z-index: 1;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #fff;
+  background: linear-gradient(#e5e5ea, #a1a1a6);
+  box-shadow:
+    0 1px 0 #fff inset,
+    0 2px 5px rgba(0, 0, 0, 0.6);
+}
+.slide.half .thumb {
+  background: linear-gradient(#a1a1a6, #c7c7cc);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45);
+  color: #1c1c1e;
+}
+.slide.full .thumb {
+  left: auto;
+  right: 3px;
+  background: linear-gradient(#a1a1a6, #c7c7cc);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45);
+  color: #1c1c1e;
+}
+.slide.full .end {
+  opacity: 0;
+}
+.key.rec i {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #ff6b61, #d70015);
+  box-shadow: inset 0 -1px 2px rgba(0, 0, 0, 0.4);
+}
+.key.wifi {
+  position: relative;
+}
+.key.wifi em {
+  position: absolute;
+  inset-inline: 0;
+  text-align: center;
+  bottom: -9px;
+  font-style: normal;
+  font-size: 8.5px;
+  font-weight: 700;
+  color: #8e8e93;
+}
+.seg > button {
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+.seg > button.on {
+  color: #fff;
+}
+.seg > button:disabled {
+  cursor: default;
+}
+.key {
+  cursor: pointer;
+}
+.key.active,
+.key:active,
+.key[aria-pressed='true'] {
+  background: linear-gradient(#38383b, #2e2e31);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.75);
+}
+.dial {
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
+.dial .vals {
+  width: max-content;
+  pointer-events: none;
+}
+.dial.ticks .vals {
+  width: 100%;
+}
+.slide {
+  touch-action: none;
+  user-select: none;
+  cursor: ew-resize;
+}
+.slide .thumb {
+  color: #1c1c1e;
+}
+.slide .thumb,
+.slide .end {
+  pointer-events: none;
+}
+.key.wifi {
+  position: relative;
+}
+.knurl button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+.knurl .tab {
+  height: 30px;
+}
+.knurl .side:active {
+  color: #fff;
+}
+.dpad > button {
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  background: transparent;
+}
+.dpad > button.ok {
+  background: linear-gradient(#55555a, #3e3e42);
+}
+.key .two {
+  white-space: pre-line;
+}
+.dpad .ok .two {
+  white-space: pre-line;
+  font: inherit;
+  line-height: inherit;
+}
+
+.control-face {
+  --control-scale: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  vertical-align: middle;
+  color: #e5e5ea;
+}
+.control-face.mini {
+  --control-scale: 0.6;
+  pointer-events: none;
+}
+/* Scale the panel's actual drawing, including its wedge geometry and pressed style. */
+.control-face > :first-child {
+  zoom: var(--control-scale);
+}
+.control-face .i {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+.control-face .key .two {
+  white-space: pre-line;
+}
+.control-face .cmd {
+  display: inline-block;
+  width: 168px;
+}
+.control-face .dpad {
+  display: inline-block;
+}
+.control-face .slide {
+  display: inline-block;
+  width: 142px;
+}
+.control-face .dial {
+  display: block;
+  width: 100%;
+  background-color: #141416;
+}
+.control-face.panel[data-part='positions'],
+.control-face.panel[data-part='shutter'] {
+  display: flex;
+  width: 100%;
+}
+.control-face.panel .slide {
+  width: 100%;
+}
+.key-wrapper {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.key-wrapper:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.key-wrapper.active .key {
+  background: #252528;
+  box-shadow: inset 0 2px 4px #0008;
+}
+.key-wrapper.glow .key {
+  outline: 2px solid #fff;
+}
+.dial-press svg {
+  display: block;
+  width: 66px;
+  height: 60px;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dial-press .push {
+  stroke: #fff;
+  stroke-width: 2.6;
+}
+.dial-press .wheel {
+  fill: #3a3a3c;
+  stroke: #fff;
+  stroke-width: 2;
+}
+.dial-press .ridges {
+  stroke: #8e8e93;
+  stroke-width: 2;
+}
+/* The wheel's white outline is its highlight; no ring around the icon. */
+.dial-press.glow {
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 5px rgb(255 255 255 / 35%));
+}
+.dial-wrapper,
+.shutter-wrapper {
+  width: 100%;
+  touch-action: none;
+  cursor: ew-resize;
+}
+.control-face .seg {
+  display: inline-grid;
+  width: auto;
+}
+.control-face .seg .vals {
+  display: contents;
+}
+.control-face .seg .vals > * {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  padding: 0 10px;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #6e6e73;
+  white-space: nowrap;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  border-radius: 8px;
+}
+.control-face .seg .vals > .on {
+  color: #fff;
+  background: linear-gradient(#4a4a4e, #38383b);
+  box-shadow:
+    inset 0 1px 0 #5c5c60,
+    0 2px 5px #0009;
+}
+.control-face .seg button {
+  cursor: pointer;
+}
+.control-face .seg button:disabled {
+  opacity: 0.35;
+}
+.control-face .knurl .side.active {
+  color: #fff;
+  background: #252528;
+}
+.control-face .knurl .tab.active {
+  background: #252528;
+  box-shadow: inset 0 2px 4px #0008;
+}
+.control-short-name {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.power-combo-keys {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  max-width: 100%;
+}
+.combo-usb {
+  display: inline-flex;
+  color: #bbb;
+}
+.combo-usb svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.combo {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.combo .power-combo-keys {
+  flex: 1 1 100%;
+}
+
+.glow {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 14px rgba(255, 255, 255, 0.45) !important;
+}
+/* The wedge clips its outer shadow; brighten the held direction inside its outline. */
+.dpad .a.glow {
+  background: linear-gradient(#c7c7cc, #686870);
+  color: #fff;
+}
+
+.rocker {
+  display: inline-block;
+  width: 168px;
+  position: relative;
+}
+.rocker .knurl {
+  border-radius: 45% 45% 46% 46% / 20% 20% 75% 75%;
+  height: 38px;
+  overflow: visible;
+}
+.rocker .knurl .side {
+  height: 38px;
+  background: transparent;
+}
+.rocker .knurl .tab {
+  height: 32px;
+  width: 38px;
+  border-radius: 3px 3px 8px 8px;
+  align-self: end;
+  margin-bottom: -3px;
+}
+.rocker .knurl .side.l {
+  border-radius: 50% 0 0 80%;
+}
+.rocker .knurl .side.r {
+  border-radius: 0 50% 80% 0;
+}
+.rocker.with-arrow {
+  padding-bottom: 36px;
+}
+.rocker-arrow {
+  position: absolute;
+  width: 168px;
+  height: 34px;
+  left: 0;
+  bottom: 0;
+  fill: #fff;
+  stroke: #141416;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+.rocker-arrow.left {
+  transform: scaleX(-1);
+}
+.rocker .knurl .side.active,
+.rocker .knurl .tab.active {
+  background-color: #252528;
+}

@@ -1,0 +1,200 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "xe2-411-settings",
+  "firmware_id": "xe2-411",
+  "source": {
+    "flash_offset": 1441792,
+    "address": 9044992,
+    "size": 3519680,
+    "sha256": "57236181275971691cc1248489626464115aa2bf3957ad52d65c201ef7e82403"
+  },
+  "bank": {
+    "descriptor": {
+      "address": 11578580,
+      "size": 12,
+      "sha256": "324cd67e633dc7d4f9fb8de449632dd2938ffe7d7159d77fee4c462131eb34e2"
+    },
+    "kind": 2,
+    "blocks": 40,
+    "first_block": 931,
+    "logical_first": 41,
+    "bytes": 4325376
+  },
+  "defaults": {
+    "address": 11577896,
+    "size": 532,
+    "sha256": "6576495224ec029ce256a70fc1a40494fe1cf2dacb8dc47f38693b262c25ce9b"
+  },
+  "fields": [
+    {
+      "offset": 256,
+      "bytes": [
+        203,
+        4
+      ],
+      "basis": "Normal USB vendor ID."
+    },
+    {
+      "offset": 318,
+      "bytes": [
+        204,
+        2
+      ],
+      "basis": "Normal USB product ID."
+    },
+    {
+      "offset": 348,
+      "bytes": [
+        88,
+        45,
+        69,
+        50,
+        0
+      ],
+      "basis": "Body product name."
+    },
+    {
+      "offset": 514,
+      "bytes": [
+        85,
+        170
+      ],
+      "basis": "Settings bank signature."
+    },
+    {
+      "offset": 516,
+      "bytes": [
+        3,
+        5
+      ],
+      "basis": "Internal version."
+    },
+    {
+      "offset": 4536,
+      "bytes": [
+        229,
+        37,
+        0,
+        255,
+        255,
+        255,
+        0,
+        0,
+        0,
+        0,
+        88,
+        2,
+        82,
+        3,
+        17,
+        0,
+        12,
+        32,
+        57,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "basis": "Explicit synthetic proximity-controller configuration using the fallback byte column of the checked 27-row stock table 0xb1de64. Getter 0x96aa2c normally reads these configuration offsets. Includes the supported E5 command; zeros are not valid command bytes. These are declared external inputs, not an executed defaults routine."
+    },
+    {
+      "offset": 38929,
+      "bytes": [
+        1
+      ],
+      "basis": "Explicit synthetic active normal-read accelerometer setting; stock 0x9510bc masks this configuration byte with 0x1f and writes sensor CTRL_REG1 (0x2a). No fast-read mode or physical calibration claim."
+    }
+  ],
+  "profile": {
+    "header": {
+      "address": 11618464,
+      "size": 16,
+      "sha256": "342cdfa6f02b2b2a507d081fe33a17facc02468faec5647f40b36ef0c0f571a2"
+    },
+    "records": {
+      "main": {
+        "block": 976,
+        "managed_index": 86,
+        "bytes": 512,
+        "defaults": {
+          "address": 12563760,
+          "size": 384,
+          "sha256": "79e8f8f2670fcdc8f26a7a900e956636c4fa9b875d5736c99598b8284472aa03"
+        },
+        "defaults_offset": 40,
+        "parity_offset": 492,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Main record marker after the sequence word."
+          }
+        ]
+      },
+      "custom": {
+        "block": 978,
+        "managed_index": 88,
+        "bytes": 512,
+        "defaults": {
+          "address": 11618480,
+          "size": 448,
+          "sha256": "ff8316413501ec047ae44dc3651fcfb0a6ea5e95f4e7d2a1d6de56ccfe1d482f"
+        },
+        "defaults_offset": 4,
+        "parity_offset": 492,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Custom record marker after the sequence word."
+          }
+        ]
+      }
+    }
+  },
+  "settings": {
+    "debug": {
+      "store": "bank",
+      "offset": 247,
+      "values": {
+        "off": [
+          0
+        ],
+        "on": [
+          1
+        ]
+      }
+    },
+    "language": {
+      "store": "main",
+      "offset": 55,
+      "values": {
+        "en": [
+          129
+        ]
+      }
+    },
+    "setup": {
+      "store": "header",
+      "offset": 11,
+      "values": {
+        "done": [
+          7
+        ]
+      }
+    }
+  },
+  "sections": []
+}

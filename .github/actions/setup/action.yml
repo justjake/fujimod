@@ -13,13 +13,17 @@ runs:
         shared-key: ${{ runner.os }}-ci
     - shell: bash
       run: uv sync --locked
+    - name: Install TypeScript compiler for Cargo browser assets
+      shell: bash
+      run: npm ci
     - if: inputs.javascript == 'true'
       shell: bash
       run: |
         rustup target add wasm32-unknown-unknown
-        npm ci
         npm --prefix bindings/javascript ci
+        npm --prefix packages/emulator-ui ci
         npm --prefix apps/web ci
         npm --prefix apps/usb-sharing ci
+        npm --prefix crates/simulation/tools ci
         npm --prefix bindings/javascript run setup:tooling
         echo "$GITHUB_WORKSPACE/target/tooling/bin" >> "$GITHUB_PATH"

@@ -122,8 +122,8 @@ fn normalize64(m: &str, op: &str) -> String {
 fn hash64(bytes: &[u8]) -> u64 {
     u64::from_le_bytes(Sha256::digest(bytes)[..8].try_into().unwrap())
 }
-pub(crate) fn decode(u: &Unit) -> Result<(Vec<Function>, Vec<String>)> {
-    let cs = match u.input.architecture {
+pub(crate) fn decode(u: &Unit, functions: &[Boundary]) -> Result<(Vec<Function>, Vec<String>)> {
+    let cs = match u.layout.architecture {
         Architecture::Arm32 => Capstone::new().arm().mode(arch::arm::ArchMode::Arm).build(),
         Architecture::Aarch64 => Capstone::new()
             .arm64()
@@ -134,7 +134,7 @@ pub(crate) fn decode(u: &Unit) -> Result<(Vec<Function>, Vec<String>)> {
     let mut dictionary = HashMap::<String, u32>::new();
     let mut words = Vec::new();
     let mut out = Vec::new();
-    for f in &u.input.functions {
+    for f in functions {
         let mut texts = Vec::<String>::new();
         let mut calls = Vec::new();
         let mut constants = BTreeSet::new();
@@ -164,7 +164,7 @@ pub(crate) fn decode(u: &Unit) -> Result<(Vec<Function>, Vec<String>)> {
                 }
             }
             let mut pool = BTreeSet::new();
-            if u.input.architecture == Architecture::Arm32 {
+            if u.layout.architecture == Architecture::Arm32 {
                 for (&a, (m, op)) in &insns {
                     if (base(m).starts_with("ldr") || base(m).starts_with("vldr"))
                         && let Some(t) = literal(a, op)
@@ -209,7 +209,7 @@ pub(crate) fn decode(u: &Unit) -> Result<(Vec<Function>, Vec<String>)> {
                         }
                     }
                 }
-                if u.input.architecture == Architecture::Arm32 {
+                if u.layout.architecture == Architecture::Arm32 {
                     if let (Some(low), Some(high)) = (u.read(a, 4), u.read(a + 4, 4)) {
                         let low = u32::from_le_bytes(low.try_into().unwrap());
                         let high = u32::from_le_bytes(high.try_into().unwrap());
@@ -321,19 +321,21 @@ pub(crate) fn decode(u: &Unit) -> Result<(Vec<Function>, Vec<String>)> {
             })
             .collect();
         out.push(Function {
-            key: FunctionKey {
-                firmware: u.input.firmware.clone(),
-                unit: u.input.unit.clone(),
-                address: f.address,
+            header: FunctionHeader {
+                key: FunctionKey {
+                    firmware: u.layout.firmware.clone(),
+                    unit: u.layout.unit.clone(),
+                    address: f.address,
+                },
+                architecture: u.layout.architecture,
+                names: f.names.clone(),
+                annotations: f.annotations.clone(),
+                ranges: f.ranges.clone(),
+                signature,
+                instructions,
+                calls,
             },
-            architecture: u.input.architecture,
-            names: f.names.clone(),
-            annotations: f.annotations.clone(),
-            ranges: f.ranges.clone(),
             tokens,
-            signature,
-            instructions,
-            calls,
             references: refs,
             constants,
             strings,

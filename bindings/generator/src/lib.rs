@@ -2,8 +2,13 @@
 //! or copied validation bounds belong here.
 use serde::Serialize;
 use std::{collections::BTreeMap, fs, path::Path};
+mod catalog_types;
+mod catalog_typescript;
 mod unions;
 use unions::Union;
+
+pub use catalog_types::generate as generate_catalog_types;
+pub use catalog_typescript::generate as generate_catalog_typescript;
 
 use syn::{Fields, FnArg, ImplItem, Item, ReturnType, Type, Visibility};
 
@@ -107,7 +112,7 @@ fn choice(item: &syn::ItemEnum) -> Option<Choice> {
 impl Api {
     pub fn read(root: &Path) -> Result<Self, String> {
         let mut sources = Vec::new();
-        let file = root.join("crates/usb/src/app80/catalogue.rs");
+        let file = root.join("crates/usb-app80-types/src/catalog.rs");
         sources.push((
             file.clone(),
             fs::read_to_string(&file).map_err(|e| e.to_string())?,
@@ -130,9 +135,9 @@ impl Api {
             }
         }
         let mut api = Self::from_sources(sources.iter().map(|(_, text)| text.as_str()))?;
-        let defs = fs::read_to_string(root.join("crates/defs/src/service.rs"))
+        let catalog = fs::read_to_string(root.join("crates/catalog-service/src/lib.rs"))
             .map_err(|e| e.to_string())?;
-        api.codec = syn::parse_file(&defs)
+        api.codec = syn::parse_file(&catalog)
             .map_err(|e| e.to_string())?
             .items
             .iter()
@@ -325,7 +330,7 @@ impl Api {
             ("service_values_javascript.rs", self.javascript()),
             (
                 "definition_codec_python.rs",
-                python_choice(&self.codec, "fujimod.defs.service", "pub(crate)"),
+                python_choice(&self.codec, "fujimod.catalog.service", "pub"),
             ),
             (
                 "definition_codec_javascript.rs",
@@ -349,11 +354,11 @@ impl Api {
     pub fn build(root: &Path, out: &Path) {
         println!(
             "cargo:rerun-if-changed={}",
-            root.join("crates/usb/src/app80").display()
+            root.join("crates/usb-app80/src").display()
         );
         println!(
             "cargo:rerun-if-changed={}",
-            root.join("crates/defs/src/service.rs").display()
+            root.join("crates/catalog-service/src/lib.rs").display()
         );
         Self::read(root)
             .and_then(|api| api.write(out))
@@ -544,7 +549,7 @@ impl Api {
             out +=
                 "});\nexport const definitionValues=Object.freeze({Codec:native.ServiceCodec});\n";
             let service = serde_json::to_string(&self.service).unwrap();
-            let defs = serde_json::to_string(&Values {
+            let catalog = serde_json::to_string(&Values {
                 unions: vec![],
                 choices: vec![self.codec.clone()],
                 quantities: vec![],
@@ -553,7 +558,7 @@ impl Api {
             out += &format!(
                 "export const valueSchemas=Object.freeze({{service:{},definitions:{}}});\n",
                 serde_json::to_string(&service).unwrap(),
-                serde_json::to_string(&defs).unwrap()
+                serde_json::to_string(&catalog).unwrap()
             );
         }
         out
@@ -622,7 +627,7 @@ fn python_quantity(q: &Quantity) -> String {
         parameters.push(format!("{name}:{py_type}"));
         calls.push(match ty {
             "bytes" => format!("&{name}"),
-            "Address" => format!("usb::ff80::commands::memory::Address({name})"),
+            "Address" => format!("fujimod_usb_app80_types::Address({name})"),
             _ => name.to_owned(),
         });
     }
@@ -680,7 +685,7 @@ fn javascript_quantity(q: &Quantity) -> String {
         let checked = match ty {
             "bytes" => format!("&error::buffer({name})?"),
             "Address" => format!(
-                "usb::ff80::commands::memory::Address({})",
+                "fujimod_usb_app80_types::Address({})",
                 checked_integer(&name, "u32")
             ),
             _ => checked_integer(&name, ty),
@@ -753,6 +758,8 @@ fn javascript_codec(c: &Choice) -> String {
     out += "}}}\n";
     out
 }
+
+mod typing;
 
 #[cfg(test)]
 mod tests;

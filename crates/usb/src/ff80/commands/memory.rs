@@ -145,7 +145,7 @@ mod tests {
         assert_eq!(write.encode(), expected);
     }
     #[test]
-    fn malformed_acknowledgements_are_rejected() {
+    fn malformed_acknowledgments_are_rejected() {
         let read = ReadMemory::new(MemoryRange::new(Address(3), nz(1)).unwrap(), limits()).unwrap();
         let mut response = read.encode();
         response.push(99);

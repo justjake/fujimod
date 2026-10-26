@@ -1,0 +1,119 @@
+{
+  "$defs": {
+    "ReadinessAddresses": {
+      "additionalProperties": false,
+      "description": "Addresses used to check REC readiness.",
+      "properties": {
+        "category_one": {
+          "description": "Firmware address for readiness category one.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "category_two": {
+          "description": "Firmware address for readiness category two.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "excluded_mask": {
+          "description": "Mask of readiness bits excluded from the check.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "input_pending": {
+          "description": "Firmware address for pending input state.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operation_alert_timer": {
+          "description": "Firmware address for the operation-alert timer.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "override_address": {
+          "description": "Firmware address used to override readiness.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "category_one",
+        "category_two",
+        "input_pending",
+        "excluded_mask",
+        "operation_alert_timer",
+        "override_address"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/remote-state.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Firmware addresses used by a supported run observer.",
+  "properties": {
+    "menu_active": {
+      "description": "Firmware address containing the menu-active flag.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "menu_node": {
+      "description": "Firmware address containing the current menu node.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "pending_mode": {
+      "description": "Firmware address containing the pending UI mode.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "readiness": {
+      "$ref": "#/$defs/ReadinessAddresses",
+      "description": "Readiness observer addresses."
+    },
+    "rec_mode": {
+      "description": "REC mode value.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "setup_mode": {
+      "description": "Setup mode value.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "system_mode": {
+      "description": "Firmware address containing the system mode.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "ui_mode": {
+      "description": "Firmware address containing the UI mode.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "ui_mode",
+    "system_mode",
+    "menu_active",
+    "pending_mode",
+    "menu_node",
+    "rec_mode",
+    "setup_mode",
+    "readiness"
+  ],
+  "title": "FirmwareObservation",
+  "type": "object"
+}

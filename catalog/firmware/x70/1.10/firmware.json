@@ -1,0 +1,1353 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "x70-110",
+  "body_id": "x70",
+  "version": "1.10",
+  "update": {
+    "size": 53085736,
+    "sha256": "7dd5b358a66f38d1fc7dad899a77d35fe4e6ed0edd0ed1d04fbca512d5dc8fd6"
+  },
+  "boot_rom": {
+    "content": {
+      "size": 16384,
+      "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be"
+    },
+    "address": 2147483648
+  },
+  "installation": {
+    "flash_offset": 604,
+    "entry_labels": {
+      "0x1800": "primary loader",
+      "0x11800": "secondary loader",
+      "0x40020": "primary kernel",
+      "0xd0020": "secondary kernel",
+      "0x93e578": "application entry",
+      "0x93eac4": "application INIT",
+      "0x96bac8": "LCD/EVF task",
+      "0x96aabc": "graphics task",
+      "0x9726c4": "HDMI task",
+      "0x973008": "VGLIB task",
+      "0x11e11e8": "system task",
+      "0x10fbb94": "recording task",
+      "0x9d9b30": "overlay loader task",
+      "0x8a073c": "overlay prefetch handler",
+      "0x8a08a4": "overlay fault task continuation",
+      "0x9d9f40": "overlay fault wait",
+      "0x9d9cb4": "overlay availability update",
+      "0x1d16508": "playcont task",
+      "0x9049dc": "UI initialization",
+      "0x904668": "UI mode installation",
+      "0x92c8cc": "statistics DMA ISR",
+      "0x11f8ef8": "statistics completion callback",
+      "0x11ff3f0": "statistics normalization",
+      "0x12f604c": "statistics IMGDC packet",
+      "0x12f8814": "statistics IMGDC consumer",
+      "0x1202870": "statistics acquisition stop",
+      "0x1226c1c": "REC statistics data handler",
+      "0x1226e10": "REC statistics finish handler"
+    },
+    "loader_validation": {
+      "entry": 262176,
+      "sections": [
+        "kernel0",
+        "kernel1",
+        "section4"
+      ]
+    },
+    "image_sections": [
+      {
+        "name": "boot",
+        "address": 0,
+        "size": 131072,
+        "sha256": "f17f9eb671a2b39483bf8aa924360f13dc717fe13ddcfa658621ed908c6e2306",
+        "native_flash_offset": 262144
+      },
+      {
+        "name": "kernel0",
+        "address": 262144,
+        "size": 56224,
+        "sha256": "399c48c26c1b09e8dafcf666fe0efa62619f9cdcaa27166fb8f6d864a3d8d6f0",
+        "native_flash_offset": 524288
+      },
+      {
+        "name": "kernel1",
+        "address": 851968,
+        "size": 56192,
+        "sha256": "6db7ca9ec6d87124d830acbbf452c9f2d57fb26089766c2a88e0c5503d7de128",
+        "native_flash_offset": 655360
+      },
+      {
+        "name": "resources2",
+        "address": 1245184,
+        "size": 2368484,
+        "sha256": "a49704197cfa9f145aa238cdf9793489913fe1e33e218340eb9afa8f886bc35f",
+        "native_flash_offset": 17432576
+      },
+      {
+        "name": "resources3",
+        "address": 6553600,
+        "size": 541332,
+        "sha256": "d6151afefc17b30d8eb2f194582d891de9b16b04eebea6aebbe39a88e67cb1af",
+        "native_flash_offset": 23461888
+      },
+      {
+        "name": "section_table",
+        "address": 9043968,
+        "size": 1024,
+        "sha256": "6f44765ca78458df5a7de219105745b6eccf701a5fbb533de020fceef2633f7d",
+        "native_flash_offset": 1310720
+      },
+      {
+        "name": "section4",
+        "address": 9044992,
+        "size": 3409248,
+        "sha256": "9923d542f84f07196f0acdae181f0d536578c3f3f0419dba5960d9b055925acb",
+        "native_flash_offset": 1441792
+      },
+      {
+        "name": "section5",
+        "address": 16090784,
+        "size": 6011584,
+        "sha256": "316f14c6e1fa3a26f02d79b47904d41ce41f6d631fa623044902af4821974394",
+        "native_flash_offset": 3276800
+      },
+      {
+        "name": "overlay48",
+        "address": 26869760,
+        "size": 3151104,
+        "sha256": "afdda2f3a26057f38bcb7e2e67a038e414213989920c14a0aba70978cc53e31e",
+        "native_flash_offset": 6684672
+      },
+      {
+        "name": "overlay4a",
+        "address": 30146560,
+        "size": 119616,
+        "sha256": "26b3f00108829868645af2bb1afa6e76c29eb43f314e63f61591cd4d97c57d9a",
+        "native_flash_offset": 9961472
+      },
+      {
+        "name": "overlay4b",
+        "address": 30277632,
+        "size": 2489408,
+        "sha256": "95c905155a0f93dddea193b89a55dfdc6310ca63fa573761dab38ae1c9b98fb2",
+        "native_flash_offset": 10092544
+      }
+    ]
+  },
+  "generated_facts": {
+    "cfgdata_location": {
+      "kind": "pointer",
+      "address": 12466684
+    },
+    "additional_ui_modes": {
+      "play": 4,
+      "setup_play": 6
+    },
+    "menu_cursor": 13175048,
+    "menu_keys": {
+      "menu": "EXE_M",
+      "back": "DISP_B",
+      "up": "UP",
+      "down": "DOWN"
+    },
+    "uncached_alias": 1073741824,
+    "identity_checks": [
+      {
+        "address": 9525536,
+        "size": 256,
+        "sha256": "cf9e6d36e535973642d7a1383fb169a798b95991788b685cb06f2787ec52d3f9"
+      },
+      {
+        "address": 18790788,
+        "size": 180,
+        "sha256": "461f10b19e24f2ab7638b612937bc8ac80909b8b0154583f4af8c37069185084"
+      }
+    ],
+    "observation": {
+      "ui_mode": 13358048,
+      "system_mode": 13272292,
+      "menu_active": 13180008,
+      "pending_mode": 13358060,
+      "menu_node": 13175040,
+      "rec_mode": 3,
+      "setup_mode": 5,
+      "readiness": {
+        "category_one": 13355712,
+        "category_two": 13355720,
+        "input_pending": 13359136,
+        "excluded_mask": 16392,
+        "operation_alert_timer": 13355924,
+        "override_address": 13363328
+      }
+    },
+    "remote": {
+      "$schema": "https://fujimod.com/schemas/remote-firmware.generated.schema.json",
+      "schema": 1,
+      "firmware_id": "x70-110",
+      "firmware_sha256": "7dd5b358a66f38d1fc7dad899a77d35fe4e6ed0edd0ed1d04fbca512d5dc8fd6",
+      "body_id": "x70",
+      "uncached_alias": 1073741824,
+      "identity_checks": [
+        {
+          "address": 9525536,
+          "size": 256,
+          "sha256": "cf9e6d36e535973642d7a1383fb169a798b95991788b685cb06f2787ec52d3f9"
+        },
+        {
+          "address": 18790788,
+          "size": 180,
+          "sha256": "461f10b19e24f2ab7638b612937bc8ac80909b8b0154583f4af8c37069185084"
+        }
+      ],
+      "configuration": {
+        "kind": "pointer",
+        "address": 12466684
+      },
+      "state": {
+        "ui_mode": 13358048,
+        "system_mode": 13272292,
+        "menu_active": 13180008,
+        "pending_mode": 13358060,
+        "menu_node": 13175040,
+        "rec_mode": 3,
+        "setup_mode": 5,
+        "readiness": {
+          "category_one": 13355712,
+          "category_two": 13355720,
+          "input_pending": 13359136,
+          "excluded_mask": 16392,
+          "operation_alert_timer": 13355924,
+          "override_address": 13363328
+        }
+      },
+      "menus": {
+        "roots_address": 11887492,
+        "root_count": 188,
+        "roles": {
+          "shooting": 1,
+          "setup": 73,
+          "button_dial": 122,
+          "edit_quick_menu": 105
+        },
+        "root_titles": {
+          "1": 290,
+          "73": 277,
+          "2": 329
+        },
+        "root_routes": {
+          "1": {
+            "entry": "shooting_menu"
+          },
+          "73": {
+            "entry": "setup_menu",
+            "tab": 208
+          }
+        },
+        "page_tabs": {
+          "1": 200,
+          "73": 208
+        },
+        "navigation": {
+          "shooting_first_tab": 200,
+          "shooting_last_tab": 204,
+          "setup_first_tab": 208
+        },
+        "layout": {
+          "size": 32,
+          "fields": {
+            "menu_id": 0,
+            "type_code": 4,
+            "setting_id": 8,
+            "rows_per_page": 12,
+            "flags_word": 16,
+            "parent_pointer": 20,
+            "item_array": 24,
+            "handlers_pointer": 28
+          },
+          "row_size": 8,
+          "row_key": 0,
+          "row_child": 4,
+          "caption_words": 8,
+          "sentinel": 2147483646,
+          "max_kind": 12,
+          "nowrap_flags": 1
+        },
+        "cursor_address": 13175040,
+        "cursor": {
+          "size": 32,
+          "fields": {
+            "pointer": 0,
+            "cursor": 8,
+            "subcursor": 12,
+            "visible_count": 16,
+            "value_cursor": 20,
+            "raw_count": 24,
+            "filtered_count": 28
+          },
+          "status_offset": 32,
+          "status_stride": 4,
+          "status_width": 4
+        },
+        "q_grid": {
+          "rows": 4,
+          "columns": 4,
+          "menu_code": 173
+        }
+      },
+      "scanout": {
+        "address": 42233856,
+        "width": 720,
+        "height": 480,
+        "pixel_format": "bgra8888",
+        "stride_bytes": 2880,
+        "instance": 1,
+        "layer": 1,
+        "channel": 0,
+        "pointer_address": 12997704,
+        "address_mask": 1073741823
+      },
+      "resources": {
+        "language": {
+          "kind": "pointer",
+          "address": 30020776
+        },
+        "text_record_size": 8,
+        "text_variants_offset": 2,
+        "text_metrics_offset": 4,
+        "text_pointer_offset": 0,
+        "text_unit_bytes": 2,
+        "text_max_units": 512,
+        "private_text_first": 57600,
+        "private_text_last": 57855,
+        "private_text_bias": 57600,
+        "glyph_first": 61440,
+        "glyph_last": 63743,
+        "supplementary_address": 3612504,
+        "supplementary_first": 3552,
+        "last_caption": 3558,
+        "supplementary_stride": 66,
+        "supplementary_max_units": 28,
+        "bitmaps": {
+          "final_first_index": 1790,
+          "final_table": 3613644,
+          "last_index": 1790,
+          "last_record": 3613644,
+          "layout": {
+            "data_bytes": 4,
+            "data_offset": 8,
+            "height_bytes": 2,
+            "height_offset": 2,
+            "kind_bytes": 4,
+            "kind_offset": 4,
+            "width_bytes": 2,
+            "width_offset": 0
+          },
+          "stride": 12,
+          "table": 2341648
+        },
+        "glyphs": {
+          "registry_address": 28616060,
+          "record_size": 24,
+          "icon_index": 7,
+          "data_address_offset": 8,
+          "data_size_offset": 12
+        }
+      }
+    }
+  },
+  "layouts": {
+    "profiles": {
+      "x70-110-rec-usb": {
+        "fixture_layouts": {
+          "status": "Existing X70 module contracts retained; address extraction proceeds in steps4/5/9"
+        },
+        "control_bus_tables_id": "control-bus-x70-110",
+        "usb_interrupt_tables": [
+          {
+            "name": "irq",
+            "address": 11448480,
+            "size": 12,
+            "sha256": "5cc548bd54d16b6bd80ce6376a79b9ccbc8a7b17e379bcab9c9b58e7f1ebcbb1",
+            "sampling": "immutable-source"
+          },
+          {
+            "name": "dma_irq",
+            "address": 11449140,
+            "size": 12,
+            "sha256": "879883a19c7732f9ec2115a2a01006f101c4762956464fd7107bc25166125600",
+            "sampling": "immutable-source"
+          }
+        ],
+        "reset_release": {
+          "register": 4294656204,
+          "mask": 16777216,
+          "source": 120,
+          "target": 1073676288
+        }
+      },
+      "x70-110": {
+        "fixture_layouts": {
+          "status": "Existing X70 module contracts retained; address extraction proceeds in steps4/5/9"
+        },
+        "persistent_inputs": {
+          "geometry": {
+            "bytes": 134217728,
+            "page_bytes": 2048,
+            "pages_per_block": 64,
+            "spare_bytes": 512
+          },
+          "assets": {
+            "bank0_captured": {
+              "file_offset": 0,
+              "bytes": 5242880,
+              "sha256": "e09bbebcfcb24cf381b257150b276e5eca0812649101d4609d5425b684399090",
+              "normalized_sha256": "e09bbebcfcb24cf381b257150b276e5eca0812649101d4609d5425b684399090",
+              "patches": []
+            },
+            "bank0_browser": {
+              "file_offset": 0,
+              "bytes": 5242880,
+              "sha256": "e09bbebcfcb24cf381b257150b276e5eca0812649101d4609d5425b684399090",
+              "normalized_sha256": "58919ae3ea385eef12f87daf4e926cefd95e0425f845025090e74a83c5afcad7",
+              "patches": [
+                {
+                  "offset": 38681,
+                  "bytes": [
+                    176,
+                    184,
+                    200,
+                    0,
+                    202,
+                    254
+                  ]
+                },
+                {
+                  "offset": 38722,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32
+                  ]
+                }
+              ]
+            },
+            "bank1_captured": {
+              "file_offset": 0,
+              "bytes": 131072,
+              "sha256": "b5a41c3758763bbec72769fab4a2533bf2db0b6312d93d25a695f9e4b9e02260",
+              "normalized_sha256": "b5a41c3758763bbec72769fab4a2533bf2db0b6312d93d25a695f9e4b9e02260",
+              "patches": []
+            },
+            "bank1_browser": {
+              "file_offset": 0,
+              "bytes": 131072,
+              "sha256": "b5a41c3758763bbec72769fab4a2533bf2db0b6312d93d25a695f9e4b9e02260",
+              "normalized_sha256": "b5a41c3758763bbec72769fab4a2533bf2db0b6312d93d25a695f9e4b9e02260",
+              "patches": []
+            },
+            "main_captured": {
+              "file_offset": 0,
+              "bytes": 262144,
+              "sha256": "95bf825976ba3289988cdf9b41c9918a008f31e14bd03c14cf34bf94604c0b16",
+              "normalized_sha256": "95bf825976ba3289988cdf9b41c9918a008f31e14bd03c14cf34bf94604c0b16",
+              "patches": []
+            },
+            "main_browser": {
+              "file_offset": 0,
+              "bytes": 262144,
+              "sha256": "95bf825976ba3289988cdf9b41c9918a008f31e14bd03c14cf34bf94604c0b16",
+              "normalized_sha256": "e4a8a886c67746e7c17bfb08081938836791f7f565e14e2eb60efbc714756716",
+              "patches": [
+                {
+                  "offset": 720,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 4816,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 8912,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 13008,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 17104,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 21200,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 25296,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 29392,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 33488,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 37584,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 41680,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 45776,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 131792,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 135888,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 139984,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 144080,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 148176,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 152272,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 156368,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 160464,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 164560,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 168656,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 172752,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 176848,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 180944,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 185040,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 189136,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                },
+                {
+                  "offset": 193232,
+                  "bytes": [
+                    70,
+                    85,
+                    74,
+                    73,
+                    70,
+                    73,
+                    76,
+                    77,
+                    45,
+                    88,
+                    55,
+                    48,
+                    45,
+                    67,
+                    65,
+                    70,
+                    69
+                  ]
+                }
+              ]
+            },
+            "custom_captured": {
+              "file_offset": 0,
+              "bytes": 262144,
+              "sha256": "62aba5db73b7e084b601e0d85be1cdfb9c801b87450e5a840347b2f56a106203",
+              "normalized_sha256": "62aba5db73b7e084b601e0d85be1cdfb9c801b87450e5a840347b2f56a106203",
+              "patches": []
+            },
+            "custom_browser": {
+              "file_offset": 0,
+              "bytes": 262144,
+              "sha256": "62aba5db73b7e084b601e0d85be1cdfb9c801b87450e5a840347b2f56a106203",
+              "normalized_sha256": "62aba5db73b7e084b601e0d85be1cdfb9c801b87450e5a840347b2f56a106203",
+              "patches": []
+            }
+          },
+          "sets": {
+            "erased": {
+              "placements": [],
+              "append": null,
+              "mcu_packet": null
+            },
+            "captured": {
+              "placements": [
+                {
+                  "asset": "bank0_captured",
+                  "source_offset": 0,
+                  "bytes": 5242880,
+                  "physical_offset": 122028032,
+                  "managed_index": 41
+                },
+                {
+                  "asset": "bank1_captured",
+                  "source_offset": 0,
+                  "bytes": 131072,
+                  "physical_offset": 127270912,
+                  "managed_index": 81
+                }
+              ],
+              "append": null,
+              "mcu_packet": null
+            },
+            "captured_restored": {
+              "placements": [
+                {
+                  "asset": "bank0_captured",
+                  "source_offset": 0,
+                  "bytes": 5242880,
+                  "physical_offset": 122028032,
+                  "managed_index": 41
+                },
+                {
+                  "asset": "bank1_captured",
+                  "source_offset": 0,
+                  "bytes": 131072,
+                  "physical_offset": 127270912,
+                  "managed_index": 81
+                },
+                {
+                  "asset": "main_captured",
+                  "source_offset": 0,
+                  "bytes": 131072,
+                  "physical_offset": 127926272,
+                  "managed_index": 86
+                },
+                {
+                  "asset": "main_captured",
+                  "source_offset": 131072,
+                  "bytes": 131072,
+                  "physical_offset": 128057344,
+                  "managed_index": 87
+                },
+                {
+                  "asset": "custom_captured",
+                  "source_offset": 0,
+                  "bytes": 131072,
+                  "physical_offset": 128319488,
+                  "managed_index": 89
+                },
+                {
+                  "asset": "custom_captured",
+                  "source_offset": 131072,
+                  "bytes": 131072,
+                  "physical_offset": 128188416,
+                  "managed_index": 88
+                }
+              ],
+              "append": null,
+              "mcu_packet": {
+                "kind": "bytes",
+                "bytes": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  208,
+                  7,
+                  57,
+                  255,
+                  0,
+                  128,
+                  0,
+                  7,
+                  0,
+                  0,
+                  170,
+                  192
+                ]
+              }
+            },
+            "browser": {
+              "placements": [
+                {
+                  "asset": "bank0_browser",
+                  "source_offset": 0,
+                  "bytes": 5242880,
+                  "physical_offset": 122028032,
+                  "managed_index": 41
+                },
+                {
+                  "asset": "bank1_browser",
+                  "source_offset": 0,
+                  "bytes": 131072,
+                  "physical_offset": 127270912,
+                  "managed_index": 81
+                }
+              ],
+              "append": null,
+              "mcu_packet": null
+            },
+            "browser_restored": {
+              "placements": [
+                {
+                  "asset": "bank0_browser",
+                  "source_offset": 0,
+                  "bytes": 5242880,
+                  "physical_offset": 122028032,
+                  "managed_index": 41
+                },
+                {
+                  "asset": "bank1_browser",
+                  "source_offset": 0,
+                  "bytes": 131072,
+                  "physical_offset": 127270912,
+                  "managed_index": 81
+                },
+                {
+                  "asset": "main_browser",
+                  "source_offset": 0,
+                  "bytes": 131072,
+                  "physical_offset": 127926272,
+                  "managed_index": 86
+                },
+                {
+                  "asset": "main_browser",
+                  "source_offset": 131072,
+                  "bytes": 131072,
+                  "physical_offset": 128057344,
+                  "managed_index": 87
+                },
+                {
+                  "asset": "custom_browser",
+                  "source_offset": 0,
+                  "bytes": 131072,
+                  "physical_offset": 128319488,
+                  "managed_index": 89
+                },
+                {
+                  "asset": "custom_browser",
+                  "source_offset": 131072,
+                  "bytes": 131072,
+                  "physical_offset": 128188416,
+                  "managed_index": 88
+                }
+              ],
+              "append": null,
+              "mcu_packet": {
+                "kind": "bytes",
+                "bytes": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  208,
+                  7,
+                  57,
+                  255,
+                  0,
+                  128,
+                  0,
+                  7,
+                  0,
+                  0,
+                  170,
+                  192
+                ]
+              }
+            }
+          }
+        },
+        "sdio_inputs": {
+          "firmware_bytes": 136640,
+          "mac_address": [
+            176,
+            184,
+            200,
+            0,
+            202,
+            254
+          ],
+          "ssid": "FUJIFILM-X70-CAFE"
+        },
+        "browser_configuration_id": "x70-110-browser-camera",
+        "hdmi_configuration_id": "x70-110-connected-hdmi",
+        "reset_release": {
+          "register": 4294656204,
+          "mask": 16777216,
+          "source": 120,
+          "target": 1073676288
+        }
+      }
+    },
+    "views": {
+      "control-bus-x70-110": {
+        "kind": "control_bus_tables",
+        "data": {
+          "descriptors": {
+            "address": 11452536,
+            "size": 120,
+            "count": 10,
+            "sha256": "52a3fa4847f2e027d9091ddd549f171361aeed488d330de51758eb5b9570bf6a",
+            "sampling": "immutable-source",
+            "format": "little-endian address/polarity-selector/channel u32"
+          },
+          "polarity_words": {
+            "address": 11488036,
+            "size": 8,
+            "sha256": "01acecb507abfe1a354aa8064f4af5d3f1acd019e37db3c11c97523b71c76e9d",
+            "sampling": "transaction"
+          },
+          "limits": []
+        }
+      }
+    }
+  }
+}

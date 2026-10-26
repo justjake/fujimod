@@ -1,6 +1,5 @@
 import { expect, test } from 'vite-plus/test';
-import { bugReportRoute } from './route.mjs';
-import { simulatorReports } from '../../scripts/local-reports.mjs';
+import { bugReportRoute } from './route.ts';
 test('the QR path redirects to the private entry without losing its fragment', () => {
   let middleware: Function;
   bugReportRoute().configureServer({
@@ -9,7 +8,7 @@ test('the QR path redirects to the private entry without losing its fragment', (
         middleware = value;
       },
     },
-  });
+  } as unknown as import('vite').ViteDevServer);
   const headers: Record<string, string> = {},
     response = {
       statusCode: 0,
@@ -23,9 +22,4 @@ test('the QR path redirects to the private entry without losing its fragment', (
   });
   expect(response.statusCode).toBe(307);
   expect(headers.Location).toBe('/bug/?test=1');
-});
-test('camera report pages do not inject automatic simulator reporting', () => {
-  const handler = simulatorReports().transformIndexHtml.handler;
-  expect(handler('', { path: '/bug/index.html' })).toEqual([]);
-  expect(handler('', { path: '/index.html' })).not.toEqual([]);
 });

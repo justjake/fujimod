@@ -1,0 +1,309 @@
+#camera-table {
+  /* Dark categorical slots 5 and 1–4, in bar order, validated for color-vision deficiency on black. */
+  --phase-research: #d55181;
+  --phase-emulator: #3987e5;
+  --phase-camera: #d95926;
+  --phase-mods: #199e70;
+  --phase-sd-card: #c98500;
+  /* The outline around bodies a contributor owns. */
+  --owned-outline: rgb(255 255 255 / 30%);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
+  gap: 32px 40px;
+}
+#camera-table .cameras-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: -12px;
+}
+#camera-table .legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  color: var(--dim);
+}
+#camera-table .legend li {
+  white-space: nowrap;
+}
+#camera-table .legend li::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+  background: var(--c);
+}
+#camera-table .legend li.owned::before {
+  width: 12px;
+  height: 6px;
+  border-radius: 3px;
+  background: none;
+  box-shadow: 0 0 0 1px var(--owned-outline) inset;
+}
+#camera-table .gen h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+#camera-table .gen h4 span {
+  color: var(--dim);
+  font-weight: 400;
+  margin-left: 6px;
+}
+#camera-table .col .gen + .gen {
+  margin-top: 28px;
+}
+.progress-row {
+  padding-top: 6px;
+}
+.progress-row .progress-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.progress-row .name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.progress-row .version {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+/* The same 4px track as the emulator's loading bar. */
+.progress-row .bar {
+  display: flex;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* Bodies a contributor owns: a 1px outline 2px outside the track, following its rounded ends. */
+.progress-row.owned .bar {
+  position: relative;
+}
+.progress-row.owned .bar::after {
+  content: '';
+  position: absolute;
+  inset: 4px -3px auto;
+  height: 10px;
+  border: 1px solid var(--owned-outline);
+  border-radius: 5px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.progress-row .phase {
+  position: relative;
+  flex: var(--w) 1 0;
+  padding: 7px 0 9px; /* hit target taller than the mark */
+  outline: none;
+}
+.progress-row .track {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  background: rgb(118 118 128 / 24%);
+  overflow: hidden;
+  transition: opacity 120ms;
+}
+/* A segment of separately graded features: one cell each, filled by its share. */
+.progress-row .track.cells {
+  display: flex;
+  gap: 1px;
+  background: none;
+}
+.progress-row .cell {
+  position: relative;
+  flex: 1 1 0;
+  background: rgb(118 118 128 / 24%);
+  overflow: hidden;
+}
+.progress-row .cell::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--p);
+  background: var(--c);
+  transition: filter 120ms;
+}
+.progress-row .phase.open .cell::after {
+  filter: brightness(1.2);
+}
+.progress-row .fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--p);
+  background: var(--c);
+  transition: filter 120ms;
+}
+.progress-row .bar:has(.open) .track {
+  opacity: 0.45;
+}
+.progress-row .phase.open .track {
+  opacity: 1;
+}
+.progress-row .phase.open .fill {
+  filter: brightness(1.2);
+}
+.progress-row .phase:focus-visible .track {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.progress-row .tip {
+  position: absolute;
+  z-index: 2;
+  bottom: calc(100% + 22px); /* clears this row's name and status */
+  left: 50%;
+  width: 240px;
+  translate: -50% 0;
+  padding: 10px 12px 11px;
+  border-radius: 12px;
+  background: rgb(44 44 46 / 97%);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow:
+    0 0 0 0.5px rgb(255 255 255 / 12%) inset,
+    0 10px 30px rgb(0 0 0 / 55%);
+  font-size: 12px;
+  line-height: 1.45;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  transition:
+    opacity 140ms,
+    transform 140ms,
+    visibility 0s 140ms;
+}
+.progress-row .tip::after {
+  /* keeps the hover alive while the pointer crosses to the tip's links */
+  content: '';
+  position: absolute;
+  inset: 100% 0 auto;
+  height: 26px;
+}
+.progress-row .phase:first-child .tip {
+  left: 0;
+  translate: 0 0;
+}
+.progress-row .phase:last-child .tip {
+  left: auto;
+  right: 0;
+  translate: 0 0;
+}
+.progress-row .phase.open .tip {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    opacity 140ms,
+    transform 140ms;
+}
+.progress-row .tip .tip-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dim);
+  font-size: 11px;
+}
+.progress-row .tip .tip-label::before {
+  content: '';
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--c);
+}
+.progress-row .tip .tip-value {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 1px 0 6px;
+  font-variant-numeric: tabular-nums;
+}
+.progress-row .tip ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.progress-row .tip li {
+  display: flex;
+  gap: 7px;
+  color: #d1d1d6;
+}
+.progress-row .tip li::before {
+  content: '✓';
+  width: 10px;
+  font-weight: 700;
+  color: var(--c);
+}
+.progress-row .tip .step-detail {
+  margin-left: auto;
+  padding-left: 10px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.progress-row .tip li.partial.todo::before {
+  content: '◐';
+  font-weight: 400;
+  color: var(--c);
+}
+.progress-row .tip li.todo {
+  color: var(--dim);
+}
+.progress-row .tip li.todo::before {
+  content: '○';
+  font-weight: 400;
+  color: var(--faint);
+}
+.progress-row .tip .owners {
+  margin-top: 8px;
+  color: var(--dim);
+}
+.progress-row .tip .owners a {
+  color: #d1d1d6;
+}
+.progress-row .tip .help {
+  display: block;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 0.5px solid rgb(255 255 255 / 14%);
+  color: #64a8ff;
+  text-decoration: none;
+  font-weight: 500;
+}
+.progress-row .tip .help::after {
+  content: ' ›';
+}
+
+#camera-table .rest {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #6e6e73;
+}
+#camera-table .rest .owned {
+  padding: 0 3px;
+  border-radius: 4px;
+  outline: 1px solid var(--owned-outline);
+  outline-offset: 2px;
+}
+#camera-table .rest b {
+  display: block;
+  font-weight: 600;
+  color: var(--faint);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+@media (max-width: 820px) {
+  #camera-table {
+    grid-template-columns: 1fr;
+  }
+}

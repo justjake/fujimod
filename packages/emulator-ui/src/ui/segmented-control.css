@@ -1,0 +1,42 @@
+/* The camera viewer's choice control: joined buttons in a recessed track. */
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid #3a3c42;
+  border-radius: 9px;
+  background: #101215;
+}
+.segmented .segmented-option {
+  flex: 1;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #d3d3d7;
+  font:
+    500 11px/1.1 system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+.segmented .segmented-option:hover:not(:disabled),
+.segmented .segmented-option.selected {
+  color: #17181b;
+  background: #d1d1d5;
+  border-color: #e1e1e5;
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 50%),
+    0 1px 3px rgb(0 0 0 / 25%);
+}
+.segmented .segmented-option.selected:hover {
+  background: #e1e1e5;
+}
+.segmented .segmented-option:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.segmented .segmented-option:focus-visible {
+  outline: 2px solid #e8e8ed;
+  outline-offset: 3px;
+}

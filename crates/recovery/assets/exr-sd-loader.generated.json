@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "image_bytes": 1612,
+  "stage": {
+    "offset": 0,
+    "size": 388,
+    "config": 368,
+    "sram": 4293920768,
+    "sram_size": 324,
+    "stack_bottom": 4293922816,
+    "stack_top": 4293926904
+  },
+  "firmware": {
+    "address": 8192,
+    "offset": 388,
+    "size": 1224,
+    "symbols": {
+      "exr_firmware_config": 680,
+      "exr_firmware_indexed": 72,
+      "exr_firmware_indexed3": 644,
+      "exr_firmware_indexed4": 624
+    }
+  }
+}

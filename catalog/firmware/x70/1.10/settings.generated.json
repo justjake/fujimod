@@ -1,0 +1,2155 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "x70-110-settings",
+  "firmware_id": "x70-110",
+  "source": {
+    "flash_offset": 1441792,
+    "address": 9044992,
+    "size": 3409248,
+    "sha256": "9923d542f84f07196f0acdae181f0d536578c3f3f0419dba5960d9b055925acb"
+  },
+  "bank": {
+    "descriptor": {
+      "address": 11447184,
+      "size": 12,
+      "sha256": "324cd67e633dc7d4f9fb8de449632dd2938ffe7d7159d77fee4c462131eb34e2"
+    },
+    "kind": 2,
+    "blocks": 40,
+    "first_block": 931,
+    "logical_first": 41,
+    "bytes": 4325376
+  },
+  "defaults": {
+    "address": 11446496,
+    "size": 536,
+    "sha256": "0737d74d430a8168ccb96a2179e7809d032a9bf492181519d94c95c2ef0feee5"
+  },
+  "fields": [
+    {
+      "offset": 256,
+      "bytes": [
+        203,
+        4
+      ],
+      "basis": "Normal USB vendor ID."
+    },
+    {
+      "offset": 318,
+      "bytes": [
+        186,
+        2
+      ],
+      "basis": "Normal USB product ID."
+    },
+    {
+      "offset": 348,
+      "bytes": [
+        88,
+        55,
+        48,
+        0
+      ],
+      "basis": "Body product name."
+    },
+    {
+      "offset": 514,
+      "bytes": [
+        85,
+        170
+      ],
+      "basis": "Settings bank signature."
+    },
+    {
+      "offset": 516,
+      "bytes": [
+        1,
+        57
+      ],
+      "basis": "Internal version."
+    },
+    {
+      "offset": 1036,
+      "bytes": [
+        2,
+        3,
+        88,
+        232,
+        2,
+        3,
+        88,
+        232,
+        2,
+        3,
+        88,
+        232,
+        2,
+        3,
+        88,
+        232
+      ],
+      "basis": "Declared synthetic panel timing counters: stock display_engine_load_configuration (0x960824) reads four pairs through table 0xb643b4 at 0x40c..0x41b. Each pair is 1000 by 600, within the 12-bit register fields and positive so configured-clocked phases have a complete counter input. Not measured panel timing."
+    },
+    {
+      "offset": 4174,
+      "bytes": [
+        1
+      ],
+      "basis": "Declared synthetic display timing control bit: stock 0x960824 maps bit 0 of key 0x104e to timing control bit 16. Not a measured panel setting."
+    },
+    {
+      "offset": 4536,
+      "bytes": [
+        229,
+        37,
+        0,
+        255,
+        255,
+        255,
+        0,
+        0,
+        0,
+        0,
+        88,
+        2,
+        82,
+        3,
+        17,
+        0,
+        12,
+        32,
+        57,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "basis": "Explicit synthetic proximity-controller configuration using the fallback byte column of the checked 27-row stock table 0xb1e104. Getter 0x96aa2c normally reads these configuration offsets. Includes the supported E5 command; zeros are not valid command bytes. These are declared external inputs, not an executed defaults routine. Shared with the X-E2S family; the X70 bank carries the same field."
+    },
+    {
+      "offset": 14294,
+      "bytes": [
+        100,
+        0,
+        50,
+        0,
+        200,
+        0,
+        150,
+        0,
+        44,
+        1,
+        250,
+        0,
+        144,
+        1,
+        94,
+        1,
+        244,
+        1,
+        194,
+        1,
+        88,
+        2,
+        38,
+        2,
+        188,
+        2,
+        138,
+        2,
+        32,
+        3,
+        238,
+        2,
+        132,
+        3,
+        82,
+        3
+      ],
+      "basis": "Declared synthetic ADC8 key ladder intervals: nine 28-byte stock records at 0xb636b0..0xb63790 use U16 upper/lower tags 0x37d6..0x37f8. Intervals 50..100 through 850..900 are disjoint and exclude released level 1023. Not measured resistor calibration."
+    },
+    {
+      "offset": 38929,
+      "bytes": [
+        1
+      ],
+      "basis": "Explicit synthetic active normal-read accelerometer setting; stock 0x9510a4 masks this configuration byte with 0x1f and writes sensor CTRL_REG1 (0x2a). No fast-read mode or physical calibration claim. Shared with the X-E2S family; the X70 bank carries the same field."
+    },
+    {
+      "offset": 116736,
+      "bytes": [
+        0,
+        250,
+        72,
+        238,
+        144,
+        226,
+        216,
+        214,
+        32,
+        203,
+        104,
+        191,
+        176,
+        179,
+        248,
+        167,
+        64,
+        156,
+        136,
+        144,
+        208,
+        132,
+        24,
+        121,
+        96,
+        109,
+        168,
+        97,
+        240,
+        85,
+        56,
+        74,
+        128,
+        62,
+        200,
+        50,
+        16,
+        39
+      ],
+      "basis": "Declared synthetic focus conversion knots: X70 0x9e9108 reads 19 little-endian U16 divisors at 0x1c800 and computes 16777215/value after its fixed first coordinate 0x43800080. Positive decreasing divisors keep spline coordinates strictly increasing; zero divisors enter the stock fatal loop at 0x9c02a8. Not measured lens calibration."
+    },
+    {
+      "offset": 132864,
+      "bytes": [
+        0,
+        250,
+        72,
+        238,
+        144,
+        226,
+        216,
+        214,
+        32,
+        203,
+        104,
+        191,
+        176,
+        179,
+        248,
+        167,
+        64,
+        156,
+        136,
+        144,
+        208,
+        132,
+        24,
+        121,
+        96,
+        109,
+        168,
+        97,
+        240,
+        85,
+        56,
+        74,
+        128,
+        62,
+        200,
+        50,
+        16,
+        39
+      ],
+      "basis": "Alternate configuration bank for logical 0x1c800: stock mapper 0x94522c adds 0x3f00 for selection 1. Same declared synthetic focus knots as the base bank; not measured lens calibration."
+    }
+  ],
+  "profile": {
+    "header": {
+      "address": 11488084,
+      "size": 16,
+      "sha256": "70f7e6411d8c85ecb6bb240a79c2e3202bc217ab4d531abd0c207e754fd5f69f"
+    },
+    "records": {
+      "main": {
+        "block": 976,
+        "managed_index": 86,
+        "bytes": 4096,
+        "defaults": {
+          "address": 12450000,
+          "size": 3700,
+          "sha256": "fe77e90d0dcdc6c4d9266883aae904dc59b333e1b96ca2c11de083a206885f63"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 3964,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Main record marker after the sequence word."
+          },
+          {
+            "offset": 3960,
+            "bytes": [
+              1,
+              16
+            ],
+            "basis": "Stock profile_prepare_storage copies version bytes 0xaf4aa8/0xaf4aaa into main +0xf78/+0xf79."
+          },
+          {
+            "offset": 132,
+            "bytes": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ],
+            "basis": "Erased main record bytes before the pages."
+          }
+        ]
+      },
+      "custom": {
+        "block": 978,
+        "managed_index": 88,
+        "bytes": 4096,
+        "defaults": {
+          "address": 11488100,
+          "size": 1792,
+          "sha256": "44ede3d57725dc03ef0812e021ca0c30fa646fd44e90e84ee1a6fbc529db917e"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 3964,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              0,
+              0
+            ],
+            "basis": "Stock custom-record header bytes; the main-record marker is not used here."
+          }
+        ]
+      }
+    },
+    "derived_fields": [
+      {
+        "store": "main",
+        "offset": 3962,
+        "bytes": 2,
+        "source": {
+          "kind": "fill",
+          "value": 255
+        },
+        "basis": "Main startup buffer begins erased; bytes after the two writer version bytes stay erased."
+      },
+      {
+        "store": "main",
+        "offset": 393,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 38755
+        },
+        "basis": "power_profiles_initialize copies the bank wireless-name length into profile +0x95."
+      },
+      {
+        "store": "main",
+        "offset": 720,
+        "bytes": 32,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 38722
+        },
+        "basis": "power_profiles_initialize copies the bank wireless name into profile +0x1dc."
+      },
+      {
+        "store": "main",
+        "offset": 712,
+        "bytes": 4,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 339
+        },
+        "basis": "power_profiles_initialize copies the bank filename prefix into profile +0x1d4."
+      },
+      {
+        "store": "main",
+        "offset": 716,
+        "bytes": 4,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 331
+        },
+        "basis": "power_profiles_initialize copies the bank directory prefix into profile +0x1d8."
+      },
+      {
+        "store": "main",
+        "offset": 705,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 523,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 1
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Japanese factory language enables the stock optional-profile flag; the later English selection changes only language."
+      },
+      {
+        "store": "main",
+        "offset": 348,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 534,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock bank flag 0x216 becomes a Boolean in profile +0x68."
+      },
+      {
+        "store": "custom",
+        "offset": 293,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the inverted bank 0x218 flag from metadata_pages_initialize."
+      },
+      {
+        "store": "custom",
+        "offset": 549,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the inverted bank 0x218 flag from metadata_pages_initialize."
+      },
+      {
+        "store": "custom",
+        "offset": 805,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the inverted bank 0x218 flag from metadata_pages_initialize."
+      },
+      {
+        "store": "custom",
+        "offset": 1061,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the inverted bank 0x218 flag from metadata_pages_initialize."
+      },
+      {
+        "store": "custom",
+        "offset": 1317,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the inverted bank 0x218 flag from metadata_pages_initialize."
+      },
+      {
+        "store": "custom",
+        "offset": 1573,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the inverted bank 0x218 flag from metadata_pages_initialize."
+      },
+      {
+        "store": "custom",
+        "offset": 1829,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the inverted bank 0x218 flag from metadata_pages_initialize."
+      },
+      {
+        "store": "main",
+        "offset": 342,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 533,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock profile +0x62 takes bank date-order values 1 or 2, otherwise zero."
+      },
+      {
+        "store": "main",
+        "offset": 453,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Stock profile +0xd1 encodes the bank image-size mode."
+      },
+      {
+        "store": "main",
+        "offset": 454,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Stock profile +0xd2 takes the bank orientation."
+      },
+      {
+        "store": "main",
+        "offset": 455,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Stock profile +0xd3 inverts bank flag 0x218."
+      },
+      {
+        "store": "custom",
+        "offset": 291,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank image-size mapping."
+      },
+      {
+        "store": "custom",
+        "offset": 292,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank orientation."
+      },
+      {
+        "store": "custom",
+        "offset": 547,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank image-size mapping."
+      },
+      {
+        "store": "custom",
+        "offset": 548,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank orientation."
+      },
+      {
+        "store": "custom",
+        "offset": 803,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank image-size mapping."
+      },
+      {
+        "store": "custom",
+        "offset": 804,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank orientation."
+      },
+      {
+        "store": "custom",
+        "offset": 1059,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank image-size mapping."
+      },
+      {
+        "store": "custom",
+        "offset": 1060,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank orientation."
+      },
+      {
+        "store": "custom",
+        "offset": 1315,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank image-size mapping."
+      },
+      {
+        "store": "custom",
+        "offset": 1316,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank orientation."
+      },
+      {
+        "store": "custom",
+        "offset": 1571,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank image-size mapping."
+      },
+      {
+        "store": "custom",
+        "offset": 1572,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank orientation."
+      },
+      {
+        "store": "custom",
+        "offset": 1827,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank image-size mapping."
+      },
+      {
+        "store": "custom",
+        "offset": 1828,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank orientation."
+      }
+    ]
+  },
+  "settings": {
+    "debug": {
+      "store": "bank",
+      "offset": 247,
+      "values": {
+        "off": [
+          0
+        ],
+        "on": [
+          1
+        ]
+      }
+    },
+    "language": {
+      "store": "main",
+      "offset": 340,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    },
+    "setup": {
+      "store": "header",
+      "offset": 11,
+      "values": {
+        "done": [
+          7
+        ]
+      }
+    },
+    "date_order": {
+      "store": "main",
+      "offset": 342,
+      "values": {
+        "us": [
+          1
+        ]
+      }
+    },
+    "white_balance": {
+      "store": "main",
+      "offset": 430,
+      "values": {
+        "auto": [
+          0
+        ],
+        "daylight": [
+          1
+        ]
+      }
+    },
+    "dynamic_range": {
+      "store": "main",
+      "offset": 468,
+      "values": {
+        "dr100": [
+          1
+        ],
+        "dr200": [
+          2
+        ],
+        "dr400": [
+          3
+        ]
+      }
+    },
+    "film_simulation": {
+      "store": "main",
+      "offset": 461,
+      "values": {
+        "0": [
+          0
+        ],
+        "1": [
+          1
+        ],
+        "2": [
+          2
+        ],
+        "3": [
+          3
+        ],
+        "4": [
+          4
+        ],
+        "5": [
+          5
+        ],
+        "6": [
+          6
+        ],
+        "7": [
+          7
+        ],
+        "8": [
+          8
+        ],
+        "9": [
+          9
+        ],
+        "10": [
+          10
+        ],
+        "11": [
+          11
+        ],
+        "12": [
+          12
+        ],
+        "13": [
+          13
+        ]
+      }
+    },
+    "color": {
+      "store": "main",
+      "offset": 469,
+      "values": {
+        "0": [
+          0
+        ],
+        "2": [
+          3
+        ],
+        "3": [
+          4
+        ],
+        "4": [
+          5
+        ],
+        "5": [
+          6
+        ]
+      }
+    },
+    "sharpness": {
+      "store": "main",
+      "offset": 471,
+      "values": {
+        "0": [
+          4
+        ],
+        "1": [
+          3
+        ],
+        "2": [
+          2
+        ],
+        "3": [
+          1
+        ],
+        "4": [
+          0
+        ]
+      }
+    },
+    "highlight_tone": {
+      "store": "main",
+      "offset": 472,
+      "values": {
+        "0": [
+          0
+        ],
+        "1": [
+          1
+        ],
+        "2": [
+          2
+        ],
+        "3": [
+          3
+        ],
+        "4": [
+          4
+        ]
+      }
+    },
+    "shadow_tone": {
+      "store": "main",
+      "offset": 473,
+      "values": {
+        "0": [
+          0
+        ],
+        "1": [
+          1
+        ],
+        "2": [
+          2
+        ],
+        "3": [
+          3
+        ],
+        "4": [
+          4
+        ]
+      }
+    },
+    "noise_reduction": {
+      "store": "main",
+      "offset": 452,
+      "values": {
+        "0": [
+          0
+        ],
+        "1": [
+          1
+        ],
+        "2": [
+          2
+        ],
+        "3": [
+          3
+        ],
+        "4": [
+          4
+        ]
+      }
+    },
+    "focus_mode": {
+      "store": "main",
+      "offset": 476,
+      "values": {
+        "0": [
+          5
+        ],
+        "1": [
+          0
+        ],
+        "2": [
+          2
+        ],
+        "3": [
+          3
+        ],
+        "4": [
+          1
+        ],
+        "8": [
+          4
+        ],
+        "9": [
+          6
+        ]
+      }
+    },
+    "iso": {
+      "store": "main",
+      "offset": 495,
+      "values": {
+        "3": [
+          6
+        ],
+        "4": [
+          7
+        ],
+        "5": [
+          8
+        ],
+        "7": [
+          9
+        ],
+        "8": [
+          10
+        ],
+        "10": [
+          11
+        ],
+        "11": [
+          12
+        ],
+        "12": [
+          13
+        ],
+        "13": [
+          14
+        ],
+        "14": [
+          15
+        ],
+        "15": [
+          16
+        ],
+        "16": [
+          17
+        ],
+        "17": [
+          18
+        ],
+        "18": [
+          19
+        ],
+        "19": [
+          20
+        ],
+        "20": [
+          21
+        ],
+        "21": [
+          22
+        ],
+        "22": [
+          23
+        ],
+        "23": [
+          24
+        ],
+        "24": [
+          25
+        ],
+        "25": [
+          26
+        ],
+        "26": [
+          27
+        ],
+        "27": [
+          28
+        ],
+        "28": [
+          29
+        ],
+        "29": [
+          30
+        ]
+      }
+    },
+    "iso_auto1_base": {
+      "store": "main",
+      "offset": 497,
+      "values": {
+        "8": [
+          16
+        ],
+        "10": [
+          15
+        ],
+        "11": [
+          14
+        ],
+        "12": [
+          13
+        ],
+        "13": [
+          12
+        ],
+        "14": [
+          11
+        ],
+        "15": [
+          10
+        ],
+        "16": [
+          9
+        ],
+        "17": [
+          8
+        ],
+        "18": [
+          7
+        ],
+        "19": [
+          6
+        ],
+        "20": [
+          5
+        ],
+        "21": [
+          4
+        ],
+        "22": [
+          3
+        ],
+        "23": [
+          2
+        ],
+        "24": [
+          1
+        ],
+        "25": [
+          0
+        ]
+      }
+    },
+    "iso_auto2_base": {
+      "store": "main",
+      "offset": 498,
+      "values": {
+        "8": [
+          16
+        ],
+        "10": [
+          15
+        ],
+        "11": [
+          14
+        ],
+        "12": [
+          13
+        ],
+        "13": [
+          12
+        ],
+        "14": [
+          11
+        ],
+        "15": [
+          10
+        ],
+        "16": [
+          9
+        ],
+        "17": [
+          8
+        ],
+        "18": [
+          7
+        ],
+        "19": [
+          6
+        ],
+        "20": [
+          5
+        ],
+        "21": [
+          4
+        ],
+        "22": [
+          3
+        ],
+        "23": [
+          2
+        ],
+        "24": [
+          1
+        ],
+        "25": [
+          0
+        ]
+      }
+    },
+    "iso_auto3_base": {
+      "store": "main",
+      "offset": 499,
+      "values": {
+        "8": [
+          16
+        ],
+        "10": [
+          15
+        ],
+        "11": [
+          14
+        ],
+        "12": [
+          13
+        ],
+        "13": [
+          12
+        ],
+        "14": [
+          11
+        ],
+        "15": [
+          10
+        ],
+        "16": [
+          9
+        ],
+        "17": [
+          8
+        ],
+        "18": [
+          7
+        ],
+        "19": [
+          6
+        ],
+        "20": [
+          5
+        ],
+        "21": [
+          4
+        ],
+        "22": [
+          3
+        ],
+        "23": [
+          2
+        ],
+        "24": [
+          1
+        ],
+        "25": [
+          0
+        ]
+      }
+    },
+    "iso_auto1_max": {
+      "store": "main",
+      "offset": 500,
+      "values": {
+        "1": [
+          3
+        ],
+        "2": [
+          2
+        ],
+        "3": [
+          1
+        ],
+        "4": [
+          0
+        ],
+        "5": [
+          4
+        ]
+      }
+    },
+    "iso_auto2_max": {
+      "store": "main",
+      "offset": 501,
+      "values": {
+        "1": [
+          3
+        ],
+        "2": [
+          2
+        ],
+        "3": [
+          1
+        ],
+        "4": [
+          0
+        ],
+        "5": [
+          4
+        ]
+      }
+    },
+    "iso_auto3_max": {
+      "store": "main",
+      "offset": 502,
+      "values": {
+        "1": [
+          3
+        ],
+        "2": [
+          2
+        ],
+        "3": [
+          1
+        ],
+        "4": [
+          0
+        ],
+        "5": [
+          4
+        ]
+      }
+    },
+    "iso_auto1_minimum_shutter": {
+      "store": "main",
+      "offset": 503,
+      "values": {
+        "0": [
+          14
+        ],
+        "1": [
+          13
+        ],
+        "2": [
+          12
+        ],
+        "3": [
+          11
+        ],
+        "4": [
+          10
+        ],
+        "5": [
+          9
+        ],
+        "6": [
+          8
+        ],
+        "7": [
+          7
+        ],
+        "8": [
+          6
+        ],
+        "9": [
+          5
+        ],
+        "10": [
+          4
+        ],
+        "11": [
+          3
+        ],
+        "12": [
+          2
+        ],
+        "13": [
+          1
+        ],
+        "14": [
+          0
+        ]
+      }
+    },
+    "iso_auto2_minimum_shutter": {
+      "store": "main",
+      "offset": 504,
+      "values": {
+        "0": [
+          14
+        ],
+        "1": [
+          13
+        ],
+        "2": [
+          12
+        ],
+        "3": [
+          11
+        ],
+        "4": [
+          10
+        ],
+        "5": [
+          9
+        ],
+        "6": [
+          8
+        ],
+        "7": [
+          7
+        ],
+        "8": [
+          6
+        ],
+        "9": [
+          5
+        ],
+        "10": [
+          4
+        ],
+        "11": [
+          3
+        ],
+        "12": [
+          2
+        ],
+        "13": [
+          1
+        ],
+        "14": [
+          0
+        ]
+      }
+    },
+    "iso_auto3_minimum_shutter": {
+      "store": "main",
+      "offset": 505,
+      "values": {
+        "0": [
+          14
+        ],
+        "1": [
+          13
+        ],
+        "2": [
+          12
+        ],
+        "3": [
+          11
+        ],
+        "4": [
+          10
+        ],
+        "5": [
+          9
+        ],
+        "6": [
+          8
+        ],
+        "7": [
+          7
+        ],
+        "8": [
+          6
+        ],
+        "9": [
+          5
+        ],
+        "10": [
+          4
+        ],
+        "11": [
+          3
+        ],
+        "12": [
+          2
+        ],
+        "13": [
+          1
+        ],
+        "14": [
+          0
+        ]
+      }
+    },
+    "face_detection": {
+      "store": "main",
+      "offset": 642,
+      "values": {
+        "0": [
+          0
+        ],
+        "1": [
+          1
+        ]
+      }
+    },
+    "eye_af": {
+      "store": "main",
+      "offset": 643,
+      "values": {
+        "0": [
+          3
+        ],
+        "1": [
+          2
+        ],
+        "2": [
+          1
+        ],
+        "3": [
+          0
+        ]
+      }
+    }
+  },
+  "sections": [
+    {
+      "name": "configuration",
+      "offset": 0,
+      "length": {
+        "kind": "fixed",
+        "bytes": 517632
+      },
+      "basis": "initialize_cfgdata_ram reads bank 0x0-0x7e600 at boot (storage_read_split_regions); signature 55 aa at 0x202."
+    },
+    {
+      "name": "tone-curves",
+      "offset": 4063232,
+      "length": {
+        "kind": "fixed",
+        "bytes": 84992
+      },
+      "basis": "initialize_cfgdata_ram reads the two 0xa600-byte halves at 0x3e0000 and 0x3ea600; configuration_address_resolve selects between them."
+    },
+    {
+      "name": "sensor-table-1",
+      "offset": 517632,
+      "length": {
+        "kind": "counted",
+        "counts": 10464,
+        "bits": 34
+      },
+      "basis": "settings_copy_regions reads bank 0x7e600 with the length from the counts at 0x28e0."
+    },
+    {
+      "name": "sensor-table-2",
+      "offset": 3917632,
+      "length": {
+        "kind": "counted",
+        "counts": 10482,
+        "bits": 34
+      },
+      "basis": "settings_copy_regions reads bank 0x3bc740 with the length from the counts at 0x28f2."
+    },
+    {
+      "name": "sensor-table-3",
+      "offset": 1197632,
+      "length": {
+        "kind": "counted",
+        "counts": 10470,
+        "bits": 34
+      },
+      "basis": "settings_copy_regions reads bank 0x124640 with the length from the counts at 0x28e6."
+    },
+    {
+      "name": "sensor-table-4",
+      "offset": 3934632,
+      "length": {
+        "kind": "counted",
+        "counts": 10488,
+        "bits": 34
+      },
+      "basis": "settings_copy_regions reads bank 0x3c09a8 with the length from the counts at 0x28f8."
+    },
+    {
+      "name": "sensor-table-5",
+      "offset": 2897632,
+      "length": {
+        "kind": "counted",
+        "counts": 10476,
+        "bits": 34
+      },
+      "basis": "settings_copy_regions reads bank 0x2c36e0 with the length from the counts at 0x28ec."
+    },
+    {
+      "name": "sensor-table-6",
+      "offset": 3977136,
+      "length": {
+        "kind": "counted",
+        "counts": 10494,
+        "bits": 34
+      },
+      "basis": "settings_copy_regions reads bank 0x3cafb0 with the length from the counts at 0x28fe."
+    }
+  ]
+}

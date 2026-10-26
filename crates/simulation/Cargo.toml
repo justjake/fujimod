@@ -1,0 +1,66 @@
+# The Bevy simulation is its own workspace, outside the emulator's, with its own
+# lockfile and target directory.
+[workspace]
+
+[package]
+name = "fujimod-simulation"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97.1"
+repository = "https://github.com/justjake/fujimod"
+publish = false
+
+[lib]
+doctest = false
+crate-type = ["cdylib", "rlib"]
+
+[features]
+webgl2 = ["bevy/webgl2"]
+webgpu = ["bevy/webgpu"]
+
+[dependencies]
+bevy = { version = "=0.20.0", default-features = false, features = [
+  "std",
+  "async_executor",
+  "bevy_asset",
+  "bevy_log",
+  "reflect_auto_register",
+  "bevy_pbr",
+  "bevy_gltf",
+  "bevy_anti_alias",
+  "bevy_mikktspace",
+  "scene",
+  "png",
+  "jpeg",
+  "mesh_picking",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+bevy = { version = "=0.20.0", default-features = false, features = ["bevy_winit"] }
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+  "Window",
+  "Document",
+  "HtmlCanvasElement",
+  "console",
+  "CustomEvent",
+  "CustomEventInit",
+] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+bevy = { version = "=0.20.0", default-features = false, features = ["bevy_post_process"] }
+
+# The browser simulation: size-optimized, ThinLTO, stripped.
+[profile.simulation-web]
+inherits = "release"
+incremental = false
+opt-level = "s"
+codegen-units = 1
+lto = "thin"
+strip = "debuginfo"
+
+[profile.simulation-web.package."*"]
+opt-level = "s"

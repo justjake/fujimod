@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.scripts.json",
+  "include": ["tests/usb.test.ts"],
+  "exclude": []
+}
