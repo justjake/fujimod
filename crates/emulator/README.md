@@ -59,6 +59,8 @@ returns a stopped report while retaining the session for inspection. No Python
 runtime is required. The Python package exposes the same construction through
 `fujimod.emulator.Board.from_inputs`.
 
+Catalog CPU graph assembly covers sub-page peripheral spans with the processor's mapping pages and merges compatible aliases. `board::factory::Graph::into_page_granular_peripherals` exposes the same conversion for caller-built graphs. The strict bus retains exact device windows, so page coverage does not admit neighboring registers.
+
 ## Durable snapshots
 
 `session.checkpoint(None)?.export()?` returns a versioned binary archive that can

@@ -407,8 +407,7 @@ pub fn assemble_with_starts(
         peripherals,
         instructions_per_tick: fujimod_emulator_cpu::timeline::Ratio::new(numerator, denominator)?,
     };
-    graph.validate()?;
-    Ok(graph)
+    graph.into_page_granular_peripherals()
 }
 
 fn processor_model(model: Model) -> &'static str {

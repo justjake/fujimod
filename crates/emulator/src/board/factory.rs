@@ -18,6 +18,15 @@ pub struct Processor {
     pub mprofile: Option<super::mprofile::Config>,
     pub rprofile: Option<fujimod_emulator_cpu_unicorn::rprofile::core::Options>,
 }
+impl Processor {
+    fn mapping_granule(&self) -> u64 {
+        if self.model == Model::ArmV8A {
+            0x4000
+        } else {
+            0x1000
+        }
+    }
+}
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Ram {
@@ -214,20 +223,80 @@ impl Engines {
     }
 }
 impl Graph {
+    /// Compatible overlapping or adjacent aliases are merged.
+    /// Bus windows retain exact device spans.
+    pub fn into_page_granular_peripherals(mut self) -> Result<Self, String> {
+        for peripheral in &mut self.peripherals {
+            let grain = self
+                .processors
+                .get(peripheral.core)
+                .ok_or("peripheral mapping names absent processor")?
+                .mapping_granule();
+            let offset = peripheral.address % grain;
+            if peripheral.size == 0 || peripheral.physical % grain != offset {
+                return Err("peripheral mapping cannot share a CPU page offset".into());
+            }
+            let end = peripheral
+                .address
+                .checked_add(peripheral.size as u64)
+                .and_then(|end| end.checked_add(grain - 1))
+                .ok_or("peripheral aperture overflow")?
+                & !(grain - 1);
+            peripheral.address -= offset;
+            peripheral.physical -= offset;
+            peripheral.size = usize::try_from(end - peripheral.address)
+                .map_err(|_| "peripheral aperture exceeds host address space")?;
+        }
+        self.peripherals
+            .sort_unstable_by_key(|p| (p.core, p.address));
+        let mut retained = 0;
+        for index in 0..self.peripherals.len() {
+            if retained > 0 {
+                let previous = &self.peripherals[retained - 1];
+                let current = &self.peripherals[index];
+                let previous_end = previous
+                    .address
+                    .checked_add(previous.size as u64)
+                    .ok_or("peripheral aperture overflow")?;
+                if previous.core == current.core && current.address <= previous_end {
+                    let compatible = previous
+                        .physical
+                        .checked_add(current.address - previous.address)
+                        == Some(current.physical);
+                    if !compatible && current.address < previous_end {
+                        return Err("CPU page contains incompatible peripheral aliases".into());
+                    }
+                    if compatible {
+                        let end = current
+                            .address
+                            .checked_add(current.size as u64)
+                            .ok_or("peripheral aperture overflow")?
+                            .max(previous_end);
+                        let size = usize::try_from(end - previous.address)
+                            .map_err(|_| "peripheral aperture exceeds host address space")?;
+                        self.peripherals[retained - 1].size = size;
+                        continue;
+                    }
+                }
+            }
+            self.peripherals.swap(retained, index);
+            retained += 1;
+        }
+        self.peripherals.truncate(retained);
+        self.validate()?;
+        Ok(self)
+    }
+
     pub(super) fn validate_memory_map(
         &self,
         a: &MemoryMap,
         spans: &[(u64, u64)],
     ) -> Result<(), String> {
-        let grain = if self
+        let grain = self
             .processors
             .get(a.core)
-            .is_some_and(|p| p.model != Model::ArmV8A)
-        {
-            0x1000
-        } else {
-            0x4000
-        };
+            .map(Processor::mapping_granule)
+            .unwrap_or(0x4000);
         if a.core >= self.processors.len()
             || a.size == 0
             || !a.address.is_multiple_of(grain)
@@ -440,9 +509,11 @@ mod translation_cache_tests {
             browser_translation_cache_size_bytes((64 + 95) * mib, 1).unwrap(),
             95 << 20
         );
-        assert!(browser_translation_cache_size_bytes((64 + 31) * mib, 1)
-            .unwrap_err()
-            .contains("minimum 32 MiB"));
+        assert!(
+            browser_translation_cache_size_bytes((64 + 31) * mib, 1)
+                .unwrap_err()
+                .contains("minimum 32 MiB")
+        );
         assert!(browser_translation_cache_size_bytes((64 + 64) * mib, 0).is_err());
     }
 }
