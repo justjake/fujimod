@@ -1,27 +1,8 @@
 //! Retained guest-memory backing, independent of the CPU execution backend.
 use std::cell::UnsafeCell;
 #[cfg(not(target_os = "emscripten"))]
-use std::ffi::c_void;
-
+mod native;
 pub mod pages;
-
-unsafe extern "C" {
-    #[cfg(not(target_os = "emscripten"))]
-    fn mmap(
-        addr: *mut c_void,
-        len: usize,
-        prot: i32,
-        flags: i32,
-        fd: i32,
-        offset: i64,
-    ) -> *mut c_void;
-    #[cfg(not(target_os = "emscripten"))]
-    fn munmap(addr: *mut c_void, len: usize) -> i32;
-}
-#[cfg(target_vendor = "apple")]
-const MAP_ANON: i32 = 0x1000;
-#[cfg(all(not(target_vendor = "apple"), not(target_os = "emscripten")))]
-const MAP_ANON: i32 = 0x20;
 const ZERO_MAP_THRESHOLD: usize = 1 << 20;
 
 enum Storage {
@@ -60,17 +41,8 @@ impl Backing {
         let allocation_size = size
             .checked_add(alignment)
             .ok_or("aligned backing size overflow")?;
-        let allocation = unsafe {
-            mmap(
-                std::ptr::null_mut(),
-                allocation_size,
-                3,
-                2 | MAP_ANON,
-                -1,
-                0,
-            )
-        };
-        if allocation as isize == -1 || allocation.is_null() {
+        let allocation = native::allocate(allocation_size);
+        if allocation.is_null() {
             return Err("aligned guest backing allocation failed".into());
         }
         let pointer = ((allocation as usize + alignment - 1) & !(alignment - 1)) as *mut u8;
@@ -118,17 +90,8 @@ impl Backing {
         }
         #[cfg(not(target_os = "emscripten"))]
         if size >= ZERO_MAP_THRESHOLD {
-            let pointer = unsafe {
-                mmap(
-                    std::ptr::null_mut(),
-                    size,
-                    3,            // PROT_READ | PROT_WRITE
-                    2 | MAP_ANON, // MAP_PRIVATE | MAP_ANON
-                    -1,
-                    0,
-                )
-            };
-            if pointer as isize != -1 && !pointer.is_null() {
+            let pointer = native::allocate(size);
+            if !pointer.is_null() {
                 return Self {
                     storage: Storage::Mapped(pointer.cast(), size),
                 };
@@ -171,7 +134,7 @@ impl Drop for Backing {
         #[cfg(not(target_os = "emscripten"))]
         if let Storage::Mapped(pointer, size) = self.storage {
             unsafe {
-                munmap(pointer.cast(), size);
+                native::release(pointer, size);
             }
         }
         #[cfg(not(target_os = "emscripten"))]
@@ -182,7 +145,7 @@ impl Drop for Backing {
         } = self.storage
         {
             unsafe {
-                munmap(allocation.cast(), allocation_size);
+                native::release(allocation, allocation_size);
             }
         }
     }
