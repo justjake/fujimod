@@ -51,7 +51,7 @@ tokio = { version = "1", features = [
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 js-sys.workspace = true
-gloo-net = { version = "0.6", features = ["websocket"], default-features = false }
+gloo-net = { version = "0.7", features = ["websocket"], default-features = false }
 
 [[bin]]
 name = "fujimod-usb-relay"
