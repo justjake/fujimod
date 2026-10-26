@@ -1,55 +1,79 @@
 [
   {
     "name": "X100",
-    "announcement_year": 2010,
-    "image_processor": "EXR",
+    "announced": "2010-09",
+    "image_processor": "EXR Processor",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x100/"
   },
   {
     "name": "X10",
-    "announcement_year": 2011,
-    "image_processor": "EXR",
+    "announced": "2011-09",
+    "image_processor": "EXR Processor",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x10/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x10/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x10/"
   },
   {
-    "name": "X-E1",
-    "announcement_year": 2012,
-    "image_processor": "EXR Pro",
-    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e1/",
-    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e1/",
-    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-e1/"
-  },
-  {
-    "name": "X-Pro1",
-    "announcement_year": 2012,
-    "image_processor": "EXR Pro",
-    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-pro1/",
-    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-pro1/",
-    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-pro1/"
-  },
-  {
     "name": "X-S1",
-    "announcement_year": 2012,
-    "image_processor": "EXR",
+    "announced": "2011-11",
+    "image_processor": "EXR Processor",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-s1/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-s1/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-s1/"
   },
   {
+    "name": "X-Pro1",
+    "announced": "2012-01",
+    "image_processor": "EXR Processor Pro",
+    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-pro1/",
+    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-pro1/",
+    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-pro1/"
+  },
+  {
+    "name": "X-E1",
+    "announced": "2012-09",
+    "image_processor": "EXR Processor Pro",
+    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e1/",
+    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e1/",
+    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-e1/"
+  },
+  {
     "name": "XF1",
-    "announcement_year": 2012,
+    "announced": "2012-09",
     "image_processor": "other",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/xf1/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/xf1/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/xf1/"
   },
   {
+    "name": "X100S",
+    "announced": "2013-01",
+    "image_processor": "EXR Processor II",
+    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100s/",
+    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100s/",
+    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x100s/"
+  },
+  {
+    "name": "X20",
+    "announced": "2013-01",
+    "image_processor": "EXR Processor II",
+    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x20/",
+    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x20/",
+    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x20/"
+  },
+  {
+    "name": "X-M1",
+    "announced": "2013-06",
+    "image_processor": "EXR Processor II",
+    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-m1/",
+    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-m1/",
+    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-m1/"
+  },
+  {
     "name": "X-A1",
-    "announcement_year": 2013,
+    "announced": "2013-09",
     "image_processor": "other",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-a1/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-a1/",
@@ -57,151 +81,119 @@
   },
   {
     "name": "X-E2",
-    "announcement_year": 2013,
-    "image_processor": "EXR II",
+    "announced": "2013-10",
+    "image_processor": "EXR Processor II",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e2/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e2/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-e2/"
   },
   {
-    "name": "X-M1",
-    "announcement_year": 2013,
-    "image_processor": "EXR II",
-    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-m1/",
-    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-m1/",
-    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-m1/"
-  },
-  {
-    "name": "X100S",
-    "announcement_year": 2013,
-    "image_processor": "EXR II",
-    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100s/",
-    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100s/",
-    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x100s/"
-  },
-  {
-    "name": "X20",
-    "announcement_year": 2013,
-    "image_processor": "EXR II",
-    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x20/",
-    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x20/",
-    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x20/"
-  },
-  {
     "name": "XQ1",
-    "announcement_year": 2013,
-    "image_processor": "EXR II",
+    "announced": "2013-10",
+    "image_processor": "EXR Processor II",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/xq1/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/xq1/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/xq1/"
   },
   {
     "name": "X-T1",
-    "announcement_year": 2014,
-    "image_processor": "EXR II",
+    "announced": "2014-01",
+    "image_processor": "EXR Processor II",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t1/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t1/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-t1/"
   },
   {
-    "name": "X100T",
-    "announcement_year": 2014,
-    "image_processor": "EXR II",
-    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100t/",
-    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100t/",
-    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x100t/"
-  },
-  {
     "name": "X30",
-    "announcement_year": 2014,
-    "image_processor": "EXR II",
+    "announced": "2014-08",
+    "image_processor": "EXR Processor II",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x30/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x30/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x30/"
   },
   {
+    "name": "X100T",
+    "announced": "2014-09",
+    "image_processor": "EXR Processor II",
+    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100t/",
+    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100t/",
+    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x100t/"
+  },
+  {
     "name": "X-A2",
-    "announcement_year": 2015,
+    "announced": "2015-01",
     "image_processor": "other",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-a2/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-a2/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-a2/"
   },
   {
-    "name": "X-T10",
-    "announcement_year": 2015,
-    "image_processor": "EXR II",
-    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t10/",
-    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t10/",
-    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-t10/"
-  },
-  {
     "name": "XQ2",
-    "announcement_year": 2015,
-    "image_processor": "EXR II",
+    "announced": "2015-01",
+    "image_processor": "EXR Processor II",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/xq2/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/xq2/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/xq2/"
   },
   {
-    "name": "X-A10",
-    "announcement_year": 2016,
-    "image_processor": "other",
-    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-a10/",
-    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-a10/",
-    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-a10/"
-  },
-  {
-    "name": "X-A3",
-    "announcement_year": 2016,
-    "image_processor": "other",
-    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-a3/",
-    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-a3/",
-    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-a3/"
+    "name": "X-T10",
+    "announced": "2015-05",
+    "image_processor": "EXR Processor II",
+    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t10/",
+    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t10/",
+    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-t10/"
   },
   {
     "name": "X-E2S",
-    "announcement_year": 2016,
-    "image_processor": "EXR II",
+    "announced": "2016-01",
+    "image_processor": "EXR Processor II",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e2s/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e2s/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-e2s/"
   },
   {
     "name": "X-Pro2",
-    "announcement_year": 2016,
+    "announced": "2016-01",
     "image_processor": "X-Processor Pro",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-pro2/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-pro2/",
     "processor_source_url": "https://www.fujifilm-x.com/en-gb/special/masters_of_microsite/masters_of_colour.php"
   },
   {
+    "name": "X70",
+    "announced": "2016-01",
+    "image_processor": "EXR Processor II",
+    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x70/",
+    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x70/",
+    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x70/"
+  },
+  {
     "name": "X-T2",
-    "announcement_year": 2016,
+    "announced": "2016-07",
     "image_processor": "X-Processor Pro",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t2/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t2/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-t2/"
   },
   {
-    "name": "X70",
-    "announcement_year": 2016,
-    "image_processor": "EXR II",
-    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x70/",
-    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x70/",
-    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x70/"
+    "name": "X-A3",
+    "announced": "2016-08",
+    "image_processor": "other",
+    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-a3/",
+    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-a3/",
+    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-a3/"
   },
   {
-    "name": "X-E3",
-    "announcement_year": 2017,
-    "image_processor": "X-Processor Pro",
-    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e3/",
-    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e3/",
-    "processor_source_url": "https://www.fujifilm-x.com/en-gb/special/masters_of_microsite/masters_of_colour.php"
+    "name": "X-A10",
+    "announced": "2016-12",
+    "image_processor": "other",
+    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-a10/",
+    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-a10/",
+    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-a10/"
   },
   {
     "name": "X-T20",
-    "announcement_year": 2017,
+    "announced": "2017-01",
     "image_processor": "X-Processor Pro",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t20/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t20/",
@@ -209,15 +201,23 @@
   },
   {
     "name": "X100F",
-    "announcement_year": 2017,
+    "announced": "2017-01",
     "image_processor": "X-Processor Pro",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100f/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100f/",
     "processor_source_url": "https://www.fujifilm-x.com/en-gb/special/masters_of_microsite/masters_of_colour.php"
   },
   {
+    "name": "X-E3",
+    "announced": "2017-09",
+    "image_processor": "X-Processor Pro",
+    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e3/",
+    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e3/",
+    "processor_source_url": "https://www.fujifilm-x.com/en-gb/special/masters_of_microsite/masters_of_colour.php"
+  },
+  {
     "name": "X-A5",
-    "announcement_year": 2018,
+    "announced": "2018-01",
     "image_processor": "other",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-a5/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-a5/",
@@ -225,7 +225,7 @@
   },
   {
     "name": "X-H1",
-    "announcement_year": 2018,
+    "announced": "2018-02",
     "image_processor": "X-Processor Pro",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-h1/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-h1/",
@@ -233,7 +233,7 @@
   },
   {
     "name": "X-T100",
-    "announcement_year": 2018,
+    "announced": "2018-05",
     "image_processor": "other",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t100/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t100/",
@@ -241,15 +241,23 @@
   },
   {
     "name": "X-T3",
-    "announcement_year": 2018,
+    "announced": "2018-09",
     "image_processor": "X-Processor 4",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t3/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t3/",
     "processor_source_url": "https://www.fujifilm-x.com/en-gb/special/masters_of_microsite/masters_of_colour.php"
   },
   {
+    "name": "X-T30",
+    "announced": "2019-02",
+    "image_processor": "X-Processor 4",
+    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t30/",
+    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t30/",
+    "processor_source_url": "https://www.fujifilm-x.com/en-gb/special/masters_of_microsite/masters_of_colour.php"
+  },
+  {
     "name": "X-A7",
-    "announcement_year": 2019,
+    "announced": "2019-09",
     "image_processor": "other",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-a7/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-a7/",
@@ -257,31 +265,15 @@
   },
   {
     "name": "X-Pro3",
-    "announcement_year": 2019,
+    "announced": "2019-10",
     "image_processor": "X-Processor 4",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-pro3/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-pro3/",
     "processor_source_url": "https://www.fujifilm-x.com/en-gb/special/masters_of_microsite/masters_of_colour.php"
   },
   {
-    "name": "X-T30",
-    "announcement_year": 2019,
-    "image_processor": "X-Processor 4",
-    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t30/",
-    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t30/",
-    "processor_source_url": "https://www.fujifilm-x.com/en-gb/special/masters_of_microsite/masters_of_colour.php"
-  },
-  {
-    "name": "X-S10",
-    "announcement_year": 2020,
-    "image_processor": "X-Processor 4",
-    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-s10/",
-    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-s10/",
-    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-s10/"
-  },
-  {
     "name": "X-T200",
-    "announcement_year": 2020,
+    "announced": "2020-01",
     "image_processor": "other",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t200/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t200/",
@@ -289,7 +281,7 @@
   },
   {
     "name": "X-T4",
-    "announcement_year": 2020,
+    "announced": "2020-02",
     "image_processor": "X-Processor 4",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t4/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t4/",
@@ -297,15 +289,23 @@
   },
   {
     "name": "X100V",
-    "announcement_year": 2020,
+    "announced": "2020-02",
     "image_processor": "X-Processor 4",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100v/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100v/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x100v/"
   },
   {
+    "name": "X-S10",
+    "announced": "2020-10",
+    "image_processor": "X-Processor 4",
+    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-s10/",
+    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-s10/",
+    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-s10/"
+  },
+  {
     "name": "X-E4",
-    "announcement_year": 2021,
+    "announced": "2021-01",
     "image_processor": "X-Processor 4",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e4/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e4/",
@@ -313,31 +313,31 @@
   },
   {
     "name": "X-T30 II",
-    "announcement_year": 2021,
+    "announced": "2021-09",
     "image_processor": "X-Processor 4",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t30-ii/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t30-ii/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-t30-ii/"
   },
   {
-    "name": "X-H2",
-    "announcement_year": 2022,
-    "image_processor": "X-Processor 5",
-    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-h2/",
-    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-h2/",
-    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-h2/"
-  },
-  {
     "name": "X-H2S",
-    "announcement_year": 2022,
+    "announced": "2022-05",
     "image_processor": "X-Processor 5",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-h2s/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-h2s/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-h2s/"
   },
   {
+    "name": "X-H2",
+    "announced": "2022-09",
+    "image_processor": "X-Processor 5",
+    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-h2/",
+    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-h2/",
+    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-h2/"
+  },
+  {
     "name": "X-T5",
-    "announcement_year": 2022,
+    "announced": "2022-11",
     "image_processor": "X-Processor 5",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t5/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t5/",
@@ -345,55 +345,55 @@
   },
   {
     "name": "X-S20",
-    "announcement_year": 2023,
+    "announced": "2023-05",
     "image_processor": "X-Processor 5",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-s20/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-s20/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-s20/"
   },
   {
-    "name": "X-M5",
-    "announcement_year": 2024,
-    "image_processor": "X-Processor 5",
-    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-m5/",
-    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-m5/",
-    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-m5/"
-  },
-  {
-    "name": "X-T50",
-    "announcement_year": 2024,
-    "image_processor": "X-Processor 5",
-    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t50/",
-    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t50/",
-    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-t50/"
-  },
-  {
     "name": "X100VI",
-    "announcement_year": 2024,
+    "announced": "2024-02",
     "image_processor": "X-Processor 5",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100vi/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100vi/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x100vi/"
   },
   {
-    "name": "X-E5",
-    "announcement_year": 2025,
+    "name": "X-T50",
+    "announced": "2024-05",
     "image_processor": "X-Processor 5",
-    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e5/",
-    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e5/",
-    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-e5/"
+    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t50/",
+    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t50/",
+    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-t50/"
+  },
+  {
+    "name": "X-M5",
+    "announced": "2024-10",
+    "image_processor": "X-Processor 5",
+    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-m5/",
+    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-m5/",
+    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-m5/"
   },
   {
     "name": "X-Half",
-    "announcement_year": 2025,
+    "announced": "2025-05",
     "image_processor": "other",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-hf1/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-hf1/",
     "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-hf1/"
   },
   {
+    "name": "X-E5",
+    "announced": "2025-06",
+    "image_processor": "X-Processor 5",
+    "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e5/",
+    "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e5/",
+    "processor_source_url": "https://www.fujifilm-x.com/global/products/cameras/x-e5/"
+  },
+  {
     "name": "X-T30 III",
-    "announcement_year": 2025,
+    "announced": "2025-10",
     "image_processor": "X-Processor 5",
     "firmware_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t30-iii/",
     "source_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t30-iii/",

@@ -1,8 +1,8 @@
 //! Typed App80 values and conversions. Wire codecs live in fujimod-usb.
 use super::*;
-use defs::{ServiceCodec, ServiceDefinition, ServiceModes};
+use catalog::{ServiceCodec, ServiceDefinition, ServiceModes};
 use error::{integer, property, record};
-use usb::app80::catalogue as core;
+use fujimod_usb_app80_types::catalog as core;
 mod values {
     include!(concat!(env!("OUT_DIR"), "/service_values_javascript.rs"));
 }
@@ -60,7 +60,7 @@ impl App80CommandReply {
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct App80Invocation {
-    pub(crate) inner: usb::operations::app80::Invocation,
+    pub(crate) inner: fujimod_usb_app80::operations::Invocation,
 }
 #[wasm_bindgen]
 impl App80Invocation {
@@ -80,18 +80,18 @@ impl App80Invocation {
             .command()
             .decode_bytes(&error::buffer(raw)?)
             .map(|inner| App80CommandReply { inner })
-            .map_err(error)
+            .map_err(|source| error::fail(error::ErrorKind::Protocol, &source.to_string()))
     }
 }
 #[wasm_bindgen]
 pub struct App80Service {
-    inner: usb::operations::app80::Service,
+    inner: fujimod_usb_app80::operations::Service,
 }
 #[wasm_bindgen]
 impl App80Service {
     #[wasm_bindgen(constructor)]
     pub fn new(definition: &ServiceDefinition) -> Result<Self, JsValue> {
-        usb::operations::app80::Service::new(definition.inner.clone())
+        fujimod_usb_app80::operations::Service::new(definition.inner.clone())
             .map(|inner| Self { inner })
             .map_err(error)
     }
@@ -114,7 +114,7 @@ impl App80Service {
     ) -> Result<App80Invocation, JsValue> {
         self.inner
             .prepare_code(
-                usb::app80::CommandCode(code.value()),
+                fujimod_usb_app80_types::CommandCode(code.value()),
                 modes.inner,
                 command.inner,
             )
@@ -130,7 +130,7 @@ impl App80Service {
     ) -> Result<App80Invocation, JsValue> {
         self.inner
             .prepare_research(
-                usb::app80::CommandCode(code.value()),
+                fujimod_usb_app80_types::CommandCode(code.value()),
                 modes.inner,
                 &error::buffer(arguments)?,
             )

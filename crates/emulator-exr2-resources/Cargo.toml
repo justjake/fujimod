@@ -1,0 +1,20 @@
+[package]
+name = "fujimod-emulator-exr2-resources"
+description = "The wires, media and inputs EXR II models and sessions share, with the image part behind a trait, and their checkpoints"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-emulator-devices.workspace = true
+serde = { workspace = true, features = ["derive", "rc"] }
+serde_json.workspace = true
+fujimod-workspace-hack.workspace = true
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

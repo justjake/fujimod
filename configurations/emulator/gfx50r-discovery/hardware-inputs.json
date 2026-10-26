@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "gfx50r-discovery",
+  "body_id": "gfx50r",
+  "reset": {
+    "kernel_unit": "kernel",
+    "loader_handoff": {
+      "address": 9437184,
+      "size": 1472,
+      "fill": 0,
+      "words": [],
+      "basis": "Declared discovery input: an all-zero loader handoff in a free RAM gap, not a capture. The kernel copies 0x5c0 bytes from it; the boot-reason word at +0x140 reads zero, whose meaning is untraced. Kernel entry bypasses the boot ROM."
+    },
+    "flash_aperture": {
+      "contents": "registered-update",
+      "basis": "Declared discovery input: the update image from its flash offset; bytes past it read erased. No flash capture exists."
+    }
+  }
+}

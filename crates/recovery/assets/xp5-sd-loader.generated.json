@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "image_bytes": 22064,
+  "prelude_stack_max": 80,
+  "symbols": {
+    "xp5_setup_entry": 0,
+    "xp5_setup_configuration": 14872,
+    "xp5_setup_return_branch": 184,
+    "xp5_setup_stack": 20016,
+    "xp5_setup_stack_top": 22064,
+    "setup_sd_initialize": 208,
+    "setup_sd_request": 14792,
+    "setup_sd_progress": 19840,
+    "setup_sd_board": 13696,
+    "a64_boot_ready": 19968,
+    "a64_boot_zero_gate": 10952,
+    "setup_sd_card_boot": 14576,
+    "setup_sd_phy_imem": 1424,
+    "setup_sd_phy_dmem": 1440,
+    "setup_sd_layout_marker": 1456,
+    "setup_sd_flash_info": 1472,
+    "setup_sd_runtime": 14832,
+    "setup_sd_firmware_read": 1504,
+    "setup_sd_training_backup": 2320,
+    "setup_sd_firmware_initialize": 2384
+  },
+  "externals": [
+    {
+      "offset": 512,
+      "kind": 283,
+      "symbol": "boot_setup_initialize"
+    },
+    {
+      "offset": 2744,
+      "kind": 282,
+      "symbol": "boot_setup_delay"
+    }
+  ]
+}

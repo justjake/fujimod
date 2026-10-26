@@ -1,0 +1,4846 @@
+{
+  "$defs": {
+    "ApplicationBlockInput": {
+      "description": "External values supplied to one application-profile SoC block.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Explicit analog sample values in channel order.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "adc",
+              "type": "string"
+            },
+            "samples": {
+              "items": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "samples"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Explicit GPIO input words and known output latches.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "gpio",
+              "type": "string"
+            },
+            "levels": {
+              "items": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "outputs": {
+              "items": {
+                "$ref": "#/$defs/GpioOutputWord"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "levels",
+            "outputs"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Ambient temperature presented to a temperature-monitor block.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "temperature",
+              "type": "string"
+            },
+            "millicelsius": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "millicelsius"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Idle serial input level on a named controller.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "idle_high": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "serial_line",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "idle_high"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Backing contents supplied to a nonvolatile-memory aperture.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "erased_tail": {
+              "default": null,
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "flash",
+              "type": "string"
+            },
+            "part_id": {
+              "type": "string"
+            },
+            "seeds": {
+              "items": {
+                "$ref": "#/$defs/FlashSeed"
+              },
+              "type": "array"
+            },
+            "source": {
+              "$ref": "#/$defs/ApplicationFlashSource"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "part_id",
+            "source",
+            "seeds"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ApplicationCommandImageInput": {
+      "additionalProperties": false,
+      "description": "Uniform image data supplied to command-driven imaging work.",
+      "properties": {
+        "block_ids": {
+          "description": "Blocks consuming this command-driven image input.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "luma": {
+          "description": "Uniform source luma sample.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block_ids",
+        "luma"
+      ],
+      "type": "object"
+    },
+    "ApplicationFlashSource": {
+      "description": "Source of the nonvolatile backing supplied by a run.",
+      "oneOf": [
+        {
+          "const": "firmware_update",
+          "description": "The explicitly supplied, identity-checked selected firmware update.",
+          "type": "string"
+        }
+      ]
+    },
+    "ApplicationFrameInput": {
+      "additionalProperties": false,
+      "description": "A periodic external frame source for one or more declared blocks.",
+      "properties": {
+        "active_ticks": {
+          "default": null,
+          "description": "Active duration within the frame period, when supplied.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "block_ids": {
+          "description": "Blocks consuming this external frame source.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "luma": {
+          "default": null,
+          "description": "Uniform source luma sample, when supplied.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "period_ticks": {
+          "description": "Period between frames in the run's virtual ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block_ids",
+        "period_ticks"
+      ],
+      "type": "object"
+    },
+    "ApplicationPartInput": {
+      "description": "Initial values supplied to one installed serial endpoint.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Initial word registers and optional RTC timebase.",
+          "properties": {
+            "kind": {
+              "const": "register_words",
+              "type": "string"
+            },
+            "part_id": {
+              "type": "string"
+            },
+            "registers": {
+              "items": {
+                "$ref": "#/$defs/RegisterWord"
+              },
+              "type": "array"
+            },
+            "rtc_ticks_per_second": {
+              "default": null,
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "part_id",
+            "registers"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Initial clock state for a power-controller endpoint.",
+          "properties": {
+            "kind": {
+              "const": "clock",
+              "type": "string"
+            },
+            "part_id": {
+              "type": "string"
+            },
+            "seconds": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "valid": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "part_id",
+            "seconds",
+            "valid"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Idle input level for a serial endpoint.",
+          "properties": {
+            "high": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "idle_level",
+              "type": "string"
+            },
+            "part_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "part_id",
+            "high"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Explicit BIS revision-register and idle-line inputs.",
+          "properties": {
+            "idle_high": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "bis_revision",
+              "type": "string"
+            },
+            "part_id": {
+              "type": "string"
+            },
+            "revision": {
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "part_id",
+            "revision",
+            "idle_high"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ApplicationStatisticsInput": {
+      "additionalProperties": false,
+      "description": "A uniform statistics scene supplied to one imaging block.",
+      "properties": {
+        "black_level": {
+          "description": "Black-level subtraction value.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "block_id": {
+          "description": "Imaging block consuming the statistics scene.",
+          "type": "string"
+        },
+        "luma": {
+          "description": "Uniform input luma value.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "samples_per_cell": {
+          "description": "Number of samples accumulated in one cell.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "signal_shift": {
+          "description": "Right shift applied to the input signal.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block_id",
+        "luma",
+        "samples_per_cell",
+        "black_level",
+        "signal_shift"
+      ],
+      "type": "object"
+    },
+    "ApplicationTiming": {
+      "description": "Explicit functional timing supplied to named blocks or parts.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "The same delay policy applied to a set of named SoC blocks.",
+          "properties": {
+            "block_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "delay",
+              "type": "string"
+            },
+            "operation": {
+              "$ref": "#/$defs/TimingOperation"
+            },
+            "ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "block_ids",
+            "operation",
+            "ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Transfer setup cost and byte throughput for a named SoC block.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "bytes_per_tick": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "throughput",
+              "type": "string"
+            },
+            "setup_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "setup_ticks",
+            "bytes_per_tick"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Ratio between a serial input clock and its parent virtual clock.",
+          "properties": {
+            "block_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "parent_clock",
+              "type": "string"
+            },
+            "ticks_per_parent": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "block_ids",
+            "ticks_per_parent"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Programming delay for an installed storage part.",
+          "properties": {
+            "erase_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "storage_programming",
+              "type": "string"
+            },
+            "page_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "part_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "part_id",
+            "erase_ticks",
+            "page_ticks"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "FlashSeed": {
+      "additionalProperties": false,
+      "description": "An explicit byte overlay on the run's supplied flash backing.",
+      "properties": {
+        "offset": {
+          "description": "Offset from the start of flash backing.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Byte supplied at that offset; this is an intervention, not stock firmware.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "value"
+      ],
+      "type": "object"
+    },
+    "GeneratedSceneAsset": {
+      "additionalProperties": false,
+      "description": "A generated run-scene input asset.",
+      "properties": {
+        "id": {
+          "description": "Stable asset identity scoped to the configuration.",
+          "type": "string"
+        },
+        "pattern": {
+          "description": "Repeated bytes used to generate the asset.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "size": {
+          "description": "Generated byte length.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "pattern",
+        "size"
+      ],
+      "type": "object"
+    },
+    "GpioOutputWord": {
+      "additionalProperties": false,
+      "description": "One explicitly initialized GPIO output word.",
+      "properties": {
+        "levels": {
+          "description": "Supplied output-latch bits for this port.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "description": "GPIO port number.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "levels"
+      ],
+      "type": "object"
+    },
+    "HardwareSelection": {
+      "additionalProperties": false,
+      "description": "Explicit selection of SoC and body hardware profiles.",
+      "properties": {
+        "body_profile_id": {
+          "description": "Profile identity within the selected body.",
+          "type": "string"
+        },
+        "soc_profile_id": {
+          "description": "Profile identity within the selected SoC.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "soc_profile_id",
+        "body_profile_id"
+      ],
+      "type": "object"
+    },
+    "NativeBlock11000InputsControlMode": {
+      "additionalProperties": false,
+      "description": "Declared NativeBlock11000InputsControlMode startup inputs and execution limits.",
+      "properties": {
+        "ClearBit0Ack": {
+          "$ref": "#/$defs/NativeBlock11000InputsControlModeClearbit0ack"
+        }
+      },
+      "required": [
+        "ClearBit0Ack"
+      ],
+      "type": "object"
+    },
+    "NativeBlock11000InputsControlModeClearbit0ack": {
+      "additionalProperties": false,
+      "description": "Declared NativeBlock11000InputsControlModeClearbit0ack startup inputs and execution limits.",
+      "properties": {
+        "delay_ticks": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "delay_ticks"
+      ],
+      "type": "object"
+    },
+    "NativeControlBusProfile": {
+      "enum": [
+        "endpoint7-stationary-and9-heartbeat-latched-irq-unmeasured",
+        "usbcharge-disconnected-pwic-startup-tagged"
+      ],
+      "type": "string"
+    },
+    "NativeDisplayTimingInputsMode": {
+      "description": "Closed NativeDisplayTimingInputsMode selection.",
+      "enum": [
+        "configured_clocked"
+      ],
+      "type": "string"
+    },
+    "NativeEncoderInputsPinsItem": {
+      "additionalProperties": false,
+      "description": "Declared NativeEncoderInputsPinsItem startup inputs and execution limits.",
+      "properties": {
+        "pin": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin"
+      ],
+      "type": "object"
+    },
+    "NativeExr2InterruptControllerInputsArbitration": {
+      "description": "Closed NativeExr2InterruptControllerInputsArbitration selection.",
+      "enum": [
+        "active-bitmap"
+      ],
+      "type": "string"
+    },
+    "NativeFaceDetectorInputsMode": {
+      "description": "Closed NativeFaceDetectorInputsMode selection.",
+      "enum": [
+        "retained_words"
+      ],
+      "type": "string"
+    },
+    "NativeGpioInputsOutputLevelsItem": {
+      "additionalProperties": false,
+      "description": "Declared NativeGpioInputsOutputLevelsItem startup inputs and execution limits.",
+      "properties": {
+        "high": {
+          "type": "boolean"
+        },
+        "pin": {
+          "$ref": "#/$defs/NativeGpioInputsOutputLevelsItemPin"
+        }
+      },
+      "required": [
+        "pin",
+        "high"
+      ],
+      "type": "object"
+    },
+    "NativeGpioInputsOutputLevelsItemPin": {
+      "additionalProperties": false,
+      "description": "Declared NativeGpioInputsOutputLevelsItemPin startup inputs and execution limits.",
+      "properties": {
+        "pin": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin"
+      ],
+      "type": "object"
+    },
+    "NativeImageCombinationInputsArithmetic": {
+      "description": "Closed NativeImageCombinationInputsArithmetic selection.",
+      "enum": [
+        "packed_image_unmeasured"
+      ],
+      "type": "string"
+    },
+    "NativeImageCombinationInputsClock": {
+      "additionalProperties": false,
+      "description": "Declared NativeImageCombinationInputsClock startup inputs and execution limits.",
+      "properties": {
+        "bytes_per_tick": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/$defs/NativeImageCombinationInputsClockKind"
+        }
+      },
+      "required": [
+        "kind",
+        "bytes_per_tick"
+      ],
+      "type": "object"
+    },
+    "NativeImageCombinationInputsClockKind": {
+      "description": "Closed NativeImageCombinationInputsClockKind selection.",
+      "enum": [
+        "throughput"
+      ],
+      "type": "string"
+    },
+    "NativeImageInputInputsClock": {
+      "additionalProperties": false,
+      "description": "Declared NativeImageInputInputsClock startup inputs and execution limits.",
+      "properties": {
+        "companion_secondary": {
+          "type": "boolean"
+        },
+        "mode": {
+          "$ref": "#/$defs/NativeImageInputInputsClockMode"
+        },
+        "secondary": {
+          "type": "boolean"
+        },
+        "source": {
+          "$ref": "#/$defs/NativeImageInputInputsClockSource"
+        }
+      },
+      "required": [
+        "mode",
+        "source",
+        "secondary",
+        "companion_secondary"
+      ],
+      "type": "object"
+    },
+    "NativeImageInputInputsClockMode": {
+      "description": "Closed NativeImageInputInputsClockMode selection.",
+      "enum": [
+        "input_enable"
+      ],
+      "type": "string"
+    },
+    "NativeImageInputInputsClockSource": {
+      "additionalProperties": false,
+      "description": "Declared NativeImageInputInputsClockSource startup inputs and execution limits.",
+      "properties": {
+        "first_delay_ticks": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/NativeImageInputInputsClockSourceKind"
+        },
+        "period_ticks": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "period_ticks"
+      ],
+      "type": "object"
+    },
+    "NativeImageInputInputsClockSourceKind": {
+      "description": "Closed NativeImageInputInputsClockSourceKind selection.",
+      "enum": [
+        "periodic"
+      ],
+      "type": "string"
+    },
+    "NativeImageInputInputsCommand": {
+      "description": "Closed NativeImageInputInputsCommand selection.",
+      "enum": [
+        "packed_writes"
+      ],
+      "type": "string"
+    },
+    "NativeImageInputInputsPhaseAck": {
+      "description": "Closed NativeImageInputInputsPhaseAck selection.",
+      "enum": [
+        "inactive"
+      ],
+      "type": "string"
+    },
+    "NativeLzInputsResize": {
+      "description": "Closed NativeLzInputsResize selection.",
+      "enum": [
+        "declared_packed_pyramid"
+      ],
+      "type": "string"
+    },
+    "NativeOutputChannelInputsClock": {
+      "additionalProperties": false,
+      "description": "Declared NativeOutputChannelInputsClock startup inputs and execution limits.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/NativeOutputChannelInputsClockKind"
+        },
+        "ticks": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "ticks"
+      ],
+      "type": "object"
+    },
+    "NativeOutputChannelInputsClockKind": {
+      "description": "Closed NativeOutputChannelInputsClockKind selection.",
+      "enum": [
+        "fixed"
+      ],
+      "type": "string"
+    },
+    "NativeOutputChannelInputsGeometry": {
+      "description": "Closed NativeOutputChannelInputsGeometry selection.",
+      "enum": [
+        "skip_incomplete"
+      ],
+      "type": "string"
+    },
+    "NativePhaseDetectionInputsArithmetic": {
+      "description": "Closed NativePhaseDetectionInputsArithmetic selection.",
+      "enum": [
+        "aperture_sad"
+      ],
+      "type": "string"
+    },
+    "NativePowerInputsSpi0": {
+      "additionalProperties": false,
+      "description": "Declared NativePowerInputsSpi0 startup inputs and execution limits.",
+      "properties": {
+        "presence": {
+          "$ref": "#/$defs/NativePowerInputsSpi0Presence"
+        },
+        "required": {
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "selection": {
+          "$ref": "#/$defs/NativePowerInputsSpi0Selection"
+        }
+      },
+      "required": [
+        "required",
+        "selection",
+        "presence"
+      ],
+      "type": "object"
+    },
+    "NativePowerInputsSpi0Presence": {
+      "additionalProperties": false,
+      "description": "Declared NativePowerInputsSpi0Presence startup inputs and execution limits.",
+      "properties": {
+        "high": {
+          "type": "boolean"
+        },
+        "pin": {
+          "$ref": "#/$defs/NativePowerInputsSpi0PresencePin"
+        }
+      },
+      "required": [
+        "pin",
+        "high"
+      ],
+      "type": "object"
+    },
+    "NativePowerInputsSpi0PresencePin": {
+      "additionalProperties": false,
+      "description": "Declared NativePowerInputsSpi0PresencePin startup inputs and execution limits.",
+      "properties": {
+        "pin": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin"
+      ],
+      "type": "object"
+    },
+    "NativePowerInputsSpi0Selection": {
+      "additionalProperties": false,
+      "description": "Declared NativePowerInputsSpi0Selection startup inputs and execution limits.",
+      "properties": {
+        "high": {
+          "type": "boolean"
+        },
+        "pin": {
+          "$ref": "#/$defs/NativePowerInputsSpi0SelectionPin"
+        }
+      },
+      "required": [
+        "pin",
+        "high"
+      ],
+      "type": "object"
+    },
+    "NativePowerInputsSpi0SelectionPin": {
+      "additionalProperties": false,
+      "description": "Declared NativePowerInputsSpi0SelectionPin startup inputs and execution limits.",
+      "properties": {
+        "pin": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin"
+      ],
+      "type": "object"
+    },
+    "NativeScanoutInputsBackdropProfile": {
+      "description": "Closed NativeScanoutInputsBackdropProfile selection.",
+      "enum": [
+        "declared-black-canvas-unmeasured"
+      ],
+      "type": "string"
+    },
+    "NativeScanoutInputsGraphicsProfile": {
+      "description": "Closed NativeScanoutInputsGraphicsProfile selection.",
+      "enum": [
+        "mode1-abgr8888-straight"
+      ],
+      "type": "string"
+    },
+    "NativeScanoutInputsMatrix": {
+      "description": "Closed NativeScanoutInputsMatrix selection.",
+      "enum": [
+        "bt601-full"
+      ],
+      "type": "string"
+    },
+    "NativeScanoutInputsPacking": {
+      "description": "Closed NativeScanoutInputsPacking selection.",
+      "enum": [
+        "yycbcr"
+      ],
+      "type": "string"
+    },
+    "NativeScanoutInputsRectangleProfile": {
+      "description": "Closed NativeScanoutInputsRectangleProfile selection.",
+      "enum": [
+        "exr2-signed-ycbcr-rectangle-overlay-unmeasured"
+      ],
+      "type": "string"
+    },
+    "NativeStatisticsInputsClock": {
+      "additionalProperties": false,
+      "description": "Declared NativeStatisticsInputsClock startup inputs and execution limits.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/NativeStatisticsInputsClockKind"
+        },
+        "ticks": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "ticks"
+      ],
+      "type": "object"
+    },
+    "NativeStatisticsInputsClockKind": {
+      "description": "Closed NativeStatisticsInputsClockKind selection.",
+      "enum": [
+        "fixed"
+      ],
+      "type": "string"
+    },
+    "NativeUsbEndpoints": {
+      "additionalProperties": false,
+      "description": "Native USB endpoint queue limits and transfer cadence.",
+      "properties": {
+        "dma_limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "in_endpoints": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "out_endpoints": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "packet_bytes": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transfer_ticks": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "transfer_ticks",
+        "packet_bytes",
+        "dma_limit",
+        "out_endpoints",
+        "in_endpoints"
+      ],
+      "type": "object"
+    },
+    "NativeVectorGpuInputsClearProfile": {
+      "description": "Closed NativeVectorGpuInputsClearProfile selection.",
+      "enum": [
+        "declared-vg-ui-primitives-unmeasured"
+      ],
+      "type": "string"
+    },
+    "NativeVectorGpuInputsCopyProfile": {
+      "description": "Closed NativeVectorGpuInputsCopyProfile selection.",
+      "enum": [
+        "vg-32bpp-untile-unrotated"
+      ],
+      "type": "string"
+    },
+    "RegisterWord": {
+      "additionalProperties": false,
+      "description": "One initial word-sized endpoint register.",
+      "properties": {
+        "register": {
+          "description": "Endpoint register number.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Supplied register value.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "register",
+        "value"
+      ],
+      "type": "object"
+    },
+    "RunAdcInputs": {
+      "additionalProperties": false,
+      "description": "ADC block and reset sample vector.",
+      "properties": {
+        "block_id": {
+          "description": "SoC ADC block identity.",
+          "type": "string"
+        },
+        "samples": {
+          "description": "Per-channel samples at reset.",
+          "items": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "block_id",
+        "samples"
+      ],
+      "type": "object"
+    },
+    "RunAudioInputProfile": {
+      "description": "External PCM supplied by the selected run, independent of guest execution.",
+      "oneOf": [
+        {
+          "const": "declared-silent-stereo-pcm48000",
+          "description": "Constant zero, 48 kHz, stereo signed 16-bit PCM.",
+          "type": "string"
+        }
+      ]
+    },
+    "RunAuxiliaryControlProfile": {
+      "description": "Closed selection for auxiliary control profile.",
+      "enum": [
+        "stock-control3-bit0-clear-ack-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunBackdropProfile": {
+      "description": "Closed selection for backdrop profile.",
+      "enum": [
+        "declared-black-canvas-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunBinaryInput": {
+      "additionalProperties": false,
+      "description": "A bounded external binary input identified independently of its location.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "RunBrowserCamera": {
+      "additionalProperties": false,
+      "description": "Browser camera attachments: a virtual card, still-capture policy and LCD preview cadence.",
+      "properties": {
+        "preview": {
+          "$ref": "#/$defs/RunPreview",
+          "description": "LCD preview statistics cadence."
+        },
+        "sensor": {
+          "$ref": "#/$defs/RunBrowserSensor",
+          "description": "The image sensor's scene input."
+        },
+        "still_capture": {
+          "$ref": "#/$defs/RunStillCapture",
+          "description": "Still-capture policy identity."
+        },
+        "virtual_card": {
+          "$ref": "#/$defs/RunVirtualCard",
+          "description": "Blank virtual card inserted into the declared card slot."
+        }
+      },
+      "required": [
+        "virtual_card",
+        "still_capture",
+        "preview",
+        "sensor"
+      ],
+      "type": "object"
+    },
+    "RunBrowserSensor": {
+      "additionalProperties": false,
+      "description": "The browser's external scene input for the image sensor.",
+      "properties": {
+        "frames": {
+          "description": "Identity of the run's scene asset that supplies the sensor's exposure input.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "frames"
+      ],
+      "type": "object"
+    },
+    "RunCardFilesystem": {
+      "description": "Card filesystems a virtual card can declare.",
+      "oneOf": [
+        {
+          "const": "fat32",
+          "description": "FAT32 with the declared partition start and cluster size.",
+          "type": "string"
+        }
+      ]
+    },
+    "RunCardFormat": {
+      "additionalProperties": false,
+      "description": "Synthetic FAT card formatting parameters.",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "partition_start": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sectors_per_cluster": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "label",
+        "partition_start",
+        "sectors_per_cluster"
+      ],
+      "type": "object"
+    },
+    "RunCardInput": {
+      "additionalProperties": false,
+      "description": "Initial removable-card state.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection identity for the removable-card slot.",
+          "type": "string"
+        },
+        "present": {
+          "description": "Whether a card is inserted.",
+          "type": "boolean"
+        },
+        "write_protected": {
+          "description": "Whether an inserted card is write protected.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "connection_id",
+        "present",
+        "write_protected"
+      ],
+      "type": "object"
+    },
+    "RunClearProfile": {
+      "description": "Closed selection for clear profile.",
+      "enum": [
+        "declared-vg-ui-primitives-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunClearedOption": {
+      "description": "Named policy inputs that a preset explicitly clears before selection.",
+      "enum": [
+        "mcu_profile",
+        "user_journals",
+        "producer_data_profile",
+        "producer_data_fixture",
+        "lens_response_profile",
+        "lens_response_ticks",
+        "lens_continuation_profile"
+      ],
+      "type": "string"
+    },
+    "RunConnectionState": {
+      "additionalProperties": false,
+      "description": "Initial state of a physical body connection.",
+      "properties": {
+        "connected": {
+          "description": "Whether the external connection is present or electrically closed.",
+          "type": "boolean"
+        },
+        "connection_id": {
+          "description": "Body connection identity.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "connection_id",
+        "connected"
+      ],
+      "type": "object"
+    },
+    "RunControlBusProfile": {
+      "description": "Closed selection for control bus profile.",
+      "enum": [
+        "endpoint7-stationary-and9-heartbeat-latched-irq-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunCopyProfile": {
+      "description": "Closed selection for copy profile.",
+      "enum": [
+        "vg-32bpp-untile-unrotated"
+      ],
+      "type": "string"
+    },
+    "RunCounterInputProfile": {
+      "description": "Closed selection for counter input profile.",
+      "enum": [
+        "declared-lens-step-feedback-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunEncoderInput": {
+      "additionalProperties": false,
+      "description": "Initial phase for a body-backed quadrature encoder.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection identity carrying both encoder signals.",
+          "type": "string"
+        },
+        "phase": {
+          "description": "Initial two-bit encoder phase in the range zero through three.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "connection_id",
+        "phase"
+      ],
+      "type": "object"
+    },
+    "RunEngine": {
+      "description": "A supported processor execution backend.",
+      "oneOf": [
+        {
+          "const": "unicorn",
+          "description": "Run the configured processors through the Unicorn backend.",
+          "type": "string"
+        },
+        {
+          "const": "hypervisor",
+          "description": "Run AArch64 processors through Hypervisor.framework; M-profile companions use Unicorn.",
+          "type": "string"
+        }
+      ]
+    },
+    "RunEntry": {
+      "description": "Closed selection for entry.",
+      "enum": [
+        "loader"
+      ],
+      "type": "string"
+    },
+    "RunExecution": {
+      "additionalProperties": false,
+      "description": "Execution policy selected by the run configuration.",
+      "properties": {
+        "engine": {
+          "$ref": "#/$defs/RunEngine",
+          "description": "CPU engine selected for the configured processors."
+        },
+        "instructions_per_tick": {
+          "$ref": "#/$defs/RunInstructionRate",
+          "description": "Instruction-derived virtual-time ratio."
+        },
+        "mode": {
+          "$ref": "#/$defs/RunExecutionMode",
+          "description": "Strictly model unsupported hardware and bus behavior."
+        },
+        "quantum": {
+          "description": "Maximum instruction count scheduled in one batch.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mode",
+        "engine",
+        "quantum",
+        "instructions_per_tick"
+      ],
+      "type": "object"
+    },
+    "RunExecutionMode": {
+      "description": "A supported run execution mode.",
+      "oneOf": [
+        {
+          "const": "strict",
+          "description": "Refuse unsupported hardware or bus behavior.",
+          "type": "string"
+        }
+      ]
+    },
+    "RunExecutionScope": {
+      "description": "Execution eligibility carried by a run selection.",
+      "enum": [
+        "emulator-only",
+        "isolated-driver",
+        "offline-boot-development"
+      ],
+      "type": "string"
+    },
+    "RunFaceRegisterMode": {
+      "description": "Closed selection for face register mode.",
+      "enum": [
+        "retained_words"
+      ],
+      "type": "string"
+    },
+    "RunFaceStopProfile": {
+      "description": "Explicit constructor policy selected by a run.",
+      "enum": [
+        "declared-armed-face-dma-idle-abort-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunFactoryOptions": {
+      "additionalProperties": false,
+      "properties": {
+        "audio_input_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunAudioInputProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit external serial audio source."
+        },
+        "auxiliary_control_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunAuxiliaryControlProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected auxiliary control profile. Absence preserves the base selection."
+        },
+        "auxiliary_control_ticks": {
+          "description": "Selected auxiliary control ticks. Absence preserves the base selection.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "backdrop_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunBackdropProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected backdrop profile. Absence preserves the base selection."
+        },
+        "camera_settings": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Named camera settings written into the settings bank, with the\n`settings` storage profile. Absence preserves the base selection.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "clear_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunClearProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected clear profile. Absence preserves the base selection."
+        },
+        "clock_seconds_2000": {
+          "description": "Selected clock seconds 2000. Absence preserves the base selection.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "control_bus_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunControlBusProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected control bus profile. Absence preserves the base selection."
+        },
+        "copy_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunCopyProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected copy profile. Absence preserves the base selection."
+        },
+        "counter_input_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunCounterInputProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected counter input profile. Absence preserves the base selection."
+        },
+        "display_frame_ticks": {
+          "description": "Selected display frame ticks. Absence preserves the base selection.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "entry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunEntry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected entry. Absence preserves the base selection."
+        },
+        "face_register_mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunFaceRegisterMode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected face register mode. Absence preserves the base selection."
+        },
+        "face_stop_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunFaceStopProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared face DMA stop policy."
+        },
+        "graphics_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunGraphicsProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected graphics profile. Absence preserves the base selection."
+        },
+        "hdmi_sink": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunHdmiSink"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Synthetic HDMI sink input, including the identity of its external EDID."
+        },
+        "histogram_data_ticks": {
+          "description": "Selected histogram data ticks. Absence preserves the base selection.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "histogram_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunHistogramProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected histogram profile. Absence preserves the base selection."
+        },
+        "image_work_data_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunImageWorkDataProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected image work data profile. Absence preserves the base selection."
+        },
+        "image_work_data_ticks": {
+          "description": "Selected image work data ticks. Absence preserves the base selection.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "image_work_stop_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunImageWorkStopProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected image work stop profile. Absence preserves the base selection."
+        },
+        "image_work_stop_ticks": {
+          "description": "Selected image work stop ticks. Absence preserves the base selection.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "input_event_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunInputEventProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected input event profile. Absence preserves the base selection."
+        },
+        "input_event_ticks": {
+          "description": "Selected input event ticks. Absence preserves the base selection.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "input_phase_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunInputPhaseProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected input phase profile. Absence preserves the base selection."
+        },
+        "input_processing_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunInputProcessingProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected input processing profile. Absence preserves the base selection."
+        },
+        "instructions_per_tick": {
+          "description": "Selected instructions per tick. Absence preserves the base selection.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "irq_tie_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunIrqTieProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected irq tie profile. Absence preserves the base selection."
+        },
+        "jpeg_decode_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunJpegDecodeProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected jpeg decode profile. Absence preserves the base selection."
+        },
+        "lens_continuation_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunLensContinuationProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Requested lens continuation policy; consumers must support it explicitly."
+        },
+        "lens_response_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunLensResponseProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected lens response profile. Absence preserves the base selection."
+        },
+        "lens_response_ticks": {
+          "description": "Selected lens response ticks. Absence preserves the base selection.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "mcu_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunMcuProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected mcu profile. Absence preserves the base selection."
+        },
+        "movrsz_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunMovrszProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected movrsz profile. Absence preserves the base selection."
+        },
+        "movrsz_ticks": {
+          "description": "Selected movrsz ticks. Absence preserves the base selection.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "phase_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunPhaseProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected phase profile. Absence preserves the base selection."
+        },
+        "producer_ack_ticks": {
+          "description": "Selected producer ack ticks. Absence preserves the base selection.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "producer_data_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunProducerDataProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected producer data profile. Absence preserves the base selection."
+        },
+        "producer_data_ticks": {
+          "description": "Selected producer data ticks. Absence preserves the base selection.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "producer_stop_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunProducerStopProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected producer stop profile. Absence preserves the base selection."
+        },
+        "producer_stop_ticks": {
+          "description": "Selected producer stop ticks. Absence preserves the base selection.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "pulse_timer_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunPulseTimerProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected pulse timer profile. Absence preserves the base selection."
+        },
+        "quantum": {
+          "description": "Selected quantum. Absence preserves the base selection.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "raw_readback_ticks": {
+          "description": "Explicit RAW-to-output DMA duration in virtual ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "rectangle_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunRectangleProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected rectangle profile. Absence preserves the base selection."
+        },
+        "sd_card_format": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunCardFormat"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected sd card format. Absence preserves the base selection."
+        },
+        "sd_card_present": {
+          "description": "Selected sd card present. Absence preserves the base selection.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "sd_card_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunSdCardProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected sd card profile. Absence preserves the base selection."
+        },
+        "sd_card_sectors": {
+          "description": "Selected sd card sectors. Absence preserves the base selection.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "secondary_bus_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunSecondaryBusProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected secondary bus profile. Absence preserves the base selection."
+        },
+        "sensor_frame_clock": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunSensorFrameClock"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Connect physical sensor frames using the selected clock source."
+        },
+        "settings": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunSettings"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected settings. Absence preserves the base selection."
+        },
+        "spi0_input_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunSpi0InputProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected spi0 input profile. Absence preserves the base selection."
+        },
+        "storage_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunStorageProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected storage profile. Absence preserves the base selection."
+        },
+        "user_journals": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunUserJournals"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected user journals. Absence preserves the base selection."
+        },
+        "video_encoder_backend": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VideoEncoderBackend"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit H.264 backend; absence selects the local platform default."
+        },
+        "wifi_sdio_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunWifiSdioProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selected wifi sdio profile. Absence preserves the base selection."
+        },
+        "wifi_sdio_transfer_ticks": {
+          "description": "Selected wifi sdio transfer ticks. Absence preserves the base selection.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "RunFirstStart": {
+      "additionalProperties": false,
+      "description": "Policy for navigating and accepting stock first-start setup.",
+      "properties": {
+        "hold_ticks": {
+          "description": "Virtual ticks to hold the input active.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "key_id": {
+          "description": "Firmware logical key identity, such as `EXE_M`.",
+          "type": "string"
+        },
+        "language": {
+          "description": "Optional exact firmware language name to select from START MENU.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_presses": {
+          "description": "Maximum confirmation presses accepted for this startup policy.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "settle_ticks": {
+          "description": "Virtual ticks to wait after releasing the input.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key_id",
+        "hold_ticks",
+        "settle_ticks",
+        "max_presses"
+      ],
+      "type": "object"
+    },
+    "RunGpioInputs": {
+      "additionalProperties": false,
+      "description": "GPIO input block and semantic external states for the base run.",
+      "properties": {
+        "block_id": {
+          "description": "SoC GPIO block identity.",
+          "type": "string"
+        },
+        "connections": {
+          "description": "External connection states resolved through body wiring.",
+          "items": {
+            "$ref": "#/$defs/RunConnectionState"
+          },
+          "type": "array"
+        },
+        "keys": {
+          "description": "Explicit key/control states; released controls are listed as false.",
+          "items": {
+            "$ref": "#/$defs/RunKeyState"
+          },
+          "type": "array"
+        },
+        "outputs": {
+          "description": "Known GPIO output-latch states addressed through body wiring.",
+          "items": {
+            "$ref": "#/$defs/RunGpioOutputState"
+          },
+          "type": "array"
+        },
+        "unassigned_input_level": {
+          "description": "Startup input level supplied for pads without a named assignment.\nThis is a run assumption, not a measured hardware fact.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "block_id",
+        "unassigned_input_level",
+        "keys",
+        "connections",
+        "outputs"
+      ],
+      "type": "object"
+    },
+    "RunGpioOutputState": {
+      "additionalProperties": false,
+      "description": "Initial output-latch value for one GPIO signal in a body connection.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection identity for the output signal.",
+          "type": "string"
+        },
+        "high": {
+          "description": "Output level latched at reset.",
+          "type": "boolean"
+        },
+        "signal_index": {
+          "description": "Zero-based signal index in the body connection.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "connection_id",
+        "signal_index",
+        "high"
+      ],
+      "type": "object"
+    },
+    "RunGraphicsProfile": {
+      "description": "Closed selection for graphics profile.",
+      "enum": [
+        "mode1-abgr8888-straight"
+      ],
+      "type": "string"
+    },
+    "RunHdmiSink": {
+      "additionalProperties": false,
+      "description": "Synthetic HDMI cable and display-identification input.",
+      "properties": {
+        "basis": {
+          "type": "string"
+        },
+        "connected": {
+          "type": "boolean"
+        },
+        "edid": {
+          "$ref": "#/$defs/RunBinaryInput"
+        }
+      },
+      "required": [
+        "connected",
+        "edid",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "RunHistogramProfile": {
+      "description": "Closed selection for histogram profile.",
+      "enum": [
+        "declared-postisp-histogram256-u32-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunImage": {
+      "additionalProperties": false,
+      "description": "A live-view image source and its raster layout.",
+      "properties": {
+        "asset": {
+          "description": "Generated scene asset identity.",
+          "type": "string"
+        },
+        "height": {
+          "description": "Raster height in pixels.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stride": {
+          "description": "Raster row stride in bytes.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width": {
+          "description": "Raster width in pixels.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "width",
+        "height",
+        "stride",
+        "asset"
+      ],
+      "type": "object"
+    },
+    "RunImageWorkDataProfile": {
+      "description": "Closed selection for image work data profile.",
+      "enum": [
+        "declared-postisp-yycbcr-scene-unmeasured",
+        "xm1-150-declared-continuous-postisp-scene-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunImageWorkStopProfile": {
+      "description": "Closed selection for image work stop profile.",
+      "enum": [
+        "stock-idle-image-banks-bit0-stop-ack-unmeasured",
+        "stock-initial-image-banks-bit0-stop-ack-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunImages": {
+      "additionalProperties": false,
+      "description": "The named image sources used by the run scene.",
+      "properties": {
+        "live_image": {
+          "$ref": "#/$defs/RunImage",
+          "description": "Live-view image and raster layout."
+        }
+      },
+      "required": [
+        "live_image"
+      ],
+      "type": "object"
+    },
+    "RunInputEventProfile": {
+      "description": "Closed selection for input event profile.",
+      "enum": [
+        "declared-rec-display-card-late-source-staging-unmeasured",
+        "declared-rec-display-close-reentry-plus-one-ready-source0-edge-unmeasured",
+        "xm1-150-configured-phase-clock-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunInputPhaseProfile": {
+      "description": "Closed selection for input phase profile.",
+      "enum": [
+        "declared-enabled-or-inactive-phase2-stop-ack-unmeasured",
+        "stock-inactive-phase2-ack",
+        "xm1-150-phase2-ack-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunInputProcessingProfile": {
+      "description": "Closed selection for input processing profile.",
+      "enum": [
+        "packed-three-byte-command-words",
+        "stock-mode0-81-packed-writes",
+        "xm1-150-packed-command-writes"
+      ],
+      "type": "string"
+    },
+    "RunInputs": {
+      "description": "Model-specific synthetic startup inputs applied to resolved hardware.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Reset inputs for an EXR2-based body.",
+          "properties": {
+            "adc": {
+              "$ref": "#/$defs/RunAdcInputs",
+              "description": "ADC reset samples."
+            },
+            "card": {
+              "$ref": "#/$defs/RunCardInput",
+              "description": "Initial SD card insertion and protection state."
+            },
+            "encoders": {
+              "description": "Initial phases for physical quadrature encoders.",
+              "items": {
+                "$ref": "#/$defs/RunEncoderInput"
+              },
+              "type": "array"
+            },
+            "first_start": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RunFirstStart"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Policy for accepting a firmware first-start prompt, when needed."
+            },
+            "gpio": {
+              "$ref": "#/$defs/RunGpioInputs",
+              "description": "GPIO reset state and explicitly released controls."
+            },
+            "kind": {
+              "const": "exr2",
+              "type": "string"
+            },
+            "mcu": {
+              "$ref": "#/$defs/RunMcuInput",
+              "description": "MCU persistent input and RTC start state."
+            },
+            "power": {
+              "$ref": "#/$defs/RunPowerInput",
+              "description": "Power-controller reset input."
+            },
+            "serial_registers": {
+              "description": "Other declared reset values for serial-backed parts.",
+              "items": {
+                "$ref": "#/$defs/RunSerialRegisters"
+              },
+              "type": "array"
+            },
+            "settings": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RunPowerOnSettings"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The settings the camera starts with. Absent, the flash holds what the\nupdate installs."
+            },
+            "usb": {
+              "$ref": "#/$defs/RunUsbInput",
+              "description": "Initial USB cable state."
+            }
+          },
+          "required": [
+            "kind",
+            "gpio",
+            "encoders",
+            "adc",
+            "power",
+            "mcu",
+            "serial_registers",
+            "usb",
+            "card"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Reset inputs for an XP4-based body.",
+          "properties": {
+            "blocks": {
+              "description": "Initial external values supplied to named SoC blocks.",
+              "items": {
+                "$ref": "#/$defs/ApplicationBlockInput"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "xp4",
+              "type": "string"
+            },
+            "parts": {
+              "description": "Initial external values supplied to installed parts.",
+              "items": {
+                "$ref": "#/$defs/ApplicationPartInput"
+              },
+              "type": "array"
+            },
+            "ticks_per_second": {
+              "description": "Virtual clock ticks per second used by the supplied timing policies.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "timings": {
+              "description": "Functional device timing policy for this run, not measured silicon timing.",
+              "items": {
+                "$ref": "#/$defs/ApplicationTiming"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "ticks_per_second",
+            "blocks",
+            "parts",
+            "timings"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Reset inputs for an XP5-based body.",
+          "properties": {
+            "blocks": {
+              "description": "Initial external values supplied to named SoC blocks.",
+              "items": {
+                "$ref": "#/$defs/ApplicationBlockInput"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "xp5",
+              "type": "string"
+            },
+            "parts": {
+              "description": "Initial external values supplied to installed parts.",
+              "items": {
+                "$ref": "#/$defs/ApplicationPartInput"
+              },
+              "type": "array"
+            },
+            "ticks_per_second": {
+              "description": "Virtual clock ticks per second used by the supplied timing policies.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "timings": {
+              "description": "Functional device timing policy for this run, not measured silicon timing.",
+              "items": {
+                "$ref": "#/$defs/ApplicationTiming"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "ticks_per_second",
+            "blocks",
+            "parts",
+            "timings"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "RunInstructionRate": {
+      "additionalProperties": false,
+      "description": "Closed instruction-derived timebase ratio for a run.",
+      "properties": {
+        "denominator": {
+          "description": "Board ticks advanced per instruction entry.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "numerator": {
+          "description": "Instruction entries consumed per board tick.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "RunIrqTieProfile": {
+      "description": "Closed selection for irq tie profile.",
+      "enum": [
+        "kernel-active-scan-order"
+      ],
+      "type": "string"
+    },
+    "RunJpegDecodeProfile": {
+      "description": "Closed selection for jpeg decode profile.",
+      "enum": [
+        "declared-channel9-libjpeg-yycbcr-playback-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunKeyState": {
+      "additionalProperties": false,
+      "description": "Initial state of a physical key or body control connection.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection identity for the control.",
+          "type": "string"
+        },
+        "pressed": {
+          "description": "Whether the control is pressed at reset.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "connection_id",
+        "pressed"
+      ],
+      "type": "object"
+    },
+    "RunLensContinuationProfile": {
+      "description": "Explicit constructor policy selected by a run.",
+      "enum": [
+        "declared-lens-controller-close-focus-reference-target222-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunLensResponseProfile": {
+      "description": "Closed selection for lens response profile.",
+      "enum": [
+        "declared-lens-startup-homing-lattice-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunMcuInput": {
+      "additionalProperties": false,
+      "description": "MCU packet, serial clock and RTC start state.",
+      "properties": {
+        "packet": {
+          "description": "Synthetic sixteen-byte persistent settings packet.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 16,
+          "minItems": 16,
+          "type": "array"
+        },
+        "part_id": {
+          "description": "Body MCU-interface part identity.",
+          "type": "string"
+        },
+        "rtc": {
+          "$ref": "#/$defs/RunRtcInput",
+          "description": "Synthetic RTC state at reset."
+        }
+      },
+      "required": [
+        "part_id",
+        "packet",
+        "rtc"
+      ],
+      "type": "object"
+    },
+    "RunMcuProfile": {
+      "description": "Closed selection for mcu profile.",
+      "enum": [
+        "disabled",
+        "captured-backup"
+      ],
+      "type": "string"
+    },
+    "RunMovrszProfile": {
+      "description": "Closed selection for movrsz profile.",
+      "enum": [
+        "declared-packed-yycbcr-pyramid-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunNandAssetPlacement": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_id": {
+          "type": "string"
+        },
+        "offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "asset_id"
+      ],
+      "type": "object"
+    },
+    "RunNandGeometry": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_bytes": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pages_per_block": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "spare_bytes": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bytes",
+        "page_bytes",
+        "pages_per_block",
+        "spare_bytes"
+      ],
+      "type": "object"
+    },
+    "RunNandSceneInput": {
+      "description": "External raw-NAND scene selection; geometry must match the selected medium.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "base": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "raw",
+              "type": "string"
+            },
+            "options": {
+              "$ref": "#/$defs/RunNandGeometry"
+            },
+            "overlays": {
+              "items": {
+                "$ref": "#/$defs/RunNandAssetPlacement"
+              },
+              "type": "array"
+            },
+            "spare": {
+              "items": {
+                "$ref": "#/$defs/RunNandAssetPlacement"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "options",
+            "base",
+            "overlays",
+            "spare"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "RunNativeDeviceInputs": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeExr2InterruptControllerInputs startup inputs and execution limits.",
+          "properties": {
+            "arbitration": {
+              "$ref": "#/$defs/NativeExr2InterruptControllerInputsArbitration"
+            },
+            "kind": {
+              "const": "exr2-interrupt-controller",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "arbitration"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeExr2SystemTimersInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "exr2-system-timers",
+              "type": "string"
+            },
+            "main_targets": {
+              "items": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "main_targets"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeCoreReleaseInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "core-release",
+              "type": "string"
+            },
+            "released": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "released"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeGpioInputs startup inputs and execution limits.",
+          "properties": {
+            "input_levels": {
+              "items": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "gpio",
+              "type": "string"
+            },
+            "output_levels": {
+              "items": {
+                "$ref": "#/$defs/NativeGpioInputsOutputLevelsItem"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "input_levels",
+            "output_levels"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeSpiControllerInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "spi-controller",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeDramInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "dram",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeDramPhyInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "dram-phy",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeResetInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "reset",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeClocksInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "clocks",
+              "type": "string"
+            },
+            "output_settle_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "reset_ready": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "output_settle_ticks",
+            "reset_ready"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeBlock98000Inputs startup inputs and execution limits.",
+          "properties": {
+            "boot_source": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "block-98000",
+              "type": "string"
+            },
+            "selection_reset": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "boot_source",
+            "selection_reset"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeSdhciClocksInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "sdhci-clocks",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeAdcInputs startup inputs and execution limits.",
+          "properties": {
+            "conversion_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "adc",
+              "type": "string"
+            },
+            "samples": {
+              "items": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "conversion_ticks",
+            "samples"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeStatisticsInputs startup inputs and execution limits.",
+          "properties": {
+            "ack_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "clock": {
+              "$ref": "#/$defs/NativeStatisticsInputsClock"
+            },
+            "external_statistics": {
+              "type": "boolean"
+            },
+            "histogram": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "statistics",
+              "type": "string"
+            },
+            "stop_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "clock",
+            "ack_ticks",
+            "stop_ticks",
+            "histogram",
+            "external_statistics"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeOutputChannelInputs startup inputs and execution limits.",
+          "properties": {
+            "clock": {
+              "$ref": "#/$defs/NativeOutputChannelInputsClock"
+            },
+            "geometry": {
+              "$ref": "#/$defs/NativeOutputChannelInputsGeometry"
+            },
+            "kind": {
+              "const": "output-channel",
+              "type": "string"
+            },
+            "stop_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "stop_ticks",
+            "clock",
+            "geometry"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeFaceDetectorInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "face-detector",
+              "type": "string"
+            },
+            "mode": {
+              "$ref": "#/$defs/NativeFaceDetectorInputsMode"
+            }
+          },
+          "required": [
+            "kind",
+            "mode"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativePhaseDetectionInputs startup inputs and execution limits.",
+          "properties": {
+            "arithmetic": {
+              "$ref": "#/$defs/NativePhaseDetectionInputsArithmetic"
+            },
+            "data_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "phase-detection",
+              "type": "string"
+            },
+            "stop_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "arithmetic",
+            "data_ticks",
+            "stop_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeExternalFramesInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "external-frames",
+              "type": "string"
+            },
+            "period_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "period_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeSdioHostInputs startup inputs and execution limits.",
+          "properties": {
+            "clock_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "sdio-host",
+              "type": "string"
+            },
+            "ram_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "rca": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "transfer_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "transfer_ticks",
+            "clock_ticks",
+            "rca",
+            "ram_bytes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeNandInputs startup inputs and execution limits.",
+          "properties": {
+            "erase_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "nand",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "erase_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeLzInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "lz",
+              "type": "string"
+            },
+            "resize": {
+              "$ref": "#/$defs/NativeLzInputsResize"
+            },
+            "resize_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "resize",
+            "resize_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeMemoryDmaInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "memory-dma",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeSerialDmaInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "serial-dma",
+              "type": "string"
+            },
+            "max_transfer_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "ram_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "ram_bytes",
+            "max_transfer_bytes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeUsbInputs startup inputs and execution limits.",
+          "properties": {
+            "endpoints": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NativeUsbEndpoints"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "usb",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativePowerInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "power",
+              "type": "string"
+            },
+            "max_program_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "spi0": {
+              "$ref": "#/$defs/NativePowerInputsSpi0"
+            },
+            "transfer_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "transfer_ticks",
+            "max_program_bytes",
+            "spi0"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeSerialAudioInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "serial-audio",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeExr2PulseInputs startup inputs and execution limits.",
+          "properties": {
+            "capture_channel": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "counter_channels": {
+              "items": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "initial_phase": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "exr2-pulse",
+              "type": "string"
+            },
+            "quadrature": {
+              "type": "boolean"
+            },
+            "timer_channels": {
+              "items": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "counter_channels",
+            "timer_channels",
+            "quadrature",
+            "initial_phase"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeFe80ProcessingInputs startup inputs and execution limits.",
+          "properties": {
+            "irq": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "fe80-processing",
+              "type": "string"
+            },
+            "pixels_per_tick": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "irq",
+            "pixels_per_tick"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeImageInputInputs startup inputs and execution limits.",
+          "properties": {
+            "cfa": {
+              "items": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "clock": {
+              "$ref": "#/$defs/NativeImageInputInputsClock"
+            },
+            "command": {
+              "$ref": "#/$defs/NativeImageInputInputsCommand"
+            },
+            "command_controls": {
+              "items": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "command_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "image-input",
+              "type": "string"
+            },
+            "phase_ack": {
+              "$ref": "#/$defs/NativeImageInputInputsPhaseAck"
+            },
+            "phase_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "raw_dma_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "readback_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "reset_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sensor_period_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "reset_ticks",
+            "command_ticks",
+            "phase_ticks",
+            "command",
+            "command_controls",
+            "phase_ack",
+            "clock",
+            "raw_dma_ticks",
+            "readback_ticks",
+            "cfa"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeBlock11000Inputs startup inputs and execution limits.",
+          "properties": {
+            "control_mode": {
+              "$ref": "#/$defs/NativeBlock11000InputsControlMode"
+            },
+            "kind": {
+              "const": "block11000",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "control_mode"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeParametersInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "parameters",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeHdmiSinkInputs startup inputs and execution limits.",
+          "properties": {
+            "connected": {
+              "type": "boolean"
+            },
+            "edid": {
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "hdmi-sink",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connected",
+            "edid"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeHdmiInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "hdmi",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeBlock86000Inputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "block86000",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeVectorGpuInputs startup inputs and execution limits.",
+          "properties": {
+            "bytes_per_tick": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "clear_profile": {
+              "$ref": "#/$defs/NativeVectorGpuInputsClearProfile"
+            },
+            "copy_profile": {
+              "$ref": "#/$defs/NativeVectorGpuInputsCopyProfile"
+            },
+            "kind": {
+              "const": "vector-gpu",
+              "type": "string"
+            },
+            "max_clear_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "max_command_capture_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "max_copy_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "max_fill_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "ram_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "ram_bytes",
+            "max_fill_bytes",
+            "max_copy_bytes",
+            "max_clear_bytes",
+            "bytes_per_tick",
+            "max_command_capture_bytes",
+            "copy_profile",
+            "clear_profile"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeScanoutInputs startup inputs and execution limits.",
+          "properties": {
+            "backdrop_profile": {
+              "$ref": "#/$defs/NativeScanoutInputsBackdropProfile"
+            },
+            "graphics_profile": {
+              "$ref": "#/$defs/NativeScanoutInputsGraphicsProfile"
+            },
+            "kind": {
+              "const": "scanout",
+              "type": "string"
+            },
+            "matrix": {
+              "$ref": "#/$defs/NativeScanoutInputsMatrix"
+            },
+            "max_pixels": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "packing": {
+              "$ref": "#/$defs/NativeScanoutInputsPacking"
+            },
+            "ram_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "rectangle_profile": {
+              "$ref": "#/$defs/NativeScanoutInputsRectangleProfile"
+            },
+            "reset_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "ram_bytes",
+            "packing",
+            "matrix",
+            "graphics_profile",
+            "backdrop_profile",
+            "rectangle_profile",
+            "max_pixels",
+            "reset_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeDisplayTimingInputs startup inputs and execution limits.",
+          "properties": {
+            "frame_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "display-timing",
+              "type": "string"
+            },
+            "mode": {
+              "$ref": "#/$defs/NativeDisplayTimingInputsMode"
+            },
+            "stop_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "mode",
+            "frame_ticks",
+            "stop_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeFormatterInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "formatter",
+              "type": "string"
+            },
+            "latch_delay": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "latch_delay"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeImageCombinationInputs startup inputs and execution limits.",
+          "properties": {
+            "arithmetic": {
+              "$ref": "#/$defs/NativeImageCombinationInputsArithmetic"
+            },
+            "clock": {
+              "$ref": "#/$defs/NativeImageCombinationInputsClock"
+            },
+            "kind": {
+              "const": "image-combination",
+              "type": "string"
+            },
+            "reset_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "reset_ticks",
+            "arithmetic",
+            "clock"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Declared NativeEncoderInputs startup inputs and execution limits.",
+          "properties": {
+            "kind": {
+              "const": "encoder",
+              "type": "string"
+            },
+            "phase_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "pins": {
+              "items": {
+                "$ref": "#/$defs/NativeEncoderInputsPinsItem"
+              },
+              "type": "array"
+            },
+            "rest_phase": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "pins",
+            "phase_ticks",
+            "rest_phase"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Control-bus startup model selection.",
+          "properties": {
+            "kind": {
+              "const": "i2c",
+              "type": "string"
+            },
+            "modes": {
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "profile": {
+              "$ref": "#/$defs/NativeControlBusProfile"
+            },
+            "transfer_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "modes",
+            "transfer_ticks",
+            "profile"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "RunObserver": {
+      "additionalProperties": false,
+      "description": "Named device observed by a firmware readiness monitor.",
+      "properties": {
+        "instance": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scanout": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "scanout",
+        "instance"
+      ],
+      "type": "object"
+    },
+    "RunPadLevel": {
+      "additionalProperties": false,
+      "description": "A declared electrical startup input.",
+      "properties": {
+        "basis": {
+          "type": "string"
+        },
+        "level": {
+          "type": "boolean"
+        },
+        "pin": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin",
+        "level",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "RunPhaseProfile": {
+      "description": "Closed selection for phase profile.",
+      "enum": [
+        "configured-clocked"
+      ],
+      "type": "string"
+    },
+    "RunPowerInput": {
+      "additionalProperties": false,
+      "description": "Power-controller reset values.",
+      "properties": {
+        "boot_reply": {
+          "description": "Synthetic boot reply byte.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "part_id": {
+          "description": "Body power-controller part identity.",
+          "type": "string"
+        },
+        "powered_on": {
+          "description": "Whether the camera power input is asserted.",
+          "type": "boolean"
+        },
+        "spi_status": {
+          "description": "Synthetic serial status values presented by the power controller.",
+          "items": {
+            "$ref": "#/$defs/RunRegisterValue"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "part_id",
+        "powered_on",
+        "boot_reply",
+        "spi_status"
+      ],
+      "type": "object"
+    },
+    "RunPowerOnSettings": {
+      "additionalProperties": false,
+      "description": "A camera's settings at power-on: its settings bank, the firmware's default\nuser settings and the named changes a run requests.",
+      "properties": {
+        "camera": {
+          "description": "The body's camera whose NAND sections the run supplies for the settings\nbank (`catalog/bodies/<body>/cameras/<camera>`). Absent, the bank is\nbuilt from the update's defaults table.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "requested": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Requested settings by name and value name, such as `setup: done`.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "requested"
+      ],
+      "type": "object"
+    },
+    "RunPreset": {
+      "additionalProperties": false,
+      "description": "Startup policy and synthetic external inputs selected together.",
+      "properties": {
+        "browser_camera": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunBrowserCamera"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional virtual card and preview inputs."
+        },
+        "clear_options": {
+          "description": "Inherited policy inputs to clear before applying this preset.",
+          "items": {
+            "$ref": "#/$defs/RunClearedOption"
+          },
+          "type": "array"
+        },
+        "execution": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunExecution"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Complete execution policy when selecting timing or batch options."
+        },
+        "execution_scope": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunExecutionScope"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Restriction on the execution this configuration represents."
+        },
+        "factory_inputs_id": {
+          "description": "Caller-supplied factory input locations selected independently of policy.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "factory_options": {
+          "$ref": "#/$defs/RunFactoryOptions",
+          "description": "Closed device policy selections; omitted fields retain factory defaults."
+        },
+        "files": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "description": "Card file paths and their external asset identities, grouped by medium.",
+          "type": "object"
+        },
+        "firmware_inputs_id": {
+          "description": "Caller-supplied, firmware-qualified input recipe selected by identity.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "firmware_profile_id": {
+          "description": "Boot and device layout selected within the chosen firmware identity.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hardware_inputs_id": {
+          "description": "Named reset-input document for the selected body hardware profile.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hardware_notes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Provenance for caller-supplied hardware inputs, keyed by source field path.",
+          "type": "object"
+        },
+        "hardware_selection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareSelection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Named SoC and body implementations selected through the hardware graph."
+        },
+        "initial_gpio": {
+          "description": "Declared electrical startup levels, applied after the body reset inputs.",
+          "items": {
+            "$ref": "#/$defs/RunPadLevel"
+          },
+          "type": "array"
+        },
+        "limits": {
+          "description": "Explicit limits on this synthetic input selection.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "nand_inputs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/RunNandSceneInput"
+          },
+          "description": "Caller-supplied persistent scene inputs keyed by medium identity.",
+          "type": "object"
+        },
+        "native_device_inputs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/RunNativeDeviceInputs"
+          },
+          "description": "Startup values and scheduling limits keyed by native device identity.",
+          "type": "object"
+        },
+        "observer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunObserver"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Named scanout selected by firmware observation without firmware addresses."
+        },
+        "purpose": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunPurpose"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Intended operation for this input selection."
+        },
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunStart"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Boot entry when it differs from the base run."
+        },
+        "usb_connected": {
+          "description": "Initial cable state, including for runs with no complete reset input set.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "virtual_card": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunVirtualCard"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Virtual card declaration without a preview or capture pipeline."
+        }
+      },
+      "required": [
+        "factory_options"
+      ],
+      "type": "object"
+    },
+    "RunPreview": {
+      "additionalProperties": false,
+      "description": "LCD preview statistics cadence, in frames.",
+      "properties": {
+        "active_statistics_every_frames": {
+          "description": "Statistics period while active: one through sixty frames.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis for the cadence.",
+          "type": "string"
+        },
+        "frames_per_second": {
+          "description": "Preview frames per second: one through sixty.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "statistics_every_frames": {
+          "description": "Statistics period while idle: one through sixty frames.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "statistics_profile": {
+          "description": "Statistics divider profile identity.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "frames_per_second",
+        "statistics_every_frames",
+        "active_statistics_every_frames",
+        "statistics_profile",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "RunProducerDataProfile": {
+      "description": "Closed selection for producer data profile.",
+      "oneOf": [
+        {
+          "enum": [
+            "xm1-150-declared-continuous-statistics-scene-unmeasured"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "recorded-statistics",
+          "description": "Replay externally supplied statistics through the declared producer input.",
+          "type": "string"
+        }
+      ]
+    },
+    "RunProducerStopProfile": {
+      "description": "Closed selection for producer stop profile.",
+      "enum": [
+        "stock-idle-stop-handshakes-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunPulseTimerProfile": {
+      "description": "Closed selection for pulse timer profile.",
+      "enum": [
+        "exr2-configured-interval-clocks-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunPurpose": {
+      "description": "Intended operation selected by a run configuration.",
+      "oneOf": [
+        {
+          "const": "rom_boot",
+          "description": "Start the selected firmware for normal operation.",
+          "type": "string"
+        },
+        {
+          "const": "service_session",
+          "description": "Prepare a service-session run.",
+          "type": "string"
+        },
+        {
+          "const": "rehearsal",
+          "description": "Prepare a rehearsal of a declared service operation.",
+          "type": "string"
+        },
+        {
+          "const": "boot_access",
+          "description": "Prepare a boot-access probe.",
+          "type": "string"
+        },
+        {
+          "const": "shutdown",
+          "description": "Prepare a controlled shutdown run.",
+          "type": "string"
+        }
+      ]
+    },
+    "RunRectangleProfile": {
+      "description": "Closed selection for rectangle profile.",
+      "enum": [
+        "exr2-signed-ycbcr-rectangle-overlay-unmeasured",
+        "xm1-150-declared-luma-rectangle-overlay-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunRegisterValue": {
+      "additionalProperties": false,
+      "description": "One synthetic external serial register value.",
+      "properties": {
+        "register": {
+          "description": "External part register number.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Initial register byte.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "register",
+        "value"
+      ],
+      "type": "object"
+    },
+    "RunRtcInput": {
+      "additionalProperties": false,
+      "description": "RTC hardware of a run. It starts at the run's requested clock or\n`DEFAULT_CLOCK_SECONDS_2000`.",
+      "properties": {
+        "maximum_seconds": {
+          "description": "Maximum supported seconds in the device clock's epoch.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "started": {
+          "description": "Starting virtual tick for RTC progression.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ticks_per_second": {
+          "description": "Virtual ticks per RTC second.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ticks_per_second",
+        "maximum_seconds",
+        "started"
+      ],
+      "type": "object"
+    },
+    "RunScene": {
+      "description": "Model-specific scene inputs and the devices that consume them.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Generated scene assets for an EXR2-based body.",
+          "properties": {
+            "frame_period_ticks": {
+              "description": "Initial frame clock period in virtual ticks.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "generated_assets": {
+              "description": "Deterministic external byte assets generated from fixed patterns.",
+              "items": {
+                "$ref": "#/$defs/GeneratedSceneAsset"
+              },
+              "type": "array"
+            },
+            "images": {
+              "$ref": "#/$defs/RunImages",
+              "description": "Image input presented to live-view hardware."
+            },
+            "kind": {
+              "const": "exr2",
+              "type": "string"
+            },
+            "statistics": {
+              "$ref": "#/$defs/RunStatistics",
+              "description": "Statistics input presented to live-view hardware."
+            }
+          },
+          "required": [
+            "kind",
+            "generated_assets",
+            "images",
+            "statistics",
+            "frame_period_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "External scene inputs for an XP4-based body.",
+          "properties": {
+            "command_images": {
+              "description": "Image values supplied when a declared block requests command-driven work.",
+              "items": {
+                "$ref": "#/$defs/ApplicationCommandImageInput"
+              },
+              "type": "array"
+            },
+            "frames": {
+              "description": "Periodic frame sources bound to named SoC blocks.",
+              "items": {
+                "$ref": "#/$defs/ApplicationFrameInput"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "xp4",
+              "type": "string"
+            },
+            "statistics": {
+              "description": "Uniform statistics scenes bound to named SoC blocks.",
+              "items": {
+                "$ref": "#/$defs/ApplicationStatisticsInput"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "frames",
+            "statistics",
+            "command_images"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "External scene inputs for an XP5-based body.",
+          "properties": {
+            "command_images": {
+              "description": "Image values supplied when a declared block requests command-driven work.",
+              "items": {
+                "$ref": "#/$defs/ApplicationCommandImageInput"
+              },
+              "type": "array"
+            },
+            "frames": {
+              "description": "Periodic frame sources bound to named SoC blocks.",
+              "items": {
+                "$ref": "#/$defs/ApplicationFrameInput"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "xp5",
+              "type": "string"
+            },
+            "statistics": {
+              "description": "Uniform statistics scenes bound to named SoC blocks.",
+              "items": {
+                "$ref": "#/$defs/ApplicationStatisticsInput"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "frames",
+            "statistics",
+            "command_images"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "RunSdCardProfile": {
+      "description": "Closed selection for sd card profile.",
+      "enum": [
+        "declared-blank-sdhc-default-speed-unmeasured"
+      ],
+      "type": "string"
+    },
+    "RunSecondaryBusProfile": {
+      "description": "Closed selection for secondary bus profile.",
+      "oneOf": [
+        {
+          "enum": [
+            "usbcharge-disconnected-pwic-startup-tagged"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "disabled",
+          "description": "Explicitly disable the inherited endpoint policy.",
+          "type": "string"
+        }
+      ]
+    },
+    "RunSensorFrameClock": {
+      "description": "Clock connection for an external physical sensor scene.",
+      "enum": [
+        "sensor",
+        "periodic"
+      ],
+      "type": "string"
+    },
+    "RunSerialRegisters": {
+      "additionalProperties": false,
+      "description": "Initial serial-register values for one resolved physical part.",
+      "properties": {
+        "part_id": {
+          "description": "Body part identity whose external registers receive these values.",
+          "type": "string"
+        },
+        "values": {
+          "description": "Register values at reset.",
+          "items": {
+            "$ref": "#/$defs/RunRegisterValue"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "part_id",
+        "values"
+      ],
+      "type": "object"
+    },
+    "RunSettings": {
+      "description": "Closed selection for settings.",
+      "enum": [
+        "default",
+        "owner"
+      ],
+      "type": "string"
+    },
+    "RunSpi0InputProfile": {
+      "description": "Closed selection for spi0 input profile.",
+      "enum": [
+        "absent-hot-shoe-flash-fixed-low-miso"
+      ],
+      "type": "string"
+    },
+    "RunStart": {
+      "description": "A supported firmware start entry.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Reset through the selected firmware's real boot ROM.",
+          "properties": {
+            "kind": {
+              "const": "rom",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Enter through the selected firmware's loader entry.",
+          "properties": {
+            "kind": {
+              "const": "loader",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Enter through a removable-card boot entry.",
+          "properties": {
+            "kind": {
+              "const": "sd_card",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "RunStatistics": {
+      "additionalProperties": false,
+      "description": "The named statistics sources used by the run scene.",
+      "properties": {
+        "live_statistics": {
+          "description": "Statistics spans presented to live-view hardware.",
+          "items": {
+            "$ref": "#/$defs/RunStatisticsSpan"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "live_statistics"
+      ],
+      "type": "object"
+    },
+    "RunStatisticsSpan": {
+      "additionalProperties": false,
+      "description": "One statistics asset span.",
+      "properties": {
+        "asset": {
+          "description": "Generated scene asset identity.",
+          "type": "string"
+        },
+        "destination": {
+          "description": "Statistics destination selected by the device implementation.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "description": "Byte offset within the destination.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "destination",
+        "offset",
+        "asset"
+      ],
+      "type": "object"
+    },
+    "RunStillCapture": {
+      "description": "Still-capture policy identities a browser camera can select.",
+      "oneOf": [
+        {
+          "const": "register-capture-readonly-card-observation",
+          "description": "Register-level capture, observed read-only on the card.",
+          "type": "string"
+        }
+      ]
+    },
+    "RunStorageProfile": {
+      "description": "Closed selection for storage profile.",
+      "oneOf": [
+        {
+          "enum": [
+            "captured",
+            "browser",
+            "erased"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "settings",
+          "description": "A settings bank built from stock defaults and requested camera settings.",
+          "type": "string"
+        },
+        {
+          "const": "profile",
+          "description": "The stock user profile built from requested camera settings, over an\nerased settings bank.",
+          "type": "string"
+        },
+        {
+          "const": "factory",
+          "description": "A new camera as it ships: the body's calibrated settings bank and an\nempty user profile, so the firmware runs its first-start setup.",
+          "type": "string"
+        }
+      ]
+    },
+    "RunUsbInput": {
+      "additionalProperties": false,
+      "description": "Initial USB cable state.",
+      "properties": {
+        "connected": {
+          "description": "Whether a USB cable is present.",
+          "type": "boolean"
+        },
+        "connection_id": {
+          "description": "Body USB connection identity.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "connection_id",
+        "connected"
+      ],
+      "type": "object"
+    },
+    "RunUserJournals": {
+      "description": "Selection of externally supplied persistent user journals.",
+      "enum": [
+        "disabled",
+        "restored"
+      ],
+      "type": "string"
+    },
+    "RunVirtualCard": {
+      "additionalProperties": false,
+      "description": "A virtual FAT card geometry declared for one browser camera.",
+      "properties": {
+        "filesystem": {
+          "$ref": "#/$defs/RunCardFilesystem",
+          "description": "Card filesystem."
+        },
+        "label": {
+          "description": "FAT volume label: one to eleven ASCII bytes.",
+          "type": "string"
+        },
+        "partition_start": {
+          "description": "First sector of the FAT partition.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sectors": {
+          "description": "Sectors on the blank card.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sectors_per_cluster": {
+          "description": "Sectors per FAT cluster.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "filesystem",
+        "label",
+        "sectors",
+        "partition_start",
+        "sectors_per_cluster"
+      ],
+      "type": "object"
+    },
+    "RunWifiSdioProfile": {
+      "description": "Closed selection for wifi sdio profile.",
+      "enum": [
+        "mt5931-no-peers",
+        "declared-wifi-sdio-one-function-enumeration-unmeasured"
+      ],
+      "type": "string"
+    },
+    "TimingOperation": {
+      "description": "Device operation to which a run's functional delay applies.",
+      "oneOf": [
+        {
+          "const": "settle",
+          "description": "Clock or signal settling.",
+          "type": "string"
+        },
+        {
+          "const": "sample",
+          "description": "Analog or temperature sampling.",
+          "type": "string"
+        },
+        {
+          "const": "command",
+          "description": "Command acceptance or completion.",
+          "type": "string"
+        },
+        {
+          "const": "reset",
+          "description": "Device reset completion.",
+          "type": "string"
+        },
+        {
+          "const": "pixel",
+          "description": "Display pixel clock.",
+          "type": "string"
+        },
+        {
+          "const": "acknowledge",
+          "description": "Control-request acknowledgment.",
+          "type": "string"
+        },
+        {
+          "const": "complete",
+          "description": "General processing completion.",
+          "type": "string"
+        }
+      ]
+    },
+    "VideoEncoderBackend": {
+      "description": "Explicit H.264 compression implementation, selected before construction.",
+      "enum": [
+        "videotoolbox",
+        "software"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A validated, named run configuration for one resolved body and firmware.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "body_id": {
+      "description": "Selected body identity.",
+      "type": "string"
+    },
+    "browser_camera": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunBrowserCamera"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Browser camera attachments declared by a selected overlay."
+    },
+    "execution": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunExecution"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Execution policy for this run."
+    },
+    "firmware_id": {
+      "description": "Selected firmware identity.",
+      "type": "string"
+    },
+    "id": {
+      "description": "Stable run-configuration identity.",
+      "type": "string"
+    },
+    "inputs": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunInputs"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Declared model-specific reset inputs, addressed by catalog identity."
+    },
+    "overlays": {
+      "description": "Named overlays to apply in declaration order.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "preset": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunPreset"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Explicit device policy and startup selections for this run."
+    },
+    "purpose": {
+      "$ref": "#/$defs/RunPurpose",
+      "description": "Intended operation selected by this run configuration."
+    },
+    "scene": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunScene"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "External scene inputs generated for this run."
+    },
+    "schema": {
+      "description": "Run-configuration document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "start": {
+      "$ref": "#/$defs/RunStart",
+      "description": "Firmware entry mode selected for this run."
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "purpose",
+    "body_id",
+    "firmware_id",
+    "start",
+    "overlays"
+  ],
+  "title": "RunConfiguration",
+  "type": "object"
+}

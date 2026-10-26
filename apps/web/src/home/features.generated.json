@@ -1,0 +1,1333 @@
+{
+  "schema": 1,
+  "groups": ["pictures", "movies", "handling", "problems"],
+  "features": [
+    {
+      "id": "film_simulation",
+      "group": "pictures",
+      "icon": "film",
+      "title": "FILM SIMULATION",
+      "path": ["SHOOTING MENU"],
+      "summary": "Simulate the effects of additional types of film. Create your own film simulations in FILM EDITOR.",
+      "card": "film_simulation",
+      "media_cards": ["film_simulation"],
+      "controls": [
+        {
+          "title": "FILM SIMULATION",
+          "primary": true,
+          "card": "film_simulation",
+          "choices": [
+            {
+              "label": "ETERNA",
+              "stock": false,
+              "icon": "eterna"
+            },
+            {
+              "label": "Classic Neg. (approx.)",
+              "stock": false,
+              "icon": "classic-neg"
+            },
+            {
+              "label": "Bleach Bypass (approx.)",
+              "stock": false,
+              "icon": "bleach-bypass"
+            },
+            {
+              "label": "Nostalgic Neg. (approx.)",
+              "stock": false,
+              "icon": "nostalgic-neg"
+            },
+            {
+              "label": "REALA ACE (approx.)",
+              "stock": false,
+              "icon": "reala-ace"
+            },
+            {
+              "label": "Neutral",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "card_films",
+      "group": "pictures",
+      "icon": "film",
+      "title": "Card Films",
+      "path": [],
+      "summary": "Load custom film simulations from the memory card.",
+      "card": null,
+      "media_cards": [],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "film_editor",
+      "group": "pictures",
+      "icon": "film",
+      "title": "FILM EDITOR",
+      "path": ["SHOOTING MENU"],
+      "summary": "Create and edit your own film simulations, saved as files on the memory card.",
+      "card": "film_editor_item",
+      "media_cards": ["film_editor_item"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "highlight_metering",
+      "group": "pictures",
+      "icon": "highlight",
+      "title": "PHOTOMETRY",
+      "path": ["SHOOTING MENU"],
+      "summary": "Choose HIGHLIGHT to reduce exposure when bright areas dominate the scene.",
+      "card": "photometry",
+      "media_cards": ["photometry"],
+      "controls": [
+        {
+          "title": "PHOTOMETRY",
+          "primary": true,
+          "card": "photometry",
+          "choices": [
+            {
+              "label": "MULTI",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "SPOT",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "AVERAGE",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "HIGHLIGHT",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "RAW HIGHLIGHT",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [["Ricoh GRIII"]],
+        "thanks": []
+      }
+    },
+    {
+      "id": "raw_view",
+      "group": "pictures",
+      "icon": "highlight",
+      "title": "RAW VIEW",
+      "path": [],
+      "summary": "Assign RAW VIEW to a function button to see how close the brightest areas are to losing detail in the RAW file.",
+      "card": "raw_view",
+      "media_cards": ["raw_view"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "recipes",
+      "group": "pictures",
+      "icon": "recipes",
+      "title": "Unlimited Recipes",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "summary": "Store custom settings as named files on the memory card and load them into C1–C7.",
+      "card": null,
+      "media_cards": ["edit_save_custom_setting"],
+      "controls": [
+        {
+          "title": "RECIPE",
+          "primary": true,
+          "card": null,
+          "choices": [],
+          "actions": ["SAVE CURRENT SETTINGS", "SAVE AS NEW RECIPE", "CHOOSE FROM SD CARD"]
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "aspect_ratio",
+      "group": "pictures",
+      "icon": "aspect",
+      "title": "ASPECT RATIO",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "summary": "Choose the aspect ratio of still pictures.",
+      "card": "shape_aspect_item",
+      "media_cards": ["shape_aspect_item"],
+      "controls": [
+        {
+          "title": "ASPECT RATIO",
+          "primary": true,
+          "card": "shape_aspect_item",
+          "choices": [
+            {
+              "label": "3:2",
+              "stock": true,
+              "icon": "ratio:3:2"
+            },
+            {
+              "label": "16:9",
+              "stock": true,
+              "icon": "ratio:16:9"
+            },
+            {
+              "label": "1:1",
+              "stock": true,
+              "icon": "ratio:1:1"
+            },
+            {
+              "label": "4:3",
+              "stock": false,
+              "icon": "ratio:4:3"
+            },
+            {
+              "label": "65:24",
+              "stock": false,
+              "icon": "ratio:65:24"
+            },
+            {
+              "label": "17:6",
+              "stock": false,
+              "icon": "ratio:17:6"
+            },
+            {
+              "label": "3:4",
+              "stock": false,
+              "icon": "ratio:3:4"
+            },
+            {
+              "label": "7:6",
+              "stock": false,
+              "icon": "ratio:7:6"
+            },
+            {
+              "label": "5:4",
+              "stock": false,
+              "icon": "ratio:5:4"
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "surround_view",
+      "group": "pictures",
+      "icon": "aspect",
+      "title": "SURROUND VIEW",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "summary": "Choose how the area outside the frame is shown.",
+      "card": "shape_surround_item",
+      "media_cards": ["shape_surround_item"],
+      "controls": [
+        {
+          "title": "SURROUND VIEW",
+          "primary": true,
+          "card": "shape_surround_item",
+          "choices": [
+            {
+              "label": "MASKED",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "DARKENED",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "WHITE BORDER",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgu9bq5/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/old_school_gearhead/",
+              "text": ["u/old_school_gearhead"]
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "framing_guideline",
+      "group": "pictures",
+      "icon": "golden-ratio",
+      "title": "FRAMING GUIDELINE",
+      "path": ["SET-UP", "SCREEN SET-UP"],
+      "summary": "Choose a guide to display in the shooting view, including Golden Ratio and four Golden Spiral focal points.",
+      "card": "c",
+      "media_cards": ["c"],
+      "controls": [
+        {
+          "title": "FRAMING GUIDELINE",
+          "primary": true,
+          "card": "c",
+          "choices": [
+            {
+              "label": "GRID 9",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "GRID 24",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "HD FRAMING",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "GOLDEN RATIO",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "GOLDEN SPIRAL - BOTTOM LEFT",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "GOLDEN SPIRAL - BOTTOM RIGHT",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "GOLDEN SPIRAL - TOP LEFT",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "GOLDEN SPIRAL - TOP RIGHT",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "desqueeze",
+      "group": "pictures",
+      "icon": "anamorphic",
+      "title": "Anamorphic Lenses",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "summary": "Display and record pictures taken through an anamorphic adapter at their corrected width.",
+      "card": null,
+      "media_cards": ["shape_desqueeze_item"],
+      "controls": [
+        {
+          "title": "DESQUEEZE",
+          "primary": false,
+          "card": "shape_desqueeze_item",
+          "choices": [
+            {
+              "label": "1.25X",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "1.33X",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "1.50X",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "1.60X",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "1.80X",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "2.00X",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": [
+          [
+            "suggested by ",
+            {
+              "href": "https://www.reddit.com/user/-ayiv-/",
+              "text": ["u/-ayiv-"]
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "desqueeze_jpeg",
+      "group": "pictures",
+      "icon": "anamorphic",
+      "title": "Desqueeze JPEG",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "summary": "Display and record pictures taken through an anamorphic adapter at their corrected width.",
+      "card": null,
+      "media_cards": ["shape_jpeg_item"],
+      "controls": [
+        {
+          "title": "DESQUEEZE JPEG",
+          "primary": false,
+          "card": "shape_jpeg_item",
+          "choices": [
+            {
+              "label": "ON",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "OFF",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "snap_focus",
+      "group": "pictures",
+      "icon": "snap",
+      "title": "MF SNAP FOCUS",
+      "path": ["SHOOTING MENU"],
+      "summary": "In manual focus mode, press a button assigned to SNAP FOCUS to focus at a preset distance.",
+      "card": "snap_menu_item",
+      "media_cards": ["snap_menu_item"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [["Ricoh GRIII"]],
+        "thanks": []
+      }
+    },
+    {
+      "id": "f_log",
+      "group": "movies",
+      "icon": "movie",
+      "title": "F-Log RECORDING",
+      "path": ["SHOOTING MENU", "MOVIE SET-UP"],
+      "summary": "Record movies with the F-Log transfer and F-Gamut color matrix.",
+      "card": "f_log_recording_item",
+      "media_cards": ["f_log_recording_item"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgsf59j/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/Visible-Marzipan5763/",
+              "text": ["u/Visible-Marzipan5763"]
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "unlocked_controls",
+      "group": "handling",
+      "icon": "controls",
+      "title": "Unlocked Controls",
+      "path": [],
+      "summary": "Assign settings to the EV dial, shutter dial, aperture ring, command control, control ring, focus selector, Auto lever and unlocked buttons.",
+      "card": null,
+      "media_cards": [
+        "bindings_row_exposure_compensation_dial",
+        "bindings_row_command_control",
+        "control_ring_setting",
+        "bindings_row_auto_mode_selector_lever",
+        "bindings_row_shutter_speed_dial",
+        "bindings_row_aperture_ring",
+        "bindings_row_focus_mode_selector",
+        "bindings_row_af_ae_lock_button",
+        "bindings_row_drive_button",
+        "bindings_row_quick_menu_button",
+        "bindings_row_command_control_press"
+      ],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgskdyo/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/ArvinAbadilla/",
+              "text": ["u/ArvinAbadilla"]
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "hdmi_output",
+      "group": "handling",
+      "icon": "hdmi",
+      "title": "HDMI OUTPUT",
+      "path": ["SET-UP"],
+      "summary": "Display the shooting view on an HDMI device.",
+      "card": "hdmi_rec_behavior_item",
+      "media_cards": ["hdmi_rec_behavior_item"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "menu_theme",
+      "group": "handling",
+      "icon": "theme",
+      "title": "MENU THEME",
+      "path": ["SET-UP"],
+      "summary": "Choose the appearance of the menus.",
+      "card": "menu_theme_item",
+      "media_cards": ["menu_theme_item"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "menu_tap",
+      "group": "handling",
+      "icon": "touch",
+      "title": "Menu Tap",
+      "path": ["SET-UP", "TOUCH SCREEN SETTING"],
+      "summary": "Tap a menu row, tab or option to choose it. Tap outside a pop-up to close it.",
+      "card": null,
+      "media_cards": ["touch_screen_setting"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "autofocus",
+      "group": "handling",
+      "icon": "autofocus",
+      "title": "Autofocus",
+      "path": [],
+      "summary": "In AF-S mode, when phase detection fails, the camera estimates focus and measures again before using contrast detection.",
+      "card": null,
+      "media_cards": [],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "date_card_name",
+      "group": "handling",
+      "icon": "card",
+      "title": "FORMAT CARD NAME",
+      "path": ["SET-UP", "SAVE DATA SET-UP"],
+      "summary": "Name memory cards after the date they are formatted.",
+      "card": "sd_volume_name_item",
+      "media_cards": ["sd_volume_name_item"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "date_folders",
+      "group": "handling",
+      "icon": "folder",
+      "title": "DATE FOLDERS",
+      "path": ["SET-UP", "SAVE DATA SET-UP"],
+      "summary": "Keep each day's pictures in their own folder, named after the date.",
+      "card": "date_folders_item",
+      "media_cards": ["date_folders_item"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgumwwa/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/Mister_Mints/",
+              "text": ["u/Mister_Mints"]
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "bug_reports",
+      "group": "problems",
+      "icon": "bug",
+      "title": "Bug Reports",
+      "path": ["SET-UP", "FUJIMOD DEVTOOLS", "BUG REPORT SHORTCUT"],
+      "summary": "Hold the side Fn button and press DISP/BACK to save a diagnostic report to the memory card and display a QR code.",
+      "card": null,
+      "media_cards": ["bug_report_shortcut"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    }
+  ],
+  "cards": {
+    "image_size": {
+      "title": "IMAGE SIZE",
+      "path": ["SHOOTING MENU"],
+      "summary": null,
+      "choices": {},
+      "related": [],
+      "changes": "Aspect ratio selection moved to SHAPE & ASPECT > ASPECT RATIO; IMAGE SIZE now sets L, M or S only.",
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "shape_aspect_item": {
+      "title": "ASPECT RATIO",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "summary": "Choose the shape of still pictures: wide, square or tall.",
+      "choices": {
+        "3:2": "The sensor's full frame, uncropped.",
+        "16:9": "Widescreen, like a TV or movie.",
+        "1:1": "A square frame.",
+        "4:3": "A taller frame, like most phones.",
+        "65:24": "A panoramic strip, as on the Hasselblad XPan.",
+        "17:6": "A wide panoramic strip.",
+        "3:4": "A tall portrait frame.",
+        "7:6": "A near-square frame, like 6×7 film.",
+        "5:4": "A frame like 4×5 large-format film."
+      },
+      "related": [
+        {
+          "card": "image_size",
+          "reason": "set the max width and height before applying the crop"
+        }
+      ],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {
+        "65:24": {
+          "premiere": false,
+          "inspired": [],
+          "thanks": [
+            [
+              {
+                "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgrajab/",
+                "text": ["suggested"]
+              },
+              " by ",
+              {
+                "href": "https://www.reddit.com/user/Jinjer/",
+                "text": ["u/Jinjer"]
+              }
+            ]
+          ]
+        },
+        "4:3": {
+          "premiere": false,
+          "inspired": [],
+          "thanks": [
+            [
+              {
+                "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgrhabd/",
+                "text": ["suggested"]
+              },
+              " by ",
+              {
+                "href": "https://www.reddit.com/user/YatoAkito/",
+                "text": ["u/YatoAkito"]
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "shape_surround_item": {
+      "title": "SURROUND VIEW",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "summary": "Choose how the area outside the frame is shown.",
+      "choices": {
+        "MASKED": "The area outside the frame is black.",
+        "DARKENED": "The area outside the frame is darkened.",
+        "WHITE BORDER": "A white line marks the frame."
+      },
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgu9bq5/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/old_school_gearhead/",
+              "text": ["u/old_school_gearhead"]
+            }
+          ]
+        ]
+      },
+      "choice_credits": {}
+    },
+    "shape_desqueeze_item": {
+      "title": "DESQUEEZE",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "summary": "Choose the squeeze factor of your anamorphic adapter.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "shape_jpeg_item": {
+      "title": "DESQUEEZE JPEG",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "summary": "Choose whether JPEG pictures are also recorded at their corrected width.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "c": {
+      "title": "FRAMING GUIDELINE",
+      "path": ["SET-UP", "SCREEN SET-UP"],
+      "summary": null,
+      "choices": {
+        "GOLDEN RATIO": "Lines that divide the frame at the golden ratio.",
+        "GOLDEN SPIRAL - BOTTOM LEFT": "A golden logarithmic spiral with its focal point at the lower-left golden-section intersection.",
+        "GOLDEN SPIRAL - BOTTOM RIGHT": "A golden logarithmic spiral with its focal point at the lower-right golden-section intersection.",
+        "GOLDEN SPIRAL - TOP LEFT": "A golden logarithmic spiral with its focal point at the upper-left golden-section intersection.",
+        "GOLDEN SPIRAL - TOP RIGHT": "A golden logarithmic spiral with its focal point at the upper-right golden-section intersection."
+      },
+      "related": [],
+      "changes": "Adds GOLDEN RATIO and four GOLDEN SPIRAL focal-point placements. All guides follow the selected image bounds and aspect ratio.",
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {
+        "GOLDEN RATIO": {
+          "premiere": false,
+          "inspired": [],
+          "thanks": [
+            [
+              {
+                "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgr9ple/",
+                "text": ["suggested"]
+              },
+              " by ",
+              {
+                "href": "https://www.reddit.com/user/Puzzleheaded-Tea9962/",
+                "text": ["u/Puzzleheaded-Tea9962"]
+              }
+            ]
+          ]
+        },
+        "GOLDEN SPIRAL - BOTTOM LEFT": {
+          "premiere": false,
+          "inspired": [],
+          "thanks": [
+            [
+              {
+                "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/phb9mxi/",
+                "text": ["suggested"]
+              },
+              " by ",
+              {
+                "href": "https://www.reddit.com/user/AdGroundbreaking2874/",
+                "text": ["u/AdGroundbreaking2874"]
+              }
+            ]
+          ]
+        },
+        "GOLDEN SPIRAL - BOTTOM RIGHT": {
+          "premiere": false,
+          "inspired": [],
+          "thanks": [
+            [
+              {
+                "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/phb9mxi/",
+                "text": ["suggested"]
+              },
+              " by ",
+              {
+                "href": "https://www.reddit.com/user/AdGroundbreaking2874/",
+                "text": ["u/AdGroundbreaking2874"]
+              }
+            ]
+          ]
+        },
+        "GOLDEN SPIRAL - TOP LEFT": {
+          "premiere": false,
+          "inspired": [],
+          "thanks": [
+            [
+              {
+                "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/phb9mxi/",
+                "text": ["suggested"]
+              },
+              " by ",
+              {
+                "href": "https://www.reddit.com/user/AdGroundbreaking2874/",
+                "text": ["u/AdGroundbreaking2874"]
+              }
+            ]
+          ]
+        },
+        "GOLDEN SPIRAL - TOP RIGHT": {
+          "premiere": false,
+          "inspired": [],
+          "thanks": [
+            [
+              {
+                "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/phb9mxi/",
+                "text": ["suggested"]
+              },
+              " by ",
+              {
+                "href": "https://www.reddit.com/user/AdGroundbreaking2874/",
+                "text": ["u/AdGroundbreaking2874"]
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "film_simulation": {
+      "title": "FILM SIMULATION",
+      "path": ["SHOOTING MENU"],
+      "summary": null,
+      "choices": {},
+      "related": [],
+      "changes": "Adds ETERNA, Neutral and approximations of four film simulations from newer cameras, and films saved on the memory card. Approximations are marked (approx.) in the camera.",
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "film_editor_item": {
+      "title": "FILM EDITOR",
+      "path": ["SHOOTING MENU"],
+      "summary": "Create and edit film simulations, saved as files on the memory card.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "photometry": {
+      "title": "PHOTOMETRY",
+      "path": ["SHOOTING MENU"],
+      "summary": null,
+      "choices": {
+        "HIGHLIGHT": "Meters exposure in multiple areas of the frame with emphasis on the bright areas.",
+        "RAW HIGHLIGHT": "Expose To The Right (ETTR): Exposure is set so that the brightest areas of the frame are recorded as brightly as possible without loss of detail in RAW images."
+      },
+      "related": [
+        {
+          "card": "raw_view",
+          "reason": "see how close the brightest areas are to losing detail in RAW file while shooting"
+        }
+      ],
+      "changes": "Adds HIGHLIGHT and RAW HIGHLIGHT metering modes, which expose for detail in the brightest areas.",
+      "credits": {
+        "premiere": false,
+        "inspired": [["Ricoh GRIII"]],
+        "thanks": []
+      },
+      "choice_credits": {
+        "RAW HIGHLIGHT": {
+          "premiere": false,
+          "inspired": [],
+          "thanks": [
+            [
+              {
+                "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/ph5js9v/",
+                "text": ["suggested"]
+              },
+              " by ",
+              {
+                "href": "https://www.reddit.com/user/Dry_Safe_6021/",
+                "text": ["u/Dry_Safe_6021"]
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "raw_view": {
+      "title": "RAW VIEW",
+      "path": [],
+      "summary": "Press a button assigned to RAW VIEW to see how close the brightest areas are to losing detail in the RAW file. Press it again to return to the normal live view.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "f_log_recording_item": {
+      "title": "F-Log RECORDING",
+      "path": ["SHOOTING MENU", "MOVIE SET-UP"],
+      "summary": "Choose F-Log processing for movies.",
+      "choices": {
+        "OFF": "Use the selected picture settings.",
+        "ON": "Use F-Log movie processing."
+      },
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgsf59j/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/Visible-Marzipan5763/",
+              "text": ["u/Visible-Marzipan5763"]
+            }
+          ]
+        ]
+      },
+      "choice_credits": {}
+    },
+    "hdmi_rec_behavior_item": {
+      "title": "HDMI OUTPUT",
+      "path": ["SET-UP"],
+      "summary": "Choose whether an HDMI device shows the shooting view or playback only.",
+      "choices": {
+        "LIVE VIEW": "The HDMI device shows the shooting view.",
+        "PLAYBACK ONLY": "The HDMI device shows playback only, as on an unmodified camera."
+      },
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "bindings_row_exposure_compensation_dial": {
+      "title": "EV DIAL",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "summary": "Choose an action and the value each EV notch selects.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgu87sm/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/yourasian/",
+              "text": ["u/yourasian"]
+            }
+          ]
+        ]
+      },
+      "choice_credits": {}
+    },
+    "bindings_row_command_control": {
+      "title": "COMMAND CONTROL",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "summary": "Choose the setting the command control adjusts.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "bindings_row_auto_mode_selector_lever": {
+      "title": "AUTO LEVER",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "summary": "Choose an action and the value each Auto-lever position selects.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "bindings_row_shutter_speed_dial": {
+      "title": "SHUTTER DIAL",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "summary": "Choose an action and the value each shutter notch selects.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "bindings_row_aperture_ring": {
+      "title": "APERTURE RING",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "summary": "Choose an action and the value each aperture notch selects.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "bindings_row_focus_mode_selector": {
+      "title": "FOCUS MODE",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "summary": "Choose an action and the value S, C and M each select.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "bindings_row_af_ae_lock_button": {
+      "title": "AE-L/AF-L",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "summary": "Choose the AE-L/AF-L button action and press operation.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "bindings_row_drive_button": {
+      "title": "DRIVE BUTTON",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "summary": "Choose the DRIVE button action and press operation.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "bindings_row_quick_menu_button": {
+      "title": "Q BUTTON",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "summary": "Choose the Q button action and press operation.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "bindings_row_command_control_press": {
+      "title": "COMMAND PRESS",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "summary": "Choose the command control press action and press operation.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "control_ring_setting": {
+      "title": "CONTROL RING SETTING",
+      "path": ["SHOOTING MENU"],
+      "summary": null,
+      "choices": {},
+      "related": [],
+      "changes": "Adds EXPOSURE COMP., STILLS/MOVIE and the FujiMod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.",
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "menu_theme_item": {
+      "title": "MENU THEME",
+      "path": ["SET-UP"],
+      "summary": "Choose the appearance of the menus.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "touch_screen_setting": {
+      "title": "TOUCH SCREEN SETTING",
+      "path": ["SET-UP"],
+      "summary": null,
+      "choices": {
+        "ON": "Taps choose menu rows, tabs and options, and close pop-ups.",
+        "OFF": "The screen ignores touch, in the menus too."
+      },
+      "related": [],
+      "changes": "Touch also works in the menus: tap a row, tab or option to choose it, tap outside a pop-up or tap BACK to go back.",
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "edit_save_custom_setting": {
+      "title": "EDIT/SAVE CUSTOM SETTING",
+      "path": ["SHOOTING MENU"],
+      "summary": null,
+      "choices": {},
+      "related": [],
+      "changes": "Each slot C1–C7 holds a recipe saved as a named file on the memory card. Choose SAVE CURRENT SETTINGS, SAVE AS NEW RECIPE, CHOOSE FROM SD CARD or CLEAR SLOT.",
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "snap_menu_item": {
+      "title": "MF SNAP FOCUS",
+      "path": ["SHOOTING MENU"],
+      "summary": "Choose the distance used by the SNAP FOCUS action in manual focus mode.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [["Ricoh GRIII"]],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "bug_report_shortcut": {
+      "title": "BUG REPORT SHORTCUT",
+      "path": ["SET-UP", "FUJIMOD DEVTOOLS"],
+      "summary": "Choose whether the side Fn button and DISP/BACK save a bug report.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "sd_volume_name_item": {
+      "title": "FORMAT CARD NAME",
+      "path": ["SET-UP", "SAVE DATA SET-UP"],
+      "summary": "Choose whether FORMAT names the memory card after the date, such as 2026-10-22.",
+      "choices": {
+        "ON": "Formatted cards are named after the date.",
+        "OFF": "Formatted cards are left unnamed, as on an unmodified camera."
+      },
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "date_folders_item": {
+      "title": "DATE FOLDERS",
+      "path": ["SET-UP", "SAVE DATA SET-UP"],
+      "summary": "Choose whether the first picture of each day starts a new folder named after the date.",
+      "choices": {
+        "ON": "Each day starts a new folder, such as 101_1022 for October 22.",
+        "OFF": "Pictures are stored in folders as on an unmodified camera."
+      },
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgumwwa/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/Mister_Mints/",
+              "text": ["u/Mister_Mints"]
+            }
+          ]
+        ]
+      },
+      "choice_credits": {}
+    }
+  }
+}

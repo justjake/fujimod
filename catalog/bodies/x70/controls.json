@@ -1,0 +1,1486 @@
+{
+  "$schema": "https://fujimod.com/schemas/physical-controls.schema.json",
+  "schema": 1,
+  "id": "x70-controls",
+  "body_id": "x70",
+  "manual": {
+    "url": "https://fujifilm-dsc.com/en/manual/x70/X70_OMW_EN_S_F_02.pdf",
+    "title": "FUJIFILM X70 Owner's Manual",
+    "pages": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      14,
+      21,
+      24,
+      25,
+      29,
+      30,
+      35,
+      36,
+      39,
+      42,
+      43,
+      48,
+      49,
+      51,
+      52,
+      53,
+      54,
+      62,
+      65,
+      74,
+      81,
+      85,
+      96,
+      107,
+      111,
+      128
+    ]
+  },
+  "analog_levels": 1024,
+  "boot": {
+    "sd": {
+      "hold": [
+        {
+          "id": "command_control.press"
+        },
+        {
+          "id": "movie_record_button"
+        }
+      ]
+    },
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
+    },
+    "service": {
+      "usb": true,
+      "hold": [
+        {
+          "id": "selector.up"
+        },
+        {
+          "id": "shutter_button",
+          "stage": "full"
+        }
+      ]
+    }
+  },
+  "controls": {
+    "af_ae_lock_button": {
+      "name": "AF-L/AE-L (autofocus/autoexposure lock) button",
+      "location": "rear",
+      "manual_page": 85,
+      "face": "AF-L/AE-L",
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-8"
+      ],
+      "assignable": false,
+      "default_function": "AE lock only by default; lock behavior can be set to remain active while pressed or until the button is pressed again.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "AEAF_LOCK"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "aperture_ring": {
+      "name": "Aperture ring",
+      "location": "front",
+      "manual_page": 51,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-9"
+      ],
+      "assignable": false,
+      "default_function": "Sets aperture; A lets the camera select aperture.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "ring",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "A",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_A"
+              },
+              "asserted": true
+            },
+            {
+              "id": "2.8",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F2.8"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F3.2",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F3_2"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F3.6",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F3_6"
+              },
+              "asserted": true
+            },
+            {
+              "id": "4",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F4.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F4.5",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F4_5"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F5",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F5_0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "5.6",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F5.6"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F6.4",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F6_4"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F7.1",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F7_1"
+              },
+              "asserted": true
+            },
+            {
+              "id": "8",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F8.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F9",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F9"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F10",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F10"
+              },
+              "asserted": true
+            },
+            {
+              "id": "11",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F11"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F13",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F13"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F14",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F14"
+              },
+              "asserted": true
+            },
+            {
+              "id": "16",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F16"
+              },
+              "asserted": true
+            }
+          ]
+        },
+        "press": null,
+        "endless": false
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "A",
+          "label": "A",
+          "description": null
+        },
+        {
+          "id": "2.8",
+          "label": "2.8",
+          "description": null
+        },
+        {
+          "id": "F3.2",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "F3.6",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "4",
+          "label": "4",
+          "description": null
+        },
+        {
+          "id": "F4.5",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "F5",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "5.6",
+          "label": "5.6",
+          "description": null
+        },
+        {
+          "id": "F6.4",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "F7.1",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "8",
+          "label": "8",
+          "description": null
+        },
+        {
+          "id": "F9",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "F10",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "11",
+          "label": "11",
+          "description": null
+        },
+        {
+          "id": "F13",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "F14",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "16",
+          "label": "16",
+          "description": null
+        }
+      ],
+      "short_name": "APERTURE"
+    },
+    "auto_mode_selector_lever": {
+      "name": "Auto mode selector lever",
+      "location": "top",
+      "manual_page": 5,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-gpio-2-11"
+      ],
+      "assignable": false,
+      "default_function": "Selects manual exposure modes P, S, A, and M, or auto mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "lever",
+        "positions": [
+          {
+            "id": "manual",
+            "key": {
+              "kind": "native_input",
+              "name": "KEY_RECL_MANUAL"
+            },
+            "asserted": true
+          },
+          {
+            "id": "AUTO",
+            "key": {
+              "kind": "native_input",
+              "name": "KEY_RECL_AUTO"
+            },
+            "asserted": true
+          }
+        ],
+        "momentary": false
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "manual",
+          "label": "icon",
+          "description": "Select from P (program AE), S (shutter-priority AE), A (aperture-priority AE), and M (manual) modes."
+        },
+        {
+          "id": "AUTO",
+          "label": "AUTO",
+          "description": null
+        }
+      ],
+      "short_name": "AUTO"
+    },
+    "battery_chamber_cover_latch": {
+      "name": "Battery-chamber cover latch",
+      "location": "bottom",
+      "manual_page": 14,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Slide the battery-chamber latch as shown and open the battery-chamber cover.",
+      "role": null,
+      "mechanical": true,
+      "behavior": null,
+      "pushable": false,
+      "positions": []
+    },
+    "battery_latch": {
+      "name": "Battery latch",
+      "location": "bottom",
+      "manual_page": 14,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "To remove the battery, press the battery latch to the side, and slide the battery out of the camera as shown.",
+      "role": null,
+      "mechanical": true,
+      "behavior": null,
+      "pushable": false,
+      "positions": []
+    },
+    "command_control": {
+      "name": "Command control",
+      "location": "rear",
+      "manual_page": 6,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-gpio-0-10",
+        "controls-gpio-3-8",
+        "controls-gpio-3-9"
+      ],
+      "assignable": false,
+      "default_function": "Press left or right to choose shutter speed and aperture combinations or fine-tune shutter speed, and to zoom during playback; press the center to zoom in on the selected focus area. Press and hold the center during manual focus to choose a focus-assist display.",
+      "role": "command_control",
+      "mechanical": false,
+      "behavior": {
+        "kind": "rocker",
+        "decrease": {
+          "kind": "debug_key",
+          "name": "CMD_LEFT"
+        },
+        "increase": {
+          "kind": "debug_key",
+          "name": "CMD_RIGHT"
+        },
+        "press": {
+          "kind": "debug_key",
+          "name": "CMD_PUSH"
+        }
+      },
+      "pushable": true,
+      "positions": [],
+      "short_name": "COMMAND"
+    },
+    "control_ring": {
+      "name": "Control ring",
+      "location": "front",
+      "manual_page": 49,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-encoder-3-6-3-7"
+      ],
+      "assignable": true,
+      "default_function": "Provides the selected control-ring function; DEFAULT varies by shooting mode. In manual focus mode, it adjusts focus distance.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "ring",
+        "motion": {
+          "kind": "steps",
+          "decrease": {
+            "kind": "debug_key",
+            "name": "CRING-"
+          },
+          "increase": {
+            "kind": "debug_key",
+            "name": "CRING+"
+          }
+        },
+        "press": null,
+        "endless": true
+      },
+      "pushable": false,
+      "positions": [],
+      "short_name": "LENS"
+    },
+    "control_ring_options_button": {
+      "name": "Control ring options button / Function button (Fn7)",
+      "location": "front",
+      "manual_page": 49,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-7"
+      ],
+      "assignable": true,
+      "default_function": "Displays control ring options; Fn7 is assigned to control ring options by default and its function-button role is assignable.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "FUNCTION2"
+        }
+      },
+      "pushable": true,
+      "positions": [],
+      "short_name": "SIDE"
+    },
+    "delete_button": {
+      "name": "Delete button / Function button (Fn8)",
+      "location": "rear",
+      "manual_page": 35,
+      "face": null,
+      "icon": "delete",
+      "connection_ids": [
+        "controls-gpio-3-3"
+      ],
+      "assignable": true,
+      "default_function": "Deletes pictures in playback; Fn8 has no function assigned by default and can be assigned.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "DELETE"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "disp_back_button": {
+      "name": "DISP (display)/BACK button",
+      "location": "rear",
+      "manual_page": 25,
+      "face": "DISP/BACK",
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-8"
+      ],
+      "assignable": false,
+      "default_function": "Cycles display modes and serves as BACK in menus; press and hold to display function-button role settings.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "DISP_B"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "drive_button": {
+      "name": "DRIVE button",
+      "location": "top",
+      "manual_page": 65,
+      "face": "DRIVE",
+      "icon": null,
+      "connection_ids": [
+        "controls-gpio-2-12"
+      ],
+      "assignable": false,
+      "default_function": "Displays drive options for still image, continuous, bracketing, motion panorama, multiple exposure, and advanced filter modes.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "DRIVE"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "exposure_compensation_dial": {
+      "name": "Exposure compensation dial",
+      "location": "top",
+      "manual_page": 62,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-4"
+      ],
+      "assignable": false,
+      "default_function": "Adjusts exposure compensation; positive values increase exposure and negative values reduce it.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "+3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+3.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "8/3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+2.7"
+              },
+              "asserted": true
+            },
+            {
+              "id": "7/3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+2.3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "+2",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+2.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "5/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P5_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "4/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P4_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "+1",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+1.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "2/3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+0.7"
+              },
+              "asserted": true
+            },
+            {
+              "id": "1/3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+0.3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "0",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D=0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-1/3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-0.3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-2/3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-0.7"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−1",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-1.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-4/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M4_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-5/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M5_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−2",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-2.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-7/3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-2.3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-8/3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-2.7"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-3.0"
+              },
+              "asserted": true
+            }
+          ]
+        },
+        "press": null,
+        "endless": false
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "+3",
+          "label": "+3",
+          "description": null
+        },
+        {
+          "id": "8/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "7/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "+2",
+          "label": "+2",
+          "description": null
+        },
+        {
+          "id": "5/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "4/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "+1",
+          "label": "+1",
+          "description": null
+        },
+        {
+          "id": "2/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "1/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "0",
+          "label": "0",
+          "description": null
+        },
+        {
+          "id": "-1/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "-2/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "−1",
+          "label": "−1",
+          "description": null
+        },
+        {
+          "id": "-4/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "-5/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "−2",
+          "label": "−2",
+          "description": null
+        },
+        {
+          "id": "-7/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "-8/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "−3",
+          "label": "−3",
+          "description": null
+        }
+      ],
+      "short_name": "EV"
+    },
+    "focus_mode_selector": {
+      "name": "Focus mode selector",
+      "location": "front",
+      "manual_page": 74,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-7"
+      ],
+      "assignable": false,
+      "default_function": "Selects single AF, continuous AF, or manual focus.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch",
+        "positions": [
+          {
+            "id": "S",
+            "key": {
+              "kind": "debug_key",
+              "name": "MF_AF_A"
+            },
+            "asserted": true
+          },
+          {
+            "id": "C",
+            "key": {
+              "kind": "debug_key",
+              "name": "MF_AF_C"
+            },
+            "asserted": true
+          },
+          {
+            "id": "M",
+            "key": {
+              "kind": "debug_key",
+              "name": "MF_AF_M"
+            },
+            "asserted": true
+          }
+        ]
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "S",
+          "label": "S",
+          "description": null
+        },
+        {
+          "id": "C",
+          "label": "C",
+          "description": null
+        },
+        {
+          "id": "M",
+          "label": "M",
+          "description": null
+        }
+      ],
+      "short_name": "FOCUS"
+    },
+    "front_ring": {
+      "name": "Front ring",
+      "location": "front",
+      "manual_page": 128,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Remove to attach the optional wide conversion lens.",
+      "role": null,
+      "mechanical": true,
+      "behavior": null,
+      "pushable": false,
+      "positions": []
+    },
+    "lcd_tilt_switch": {
+      "name": "LCD tilt switch",
+      "location": "rear",
+      "manual_page": null,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-gpio-1-1"
+      ],
+      "assignable": false,
+      "default_function": null,
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch",
+        "positions": [
+          {
+            "id": "normal",
+            "key": {
+              "kind": "native_input",
+              "name": "KEY_LCD_TILT"
+            },
+            "asserted": false
+          },
+          {
+            "id": "selfie",
+            "key": {
+              "kind": "native_input",
+              "name": "KEY_LCD_TILT"
+            },
+            "asserted": true
+          }
+        ]
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "normal",
+          "label": "normal",
+          "description": null
+        },
+        {
+          "id": "selfie",
+          "label": "selfie",
+          "description": null
+        }
+      ],
+      "short_name": "SCREEN"
+    },
+    "menu_ok_button": {
+      "name": "MENU/OK button / Control lock button",
+      "location": "rear",
+      "manual_page": 3,
+      "face": "MENU/OK",
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-8"
+      ],
+      "assignable": false,
+      "default_function": "Opens menus and selects items; press and hold to lock or unlock the selector, Q, Fn6, and AF-L/AE-L buttons during shooting.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "EXE_M"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "movie_record_button": {
+      "name": "Movie-record button / Function button (Fn1)",
+      "location": "top",
+      "manual_page": 36,
+      "face": null,
+      "icon": "record",
+      "connection_ids": [
+        "controls-gpio-0-11"
+      ],
+      "assignable": true,
+      "default_function": "Starts and stops movie recording by default; its function-button role is assignable and the assigned role is accessed by pressing and holding.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "native_input",
+          "name": "KEY_FUNCTION3"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "playback_button": {
+      "name": "Playback button",
+      "location": "rear",
+      "manual_page": 30,
+      "face": null,
+      "icon": "playback",
+      "connection_ids": [
+        "controls-gpio-2-9"
+      ],
+      "assignable": false,
+      "default_function": "Starts playback.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "K_PLAY"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "power_switch": {
+      "name": "ON/OFF switch",
+      "location": "top",
+      "manual_page": 21,
+      "face": "ON/OFF",
+      "icon": null,
+      "connection_ids": [
+        "power"
+      ],
+      "assignable": false,
+      "default_function": "Turns the camera on or off.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch",
+        "positions": [
+          {
+            "id": "ON",
+            "key": {
+              "kind": "debug_key",
+              "name": "POWER"
+            },
+            "asserted": true
+          },
+          {
+            "id": "OFF",
+            "key": {
+              "kind": "debug_key",
+              "name": "POWER"
+            },
+            "asserted": false
+          }
+        ]
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "ON",
+          "label": "ON",
+          "description": null
+        },
+        {
+          "id": "OFF",
+          "label": "OFF",
+          "description": null
+        }
+      ]
+    },
+    "quick_menu_button": {
+      "name": "Q (quick menu) button",
+      "location": "rear",
+      "manual_page": 39,
+      "face": "Q",
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-8"
+      ],
+      "assignable": false,
+      "default_function": "Displays the quick menu; press and hold to display quick-menu edit options.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "K_Q"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "selector": {
+      "name": "Selector/function buttons",
+      "location": "rear",
+      "manual_page": 4,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-8"
+      ],
+      "assignable": true,
+      "default_function": "Highlights items; up selects AF mode, left selects self-timer, right selects flash mode, and down selects the focus area by default. These directions are assignable as function buttons Fn2–Fn5.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "pad",
+        "directions": {
+          "up": {
+            "kind": "debug_key",
+            "name": "UP"
+          },
+          "down": {
+            "kind": "debug_key",
+            "name": "DOWN"
+          },
+          "left": {
+            "kind": "debug_key",
+            "name": "LEFT"
+          },
+          "right": {
+            "kind": "debug_key",
+            "name": "RIGHT"
+          }
+        },
+        "press": null
+      },
+      "pushable": false,
+      "positions": [],
+      "short_name": "SELECTOR"
+    },
+    "shutter_button": {
+      "name": "Shutter button",
+      "location": "top",
+      "manual_page": 29,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "s1",
+        "s2"
+      ],
+      "assignable": false,
+      "default_function": "Half-presses to focus and lock focus and exposure; press fully to take a picture.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "shutter",
+        "stages": {
+          "half_press": [
+            {
+              "kind": "debug_key",
+              "name": "S1"
+            }
+          ],
+          "full_press": [
+            {
+              "kind": "debug_key",
+              "name": "S1"
+            },
+            {
+              "kind": "debug_key",
+              "name": "S2"
+            }
+          ]
+        }
+      },
+      "pushable": true,
+      "positions": [],
+      "short_name": "SHUTTER"
+    },
+    "shutter_speed_dial": {
+      "name": "Shutter speed dial",
+      "location": "top",
+      "manual_page": 51,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-3"
+      ],
+      "assignable": false,
+      "default_function": "Selects shutter speed; A selects automatic shutter speed, T selects a timed exposure, and B holds the shutter open while the shutter button is pressed.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "A",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-A"
+              },
+              "asserted": true
+            },
+            {
+              "id": "4000",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/4000"
+              },
+              "asserted": true
+            },
+            {
+              "id": "2000",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/2000"
+              },
+              "asserted": true
+            },
+            {
+              "id": "1000",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/1000"
+              },
+              "asserted": true
+            },
+            {
+              "id": "500",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/500"
+              },
+              "asserted": true
+            },
+            {
+              "id": "250",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/250"
+              },
+              "asserted": true
+            },
+            {
+              "id": "125",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/125"
+              },
+              "asserted": true
+            },
+            {
+              "id": "60",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/60"
+              },
+              "asserted": true
+            },
+            {
+              "id": "30",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/30"
+              },
+              "asserted": true
+            },
+            {
+              "id": "15",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/15"
+              },
+              "asserted": true
+            },
+            {
+              "id": "8",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/8"
+              },
+              "asserted": true
+            },
+            {
+              "id": "4",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/4"
+              },
+              "asserted": true
+            },
+            {
+              "id": "2",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/2"
+              },
+              "asserted": true
+            },
+            {
+              "id": "1",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/1"
+              },
+              "asserted": true
+            },
+            {
+              "id": "T",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-T"
+              },
+              "asserted": true
+            },
+            {
+              "id": "B",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-B"
+              },
+              "asserted": true
+            }
+          ]
+        },
+        "press": null,
+        "endless": false
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "A",
+          "label": "A",
+          "description": null
+        },
+        {
+          "id": "4000",
+          "label": "4000",
+          "description": null
+        },
+        {
+          "id": "2000",
+          "label": "2000",
+          "description": null
+        },
+        {
+          "id": "1000",
+          "label": "1000",
+          "description": null
+        },
+        {
+          "id": "500",
+          "label": "500",
+          "description": null
+        },
+        {
+          "id": "250",
+          "label": "250",
+          "description": null
+        },
+        {
+          "id": "125",
+          "label": "125",
+          "description": null
+        },
+        {
+          "id": "60",
+          "label": "60",
+          "description": null
+        },
+        {
+          "id": "30",
+          "label": "30",
+          "description": null
+        },
+        {
+          "id": "15",
+          "label": "15",
+          "description": null
+        },
+        {
+          "id": "8",
+          "label": "8",
+          "description": null
+        },
+        {
+          "id": "4",
+          "label": "4",
+          "description": null
+        },
+        {
+          "id": "2",
+          "label": "2",
+          "description": null
+        },
+        {
+          "id": "1",
+          "label": "1",
+          "description": null
+        },
+        {
+          "id": "T",
+          "label": "T",
+          "description": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "description": null
+        }
+      ],
+      "short_name": "SPEED"
+    },
+    "touchscreen": {
+      "name": "LCD monitor (touchscreen)",
+      "location": "rear",
+      "manual_page": 24,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-touch"
+      ],
+      "assignable": false,
+      "default_function": "Touch controls are off by default; touch mode can be set to touch shooting or focus-area selection.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "touch"
+      },
+      "pushable": false,
+      "positions": []
+    },
+    "wifi_button": {
+      "name": "Wi-Fi button / Function button (Fn6)",
+      "location": "rear",
+      "manual_page": 48,
+      "face": "Fn",
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-8"
+      ],
+      "assignable": true,
+      "default_function": "Wireless options are assigned to Fn6 by default; its function-button role is assignable.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "FUNCTION"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    }
+  }
+}

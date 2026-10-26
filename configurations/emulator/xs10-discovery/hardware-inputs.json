@@ -1,0 +1,166 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "xs10-discovery",
+  "body_id": "xs10",
+  "reset": {
+    "kernel_unit": "kernel",
+    "loader_handoff": {
+      "address": 10485760,
+      "size": 1488,
+      "fill": 0,
+      "words": [
+        {
+          "offset": 320,
+          "value": 4,
+          "name": "cold boot reason"
+        },
+        {
+          "offset": 1484,
+          "value": 32,
+          "name": "NOR manufacturer"
+        }
+      ],
+      "basis": "Synthetic cold loader input in a free RAM gap; kernel entry bypasses boot ROM. The manufacturer word 0x20 matches the loader handoff copy at 0x82cfc + 0x5cc in RAM read from a running X-S10 3.11; the cold boot reason and every other word stay synthetic."
+    },
+    "spi_inputs": {
+      "1": {
+        "level": "low",
+        "basis": "Declared catalog input.",
+        "power_checksum_registers": {
+          "chip_select": {
+            "port": 12,
+            "pin": 5,
+            "active_high": true
+          },
+          "inputs": {
+            "0": 0,
+            "2": 0,
+            "14": 17,
+            "16": 0
+          },
+          "disable_writes": [
+            {
+              "register": 25,
+              "value": 0
+            }
+          ],
+          "retained_registers": [
+            42,
+            43,
+            44,
+            45
+          ],
+          "rtc": {
+            "control": 36,
+            "read_low": 34,
+            "read_high": 35,
+            "stage_low": 29,
+            "stage_high": 30,
+            "commit_value": 514,
+            "valid_mask": 2,
+            "retained_valid_mask": 1,
+            "strobe": {
+              "mask": 512,
+              "set_through_ticks": 9720,
+              "clear_from_ticks": 5940000
+            },
+            "initial_control": 0,
+            "initial_seconds": 0,
+            "ticks_per_second": 54000000
+          },
+          "basis": "Four-byte checksum transport; synthetic status inputs and unset RTC. Registers 2 and 14 read 0x0000 and 0x0011, physical service-mode samples stable over five seconds (register 14 with the headphone field clear); writes to them refuse. Stored words initially read zero. Clock loads preserve retained validity. Control reads retain the load strobe through the declared set window, refuse the unresolved interval, then clear it. After fresh writes to every retained word, the declared validity update latches without a clock reload or persistence effect. Independent control operations and alarm enables refuse."
+        }
+      },
+      "4": {
+        "level": "low",
+        "basis": "Declared catalog input."
+      },
+      "5": {
+        "level": "low",
+        "basis": "Declared catalog input."
+      }
+    },
+    "serial_flash": {
+      "contents": "registered-update",
+      "jedec_id": 2145056,
+      "geometry": {
+        "erase_bytes": 65536,
+        "page_bytes": 256,
+        "erase_ticks": 4096,
+        "page_ticks": 512,
+        "basis": "Declared catalog input."
+      },
+      "basis": "64 MiB NOR with manufacturer 0x20, as in the loader handoff of a running X-S10 3.11, whose flash aperture repeats after 64 MiB. The memory-type and capacity bytes (0xbb, 0x20) are unmeasured; the manufacturer is also declared in the loader handoff."
+    },
+    "adc_input": {
+      "samples": [
+        2048,
+        0,
+        0,
+        4095,
+        0,
+        0,
+        0,
+        0,
+        2048,
+        0,
+        2048,
+        0
+      ],
+      "ambient_celsius": 25,
+      "thermal_channels": [
+        0,
+        8,
+        10
+      ],
+      "basis": "Declared catalog input."
+    },
+    "gpio_input": {
+      "levels": [
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "basis": "Declared catalog input."
+    },
+    "temperature_input": {
+      "millicelsius": 25000,
+      "basis": "Declared catalog input."
+    },
+    "processed_frame_input": {
+      "frame_period_ticks": 900900,
+      "luma": 128,
+      "basis": "Declared catalog input."
+    },
+    "sensor_input": {
+      "frame_period_ticks": 900900,
+      "frame_active_ticks": 450450,
+      "read_gate": {
+        "register": 81,
+        "mask": 8
+      },
+      "statistics_scene": {
+        "name": "functional uniform gray",
+        "luma": 2048,
+        "samples_per_cell": 1024,
+        "black_level": 1024,
+        "signal_shift": 2
+      },
+      "basis": "Declared catalog input."
+    }
+  }
+}

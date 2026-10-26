@@ -19,7 +19,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = fujimod_usb_proxy::relay::router(token, origins.clone())?;
     // Local development only: pages that share a camera register their link.
     if let Ok(directory) = std::env::var("FUJIMOD_USB_PROXY_DEV_SHARES") {
-        app = app.merge(fujimod_usb_proxy::dev_shares::router(directory.clone().into(), origins)?);
+        app = app.merge(fujimod_usb_proxy::dev_shares::router(
+            directory.clone().into(),
+            origins,
+        )?);
         println!("Development share registry: {directory}");
     }
     let listener = tokio::net::TcpListener::bind(&bind).await?;

@@ -1,0 +1,695 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+  "schema": 1,
+  "id": "x70-110-runtime",
+  "body_id": "x70",
+  "firmware_id": "x70-110",
+  "start": {
+    "kind": "rom"
+  },
+  "execution": {
+    "mode": "strict",
+    "engine": "unicorn",
+    "quantum": 1000,
+    "instructions_per_tick": {
+      "numerator": 24,
+      "denominator": 1
+    }
+  },
+  "inputs": {
+    "kind": "exr2",
+    "gpio": {
+      "block_id": "gpio",
+      "unassigned_input_level": false,
+      "keys": [
+        {
+          "connection_id": "controls-gpio-2-12",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-2-11",
+          "pressed": true
+        },
+        {
+          "connection_id": "s1",
+          "pressed": false
+        },
+        {
+          "connection_id": "s2",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-0-11",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-3-3",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-2-9",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-3-8",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-3-9",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-0-10",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-1-1",
+          "pressed": true
+        }
+      ],
+      "connections": [
+        {
+          "connection_id": "power",
+          "connected": true
+        },
+        {
+          "connection_id": "hdmi",
+          "connected": false
+        },
+        {
+          "connection_id": "remote",
+          "connected": false
+        },
+        {
+          "connection_id": "hot-shoe",
+          "connected": false
+        }
+      ],
+      "outputs": [
+        {
+          "connection_id": "display-select",
+          "signal_index": 0,
+          "high": true
+        },
+        {
+          "connection_id": "display-select",
+          "signal_index": 1,
+          "high": true
+        },
+        {
+          "connection_id": "lens-select",
+          "signal_index": 0,
+          "high": true
+        }
+      ]
+    },
+    "encoders": [
+      {
+        "connection_id": "controls-encoder-3-6-3-7",
+        "phase": 0
+      }
+    ],
+    "adc": {
+      "block_id": "adc",
+      "samples": [
+        0,
+        0,
+        1023,
+        63,
+        534,
+        640,
+        0,
+        825,
+        1023,
+        60,
+        0,
+        0
+      ]
+    },
+    "power": {
+      "part_id": "power-control",
+      "powered_on": true,
+      "boot_reply": 0,
+      "spi_status": []
+    },
+    "mcu": {
+      "part_id": "mcu-interface",
+      "packet": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        170,
+        86
+      ],
+      "rtc": {
+        "ticks_per_second": 12000000,
+        "maximum_seconds": 1609459199,
+        "started": 0
+      }
+    },
+    "serial_registers": [
+      {
+        "part_id": "mcu-interface",
+        "values": [
+          {
+            "register": 69,
+            "value": 0
+          },
+          {
+            "register": 70,
+            "value": 0
+          },
+          {
+            "register": 73,
+            "value": 0
+          },
+          {
+            "register": 74,
+            "value": 0
+          },
+          {
+            "register": 75,
+            "value": 0
+          },
+          {
+            "register": 76,
+            "value": 0
+          },
+          {
+            "register": 78,
+            "value": 0
+          },
+          {
+            "register": 96,
+            "value": 0
+          },
+          {
+            "register": 104,
+            "value": 0
+          },
+          {
+            "register": 105,
+            "value": 0
+          },
+          {
+            "register": 106,
+            "value": 0
+          }
+        ]
+      }
+    ],
+    "usb": {
+      "connection_id": "usb",
+      "connected": false
+    },
+    "card": {
+      "connection_id": "sd-card",
+      "present": false,
+      "write_protected": false
+    },
+    "settings": {
+      "camera": "reference",
+      "requested": {
+        "language": "en",
+        "setup": "done"
+      }
+    }
+  },
+  "scene": {
+    "kind": "exr2",
+    "frame_period_ticks": 400000,
+    "generated_assets": [
+      {
+        "id": "live_pixels",
+        "pattern": [
+          64,
+          64,
+          128,
+          128
+        ],
+        "size": 4258176
+      },
+      {
+        "id": "live_statistics_0",
+        "pattern": [
+          0
+        ],
+        "size": 1024
+      }
+    ],
+    "images": {
+      "live_image": {
+        "width": 2496,
+        "height": 853,
+        "stride": 4992,
+        "asset": "live_pixels"
+      }
+    },
+    "statistics": {
+      "live_statistics": [
+        {
+          "destination": 2,
+          "offset": 0,
+          "asset": "live_statistics_0"
+        }
+      ]
+    }
+  },
+  "overlays": [],
+  "purpose": "rom_boot",
+  "preset": {
+    "factory_options": {},
+    "hardware_selection": {
+      "soc_profile_id": "exr2",
+      "body_profile_id": "x70-runtime"
+    },
+    "native_device_inputs": {
+      "irq0": {
+        "kind": "exr2-interrupt-controller",
+        "arbitration": "active-bitmap"
+      },
+      "irq1": {
+        "kind": "exr2-interrupt-controller",
+        "arbitration": "active-bitmap"
+      },
+      "timers": {
+        "kind": "exr2-system-timers",
+        "main_targets": [
+          0,
+          1
+        ]
+      },
+      "release": {
+        "kind": "core-release",
+        "released": false
+      },
+      "serial_gpio": {
+        "kind": "gpio",
+        "input_levels": [
+          3118,
+          0,
+          4608,
+          777,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          128,
+          0,
+          0,
+          0
+        ],
+        "output_levels": [
+          {
+            "pin": {
+              "port": 11,
+              "pin": 3
+            },
+            "high": true
+          },
+          {
+            "pin": {
+              "port": 12,
+              "pin": 3
+            },
+            "high": true
+          },
+          {
+            "pin": {
+              "port": 13,
+              "pin": 9
+            },
+            "high": true
+          }
+        ]
+      },
+      "serial_spi1": {
+        "kind": "spi-controller"
+      },
+      "dram_controller": {
+        "kind": "dram"
+      },
+      "dram_phy": {
+        "kind": "dram-phy"
+      },
+      "reset_control": {
+        "kind": "reset"
+      },
+      "clocks": {
+        "kind": "clocks",
+        "output_settle_ticks": 2,
+        "reset_ready": true
+      },
+      "block98000": {
+        "kind": "block-98000",
+        "boot_source": 1,
+        "selection_reset": 0
+      },
+      "sd_clocks": {
+        "kind": "sdhci-clocks"
+      },
+      "adc": {
+        "kind": "adc",
+        "conversion_ticks": 4,
+        "samples": [
+          0,
+          0,
+          1023,
+          63,
+          534,
+          640,
+          0,
+          825,
+          1023,
+          60,
+          0,
+          0
+        ]
+      },
+      "statistics": {
+        "kind": "statistics",
+        "clock": {
+          "kind": "fixed",
+          "ticks": 400000
+        },
+        "ack_ticks": 2,
+        "stop_ticks": 2,
+        "histogram": true,
+        "external_statistics": false
+      },
+      "image_output_0": {
+        "kind": "output-channel",
+        "stop_ticks": 2,
+        "clock": {
+          "kind": "fixed",
+          "ticks": 400000
+        },
+        "geometry": "skip_incomplete"
+      },
+      "image_output_1": {
+        "kind": "output-channel",
+        "stop_ticks": 2,
+        "clock": {
+          "kind": "fixed",
+          "ticks": 400000
+        },
+        "geometry": "skip_incomplete"
+      },
+      "face_detector": {
+        "kind": "face-detector",
+        "mode": "retained_words"
+      },
+      "phase_detection": {
+        "kind": "phase-detection",
+        "arithmetic": "aperture_sad",
+        "data_ticks": 400000,
+        "stop_ticks": 2
+      },
+      "live_frames": {
+        "kind": "external-frames",
+        "period_ticks": 400000
+      },
+      "sdio": {
+        "kind": "sdio-host",
+        "transfer_ticks": 100,
+        "clock_ticks": 2,
+        "rca": 4660,
+        "ram_bytes": 536870912
+      },
+      "nand": {
+        "kind": "nand",
+        "erase_ticks": 64
+      },
+      "lz": {
+        "kind": "lz",
+        "resize": "declared_packed_pyramid",
+        "resize_ticks": 400000
+      },
+      "memory_dma": {
+        "kind": "memory-dma"
+      },
+      "audio_dma": {
+        "kind": "serial-dma",
+        "ram_bytes": 536870912,
+        "max_transfer_bytes": 16777216
+      },
+      "usb": {
+        "kind": "usb",
+        "endpoints": null
+      },
+      "power_peripherals": {
+        "kind": "power",
+        "transfer_ticks": 4,
+        "max_program_bytes": 536870912,
+        "spi0": {
+          "required": [
+            192,
+            48,
+            0
+          ],
+          "selection": {
+            "pin": {
+              "port": 11,
+              "pin": 2
+            },
+            "high": false
+          },
+          "presence": {
+            "pin": {
+              "port": 11,
+              "pin": 2
+            },
+            "high": false
+          }
+        }
+      },
+      "audio_registers": {
+        "kind": "serial-audio"
+      },
+      "pulse": {
+        "kind": "exr2-pulse",
+        "counter_channels": [
+          0,
+          4
+        ],
+        "timer_channels": [
+          0,
+          2,
+          4,
+          6,
+          8,
+          9,
+          10,
+          11
+        ],
+        "quadrature": false,
+        "initial_phase": 0,
+        "capture_channel": null
+      },
+      "lens_serial": {
+        "kind": "spi-controller"
+      },
+      "control_bus0": {
+        "kind": "i2c",
+        "modes": [
+          9
+        ],
+        "transfer_ticks": 4,
+        "profile": "endpoint7-stationary-and9-heartbeat-latched-irq-unmeasured"
+      },
+      "control_bus1": {
+        "kind": "i2c",
+        "modes": [
+          1,
+          9
+        ],
+        "transfer_ticks": 4,
+        "profile": "usbcharge-disconnected-pwic-startup-tagged"
+      },
+      "companion": {
+        "kind": "fe80-processing",
+        "irq": 88,
+        "pixels_per_tick": 64
+      },
+      "image_input": {
+        "kind": "image-input",
+        "reset_ticks": 2,
+        "command_ticks": 2,
+        "phase_ticks": 2,
+        "command": "packed_writes",
+        "command_controls": [
+          0
+        ],
+        "phase_ack": "inactive",
+        "clock": {
+          "mode": "input_enable",
+          "source": {
+            "kind": "periodic",
+            "period_ticks": 400000,
+            "first_delay_ticks": null
+          },
+          "secondary": true,
+          "companion_secondary": true
+        },
+        "sensor_period_ticks": null,
+        "raw_dma_ticks": 1000,
+        "readback_ticks": 750000,
+        "cfa": [
+          0,
+          2,
+          1,
+          2,
+          0,
+          1,
+          1,
+          1,
+          0,
+          1,
+          1,
+          2,
+          1,
+          1,
+          2,
+          1,
+          1,
+          0,
+          2,
+          0,
+          1,
+          0,
+          2,
+          1,
+          1,
+          1,
+          2,
+          1,
+          1,
+          0,
+          1,
+          1,
+          0,
+          1,
+          1,
+          2
+        ]
+      },
+      "input_auxiliary": {
+        "kind": "block11000",
+        "control_mode": {
+          "ClearBit0Ack": {
+            "delay_ticks": 2
+          }
+        }
+      },
+      "parameters": {
+        "kind": "parameters"
+      },
+      "hdmisink": {
+        "kind": "hdmi-sink",
+        "connected": false,
+        "edid": []
+      },
+      "hdmi": {
+        "kind": "hdmi"
+      },
+      "output": {
+        "kind": "block86000"
+      },
+      "graphics": {
+        "kind": "vector-gpu",
+        "ram_bytes": 536870912,
+        "max_fill_bytes": 67108864,
+        "max_copy_bytes": 67108864,
+        "max_clear_bytes": 67108864,
+        "bytes_per_tick": 16,
+        "max_command_capture_bytes": 524288,
+        "copy_profile": "vg-32bpp-untile-unrotated",
+        "clear_profile": "declared-vg-ui-primitives-unmeasured"
+      },
+      "scanout": {
+        "kind": "scanout",
+        "ram_bytes": 536870912,
+        "packing": "yycbcr",
+        "matrix": "bt601-full",
+        "graphics_profile": "mode1-abgr8888-straight",
+        "backdrop_profile": "declared-black-canvas-unmeasured",
+        "rectangle_profile": "exr2-signed-ycbcr-rectangle-overlay-unmeasured",
+        "max_pixels": 8847360,
+        "reset_ticks": 2
+      },
+      "display_timing": {
+        "kind": "display-timing",
+        "mode": "configured_clocked",
+        "frame_ticks": 400000,
+        "stop_ticks": 2
+      },
+      "display_formatter": {
+        "kind": "formatter",
+        "latch_delay": 2
+      },
+      "image_combination": {
+        "kind": "image-combination",
+        "reset_ticks": 16,
+        "arithmetic": "packed_image_unmeasured",
+        "clock": {
+          "kind": "throughput",
+          "bytes_per_tick": 256
+        }
+      },
+      "encoder_control_ring": {
+        "kind": "encoder",
+        "pins": [
+          {
+            "port": 3,
+            "pin": 6
+          },
+          {
+            "port": 3,
+            "pin": 7
+          }
+        ],
+        "phase_ticks": 120000,
+        "rest_phase": 0
+      }
+    },
+    "nand_inputs": {
+      "nand": {
+        "kind": "raw",
+        "options": {
+          "bytes": 134217728,
+          "page_bytes": 2048,
+          "pages_per_block": 64,
+          "spare_bytes": 512
+        },
+        "base": "nand_base",
+        "overlays": [],
+        "spare": []
+      }
+    },
+    "files": {
+      "sd_files": {}
+    },
+    "observer": {
+      "scanout": "scanout",
+      "instance": 0
+    },
+    "hardware_inputs_id": "x70",
+    "firmware_profile_id": "x70-110"
+  },
+  "browser_camera": null
+}

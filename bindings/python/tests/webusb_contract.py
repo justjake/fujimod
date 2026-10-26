@@ -1,12 +1,29 @@
-"""Executed in real Pyodide by pyodide.mjs; USB is replaced before import."""
+"""Executed in real Pyodide by pyodide.ts; USB is replaced before import."""
 
 import asyncio
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
+
+from _fixture import log, state
+from adjustment_contract import check_adjustment_values
+from configuration_contract import check_configuration_values
+from contract_assertions import expect
+from exposure_contract import check_exposure_values
+from extended_contract import check_extended_values
 from fujimod import usb
-from fujimod.usb import memory, data, research, app80, tracing
-from _fixture import state, log
+from fujimod.catalog import service as definitions
+from fujimod.usb import app80, data, memory, research, tracing
+from lens_contract import check_lens_values
+from media_contract import check_media_values
+from network_contract import check_network_values
+from peripheral_contract import check_peripheral_values
+from transfer_contract import check_transfer_values
+
+if TYPE_CHECKING:
+    from _fujimod_js import JsBytes
 
 
-async def check():
+async def check() -> bool:
     assert usb.InfoSelector.Product != 4
     assert usb.DataWriteMode.Echo != usb.DataReadMode.Echo
     limits = usb.FirmwareLimits(
@@ -16,6 +33,7 @@ async def check():
     assert len(devices) == 1 and devices[0].vendor_id == 0x04CB
     assert devices[0].bus_id is None and devices[0].ports is None
     device = await usb.request_device(usb.DeviceFilter.Diagnostic)
+    assert device is not None
     choices = await usb.interfaces(device)
     assert len(choices) == 1 and (
         choices[0].configuration,
@@ -28,13 +46,13 @@ async def check():
     assert await session.device_info(usb.InfoSelector.Product) == "SYNTHETIC"
     assert await session.read_data(123, 5) == bytes([123, 124, 125, 126, 127])
     try:
-        await session.device_info("Product")
+        await session.device_info("Product")  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     except TypeError:
         pass
     else:
         raise AssertionError("string selector accepted")
     try:
-        await session.read_data(0, 1.0)
+        await session.read_data(0, 1.0)  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     except TypeError:
         pass
     else:
@@ -55,7 +73,7 @@ async def check():
     result = await data.upload(
         session, memoryview(mutable), piece_bytes=2, mode=usb.DataWriteMode.Preserve
     )
-    assert result.bytes_written == 3 and result.acknowledgement == b"\x01\x02\x03\x04"
+    assert result.bytes_written == 3 and result.acknowledgment == b"\x01\x02\x03\x04"
     assert result.setup.status == usb.CommandStatus.Success
     assert result.setup.fields == [0, 0, 0, 0]
     assert await session.close() == b"\xaa\xbb"
@@ -65,7 +83,9 @@ async def check():
     assert batch.protocol_events
     assert all(e.layer == tracing.Layer.Ff80 for e in batch.protocol_events)
     assert any(e.command == 0x150000 and e.data for e in batch.protocol_events)
-    assert len({e.sequence for e in [*batch.events, *batch.protocol_events]}) == len(batch.events) + len(batch.protocol_events)
+    assert len({e.sequence for e in [*batch.events, *batch.protocol_events]}) == len(
+        batch.events
+    ) + len(batch.protocol_events)
     assert any(
         e.stage == tracing.Stage.BulkIn and e.endpoint == 0x82 for e in batch.events
     )
@@ -96,14 +116,14 @@ async def check():
     except usb.CompletionUnknownError:
         pass
     else:
-        raise AssertionError("cancelled exchange allowed cleanup")
+        raise AssertionError("canceled exchange allowed cleanup")
     second.abandon()
     assert second.state == usb.SessionState.Abandoned
     assert sum(entry[0] == "control" and entry[1] == 0xC4 for entry in log) == 1
     return True
 
 
-async def check_pending_reader():
+async def check_pending_reader() -> bool:
     state.hangControl = None
     device = (await usb.discover(usb.DeviceFilter.Diagnostic))[0]
     interface = (await usb.interfaces(device))[0]
@@ -120,7 +140,7 @@ async def check_pending_reader():
     )
     closed = object()
 
-    async def read_one():
+    async def read_one() -> object:
         try:
             return await anext(reader)
         except usb.ClosedSessionError:
@@ -156,7 +176,7 @@ async def check_pending_reader():
     return True
 
 
-async def check_commands():
+async def check_commands() -> bool:
     state.hangControl = None
     device = (await usb.discover(usb.DeviceFilter.Diagnostic))[0]
     interface = (await usb.interfaces(device))[0]
@@ -232,11 +252,12 @@ async def check_commands():
     return True
 
 
-async def run():
+async def run() -> bool:
     await check()
+    await check_install_helpers()
     await check_pending_reader()
     await check_commands()
-    await check_service_catalogue()
+    await check_service_catalog()
     assert check_peripheral_values()
     assert check_media_values()
     assert check_network_values()
@@ -249,15 +270,58 @@ async def run():
     return True
 
 
-async def check_service_catalogue():
+async def check_install_helpers() -> None:
+    import struct
+
+    limits = usb.FirmwareLimits(
+        memory_read=256, memory_write=256, configuration=256, console=256
+    )
+    device = await usb.request_device(usb.DeviceFilter.Diagnostic)
+    assert device is not None
+    interface = (await usb.interfaces(device))[0]
+    session = await usb.Session.open(device, interface, limits)
+    raw = bytes(range(256)) + b"tail"
+    for batch in usb.CommandSequence.verified_writes(
+        0xA400, raw, limits, session.packet_bytes
+    ):
+        await session.execute_sequence(batch)
+    assert await memory.read_range(session, 0xA400, len(raw)) == raw
+    await session.write_memory(0xB000, struct.pack("<I", 0xC000))
+    await session.write_memory(0xB100, b"orig")
+    plan = usb.InstallQueries(0xB000, 0xC000, 0xB100, b"orig")
+    queried, output = plan.call(0xC100, 17, [(1, 0xFFFF)], b"seed")
+    replies = await session.execute_sequence(plan.finish())
+    assert len(replies[queried]) == 32 and replies[output] == b"seed"
+    assert await session.read_memory(0xB000, 4) == struct.pack("<I", 0xC000)
+    assert await session.read_memory(0xB100, 4) == b"orig"
+    await session.write_memory(0xA000, struct.pack("<I", 0x8000))
+    await session.write_memory(0xA004, struct.pack("<I", 32))
+    image = usb.OwnedUpload(0x4000, 16, 0x4000, bytes(range(11)), 8, 4)
+    assert image.padded_bytes == usb.OwnedUpload.padded_size(11, 8) == 16
+    assert image.image_bytes == 11
+    receipt = await session.upload_owned(image, 0xA000, 0x8000, 0xA004, 32)
+    assert receipt.bytes_written == 16
+    assert await session.read_memory(0xA000, 4) == struct.pack("<I", 0x8000)
+    # This fixture's E1 source is the declared incrementing byte pattern.
+    await session.verify_owned(
+        image, usb.DataWindow(0x4000, 0x4000, 16, 4, usb.OffsetMode.Checked)
+    )
+    assert await session.close() == b"\xaa\xbb"
+
+
+async def check_service_catalog() -> bool:
     import importlib
     import json
+
+    from fujimod import catalog
+    from fujimod.catalog import service as definitions
     from js import Promise
     from pyodide.ffi import create_proxy
-    from fujimod import defs
-    from fujimod.defs import service as definitions
 
-    def definition(rows=None, expected_id="synthetic-b-v2"):
+    def definition(
+        rows: list[tuple[int, str, list[int], int | None]] | None = None,
+        expected_id: str = "synthetic-b-v2",
+    ) -> definitions.Definition:
         if rows is None:
             rows = [(153, "flush_configuration", [7], 4)]
         document = dict(
@@ -282,18 +346,18 @@ async def check_service_catalogue():
             ],
         )
         return definitions.Definition.from_json(
-            json.dumps(document), defs.FirmwareIdentity(expected_id, "ab" * 32)
+            json.dumps(document), catalog.FirmwareIdentity(expected_id, "ab" * 32)
         )
 
-    def failure(cls, action):
+    def failure[E: Exception](cls: type[E], action: Callable[[], object]) -> E:
         try:
             action()
         except cls as error:
             return error
         raise AssertionError(f"{cls.__name__} was not raised")
 
-    assert importlib.import_module("fujimod.defs") is defs
-    assert importlib.import_module("fujimod.defs.service") is definitions
+    assert importlib.import_module("fujimod.catalog") is catalog
+    assert importlib.import_module("fujimod.catalog.service") is definitions
     modes = definitions.ServiceModes(4)
     d = definition()
     assert d.identity.id == "synthetic-b-v2" and d.identity.sha256 == "ab" * 32
@@ -322,19 +386,19 @@ async def check_service_catalogue():
     assert unreviewed.select(153, modes) is None
     assert isinstance(
         failure(
-            defs.DefinitionError, lambda: definition(expected_id="another-body")
+            catalog.DefinitionError, lambda: definition(expected_id="another-body")
         ).reason,
-        defs.DefinitionFailure.FirmwareMismatch,
+        catalog.DefinitionFailure.FirmwareMismatch,
     )
     assert isinstance(
         failure(
-            defs.DefinitionError, lambda: defs.FirmwareIdentity("wrong", "é" * 32)
+            catalog.DefinitionError, lambda: catalog.FirmwareIdentity("wrong", "é" * 32)
         ).reason,
-        defs.DefinitionFailure.InvalidDigest,
+        catalog.DefinitionFailure.InvalidDigest,
     )
     assert isinstance(
-        failure(defs.DefinitionError, lambda: definitions.ServiceModes(0)).reason,
-        defs.DefinitionFailure.EmptyModes,
+        failure(catalog.DefinitionError, lambda: definitions.ServiceModes(0)).reason,
+        catalog.DefinitionFailure.EmptyModes,
     )
     assert isinstance(
         failure(app80.CommandError, lambda: app80.PinBank(16)).reason,
@@ -404,10 +468,13 @@ async def check_service_catalogue():
         assert invocation.configuration_limit == 512
         if command.__match_args__:
             failure(
-                AttributeError, lambda: setattr(command, command.__match_args__[0], 0)
+                AttributeError,
+                lambda command=command: setattr(command, command.__match_args__[0], 0),
             )
 
-    def decode(codec, command, slots, changes):
+    def decode(
+        codec: str, command: app80.Command, slots: list[int], changes: dict[int, int]
+    ) -> app80.ReplyValue:
         invocation = app80.Service(definition([(153, codec, slots, 4)])).prepare(
             modes, command
         )
@@ -470,9 +537,21 @@ async def check_service_catalogue():
     service = app80.Service(d)
     invocation = service.prepare(modes, C.FlushConfiguration())
     assert isinstance(
-        invocation.decode(invocation.raw).value.status, app80.SaveStatus.Unknown
+        expect(
+            invocation.decode(invocation.raw).value, app80.ReplyValue.ConfigurationSaved
+        ).status,
+        app80.SaveStatus.Unknown,
     )
-    assert invocation.decode(invocation.raw).value.status.raw_status == 255
+    assert (
+        expect(
+            expect(
+                invocation.decode(invocation.raw).value,
+                app80.ReplyValue.ConfigurationSaved,
+            ).status,
+            app80.SaveStatus.Unknown,
+        ).raw_status
+        == 255
+    )
     research = service.prepare_research(app80.CommandCode(153), modes, b"")
     assert isinstance(research.decode(bytes(33)).value, app80.ReplyValue.Research)
     failure(usb.ProtocolError, lambda: invocation.decode(bytes(33)))
@@ -504,9 +583,10 @@ async def check_service_catalogue():
         app80.CommandFailure.OversizeArguments,
     )
     ambiguous = app80.Service(
-        definition(
-            [(153, "flush_configuration", [7], 4), (154, "flush_configuration", [7], 4)]
-        )
+        definition([
+            (153, "flush_configuration", [7], 4),
+            (154, "flush_configuration", [7], 4),
+        ])
     )
     assert isinstance(
         failure(
@@ -526,7 +606,7 @@ async def check_service_catalogue():
     published = 0
     never = Promise.new(lambda resolve, reject: None)
 
-    def publish(page, address, raw):
+    def publish(page: int, address: int, raw: JsBytes) -> Awaitable[object] | None:
         nonlocal published
         if page == 3 and address == 576:
             published += 1
@@ -544,7 +624,10 @@ async def check_service_catalogue():
         s = await usb.Session.open(device, interface, limits)
         sessions.append(s)
         reply = await app80.execute(s, invocation)
-        assert isinstance(reply.value.status, app80.SaveStatus.Failed)
+        assert isinstance(
+            expect(reply.value, app80.ReplyValue.ConfigurationSaved).status,
+            app80.SaveStatus.Failed,
+        )
         assert s.state == usb.SessionState.Ready and published == 1
         await s.close()
         behavior = "foreign"
@@ -563,7 +646,7 @@ async def check_service_catalogue():
         sessions.append(s)
         task = asyncio.create_task(app80.execute(s, invocation))
 
-        async def wait_for_publication():
+        async def wait_for_publication() -> None:
             while published < 3:
                 await asyncio.sleep(0)
 

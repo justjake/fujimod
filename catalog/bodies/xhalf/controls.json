@@ -1,0 +1,456 @@
+{
+  "$schema": "https://fujimod.com/schemas/physical-controls.schema.json",
+  "schema": 1,
+  "id": "xhalf-controls",
+  "body_id": "xhalf",
+  "manual": {
+    "url": "https://fujifilm-dsc.com/en/manual/x-hf1/x-hf1_manual_en_s_f.pdf",
+    "title": "FUJIFILM X half Owner’s Manual (X-HF1, FF240003)",
+    "pages": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      12,
+      36,
+      44,
+      45,
+      46,
+      48,
+      54,
+      61,
+      63,
+      66,
+      70,
+      76,
+      139
+    ]
+  },
+  "analog_levels": null,
+  "controls": {
+    "shutter_button": {
+      "name": "Shutter button",
+      "location": "top",
+      "manual_page": 45,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Half-press to focus; in SINGLE AF or MANUAL FOCUS, focus and exposure lock while held halfway. Press fully to take a picture, or to start movie recording in MOVIE mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "shutter",
+        "stages": {
+          "half_press": null,
+          "full_press": null
+        }
+      },
+      "positions": [],
+      "short_name": "SHUTTER"
+    },
+    "exposure_compensation_dial": {
+      "name": "Exposure compensation dial",
+      "location": "top",
+      "manual_page": 4,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Rotate to choose an exposure compensation amount.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "OFF",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "+3",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "+2",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "+1",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "±0",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "-1",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "-2",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "-3",
+              "key": null,
+              "asserted": null
+            }
+          ]
+        },
+        "press": null,
+        "endless": null
+      },
+      "positions": [
+        {
+          "id": "OFF",
+          "label": "OFF",
+          "description": null
+        },
+        {
+          "id": "+3",
+          "label": "+3",
+          "description": null
+        },
+        {
+          "id": "+2",
+          "label": "+2",
+          "description": null
+        },
+        {
+          "id": "+1",
+          "label": "+1",
+          "description": null
+        },
+        {
+          "id": "±0",
+          "label": "±0",
+          "description": null
+        },
+        {
+          "id": "-1",
+          "label": "-1",
+          "description": null
+        },
+        {
+          "id": "-2",
+          "label": "-2",
+          "description": null
+        },
+        {
+          "id": "-3",
+          "label": "-3",
+          "description": null
+        }
+      ],
+      "short_name": "EV"
+    },
+    "aperture_ring": {
+      "name": "Aperture Ring",
+      "location": "lens",
+      "manual_page": 4,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "In mode A or M, rotate to adjust aperture. Set to A to let the camera adjust aperture automatically.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "ring",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "A",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "11",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "8",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "5",
+              "key": null,
+              "asserted": null
+            }
+          ]
+        },
+        "press": null,
+        "endless": null
+      },
+      "positions": [
+        {
+          "id": "A",
+          "label": "A",
+          "description": null
+        },
+        {
+          "id": "11",
+          "label": "11",
+          "description": null
+        },
+        {
+          "id": "8",
+          "label": "8",
+          "description": null
+        },
+        {
+          "id": "5",
+          "label": "5",
+          "description": null
+        }
+      ],
+      "short_name": "APERTURE"
+    },
+    "focus_ring": {
+      "name": "Focus Ring",
+      "location": "lens",
+      "manual_page": 61,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "In MANUAL FOCUS, rotate to change the focus distance.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "ring",
+        "motion": {
+          "kind": "steps",
+          "decrease": null,
+          "increase": null
+        },
+        "press": null,
+        "endless": null
+      },
+      "positions": [],
+      "short_name": "FOCUS"
+    },
+    "on_off_switch": {
+      "name": "ON/OFF switch",
+      "location": "top",
+      "manual_page": 36,
+      "face": "ON/OFF",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Slide to ON to turn the camera on, or to OFF to turn it off.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch",
+        "positions": [
+          {
+            "id": "ON",
+            "key": null,
+            "asserted": null
+          },
+          {
+            "id": "OFF",
+            "key": null,
+            "asserted": null
+          }
+        ]
+      },
+      "positions": [
+        {
+          "id": "ON",
+          "label": "ON",
+          "description": null
+        },
+        {
+          "id": "OFF",
+          "label": "OFF",
+          "description": null
+        }
+      ]
+    },
+    "flash_switch": {
+      "name": "Flash switch",
+      "location": "right",
+      "manual_page": 6,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Slide to the flash position to fire the flash during still photography; the video light turns on during movie recording.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch",
+        "positions": [
+          {
+            "id": "flash",
+            "key": null,
+            "asserted": null
+          }
+        ]
+      },
+      "positions": [
+        {
+          "id": "flash",
+          "label": "icon",
+          "description": "Slide the flash switch to N to fire the flash during still photography. The video light turns on during movie recording."
+        }
+      ],
+      "short_name": "FLASH"
+    },
+    "still_movie_mode_switch": {
+      "name": "STILL/MOVIE mode switch",
+      "location": "rear",
+      "manual_page": 4,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Slide to STILL to take photographs or MOVIE to record movies.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch",
+        "positions": [
+          {
+            "id": "STILL",
+            "key": null,
+            "asserted": null
+          },
+          {
+            "id": "MOVIE",
+            "key": null,
+            "asserted": null
+          }
+        ]
+      },
+      "positions": [
+        {
+          "id": "STILL",
+          "label": "STILL",
+          "description": null
+        },
+        {
+          "id": "MOVIE",
+          "label": "MOVIE",
+          "description": null
+        }
+      ],
+      "short_name": "MODE"
+    },
+    "frame_advance_lever": {
+      "name": "Frame Advance Lever",
+      "location": "top",
+      "manual_page": 5,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Pull to create a 2-in-1 image and to take each picture in Film Camera Mode; push the lever in while turning the camera off.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "lever",
+        "positions": [],
+        "momentary": null
+      },
+      "positions": [],
+      "short_name": "ADVANCE"
+    },
+    "playback_button": {
+      "name": "PLAY (playback) button",
+      "location": "rear",
+      "manual_page": 76,
+      "face": null,
+      "icon": "playback",
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Press to start playback during shooting.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": null
+      },
+      "positions": []
+    },
+    "lcd_monitor_touch_screen": {
+      "name": "Touch screen",
+      "location": "rear",
+      "manual_page": 12,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Use the LCD monitor to change shooting settings, select playback images, and select menus.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "touch"
+      },
+      "positions": []
+    },
+    "secondary_lcd_monitor_touch_screen": {
+      "name": "Touch screen",
+      "location": "rear",
+      "manual_page": 12,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Use the secondary LCD monitor to select a film simulation, operate during playback, and set menus.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "touch"
+      },
+      "positions": []
+    },
+    "battery_latch": {
+      "name": "Battery latch",
+      "location": "bottom",
+      "manual_page": 29,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "To remove the battery, press the battery latch to the side, and slide the battery out of the camera as shown.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "lever",
+        "positions": [],
+        "momentary": null
+      },
+      "positions": [],
+      "short_name": "BATTERY"
+    }
+  }
+}

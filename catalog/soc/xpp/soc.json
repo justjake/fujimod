@@ -1,0 +1,285 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc.schema.json",
+  "schema": 1,
+  "id": "xpp",
+  "architecture": "arm32",
+  "processors": [
+    {
+      "id": "core0",
+      "model": "cortex-a7",
+      "released": null,
+      "registers": [],
+      "mprofile": null,
+      "rprofile": null
+    },
+    {
+      "id": "core1",
+      "model": "cortex-a7",
+      "released": null,
+      "registers": [],
+      "mprofile": null,
+      "rprofile": null
+    }
+  ],
+  "memory_regions": [
+    {
+      "id": "dram",
+      "base": 0,
+      "size": {
+        "kind": "body_dram"
+      },
+      "kind": "dram"
+    }
+  ],
+  "blocks": [
+    {
+      "id": "gic-distributor",
+      "base": 4294905856,
+      "size": 4096,
+      "kind": "interrupt-controller",
+      "clock_id": null
+    },
+    {
+      "id": "gic-cpu-interface",
+      "base": 4294909952,
+      "size": 4096,
+      "kind": "interrupt-controller",
+      "clock_id": null
+    },
+    {
+      "id": "interval-timer",
+      "base": 4294025216,
+      "size": 512,
+      "kind": "timer",
+      "clock_id": null
+    },
+    {
+      "id": "flash-controller",
+      "base": 4294000640,
+      "size": 64,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "flash-aperture",
+      "base": 4026531840,
+      "size": 134217728,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "dma",
+      "base": 4294017024,
+      "size": 4096,
+      "kind": "dma",
+      "clock_id": null
+    },
+    {
+      "id": "serial0",
+      "base": 4294082560,
+      "size": 256,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "serial1",
+      "base": 4294086656,
+      "size": 256,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "serial2",
+      "base": 4294090752,
+      "size": 256,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "serial3",
+      "base": 4294094848,
+      "size": 256,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "serial4",
+      "base": 4294098944,
+      "size": 256,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "serial5",
+      "base": 4294103040,
+      "size": 256,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "serial6",
+      "base": 4294107136,
+      "size": 256,
+      "kind": "serial-controller",
+      "clock_id": null
+    }
+  ],
+  "interrupts": [],
+  "clocks": [],
+  "mappings": [],
+  "dma_mappings": [],
+  "decoders": [],
+  "peripherals": [],
+  "reset": {
+    "release": null,
+    "coprocessor_writes": []
+  },
+  "hardware": {
+    "application": {
+      "kind": "armv7a",
+      "configuration_base": 4294901760,
+      "caches": {
+        "l1_data_bytes": 32768,
+        "l1_instruction_bytes": 32768,
+        "l2_bytes": 1048576
+      }
+    },
+    "interrupt_controller": {
+      "kind": "gic_v2",
+      "distributor_block_id": "gic-distributor",
+      "cpu_interface_block_id": "gic-cpu-interface",
+      "lines": 512
+    },
+    "interrupt_inputs": [
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel8",
+        "line": 56
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel15",
+        "line": 63
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "event0",
+        "line": 207
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "event1",
+        "line": 208
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "event2",
+        "line": 209
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "event3",
+        "line": 210
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "event4",
+        "line": 211
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "event5",
+        "line": 212
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "event6",
+        "line": 213
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "event7",
+        "line": 214
+      }
+    ],
+    "companion": null,
+    "blocks": {
+      "flash-controller": {
+        "kind": "serial_flash",
+        "aperture_block_id": "flash-aperture"
+      }
+    },
+    "profiles": {
+      "xpp": {
+        "cpu_model": "Cortex-A7",
+        "runtime_abi": "armv7a-unicorn-v1",
+        "mmu": "Unicorn ARMv7-A CPU page-table walker; guest CP15 and page tables",
+        "register_maps": {
+          "gic": {
+            "distributor": 4294905856,
+            "cpu_interface": 4294909952,
+            "lines": 512,
+            "basis": "Kernel CBAR reads and GIC distributor/CPU-interface accesses at CBAR+0x1000/+0x2000. CBAR 0xffff0000 is a declared discovery input, not captured."
+          },
+          "interval_timer": {
+            "base": 4294025216,
+            "layout": "xpp",
+            "routes": [
+              {
+                "channel": 8,
+                "irq": 56
+              },
+              {
+                "channel": 15,
+                "irq": 63
+              }
+            ],
+            "clock": "one timer cycle per aggregate CPU instruction; synthetic ratio, not measured",
+            "basis": "Control +0 is written with an inverted select mask, per-channel configuration at +0x10+n*4, count and reload at +0x100+n*0x10; one channel is read as a running counter. Channel n raising IRQ 48+n is a declared discovery input inferred from the two enabled GIC lines, not traced."
+          },
+          "flash_controller": {
+            "base": 4294000640,
+            "aperture": 4026531840,
+            "size": 134217728,
+            "basis": "Flash reads go through the aperture at 0xf0000000+offset by CPU copies and DMA; the controller's configuration words are written around each copy and no status bit is polled. Registers only retain writes."
+          },
+          "pl330": {
+            "base": 4294017024,
+            "irq_routes": [
+              207,
+              208,
+              209,
+              210,
+              211,
+              212,
+              213,
+              214
+            ],
+            "setup_ticks": 16,
+            "bytes_per_tick": 16,
+            "timing": "16 guest setup ticks plus ceil(bytes/16); functional transfer timing reused from XP4, not measured bus bandwidth.",
+            "basis": "Channel programs start through DMAGO written to the debug instruction registers; the driver's IRQ table maps event n to line 207+n."
+          },
+          "serial_ports": {
+            "bases": [
+              4294082560,
+              4294086656,
+              4294090752,
+              4294094848,
+              4294098944,
+              4294103040,
+              4294107136
+            ],
+            "basis": "Declared discovery input: a provisional status law without a peer. Sends complete at once and set done bit 2, writes to +0x2c clear status bits, bit 3 reads set and received words read zero. The attached peers are not identified."
+          }
+        },
+        "limits": [
+          "Two cores are a declared discovery input from a public dual Cortex-A7 listing; the count is not measured.",
+          "Storage covers the flash aperture and PL330 memory-to-memory programs only; no decompressor or display block is declared.",
+          "No boot ROM, reset-release controller or external peripheral replies are assumed."
+        ],
+        "cache_basis": "Declared discovery input: the XP4 Cortex-A7 capacities, unmeasured. Not a cache timing model."
+      }
+    }
+  }
+}

@@ -1,0 +1,437 @@
+{
+  "controls": {
+    "selector.up": {
+      "label": "Up",
+      "icon": "up"
+    },
+    "selector.down": {
+      "label": "Down",
+      "icon": "down"
+    },
+    "selector.left": {
+      "label": "Left",
+      "icon": "left"
+    },
+    "selector.right": {
+      "label": "Right",
+      "icon": "right"
+    },
+    "shutter_button": {
+      "label": "Shutter",
+      "text": "Shutter"
+    },
+    "power_switch": {
+      "label": "Power",
+      "text": "Power"
+    },
+    "auto_mode_selector_lever": {
+      "label": "Auto",
+      "text": "Auto"
+    },
+    "movie_record_button": {
+      "label": "Fn/Rec",
+      "text": "Fn/Rec"
+    },
+    "wifi_button": {
+      "label": "Fn/Wifi",
+      "text": "Fn/Wifi"
+    },
+    "quick_menu_button": {
+      "label": "Q",
+      "text": "Q"
+    },
+    "disp_back_button": {
+      "label": "DISP / BACK",
+      "text": "DISP/BACK"
+    },
+    "menu_ok_button": {
+      "label": "Menu / OK",
+      "text": "MENU/OK"
+    },
+    "control_ring_options_button": {
+      "label": "Side Fn",
+      "text": "Side Fn"
+    },
+    "command_control.decrease": {
+      "label": "Command left",
+      "text": "Command left"
+    },
+    "command_control.increase": {
+      "label": "Command right",
+      "text": "Command right"
+    },
+    "command_control.press": {
+      "label": "Command press",
+      "text": "Command press"
+    },
+    "touchscreen": {
+      "label": "Screen",
+      "text": "Screen"
+    },
+    "battery_chamber_cover_latch": {
+      "label": "Battery cover",
+      "text": "Battery cover"
+    },
+    "focus_mode_selector": {
+      "label": "Focus mode",
+      "text": "Focus mode"
+    },
+    "delete_button": {
+      "label": "Delete",
+      "icon": "trash"
+    },
+    "drive_button": {
+      "label": "Drive",
+      "text": "DRIVE"
+    },
+    "af_ae_lock_button": {
+      "label": "AE-L / AF-L",
+      "text": "AE-L/AF-L"
+    },
+    "playback_button": {
+      "label": "Playback",
+      "icon": "play"
+    },
+    "shutter_speed_dial": {
+      "label": "Shutter speed",
+      "text": "Shutter speed"
+    },
+    "exposure_compensation_dial": {
+      "label": "Exposure compensation",
+      "text": "Exposure compensation"
+    },
+    "aperture_ring": {
+      "label": "Aperture",
+      "text": "Aperture"
+    },
+    "control_ring": {
+      "label": "Lens control ring",
+      "text": "Lens control ring"
+    },
+    "lcd_tilt_switch": {
+      "label": "Screen tilt",
+      "text": "Screen tilt"
+    },
+    "ae_lock_button": {
+      "label": "AE-L",
+      "text": "AE-L"
+    },
+    "af_lock_button": {
+      "label": "AF-L",
+      "text": "AF-L"
+    },
+    "battery_latch": {
+      "label": "Battery latch",
+      "text": "Battery latch"
+    },
+    "front_ring": {
+      "label": "Front ring",
+      "text": "Front ring"
+    },
+    "selector": {
+      "label": "Selector",
+      "text": "Selector"
+    },
+    "command_control": {
+      "label": "Command press",
+      "text": "Command press"
+    },
+    "command_dial": {
+      "label": "Command press",
+      "text": "Command press"
+    },
+    "command_dial.press": {
+      "label": "Command press",
+      "text": "Command press"
+    },
+    "command_dial.increase": {
+      "label": "Command right",
+      "text": "Command right"
+    },
+    "command_dial.decrease": {
+      "label": "Command left",
+      "text": "Command left"
+    },
+    "diopter_adjustment_control": {
+      "label": "Diopter adjustment",
+      "text": "Diopter adjustment"
+    },
+    "flash_pop_up_button": {
+      "label": "Flash pop-up",
+      "text": "Flash pop-up"
+    },
+    "fn1_button": {
+      "label": "Fn1",
+      "text": "Fn1"
+    },
+    "fn2_button": {
+      "label": "Fn2",
+      "text": "Fn2"
+    },
+    "fn7_button": {
+      "label": "Fn7",
+      "text": "Fn7"
+    },
+    "lens_release_button": {
+      "label": "Lens release",
+      "text": "Lens release"
+    },
+    "control_ring.increase": {
+      "label": "Lens control ring",
+      "text": "Lens control ring"
+    },
+    "control_ring.decrease": {
+      "label": "Lens control ring",
+      "text": "Lens control ring"
+    },
+    "usb": {
+      "label": "USB",
+      "text": "USB"
+    },
+    "hdmi": {
+      "label": "HDMI",
+      "text": "HDMI"
+    }
+  },
+  "icons": {
+    "right": {
+      "lines": [
+        [
+          [
+            5,
+            12
+          ],
+          [
+            19,
+            12
+          ]
+        ],
+        [
+          [
+            12,
+            5
+          ],
+          [
+            19,
+            12
+          ],
+          [
+            12,
+            19
+          ]
+        ]
+      ]
+    },
+    "left": {
+      "lines": [
+        [
+          [
+            19,
+            12
+          ],
+          [
+            5,
+            12
+          ]
+        ],
+        [
+          [
+            12,
+            5
+          ],
+          [
+            5,
+            12
+          ],
+          [
+            12,
+            19
+          ]
+        ]
+      ]
+    },
+    "up": {
+      "lines": [
+        [
+          [
+            12,
+            19
+          ],
+          [
+            12,
+            5
+          ]
+        ],
+        [
+          [
+            5,
+            12
+          ],
+          [
+            12,
+            5
+          ],
+          [
+            19,
+            12
+          ]
+        ]
+      ]
+    },
+    "down": {
+      "lines": [
+        [
+          [
+            12,
+            5
+          ],
+          [
+            12,
+            19
+          ]
+        ],
+        [
+          [
+            5,
+            12
+          ],
+          [
+            12,
+            19
+          ],
+          [
+            19,
+            12
+          ]
+        ]
+      ]
+    },
+    "play": {
+      "lines": [
+        [
+          [
+            6,
+            3
+          ],
+          [
+            20,
+            12
+          ],
+          [
+            6,
+            21
+          ],
+          [
+            6,
+            3
+          ]
+        ]
+      ]
+    },
+    "trash": {
+      "lines": [
+        [
+          [
+            3,
+            6
+          ],
+          [
+            21,
+            6
+          ]
+        ],
+        [
+          [
+            19,
+            6
+          ],
+          [
+            19,
+            20
+          ],
+          [
+            5,
+            20
+          ],
+          [
+            5,
+            6
+          ]
+        ],
+        [
+          [
+            8,
+            6
+          ],
+          [
+            8,
+            3
+          ],
+          [
+            16,
+            3
+          ],
+          [
+            16,
+            6
+          ]
+        ],
+        [
+          [
+            10,
+            10
+          ],
+          [
+            10,
+            17
+          ]
+        ],
+        [
+          [
+            14,
+            10
+          ],
+          [
+            14,
+            17
+          ]
+        ]
+      ]
+    },
+    "record": {
+      "circle": [
+        12,
+        12,
+        6
+      ]
+    }
+  },
+  "badge": {
+    "foreground": "#000000",
+    "background": "#ffffffe6",
+    "border": "#000000",
+    "border_width": 1.5,
+    "radius": 8,
+    "font_size": 14,
+    "icon_size": 18,
+    "padding_x": 13,
+    "padding_y": 7,
+    "gap": 6,
+    "bottom": 64,
+    "press_ms": 1100,
+    "release_ms": 400
+  },
+  "touch": {
+    "radius": 22,
+    "fill": "#d8d8d880",
+    "border": "#ffffffc0",
+    "border_width": 2,
+    "press_ms": 90,
+    "press_scale": 0.7,
+    "minimum_ms": 150,
+    "tap_ms": 300,
+    "ripple_ms": 350,
+    "ripple_scale": 1.5,
+    "release_ms": 300
+  }
+}

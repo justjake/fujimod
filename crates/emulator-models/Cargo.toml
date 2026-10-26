@@ -1,0 +1,34 @@
+[package]
+name = "fujimod-emulator-models"
+description = "Registers the constructors of every emulator model crate"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+test = false
+doctest = false
+
+[dependencies]
+fujimod-emulator-exr2-audio.workspace = true
+fujimod-emulator-exr2-codecs.workspace = true
+fujimod-emulator-exr2-companion.workspace = true
+fujimod-emulator-exr2-display.workspace = true
+fujimod-emulator-exr2-gpu.workspace = true
+fujimod-emulator-exr2-i2c.workspace = true
+fujimod-emulator-exr2-io.workspace = true
+fujimod-emulator-exr2-isp-face.workspace = true
+fujimod-emulator-exr2-isp-input.workspace = true
+fujimod-emulator-exr2-isp-output.workspace = true
+fujimod-emulator-exr2-isp-statistics.workspace = true
+fujimod-emulator-exr2-plan.workspace = true
+fujimod-emulator-exr2-serial.workspace = true
+fujimod-emulator-exr2-storage.workspace = true
+fujimod-emulator-exr2-system.workspace = true
+fujimod-emulator-exr2-boot-serial.workspace = true
+fujimod-workspace-hack.workspace = true
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

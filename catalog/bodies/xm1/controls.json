@@ -1,0 +1,587 @@
+{
+  "$schema": "https://fujimod.com/schemas/physical-controls.schema.json",
+  "schema": 1,
+  "id": "xm1-controls",
+  "body_id": "xm1",
+  "manual": {
+    "url": "https://dl.fujifilm-x.com/support/manual/x/fujifilm_xm1_manual_en.pdf",
+    "title": "X-M1 Owner's Manual",
+    "pages": [
+      2,
+      3,
+      4,
+      5,
+      11,
+      13,
+      15,
+      17,
+      19,
+      22,
+      27,
+      30,
+      32,
+      33,
+      63,
+      64,
+      90,
+      122
+    ]
+  },
+  "analog_levels": 1024,
+  "boot": {
+    "sd": {
+      "hold": [
+        {
+          "id": "sub_command_dial.press"
+        },
+        {
+          "id": "fn_button"
+        }
+      ]
+    },
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
+    }
+  },
+  "controls": {
+    "battery_chamber_cover_latch": {
+      "name": "Battery-chamber cover latch",
+      "location": "bottom",
+      "manual_page": 13,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Slide the latch to open the battery-chamber cover.",
+      "role": null,
+      "mechanical": true,
+      "behavior": null,
+      "pushable": false,
+      "positions": []
+    },
+    "battery_latch": {
+      "name": "Battery latch",
+      "location": "bottom",
+      "manual_page": 15,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Press the latch to the side to release the battery for removal.",
+      "role": null,
+      "mechanical": true,
+      "behavior": null,
+      "pushable": false,
+      "positions": []
+    },
+    "disp_back_button": {
+      "name": "DISP (display)/BACK button",
+      "location": "rear",
+      "manual_page": 19,
+      "face": "DISP/BACK",
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-9"
+      ],
+      "assignable": false,
+      "default_function": "Cycle display modes or go back; press and hold to enable or disable silent mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "DISP_B"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "flash_pop_up_button": {
+      "name": "Flash pop-up button",
+      "location": "rear",
+      "manual_page": 27,
+      "face": null,
+      "icon": "flash",
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Raise the built-in flash.",
+      "role": null,
+      "mechanical": false,
+      "behavior": null,
+      "pushable": false,
+      "positions": []
+    },
+    "fn_button": {
+      "name": "Fn (function) button",
+      "location": "top",
+      "manual_page": 64,
+      "face": "Fn",
+      "icon": null,
+      "connection_ids": [
+        "controls-gpio-0-11"
+      ],
+      "assignable": true,
+      "default_function": "The shooting function is user-selectable; the manual does not specify its configured default. In playback mode this is the Wi-Fi button.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "FUNCTION"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "lens_release_button": {
+      "name": "Lens release button",
+      "location": "front",
+      "manual_page": 11,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Press while rotating the lens to remove it.",
+      "role": null,
+      "mechanical": true,
+      "behavior": null,
+      "pushable": false,
+      "positions": []
+    },
+    "main_command_dial": {
+      "name": "Main command",
+      "location": "top",
+      "manual_page": 5,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Rotate to set exposure or shutter speed, select quick-menu options, or view other pictures in playback mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "steps",
+          "decrease": {
+            "kind": "debug_key",
+            "name": "C_DIAL-"
+          },
+          "increase": {
+            "kind": "debug_key",
+            "name": "C_DIAL+"
+          }
+        },
+        "press": null,
+        "endless": true
+      },
+      "pushable": false,
+      "positions": [],
+      "short_name": "MAIN DIAL"
+    },
+    "menu_ok_button": {
+      "name": "MENU/OK button",
+      "location": "rear",
+      "manual_page": 5,
+      "face": "MENU/OK",
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-9"
+      ],
+      "assignable": false,
+      "default_function": "Confirm or select the highlighted menu item; press and hold to lock or unlock the selector, Q, and movie-recording buttons during shooting.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "EXE_M"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "mode_dial": {
+      "name": "Mode dial",
+      "location": "top",
+      "manual_page": 33,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-3"
+      ],
+      "assignable": false,
+      "default_function": "Select a shooting mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "SR+",
+              "key": {
+                "kind": "debug_key",
+                "name": "SR"
+              },
+              "asserted": true
+            },
+            {
+              "id": "auto",
+              "key": {
+                "kind": "debug_key",
+                "name": "AUTO"
+              },
+              "asserted": true
+            },
+            {
+              "id": "Adv.",
+              "key": {
+                "kind": "debug_key",
+                "name": "ADVANCE"
+              },
+              "asserted": true
+            },
+            {
+              "id": "SP",
+              "key": {
+                "kind": "debug_key",
+                "name": "SP"
+              },
+              "asserted": true
+            },
+            {
+              "id": "P",
+              "key": {
+                "kind": "debug_key",
+                "name": "PROGRAM"
+              },
+              "asserted": true
+            },
+            {
+              "id": "S",
+              "key": {
+                "kind": "debug_key",
+                "name": "SHUTTER"
+              },
+              "asserted": true
+            },
+            {
+              "id": "A",
+              "key": {
+                "kind": "debug_key",
+                "name": "APERTURE"
+              },
+              "asserted": true
+            },
+            {
+              "id": "M",
+              "key": {
+                "kind": "debug_key",
+                "name": "MANUAL"
+              },
+              "asserted": true
+            },
+            {
+              "id": "C",
+              "key": {
+                "kind": "debug_key",
+                "name": "C1"
+              },
+              "asserted": true
+            }
+          ]
+        },
+        "press": null,
+        "endless": false
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "SR+",
+          "label": "SR+",
+          "description": null
+        },
+        {
+          "id": "auto",
+          "label": "icon",
+          "description": "A simple “point-and-shoot” mode recommended for first-time users of digital cameras."
+        },
+        {
+          "id": "Adv.",
+          "label": "Adv.",
+          "description": null
+        },
+        {
+          "id": "SP",
+          "label": "SP",
+          "description": null
+        },
+        {
+          "id": "P",
+          "label": "P",
+          "description": null
+        },
+        {
+          "id": "S",
+          "label": "S",
+          "description": null
+        },
+        {
+          "id": "A",
+          "label": "A",
+          "description": null
+        },
+        {
+          "id": "M",
+          "label": "M",
+          "description": null
+        },
+        {
+          "id": "C",
+          "label": "C",
+          "description": null
+        }
+      ],
+      "short_name": "MODE"
+    },
+    "movie_record_button": {
+      "name": "Movie recording button",
+      "location": "rear",
+      "manual_page": 30,
+      "face": null,
+      "icon": "record",
+      "connection_ids": [
+        "controls-adc-9"
+      ],
+      "assignable": false,
+      "default_function": "Press to start movie recording and press again to end recording.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "MOVIE_REC"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "playback_button": {
+      "name": "Playback button",
+      "location": "rear",
+      "manual_page": 17,
+      "face": null,
+      "icon": "playback",
+      "connection_ids": [
+        "controls-gpio-2-9"
+      ],
+      "assignable": false,
+      "default_function": "Start playback; press the shutter button halfway to return to shooting mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "K_PLAY"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "power_switch": {
+      "name": "ON/OFF switch",
+      "location": "top",
+      "manual_page": 17,
+      "face": "ON/OFF",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "default_function": "Turn to ON to turn the camera on; select OFF to turn it off.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch",
+        "positions": [
+          {
+            "id": "ON",
+            "key": {
+              "kind": "debug_key",
+              "name": "POWER"
+            },
+            "asserted": true
+          },
+          {
+            "id": "OFF",
+            "key": {
+              "kind": "debug_key",
+              "name": "POWER"
+            },
+            "asserted": false
+          }
+        ]
+      },
+      "pushable": false,
+      "positions": [
+        {
+          "id": "ON",
+          "label": "ON",
+          "description": null
+        },
+        {
+          "id": "OFF",
+          "label": "OFF",
+          "description": null
+        }
+      ]
+    },
+    "quick_menu_button": {
+      "name": "Q (quick menu) button",
+      "location": "rear",
+      "manual_page": 32,
+      "face": "Q",
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-9"
+      ],
+      "assignable": false,
+      "default_function": "Open the quick menu; press and hold for monitor sunlight mode; in playback mode, use for RAW conversion.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "K_Q"
+        }
+      },
+      "pushable": true,
+      "positions": []
+    },
+    "selector": {
+      "name": "Selector",
+      "location": "rear",
+      "manual_page": 5,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-8"
+      ],
+      "assignable": false,
+      "default_function": "Up: AF button in shooting or delete in playback; left: macro; right: white balance; down: burst shooting. Move the cursor in the indicated direction.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "pad",
+        "directions": {
+          "up": {
+            "kind": "debug_key",
+            "name": "UP"
+          },
+          "down": {
+            "kind": "debug_key",
+            "name": "DOWN"
+          },
+          "left": {
+            "kind": "debug_key",
+            "name": "LEFT"
+          },
+          "right": {
+            "kind": "debug_key",
+            "name": "RIGHT"
+          }
+        },
+        "press": null
+      },
+      "pushable": false,
+      "positions": [],
+      "short_name": "SELECTOR"
+    },
+    "shutter_button": {
+      "name": "Shutter button",
+      "location": "top",
+      "manual_page": 22,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-gpio-0-2",
+        "controls-gpio-0-3"
+      ],
+      "assignable": false,
+      "default_function": "Press halfway to focus and lock focus and exposure; press the rest of the way down to take the picture.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "shutter",
+        "stages": {
+          "half_press": [
+            {
+              "kind": "debug_key",
+              "name": "S1"
+            }
+          ],
+          "full_press": [
+            {
+              "kind": "debug_key",
+              "name": "S1"
+            },
+            {
+              "kind": "debug_key",
+              "name": "S2"
+            }
+          ]
+        }
+      },
+      "pushable": true,
+      "positions": [],
+      "short_name": "SHUTTER"
+    },
+    "sub_command_dial": {
+      "name": "Sub-command dial",
+      "location": "top",
+      "manual_page": 5,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-encoder-3-8-3-9",
+        "controls-gpio-0-10"
+      ],
+      "assignable": false,
+      "default_function": "Rotate to adjust program shift, aperture, or shutter speed, select quick-menu options, or zoom in or out in playback. Press the center to zoom in on the selected focus area or focus point; in manual focus, press and hold the center to choose how focus is displayed.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "steps",
+          "decrease": {
+            "kind": "debug_key",
+            "name": "CMD_LEFT"
+          },
+          "increase": {
+            "kind": "debug_key",
+            "name": "CMD_RIGHT"
+          }
+        },
+        "press": {
+          "kind": "debug_key",
+          "name": "CMD_PUSH"
+        },
+        "endless": true
+      },
+      "pushable": true,
+      "positions": [],
+      "short_name": "SUB DIAL"
+    }
+  }
+}

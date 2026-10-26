@@ -132,9 +132,8 @@ async fn serve(hub: Hub, mut socket: WebSocket) {
                     let rooms = hub.rooms.lock().await;
                     let Some(active) = rooms.get(&room) else { break };
                     let target = if host { frame["to"].as_str().and_then(|id| active.clients.get(id)) } else { Some(&active.host) };
-                    if let Some(target) = target {
-                        if target.try_send(json!({"type":"signal", "from":peer, "data":data})).is_err() { break; }
-                    }
+                    if let Some(target) = target
+                        && target.try_send(json!({"type":"signal", "from":peer, "data":data})).is_err() { break; }
                 }
                 _ => break,
             }

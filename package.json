@@ -3,13 +3,20 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "lint": "vp lint --deny-warnings bindings crates apps/usb-sharing scripts vite.config.ts",
+    "lint": "npm run check:typescript-policy && node scripts/ci/lint.ts",
     "format:check": "vp fmt --check",
-    "test:node": "node scripts/ci/node-tests.mjs"
+    "test:node": "node scripts/ci/node-tests.ts",
+    "check:typescript-policy": "node scripts/ci/check-typescript.ts",
+    "check:types": "npm run check:typescript-policy && node scripts/ci/check-types.ts"
   },
   "devDependencies": {
     "@types/node": "26.6.5",
     "@vitest/coverage-v8": "5.0.5",
+    "fflate": "^0.8.3",
+    "rolldown": "1.2.15",
+    "smol-toml": "^1.9.1",
+    "typescript": "^7.0.2",
+    "typescript-api": "npm:typescript@6.0.3",
     "vite-plus": "1.3.0"
   },
   "engines": {

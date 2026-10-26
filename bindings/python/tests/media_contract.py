@@ -1,10 +1,15 @@
 """Media value contract shared by native Python and real Pyodide."""
 
+from collections.abc import Callable
 
-def check_media_values():
+from contract_assertions import expect
+from fujimod.usb import app80
+
+
+def check_media_values() -> bool:
     import json
 
-    from fujimod import defs
+    from fujimod import catalog
     from fujimod.usb import app80 as a
 
     layouts = [
@@ -45,26 +50,28 @@ def check_media_values():
         mailbox=dict(page=3, offset=576, configuration_limit=512),
         entries=entries,
     )
-    definition = defs.service.Definition.from_json(
-        json.dumps(document), defs.FirmwareIdentity("media-v2", "ab" * 32)
+    definition = catalog.service.Definition.from_json(
+        json.dumps(document), catalog.FirmwareIdentity("media-v2", "ab" * 32)
     )
     service = a.Service(definition)
-    modes = defs.service.ServiceModes(4)
+    modes = catalog.service.ServiceModes(4)
 
-    def prepare(command):
+    def prepare(command: app80.Command) -> app80.Invocation:
         return service.prepare(modes, command)
 
-    def logical(invocation, codec):
+    def logical(invocation: app80.Invocation, codec: str) -> list[int]:
         return [invocation.raw[1 + s] for s in slots[codec]]
 
-    def decode(invocation, codec, index, value):
+    def decode(
+        invocation: app80.Invocation, codec: str, index: int, value: int
+    ) -> app80.ReplyValue:
         raw = bytearray(invocation.raw)
         raw[1 + slots[codec][index]] = value
         reply = invocation.decode(raw)
         assert reply.raw == raw
         return reply.value
 
-    def invalid(function, kind):
+    def invalid(function: Callable[[], object], kind: app80.ArgumentKind) -> None:
         try:
             function()
         except a.CommandError as error:
@@ -110,7 +117,7 @@ def check_media_values():
     assert a.SoundClip(22).value == 22
     assert a.SoundClip(value=22).value == 22
     try:
-        a.SoundClip(22, constructor=None)
+        a.SoundClip(22, constructor=None)  # ty: ignore[unknown-argument]  # Deliberately invalid input: verify runtime rejection.
     except TypeError:
         pass
     else:
@@ -156,7 +163,10 @@ def check_media_values():
     ]
 
     for length in [0, 15, 17]:
-        invalid(lambda: a.HdmiPacket(bytes(length)), a.ArgumentKind.HdmiPacketLength)
+        invalid(
+            lambda length=length: a.HdmiPacket(bytes(length)),
+            a.ArgumentKind.HdmiPacketLength,
+        )
     invalid(lambda: a.HdmiValue(4096), a.ArgumentKind.HdmiValue)
     assert a.HdmiValue(4095).value == 4095
     original = bytearray(range(16))
@@ -192,7 +202,10 @@ def check_media_values():
         invocation = prepare(a.Command.ChargeControl(action=action))
         assert logical(invocation, "charge_control") == expected
         assert isinstance(
-            invocation.decode(invocation.raw).value.status, a.ChargeResult.Unknown
+            expect(
+                invocation.decode(invocation.raw).value, a.ReplyValue.ChargeApplied
+            ).status,
+            a.ChargeResult.Unknown,
         )
         for raw, result in [
             (0, a.ChargeResult.Success),
@@ -205,7 +218,7 @@ def check_media_values():
                 reply.status, result
             )
             if result is a.ChargeResult.Unknown:
-                assert reply.status.raw_status == raw
+                assert expect(reply.status, a.ChargeResult.Unknown).raw_status == raw
     invocation = prepare(a.Command.ChargeStatus(query=a.ChargeQuery.Presence))
     assert logical(invocation, "charge_status") == [0, 255]
     for raw, result in [
@@ -219,7 +232,7 @@ def check_media_values():
             reply.status, result
         )
         if result is a.ChargePresence.Unknown:
-            assert reply.status.raw_status == raw
+            assert expect(reply.status, a.ChargePresence.Unknown).raw_status == raw
     invocation = prepare(a.Command.ChargeStatus(query=a.ChargeQuery.State))
     assert logical(invocation, "charge_status") == [1, 255]
     for raw, result in [
@@ -237,15 +250,15 @@ def check_media_values():
             reply.status, result
         )
         if result is a.ReportedChargeState.Unknown:
-            assert reply.status.raw_status == raw
+            assert expect(reply.status, a.ReportedChargeState.Unknown).raw_status == raw
     try:
-        a.Command.ParameterService(enabled=1)
+        a.Command.ParameterService(enabled=1)  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     except TypeError:
         pass
     else:
         raise AssertionError("integer toggle accepted")
     try:
-        a.SoundAction.Clip(clip=a.SoundClip(0), format=a.DisplayMode.Option0)
+        a.SoundAction.Clip(clip=a.SoundClip(0), format=a.DisplayMode.Option0)  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     except TypeError:
         pass
     else:
@@ -270,7 +283,7 @@ def check_media_values():
                     reply.status, result
                 )
                 if result is a.AudioResult.Unknown:
-                    assert reply.status.raw_status == raw
+                    assert expect(reply.status, a.AudioResult.Unknown).raw_status == raw
     for mode, wire in [
         (a.AudioPlayback.AllLanes, 0),
         (a.AudioPlayback.ZeroSecondLane, 1),
@@ -307,7 +320,9 @@ def check_media_values():
                 reply.status, result
             )
             if result is a.StorageEraseResult.Unknown:
-                assert reply.status.raw_status == raw
+                assert (
+                    expect(reply.status, a.StorageEraseResult.Unknown).raw_status == raw
+                )
     invocation = prepare(a.Command.StorageStatus())
     assert logical(invocation, "storage_status") == [255]
     for raw, result in [
@@ -324,7 +339,7 @@ def check_media_values():
             reply.status, result
         )
         if result is a.StorageStatus.Unknown:
-            assert reply.status.raw_status == raw
+            assert expect(reply.status, a.StorageStatus.Unknown).raw_status == raw
     for command, codec in [
         (a.Command.FormatStorage(), "format_storage"),
         (a.Command.DisplaySetup(), "display_setup"),
@@ -336,9 +351,9 @@ def check_media_values():
             invocation.decode(invocation.raw).value, a.ReplyValue.NoPayload
         )
     for create in [
-        lambda: a.Command.AudioCapture(count=1, route=a.AudioRoute.Request81),
-        lambda: a.Command.AudioPlayback(mode=a.DisplayMode.Option0),
-        lambda: a.Command.EraseStorage(action=1),
+        lambda: a.Command.AudioCapture(count=1, route=a.AudioRoute.Request81),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
+        lambda: a.Command.AudioPlayback(mode=a.DisplayMode.Option0),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
+        lambda: a.Command.EraseStorage(action=1),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     ]:
         try:
             create()

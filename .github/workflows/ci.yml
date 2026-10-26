@@ -1,7 +1,5 @@
 name: CI
 on:
-  push:
-  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,10 +19,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
+        with:
+          javascript: 'true'
       - run: mise run python-lint
       - if: ${{ !cancelled() }}
         run: mise run python-format-check
@@ -36,25 +36,36 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
+      - name: Install JPEG development headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libjpeg-dev
       - run: mise run rust-format-check
       - if: ${{ !cancelled() }}
         run: mise run rust-check
+      - name: Check the generated workspace-hack crate
+        if: ${{ !cancelled() }}
+        run: |
+          cargo install cargo-hakari --version 0.9.39 --locked
+          mise run rust-hack-check
 
   javascript-quality:
-    name: JavaScript and TypeScript lint, format and types
+    name: TypeScript lint, format and types
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
           javascript: 'true'
+      - run: npm run check:typescript-policy
+      - run: npm run check:types
       - run: npm --prefix bindings/javascript run build
       - run: mise run javascript-lint
       - if: ${{ !cancelled() }}
@@ -71,14 +82,15 @@ jobs:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target/llvm-cov-target
       CARGO_LLVM_COV_TARGET_DIR: ${{ github.workspace }}/target/llvm-cov-target
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          submodules: recursive
       - uses: ./.github/actions/setup
       - name: Install coverage and media tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg libjpeg-dev
           rustup component add llvm-tools-preview
           cargo install cargo-llvm-cov --version 0.9.1 --locked
       - run: mise run rust-coverage
@@ -103,12 +115,12 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           mkdir -p target/coverage/rust
-          cargo llvm-cov report --all-features --lcov --output-path target/coverage/rust/lcov.info
-          cargo llvm-cov report --all-features --html --output-dir target/coverage/rust
+          cargo llvm-cov report --lcov --output-path target/coverage/rust/lcov.info
+          cargo llvm-cov report --html --output-dir target/coverage/rust
       - name: Coverage summary
         if: always()
         run: uv run --locked python scripts/ci/coverage_summary.py >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: native-coverage
@@ -121,7 +133,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
           persist-credentials: false
@@ -137,7 +149,7 @@ jobs:
       - name: Pyodide contracts in Node and Chromium
         if: ${{ !cancelled() }}
         run: |
-          uv run --locked python bindings/python/scripts/build_web_wheel.py --output target/web-wheels
+          node bindings/python/scripts/build-web-wheel.ts --out target/web-wheels
           npm --prefix bindings/javascript run test:pyodide:browser
       - if: ${{ !cancelled() }}
         run: mise run web-coverage
@@ -145,13 +157,13 @@ jobs:
         run: mise run web-build
       - name: All declared web integration test scripts
         if: ${{ !cancelled() }}
-        run: node scripts/ci/package-tests.mjs apps/web
+        run: node scripts/ci/package-tests.ts apps/web
       - if: ${{ !cancelled() }}
         run: npm --prefix apps/usb-sharing run check
       - name: Coverage summary
         if: always()
         run: uv run --locked python scripts/ci/coverage_summary.py >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: javascript-coverage

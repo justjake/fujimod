@@ -1,44 +1,34 @@
 import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
-import { expect, test, vi } from 'vite-plus/test';
-import { DevTools } from '../dev-tools/Page';
-import { Progress, type CameraBackend } from '../dev-tools/camera';
-test('Dev Tools automatically attaches the already selected backend on handoff', async () => {
-  const open = vi.fn(async () => ({
-    submit: async () => {},
-    poll: async () => ({ progress: Progress.Complete, status: 0, output: new Uint8Array() }),
-    usable: () => true,
-    close: async () => {},
-    abandon: () => {},
-  }));
-  const pick = vi.fn(async () => ({
-    name: 'Selected camera',
-    interfaces: [{ id: 0, label: 'Live USB session' }],
-  }));
-  const backend: CameraBackend = {
-    initialize: async () => {},
-    pick,
-    open,
-    drain: () => [],
-    onDisconnect: () => () => {},
-    dispose: () => {},
-  };
+import { beforeAll, expect, test, vi } from 'vite-plus/test';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { initialize } from 'fujimod';
+import DevTools from '../dev-tools/Page';
+import { createTestCameraModel, testCamera } from '../dev-tools/test-camera-model';
+
+beforeAll(async () => {
+  await initialize({
+    module_or_path: await readFile(resolve('../../bindings/javascript/pkg/fujimod_bg.wasm')),
+  });
+});
+
+test('Dev Tools opened from a bug report shows the camera already in the page model', async () => {
+  const test = createTestCameraModel({});
+  test.add(testCamera('Selected camera'));
   const host = document.createElement('div');
   document.body.append(host);
-  const dispose = render(
-    () => <DevTools backend={backend} supported={true} connectOnMount={true} />,
-    host,
-  );
+  const dispose = render(() => <DevTools model={test.model} supported={true} />, host);
   try {
     await vi.waitFor(() => {
       flush();
-      expect(
-        (host.querySelector('input[aria-label="Console command"]') as HTMLInputElement)?.disabled,
-      ).toBe(false);
+      expect(host.querySelector('.wb-camera h2')?.textContent).toBe('Selected camera');
     });
-    expect(pick).toHaveBeenCalledOnce();
-    expect(open).toHaveBeenCalledOnce();
-    expect(host.textContent).toContain('Selected camera');
+    expect(
+      [...host.querySelectorAll('button')].find(
+        (node) => node.textContent?.trim() === 'Dump configuration',
+      )!.disabled,
+    ).toBe(false);
   } finally {
     dispose();
     host.remove();

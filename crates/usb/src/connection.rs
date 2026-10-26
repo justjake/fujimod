@@ -20,18 +20,21 @@ pub enum DeviceFilter {
 #[derive(Clone, Debug)]
 pub enum Device {
     Local(nusb::DeviceInfo),
+    Owned(std::sync::Arc<crate::owner::DeviceOwner>),
     Proxy(fujimod_usb_proxy::RemoteDevice),
 }
 impl Device {
     pub fn vendor_id(&self) -> u16 {
         match self {
             Self::Local(d) => d.vendor_id(),
+            Self::Owned(d) => d.descriptor.vendor_id,
             Self::Proxy(d) => d.descriptor.vendor_id,
         }
     }
     pub fn product_id(&self) -> u16 {
         match self {
             Self::Local(d) => d.product_id(),
+            Self::Owned(d) => d.descriptor.product_id,
             Self::Proxy(d) => d.descriptor.product_id,
         }
     }
@@ -40,6 +43,10 @@ impl Device {
     pub fn bus_id(&self) -> &str {
         match self {
             Self::Local(d) => d.bus_id(),
+            Self::Owned(d) => d
+                .info
+                .as_ref()
+                .map_or(&d.descriptor.id, |info| info.bus_id()),
             Self::Proxy(d) => &d.descriptor.id,
         }
     }
@@ -47,6 +54,7 @@ impl Device {
     pub fn device_address(&self) -> u8 {
         match self {
             Self::Local(d) => d.device_address(),
+            Self::Owned(d) => d.info.as_ref().map_or(0, |info| info.device_address()),
             Self::Proxy(_) => 0,
         }
     }
@@ -54,24 +62,28 @@ impl Device {
     pub fn port_chain(&self) -> &[u8] {
         match self {
             Self::Local(d) => d.port_chain(),
+            Self::Owned(d) => d.info.as_ref().map_or(&[], |info| info.port_chain()),
             Self::Proxy(_) => &[],
         }
     }
     pub fn manufacturer_string(&self) -> Option<&str> {
         match self {
             Self::Local(d) => d.manufacturer_string(),
+            Self::Owned(d) => d.descriptor.manufacturer.as_deref(),
             Self::Proxy(d) => d.descriptor.manufacturer.as_deref(),
         }
     }
     pub fn product_string(&self) -> Option<&str> {
         match self {
             Self::Local(d) => d.product_string(),
+            Self::Owned(d) => d.descriptor.product.as_deref(),
             Self::Proxy(d) => d.descriptor.product.as_deref(),
         }
     }
     pub fn serial_number(&self) -> Option<&str> {
         match self {
             Self::Local(d) => d.serial_number(),
+            Self::Owned(d) => d.descriptor.serial.as_deref(),
             Self::Proxy(d) => d.descriptor.serial.as_deref(),
         }
     }
@@ -110,6 +122,28 @@ pub async fn discover_proxy(url: &str, token: &str, filter: DeviceFilter) -> Res
 
 /// Descriptor inspection only; does not claim or configure an interface.
 pub async fn interfaces(info: &Device) -> Result<Vec<InterfaceSelection>> {
+    if let Device::Owned(owner) = info {
+        return Ok(owner
+            .descriptor
+            .interfaces
+            .iter()
+            .filter(|i| {
+                bulk_pair(
+                    &i.endpoints
+                        .iter()
+                        .filter(|e| e.kind == "bulk")
+                        .map(|e| e.address)
+                        .collect::<Vec<_>>(),
+                )
+                .is_ok()
+            })
+            .map(|i| InterfaceSelection {
+                configuration: i.configuration,
+                interface: i.interface,
+                alternate: i.alternate,
+            })
+            .collect());
+    }
     let Device::Local(info) = info else {
         let Device::Proxy(remote) = info else {
             unreachable!()
@@ -187,6 +221,46 @@ impl Connection {
             return Err(Error::InvalidTimeout);
         }
         check_limit(8, options.max_reply_bytes.get())?;
+        if let Device::Owned(owner) = info {
+            let selection = crate::owner::Selection {
+                configuration: selection.configuration,
+                interface: selection.interface,
+                alternate: selection.alternate,
+            };
+            let descriptor = owner
+                .descriptor
+                .interfaces
+                .iter()
+                .find(|i| {
+                    i.configuration == selection.configuration
+                        && i.interface == selection.interface
+                        && i.alternate == selection.alternate
+                })
+                .ok_or(Error::InvalidInterface)?;
+            let (input_address, output_address) = bulk_pair(
+                &descriptor
+                    .endpoints
+                    .iter()
+                    .filter(|e| e.kind == "bulk")
+                    .map(|e| e.address)
+                    .collect::<Vec<_>>(),
+            )?;
+            let (lease, interface) = owner.local(selection).await?;
+            let input = interface.endpoint::<Bulk, In>(input_address)?;
+            let output = interface.endpoint::<Bulk, Out>(output_address)?;
+            return Ok(Self {
+                io: Backend::Usb(UsbIo {
+                    interface,
+                    input_address,
+                    output_address,
+                    input,
+                    output,
+                    timeout: options.timeout,
+                    lease: Some(lease),
+                }),
+                max_reply_bytes: options.max_reply_bytes.get(),
+            });
+        }
         let Device::Local(info) = info else {
             let Device::Proxy(remote) = info else {
                 unreachable!()
@@ -241,6 +315,9 @@ impl Connection {
                     output,
                     packet_size,
                     timeout: options.timeout,
+                    unsynced: Vec::new(),
+                    observation: None,
+                    observed: std::collections::BTreeMap::new(),
                 }),
                 max_reply_bytes: options.max_reply_bytes.get(),
             });
@@ -286,13 +363,28 @@ impl Connection {
                 input,
                 output,
                 timeout: options.timeout,
+                lease: None,
             }),
             max_reply_bytes: options.max_reply_bytes.get(),
         })
     }
 
-    /// Begins the ff80 protocol session. Drop never sends a camera close command;
-    /// explicitly call `Session::close` when exchanges have completed normally.
+    /// Label the current local owner lease before its first FF80 exchange.
+    pub fn set_tool(&self, tool: String) {
+        if let Backend::Usb(io) = &self.io
+            && let Some(lease) = &io.lease
+        {
+            lease.set_tool(tool);
+        }
+    }
+    /// Attach controller-side state and Rust protocol observations to a proxy.
+    pub fn observe_remote(&mut self, lease: crate::remote::Lease) {
+        if let Backend::Proxy(io) = &mut self.io {
+            io.observation = Some(lease);
+        }
+    }
+    /// Begins FF80; explicitly close the session after normal completion.
+    /// Drop never sends a camera close command.
     pub async fn begin_session(self, trace: Option<crate::trace::Trace>) -> Result<Session> {
         Session::open(self.io, self.max_reply_bytes, trace).await
     }
@@ -339,6 +431,8 @@ pub(crate) struct UsbIo {
     input: Endpoint<Bulk, In>,
     output: Endpoint<Bulk, Out>,
     timeout: Duration,
+    // Drop endpoints before releasing the logical owner claim.
+    lease: Option<crate::owner::LocalLease>,
 }
 
 async fn deadline<T>(
@@ -354,6 +448,12 @@ async fn deadline<T>(
 }
 
 impl Io for UsbIo {
+    async fn release(&mut self) -> Result<()> {
+        if let Some(lease) = &mut self.lease {
+            lease.release();
+        }
+        Ok(())
+    }
     fn endpoint(&self, stage: TransferStage) -> Option<u8> {
         Some(match stage {
             TransferStage::Control(_) => 0,
@@ -362,6 +462,63 @@ impl Io for UsbIo {
         })
     }
     async fn control(&mut self, kind: RequestKind, envelope: [u8; 12]) -> Result<()> {
+        if let Some(lease) = &self.lease {
+            lease.owner().observe_control(&envelope);
+        }
+        let result = self.control_transfer(kind, envelope).await;
+        if let Some(lease) = &self.lease {
+            match &result {
+                Ok(()) => lease.owner().observe_control_complete(),
+                Err(error) => lease.owner().observe_failure(&error.to_string()),
+            }
+        }
+        result
+    }
+    async fn write(&mut self, bytes: &[u8]) -> Result<()> {
+        let result = self.write_transfer(bytes).await;
+        if let Some(lease) = &self.lease {
+            let transferred = match &result {
+                Ok(()) => bytes.len(),
+                Err(Error::Transfer { transferred, .. }) => transferred.unwrap_or(0),
+                Err(Error::ShortTransfer { actual, .. }) => *actual,
+                _ => 0,
+            };
+            lease.owner().observe_payload(
+                false,
+                bytes,
+                bytes.len(),
+                transferred,
+                result.as_ref().err().map(ToString::to_string),
+            );
+        }
+        result
+    }
+    async fn read(&mut self, maximum: usize) -> Result<Vec<u8>> {
+        let result = self.read_transfer(maximum).await;
+        if let Some(lease) = &self.lease {
+            match &result {
+                Ok(data) => lease
+                    .owner()
+                    .observe_payload(true, data, maximum, data.len(), None),
+                Err(Error::Transfer {
+                    transferred,
+                    partial,
+                    ..
+                }) => lease.owner().observe_payload(
+                    true,
+                    partial,
+                    maximum,
+                    transferred.unwrap_or(0),
+                    result.as_ref().err().map(ToString::to_string),
+                ),
+                Err(error) => lease.owner().observe_failure(&error.to_string()),
+            }
+        }
+        result
+    }
+}
+impl UsbIo {
+    async fn control_transfer(&mut self, kind: RequestKind, envelope: [u8; 12]) -> Result<()> {
         // nusb's WebUSB backend has no control-transfer timeout. Apply the
         // same host deadline as bulk transfers; dropping this future cannot
         // establish that the camera stopped processing the envelope.
@@ -388,7 +545,7 @@ impl Io for UsbIo {
             partial: vec![],
         })
     }
-    async fn write(&mut self, bytes: &[u8]) -> Result<()> {
+    async fn write_transfer(&mut self, bytes: &[u8]) -> Result<()> {
         self.output.submit(bytes.to_vec().into());
         let done = deadline(
             self.timeout,
@@ -411,7 +568,7 @@ impl Io for UsbIo {
         }
         Ok(())
     }
-    async fn read(&mut self, maximum: usize) -> Result<Vec<u8>> {
+    async fn read_transfer(&mut self, maximum: usize) -> Result<Vec<u8>> {
         // nusb requires IN buffer sizes to be multiples of USB wMaxPacketSize.
         // The control envelope still requests the exact ff80 response size.
         let packet = self.input.max_packet_size();
@@ -442,15 +599,14 @@ impl Io for UsbIo {
 pub(crate) enum Backend {
     Usb(UsbIo),
     Proxy(crate::proxy::ProxyIo),
-    #[cfg(feature = "testing")]
     Replay(crate::testing::Script),
-    #[cfg(feature = "testing")]
     Model(crate::testing::Model),
 }
 impl Io for Backend {
     async fn release(&mut self) -> Result<()> {
         match self {
             Self::Proxy(io) => io.release().await,
+            Self::Usb(io) => io.release().await,
             _ => Ok(()),
         }
     }
@@ -458,9 +614,7 @@ impl Io for Backend {
         match self {
             Self::Usb(io) => io.endpoint(stage),
             Self::Proxy(io) => io.endpoint(stage),
-            #[cfg(feature = "testing")]
             Self::Replay(io) => io.endpoint(stage),
-            #[cfg(feature = "testing")]
             Self::Model(io) => io.endpoint(stage),
         }
     }
@@ -468,9 +622,7 @@ impl Io for Backend {
         match self {
             Self::Usb(io) => io.control(kind, envelope).await,
             Self::Proxy(io) => io.control(kind, envelope).await,
-            #[cfg(feature = "testing")]
             Self::Replay(io) => io.control(kind, envelope).await,
-            #[cfg(feature = "testing")]
             Self::Model(io) => io.control(kind, envelope).await,
         }
     }
@@ -478,9 +630,7 @@ impl Io for Backend {
         match self {
             Self::Usb(io) => io.write(bytes).await,
             Self::Proxy(io) => io.write(bytes).await,
-            #[cfg(feature = "testing")]
             Self::Replay(io) => io.write(bytes).await,
-            #[cfg(feature = "testing")]
             Self::Model(io) => io.write(bytes).await,
         }
     }
@@ -488,9 +638,7 @@ impl Io for Backend {
         match self {
             Self::Usb(io) => io.read(maximum).await,
             Self::Proxy(io) => io.read(maximum).await,
-            #[cfg(feature = "testing")]
             Self::Replay(io) => io.read(maximum).await,
-            #[cfg(feature = "testing")]
             Self::Model(io) => io.read(maximum).await,
         }
     }

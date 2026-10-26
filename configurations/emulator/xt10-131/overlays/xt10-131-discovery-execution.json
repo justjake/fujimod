@@ -1,0 +1,18 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xt10-131-discovery-execution",
+  "configuration_id": "xt10-131",
+  "change": {
+    "kind": "execution",
+    "execution": {
+      "mode": "strict",
+      "engine": "unicorn",
+      "quantum": 1000,
+      "instructions_per_tick": {
+        "numerator": 24,
+        "denominator": 1
+      }
+    }
+  }
+}

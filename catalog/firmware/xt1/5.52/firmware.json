@@ -1,0 +1,54 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xt1-552",
+  "body_id": "xt1",
+  "version": "5.52",
+  "update": {
+    "size": 42599472,
+    "sha256": "4cf56ba6abb4298a844422c016289228bb0acce0a2ae2c6755c05fffb38e92db"
+  },
+  "boot_rom": {
+    "content": {
+      "size": 16384,
+      "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be"
+    },
+    "address": 2147483648
+  },
+  "installation": {
+    "flash_offset": 604,
+    "entry_labels": {},
+    "loader_validation": null,
+    "image_sections": [
+      {
+        "name": "kernel0",
+        "address": 262144,
+        "size": 56224,
+        "sha256": "399c48c26c1b09e8dafcf666fe0efa62619f9cdcaa27166fb8f6d864a3d8d6f0",
+        "native_flash_offset": 524288
+      },
+      {
+        "name": "kernel1",
+        "address": 851968,
+        "size": 56192,
+        "sha256": "6db7ca9ec6d87124d830acbbf452c9f2d57fb26089766c2a88e0c5503d7de128",
+        "native_flash_offset": 655360
+      },
+      {
+        "name": "stream-0016025c",
+        "address": 7865344,
+        "size": 4115048,
+        "sha256": "38042d1d8756c7269ff6d1b2c9ae31dc19fefd296989aa9d524b8af6ed1b169f",
+        "native_flash_offset": 1441792
+      },
+      {
+        "name": "stream-0038025c",
+        "address": 15724832,
+        "size": 6505664,
+        "sha256": "5eff6c793a875b9f4f4ac289cebc4dc521ed4d2d6ee554d68963850493bc3b04",
+        "native_flash_offset": 3670016
+      }
+    ]
+  },
+  "generated_facts": null
+}

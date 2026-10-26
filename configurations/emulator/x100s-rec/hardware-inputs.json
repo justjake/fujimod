@@ -1,0 +1,70 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "x100s-rec",
+  "body_id": "x100s",
+  "reset": {
+    "inputs": {
+      "gpio": {
+        "gpio_inputs": {
+          "0": 3116,
+          "2": 4608,
+          "3": 8968,
+          "12": 128,
+          "11": 0,
+          "4": 32
+        },
+        "profile_name": "Synthetic normal-power boot; shutter GPIO0.2/3, VIEW GPIO4.5 and viewfinder lever GPIO3.13 released high; ADC8/9 released at zero. Other lines remain borrowed and unmeasured.",
+        "boot_source": 0
+      },
+      "power": {
+        "profile_name": "Synthetic normal loader boot reason0x40; remaining ADC borrowed; MCU runtime status still separate rehearsal input",
+        "adc_samples": [
+          0,
+          0,
+          1023,
+          63,
+          534,
+          640,
+          0,
+          825,
+          0,
+          0,
+          0,
+          0
+        ],
+        "boot_reply": 64,
+        "spi0_input_profile": "absent-hot-shoe-flash-fixed-low-miso",
+        "panel_contract": [
+          [
+            224,
+            6
+          ],
+          [
+            11,
+            3,
+            0,
+            12,
+            3,
+            1
+          ],
+          [
+            16,
+            null,
+            null
+          ],
+          1
+        ],
+        "spi_status_registers": [
+          [
+            9,
+            96
+          ]
+        ]
+      },
+      "mcu_packet_hex": "00000000d00700ff008000040000aafc",
+      "usb_connected": false
+    },
+    "execution_scope": "offline-boot-development"
+  }
+}

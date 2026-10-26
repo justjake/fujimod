@@ -1,10 +1,13 @@
 """Shared native/Pyodide direct service lens contract."""
 
+from contract_assertions import expect
+from fujimod.usb import app80
 
-def check_lens_values():
+
+def check_lens_values() -> bool:
     import json
 
-    from fujimod import defs
+    from fujimod import catalog
     from fujimod.usb import app80 as a
 
     layouts = [
@@ -40,13 +43,15 @@ def check_lens_values():
         ],
     }
     service = a.Service(
-        defs.service.Definition.from_json(
-            json.dumps(doc), defs.FirmwareIdentity("lens-b", "ab" * 32)
+        catalog.service.Definition.from_json(
+            json.dumps(doc), catalog.FirmwareIdentity("lens-b", "ab" * 32)
         )
     )
-    modes = defs.service.ServiceModes(4)
+    modes = catalog.service.ServiceModes(4)
 
-    def prepare(command, codec, expected):
+    def prepare(
+        command: app80.Command, codec: str, expected: list[int]
+    ) -> app80.Invocation:
         p = service.prepare(modes, command)
         assert [p.raw[1 + i] for i in slots[codec]] == expected
         return p
@@ -55,6 +60,7 @@ def check_lens_values():
         try:
             a.LensSelectionIndex(raw)
         except a.CommandError as error:
+            assert isinstance(error.reason, a.CommandFailure.Argument)
             assert error.reason.kind == a.ArgumentKind.LensSelectionIndex
         else:
             raise AssertionError("invalid lens index accepted")
@@ -79,7 +85,9 @@ def check_lens_values():
             )
             assert bytes(value.raw_detail) == bytes([0, 255])
             if raw == 255:
-                assert value.range.raw_status == 255
+                assert (
+                    expect(value.range, a.LensSelectionRange.Unknown).raw_status == 255
+                )
     for command, codec in [
         (a.Command.LensOperation2(), "lens_operation2"),
         (a.Command.LensOperation3(), "lens_operation3"),
@@ -99,8 +107,8 @@ def check_lens_values():
         p = prepare(command, codec, [])
         assert isinstance(p.decode(p.raw).value, a.ReplyValue.NoPayload)
     for create in [
-        lambda: a.Command.LensSelect(target=1),
-        lambda: a.LensTarget.Index(index=a.TransferPayloadByte(1)),
+        lambda: a.Command.LensSelect(target=1),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
+        lambda: a.LensTarget.Index(index=a.TransferPayloadByte(1)),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     ]:
         try:
             create()

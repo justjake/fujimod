@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xt4-212",
+  "body_id": "xt4",
+  "version": "2.12",
+  "update": {
+    "size": 51278280,
+    "sha256": "853d273b5603d3a2b93493f0ebd6a762b0b4b6bdc70317777775ae5f8ed93bc5"
+  },
+  "boot_rom": null,
+  "installation": null,
+  "generated_facts": null
+}

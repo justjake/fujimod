@@ -1,0 +1,75 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xt10-131",
+  "body_id": "xt10",
+  "version": "1.31",
+  "update": {
+    "size": 53085156,
+    "sha256": "aa58f0ff3878b5ced79bb53a2e85dea3946be169dbc7416f0c896d4c5d7f4a8b"
+  },
+  "boot_rom": {
+    "content": {
+      "size": 16384,
+      "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be"
+    },
+    "address": 2147483648
+  },
+  "installation": {
+    "flash_offset": 604,
+    "entry_labels": {},
+    "loader_validation": null,
+    "image_sections": [
+      {
+        "name": "kernel0",
+        "address": 262144,
+        "size": 56224,
+        "sha256": "399c48c26c1b09e8dafcf666fe0efa62619f9cdcaa27166fb8f6d864a3d8d6f0",
+        "native_flash_offset": 524288
+      },
+      {
+        "name": "kernel1",
+        "address": 851968,
+        "size": 56192,
+        "sha256": "6db7ca9ec6d87124d830acbbf452c9f2d57fb26089766c2a88e0c5503d7de128",
+        "native_flash_offset": 655360
+      },
+      {
+        "name": "stream-0016025c",
+        "address": 9044992,
+        "size": 3522760,
+        "sha256": "8b8e0cfc5729523da8078a4fc311265fd0ba0c87ed79837fd6da78751075d9c4",
+        "native_flash_offset": 1441792
+      },
+      {
+        "name": "stream-0032025c",
+        "address": 16225536,
+        "size": 6054336,
+        "sha256": "733e26645bd47ee93dc8fa15df9d3c3ddacd8e055a4c9e2733b9ea83c856d1ba",
+        "native_flash_offset": 3276800
+      },
+      {
+        "name": "overlay48",
+        "address": 27000832,
+        "size": 3039456,
+        "sha256": "02d1ed5abf7635709389f27112ad4383ad98d1a88f92b4e0df04bd86fe7e71d8",
+        "native_flash_offset": 6684672
+      },
+      {
+        "name": "overlay4a",
+        "address": 30146560,
+        "size": 119520,
+        "sha256": "5d06272cd6c773fd4b88564d72f43316ac45eb0d58a80c855a53b9a3deee5f97",
+        "native_flash_offset": 9830400
+      },
+      {
+        "name": "overlay4b",
+        "address": 30277632,
+        "size": 2597280,
+        "sha256": "0e31995d8159d4e4bf208abada1362b9e6009ecd4876eec460d9e949a72a6429",
+        "native_flash_offset": 9961472
+      }
+    ]
+  },
+  "generated_facts": null
+}

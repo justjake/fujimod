@@ -1,0 +1,75 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "x100t-111",
+  "body_id": "x100t",
+  "version": "1.11",
+  "update": {
+    "size": 53086984,
+    "sha256": "8c84b29e3b9b4b7385653e66c7027707995826ddf29a7e80232302de60f3dd3d"
+  },
+  "boot_rom": {
+    "content": {
+      "size": 16384,
+      "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be"
+    },
+    "address": 2147483648
+  },
+  "installation": {
+    "flash_offset": 604,
+    "entry_labels": {},
+    "loader_validation": null,
+    "image_sections": [
+      {
+        "name": "kernel0",
+        "address": 262144,
+        "size": 56224,
+        "sha256": "399c48c26c1b09e8dafcf666fe0efa62619f9cdcaa27166fb8f6d864a3d8d6f0",
+        "native_flash_offset": 524288
+      },
+      {
+        "name": "kernel1",
+        "address": 851968,
+        "size": 56192,
+        "sha256": "6db7ca9ec6d87124d830acbbf452c9f2d57fb26089766c2a88e0c5503d7de128",
+        "native_flash_offset": 655360
+      },
+      {
+        "name": "stream-0016025c",
+        "address": 9044992,
+        "size": 3400008,
+        "sha256": "b9593278a28d90c9f8b079e7f98d3dc08b627158493071fcdee632aa9da65c52",
+        "native_flash_offset": 1441792
+      },
+      {
+        "name": "stream-0032025c",
+        "address": 16067328,
+        "size": 6108768,
+        "sha256": "5d4a1dbc3197e646b251d421236f7764d304deb2dfbcfd8bd4f0ea95b7f468d9",
+        "native_flash_offset": 3276800
+      },
+      {
+        "name": "overlay48",
+        "address": 26738688,
+        "size": 3220480,
+        "sha256": "97a5e47a6f944c31f5ffc406e8a1bc379a2e8c38ee45e4949a732d24954a901e",
+        "native_flash_offset": 6684672
+      },
+      {
+        "name": "overlay4a",
+        "address": 30015488,
+        "size": 119648,
+        "sha256": "39dc727004fab02ebc999c44927a042533ed732c0634d0d16ba4acbe93f48bec",
+        "native_flash_offset": 9961472
+      },
+      {
+        "name": "overlay4b",
+        "address": 30146560,
+        "size": 2597344,
+        "sha256": "627534f2af1b58e01b016f7f4c533c1fc6e322fda6efa2509f7fe024d08f2b76",
+        "native_flash_offset": 10092544
+      }
+    ]
+  },
+  "generated_facts": null
+}

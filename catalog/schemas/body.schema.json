@@ -1,0 +1,6163 @@
+{
+  "$defs": {
+    "AperturePosition": {
+      "additionalProperties": false,
+      "description": "An aperture mechanism position and f-number.",
+      "properties": {
+        "f_number": {
+          "description": "Optical f-number at this position.",
+          "format": "double",
+          "type": "number"
+        },
+        "position": {
+          "description": "Mechanical position value.",
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "position",
+        "f_number"
+      ],
+      "type": "object"
+    },
+    "AvcCodecOptions": {
+      "additionalProperties": false,
+      "description": "Compression backend selection; register and DMA behavior is shared.",
+      "properties": {
+        "backend": {
+          "$ref": "#/$defs/VideoEncoderBackend"
+        }
+      },
+      "required": [
+        "backend"
+      ],
+      "type": "object"
+    },
+    "BlockSignal": {
+      "description": "Named control signals carried by SoC blocks.",
+      "oneOf": [
+        {
+          "const": "detect",
+          "description": "Presence or cable-detect signal.",
+          "type": "string"
+        },
+        {
+          "const": "write_protect",
+          "description": "Write-protect signal.",
+          "type": "string"
+        },
+        {
+          "const": "data_ready",
+          "description": "Data ready signal.",
+          "type": "string"
+        },
+        {
+          "const": "clock",
+          "description": "Clock output.",
+          "type": "string"
+        }
+      ]
+    },
+    "BodyConnection": {
+      "additionalProperties": false,
+      "description": "A physical body connection.",
+      "properties": {
+        "id": {
+          "description": "Connection identity referenced by body wiring and run inputs.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ConnectionKind",
+          "description": "Physical connection category."
+        },
+        "signals": {
+          "description": "Electrical or physical signals carried by the connection.",
+          "items": {
+            "$ref": "#/$defs/ConnectionSignal"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "signals"
+      ],
+      "type": "object"
+    },
+    "BodyHardware": {
+      "additionalProperties": false,
+      "description": "Additional body-specific physical wiring.",
+      "properties": {
+        "gpio_feedback": {
+          "description": "Connections between GPIO output and input pads.",
+          "items": {
+            "$ref": "#/$defs/GpioFeedback"
+          },
+          "type": "array"
+        },
+        "keypad_samples": {
+          "additionalProperties": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Named keypad positions and their declared analog sample levels.",
+          "type": "object"
+        },
+        "profiles": {
+          "additionalProperties": {
+            "$ref": "#/$defs/BodyProfile"
+          },
+          "description": "Named hardware profiles, selected explicitly by a run preset.",
+          "type": "object"
+        },
+        "serial_attachments": {
+          "description": "Serial endpoints and their processor-side connections.",
+          "items": {
+            "$ref": "#/$defs/SerialAttachment"
+          },
+          "type": "array"
+        },
+        "thermal_connection_ids": {
+          "description": "Body connections carrying thermal sensor voltages.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "serial_attachments",
+        "gpio_feedback",
+        "keypad_samples",
+        "thermal_connection_ids"
+      ],
+      "type": "object"
+    },
+    "BodyProfile": {
+      "additionalProperties": false,
+      "description": "Declared body profile facts.",
+      "properties": {
+        "attachments": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwarePartAssemblies"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared attachments."
+        },
+        "card_contacts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareCardContacts"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared card contacts."
+        },
+        "connections": {
+          "description": "Declared connections.",
+          "items": {
+            "$ref": "#/$defs/HardwareConnectionSupport"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "construction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConstructionProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Exported construction topology, including native node identities and hardware parameters."
+        },
+        "control_bus_notes": {
+          "description": "Declared control bus notes.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "control_bus_order": {
+          "description": "Firmware descriptor order of body devices; `sensor` refers to the installed sensor endpoint.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "controllers": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareControllerModels"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared controllers."
+        },
+        "counter_feedback": {
+          "description": "Declared counter feedback.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dram_basis": {
+          "description": "Declared dram basis.",
+          "type": "string"
+        },
+        "encoders": {
+          "description": "Declared encoders.",
+          "items": {
+            "$ref": "#/$defs/HardwareEncoder"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "face_register_mode": {
+          "description": "Declared face register mode.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "graph": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeviceGraph"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared graph."
+        },
+        "imaging": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareImaging"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared imaging."
+        },
+        "interrupt_notes": {
+          "description": "Declared interrupt notes.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lens_notes": {
+          "description": "Declared lens notes.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limits": {
+          "description": "Declared limits.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "panel_notes": {
+          "description": "Declared panel notes.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pin_interrupts": {
+          "description": "Declared pin interrupts.",
+          "items": {
+            "$ref": "#/$defs/HardwarePinInterrupt"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "preview_activity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwarePreviewActivity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared preview activity."
+        },
+        "touch": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareTouch"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared touch."
+        }
+      },
+      "required": [
+        "dram_basis"
+      ],
+      "type": "object"
+    },
+    "BodyRamRegion": {
+      "additionalProperties": false,
+      "description": "A body-specific mapped RAM extent.",
+      "properties": {
+        "base": {
+          "description": "Physical base address of the region.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "bytes": {
+          "description": "Region capacity in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "description": "Stable region identity within the body.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/MemoryKind",
+          "description": "Memory type exposed by the body."
+        }
+      },
+      "required": [
+        "id",
+        "base",
+        "bytes",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "BodyWiring": {
+      "additionalProperties": false,
+      "description": "A physical wire between a body connection, part, or SoC block.",
+      "properties": {
+        "signal": {
+          "$ref": "#/$defs/WireSignal",
+          "description": "Named signal carried by the wire."
+        },
+        "source_id": {
+          "description": "Source component identity.",
+          "type": "string"
+        },
+        "target_id": {
+          "description": "Target component identity.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "target_id",
+        "signal"
+      ],
+      "type": "object"
+    },
+    "CardSlotAssembly": {
+      "additionalProperties": false,
+      "description": "A body-specific attachment for a removable-card slot part.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection identity for the card data interface.",
+          "type": "string"
+        },
+        "controller_id": {
+          "description": "SoC removable-card controller block, when implemented.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "detect_connection_id": {
+          "description": "Body connection identity carrying card-detect state.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Reusable card-slot part identity.",
+          "type": "string"
+        },
+        "write_protect_connection_id": {
+          "description": "Body connection identity carrying write-protect state.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id",
+        "detect_connection_id",
+        "write_protect_connection_id"
+      ],
+      "type": "object"
+    },
+    "ConnectionKind": {
+      "description": "Physical connection categories.",
+      "oneOf": [
+        {
+          "const": "control",
+          "description": "User button or control switch.",
+          "type": "string"
+        },
+        {
+          "const": "usb",
+          "description": "USB cable or host connection.",
+          "type": "string"
+        },
+        {
+          "const": "hdmi",
+          "description": "HDMI cable or display connection.",
+          "type": "string"
+        },
+        {
+          "const": "sd-card",
+          "description": "SD card slot.",
+          "type": "string"
+        },
+        {
+          "const": "remote",
+          "description": "Wired remote or microphone connector.",
+          "type": "string"
+        },
+        {
+          "const": "hot-shoe",
+          "description": "Hot-shoe accessory connector.",
+          "type": "string"
+        },
+        {
+          "const": "external-power",
+          "description": "External power connector.",
+          "type": "string"
+        },
+        {
+          "const": "battery-door",
+          "description": "Battery-door interlock.",
+          "type": "string"
+        },
+        {
+          "const": "sensor",
+          "description": "Sensor data or control connection.",
+          "type": "string"
+        },
+        {
+          "const": "lens",
+          "description": "Lens or actuator connection.",
+          "type": "string"
+        },
+        {
+          "const": "display",
+          "description": "Display data or control connection.",
+          "type": "string"
+        },
+        {
+          "const": "microcontroller",
+          "description": "Microcontroller connection.",
+          "type": "string"
+        },
+        {
+          "const": "power-control",
+          "description": "Serial power-control endpoint.",
+          "type": "string"
+        }
+      ]
+    },
+    "ConnectionSignal": {
+      "description": "One electrical signal exposed by a body connection.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A GPIO pin with an active logic level.",
+          "properties": {
+            "active_level": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "gpio",
+              "type": "string"
+            },
+            "pin": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "port": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "port",
+            "pin",
+            "active_level"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "An ADC channel and threshold.",
+          "properties": {
+            "channel": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "adc",
+              "type": "string"
+            },
+            "threshold": {
+              "default": null,
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "channel"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A named SoC block signal.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "block",
+              "type": "string"
+            },
+            "signal": {
+              "$ref": "#/$defs/BlockSignal"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "signal"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A routed serial control channel.",
+          "properties": {
+            "address": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "block_id": {
+              "type": "string"
+            },
+            "channel": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "serial",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "channel",
+            "address"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Direct interrupt wire to a processor interrupt-controller input.",
+          "properties": {
+            "controller_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "interrupt",
+              "type": "string"
+            },
+            "line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "controller_id",
+            "line"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Contact reported as bits of a register read through a serial controller.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "serial_status",
+              "type": "string"
+            },
+            "mask": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "register": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "register",
+            "mask"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ConstructionActivity": {
+      "additionalProperties": false,
+      "description": "Declared activity facts.",
+      "properties": {
+        "gpio": {
+          "description": "Declared gpio.",
+          "type": "string"
+        },
+        "selection": {
+          "$ref": "#/$defs/ConstructionSelection",
+          "description": "Declared selection."
+        }
+      },
+      "required": [
+        "gpio",
+        "selection"
+      ],
+      "type": "object"
+    },
+    "ConstructionClock": {
+      "description": "Closed Clock implementation and its hardware connections.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "encoder_stages hardware.",
+          "properties": {
+            "kind": {
+              "const": "encoder_stages",
+              "type": "string"
+            },
+            "ticks_per_quantum": {
+              "description": "ticks per quantum.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "ticks_per_quantum"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "microstep_stages hardware.",
+          "properties": {
+            "kind": {
+              "const": "microstep_stages",
+              "type": "string"
+            },
+            "ticks_per_quantum": {
+              "description": "ticks per quantum.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "ticks_per_quantum"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ConstructionCore": {
+      "additionalProperties": false,
+      "description": "Declared core facts.",
+      "properties": {
+        "core": {
+          "description": "Declared core.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "line": {
+          "description": "Declared line.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "core",
+        "line"
+      ],
+      "type": "object"
+    },
+    "ConstructionCounters": {
+      "additionalProperties": false,
+      "description": "Declared counters facts.",
+      "properties": {
+        "channel": {
+          "description": "Declared channel.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "divider": {
+          "description": "Declared divider.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "channel",
+        "divider"
+      ],
+      "type": "object"
+    },
+    "ConstructionEmpty": {
+      "additionalProperties": false,
+      "description": "An explicitly empty device-reference set.",
+      "type": "object"
+    },
+    "ConstructionEndpoint": {
+      "description": "Closed Endpoint implementation and its hardware connections.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "lens-unit hardware.",
+          "properties": {
+            "completion": {
+              "description": "completion.",
+              "items": {
+                "$ref": "#/$defs/ConstructionIrqs"
+              },
+              "type": "array"
+            },
+            "focus": {
+              "$ref": "#/$defs/ConstructionFocus",
+              "description": "focus."
+            },
+            "gpio": {
+              "description": "gpio.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "lens-unit",
+              "type": "string"
+            },
+            "optics": {
+              "$ref": "#/$defs/ConstructionOptics",
+              "description": "optics."
+            },
+            "options": {
+              "$ref": "#/$defs/ConstructionLensunitOptions",
+              "description": "options."
+            },
+            "pulses": {
+              "description": "pulses.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "completion",
+            "focus",
+            "gpio",
+            "optics",
+            "options",
+            "pulses"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "panel hardware.",
+          "properties": {
+            "kind": {
+              "const": "panel",
+              "type": "string"
+            },
+            "options": {
+              "$ref": "#/$defs/ConstructionPanelOptions",
+              "description": "options."
+            }
+          },
+          "required": [
+            "kind",
+            "options"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "registers hardware.",
+          "properties": {
+            "kind": {
+              "const": "registers",
+              "type": "string"
+            },
+            "options": {
+              "$ref": "#/$defs/ConstructionRegistersOptions",
+              "description": "options."
+            }
+          },
+          "required": [
+            "kind",
+            "options"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ConstructionFocus": {
+      "additionalProperties": false,
+      "description": "Declared focus facts.",
+      "properties": {
+        "infinity_position": {
+          "description": "Declared infinity position.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "output": {
+          "description": "Declared output.",
+          "type": "string"
+        },
+        "steps_per_mm": {
+          "description": "Declared steps per mm.",
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "infinity_position",
+        "output",
+        "steps_per_mm"
+      ],
+      "type": "object"
+    },
+    "ConstructionHardware": {
+      "additionalProperties": false,
+      "description": "Declared hardware facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq": {
+          "description": "Declared irq.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parts": {
+          "$ref": "#/$defs/ConstructionParts",
+          "description": "Declared parts."
+        }
+      },
+      "required": [
+        "base",
+        "irq",
+        "parts"
+      ],
+      "type": "object"
+    },
+    "ConstructionHome": {
+      "additionalProperties": false,
+      "description": "Declared home facts.",
+      "properties": {
+        "pin": {
+          "$ref": "#/$defs/ConstructionPin",
+          "description": "Declared pin."
+        },
+        "side": {
+          "description": "Declared side.",
+          "type": "string"
+        },
+        "threshold": {
+          "description": "Declared threshold.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pin",
+        "side",
+        "threshold"
+      ],
+      "type": "object"
+    },
+    "ConstructionIrqs": {
+      "additionalProperties": false,
+      "description": "Declared irqs facts.",
+      "properties": {
+        "Core": {
+          "$ref": "#/$defs/ConstructionCore",
+          "description": "Declared Core."
+        }
+      },
+      "required": [
+        "Core"
+      ],
+      "type": "object"
+    },
+    "ConstructionIrqsIrqs": {
+      "additionalProperties": false,
+      "description": "Declared irqs irqs facts.",
+      "properties": {
+        "edge": {
+          "description": "Declared edge.",
+          "type": "string"
+        },
+        "outputs": {
+          "description": "Declared outputs.",
+          "items": {
+            "$ref": "#/$defs/ConstructionIrqs"
+          },
+          "type": "array"
+        },
+        "pin": {
+          "$ref": "#/$defs/ConstructionPin",
+          "description": "Declared pin."
+        }
+      },
+      "required": [
+        "edge",
+        "outputs",
+        "pin"
+      ],
+      "type": "object"
+    },
+    "ConstructionLensunitOptions": {
+      "additionalProperties": false,
+      "description": "Declared lensunit options facts.",
+      "properties": {
+        "encoder": {
+          "description": "Declared encoder.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "motors": {
+          "description": "Declared motors.",
+          "items": {
+            "$ref": "#/$defs/ConstructionMotors"
+          },
+          "type": "array"
+        },
+        "protocol": {
+          "$ref": "#/$defs/ConstructionProtocol",
+          "description": "Declared protocol."
+        },
+        "zoom": {
+          "description": "Declared zoom.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "motors",
+        "protocol"
+      ],
+      "type": "object"
+    },
+    "ConstructionModel": {
+      "description": "Closed ConstructionModel implementation and its hardware connections.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "adc hardware.",
+          "properties": {
+            "kind": {
+              "const": "adc",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "block-98000 hardware.",
+          "properties": {
+            "kind": {
+              "const": "block-98000",
+              "type": "string"
+            },
+            "wiring": {
+              "$ref": "#/$defs/ConstructionWiring",
+              "description": "wiring."
+            }
+          },
+          "required": [
+            "kind",
+            "wiring"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "block11000 hardware.",
+          "properties": {
+            "kind": {
+              "const": "block11000",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "block86000 hardware.",
+          "properties": {
+            "kind": {
+              "const": "block86000",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "clocks hardware.",
+          "properties": {
+            "kind": {
+              "const": "clocks",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "core-release hardware.",
+          "properties": {
+            "core": {
+              "description": "core.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "core-release",
+              "type": "string"
+            },
+            "request": {
+              "description": "request.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "core",
+            "request"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "display-timing hardware.",
+          "properties": {
+            "clock": {
+              "description": "clock.",
+              "type": "string"
+            },
+            "controllers": {
+              "description": "controllers.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "display-timing",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "clock",
+            "controllers"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "dram hardware.",
+          "properties": {
+            "kind": {
+              "const": "dram",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "dram-phy hardware.",
+          "properties": {
+            "kind": {
+              "const": "dram-phy",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "encoder hardware.",
+          "properties": {
+            "counter": {
+              "description": "counter.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "gpio": {
+              "description": "gpio.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "encoder",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "gpio"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "exr2-interrupt-controller hardware.",
+          "properties": {
+            "base": {
+              "description": "base.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "core": {
+              "description": "core.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "exr2-interrupt-controller",
+              "type": "string"
+            },
+            "routes": {
+              "description": "routes.",
+              "type": "string"
+            },
+            "software": {
+              "description": "software.",
+              "items": {
+                "$ref": "#/$defs/ConstructionSoftware"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "base",
+            "core",
+            "routes",
+            "software"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "exr2-pulse hardware.",
+          "properties": {
+            "irqs": {
+              "description": "irqs.",
+              "items": {
+                "$ref": "#/$defs/ConstructionIrqs"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "exr2-pulse",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "irqs"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "exr2-system-timers hardware.",
+          "properties": {
+            "controllers": {
+              "description": "controllers.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "exr2-system-timers",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "controllers"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "external-frames hardware.",
+          "properties": {
+            "activity": {
+              "$ref": "#/$defs/ConstructionActivity",
+              "description": "activity."
+            },
+            "images": {
+              "description": "images.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "external-frames",
+              "type": "string"
+            },
+            "statistics": {
+              "description": "statistics.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "activity",
+            "images",
+            "statistics"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "face-detector hardware.",
+          "properties": {
+            "kind": {
+              "const": "face-detector",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "fe80-processing hardware.",
+          "properties": {
+            "frames": {
+              "description": "frames.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "fe80-processing",
+              "type": "string"
+            },
+            "routes": {
+              "description": "routes.",
+              "type": "string"
+            },
+            "transport": {
+              "$ref": "#/$defs/ConstructionEmpty",
+              "description": "transport."
+            }
+          },
+          "required": [
+            "kind",
+            "frames",
+            "routes",
+            "transport"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "formatter hardware.",
+          "properties": {
+            "kind": {
+              "const": "formatter",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "gpio hardware.",
+          "properties": {
+            "irqs": {
+              "description": "irqs.",
+              "items": {
+                "$ref": "#/$defs/ConstructionIrqsIrqs"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "gpio",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "irqs"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "hdmi hardware.",
+          "properties": {
+            "hot_plug": {
+              "$ref": "#/$defs/ConstructionIrqs",
+              "description": "hot plug."
+            },
+            "kind": {
+              "const": "hdmi",
+              "type": "string"
+            },
+            "sink": {
+              "description": "sink.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "hot_plug",
+            "sink"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "hdmi-sink hardware.",
+          "properties": {
+            "kind": {
+              "const": "hdmi-sink",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "i2c hardware.",
+          "properties": {
+            "bridge": {
+              "description": "bridge.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "cable": {
+              "description": "cable.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "controllers": {
+              "description": "controllers.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "hardware": {
+              "$ref": "#/$defs/ConstructionHardware",
+              "description": "hardware."
+            },
+            "kind": {
+              "const": "i2c",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "controllers",
+            "hardware"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "image-combination hardware.",
+          "properties": {
+            "irq": {
+              "$ref": "#/$defs/ConstructionCore",
+              "description": "irq."
+            },
+            "kind": {
+              "const": "image-combination",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "irq"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "image-input hardware.",
+          "properties": {
+            "edges": {
+              "description": "edges.",
+              "type": "string"
+            },
+            "frame_period": {
+              "description": "frame period.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "image-input",
+              "type": "string"
+            },
+            "memory_outputs": {
+              "description": "memory outputs.",
+              "type": "string"
+            },
+            "parameters": {
+              "description": "parameters.",
+              "type": "string"
+            },
+            "phase_irqs": {
+              "description": "phase irqs.",
+              "items": {
+                "$ref": "#/$defs/ConstructionCore"
+              },
+              "type": "array"
+            },
+            "raw_irq": {
+              "$ref": "#/$defs/ConstructionCore",
+              "description": "raw irq."
+            },
+            "readback_irq": {
+              "$ref": "#/$defs/ConstructionCore",
+              "description": "readback irq."
+            },
+            "sensor": {
+              "description": "sensor.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "shutter_output": {
+              "description": "shutter output.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "statistics_grid": {
+              "description": "statistics grid.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "edges",
+            "memory_outputs",
+            "parameters",
+            "phase_irqs",
+            "raw_irq",
+            "readback_irq"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "lz hardware.",
+          "properties": {
+            "base": {
+              "description": "base.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "controllers": {
+              "description": "controllers.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "lz",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "base",
+            "controllers"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "memory-dma hardware.",
+          "properties": {
+            "base": {
+              "description": "base.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "memory-dma",
+              "type": "string"
+            },
+            "routes": {
+              "description": "routes.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "base",
+            "routes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "nand hardware.",
+          "properties": {
+            "kind": {
+              "const": "nand",
+              "type": "string"
+            },
+            "medium": {
+              "description": "medium.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "medium"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "output-channel hardware.",
+          "properties": {
+            "base": {
+              "description": "base.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "channel": {
+              "description": "channel.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "channels": {
+              "description": "channels.",
+              "type": "string"
+            },
+            "frames": {
+              "description": "frames.",
+              "type": "string"
+            },
+            "irq": {
+              "description": "irq.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "output-channel",
+              "type": "string"
+            },
+            "memory_outputs": {
+              "description": "memory outputs.",
+              "type": "string"
+            },
+            "routes": {
+              "description": "routes.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "base",
+            "channel",
+            "channels",
+            "frames",
+            "irq",
+            "memory_outputs",
+            "routes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "H.264 compression, decoding and addressed DMA.",
+          "properties": {
+            "irq": {
+              "$ref": "#/$defs/ConstructionCore",
+              "description": "Bitstream completion interrupt."
+            },
+            "kind": {
+              "const": "avc-codec",
+              "type": "string"
+            },
+            "options": {
+              "$ref": "#/$defs/AvcCodecOptions",
+              "description": "Compression implementation selected by the run configuration."
+            }
+          },
+          "required": [
+            "kind",
+            "options",
+            "irq"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Addressed image transfer registers.",
+          "properties": {
+            "irq": {
+              "$ref": "#/$defs/ConstructionCore",
+              "description": "Completion interrupt."
+            },
+            "kind": {
+              "const": "image-transfer",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "irq"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "parameters hardware.",
+          "properties": {
+            "bank": {
+              "description": "bank.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "parameters",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "bank"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "phase-detection hardware.",
+          "properties": {
+            "kind": {
+              "const": "phase-detection",
+              "type": "string"
+            },
+            "routes": {
+              "description": "routes.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "routes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "power hardware.",
+          "properties": {
+            "gpio": {
+              "description": "gpio.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "power",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "gpio"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "reset hardware.",
+          "properties": {
+            "kind": {
+              "const": "reset",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "scanout hardware.",
+          "properties": {
+            "kind": {
+              "const": "scanout",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "sdhci-clocks hardware.",
+          "properties": {
+            "kind": {
+              "const": "sdhci-clocks",
+              "type": "string"
+            },
+            "words": {
+              "description": "words.",
+              "items": {
+                "items": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "words"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "sdio-host hardware.",
+          "properties": {
+            "irq": {
+              "$ref": "#/$defs/ConstructionIrqs",
+              "description": "irq."
+            },
+            "kind": {
+              "const": "sdio-host",
+              "type": "string"
+            },
+            "module": {
+              "$ref": "#/$defs/ConstructionModule",
+              "description": "module."
+            }
+          },
+          "required": [
+            "kind",
+            "irq",
+            "module"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "serial-audio hardware.",
+          "properties": {
+            "kind": {
+              "const": "serial-audio",
+              "type": "string"
+            },
+            "sinks": {
+              "description": "sinks.",
+              "items": {
+                "$ref": "#/$defs/ConstructionEmpty"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "sinks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "serial-dma hardware.",
+          "properties": {
+            "kind": {
+              "const": "serial-dma",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "spi-controller hardware.",
+          "properties": {
+            "kind": {
+              "const": "spi-controller",
+              "type": "string"
+            },
+            "routes": {
+              "description": "routes.",
+              "items": {
+                "$ref": "#/$defs/ConstructionRoutes"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "routes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "statistics hardware.",
+          "properties": {
+            "frames": {
+              "description": "frames.",
+              "type": "string"
+            },
+            "images": {
+              "description": "images.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "statistics",
+              "type": "string"
+            },
+            "routes": {
+              "description": "routes.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "frames",
+            "images",
+            "routes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "usb hardware.",
+          "properties": {
+            "cable": {
+              "description": "cable.",
+              "type": "string"
+            },
+            "endpoints": {
+              "description": "endpoints.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "usb",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "cable"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "vector-gpu hardware.",
+          "properties": {
+            "controllers": {
+              "description": "controllers.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "vector-gpu",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "controllers"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ConstructionModule": {
+      "additionalProperties": false,
+      "description": "Declared module facts.",
+      "properties": {
+        "firmware_bytes": {
+          "description": "Declared firmware bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "protocol": {
+          "description": "Declared protocol.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "firmware_bytes",
+        "protocol"
+      ],
+      "type": "object"
+    },
+    "ConstructionMotors": {
+      "additionalProperties": false,
+      "description": "Declared motors facts.",
+      "properties": {
+        "counters": {
+          "description": "Declared counters.",
+          "items": {
+            "$ref": "#/$defs/ConstructionCounters"
+          },
+          "type": "array"
+        },
+        "home": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConstructionHome"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared home."
+        },
+        "initial_position": {
+          "description": "Declared initial position.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "settle_ticks": {
+          "description": "Declared settle ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ticks_per_step": {
+          "description": "Declared ticks per step.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "travel_limits": {
+          "description": "Declared travel limits.",
+          "items": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "counters",
+        "initial_position",
+        "settle_ticks",
+        "ticks_per_step",
+        "travel_limits"
+      ],
+      "type": "object"
+    },
+    "ConstructionNodes": {
+      "additionalProperties": false,
+      "description": "Declared nodes facts.",
+      "properties": {
+        "boot_entries": {
+          "description": "Declared boot entries.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "dependencies": {
+          "description": "Declared dependencies.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "model": {
+          "$ref": "#/$defs/ConstructionModel",
+          "description": "Declared model."
+        },
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "windows": {
+          "description": "Declared windows.",
+          "items": {
+            "$ref": "#/$defs/ConstructionWindows"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "boot_entries",
+        "dependencies",
+        "name",
+        "windows",
+        "model"
+      ],
+      "type": "object"
+    },
+    "ConstructionOptics": {
+      "additionalProperties": false,
+      "description": "Declared optics facts.",
+      "properties": {
+        "output": {
+          "description": "Declared output.",
+          "type": "string"
+        },
+        "positions": {
+          "description": "Declared positions.",
+          "items": {
+            "items": {
+              "format": "double",
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "output",
+        "positions"
+      ],
+      "type": "object"
+    },
+    "ConstructionOptionsClock": {
+      "additionalProperties": false,
+      "description": "Declared options clock facts.",
+      "properties": {
+        "maximum_seconds": {
+          "description": "Declared maximum seconds.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "registers": {
+          "description": "Declared registers.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "started": {
+          "description": "Declared started.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ticks_per_second": {
+          "description": "Declared ticks per second.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "maximum_seconds",
+        "registers",
+        "started",
+        "ticks_per_second"
+      ],
+      "type": "object"
+    },
+    "ConstructionPanelOptions": {
+      "additionalProperties": false,
+      "description": "Declared panel options facts.",
+      "properties": {
+        "used_mask": {
+          "description": "Declared used mask.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "used_mask"
+      ],
+      "type": "object"
+    },
+    "ConstructionParts": {
+      "description": "Closed Parts implementation and its hardware connections.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "primary hardware.",
+          "properties": {
+            "commands": {
+              "description": "commands.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "heartbeat_register": {
+              "description": "heartbeat register.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "primary",
+              "type": "string"
+            },
+            "prefix_address": {
+              "description": "prefix address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "prefix_high": {
+              "description": "prefix high.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sensor_address": {
+              "description": "sensor address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sensor_fields": {
+              "description": "sensor fields.",
+              "items": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "stationary": {
+              "description": "stationary.",
+              "type": "boolean"
+            },
+            "status": {
+              "description": "status.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "topology": {
+              "description": "topology.",
+              "items": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "touch": {
+              "$ref": "#/$defs/ConstructionTouch",
+              "description": "touch."
+            }
+          },
+          "required": [
+            "kind",
+            "commands",
+            "heartbeat_register",
+            "prefix_address",
+            "prefix_high",
+            "sensor_address",
+            "sensor_fields",
+            "stationary",
+            "status",
+            "topology",
+            "touch"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "secondary hardware.",
+          "properties": {
+            "connected": {
+              "description": "connected.",
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "secondary",
+              "type": "string"
+            },
+            "pwic_address": {
+              "description": "pwic address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "pwic_masks": {
+              "description": "pwic masks.",
+              "items": {
+                "items": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            "pwic_modes": {
+              "description": "pwic modes.",
+              "items": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "pwic_read_prefixes": {
+              "description": "pwic read prefixes.",
+              "items": {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "format": "uint64",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "items": {
+                      "format": "uint64",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "type": "array"
+                  }
+                ],
+                "type": "array"
+              },
+              "type": "array"
+            },
+            "pwic_values": {
+              "description": "pwic values.",
+              "items": {
+                "items": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            "register_address": {
+              "description": "register address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "register_masks": {
+              "description": "register masks.",
+              "items": {
+                "items": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            "register_modes": {
+              "description": "register modes.",
+              "items": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "register_values": {
+              "description": "register values.",
+              "items": {
+                "items": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            "topology": {
+              "description": "topology.",
+              "items": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "connected",
+            "pwic_address",
+            "pwic_masks",
+            "pwic_modes",
+            "pwic_read_prefixes",
+            "pwic_values",
+            "register_address",
+            "register_masks",
+            "register_modes",
+            "register_values",
+            "topology"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ConstructionPin": {
+      "additionalProperties": false,
+      "description": "Declared pin facts.",
+      "properties": {
+        "pin": {
+          "description": "Declared pin.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "description": "Declared port.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pin",
+        "port"
+      ],
+      "type": "object"
+    },
+    "ConstructionProfile": {
+      "additionalProperties": false,
+      "description": "Declared construction profile facts.",
+      "properties": {
+        "nodes": {
+          "description": "Declared nodes.",
+          "items": {
+            "$ref": "#/$defs/ConstructionNodes"
+          },
+          "type": "array"
+        },
+        "schema": {
+          "description": "Declared schema.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "wires": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ConstructionWire"
+          },
+          "description": "Declared wires.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "nodes",
+        "schema",
+        "wires"
+      ],
+      "type": "object"
+    },
+    "ConstructionProtocol": {
+      "description": "Closed Protocol implementation and its hardware connections.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "banked hardware.",
+          "properties": {
+            "clock": {
+              "description": "clock.",
+              "items": {
+                "$ref": "#/$defs/ConstructionClock"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "banked",
+              "type": "string"
+            },
+            "positive_direction_high": {
+              "description": "positive direction high.",
+              "type": "boolean"
+            },
+            "stop_response": {
+              "description": "stop response.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "clock",
+            "positive_direction_high",
+            "stop_response"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ConstructionRegistersOptions": {
+      "additionalProperties": false,
+      "description": "Declared registers options facts.",
+      "properties": {
+        "clock": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConstructionOptionsClock"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared clock."
+        },
+        "readable": {
+          "description": "Declared readable.",
+          "type": "boolean"
+        },
+        "registers": {
+          "description": "Declared registers.",
+          "items": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "status_registers": {
+          "description": "Declared status registers.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "readable",
+        "registers",
+        "status_registers"
+      ],
+      "type": "object"
+    },
+    "ConstructionRoutes": {
+      "additionalProperties": false,
+      "description": "Declared routes facts.",
+      "properties": {
+        "endpoint": {
+          "$ref": "#/$defs/ConstructionEndpoint",
+          "description": "Declared endpoint."
+        },
+        "gpio": {
+          "description": "Declared gpio.",
+          "type": "string"
+        },
+        "options": {
+          "$ref": "#/$defs/ConstructionRoutesOptions",
+          "description": "Declared options."
+        }
+      },
+      "required": [
+        "endpoint",
+        "gpio",
+        "options"
+      ],
+      "type": "object"
+    },
+    "ConstructionRoutesOptions": {
+      "additionalProperties": false,
+      "description": "Declared routes options facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "queue": {
+          "description": "Declared queue.",
+          "type": "string"
+        },
+        "selection": {
+          "description": "Declared selection.",
+          "items": {
+            "$ref": "#/$defs/ConstructionSelection"
+          },
+          "type": "array"
+        },
+        "transfer_ticks": {
+          "description": "Declared transfer ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transports": {
+          "description": "Declared transports.",
+          "items": {
+            "$ref": "#/$defs/ConstructionTransports"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "base",
+        "queue",
+        "selection",
+        "transfer_ticks",
+        "transports"
+      ],
+      "type": "object"
+    },
+    "ConstructionSelection": {
+      "additionalProperties": false,
+      "description": "Declared selection facts.",
+      "properties": {
+        "high": {
+          "description": "Declared high.",
+          "type": "boolean"
+        },
+        "pin": {
+          "$ref": "#/$defs/ConstructionPin",
+          "description": "Declared pin."
+        }
+      },
+      "required": [
+        "high",
+        "pin"
+      ],
+      "type": "object"
+    },
+    "ConstructionSelections": {
+      "additionalProperties": false,
+      "description": "Declared selections facts.",
+      "properties": {
+        "choice": {
+          "description": "Declared choice.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "word": {
+          "description": "Declared word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "choice",
+        "word"
+      ],
+      "type": "object"
+    },
+    "ConstructionSoftware": {
+      "additionalProperties": false,
+      "description": "Declared software facts.",
+      "properties": {
+        "line": {
+          "description": "Declared line.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pulse": {
+          "description": "Declared pulse.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "line",
+        "pulse"
+      ],
+      "type": "object"
+    },
+    "ConstructionTouch": {
+      "additionalProperties": false,
+      "description": "Declared touch facts.",
+      "properties": {
+        "core": {
+          "description": "Declared core.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq": {
+          "description": "Declared irq.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register": {
+          "description": "Declared register.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ticks_per_second": {
+          "description": "Declared ticks per second.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "core",
+        "irq",
+        "register",
+        "ticks_per_second"
+      ],
+      "type": "object"
+    },
+    "ConstructionTransports": {
+      "additionalProperties": false,
+      "description": "Declared transports facts.",
+      "properties": {
+        "bits": {
+          "description": "Declared bits.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "configuration": {
+          "description": "Declared configuration.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "control": {
+          "description": "Declared control.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "receive": {
+          "description": "Declared receive.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "bits",
+        "configuration",
+        "control",
+        "receive"
+      ],
+      "type": "object"
+    },
+    "ConstructionWindows": {
+      "additionalProperties": false,
+      "description": "Declared windows facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "size"
+      ],
+      "type": "object"
+    },
+    "ConstructionWire": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ConstructionWireKind",
+          "description": "Named wire mechanism."
+        },
+        {
+          "description": "Logic-level wire with its declared initial value.",
+          "properties": {
+            "logic-level": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "logic-level"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "A named signal wire or its declared initial logic level."
+    },
+    "ConstructionWireKind": {
+      "description": "Closed signal mechanisms used by device graphs.",
+      "oneOf": [
+        {
+          "const": "software-pulse",
+          "description": "Software-triggered pulse.",
+          "type": "string"
+        },
+        {
+          "const": "aperture",
+          "description": "Lens aperture output.",
+          "type": "string"
+        },
+        {
+          "const": "focus",
+          "description": "Lens focus output.",
+          "type": "string"
+        },
+        {
+          "const": "irq-routes",
+          "description": "Device interrupt routing fabric.",
+          "type": "string"
+        },
+        {
+          "const": "output-channels",
+          "description": "Image output channels.",
+          "type": "string"
+        },
+        {
+          "const": "memory-outputs",
+          "description": "Memory image destinations.",
+          "type": "string"
+        },
+        {
+          "const": "parameters",
+          "description": "Image parameter storage.",
+          "type": "string"
+        },
+        {
+          "const": "phase-edges",
+          "description": "Input phase edges.",
+          "type": "string"
+        }
+      ]
+    },
+    "ConstructionWiring": {
+      "additionalProperties": false,
+      "description": "Declared wiring facts.",
+      "properties": {
+        "decoder": {
+          "description": "Declared decoder.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "selections": {
+          "description": "Declared selections.",
+          "items": {
+            "$ref": "#/$defs/ConstructionSelections"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "decoder",
+        "selections"
+      ],
+      "type": "object"
+    },
+    "ControlBusAttachment": {
+      "additionalProperties": false,
+      "description": "Control-bus route for one physical part installed in a camera body.",
+      "properties": {
+        "address": {
+          "description": "Seven-bit endpoint address.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "channel": {
+          "description": "Controller channel index.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "controller_id": {
+          "description": "SoC control-bus block identity.",
+          "type": "string"
+        },
+        "polarity_selector": {
+          "description": "Descriptor-table polarity selector, when established for the installed device.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "controller_id",
+        "channel",
+        "address"
+      ],
+      "type": "object"
+    },
+    "ControlBusChip": {
+      "additionalProperties": false,
+      "description": "A physical control-bus device installed in a camera body.",
+      "properties": {
+        "address": {
+          "description": "Seven-bit device address.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "channel": {
+          "description": "Control-bus channel index.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "controller_id": {
+          "description": "SoC control-bus block identity carrying this device.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Stable endpoint identity within this body.",
+          "type": "string"
+        },
+        "polarity_selector": {
+          "description": "Polarity selector for this device.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "controller_id",
+        "channel",
+        "address",
+        "polarity_selector"
+      ],
+      "type": "object"
+    },
+    "DeviceGraph": {
+      "additionalProperties": false,
+      "description": "Declared graph facts.",
+      "properties": {
+        "attachment_order": {
+          "description": "Declared attachment order.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "construction_order": {
+          "description": "Declared construction order.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "devices": {
+          "description": "Declared devices.",
+          "items": {
+            "$ref": "#/$defs/DeviceNode"
+          },
+          "type": "array"
+        },
+        "optional_devices": {
+          "description": "Declared optional devices.",
+          "items": {
+            "$ref": "#/$defs/DeviceKind"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "attachment_order",
+        "construction_order",
+        "devices"
+      ],
+      "type": "object"
+    },
+    "DeviceKind": {
+      "description": "Device implementations selected by a declared hardware graph.",
+      "oneOf": [
+        {
+          "const": "SDCardController",
+          "description": "Optional removable-card controller.",
+          "type": "string"
+        },
+        {
+          "const": "WiFiSDIOController",
+          "description": "Optional wireless SDIO controller.",
+          "type": "string"
+        },
+        {
+          "const": "AfsFrameSource",
+          "description": "Optional autofocus frame source.",
+          "type": "string"
+        },
+        {
+          "const": "JPEGDecodeControl",
+          "description": "Optional JPEG decoder.",
+          "type": "string"
+        },
+        {
+          "const": "LensHomingFixture",
+          "description": "Optional lens-homing fixture.",
+          "type": "string"
+        },
+        {
+          "const": "AFExtractionControl",
+          "description": "A F Extraction Control.",
+          "type": "string"
+        },
+        {
+          "const": "ApproximateJPEGEncodeControl",
+          "description": "Approximate J P E G Encode Control.",
+          "type": "string"
+        },
+        {
+          "const": "AvcCodecControl",
+          "description": "H.264 compression, decoding and addressed DMA controller.",
+          "type": "string"
+        },
+        {
+          "const": "ImageTransferControl",
+          "description": "Addressed image transfer controller.",
+          "type": "string"
+        },
+        {
+          "const": "BankedLensController",
+          "description": "Banked Lens Controller.",
+          "type": "string"
+        },
+        {
+          "const": "BootControls",
+          "description": "Boot Controls.",
+          "type": "string"
+        },
+        {
+          "const": "ControlBus",
+          "description": "Control Bus.",
+          "type": "string"
+        },
+        {
+          "const": "DisplayFormatter",
+          "description": "Display Formatter.",
+          "type": "string"
+        },
+        {
+          "const": "DisplayScanout",
+          "description": "Display Scanout.",
+          "type": "string"
+        },
+        {
+          "const": "DisplayTiming",
+          "description": "Display Timing.",
+          "type": "string"
+        },
+        {
+          "const": "FE80Control",
+          "description": "F E80 Control.",
+          "type": "string"
+        },
+        {
+          "const": "FaceAnalysisControl",
+          "description": "Face Analysis Control.",
+          "type": "string"
+        },
+        {
+          "const": "FujiDecompressor",
+          "description": "Fuji Decompressor.",
+          "type": "string"
+        },
+        {
+          "const": "GraphicsAccelerator",
+          "description": "Graphics Accelerator.",
+          "type": "string"
+        },
+        {
+          "const": "HDMISink",
+          "description": "H D M I Sink.",
+          "type": "string"
+        },
+        {
+          "const": "HDMIStartup",
+          "description": "H D M I Startup.",
+          "type": "string"
+        },
+        {
+          "const": "ImageCombination",
+          "description": "Image Combination.",
+          "type": "string"
+        },
+        {
+          "const": "ImageParameterControl",
+          "description": "Image Parameter Control.",
+          "type": "string"
+        },
+        {
+          "const": "ImageScaler",
+          "description": "Image Scaler.",
+          "type": "string"
+        },
+        {
+          "const": "ImageWarpControl",
+          "description": "Image Warp Control.",
+          "type": "string"
+        },
+        {
+          "const": "ImageWorkControl",
+          "description": "Image Work Control.",
+          "type": "string"
+        },
+        {
+          "const": "InputAuxiliaryControl",
+          "description": "Input Auxiliary Control.",
+          "type": "string"
+        },
+        {
+          "const": "InputProcessingControl",
+          "description": "Input Processing Control.",
+          "type": "string"
+        },
+        {
+          "const": "KernelInterrupts",
+          "description": "Kernel Interrupts.",
+          "type": "string"
+        },
+        {
+          "const": "LensBridge",
+          "description": "Lens Bridge.",
+          "type": "string"
+        },
+        {
+          "const": "LensEndpoint",
+          "description": "Lens Endpoint.",
+          "type": "string"
+        },
+        {
+          "const": "LensRegisterMotor",
+          "description": "Lens Register Motor.",
+          "type": "string"
+        },
+        {
+          "const": "LoaderMemoryDMA",
+          "description": "Loader Memory D M A.",
+          "type": "string"
+        },
+        {
+          "const": "MemoryReadback",
+          "description": "Memory Readback.",
+          "type": "string"
+        },
+        {
+          "const": "MixedWidthLensController",
+          "description": "Mixed Width Lens Controller.",
+          "type": "string"
+        },
+        {
+          "const": "NandController",
+          "description": "Nand Controller.",
+          "type": "string"
+        },
+        {
+          "const": "OutputControl",
+          "description": "Output Control.",
+          "type": "string"
+        },
+        {
+          "const": "PowerDevices",
+          "description": "Power Devices.",
+          "type": "string"
+        },
+        {
+          "const": "PrefilterControl",
+          "description": "Prefilter Control.",
+          "type": "string"
+        },
+        {
+          "const": "ProducerControl",
+          "description": "Producer Control.",
+          "type": "string"
+        },
+        {
+          "const": "PulseInputCapture",
+          "description": "Pulse Input Capture.",
+          "type": "string"
+        },
+        {
+          "const": "PulseOutputs",
+          "description": "Pulse Outputs.",
+          "type": "string"
+        },
+        {
+          "const": "PulseTimerControl",
+          "description": "Pulse Timer Control.",
+          "type": "string"
+        },
+        {
+          "const": "QuadratureCounters",
+          "description": "Quadrature Counters.",
+          "type": "string"
+        },
+        {
+          "const": "RawConversionRegisters",
+          "description": "Raw Conversion Registers.",
+          "type": "string"
+        },
+        {
+          "const": "RawStatisticsControl",
+          "description": "Raw Statistics Control.",
+          "type": "string"
+        },
+        {
+          "const": "SPI1SerialBus",
+          "description": "S P I1 Serial Bus.",
+          "type": "string"
+        },
+        {
+          "const": "SPI2Serial",
+          "description": "S P I2 Serial.",
+          "type": "string"
+        },
+        {
+          "const": "SecondaryControlBus",
+          "description": "Secondary Control Bus.",
+          "type": "string"
+        },
+        {
+          "const": "SerialAudioControlRegisters",
+          "description": "Serial Audio Control Registers.",
+          "type": "string"
+        },
+        {
+          "const": "SerialAudioDMA",
+          "description": "Serial Audio D M A.",
+          "type": "string"
+        },
+        {
+          "const": "SerialAudioTransferControlRegisters",
+          "description": "Serial Audio Transfer Control Registers.",
+          "type": "string"
+        },
+        {
+          "const": "SerialAudioTransmitSink",
+          "description": "Serial Audio Transmit Sink.",
+          "type": "string"
+        },
+        {
+          "const": "SerialAudioReceiveSource",
+          "description": "Clocked external PCM input and serial receive DMA.",
+          "type": "string"
+        },
+        {
+          "const": "ThreeByteDCZoomLensController",
+          "description": "Three Byte D C Zoom Lens Controller.",
+          "type": "string"
+        },
+        {
+          "const": "ThreeByteLensController",
+          "description": "Three Byte Lens Controller.",
+          "type": "string"
+        },
+        {
+          "const": "USBControl",
+          "description": "U S B Control.",
+          "type": "string"
+        },
+        {
+          "const": "WindowAnalysisControl",
+          "description": "Window Analysis Control.",
+          "type": "string"
+        },
+        {
+          "const": "WordStabilizer",
+          "description": "Word Stabilizer.",
+          "type": "string"
+        },
+        {
+          "const": "X70SensorCaptureDMA",
+          "description": "X70 Sensor Capture D M A.",
+          "type": "string"
+        },
+        {
+          "const": "X70StillISPControl",
+          "description": "X70 Still I S P Control.",
+          "type": "string"
+        }
+      ]
+    },
+    "DeviceNode": {
+      "additionalProperties": false,
+      "description": "Declared devices facts.",
+      "properties": {
+        "boot_entries": {
+          "description": "Declared boot entries.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/DeviceKind",
+          "description": "Declared kind."
+        },
+        "model_choices": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareDeviceChoices"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared model choices."
+        },
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "refs": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Declared refs.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "refs"
+      ],
+      "type": "object"
+    },
+    "DisplayAssembly": {
+      "additionalProperties": false,
+      "description": "A body display assembly.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection identity carrying display data.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Reusable panel or display-controller part identity.",
+          "type": "string"
+        },
+        "route": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SerialRoute"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Body-specific serial wiring for this panel."
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id"
+      ],
+      "type": "object"
+    },
+    "FocusAxis": {
+      "additionalProperties": false,
+      "description": "A focus-axis model.",
+      "properties": {
+        "infinity_position": {
+          "description": "Focus position representing infinity.",
+          "format": "int32",
+          "type": "integer"
+        },
+        "output": {
+          "$ref": "#/$defs/OpticalQuantity",
+          "description": "Named optical quantity produced by focus motion."
+        },
+        "steps_per_mm": {
+          "description": "Focus steps per millimeter.",
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "output",
+        "infinity_position",
+        "steps_per_mm"
+      ],
+      "type": "object"
+    },
+    "GpioFeedback": {
+      "additionalProperties": false,
+      "description": "A declared electrical feedback connection between GPIO pads.",
+      "properties": {
+        "input_connection_id": {
+          "description": "Body connection exposing the input pad.",
+          "type": "string"
+        },
+        "output_connection_id": {
+          "description": "Body connection exposing the output pad.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "output_connection_id",
+        "input_connection_id"
+      ],
+      "type": "object"
+    },
+    "HardwareAfExtraction": {
+      "additionalProperties": false,
+      "description": "Declared af extraction facts.",
+      "properties": {
+        "profile": {
+          "description": "Declared profile.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profile"
+      ],
+      "type": "object"
+    },
+    "HardwareBusSensor": {
+      "additionalProperties": false,
+      "description": "Declared sensor facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "reply_model": {
+          "description": "Declared reply model.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "address",
+        "basis",
+        "reply_model"
+      ],
+      "type": "object"
+    },
+    "HardwareCaptureColor": {
+      "additionalProperties": false,
+      "description": "Declared capture color facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "black": {
+          "description": "Declared black.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "full_scale": {
+          "description": "Declared full scale.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "initial_rgb": {
+          "description": "Declared initial rgb.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "processing_cfa": {
+          "description": "Declared processing cfa.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "radiometry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareRadiometry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared radiometry."
+        },
+        "reference_white": {
+          "description": "Declared reference white.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "sensor_cfa": {
+          "description": "Declared sensor cfa.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "sensor_image_area": {
+          "description": "Declared sensor image area.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "black",
+        "full_scale",
+        "initial_rgb",
+        "processing_cfa",
+        "reference_white",
+        "sensor_cfa",
+        "sensor_image_area"
+      ],
+      "type": "object"
+    },
+    "HardwareCardContacts": {
+      "additionalProperties": false,
+      "description": "Declared card contacts facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "detect": {
+          "description": "Declared detect.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "write_protect": {
+          "description": "Declared write protect.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "detect",
+        "write_protect"
+      ],
+      "type": "object"
+    },
+    "HardwareCommandTarget": {
+      "additionalProperties": false,
+      "description": "Declared command targets facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "commands": {
+          "description": "Declared commands.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "prefix_mask": {
+          "description": "Declared prefix mask.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "prefix_value": {
+          "description": "Declared prefix value.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "read_frames": {
+          "description": "Declared read frames.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "register_mask": {
+          "description": "Declared register mask.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "write_masks": {
+          "description": "Declared write masks.",
+          "items": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "address",
+        "basis",
+        "commands",
+        "prefix_mask",
+        "prefix_value",
+        "read_frames",
+        "register_mask",
+        "write_masks"
+      ],
+      "type": "object"
+    },
+    "HardwareConnectionSignal": {
+      "additionalProperties": false,
+      "description": "Declared signals facts.",
+      "properties": {
+        "active_level": {
+          "description": "Declared active level.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "channel": {
+          "description": "Declared channel.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "label": {
+          "description": "Declared label.",
+          "type": "string"
+        },
+        "pin": {
+          "description": "Declared pin.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "port": {
+          "description": "Declared port.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "source": {
+          "description": "Declared source.",
+          "type": "string"
+        },
+        "threshold": {
+          "description": "Declared threshold.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "label",
+        "source"
+      ],
+      "type": "object"
+    },
+    "HardwareConnectionSupport": {
+      "additionalProperties": false,
+      "description": "Declared connections facts.",
+      "properties": {
+        "id": {
+          "description": "Declared id.",
+          "type": "string"
+        },
+        "label": {
+          "description": "Declared label.",
+          "type": "string"
+        },
+        "limits": {
+          "description": "Declared limits.",
+          "type": "string"
+        },
+        "signals": {
+          "description": "Declared signals.",
+          "items": {
+            "$ref": "#/$defs/HardwareConnectionSignal"
+          },
+          "type": "array"
+        },
+        "support": {
+          "description": "Declared support.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "limits",
+        "signals",
+        "support"
+      ],
+      "type": "object"
+    },
+    "HardwareContrast": {
+      "additionalProperties": false,
+      "description": "Declared contrast facts.",
+      "properties": {
+        "kind": {
+          "description": "Declared kind.",
+          "type": "string"
+        },
+        "luma_bits": {
+          "description": "Declared luma bits.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "luma_bits"
+      ],
+      "type": "object"
+    },
+    "HardwareControllerModels": {
+      "additionalProperties": false,
+      "description": "Declared controllers facts.",
+      "properties": {
+        "control_bus0": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwarePrimaryControlBus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared control bus0."
+        },
+        "control_bus1": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareSecondaryControlBus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared control bus1."
+        },
+        "display_timing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareDisplayTiming"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared display timing."
+        },
+        "fe80": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareFe80"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared fe80."
+        },
+        "input_processing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareInputProcessing"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared input processing."
+        },
+        "spi1_serial": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareSpi1Serial"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared spi1 serial."
+        },
+        "stabilizer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareStabilizer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared stabilizer."
+        },
+        "usb": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareUsb"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared usb."
+        },
+        "window_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareWindowAnalysis"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared window analysis."
+        }
+      },
+      "type": "object"
+    },
+    "HardwareCore": {
+      "additionalProperties": false,
+      "description": "Declared core facts.",
+      "properties": {
+        "core": {
+          "description": "Declared core.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "line": {
+          "description": "Declared line.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "core",
+        "line"
+      ],
+      "type": "object"
+    },
+    "HardwareDeviceChoices": {
+      "additionalProperties": false,
+      "description": "Declared model choices facts.",
+      "properties": {
+        "models": {
+          "additionalProperties": {
+            "$ref": "#/$defs/HardwareDeviceModel"
+          },
+          "description": "Declared models.",
+          "type": "object"
+        },
+        "option": {
+          "description": "Declared option.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "models",
+        "option"
+      ],
+      "type": "object"
+    },
+    "HardwareDeviceDependency": {
+      "additionalProperties": false,
+      "description": "Declared dependencies facts.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/DeviceKind",
+          "description": "Declared kind."
+        },
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "refs": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Declared refs.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "refs"
+      ],
+      "type": "object"
+    },
+    "HardwareDeviceModel": {
+      "additionalProperties": false,
+      "description": "Declared models facts.",
+      "properties": {
+        "dependencies": {
+          "description": "Declared dependencies.",
+          "items": {
+            "$ref": "#/$defs/HardwareDeviceDependency"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/DeviceKind",
+          "description": "Declared kind."
+        },
+        "refs": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Declared refs.",
+          "type": "object"
+        },
+        "replaces": {
+          "description": "Nodes absorbed by this composed hardware model.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "dependencies",
+        "kind",
+        "refs"
+      ],
+      "type": "object"
+    },
+    "HardwareDisplayTiming": {
+      "additionalProperties": false,
+      "description": "Declared display timing facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "frame_period_ticks": {
+          "description": "Declared frame period ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "phase_profile": {
+          "description": "Declared phase profile.",
+          "type": "string"
+        },
+        "stop_delay_ticks": {
+          "description": "Declared stop delay ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "frame_period_ticks",
+        "phase_profile",
+        "stop_delay_ticks"
+      ],
+      "type": "object"
+    },
+    "HardwareEncoder": {
+      "additionalProperties": false,
+      "description": "Declared encoders facts.",
+      "properties": {
+        "counter": {
+          "description": "Declared counter.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "options": {
+          "$ref": "#/$defs/HardwareEncoderTiming",
+          "description": "Declared options."
+        }
+      },
+      "required": [
+        "name",
+        "options"
+      ],
+      "type": "object"
+    },
+    "HardwareEncoderTiming": {
+      "additionalProperties": false,
+      "description": "Declared encoders options facts.",
+      "properties": {
+        "phase_ticks": {
+          "description": "Declared phase ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pins": {
+          "description": "Declared pins.",
+          "items": {
+            "$ref": "#/$defs/PartAssemblyPin"
+          },
+          "type": "array"
+        },
+        "rest_phase": {
+          "description": "Declared rest phase.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "phase_ticks",
+        "pins",
+        "rest_phase"
+      ],
+      "type": "object"
+    },
+    "HardwareFaceDetector": {
+      "additionalProperties": false,
+      "description": "Declared face detector facts.",
+      "properties": {
+        "mode": {
+          "description": "Declared mode.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "HardwareFe80": {
+      "additionalProperties": false,
+      "description": "Declared fe80 facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "periods": {
+          "description": "Declared periods.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "upload_setup_phases": {
+          "description": "Declared upload setup phases.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "periods",
+        "upload_setup_phases"
+      ],
+      "type": "object"
+    },
+    "HardwareFe80Processing": {
+      "additionalProperties": false,
+      "description": "Declared fe80 processing facts.",
+      "properties": {
+        "arithmetic": {
+          "description": "Declared arithmetic.",
+          "type": "string"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "memory_bytes_per_tick": {
+          "description": "Declared memory bytes per tick.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "optics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareOptics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared optics."
+        },
+        "options": {
+          "$ref": "#/$defs/HardwareFe80ProcessingOptions",
+          "description": "Declared options."
+        }
+      },
+      "required": [
+        "arithmetic",
+        "basis",
+        "options"
+      ],
+      "type": "object"
+    },
+    "HardwareFe80ProcessingOptions": {
+      "additionalProperties": false,
+      "description": "Declared fe80 processing options facts.",
+      "properties": {
+        "irq": {
+          "description": "Declared irq.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pixels_per_tick": {
+          "description": "Declared pixels per tick.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "irq",
+        "pixels_per_tick"
+      ],
+      "type": "object"
+    },
+    "HardwareFocusAxis": {
+      "additionalProperties": false,
+      "description": "Declared focus axis facts.",
+      "properties": {
+        "infinity_position": {
+          "description": "Declared infinity position.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "output": {
+          "description": "Declared output.",
+          "type": "string"
+        },
+        "steps_per_mm": {
+          "description": "Declared steps per mm.",
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "infinity_position",
+        "output",
+        "steps_per_mm"
+      ],
+      "type": "object"
+    },
+    "HardwareFocusImaging": {
+      "additionalProperties": false,
+      "description": "Declared focus imaging facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "contrast": {
+          "$ref": "#/$defs/HardwareContrast",
+          "description": "Declared contrast."
+        },
+        "face_detector": {
+          "$ref": "#/$defs/HardwareFaceDetector",
+          "description": "Declared face detector."
+        },
+        "frame_phase": {
+          "description": "Declared frame phase.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "input_clock_mode": {
+          "description": "Declared input clock mode.",
+          "type": "string"
+        },
+        "input_command": {
+          "description": "Declared input command.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "input_period_ticks": {
+          "description": "Declared input period ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "memory_bytes_per_tick": {
+          "description": "Declared memory bytes per tick.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "metering": {
+          "description": "Declared metering.",
+          "type": "string"
+        },
+        "optics": {
+          "$ref": "#/$defs/HardwareFocusImagingOptics",
+          "description": "Declared optics."
+        },
+        "raster": {
+          "$ref": "#/$defs/HardwareRaster",
+          "description": "Declared raster."
+        },
+        "statistics_pixels_per_tick": {
+          "description": "Declared statistics pixels per tick.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "basis",
+        "contrast",
+        "face_detector",
+        "input_clock_mode",
+        "memory_bytes_per_tick",
+        "metering",
+        "optics",
+        "raster"
+      ],
+      "type": "object"
+    },
+    "HardwareFocusImagingOptics": {
+      "additionalProperties": false,
+      "description": "Declared focus imaging optics facts.",
+      "properties": {
+        "maximum_radius": {
+          "description": "Declared maximum radius.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pulses_per_radius": {
+          "description": "Declared pulses per radius.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target_position": {
+          "description": "Declared target position.",
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "maximum_radius",
+        "pulses_per_radius",
+        "target_position"
+      ],
+      "type": "object"
+    },
+    "HardwareImaging": {
+      "additionalProperties": false,
+      "description": "Declared imaging facts.",
+      "properties": {
+        "af_extraction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareAfExtraction"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared af extraction."
+        },
+        "capture_color": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareCaptureColor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared capture color."
+        },
+        "fe80_processing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareFe80Processing"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared fe80 processing."
+        },
+        "focus_axis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareFocusAxis"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared focus axis."
+        },
+        "focus_imaging": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareFocusImaging"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared focus imaging."
+        },
+        "iris_mechanics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareIrisMechanics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared iris mechanics."
+        },
+        "iris_optics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareIrisOptics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared iris optics."
+        },
+        "sensor_capture": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareSensorCapture"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared sensor capture."
+        }
+      },
+      "type": "object"
+    },
+    "HardwareInputProcessing": {
+      "additionalProperties": false,
+      "description": "Declared input processing facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "command_controls": {
+          "description": "Declared command controls.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "command_controls"
+      ],
+      "type": "object"
+    },
+    "HardwareInterruptOutput": {
+      "additionalProperties": false,
+      "description": "Declared outputs facts.",
+      "properties": {
+        "Core": {
+          "$ref": "#/$defs/HardwareCore",
+          "description": "Declared Core."
+        }
+      },
+      "required": [
+        "Core"
+      ],
+      "type": "object"
+    },
+    "HardwareIrisMechanics": {
+      "additionalProperties": false,
+      "description": "Declared iris mechanics facts.",
+      "properties": {
+        "boundary": {
+          "description": "Declared boundary.",
+          "type": "string"
+        },
+        "travel_limits": {
+          "description": "Declared travel limits.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "boundary",
+        "travel_limits"
+      ],
+      "type": "object"
+    },
+    "HardwareIrisOptics": {
+      "additionalProperties": false,
+      "description": "Declared iris optics facts.",
+      "properties": {
+        "output": {
+          "description": "Declared output.",
+          "type": "string"
+        },
+        "positions": {
+          "description": "Declared positions.",
+          "items": {
+            "items": {
+              "format": "double",
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "output",
+        "positions"
+      ],
+      "type": "object"
+    },
+    "HardwareOptics": {
+      "additionalProperties": false,
+      "description": "Declared optics facts.",
+      "properties": {
+        "maximum_radius": {
+          "description": "Declared maximum radius.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pulses_per_radius": {
+          "description": "Declared pulses per radius.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target_position": {
+          "description": "Declared target position.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "maximum_radius",
+        "pulses_per_radius",
+        "target_position"
+      ],
+      "type": "object"
+    },
+    "HardwarePartAssemblies": {
+      "additionalProperties": false,
+      "description": "Declared attachments facts.",
+      "properties": {
+        "contact_actuators": {
+          "description": "Declared contact actuators.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "serial_outputs": {
+          "description": "Declared serial outputs.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "serial_part": {
+          "description": "Declared serial part.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "serial_part"
+      ],
+      "type": "object"
+    },
+    "HardwarePinInterrupt": {
+      "additionalProperties": false,
+      "description": "Declared pin interrupts facts.",
+      "properties": {
+        "edge": {
+          "description": "Declared edge.",
+          "type": "string"
+        },
+        "outputs": {
+          "description": "Declared outputs.",
+          "items": {
+            "$ref": "#/$defs/HardwareInterruptOutput"
+          },
+          "type": "array"
+        },
+        "pin": {
+          "$ref": "#/$defs/PartAssemblyPin",
+          "description": "Declared pin."
+        }
+      },
+      "required": [
+        "edge",
+        "outputs",
+        "pin"
+      ],
+      "type": "object"
+    },
+    "HardwarePreviewActivity": {
+      "additionalProperties": false,
+      "description": "Declared preview activity facts.",
+      "properties": {
+        "high": {
+          "description": "Declared high.",
+          "type": "boolean"
+        },
+        "pin": {
+          "$ref": "#/$defs/PartAssemblyPin",
+          "description": "Declared pin."
+        }
+      },
+      "required": [
+        "high",
+        "pin"
+      ],
+      "type": "object"
+    },
+    "HardwarePrimaryControlBus": {
+      "additionalProperties": false,
+      "description": "Declared control bus0 facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "command_targets": {
+          "description": "Declared command targets.",
+          "items": {
+            "$ref": "#/$defs/HardwareCommandTarget"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "profile": {
+          "description": "Declared profile.",
+          "type": "string"
+        },
+        "sensor": {
+          "$ref": "#/$defs/HardwareBusSensor",
+          "description": "Declared sensor."
+        },
+        "status_targets": {
+          "description": "Declared status targets.",
+          "items": {
+            "$ref": "#/$defs/HardwareStatusTarget"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "transfer_ticks": {
+          "description": "Declared transfer ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "profile",
+        "sensor",
+        "transfer_ticks"
+      ],
+      "type": "object"
+    },
+    "HardwareProjection": {
+      "additionalProperties": false,
+      "description": "Declared projection facts.",
+      "properties": {
+        "focal_length_mm": {
+          "description": "Declared focal length mm.",
+          "format": "double",
+          "type": "number"
+        },
+        "focus": {
+          "description": "Declared focus.",
+          "type": "string"
+        },
+        "relative_illumination": {
+          "$ref": "#/$defs/SensorIllumination",
+          "description": "Declared relative illumination."
+        },
+        "sensor_width_mm": {
+          "description": "Declared sensor width mm.",
+          "format": "double",
+          "type": "number"
+        },
+        "subject_distance_mm": {
+          "description": "Declared subject distance mm.",
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "focal_length_mm",
+        "focus",
+        "relative_illumination",
+        "sensor_width_mm",
+        "subject_distance_mm"
+      ],
+      "type": "object"
+    },
+    "HardwareRadiometry": {
+      "additionalProperties": false,
+      "description": "Declared radiometry facts.",
+      "properties": {
+        "mode_change_frames": {
+          "description": "Invalid readouts while a sensor drive-mode change acquires sync.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pixel_clock_hz": {
+          "description": "Declared pixel clock hz.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "projection": {
+          "$ref": "#/$defs/HardwareProjection",
+          "description": "Declared projection."
+        },
+        "rolling_references": {
+          "description": "Declared rolling references.",
+          "items": {
+            "$ref": "#/$defs/HardwareRollingReference"
+          },
+          "type": "array"
+        },
+        "saturation_lux_seconds": {
+          "description": "Declared saturation lux seconds.",
+          "format": "double",
+          "type": "number"
+        },
+        "shutter": {
+          "$ref": "#/$defs/HardwareShutter",
+          "description": "Declared shutter."
+        },
+        "shutter_output": {
+          "description": "Declared shutter output.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ticks_per_second": {
+          "description": "Declared ticks per second.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "white_luminance": {
+          "description": "Declared white luminance.",
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "pixel_clock_hz",
+        "projection",
+        "rolling_references",
+        "mode_change_frames",
+        "saturation_lux_seconds",
+        "shutter",
+        "shutter_output",
+        "ticks_per_second",
+        "white_luminance"
+      ],
+      "type": "object"
+    },
+    "HardwareRaster": {
+      "additionalProperties": false,
+      "description": "Declared raster facts.",
+      "properties": {
+        "height": {
+          "description": "Declared height.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stride": {
+          "description": "Declared stride.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width": {
+          "description": "Declared width.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "height",
+        "stride",
+        "width"
+      ],
+      "type": "object"
+    },
+    "HardwareRollingReference": {
+      "additionalProperties": false,
+      "description": "Declared rolling references facts.",
+      "properties": {
+        "horizontal": {
+          "description": "Declared horizontal.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "lines": {
+          "description": "Declared lines.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode": {
+          "description": "Declared mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "vertical": {
+          "description": "Declared vertical.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "horizontal",
+        "lines",
+        "mode",
+        "vertical"
+      ],
+      "type": "object"
+    },
+    "HardwareSecondaryBusRegisters": {
+      "additionalProperties": false,
+      "description": "Declared control bus1 replies facts.",
+      "properties": {
+        "pwic_address": {
+          "description": "Declared pwic address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pwic_modes": {
+          "description": "Declared pwic modes.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "pwic_read_prefixes": {
+          "description": "Declared pwic read prefixes.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "pwic_values": {
+          "description": "Declared pwic values.",
+          "items": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "pwic_write_masks": {
+          "description": "Declared pwic write masks.",
+          "items": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "register_address": {
+          "description": "Declared register address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register_modes": {
+          "description": "Declared register modes.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "register_values": {
+          "description": "Declared register values.",
+          "items": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "register_write_masks": {
+          "description": "Declared register write masks.",
+          "items": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "usb_connected": {
+          "description": "Declared usb connected.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "pwic_address",
+        "pwic_modes",
+        "pwic_read_prefixes",
+        "pwic_values",
+        "pwic_write_masks",
+        "register_address",
+        "register_modes",
+        "register_values",
+        "register_write_masks"
+      ],
+      "type": "object"
+    },
+    "HardwareSecondaryControlBus": {
+      "additionalProperties": false,
+      "description": "Declared control bus1 facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "profile": {
+          "description": "Declared profile.",
+          "type": "string"
+        },
+        "replies": {
+          "$ref": "#/$defs/HardwareSecondaryBusRegisters",
+          "description": "Declared replies."
+        },
+        "transfer_ticks": {
+          "description": "Declared transfer ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "profile",
+        "replies",
+        "transfer_ticks"
+      ],
+      "type": "object"
+    },
+    "HardwareSensorCapture": {
+      "additionalProperties": false,
+      "description": "Declared sensor capture facts.",
+      "properties": {
+        "cfa_origin": {
+          "description": "Declared cfa origin.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "dma_ticks": {
+          "description": "Declared dma ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "height": {
+          "description": "Declared height.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "period_ticks": {
+          "description": "Declared period ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width": {
+          "description": "Declared width.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cfa_origin",
+        "dma_ticks",
+        "height",
+        "period_ticks",
+        "width"
+      ],
+      "type": "object"
+    },
+    "HardwareShutter": {
+      "additionalProperties": false,
+      "description": "Declared shutter facts.",
+      "properties": {
+        "closing_delay_seconds": {
+          "description": "Declared closing delay seconds.",
+          "items": {
+            "items": {
+              "format": "double",
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "closing_delay_seconds"
+      ],
+      "type": "object"
+    },
+    "HardwareSpi1Serial": {
+      "additionalProperties": false,
+      "description": "Declared spi1 serial facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "selection": {
+          "description": "Declared selection.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "transfer_ticks": {
+          "description": "Declared transfer ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transports": {
+          "description": "Declared transports.",
+          "items": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "selection",
+        "transfer_ticks",
+        "transports"
+      ],
+      "type": "object"
+    },
+    "HardwareStabilizer": {
+      "additionalProperties": false,
+      "description": "Declared stabilizer facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "status": {
+          "description": "Declared status.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "telemetry": {
+          "description": "Declared telemetry.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "status",
+        "telemetry"
+      ],
+      "type": "object"
+    },
+    "HardwareStatusTarget": {
+      "additionalProperties": false,
+      "description": "Declared status targets facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "status_hex": {
+          "description": "Declared status hex.",
+          "type": "string"
+        },
+        "writable_registers": {
+          "description": "Declared writable registers.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "write_replies": {
+          "description": "Declared write replies.",
+          "items": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "address",
+        "basis",
+        "status_hex",
+        "writable_registers",
+        "write_replies"
+      ],
+      "type": "object"
+    },
+    "HardwareTouch": {
+      "additionalProperties": false,
+      "description": "Declared touch facts.",
+      "properties": {
+        "core": {
+          "description": "Declared core.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq": {
+          "description": "Declared irq.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register": {
+          "description": "Declared register.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ticks_per_second": {
+          "description": "Declared ticks per second.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "core",
+        "irq",
+        "register",
+        "ticks_per_second"
+      ],
+      "type": "object"
+    },
+    "HardwareUsb": {
+      "additionalProperties": false,
+      "description": "Declared usb facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "in_endpoints": {
+          "description": "Declared in endpoints.",
+          "items": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "out_endpoints": {
+          "description": "Declared out endpoints.",
+          "items": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "packet_bytes": {
+          "description": "Declared packet bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transfer_ticks": {
+          "description": "Declared transfer ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "in_endpoints",
+        "out_endpoints",
+        "packet_bytes",
+        "transfer_ticks"
+      ],
+      "type": "object"
+    },
+    "HardwareWindowAnalysis": {
+      "additionalProperties": false,
+      "description": "Declared window analysis facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "profile": {
+          "description": "Declared profile.",
+          "type": "string"
+        },
+        "ticks_per_window": {
+          "description": "Declared ticks per window.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "profile",
+        "ticks_per_window"
+      ],
+      "type": "object"
+    },
+    "IrisOptics": {
+      "additionalProperties": false,
+      "description": "Aperture positions and their optical output.",
+      "properties": {
+        "output": {
+          "$ref": "#/$defs/OpticalQuantity",
+          "description": "Named optical quantity produced by the aperture."
+        },
+        "positions": {
+          "description": "Aperture positions and their f-number values.",
+          "items": {
+            "$ref": "#/$defs/AperturePosition"
+          },
+          "type": "array"
+        },
+        "travel_limits": {
+          "description": "Minimum and maximum mechanical positions.",
+          "items": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "output",
+        "positions",
+        "travel_limits"
+      ],
+      "type": "object"
+    },
+    "LensAssembly": {
+      "additionalProperties": false,
+      "description": "A body lens assembly.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection identity carrying lens control signals.",
+          "type": "string"
+        },
+        "encoder_connection_id": {
+          "default": null,
+          "description": "Body connection wired to the optional rotary encoder.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "focus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FocusAxis"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Documented focus-axis response."
+        },
+        "home_connections": {
+          "description": "Body connections wired to motor home switches.",
+          "items": {
+            "$ref": "#/$defs/LensHomeConnection"
+          },
+          "type": "array"
+        },
+        "iris": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IrisOptics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Documented aperture positions and their optical output."
+        },
+        "part_id": {
+          "description": "Reusable lens part identity.",
+          "type": "string"
+        },
+        "pulse": {
+          "$ref": "#/$defs/PulseInterface",
+          "description": "Body-specific pulse-controller wiring for this lens."
+        },
+        "route": {
+          "$ref": "#/$defs/SerialRoute",
+          "description": "Body-specific serial route to the lens controller."
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id",
+        "route",
+        "pulse",
+        "home_connections"
+      ],
+      "type": "object"
+    },
+    "LensHomeConnection": {
+      "additionalProperties": false,
+      "description": "A body connection attached to one lens motor's home-switch input.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection carrying the home-switch signal.",
+          "type": "string"
+        },
+        "motor": {
+          "description": "Motor index within the installed lens part.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "motor",
+        "connection_id"
+      ],
+      "type": "object"
+    },
+    "MemoryKind": {
+      "description": "Memory technologies exposed by the SoC.",
+      "oneOf": [
+        {
+          "const": "dram",
+          "description": "Dynamic random-access memory.",
+          "type": "string"
+        },
+        {
+          "const": "rom",
+          "description": "Read-only boot memory.",
+          "type": "string"
+        },
+        {
+          "const": "sram",
+          "description": "Static random-access memory.",
+          "type": "string"
+        },
+        {
+          "const": "tcm",
+          "description": "Tightly coupled processor memory.",
+          "type": "string"
+        }
+      ]
+    },
+    "MicrocontrollerAssembly": {
+      "additionalProperties": false,
+      "description": "A body-specific attachment for a microcontroller part.",
+      "properties": {
+        "channel": {
+          "description": "Channel selected on the controller.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "connection_id": {
+          "description": "Body connection identity carrying MCU signals.",
+          "type": "string"
+        },
+        "controller_id": {
+          "description": "SoC serial controller block identity.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Reusable microcontroller part identity.",
+          "type": "string"
+        },
+        "select_connection_id": {
+          "description": "Body connection identity controlling chip select.",
+          "type": "string"
+        },
+        "word_bits": {
+          "description": "Transfer word width used by this attachment.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id",
+        "controller_id",
+        "channel",
+        "word_bits",
+        "select_connection_id"
+      ],
+      "type": "object"
+    },
+    "NandGeometry": {
+      "additionalProperties": false,
+      "description": "NAND geometry installed in a camera body or storage part.",
+      "properties": {
+        "bytes": {
+          "description": "Total main-area capacity in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_bytes": {
+          "description": "Main-area page size in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pages_per_block": {
+          "description": "Pages per erase block.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "spare_bytes": {
+          "description": "Spare-area size per page in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bytes",
+        "page_bytes",
+        "pages_per_block",
+        "spare_bytes"
+      ],
+      "type": "object"
+    },
+    "OpticalQuantity": {
+      "description": "Named optical quantities exposed by a lens assembly.",
+      "oneOf": [
+        {
+          "const": "lens_focus",
+          "description": "Lens focus position.",
+          "type": "string"
+        },
+        {
+          "const": "lens_aperture",
+          "description": "Lens aperture value.",
+          "type": "string"
+        }
+      ]
+    },
+    "PartAssemblyPin": {
+      "additionalProperties": false,
+      "description": "A GPIO pad on a body.",
+      "properties": {
+        "pin": {
+          "description": "Pin number within its port.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "description": "GPIO port number.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin"
+      ],
+      "type": "object"
+    },
+    "PowerControlAssembly": {
+      "additionalProperties": false,
+      "description": "A body-specific attachment for a power-control part.",
+      "properties": {
+        "channel": {
+          "description": "Channel selected on the controller.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "connection_id": {
+          "description": "Body connection identity carrying power-control signals.",
+          "type": "string"
+        },
+        "controller_id": {
+          "description": "SoC serial controller block identity.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Reusable power-control part identity.",
+          "type": "string"
+        },
+        "select_connection_id": {
+          "description": "Body connection controlling chip select.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id",
+        "controller_id",
+        "channel",
+        "select_connection_id"
+      ],
+      "type": "object"
+    },
+    "PulseInterface": {
+      "additionalProperties": false,
+      "description": "A pulse interface required by an optical mechanism.",
+      "properties": {
+        "capture_channel": {
+          "description": "Timer capture channel assigned to this lens, when documented.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "counter_channels": {
+          "description": "Counter channels sampled by the mechanism.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "initial_phase": {
+          "description": "Initial pulse phase.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "quadrature": {
+          "description": "Whether quadrature signals are active.",
+          "type": "boolean"
+        },
+        "timer_channels": {
+          "description": "Timer channels sampled by the mechanism.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "counter_channels",
+        "timer_channels",
+        "quadrature",
+        "initial_phase"
+      ],
+      "type": "object"
+    },
+    "SensorAssembly": {
+      "additionalProperties": false,
+      "description": "A camera sensor assembly.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection identity carrying sensor control and data signals.",
+          "type": "string"
+        },
+        "control_bus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ControlBusAttachment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Body-specific serial control-bus endpoint, when documented."
+        },
+        "part_id": {
+          "description": "Reusable sensor part identity.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "part_id",
+        "connection_id"
+      ],
+      "type": "object"
+    },
+    "SensorIllumination": {
+      "description": "Image-circle illumination model of a sensor projection.",
+      "oneOf": [
+        {
+          "const": "uniform",
+          "description": "No falloff across the image.",
+          "type": "string"
+        },
+        {
+          "const": "cosine-fourth",
+          "description": "Cosine-fourth falloff across the image.",
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Measured radial falloff, 1 / (1 + r2 rho^2 + r4 rho^4), with rho the\nimage-plane radius over the sensor half-diagonal.",
+          "properties": {
+            "radial-polynomial": {
+              "properties": {
+                "r2": {
+                  "description": "Coefficient of rho^2.",
+                  "format": "double",
+                  "type": "number"
+                },
+                "r4": {
+                  "description": "Coefficient of rho^4.",
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "r2",
+                "r4"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "radial-polynomial"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "SerialAttachment": {
+      "additionalProperties": false,
+      "description": "A physical serial endpoint attached to one SoC controller.",
+      "properties": {
+        "connection_id": {
+          "description": "Connection carrying endpoint data.",
+          "type": "string"
+        },
+        "controller_id": {
+          "description": "SoC serial-controller block identity.",
+          "type": "string"
+        },
+        "part_id": {
+          "description": "Installed part identity.",
+          "type": "string"
+        },
+        "select_connection_id": {
+          "default": null,
+          "description": "Connection selecting the endpoint, when declared.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "part_id",
+        "controller_id",
+        "connection_id"
+      ],
+      "type": "object"
+    },
+    "SerialRoute": {
+      "additionalProperties": false,
+      "description": "A serial bus route to a physical endpoint.",
+      "properties": {
+        "channel": {
+          "description": "Controller channel identity.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "clock_hz": {
+          "default": null,
+          "description": "Serial clock frequency in hertz, when known.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "controller_id": {
+          "description": "SoC serial controller block identity.",
+          "type": "string"
+        },
+        "endpoint_id": {
+          "description": "Endpoint identity on the serial bus.",
+          "type": "string"
+        },
+        "select_connection_id": {
+          "description": "Body connection driving chip select.",
+          "type": "string"
+        },
+        "word_bits": {
+          "description": "Word width in bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "controller_id",
+        "channel",
+        "endpoint_id",
+        "select_connection_id",
+        "word_bits"
+      ],
+      "type": "object"
+    },
+    "VideoEncoderBackend": {
+      "description": "Explicit H.264 compression implementation, selected before construction.",
+      "enum": [
+        "videotoolbox",
+        "software"
+      ],
+      "type": "string"
+    },
+    "WireSignal": {
+      "description": "Named physical wire types.",
+      "oneOf": [
+        {
+          "const": "gpio",
+          "description": "GPIO line.",
+          "type": "string"
+        },
+        {
+          "const": "adc",
+          "description": "ADC input.",
+          "type": "string"
+        },
+        {
+          "const": "serial_data",
+          "description": "Serial control data.",
+          "type": "string"
+        },
+        {
+          "const": "serial_clock",
+          "description": "Serial control clock.",
+          "type": "string"
+        },
+        {
+          "const": "image_data",
+          "description": "Sensor image data.",
+          "type": "string"
+        },
+        {
+          "const": "display_data",
+          "description": "Display output data.",
+          "type": "string"
+        },
+        {
+          "const": "microcontroller",
+          "description": "MCU command and response.",
+          "type": "string"
+        },
+        {
+          "const": "storage",
+          "description": "Memory card data and control.",
+          "type": "string"
+        },
+        {
+          "const": "pulse",
+          "description": "Pulse-counter or timer input.",
+          "type": "string"
+        },
+        {
+          "const": "power",
+          "description": "Power or reset state.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$id": "https://fujimod.com/schemas/body.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A named camera body and its physical components.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/body.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "card_slot": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CardSlotAssembly"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional removable-card slot and its body-specific contacts."
+    },
+    "connections": {
+      "description": "Declared physical control and peripheral connections.",
+      "items": {
+        "$ref": "#/$defs/BodyConnection"
+      },
+      "type": "array"
+    },
+    "control_bus_chips": {
+      "description": "Physical control-bus devices installed in this body.",
+      "items": {
+        "$ref": "#/$defs/ControlBusChip"
+      },
+      "type": "array"
+    },
+    "display": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DisplayAssembly"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional display assembly and its physical characteristics."
+    },
+    "dram_bytes": {
+      "description": "Installed DRAM capacity in bytes.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "hardware": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BodyHardware"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Optional body-specific physical attachments and signal routing."
+    },
+    "id": {
+      "description": "Stable body identity.",
+      "type": "string"
+    },
+    "lens": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LensAssembly"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional lens assembly and its physical characteristics."
+    },
+    "microcontroller": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MicrocontrollerAssembly"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional MCU endpoint and its body-specific serial wiring."
+    },
+    "nand": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NandGeometry"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional installed NAND geometry."
+    },
+    "parts": {
+      "description": "Reusable part identities installed in this body.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "power_control": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PowerControlAssembly"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional power-controller endpoint and its body-specific wiring."
+    },
+    "ram_regions": {
+      "description": "Body-mapped RAM extents when the board exposes a non-default memory map.",
+      "items": {
+        "$ref": "#/$defs/BodyRamRegion"
+      },
+      "type": "array"
+    },
+    "schema": {
+      "description": "Body record version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "sensor": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SensorAssembly"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional sensor assembly and its physical characteristics."
+    },
+    "soc_id": {
+      "description": "SoC identity implemented by this body.",
+      "type": "string"
+    },
+    "wiring": {
+      "description": "Physical links between named body connections and SoC blocks or parts.",
+      "items": {
+        "$ref": "#/$defs/BodyWiring"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "soc_id",
+    "dram_bytes",
+    "control_bus_chips",
+    "connections",
+    "parts",
+    "wiring"
+  ],
+  "title": "Body",
+  "type": "object"
+}

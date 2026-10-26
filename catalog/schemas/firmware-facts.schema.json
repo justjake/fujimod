@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FujiMod firmware facts",
+  "type": "object",
+  "required": [
+    "$schema",
+    "format_version",
+    "firmware_id",
+    "firmware_sha256",
+    "facts"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "format_version": {
+      "const": 2
+    },
+    "firmware_id": {
+      "type": "string"
+    },
+    "firmware_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "facts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,10 +1,6 @@
 name: USB sharing Worker
 on:
-  push:
-    branches: [main]
-    paths: ['apps/usb-sharing/**', '.github/workflows/usb-sharing.yml']
-  pull_request:
-    paths: ['apps/usb-sharing/**', '.github/workflows/usb-sharing.yml']
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -16,7 +12,7 @@ jobs:
     env:
       WRANGLER_SEND_METRICS: 'false'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: '26.12.0'

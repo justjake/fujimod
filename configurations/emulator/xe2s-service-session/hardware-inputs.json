@@ -1,0 +1,42 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "xe2s-service-session",
+  "body_id": "xe2s",
+  "reset": {
+    "inputs": {
+      "gpio": {
+        "gpio_inputs": {
+          "0": 3104,
+          "2": 4608,
+          "3": 776,
+          "12": 128,
+          "11": 0
+        },
+        "profile_name": "Synthetic static service entry: UP ADC8, S1/S2 GPIO0 pins2/3 active-low; switch GPIO0/5 high"
+      },
+      "power": {
+        "profile_name": "Synthetic loader boot reason0; remaining ADC borrowed; MCU runtime status still separate rehearsal input",
+        "adc_samples": [
+          0,
+          0,
+          1023,
+          63,
+          534,
+          640,
+          0,
+          825,
+          128,
+          60,
+          0,
+          0
+        ],
+        "boot_reply": 0,
+        "spi0_input_profile": "absent-hot-shoe-flash-fixed-low-miso"
+      },
+      "mcu_packet_hex": "00000000d00700ff008000040000aafc",
+      "usb_connected": true
+    },
+    "execution_scope": "offline-boot-development"
+  }
+}

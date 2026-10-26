@@ -1,0 +1,15 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+  "schema": 1,
+  "id": "x100t-111",
+  "purpose": "rom_boot",
+  "body_id": "x100t",
+  "firmware_id": "x100t-111",
+  "start": {
+    "kind": "rom"
+  },
+  "execution": null,
+  "inputs": null,
+  "scene": null,
+  "overlays": []
+}

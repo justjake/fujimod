@@ -1,0 +1,2372 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc.schema.json",
+  "schema": 1,
+  "id": "exr2",
+  "architecture": "arm32",
+  "processors": [
+    {
+      "id": "core0",
+      "model": "cortex-r5f",
+      "released": true,
+      "registers": [
+        {
+          "register": "pc",
+          "value": 0
+        },
+        {
+          "register": "pstate",
+          "value": 1073742291
+        }
+      ],
+      "mprofile": null,
+      "rprofile": {
+        "cp14_identity": 16387,
+        "atcm": {
+          "bytes": 8192,
+          "reset_address": 4294934529
+        },
+        "btcm": {
+          "bytes": 0,
+          "reset_address": 0
+        }
+      }
+    },
+    {
+      "id": "core1",
+      "model": "cortex-r5f",
+      "released": false,
+      "registers": [
+        {
+          "register": "pc",
+          "value": 1073676288
+        },
+        {
+          "register": "pstate",
+          "value": 1073742291
+        }
+      ],
+      "mprofile": null,
+      "rprofile": {
+        "cp14_identity": 20483,
+        "atcm": {
+          "bytes": 8192,
+          "reset_address": 4294934529
+        },
+        "btcm": {
+          "bytes": 0,
+          "reset_address": 0
+        }
+      }
+    }
+  ],
+  "memory_regions": [
+    {
+      "id": "dram",
+      "base": 0,
+      "size": {
+        "kind": "body_dram"
+      },
+      "kind": "dram"
+    },
+    {
+      "id": "boot-rom",
+      "base": 2147483648,
+      "size": {
+        "kind": "bytes",
+        "bytes": 16384
+      },
+      "kind": "rom"
+    },
+    {
+      "id": "system-sram",
+      "base": 4293918720,
+      "size": {
+        "kind": "bytes",
+        "bytes": 4096
+      },
+      "kind": "sram"
+    },
+    {
+      "id": "secondary-core-sram",
+      "base": 1073676288,
+      "size": {
+        "kind": "bytes",
+        "bytes": 4096
+      },
+      "kind": "sram"
+    },
+    {
+      "id": "shared-sram-0",
+      "base": 2415919104,
+      "size": {
+        "kind": "bytes",
+        "bytes": 65536
+      },
+      "kind": "sram"
+    },
+    {
+      "id": "shared-sram-1",
+      "base": 2415984640,
+      "size": {
+        "kind": "bytes",
+        "bytes": 65536
+      },
+      "kind": "sram"
+    }
+  ],
+  "blocks": [
+    {
+      "id": "interrupt-core0",
+      "base": 4294651904,
+      "size": 4096,
+      "kind": "interrupt-controller",
+      "clock_id": null,
+      "processor_core_id": "core0"
+    },
+    {
+      "id": "interrupt-core1",
+      "base": 4294656000,
+      "size": 4096,
+      "kind": "interrupt-controller",
+      "clock_id": null,
+      "processor_core_id": "core1"
+    },
+    {
+      "id": "system-timers",
+      "base": 4294512640,
+      "size": 64,
+      "kind": "timer",
+      "clock_id": null
+    },
+    {
+      "id": "gpio",
+      "base": 4294479872,
+      "size": 1052,
+      "kind": "gpio",
+      "clock_id": null
+    },
+    {
+      "id": "gpio-aux",
+      "base": 4294480928,
+      "size": 96,
+      "kind": "gpio",
+      "clock_id": null
+    },
+    {
+      "id": "serial-spi1",
+      "base": 4294459456,
+      "size": 32,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "dram-controller",
+      "base": 4294545408,
+      "size": 256,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "dram-phy",
+      "base": 4293922816,
+      "size": 584,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "reset-controller",
+      "base": 4294647812,
+      "size": 20,
+      "kind": "reset-controller",
+      "clock_id": null
+    },
+    {
+      "id": "clock-controller",
+      "base": 4294475776,
+      "size": 136,
+      "kind": "clock-controller",
+      "clock_id": null
+    },
+    {
+      "id": "clock-controller-aux",
+      "base": 4294480924,
+      "size": 4,
+      "kind": "clock-controller",
+      "clock_id": null
+    },
+    {
+      "id": "block-98000",
+      "base": 4294541312,
+      "size": 768,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "sd-clocks-0",
+      "base": 4294246444,
+      "size": 2,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "adc",
+      "base": 4294483968,
+      "size": 96,
+      "kind": "adc",
+      "clock_id": null
+    },
+    {
+      "id": "statistics",
+      "base": 4294017024,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "statistics-aux",
+      "base": 4294082560,
+      "size": 13312,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "image-output-0",
+      "base": 4293992448,
+      "size": 256,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "image-output-1",
+      "base": 4293996544,
+      "size": 256,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "face-detector-0",
+      "base": 4294000640,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "phase-detection",
+      "base": 4294066176,
+      "size": 208,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "phase-detection-aux",
+      "base": 4294070276,
+      "size": 164,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "sdhci-card-0",
+      "base": 4294246400,
+      "size": 48,
+      "kind": "sd-card-controller",
+      "clock_id": null
+    },
+    {
+      "id": "sdhci-card-2",
+      "base": 4294246448,
+      "size": 16,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "sdhci-card-1",
+      "base": 4294246656,
+      "size": 8,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "sdio-host",
+      "base": 4294250496,
+      "size": 64,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "sdio-1",
+      "base": 4294250752,
+      "size": 8,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "nand",
+      "base": 4294254592,
+      "size": 2304,
+      "kind": "nand-controller",
+      "clock_id": null
+    },
+    {
+      "id": "decompressor",
+      "base": 4294193152,
+      "size": 256,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "memory-dma",
+      "base": 4293926912,
+      "size": 64,
+      "kind": "dma",
+      "clock_id": null
+    },
+    {
+      "id": "memory-dma-1",
+      "base": 4293927680,
+      "size": 4,
+      "kind": "dma",
+      "clock_id": null
+    },
+    {
+      "id": "audio-dma",
+      "base": 4293926976,
+      "size": 64,
+      "kind": "dma",
+      "clock_id": null
+    },
+    {
+      "id": "usb-core",
+      "base": 4294262784,
+      "size": 4096,
+      "kind": "usb-controller",
+      "clock_id": null
+    },
+    {
+      "id": "usb-phy",
+      "base": 4294266880,
+      "size": 4096,
+      "kind": "usb-controller",
+      "clock_id": null
+    },
+    {
+      "id": "power-peripherals",
+      "base": 4294459392,
+      "size": 32,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "power-registers-1",
+      "base": 4294205568,
+      "size": 16,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "power-registers-2",
+      "base": 4293927040,
+      "size": 64,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "power-registers-3",
+      "base": 4294542592,
+      "size": 8,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "serial-audio",
+      "base": 4294574080,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "serial-audio-aux",
+      "base": 4294578176,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "pulse-outputs",
+      "base": 4294610944,
+      "size": 3328,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "serial-spi2",
+      "base": 4294459520,
+      "size": 32,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "control-bus0",
+      "base": 4294463488,
+      "size": 64,
+      "kind": "control-bus",
+      "clock_id": null
+    },
+    {
+      "id": "control-bus1",
+      "base": 4294463552,
+      "size": 64,
+      "kind": "control-bus",
+      "clock_id": null
+    },
+    {
+      "id": "companion-fe80",
+      "base": 4264656896,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "companion-fe3b",
+      "base": 4265279488,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "companion-fe80c",
+      "base": 4269850624,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "companion-fe80d",
+      "base": 4269854720,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "image-input",
+      "base": 4293984256,
+      "size": 1024,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "input-auxiliary-control",
+      "base": 4293988352,
+      "size": 256,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "image-parameters",
+      "base": 4294021120,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "hdmi-0",
+      "base": 4294344704,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "hdmi-1",
+      "base": 4294402048,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "hdmi-2",
+      "base": 4294406144,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "output-control",
+      "base": 4294467584,
+      "size": 12,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "graphics",
+      "base": 4294410240,
+      "size": 20480,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
+      "id": "scanout",
+      "base": 4294356992,
+      "size": 4096,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
+      "id": "scanout-aux",
+      "base": 4294369280,
+      "size": 4096,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
+      "id": "display-timing",
+      "base": 4294352896,
+      "size": 4096,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
+      "id": "display-timing-aux",
+      "base": 4294365184,
+      "size": 4096,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
+      "id": "display-formatter",
+      "base": 4294348800,
+      "size": 4096,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
+      "id": "display-formatter-aux",
+      "base": 4294361088,
+      "size": 4096,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
+      "id": "image-transfer",
+      "base": 4294328320,
+      "size": 32,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "avc-codec-input",
+      "base": 4294312960,
+      "size": 256,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "avc-codec-control",
+      "base": 4294314752,
+      "size": 1280,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "image-combination",
+      "base": 4294213632,
+      "size": 1280,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fe318000",
+      "base": 4264656896,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fe3b0000",
+      "base": 4265279488,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fe80c000",
+      "base": 4269850624,
+      "size": 8192,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff01000",
+      "base": 4293922816,
+      "size": 8192,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff10000",
+      "base": 4293984256,
+      "size": 20480,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff18000",
+      "base": 4294017024,
+      "size": 8192,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff24000",
+      "base": 4294066176,
+      "size": 8192,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff28000",
+      "base": 4294082560,
+      "size": 16384,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff43000",
+      "base": 4294193152,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff46000",
+      "base": 4294205440,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff48000",
+      "base": 4294213632,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff50000",
+      "base": 4294246400,
+      "size": 12288,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff54000",
+      "base": 4294262784,
+      "size": 8192,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff68000",
+      "base": 4294344704,
+      "size": 28672,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff76000",
+      "base": 4294402048,
+      "size": 28672,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff84000",
+      "base": 4294459392,
+      "size": 12288,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff88000",
+      "base": 4294475776,
+      "size": 12288,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff91000",
+      "base": 4294512640,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff98000",
+      "base": 4294541312,
+      "size": 8192,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fffa0000",
+      "base": 4294574080,
+      "size": 8192,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fffa9000",
+      "base": 4294610944,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fffb2000",
+      "base": 4294647808,
+      "size": 12288,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "prefilter",
+      "base": 4294025216,
+      "size": 560,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "raw-statistics",
+      "base": 4294033408,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "raw-conversion",
+      "base": 4294189056,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "image-scaler",
+      "base": 4294209536,
+      "size": 132,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "warp",
+      "base": 4294332416,
+      "size": 332,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "jpeg-encoder",
+      "base": 4294320128,
+      "size": 300,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "jpeg-decoder",
+      "base": 4294324224,
+      "size": 300,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "still-processor-0",
+      "base": 4294115328,
+      "size": 4,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "still-processor-1",
+      "base": 4294115508,
+      "size": 72,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "still-processor-2",
+      "base": 4294120448,
+      "size": 14336,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "still-processor-3",
+      "base": 4294148096,
+      "size": 96,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "still-processor-4",
+      "base": 4294180864,
+      "size": 256,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "still-processor-5",
+      "base": 4294184960,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "still-processor-6",
+      "base": 4294197248,
+      "size": 8320,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "still-processor-7",
+      "base": 4294205584,
+      "size": 112,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff1a000",
+      "base": 4294025216,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff1c000",
+      "base": 4294033408,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff30000",
+      "base": 4294115328,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff31000",
+      "base": 4294119424,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff32000",
+      "base": 4294123520,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff33000",
+      "base": 4294127616,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff34000",
+      "base": 4294131712,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff38000",
+      "base": 4294148096,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff40000",
+      "base": 4294180864,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff41000",
+      "base": 4294184960,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff42000",
+      "base": 4294189056,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff44000",
+      "base": 4294197248,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff45000",
+      "base": 4294201344,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff47000",
+      "base": 4294209536,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff62000",
+      "base": 4294320128,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff63000",
+      "base": 4294324224,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-fff65000",
+      "base": 4294332416,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    }
+  ],
+  "interrupts": [
+    {
+      "core": "core0",
+      "line": 73,
+      "source_block": "image-transfer",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 101,
+      "source_block": "control-bus0",
+      "output_id": "controller"
+    },
+    {
+      "core": "core0",
+      "line": 102,
+      "source_block": "control-bus1",
+      "output_id": "controller"
+    },
+    {
+      "core": "core0",
+      "line": 84,
+      "source_block": "usb-core",
+      "output_id": "device"
+    },
+    {
+      "core": "core0",
+      "line": 85,
+      "source_block": "usb-core",
+      "output_id": "host"
+    },
+    {
+      "core": "core0",
+      "line": 8,
+      "source_block": "gpio",
+      "output_id": "port-0-pin-0"
+    },
+    {
+      "core": "core0",
+      "line": 9,
+      "source_block": "hdmi-1",
+      "output_id": "hot-plug"
+    },
+    {
+      "core": "core0",
+      "line": 10,
+      "source_block": "gpio",
+      "output_id": "port-0-pin-2"
+    },
+    {
+      "core": "core0",
+      "line": 11,
+      "source_block": "gpio",
+      "output_id": "port-0-pin-3"
+    },
+    {
+      "core": "core0",
+      "line": 20,
+      "source_block": "pulse-outputs",
+      "output_id": "output-0"
+    },
+    {
+      "core": "core0",
+      "line": 21,
+      "source_block": "pulse-outputs",
+      "output_id": "output-1"
+    },
+    {
+      "core": "core0",
+      "line": 22,
+      "source_block": "pulse-outputs",
+      "output_id": "output-2"
+    },
+    {
+      "core": "core0",
+      "line": 23,
+      "source_block": "pulse-outputs",
+      "output_id": "output-3"
+    },
+    {
+      "core": "core0",
+      "line": 24,
+      "source_block": "pulse-outputs",
+      "output_id": "output-4"
+    },
+    {
+      "core": "core0",
+      "line": 25,
+      "source_block": "pulse-outputs",
+      "output_id": "output-5"
+    },
+    {
+      "core": "core0",
+      "line": 26,
+      "source_block": "pulse-outputs",
+      "output_id": "output-6"
+    },
+    {
+      "core": "core0",
+      "line": 27,
+      "source_block": "pulse-outputs",
+      "output_id": "output-7"
+    },
+    {
+      "core": "core0",
+      "line": 28,
+      "source_block": "pulse-outputs",
+      "output_id": "output-8"
+    },
+    {
+      "core": "core0",
+      "line": 29,
+      "source_block": "pulse-outputs",
+      "output_id": "output-9"
+    },
+    {
+      "core": "core0",
+      "line": 30,
+      "source_block": "pulse-outputs",
+      "output_id": "output-10"
+    },
+    {
+      "core": "core0",
+      "line": 31,
+      "source_block": "pulse-outputs",
+      "output_id": "output-11"
+    },
+    {
+      "core": "core0",
+      "line": 14,
+      "source_block": "serial-spi2",
+      "output_id": "complete-0"
+    },
+    {
+      "core": "core0",
+      "line": 12,
+      "source_block": "serial-spi2",
+      "output_id": "complete-1"
+    },
+    {
+      "core": "core0",
+      "line": 39,
+      "source_block": "image-input",
+      "output_id": "phase-0"
+    },
+    {
+      "core": "core0",
+      "line": 41,
+      "source_block": "image-input",
+      "output_id": "phase-1"
+    },
+    {
+      "core": "core0",
+      "line": 36,
+      "source_block": "image-input",
+      "output_id": "raw"
+    },
+    {
+      "core": "core0",
+      "line": 38,
+      "source_block": "image-input",
+      "output_id": "readback"
+    },
+    {
+      "core": "core0",
+      "line": 44,
+      "source_block": "image-output-0",
+      "output_id": "output"
+    },
+    {
+      "core": "core0",
+      "line": 45,
+      "source_block": "image-output-1",
+      "output_id": "output"
+    },
+    {
+      "core": "core0",
+      "line": 68,
+      "source_block": "image-combination",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 78,
+      "source_block": "sdhci-card-0",
+      "output_id": "host"
+    },
+    {
+      "core": "core0",
+      "line": 79,
+      "source_block": "sdio-host",
+      "output_id": "host"
+    },
+    {
+      "core": "core0",
+      "line": 88,
+      "source_block": "companion-fe80",
+      "output_id": "processing"
+    },
+    {
+      "core": "core1",
+      "line": 120,
+      "source_block": "interrupt-core1",
+      "output_id": "software-release"
+    },
+    {
+      "core": "core0",
+      "line": 49,
+      "source_block": "prefilter",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 50,
+      "source_block": "raw-statistics",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 61,
+      "source_block": "still-processor-0",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 67,
+      "source_block": "image-scaler",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 74,
+      "source_block": "warp",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 77,
+      "source_block": "jpeg-encoder",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 76,
+      "source_block": "jpeg-decoder",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
+      "line": 75,
+      "source_block": "avc-codec-control",
+      "output_id": "complete"
+    }
+  ],
+  "clocks": [],
+  "mappings": [
+    {
+      "id": "cpu0-map-00",
+      "core": "core0",
+      "address": 0,
+      "physical": 2147483648,
+      "size": {
+        "kind": "bytes",
+        "bytes": 16384
+      },
+      "permissions": 5
+    },
+    {
+      "id": "cpu1-map-01",
+      "core": "core1",
+      "address": 0,
+      "physical": 2147483648,
+      "size": {
+        "kind": "bytes",
+        "bytes": 16384
+      },
+      "permissions": 5
+    },
+    {
+      "id": "cpu0-map-02",
+      "core": "core0",
+      "address": 16384,
+      "physical": 16384,
+      "size": {
+        "kind": "bytes",
+        "bytes": 536854528
+      },
+      "permissions": 7
+    },
+    {
+      "id": "cpu0-map-03",
+      "core": "core0",
+      "address": 1073741824,
+      "physical": 0,
+      "size": {
+        "kind": "body_dram"
+      },
+      "permissions": 7
+    },
+    {
+      "id": "cpu0-map-04",
+      "core": "core0",
+      "address": 4293918720,
+      "physical": 4293918720,
+      "size": {
+        "kind": "bytes",
+        "bytes": 4096
+      },
+      "permissions": 7
+    },
+    {
+      "id": "cpu0-map-05",
+      "core": "core0",
+      "address": 1073676288,
+      "physical": 1073676288,
+      "size": {
+        "kind": "bytes",
+        "bytes": 4096
+      },
+      "permissions": 7
+    },
+    {
+      "id": "cpu0-map-06",
+      "core": "core0",
+      "address": 2147418112,
+      "physical": 1073676288,
+      "size": {
+        "kind": "bytes",
+        "bytes": 4096
+      },
+      "permissions": 7
+    },
+    {
+      "id": "cpu0-map-07",
+      "core": "core0",
+      "address": 2147483648,
+      "physical": 2147483648,
+      "size": {
+        "kind": "bytes",
+        "bytes": 16384
+      },
+      "permissions": 5
+    },
+    {
+      "id": "cpu0-map-08",
+      "core": "core0",
+      "address": 4294901760,
+      "physical": 2415919104,
+      "size": {
+        "kind": "bytes",
+        "bytes": 4096
+      },
+      "permissions": 7
+    },
+    {
+      "id": "cpu0-map-09",
+      "core": "core0",
+      "address": 4294905856,
+      "physical": 2415923200,
+      "size": {
+        "kind": "bytes",
+        "bytes": 61440
+      },
+      "permissions": 7
+    },
+    {
+      "id": "cpu1-map-10",
+      "core": "core1",
+      "address": 16384,
+      "physical": 16384,
+      "size": {
+        "kind": "bytes",
+        "bytes": 536854528
+      },
+      "permissions": 7
+    },
+    {
+      "id": "cpu1-map-11",
+      "core": "core1",
+      "address": 1073741824,
+      "physical": 0,
+      "size": {
+        "kind": "body_dram"
+      },
+      "permissions": 7
+    },
+    {
+      "id": "cpu1-map-12",
+      "core": "core1",
+      "address": 4293918720,
+      "physical": 4293918720,
+      "size": {
+        "kind": "bytes",
+        "bytes": 4096
+      },
+      "permissions": 7
+    },
+    {
+      "id": "cpu1-map-13",
+      "core": "core1",
+      "address": 1073676288,
+      "physical": 1073676288,
+      "size": {
+        "kind": "bytes",
+        "bytes": 4096
+      },
+      "permissions": 7
+    },
+    {
+      "id": "cpu1-map-14",
+      "core": "core1",
+      "address": 2147418112,
+      "physical": 1073676288,
+      "size": {
+        "kind": "bytes",
+        "bytes": 4096
+      },
+      "permissions": 7
+    },
+    {
+      "id": "cpu1-map-15",
+      "core": "core1",
+      "address": 2147483648,
+      "physical": 2147483648,
+      "size": {
+        "kind": "bytes",
+        "bytes": 16384
+      },
+      "permissions": 5
+    },
+    {
+      "id": "cpu1-map-16",
+      "core": "core1",
+      "address": 4294901760,
+      "physical": 1073676288,
+      "size": {
+        "kind": "bytes",
+        "bytes": 4096
+      },
+      "permissions": 7
+    },
+    {
+      "id": "cpu1-map-17",
+      "core": "core1",
+      "address": 4294905856,
+      "physical": 2415988736,
+      "size": {
+        "kind": "bytes",
+        "bytes": 61440
+      },
+      "permissions": 7
+    },
+    {
+      "id": "decoder-cpu0-map-18",
+      "core": "core0",
+      "address": 0,
+      "physical": 0,
+      "size": {
+        "kind": "bytes",
+        "bytes": 16384
+      },
+      "permissions": 7
+    },
+    {
+      "id": "decoder-cpu1-map-19",
+      "core": "core1",
+      "address": 0,
+      "physical": 0,
+      "size": {
+        "kind": "bytes",
+        "bytes": 16384
+      },
+      "permissions": 7
+    }
+  ],
+  "dma_mappings": [
+    {
+      "id": "dma-map-00",
+      "address": 0,
+      "physical": 2147483648,
+      "size": {
+        "kind": "bytes",
+        "bytes": 16384
+      },
+      "permissions": 1
+    },
+    {
+      "id": "dma-map-01",
+      "address": 16384,
+      "physical": 16384,
+      "size": {
+        "kind": "bytes",
+        "bytes": 536854528
+      },
+      "permissions": 3
+    },
+    {
+      "id": "dma-map-02",
+      "address": 1073741824,
+      "physical": 0,
+      "size": {
+        "kind": "body_dram"
+      },
+      "permissions": 3
+    },
+    {
+      "id": "dma-map-03",
+      "address": 2147483648,
+      "physical": 2147483648,
+      "size": {
+        "kind": "bytes",
+        "bytes": 16384
+      },
+      "permissions": 1
+    },
+    {
+      "id": "dma-map-04",
+      "address": 4293918720,
+      "physical": 4293918720,
+      "size": {
+        "kind": "bytes",
+        "bytes": 4096
+      },
+      "permissions": 3
+    },
+    {
+      "id": "dma-map-05",
+      "address": 1073676288,
+      "physical": 1073676288,
+      "size": {
+        "kind": "bytes",
+        "bytes": 4096
+      },
+      "permissions": 3
+    },
+    {
+      "id": "dma-map-06",
+      "address": 2147418112,
+      "physical": 1073676288,
+      "size": {
+        "kind": "bytes",
+        "bytes": 4096
+      },
+      "permissions": 3
+    },
+    {
+      "id": "decoder-dma-map-07",
+      "address": 0,
+      "physical": 0,
+      "size": {
+        "kind": "bytes",
+        "bytes": 16384
+      },
+      "permissions": 3
+    }
+  ],
+  "decoders": [
+    {
+      "id": "address-decoder-0",
+      "initial": {
+        "processors": [
+          "cpu0-map-00",
+          "cpu1-map-01"
+        ],
+        "dma_mappings": [
+          "dma-map-00"
+        ]
+      },
+      "choices": [
+        {
+          "id": "choice-0",
+          "selection": {
+            "processors": [
+              "cpu0-map-00",
+              "cpu1-map-01"
+            ],
+            "dma_mappings": [
+              "dma-map-00"
+            ]
+          }
+        },
+        {
+          "id": "choice-1",
+          "selection": {
+            "processors": [
+              "decoder-cpu0-map-18",
+              "decoder-cpu1-map-19"
+            ],
+            "dma_mappings": [
+              "decoder-dma-map-07"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "peripherals": [
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fe318000",
+      "address": 4264656896,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fe3b0000",
+      "address": 4265279488,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fe80c000",
+      "address": 4269850624,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff01000",
+      "address": 4293922816,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff10000",
+      "address": 4293984256,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff18000",
+      "address": 4294017024,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff24000",
+      "address": 4294066176,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff28000",
+      "address": 4294082560,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff43000",
+      "address": 4294193152,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff46000",
+      "address": 4294205440,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff48000",
+      "address": 4294213632,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff50000",
+      "address": 4294246400,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff54000",
+      "address": 4294262784,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff68000",
+      "address": 4294344704,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff76000",
+      "address": 4294402048,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff84000",
+      "address": 4294459392,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff88000",
+      "address": 4294475776,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff91000",
+      "address": 4294512640,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff98000",
+      "address": 4294541312,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fffa0000",
+      "address": 4294574080,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fffa9000",
+      "address": 4294610944,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fffb2000",
+      "address": 4294647808,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fe318000",
+      "address": 4264656896,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fe3b0000",
+      "address": 4265279488,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fe80c000",
+      "address": 4269850624,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff01000",
+      "address": 4293922816,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff10000",
+      "address": 4293984256,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff18000",
+      "address": 4294017024,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff24000",
+      "address": 4294066176,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff28000",
+      "address": 4294082560,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff43000",
+      "address": 4294193152,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff46000",
+      "address": 4294205440,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff48000",
+      "address": 4294213632,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff50000",
+      "address": 4294246400,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff54000",
+      "address": 4294262784,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff68000",
+      "address": 4294344704,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff76000",
+      "address": 4294402048,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff84000",
+      "address": 4294459392,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff88000",
+      "address": 4294475776,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff91000",
+      "address": 4294512640,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff98000",
+      "address": 4294541312,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fffa0000",
+      "address": 4294574080,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fffa9000",
+      "address": 4294610944,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fffb2000",
+      "address": 4294647808,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff1a000",
+      "address": 4294025216,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff1a000",
+      "address": 4294025216,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff1c000",
+      "address": 4294033408,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff1c000",
+      "address": 4294033408,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff30000",
+      "address": 4294115328,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff30000",
+      "address": 4294115328,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff31000",
+      "address": 4294119424,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff31000",
+      "address": 4294119424,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff32000",
+      "address": 4294123520,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff32000",
+      "address": 4294123520,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff33000",
+      "address": 4294127616,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff33000",
+      "address": 4294127616,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff34000",
+      "address": 4294131712,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff34000",
+      "address": 4294131712,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff38000",
+      "address": 4294148096,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff38000",
+      "address": 4294148096,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff40000",
+      "address": 4294180864,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff40000",
+      "address": 4294180864,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff41000",
+      "address": 4294184960,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff41000",
+      "address": 4294184960,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff42000",
+      "address": 4294189056,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff42000",
+      "address": 4294189056,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff44000",
+      "address": 4294197248,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff44000",
+      "address": 4294197248,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff45000",
+      "address": 4294201344,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff45000",
+      "address": 4294201344,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff47000",
+      "address": 4294209536,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff47000",
+      "address": 4294209536,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff62000",
+      "address": 4294320128,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff62000",
+      "address": 4294320128,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff63000",
+      "address": 4294324224,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff63000",
+      "address": 4294324224,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "image-transfer",
+      "address": 4294328320,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "image-transfer",
+      "address": 4294328320,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-fff65000",
+      "address": 4294332416,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-fff65000",
+      "address": 4294332416,
+      "offset": null
+    }
+  ],
+  "reset": {
+    "release": {
+      "register": 4294648012,
+      "mask": 16777216,
+      "source": 120,
+      "target": 1073676288
+    },
+    "coprocessor_writes": [
+      {
+        "core": "core1",
+        "cp": 15,
+        "wide": false,
+        "secure": 0,
+        "crn": 1,
+        "crm": 0,
+        "opc1": 0,
+        "opc2": 0,
+        "set_bits": 8192
+      }
+    ]
+  },
+  "hardware": {
+    "blocks": {},
+    "interrupt_inputs": [],
+    "profiles": {
+      "exr2-service-transports": {
+        "cpu_model": "Cortex-R5F proxy for R4",
+        "runtime_abi": "exr2-r5f-fixed-map-v1",
+        "register_maps": {
+          "control_bus0": {
+            "base": 4294463488,
+            "offsets": [
+              0,
+              4,
+              8,
+              16,
+              24
+            ],
+            "irq": 101,
+            "modes": [
+              1,
+              9
+            ]
+          },
+          "control_bus1": {
+            "base": 4294463552,
+            "irq": 102
+          },
+          "interrupts": {
+            "bases": [
+              4294651904,
+              4294656000
+            ],
+            "timer_base": 4294512640
+          },
+          "nand": {
+            "base": 4294254592
+          },
+          "loader_dma": {
+            "base": 4293926912
+          },
+          "decompressor": {
+            "base": 4294193152
+          },
+          "usb": {
+            "core": 4294262784,
+            "phy": 4294266880,
+            "basis": "Declared catalog input.",
+            "irq": 84,
+            "dma_irq": 85
+          }
+        },
+        "limits": [],
+        "tcm": {
+          "atcm": {
+            "size": 8192,
+            "reset_base": 4294934528,
+            "reset_enabled": true,
+            "basis": "Declared catalog input."
+          },
+          "btcm": {
+            "size": 0,
+            "reset_base": 0,
+            "reset_enabled": false,
+            "basis": "Declared catalog input."
+          }
+        },
+        "boot_rom": {
+          "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be",
+          "size": 16384,
+          "basis": "Declared catalog input."
+        },
+        "reset_release": {
+          "register": 4294656204,
+          "mask": 16777216,
+          "source": 120,
+          "target": 1073676288
+        },
+        "update_boot": {
+          "flash_dat_bias": 604,
+          "diagnostic_headers": [
+            {
+              "name": "kernel0",
+              "offset": 524288,
+              "address": 262144
+            },
+            {
+              "name": "kernel1",
+              "offset": 655360,
+              "address": 851968
+            }
+          ],
+          "nand_layouts": {
+            "0": {
+              "name": "nand-512-byte-pages",
+              "images": [
+                {
+                  "name": "boot",
+                  "offset": 32768,
+                  "size": 131072,
+                  "address": 0
+                }
+              ],
+              "entry_labels": {
+                "0x4000": "primary loader",
+                "0x14000": "secondary loader",
+                "0x40020": "primary kernel",
+                "0xd0020": "secondary kernel"
+              },
+              "basis": "Declared catalog input."
+            },
+            "1": {
+              "name": "nand-2048-byte-pages",
+              "images": [
+                {
+                  "name": "boot",
+                  "offset": 262144,
+                  "size": 131072,
+                  "address": 0
+                }
+              ],
+              "entry_labels": {
+                "0x1800": "primary loader",
+                "0x11800": "secondary loader",
+                "0x40020": "primary kernel",
+                "0xd0020": "secondary kernel"
+              },
+              "basis": "Declared catalog input."
+            }
+          }
+        },
+        "discovery_mmio": [
+          {
+            "address": 4026531840,
+            "size": 268369920,
+            "basis": "Declared catalog input."
+          },
+          {
+            "address": 2683043840,
+            "size": 65536,
+            "basis": "Declared catalog input."
+          }
+        ],
+        "private_mmio": [
+          {
+            "address": 4264656896,
+            "size": 4096
+          },
+          {
+            "address": 4265279488,
+            "size": 4096
+          },
+          {
+            "address": 4269850624,
+            "size": 4096
+          },
+          {
+            "address": 4269854720,
+            "size": 4096
+          }
+        ]
+      },
+      "exr2": {
+        "cpu_model": "Cortex-R5F proxy for R4",
+        "runtime_abi": "exr2-r5f-fixed-map-v1",
+        "register_maps": {
+          "control_bus0": {
+            "base": 4294463488,
+            "offsets": [
+              0,
+              4,
+              8,
+              16,
+              24
+            ],
+            "irq": 101,
+            "modes": [
+              1,
+              9
+            ]
+          },
+          "control_bus1": {
+            "base": 4294463552,
+            "irq": 102
+          },
+          "interrupts": {
+            "bases": [
+              4294651904,
+              4294656000
+            ],
+            "timer_base": 4294512640
+          },
+          "nand": {
+            "base": 4294254592
+          },
+          "loader_dma": {
+            "base": 4293926912
+          },
+          "decompressor": {
+            "base": 4294193152
+          },
+          "usb": {
+            "core": 4294262784,
+            "phy": 4294266880,
+            "irq": 84,
+            "dma_irq": 85
+          }
+        },
+        "limits": [],
+        "tcm": {
+          "atcm": {
+            "size": 8192,
+            "reset_base": 4294934528,
+            "reset_enabled": true,
+            "basis": "Declared catalog input."
+          },
+          "btcm": {
+            "size": 0,
+            "reset_base": 0,
+            "reset_enabled": false,
+            "basis": "Declared catalog input."
+          }
+        },
+        "boot_rom": {
+          "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be",
+          "size": 16384,
+          "basis": "Declared catalog input."
+        },
+        "reset_release": {
+          "register": 4294656204,
+          "mask": 16777216,
+          "source": 120,
+          "target": 1073676288
+        },
+        "update_boot": {
+          "flash_dat_bias": 604,
+          "diagnostic_headers": [
+            {
+              "name": "kernel0",
+              "offset": 524288,
+              "address": 262144
+            },
+            {
+              "name": "kernel1",
+              "offset": 655360,
+              "address": 851968
+            }
+          ],
+          "nand_layouts": {
+            "0": {
+              "name": "nand-512-byte-pages",
+              "images": [
+                {
+                  "name": "boot",
+                  "offset": 32768,
+                  "size": 131072,
+                  "address": 0
+                }
+              ],
+              "entry_labels": {
+                "0x4000": "primary loader",
+                "0x14000": "secondary loader",
+                "0x40020": "primary kernel",
+                "0xd0020": "secondary kernel"
+              },
+              "basis": "Declared catalog input."
+            },
+            "1": {
+              "name": "nand-2048-byte-pages",
+              "images": [
+                {
+                  "name": "boot",
+                  "offset": 262144,
+                  "size": 131072,
+                  "address": 0
+                }
+              ],
+              "entry_labels": {
+                "0x1800": "primary loader",
+                "0x11800": "secondary loader",
+                "0x40020": "primary kernel",
+                "0xd0020": "secondary kernel"
+              },
+              "basis": "Declared catalog input."
+            }
+          }
+        },
+        "discovery_mmio": [
+          {
+            "address": 4026531840,
+            "size": 268369920,
+            "basis": "Declared catalog input."
+          },
+          {
+            "address": 2683043840,
+            "size": 65536,
+            "basis": "Declared catalog input."
+          }
+        ],
+        "private_mmio": [
+          {
+            "address": 4264656896,
+            "size": 4096
+          },
+          {
+            "address": 4265279488,
+            "size": 4096
+          },
+          {
+            "address": 4269850624,
+            "size": 4096
+          },
+          {
+            "address": 4269854720,
+            "size": 4096
+          }
+        ]
+      }
+    }
+  }
+}

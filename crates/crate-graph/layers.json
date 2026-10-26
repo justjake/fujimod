@@ -1,0 +1,166 @@
+{
+  "model_line_budget": 4000,
+  "layers": {
+    "interface": [
+      "fujimod-emulator-devices",
+      "fujimod-emulator-exr2-resources",
+      "fujimod-emulator-exr2-images",
+      "fujimod-emulator-imaging",
+      "fujimod-emulator-storage"
+    ],
+    "model": [
+      "fujimod-emulator-exr2-audio",
+      "fujimod-emulator-exr2-boot-serial",
+      "fujimod-emulator-exr2-codecs",
+      "fujimod-emulator-exr2-companion",
+      "fujimod-emulator-exr2-display",
+      "fujimod-emulator-exr2-gpu",
+      "fujimod-emulator-exr2-i2c",
+      "fujimod-emulator-exr2-io",
+      "fujimod-emulator-exr2-isp-face",
+      "fujimod-emulator-exr2-isp-input",
+      "fujimod-emulator-exr2-isp-output",
+      "fujimod-emulator-exr2-isp-statistics",
+      "fujimod-emulator-exr2-serial",
+      "fujimod-emulator-exr2-storage",
+      "fujimod-emulator-exr2-system",
+      "fujimod-emulator-graphics",
+      "fujimod-emulator-image-codecs",
+      "fujimod-emulator-image-formation",
+      "fujimod-emulator-image-processing",
+      "fujimod-emulator-ip",
+      "fujimod-emulator-ip-arm",
+      "fujimod-emulator-ip-dmp",
+      "fujimod-emulator-parts-controls",
+      "fujimod-emulator-parts-io",
+      "fujimod-emulator-parts-lens",
+      "fujimod-emulator-parts-sensor",
+      "fujimod-emulator-sensor-input",
+      "fujimod-emulator-xp4-display",
+      "fujimod-emulator-xp4-io",
+      "fujimod-emulator-xp4-storage",
+      "fujimod-emulator-xp5-display",
+      "fujimod-emulator-xp5-imaging",
+      "fujimod-emulator-xp5-io",
+      "fujimod-emulator-xp5-storage"
+    ],
+    "plan": [
+      "fujimod-emulator-exr2-plan"
+    ],
+    "board": [
+      "fujimod-emulator-exr2-board",
+      "fujimod-emulator-preparation",
+      "fujimod-emulator-xp4-board",
+      "fujimod-emulator-xp5-board",
+      "fujimod-emulator-xpp"
+    ],
+    "engine": [
+      "fujimod-emulator",
+      "fujimod-emulator-boot",
+      "fujimod-emulator-cpu",
+      "fujimod-emulator-cpu-hvf",
+      "fujimod-emulator-cpu-unicorn",
+      "fujimod-emulator-session",
+      "fujimod-unicorn-sys"
+    ],
+    "library": [
+      "fujimod",
+      "fujimod-python-app80",
+      "fujimod-python-app80-values",
+      "fujimod-python-base",
+      "fujimod-python-catalog",
+      "fujimod-python-emulator",
+      "fujimod-python-recording",
+      "fujimod-python-remote",
+      "fujimod-python-service",
+      "fujimod-python-usb",
+      "fujimod-python-usb-base",
+      "fujimod-remote"
+    ],
+    "final": [
+      "fujimod-emulator-cli",
+      "fujimod-emulator-javascript",
+      "fujimod-emulator-models",
+      "fujimod-javascript",
+      "fujimod-javascript-testing",
+      "fujimod-python-graphics",
+      "fujimod-python-host-image",
+      "fujimod-python-module",
+      "fujimod-python-xp4"
+    ],
+    "other": [
+      "fujimod-bindgen",
+      "fujimod-catalog",
+      "fujimod-catalog-assets",
+      "fujimod-catalog-bulk",
+      "fujimod-catalog-camera",
+      "fujimod-catalog-configuration",
+      "fujimod-catalog-construction",
+      "fujimod-catalog-controls",
+      "fujimod-catalog-firmware-identity",
+      "fujimod-catalog-identity",
+      "fujimod-catalog-resolution",
+      "fujimod-catalog-remote",
+      "fujimod-catalog-run-inputs",
+      "fujimod-catalog-schemas",
+      "fujimod-catalog-service",
+      "fujimod-catalog-settings",
+      "fujimod-corpus",
+      "fujimod-crate-graph",
+      "fujimod-emulator-exr2-isp-testing",
+      "fujimod-firmware",
+      "fujimod-recording",
+      "fujimod-settings",
+      "fujimod-usb",
+      "fujimod-usb-app80",
+      "fujimod-usb-app80-types",
+      "fujimod-usb-proxy",
+      "fujimod-virtual-scene",
+      "fujimod-workflows",
+      "fujimod-workspace-hack"
+    ]
+  },
+  "remaining": {
+    "untested_libraries": [],
+    "model_dependencies": {
+      "fujimod-emulator-xp5-board": [
+        "fujimod-emulator-ip",
+        "fujimod-emulator-ip-arm",
+        "fujimod-emulator-ip-dmp",
+        "fujimod-emulator-parts-controls",
+        "fujimod-emulator-parts-io",
+        "fujimod-emulator-sensor-input",
+        "fujimod-emulator-xp5-display",
+        "fujimod-emulator-xp5-imaging",
+        "fujimod-emulator-xp5-io",
+        "fujimod-emulator-xp5-storage"
+      ],
+      "fujimod-emulator-xp4-board": [
+        "fujimod-emulator-ip",
+        "fujimod-emulator-ip-arm",
+        "fujimod-emulator-ip-dmp",
+        "fujimod-emulator-sensor-input",
+        "fujimod-emulator-xp4-display",
+        "fujimod-emulator-xp4-io",
+        "fujimod-emulator-xp4-storage"
+      ],
+      "fujimod-emulator-xpp": [
+        "fujimod-emulator-ip",
+        "fujimod-emulator-ip-arm",
+        "fujimod-emulator-xp4-io"
+      ]
+    },
+    "oversize_models": [],
+    "interface_devices": [
+      "fujimod-emulator-devices/src/exr2/clock.rs",
+      "fujimod-emulator-devices/src/exr2/gpio.rs",
+      "fujimod-emulator-devices/src/exr2/irq.rs",
+      "fujimod-emulator-devices/src/exr2/pulse.rs",
+      "fujimod-emulator-devices/src/exr2/pulse/block86000.rs",
+      "fujimod-emulator-devices/src/keyed_io.rs",
+      "fujimod-emulator-devices/src/lz_osd.rs",
+      "fujimod-emulator-devices/src/parts/controls.rs",
+      "fujimod-emulator-devices/src/parts/hdmi_sink.rs"
+    ]
+  }
+}

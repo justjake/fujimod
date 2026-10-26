@@ -1,0 +1,2268 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "xq",
+  "soc_id": "exr2",
+  "dram_bytes": 536870912,
+  "hardware": {
+    "serial_attachments": [],
+    "gpio_feedback": [],
+    "keypad_samples": {},
+    "thermal_connection_ids": [],
+    "profiles": {
+      "xq-rec": {
+        "graph": {
+          "devices": [
+            {
+              "name": "bootcontrols",
+              "kind": "BootControls",
+              "refs": {}
+            },
+            {
+              "name": "kernelinterrupts",
+              "kind": "KernelInterrupts",
+              "refs": {}
+            },
+            {
+              "name": "nandcontroller",
+              "kind": "NandController",
+              "refs": {}
+            },
+            {
+              "name": "windowanalysis",
+              "kind": "WindowAnalysisControl",
+              "refs": {}
+            },
+            {
+              "name": "fujidecompressor",
+              "kind": "FujiDecompressor",
+              "refs": {}
+            },
+            {
+              "name": "loadermemorydma",
+              "kind": "LoaderMemoryDMA",
+              "refs": {}
+            },
+            {
+              "name": "usbcontrol",
+              "kind": "USBControl",
+              "refs": {
+                "power": "powerdevices"
+              }
+            },
+            {
+              "name": "powerdevices",
+              "kind": "PowerDevices",
+              "refs": {}
+            },
+            {
+              "name": "audio",
+              "kind": "SerialAudioTransmitSink",
+              "refs": {}
+            },
+            {
+              "name": "pulseoutputs",
+              "kind": "PulseOutputs",
+              "refs": {}
+            },
+            {
+              "name": "zoomcapture",
+              "kind": "PulseInputCapture",
+              "refs": {
+                "pulse_source": "pulseoutputs"
+              }
+            },
+            {
+              "name": "lensendpoint",
+              "kind": "ThreeByteDCZoomLensController",
+              "refs": {
+                "pulse_source": "pulseoutputs",
+                "gpio_source": "bootcontrols",
+                "capture_source": "zoomcapture"
+              }
+            },
+            {
+              "name": "spi2serial",
+              "kind": "SPI2Serial",
+              "refs": {
+                "endpoint": "lensendpoint"
+              }
+            },
+            {
+              "name": "controlbus",
+              "kind": "ControlBus",
+              "refs": {}
+            },
+            {
+              "name": "secondarycontrolbus",
+              "kind": "SecondaryControlBus",
+              "refs": {
+                "power": "powerdevices"
+              }
+            },
+            {
+              "name": "fe80control",
+              "kind": "FE80Control",
+              "refs": {}
+            },
+            {
+              "name": "inputprocessingcontrol",
+              "kind": "InputProcessingControl",
+              "refs": {}
+            },
+            {
+              "name": "inputauxiliarycontrol",
+              "kind": "InputAuxiliaryControl",
+              "refs": {}
+            },
+            {
+              "name": "producercontrol",
+              "kind": "ProducerControl",
+              "refs": {}
+            },
+            {
+              "name": "imageparametercontrol",
+              "kind": "ImageParameterControl",
+              "refs": {}
+            },
+            {
+              "name": "imageworkcontrol",
+              "kind": "ImageWorkControl",
+              "refs": {}
+            },
+            {
+              "name": "faceanalysiscontrol",
+              "kind": "FaceAnalysisControl",
+              "refs": {}
+            },
+            {
+              "name": "hdmisink",
+              "kind": "HDMISink",
+              "refs": {}
+            },
+            {
+              "name": "hdmistartup",
+              "kind": "HDMIStartup",
+              "refs": {
+                "sink": "hdmisink"
+              }
+            },
+            {
+              "name": "outputcontrol",
+              "kind": "OutputControl",
+              "refs": {}
+            },
+            {
+              "name": "graphicsaccelerator",
+              "kind": "GraphicsAccelerator",
+              "refs": {}
+            },
+            {
+              "name": "displayscanout",
+              "kind": "DisplayScanout",
+              "refs": {}
+            },
+            {
+              "name": "displaytiming",
+              "kind": "DisplayTiming",
+              "refs": {}
+            },
+            {
+              "name": "displayformatter",
+              "kind": "DisplayFormatter",
+              "refs": {}
+            },
+            {
+              "name": "stabilizer",
+              "kind": "WordStabilizer",
+              "refs": {}
+            },
+            {
+              "name": "spi1serial",
+              "kind": "SPI1SerialBus",
+              "refs": {
+                "power": "powerdevices",
+                "gpio": "bootcontrols",
+                "endpoint": "stabilizer"
+              }
+            }
+          ],
+          "construction_order": [
+            "bootcontrols",
+            "kernelinterrupts",
+            "nandcontroller",
+            "windowanalysis",
+            "fujidecompressor",
+            "loadermemorydma",
+            "powerdevices",
+            "stabilizer",
+            "spi1serial",
+            "usbcontrol",
+            "audio",
+            "pulseoutputs",
+            "zoomcapture",
+            "lensendpoint",
+            "spi2serial",
+            "controlbus",
+            "secondarycontrolbus",
+            "fe80control",
+            "inputprocessingcontrol",
+            "inputauxiliarycontrol",
+            "producercontrol",
+            "imageparametercontrol",
+            "imageworkcontrol",
+            "faceanalysiscontrol",
+            "hdmisink",
+            "hdmistartup",
+            "outputcontrol",
+            "graphicsaccelerator",
+            "displayscanout",
+            "displaytiming",
+            "displayformatter"
+          ],
+          "attachment_order": [
+            "bootcontrols",
+            "kernelinterrupts",
+            "nandcontroller",
+            "windowanalysis",
+            "fujidecompressor",
+            "loadermemorydma",
+            "usbcontrol",
+            "stabilizer",
+            "spi1serial",
+            "powerdevices",
+            "audio",
+            "zoomcapture",
+            "pulseoutputs",
+            "lensendpoint",
+            "spi2serial",
+            "controlbus",
+            "secondarycontrolbus",
+            "fe80control",
+            "inputprocessingcontrol",
+            "inputauxiliarycontrol",
+            "producercontrol",
+            "imageparametercontrol",
+            "imageworkcontrol",
+            "faceanalysiscontrol",
+            "hdmisink",
+            "hdmistartup",
+            "outputcontrol",
+            "graphicsaccelerator",
+            "displayscanout",
+            "displaytiming",
+            "displayformatter"
+          ]
+        },
+        "controllers": {
+          "control_bus0": {
+            "profile": "endpoint7-stationary-z-plus-1g",
+            "transfer_ticks": 4,
+            "sensor": {
+              "address": 28,
+              "reply_model": "stationary-z-plus-1g",
+              "basis": "Declared catalog input."
+            },
+            "basis": "Declared catalog input."
+          },
+          "display_timing": {
+            "phase_profile": "declared-external-phase-clock-unmeasured",
+            "frame_period_ticks": 400000,
+            "stop_delay_ticks": 2,
+            "basis": "Declared catalog input."
+          },
+          "fe80": {
+            "basis": "Declared catalog input.",
+            "upload_setup_phases": [
+              "disabled"
+            ],
+            "periods": [
+              12,
+              18
+            ]
+          },
+          "window_analysis": {
+            "profile": "declared-y16-window-gradients-and-local-tracking-unmeasured",
+            "ticks_per_window": 1000,
+            "basis": "Declared catalog input."
+          },
+          "control_bus1": {
+            "profile": "declared-bus1-register-replies-unmeasured",
+            "transfer_ticks": 4,
+            "basis": "Declared catalog input.",
+            "replies": {
+              "usb_connected": null,
+              "register_address": 10,
+              "pwic_address": 48,
+              "register_values": [
+                [
+                  2,
+                  0
+                ],
+                [
+                  5,
+                  0
+                ],
+                [
+                  7,
+                  0
+                ],
+                [
+                  8,
+                  0
+                ],
+                [
+                  9,
+                  0
+                ],
+                [
+                  10,
+                  0
+                ],
+                [
+                  11,
+                  0
+                ],
+                [
+                  12,
+                  0
+                ],
+                [
+                  13,
+                  0
+                ],
+                [
+                  14,
+                  0
+                ],
+                [
+                  16,
+                  0
+                ],
+                [
+                  17,
+                  0
+                ],
+                [
+                  18,
+                  0
+                ],
+                [
+                  19,
+                  0
+                ]
+              ],
+              "register_write_masks": [
+                [
+                  7,
+                  255
+                ],
+                [
+                  8,
+                  255
+                ],
+                [
+                  9,
+                  255
+                ],
+                [
+                  10,
+                  255
+                ],
+                [
+                  11,
+                  255
+                ],
+                [
+                  12,
+                  255
+                ],
+                [
+                  13,
+                  255
+                ],
+                [
+                  14,
+                  255
+                ],
+                [
+                  16,
+                  255
+                ],
+                [
+                  17,
+                  255
+                ],
+                [
+                  18,
+                  255
+                ]
+              ],
+              "pwic_values": [
+                [
+                  97,
+                  0
+                ],
+                [
+                  32,
+                  128
+                ],
+                [
+                  1,
+                  0
+                ],
+                [
+                  2,
+                  0
+                ],
+                [
+                  4,
+                  0
+                ],
+                [
+                  5,
+                  0
+                ],
+                [
+                  6,
+                  0
+                ],
+                [
+                  7,
+                  0
+                ],
+                [
+                  8,
+                  0
+                ],
+                [
+                  9,
+                  0
+                ],
+                [
+                  11,
+                  0
+                ],
+                [
+                  14,
+                  0
+                ],
+                [
+                  98,
+                  0
+                ]
+              ],
+              "pwic_write_masks": [
+                [
+                  97,
+                  16
+                ],
+                [
+                  32,
+                  31
+                ],
+                [
+                  1,
+                  31
+                ],
+                [
+                  2,
+                  255
+                ],
+                [
+                  4,
+                  255
+                ],
+                [
+                  5,
+                  255
+                ],
+                [
+                  6,
+                  240
+                ],
+                [
+                  7,
+                  7
+                ],
+                [
+                  8,
+                  119
+                ],
+                [
+                  9,
+                  243
+                ],
+                [
+                  11,
+                  255
+                ],
+                [
+                  14,
+                  1
+                ],
+                [
+                  98,
+                  1
+                ]
+              ],
+              "pwic_read_prefixes": [
+                [
+                  32,
+                  "000000"
+                ]
+              ],
+              "register_modes": [
+                9
+              ],
+              "pwic_modes": [
+                1
+              ]
+            }
+          },
+          "input_processing": {
+            "command_controls": [
+              16777216,
+              16973824
+            ],
+            "basis": "Declared catalog input."
+          },
+          "spi1_serial": {
+            "transports": [
+              [
+                192,
+                6,
+                0
+              ],
+              [
+                65728,
+                2,
+                1
+              ]
+            ],
+            "selection": [
+              12,
+              2,
+              0,
+              12,
+              3,
+              1
+            ],
+            "transfer_ticks": 4,
+            "basis": "Declared catalog input."
+          },
+          "stabilizer": {
+            "status": 144,
+            "telemetry": 0,
+            "basis": "Declared catalog input."
+          },
+          "usb": {
+            "transfer_ticks": 4,
+            "packet_bytes": 512,
+            "out_endpoints": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ],
+            "in_endpoints": [
+              [
+                128,
+                0
+              ],
+              [
+                130,
+                1
+              ],
+              [
+                131,
+                2
+              ]
+            ],
+            "basis": "Declared catalog input."
+          }
+        },
+        "pin_interrupts": [
+          {
+            "pin": {
+              "port": 0,
+              "pin": 2
+            },
+            "edge": "falling",
+            "outputs": [
+              {
+                "Core": {
+                  "core": 0,
+                  "line": 10
+                }
+              }
+            ]
+          },
+          {
+            "pin": {
+              "port": 0,
+              "pin": 3
+            },
+            "edge": "falling",
+            "outputs": [
+              {
+                "Core": {
+                  "core": 0,
+                  "line": 11
+                }
+              }
+            ]
+          }
+        ],
+        "counter_feedback": "declared-lens-step-feedback-unmeasured",
+        "face_register_mode": "retained_words",
+        "card_contacts": {
+          "detect": [
+            12,
+            7,
+            0
+          ],
+          "write_protect": [
+            12,
+            6,
+            1
+          ],
+          "basis": "Declared catalog input."
+        },
+        "control_bus_notes": "Stock XQ1 1.21 table843054 and XQ2 1.01 table8435a4 each contain these nine address/polarity/channel rows. This includes bus1 charge target0a; physical chip identities remain unmeasured.",
+        "limits": [],
+        "dram_basis": "Declared catalog input.",
+        "imaging": {
+          "focus_imaging": {
+            "optics": {
+              "target_position": -600,
+              "pulses_per_radius": 16,
+              "maximum_radius": 32
+            },
+            "memory_bytes_per_tick": 16,
+            "contrast": {
+              "kind": "squared_horizontal_gradients",
+              "luma_bits": 12
+            },
+            "basis": "Declared catalog input.",
+            "face_detector": {
+              "mode": "retained_words"
+            },
+            "input_clock_mode": "source_mask",
+            "frame_phase": 0,
+            "raster": {
+              "width": 2080,
+              "height": 837,
+              "stride": 4160
+            },
+            "metering": "rgb_cell_means12",
+            "statistics_pixels_per_tick": 64,
+            "input_period_ticks": 200000
+          }
+        },
+        "attachments": {
+          "serial_part": [
+            "dc-zoom-lens-programmed"
+          ],
+          "contact_actuators": [
+            "acquisition-contacts"
+          ]
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6",
+          "device-7",
+          "device-8"
+        ]
+      },
+      "xq1-121-browser-usb": {
+        "graph": {
+          "devices": [
+            {
+              "name": "bootcontrols",
+              "kind": "BootControls",
+              "refs": {}
+            },
+            {
+              "name": "kernelinterrupts",
+              "kind": "KernelInterrupts",
+              "refs": {}
+            },
+            {
+              "name": "nandcontroller",
+              "kind": "NandController",
+              "refs": {}
+            },
+            {
+              "name": "windowanalysis",
+              "kind": "WindowAnalysisControl",
+              "refs": {}
+            },
+            {
+              "name": "fujidecompressor",
+              "kind": "FujiDecompressor",
+              "refs": {}
+            },
+            {
+              "name": "loadermemorydma",
+              "kind": "LoaderMemoryDMA",
+              "refs": {}
+            },
+            {
+              "name": "usbcontrol",
+              "kind": "USBControl",
+              "refs": {
+                "power": "powerdevices"
+              }
+            },
+            {
+              "name": "powerdevices",
+              "kind": "PowerDevices",
+              "refs": {}
+            },
+            {
+              "name": "audio",
+              "kind": "SerialAudioTransmitSink",
+              "refs": {}
+            },
+            {
+              "name": "pulseoutputs",
+              "kind": "PulseOutputs",
+              "refs": {}
+            },
+            {
+              "name": "zoomcapture",
+              "kind": "PulseInputCapture",
+              "refs": {
+                "pulse_source": "pulseoutputs"
+              }
+            },
+            {
+              "name": "lensendpoint",
+              "kind": "ThreeByteDCZoomLensController",
+              "refs": {
+                "pulse_source": "pulseoutputs",
+                "gpio_source": "bootcontrols",
+                "capture_source": "zoomcapture"
+              }
+            },
+            {
+              "name": "spi2serial",
+              "kind": "SPI2Serial",
+              "refs": {
+                "endpoint": "lensendpoint"
+              }
+            },
+            {
+              "name": "controlbus",
+              "kind": "ControlBus",
+              "refs": {}
+            },
+            {
+              "name": "secondarycontrolbus",
+              "kind": "SecondaryControlBus",
+              "refs": {
+                "power": "powerdevices"
+              }
+            },
+            {
+              "name": "fe80control",
+              "kind": "FE80Control",
+              "refs": {}
+            },
+            {
+              "name": "inputprocessingcontrol",
+              "kind": "InputProcessingControl",
+              "refs": {}
+            },
+            {
+              "name": "inputauxiliarycontrol",
+              "kind": "InputAuxiliaryControl",
+              "refs": {}
+            },
+            {
+              "name": "producercontrol",
+              "kind": "ProducerControl",
+              "refs": {}
+            },
+            {
+              "name": "imageparametercontrol",
+              "kind": "ImageParameterControl",
+              "refs": {}
+            },
+            {
+              "name": "imageworkcontrol",
+              "kind": "ImageWorkControl",
+              "refs": {}
+            },
+            {
+              "name": "faceanalysiscontrol",
+              "kind": "FaceAnalysisControl",
+              "refs": {}
+            },
+            {
+              "name": "hdmisink",
+              "kind": "HDMISink",
+              "refs": {}
+            },
+            {
+              "name": "hdmistartup",
+              "kind": "HDMIStartup",
+              "refs": {
+                "sink": "hdmisink"
+              }
+            },
+            {
+              "name": "outputcontrol",
+              "kind": "OutputControl",
+              "refs": {}
+            },
+            {
+              "name": "graphicsaccelerator",
+              "kind": "GraphicsAccelerator",
+              "refs": {}
+            },
+            {
+              "name": "displayscanout",
+              "kind": "DisplayScanout",
+              "refs": {}
+            },
+            {
+              "name": "displaytiming",
+              "kind": "DisplayTiming",
+              "refs": {}
+            },
+            {
+              "name": "displayformatter",
+              "kind": "DisplayFormatter",
+              "refs": {}
+            },
+            {
+              "name": "stabilizer",
+              "kind": "WordStabilizer",
+              "refs": {}
+            },
+            {
+              "name": "spi1serial",
+              "kind": "SPI1SerialBus",
+              "refs": {
+                "power": "powerdevices",
+                "gpio": "bootcontrols",
+                "endpoint": "stabilizer"
+              }
+            }
+          ],
+          "construction_order": [
+            "bootcontrols",
+            "kernelinterrupts",
+            "nandcontroller",
+            "windowanalysis",
+            "fujidecompressor",
+            "loadermemorydma",
+            "powerdevices",
+            "stabilizer",
+            "spi1serial",
+            "usbcontrol",
+            "audio",
+            "pulseoutputs",
+            "zoomcapture",
+            "lensendpoint",
+            "spi2serial",
+            "controlbus",
+            "secondarycontrolbus",
+            "fe80control",
+            "inputprocessingcontrol",
+            "inputauxiliarycontrol",
+            "producercontrol",
+            "imageparametercontrol",
+            "imageworkcontrol",
+            "faceanalysiscontrol",
+            "hdmisink",
+            "hdmistartup",
+            "outputcontrol",
+            "graphicsaccelerator",
+            "displayscanout",
+            "displaytiming",
+            "displayformatter"
+          ],
+          "attachment_order": [
+            "bootcontrols",
+            "kernelinterrupts",
+            "nandcontroller",
+            "windowanalysis",
+            "fujidecompressor",
+            "loadermemorydma",
+            "usbcontrol",
+            "stabilizer",
+            "spi1serial",
+            "powerdevices",
+            "audio",
+            "zoomcapture",
+            "pulseoutputs",
+            "lensendpoint",
+            "spi2serial",
+            "controlbus",
+            "secondarycontrolbus",
+            "fe80control",
+            "inputprocessingcontrol",
+            "inputauxiliarycontrol",
+            "producercontrol",
+            "imageparametercontrol",
+            "imageworkcontrol",
+            "faceanalysiscontrol",
+            "hdmisink",
+            "hdmistartup",
+            "outputcontrol",
+            "graphicsaccelerator",
+            "displayscanout",
+            "displaytiming",
+            "displayformatter"
+          ]
+        },
+        "controllers": {
+          "control_bus0": {
+            "profile": "endpoint7-stationary-z-plus-1g",
+            "transfer_ticks": 4,
+            "sensor": {
+              "address": 28,
+              "reply_model": "stationary-z-plus-1g",
+              "basis": "Declared catalog input."
+            },
+            "basis": "Declared catalog input."
+          },
+          "display_timing": {
+            "phase_profile": "declared-external-phase-clock-unmeasured",
+            "frame_period_ticks": 400000,
+            "stop_delay_ticks": 2,
+            "basis": "Declared catalog input."
+          },
+          "fe80": {
+            "basis": "Declared catalog input.",
+            "upload_setup_phases": [
+              "disabled"
+            ],
+            "periods": [
+              12,
+              18
+            ]
+          },
+          "window_analysis": {
+            "profile": "declared-y16-window-gradients-and-local-tracking-unmeasured",
+            "ticks_per_window": 1000,
+            "basis": "Declared catalog input."
+          },
+          "control_bus1": {
+            "profile": "declared-bus1-register-replies-unmeasured",
+            "transfer_ticks": 4,
+            "basis": "Declared catalog input.",
+            "replies": {
+              "usb_connected": null,
+              "register_address": 10,
+              "pwic_address": 48,
+              "register_values": [
+                [
+                  2,
+                  0
+                ],
+                [
+                  5,
+                  0
+                ],
+                [
+                  7,
+                  0
+                ],
+                [
+                  8,
+                  0
+                ],
+                [
+                  9,
+                  0
+                ],
+                [
+                  10,
+                  0
+                ],
+                [
+                  11,
+                  0
+                ],
+                [
+                  12,
+                  0
+                ],
+                [
+                  13,
+                  0
+                ],
+                [
+                  14,
+                  0
+                ],
+                [
+                  16,
+                  0
+                ],
+                [
+                  17,
+                  0
+                ],
+                [
+                  18,
+                  0
+                ],
+                [
+                  19,
+                  0
+                ]
+              ],
+              "register_write_masks": [
+                [
+                  7,
+                  255
+                ],
+                [
+                  8,
+                  255
+                ],
+                [
+                  9,
+                  255
+                ],
+                [
+                  10,
+                  255
+                ],
+                [
+                  11,
+                  255
+                ],
+                [
+                  12,
+                  255
+                ],
+                [
+                  13,
+                  255
+                ],
+                [
+                  14,
+                  255
+                ],
+                [
+                  16,
+                  255
+                ],
+                [
+                  17,
+                  255
+                ],
+                [
+                  18,
+                  255
+                ]
+              ],
+              "pwic_values": [
+                [
+                  97,
+                  0
+                ],
+                [
+                  32,
+                  128
+                ],
+                [
+                  1,
+                  0
+                ],
+                [
+                  2,
+                  0
+                ],
+                [
+                  4,
+                  0
+                ],
+                [
+                  5,
+                  0
+                ],
+                [
+                  6,
+                  0
+                ],
+                [
+                  7,
+                  0
+                ],
+                [
+                  8,
+                  0
+                ],
+                [
+                  9,
+                  0
+                ],
+                [
+                  11,
+                  0
+                ],
+                [
+                  14,
+                  0
+                ],
+                [
+                  98,
+                  0
+                ]
+              ],
+              "pwic_write_masks": [
+                [
+                  97,
+                  16
+                ],
+                [
+                  32,
+                  31
+                ],
+                [
+                  1,
+                  31
+                ],
+                [
+                  2,
+                  255
+                ],
+                [
+                  4,
+                  255
+                ],
+                [
+                  5,
+                  255
+                ],
+                [
+                  6,
+                  240
+                ],
+                [
+                  7,
+                  7
+                ],
+                [
+                  8,
+                  119
+                ],
+                [
+                  9,
+                  243
+                ],
+                [
+                  11,
+                  255
+                ],
+                [
+                  14,
+                  1
+                ],
+                [
+                  98,
+                  1
+                ]
+              ],
+              "pwic_read_prefixes": [
+                [
+                  32,
+                  "000000"
+                ]
+              ],
+              "register_modes": [
+                9
+              ],
+              "pwic_modes": [
+                1
+              ]
+            }
+          },
+          "input_processing": {
+            "command_controls": [
+              16777216,
+              16973824
+            ],
+            "basis": "Declared catalog input."
+          },
+          "spi1_serial": {
+            "transports": [
+              [
+                192,
+                6,
+                0
+              ],
+              [
+                65728,
+                2,
+                1
+              ]
+            ],
+            "selection": [
+              12,
+              2,
+              0,
+              12,
+              3,
+              1
+            ],
+            "transfer_ticks": 4,
+            "basis": "Declared catalog input."
+          },
+          "stabilizer": {
+            "status": 144,
+            "telemetry": 0,
+            "basis": "Declared catalog input."
+          },
+          "usb": {
+            "transfer_ticks": 4,
+            "packet_bytes": 512,
+            "out_endpoints": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ],
+            "in_endpoints": [
+              [
+                128,
+                0
+              ],
+              [
+                130,
+                1
+              ],
+              [
+                131,
+                2
+              ]
+            ],
+            "basis": "Declared catalog input."
+          }
+        },
+        "pin_interrupts": [
+          {
+            "pin": {
+              "port": 0,
+              "pin": 2
+            },
+            "edge": "falling",
+            "outputs": [
+              {
+                "Core": {
+                  "core": 0,
+                  "line": 10
+                }
+              }
+            ]
+          },
+          {
+            "pin": {
+              "port": 0,
+              "pin": 3
+            },
+            "edge": "falling",
+            "outputs": [
+              {
+                "Core": {
+                  "core": 0,
+                  "line": 11
+                }
+              }
+            ]
+          }
+        ],
+        "counter_feedback": "declared-lens-step-feedback-unmeasured",
+        "face_register_mode": "retained_words",
+        "card_contacts": {
+          "detect": [
+            12,
+            7,
+            0
+          ],
+          "write_protect": [
+            12,
+            6,
+            1
+          ],
+          "basis": "Declared catalog input."
+        },
+        "control_bus_notes": "Stock XQ1 1.21 table843054 and XQ2 1.01 table8435a4 each contain these nine address/polarity/channel rows. This includes bus1 charge target0a; physical chip identities remain unmeasured.",
+        "limits": [],
+        "dram_basis": "Declared catalog input.",
+        "imaging": {
+          "focus_imaging": {
+            "optics": {
+              "target_position": -600,
+              "pulses_per_radius": 16,
+              "maximum_radius": 32
+            },
+            "memory_bytes_per_tick": 16,
+            "contrast": {
+              "kind": "squared_horizontal_gradients",
+              "luma_bits": 12
+            },
+            "basis": "Declared catalog input.",
+            "face_detector": {
+              "mode": "retained_words"
+            },
+            "input_clock_mode": "source_mask",
+            "frame_phase": 0,
+            "raster": {
+              "width": 2080,
+              "height": 837,
+              "stride": 4160
+            },
+            "metering": "rgb_cell_means12",
+            "statistics_pixels_per_tick": 64,
+            "input_period_ticks": 200000
+          }
+        },
+        "attachments": {
+          "serial_part": [
+            "dc-zoom-lens-programmed"
+          ],
+          "contact_actuators": [
+            "acquisition-contacts"
+          ]
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6",
+          "device-7",
+          "device-8"
+        ]
+      },
+      "xq2-101-browser-usb": {
+        "graph": {
+          "devices": [
+            {
+              "name": "bootcontrols",
+              "kind": "BootControls",
+              "refs": {}
+            },
+            {
+              "name": "kernelinterrupts",
+              "kind": "KernelInterrupts",
+              "refs": {}
+            },
+            {
+              "name": "nandcontroller",
+              "kind": "NandController",
+              "refs": {}
+            },
+            {
+              "name": "windowanalysis",
+              "kind": "WindowAnalysisControl",
+              "refs": {}
+            },
+            {
+              "name": "fujidecompressor",
+              "kind": "FujiDecompressor",
+              "refs": {}
+            },
+            {
+              "name": "loadermemorydma",
+              "kind": "LoaderMemoryDMA",
+              "refs": {}
+            },
+            {
+              "name": "usbcontrol",
+              "kind": "USBControl",
+              "refs": {
+                "power": "powerdevices"
+              }
+            },
+            {
+              "name": "powerdevices",
+              "kind": "PowerDevices",
+              "refs": {}
+            },
+            {
+              "name": "audio",
+              "kind": "SerialAudioTransmitSink",
+              "refs": {}
+            },
+            {
+              "name": "pulseoutputs",
+              "kind": "PulseOutputs",
+              "refs": {}
+            },
+            {
+              "name": "zoomcapture",
+              "kind": "PulseInputCapture",
+              "refs": {
+                "pulse_source": "pulseoutputs"
+              }
+            },
+            {
+              "name": "lensendpoint",
+              "kind": "ThreeByteDCZoomLensController",
+              "refs": {
+                "pulse_source": "pulseoutputs",
+                "gpio_source": "bootcontrols",
+                "capture_source": "zoomcapture"
+              }
+            },
+            {
+              "name": "spi2serial",
+              "kind": "SPI2Serial",
+              "refs": {
+                "endpoint": "lensendpoint"
+              }
+            },
+            {
+              "name": "controlbus",
+              "kind": "ControlBus",
+              "refs": {}
+            },
+            {
+              "name": "secondarycontrolbus",
+              "kind": "SecondaryControlBus",
+              "refs": {
+                "power": "powerdevices"
+              }
+            },
+            {
+              "name": "fe80control",
+              "kind": "FE80Control",
+              "refs": {}
+            },
+            {
+              "name": "inputprocessingcontrol",
+              "kind": "InputProcessingControl",
+              "refs": {}
+            },
+            {
+              "name": "inputauxiliarycontrol",
+              "kind": "InputAuxiliaryControl",
+              "refs": {}
+            },
+            {
+              "name": "producercontrol",
+              "kind": "ProducerControl",
+              "refs": {}
+            },
+            {
+              "name": "imageparametercontrol",
+              "kind": "ImageParameterControl",
+              "refs": {}
+            },
+            {
+              "name": "imageworkcontrol",
+              "kind": "ImageWorkControl",
+              "refs": {}
+            },
+            {
+              "name": "faceanalysiscontrol",
+              "kind": "FaceAnalysisControl",
+              "refs": {}
+            },
+            {
+              "name": "hdmisink",
+              "kind": "HDMISink",
+              "refs": {}
+            },
+            {
+              "name": "hdmistartup",
+              "kind": "HDMIStartup",
+              "refs": {
+                "sink": "hdmisink"
+              }
+            },
+            {
+              "name": "outputcontrol",
+              "kind": "OutputControl",
+              "refs": {}
+            },
+            {
+              "name": "graphicsaccelerator",
+              "kind": "GraphicsAccelerator",
+              "refs": {}
+            },
+            {
+              "name": "displayscanout",
+              "kind": "DisplayScanout",
+              "refs": {}
+            },
+            {
+              "name": "displaytiming",
+              "kind": "DisplayTiming",
+              "refs": {}
+            },
+            {
+              "name": "displayformatter",
+              "kind": "DisplayFormatter",
+              "refs": {}
+            },
+            {
+              "name": "stabilizer",
+              "kind": "WordStabilizer",
+              "refs": {}
+            },
+            {
+              "name": "spi1serial",
+              "kind": "SPI1SerialBus",
+              "refs": {
+                "power": "powerdevices",
+                "gpio": "bootcontrols",
+                "endpoint": "stabilizer"
+              }
+            }
+          ],
+          "construction_order": [
+            "bootcontrols",
+            "kernelinterrupts",
+            "nandcontroller",
+            "windowanalysis",
+            "fujidecompressor",
+            "loadermemorydma",
+            "powerdevices",
+            "stabilizer",
+            "spi1serial",
+            "usbcontrol",
+            "audio",
+            "pulseoutputs",
+            "zoomcapture",
+            "lensendpoint",
+            "spi2serial",
+            "controlbus",
+            "secondarycontrolbus",
+            "fe80control",
+            "inputprocessingcontrol",
+            "inputauxiliarycontrol",
+            "producercontrol",
+            "imageparametercontrol",
+            "imageworkcontrol",
+            "faceanalysiscontrol",
+            "hdmisink",
+            "hdmistartup",
+            "outputcontrol",
+            "graphicsaccelerator",
+            "displayscanout",
+            "displaytiming",
+            "displayformatter"
+          ],
+          "attachment_order": [
+            "bootcontrols",
+            "kernelinterrupts",
+            "nandcontroller",
+            "windowanalysis",
+            "fujidecompressor",
+            "loadermemorydma",
+            "usbcontrol",
+            "stabilizer",
+            "spi1serial",
+            "powerdevices",
+            "audio",
+            "zoomcapture",
+            "pulseoutputs",
+            "lensendpoint",
+            "spi2serial",
+            "controlbus",
+            "secondarycontrolbus",
+            "fe80control",
+            "inputprocessingcontrol",
+            "inputauxiliarycontrol",
+            "producercontrol",
+            "imageparametercontrol",
+            "imageworkcontrol",
+            "faceanalysiscontrol",
+            "hdmisink",
+            "hdmistartup",
+            "outputcontrol",
+            "graphicsaccelerator",
+            "displayscanout",
+            "displaytiming",
+            "displayformatter"
+          ]
+        },
+        "controllers": {
+          "control_bus0": {
+            "profile": "endpoint7-stationary-z-plus-1g",
+            "transfer_ticks": 4,
+            "sensor": {
+              "address": 28,
+              "reply_model": "stationary-z-plus-1g",
+              "basis": "Declared catalog input."
+            },
+            "basis": "Declared catalog input."
+          },
+          "display_timing": {
+            "phase_profile": "declared-external-phase-clock-unmeasured",
+            "frame_period_ticks": 400000,
+            "stop_delay_ticks": 2,
+            "basis": "Declared catalog input."
+          },
+          "fe80": {
+            "basis": "Declared catalog input.",
+            "upload_setup_phases": [
+              "disabled"
+            ],
+            "periods": [
+              12,
+              18
+            ]
+          },
+          "window_analysis": {
+            "profile": "declared-y16-window-gradients-and-local-tracking-unmeasured",
+            "ticks_per_window": 1000,
+            "basis": "Declared catalog input."
+          },
+          "control_bus1": {
+            "profile": "declared-bus1-register-replies-unmeasured",
+            "transfer_ticks": 4,
+            "basis": "Declared catalog input.",
+            "replies": {
+              "usb_connected": null,
+              "register_address": 10,
+              "pwic_address": 48,
+              "register_values": [
+                [
+                  2,
+                  0
+                ],
+                [
+                  5,
+                  0
+                ],
+                [
+                  7,
+                  0
+                ],
+                [
+                  8,
+                  0
+                ],
+                [
+                  9,
+                  0
+                ],
+                [
+                  10,
+                  0
+                ],
+                [
+                  11,
+                  0
+                ],
+                [
+                  12,
+                  0
+                ],
+                [
+                  13,
+                  0
+                ],
+                [
+                  14,
+                  0
+                ],
+                [
+                  16,
+                  0
+                ],
+                [
+                  17,
+                  0
+                ],
+                [
+                  18,
+                  0
+                ],
+                [
+                  19,
+                  0
+                ]
+              ],
+              "register_write_masks": [
+                [
+                  7,
+                  255
+                ],
+                [
+                  8,
+                  255
+                ],
+                [
+                  9,
+                  255
+                ],
+                [
+                  10,
+                  255
+                ],
+                [
+                  11,
+                  255
+                ],
+                [
+                  12,
+                  255
+                ],
+                [
+                  13,
+                  255
+                ],
+                [
+                  14,
+                  255
+                ],
+                [
+                  16,
+                  255
+                ],
+                [
+                  17,
+                  255
+                ],
+                [
+                  18,
+                  255
+                ]
+              ],
+              "pwic_values": [
+                [
+                  97,
+                  0
+                ],
+                [
+                  32,
+                  128
+                ],
+                [
+                  1,
+                  0
+                ],
+                [
+                  2,
+                  0
+                ],
+                [
+                  4,
+                  0
+                ],
+                [
+                  5,
+                  0
+                ],
+                [
+                  6,
+                  0
+                ],
+                [
+                  7,
+                  0
+                ],
+                [
+                  8,
+                  0
+                ],
+                [
+                  9,
+                  0
+                ],
+                [
+                  11,
+                  0
+                ],
+                [
+                  14,
+                  0
+                ],
+                [
+                  98,
+                  0
+                ]
+              ],
+              "pwic_write_masks": [
+                [
+                  97,
+                  16
+                ],
+                [
+                  32,
+                  31
+                ],
+                [
+                  1,
+                  31
+                ],
+                [
+                  2,
+                  255
+                ],
+                [
+                  4,
+                  255
+                ],
+                [
+                  5,
+                  255
+                ],
+                [
+                  6,
+                  240
+                ],
+                [
+                  7,
+                  7
+                ],
+                [
+                  8,
+                  119
+                ],
+                [
+                  9,
+                  243
+                ],
+                [
+                  11,
+                  255
+                ],
+                [
+                  14,
+                  1
+                ],
+                [
+                  98,
+                  1
+                ]
+              ],
+              "pwic_read_prefixes": [
+                [
+                  32,
+                  "000000"
+                ]
+              ],
+              "register_modes": [
+                9
+              ],
+              "pwic_modes": [
+                1
+              ]
+            }
+          },
+          "input_processing": {
+            "command_controls": [
+              16777216,
+              16973824
+            ],
+            "basis": "Declared catalog input."
+          },
+          "spi1_serial": {
+            "transports": [
+              [
+                192,
+                6,
+                0
+              ],
+              [
+                65728,
+                2,
+                1
+              ]
+            ],
+            "selection": [
+              12,
+              2,
+              0,
+              12,
+              3,
+              1
+            ],
+            "transfer_ticks": 4,
+            "basis": "Declared catalog input."
+          },
+          "stabilizer": {
+            "status": 144,
+            "telemetry": 0,
+            "basis": "Declared catalog input."
+          },
+          "usb": {
+            "transfer_ticks": 4,
+            "packet_bytes": 512,
+            "out_endpoints": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ],
+            "in_endpoints": [
+              [
+                128,
+                0
+              ],
+              [
+                130,
+                1
+              ],
+              [
+                131,
+                2
+              ]
+            ],
+            "basis": "Declared catalog input."
+          }
+        },
+        "pin_interrupts": [
+          {
+            "pin": {
+              "port": 0,
+              "pin": 2
+            },
+            "edge": "falling",
+            "outputs": [
+              {
+                "Core": {
+                  "core": 0,
+                  "line": 10
+                }
+              }
+            ]
+          },
+          {
+            "pin": {
+              "port": 0,
+              "pin": 3
+            },
+            "edge": "falling",
+            "outputs": [
+              {
+                "Core": {
+                  "core": 0,
+                  "line": 11
+                }
+              }
+            ]
+          }
+        ],
+        "counter_feedback": "declared-lens-step-feedback-unmeasured",
+        "face_register_mode": "retained_words",
+        "card_contacts": {
+          "detect": [
+            12,
+            7,
+            0
+          ],
+          "write_protect": [
+            12,
+            6,
+            1
+          ],
+          "basis": "Declared catalog input."
+        },
+        "control_bus_notes": "Stock XQ1 1.21 table843054 and XQ2 1.01 table8435a4 each contain these nine address/polarity/channel rows. This includes bus1 charge target0a; physical chip identities remain unmeasured.",
+        "limits": [],
+        "dram_basis": "Declared catalog input.",
+        "imaging": {
+          "focus_imaging": {
+            "optics": {
+              "target_position": -600,
+              "pulses_per_radius": 16,
+              "maximum_radius": 32
+            },
+            "memory_bytes_per_tick": 16,
+            "contrast": {
+              "kind": "squared_horizontal_gradients",
+              "luma_bits": 12
+            },
+            "basis": "Declared catalog input.",
+            "face_detector": {
+              "mode": "retained_words"
+            },
+            "input_clock_mode": "source_mask",
+            "frame_phase": 0,
+            "raster": {
+              "width": 2080,
+              "height": 837,
+              "stride": 4160
+            },
+            "metering": "rgb_cell_means12",
+            "statistics_pixels_per_tick": 64,
+            "input_period_ticks": 200000
+          }
+        },
+        "attachments": {
+          "serial_part": [
+            "dc-zoom-lens-programmed"
+          ],
+          "contact_actuators": [
+            "acquisition-contacts"
+          ]
+        },
+        "control_bus_order": [
+          "device-0",
+          "device-1",
+          "device-2",
+          "device-3",
+          "device-4",
+          "device-5",
+          "device-6",
+          "device-7",
+          "device-8"
+        ]
+      }
+    }
+  },
+  "ram_regions": [],
+  "nand": null,
+  "sensor": null,
+  "lens": null,
+  "display": null,
+  "microcontroller": null,
+  "power_control": null,
+  "card_slot": {
+    "part_id": "sd-card",
+    "connection_id": "sd-card-slot",
+    "detect_connection_id": "sd-card-detect",
+    "write_protect_connection_id": "sd-card-write-protect",
+    "controller_id": null
+  },
+  "control_bus_chips": [
+    {
+      "controller_id": "control-bus1",
+      "channel": 1,
+      "address": 48,
+      "polarity_selector": 0,
+      "id": "device-0"
+    },
+    {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 24,
+      "polarity_selector": 1,
+      "id": "device-1"
+    },
+    {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 68,
+      "polarity_selector": 0,
+      "id": "device-2"
+    },
+    {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 57,
+      "polarity_selector": 1,
+      "id": "device-3"
+    },
+    {
+      "controller_id": "control-bus1",
+      "channel": 1,
+      "address": 114,
+      "polarity_selector": 0,
+      "id": "device-4"
+    },
+    {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 25,
+      "polarity_selector": 1,
+      "id": "device-5"
+    },
+    {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 12,
+      "polarity_selector": 1,
+      "id": "device-6"
+    },
+    {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 28,
+      "polarity_selector": 1,
+      "id": "device-7"
+    },
+    {
+      "controller_id": "control-bus1",
+      "channel": 1,
+      "address": 10,
+      "polarity_selector": 1,
+      "id": "device-8"
+    }
+  ],
+  "connections": [
+    {
+      "id": "sd-card-slot",
+      "kind": "sd-card",
+      "signals": []
+    },
+    {
+      "id": "sd-card-detect",
+      "kind": "sd-card",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 7,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "sd-card-write-protect",
+      "kind": "sd-card",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 6,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-5",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 5,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-0-2",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 2,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-0-3",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 3,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-3-2",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 2,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-8",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 8,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-4",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 4,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-9",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 9,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-3",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 3,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "playback",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "serial_status",
+          "block_id": "serial-spi1",
+          "register": 96,
+          "mask": 2
+        }
+      ]
+    },
+    {
+      "id": "power",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "serial_status",
+          "block_id": "serial-spi1",
+          "register": 96,
+          "mask": 1
+        }
+      ]
+    }
+  ],
+  "parts": [
+    "sd-card",
+    "dc-zoom-lens-programmed",
+    "acquisition-contacts"
+  ],
+  "wiring": []
+}

@@ -1,0 +1,261 @@
+{
+  "$defs": {
+    "FactCount": {
+      "additionalProperties": false,
+      "description": "How many of a firmware's facts were located.",
+      "properties": {
+        "located": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "total": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "located",
+        "total"
+      ],
+      "type": "object"
+    },
+    "ModProgress": {
+      "description": "Latest walkthrough result of one mod.",
+      "oneOf": [
+        {
+          "enum": [
+            "pass",
+            "fail",
+            "not-run"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "unavailable",
+          "description": "The mod cannot be built for this firmware.",
+          "type": "string"
+        },
+        {
+          "const": "stale",
+          "description": "Recorded, but its inputs changed since.",
+          "type": "string"
+        }
+      ]
+    },
+    "ProgressStages": {
+      "additionalProperties": false,
+      "description": "Bring-up stages, grouped as research, emulator, camera, mods and SD card.",
+      "properties": {
+        "analysis": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "The function index was built and the firmware's facts located."
+        },
+        "camera-identity": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "A camera was identified over USB."
+        },
+        "camera-menu": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "A camera's menus were driven over USB."
+        },
+        "camera-snapshot": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "A camera's memory was captured over USB."
+        },
+        "menu": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "The emulator's menus respond to remote control."
+        },
+        "mod-build": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "Every shipped mod was built for the firmware."
+        },
+        "mod-target": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "The mod target was generated from the firmware's facts."
+        },
+        "rec": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "The emulator boots to the shooting screen."
+        },
+        "research": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "The update file was registered, its overlays unpacked and every code unit's corpus exported."
+        },
+        "sd-boot": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "A camera booted the SD card image."
+        },
+        "sd-image": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "The dual-boot SD card image was built."
+        }
+      },
+      "required": [
+        "research",
+        "analysis",
+        "rec",
+        "menu",
+        "camera-identity",
+        "camera-snapshot",
+        "camera-menu",
+        "mod-target",
+        "mod-build",
+        "sd-image",
+        "sd-boot"
+      ],
+      "type": "object"
+    },
+    "StageProgress": {
+      "description": "Latest result of one stage.",
+      "oneOf": [
+        {
+          "enum": [
+            "pass",
+            "fail",
+            "not-run"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "stale",
+          "description": "Recorded, but its inputs changed since.",
+          "type": "string"
+        }
+      ]
+    },
+    "StockProgress": {
+      "additionalProperties": false,
+      "description": "Latest grade of one stock-feature walkthrough.",
+      "properties": {
+        "passed": {
+          "description": "Graded parts that pass, for features graded in parts.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "result": {
+          "$ref": "#/$defs/StockResult"
+        },
+        "total": {
+          "description": "Graded parts in total.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "result"
+      ],
+      "type": "object"
+    },
+    "StockResult": {
+      "description": "Grade of one stock feature.",
+      "oneOf": [
+        {
+          "enum": [
+            "pass",
+            "fail",
+            "not-run"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "partial",
+          "description": "Some graded parts pass.",
+          "type": "string"
+        },
+        {
+          "const": "stale",
+          "description": "Recorded, but its inputs changed since.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$id": "https://fujimod.com/schemas/progress.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Bring-up progress toward FujiMod on one firmware.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/progress.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "boot_rom": {
+      "description": "Camera model whose boot ROM dump this firmware boots with, if any.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "facts": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FactCount"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Located firmware facts, when the firmware has a facts document."
+    },
+    "firmware_id": {
+      "description": "Firmware the progress belongs to.",
+      "type": "string"
+    },
+    "model": {
+      "description": "Camera model name, as the camera reports it.",
+      "type": "string"
+    },
+    "mods": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ModProgress"
+      },
+      "description": "Walkthrough result of every shipped mod, by mod name.",
+      "type": "object"
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "stages": {
+      "$ref": "#/$defs/ProgressStages",
+      "description": "Bring-up stages, in order."
+    },
+    "stock": {
+      "additionalProperties": {
+        "$ref": "#/$defs/StockProgress"
+      },
+      "description": "Stock camera features the emulator is graded on, by feature; only features the body has.",
+      "type": "object"
+    },
+    "version": {
+      "description": "Firmware version.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "firmware_id",
+    "model",
+    "version",
+    "stages",
+    "stock",
+    "mods"
+  ],
+  "title": "FirmwareProgress",
+  "type": "object"
+}

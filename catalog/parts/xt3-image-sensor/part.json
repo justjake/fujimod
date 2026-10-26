@@ -1,0 +1,13 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "xt3-image-sensor",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "imaging-sensor",
+      "read_gate_register": 81,
+      "read_gate_mask": 8
+    }
+  }
+}

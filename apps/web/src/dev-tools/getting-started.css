@@ -1,0 +1,82 @@
+.gs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.gs-steps {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--wb-line);
+  border-radius: 6px;
+  background: var(--wb-panel);
+}
+.gs-step {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 8px;
+  align-items: start;
+  padding: 8px 10px;
+}
+.gs-step + .gs-step {
+  border-top: 1px solid var(--wb-line);
+}
+.gs-number {
+  /* Centered on the first line: a 28 px button or a line of text. */
+  margin-top: 4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--wb-line-2);
+  border-radius: 50%;
+  font: 600 10.5px var(--wb-mono);
+  color: var(--wb-dim);
+}
+.gs-step[data-state='done'] .gs-number {
+  border-color: rgba(var(--wb-accent-rgb), 0.6);
+  background: #16211a;
+  color: var(--wb-accent);
+}
+.gs-step[data-state='running'] .gs-number {
+  border-color: var(--wb-accent);
+  color: var(--wb-text);
+}
+.gs-tag {
+  font: 500 10.5px var(--wb-sans);
+  color: var(--wb-faint);
+}
+.gs-row {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.gs-row > .wb-btn {
+  flex: 1;
+}
+.gs-stack {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.gs-disabled {
+  opacity: 0.45;
+}
+.gs-writes {
+  color: var(--wb-amber);
+}
+.gs-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #b9b9bf;
+}
+.gs-failure {
+  color: var(--wb-red);
+}

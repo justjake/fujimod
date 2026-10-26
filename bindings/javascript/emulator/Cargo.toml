@@ -1,0 +1,50 @@
+[package]
+name = "fujimod-emulator-javascript"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "fujimod_emulator_javascript"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+fujimod-emulator-session.workspace = true
+fujimod-emulator-exr2-resources.workspace = true
+fujimod-emulator-models.workspace = true
+fujimod-emulator-xp5-board.workspace = true
+fujimod-emulator-xp5-display.workspace = true
+fujimod-emulator-parts-controls.workspace = true
+fujimod-emulator-storage.workspace = true
+fujimod-emulator-preparation.workspace = true
+fujimod-emulator-parts-io.workspace = true
+fujimod-emulator-ip-arm.workspace = true
+fujimod-emulator-graphics.workspace = true
+ciborium.workspace = true
+fujimod-emulator = { workspace = true, default-features = false }
+fujimod-emulator-boot.workspace = true
+fujimod-emulator-cpu.workspace = true
+fujimod-emulator-cpu-unicorn.workspace = true
+fujimod-emulator-devices.workspace = true
+fujimod-emulator-exr2-board.workspace = true
+fujimod-emulator-exr2-plan.workspace = true
+fujimod-firmware.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+serde_bytes = "0.11"
+js-sys.workspace = true
+tsify.workspace = true
+serde-wasm-bindgen.workspace = true
+wasm-bindgen.workspace = true
+sha2 = { workspace = true, default-features = false }
+fujimod-workspace-hack.workspace = true
+
+[dev-dependencies]
+fujimod-emulator-imaging.workspace = true
+fujimod-emulator-exr2-images.workspace = true
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "x100vi-serial-nor",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "serial-nor-flash",
+      "jedec_id": 2906907,
+      "erase_bytes": null,
+      "page_bytes": null
+    }
+  }
+}

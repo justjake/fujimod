@@ -1,0 +1,50 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "command-data-serial-output",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "command-data-output",
+      "command_prefix": 128,
+      "data_prefix": 0,
+      "payload_bytes": 16
+    }
+  },
+  "attachment": {
+    "label": "serial_spi3",
+    "basis": "Declared catalog input.",
+    "limits": [],
+    "serial_routes": [
+      {
+        "controller_address": 4294459584,
+        "formats": [
+          {
+            "control": 224,
+            "configuration": 6,
+            "bits": 16,
+            "receive": false
+          },
+          {
+            "control": 208,
+            "configuration": 6,
+            "bits": 8,
+            "receive": false
+          }
+        ],
+        "selection": [
+          {
+            "pin": {
+              "port": 1,
+              "pin": 0
+            },
+            "high": false
+          }
+        ],
+        "transfer_ticks": 4,
+        "queue": "single",
+        "endpoint_part_id": "command-data-serial-output"
+      }
+    ]
+  }
+}

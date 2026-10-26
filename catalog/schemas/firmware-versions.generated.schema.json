@@ -1,0 +1,127 @@
+{
+  "$defs": {
+    "BootRomIdentity": {
+      "additionalProperties": false,
+      "description": "A verified boot ROM image and its load address.",
+      "properties": {
+        "address": {
+          "description": "Address where the ROM image is loaded.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "content": {
+          "$ref": "#/$defs/ContentIdentity",
+          "description": "Boot ROM content identity."
+        }
+      },
+      "required": [
+        "content",
+        "address"
+      ],
+      "type": "object"
+    },
+    "ContentIdentity": {
+      "additionalProperties": false,
+      "description": "A firmware content identity.",
+      "properties": {
+        "sha256": {
+          "description": "Lowercase SHA-256 digest.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Content size in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "FirmwareVersion": {
+      "additionalProperties": false,
+      "description": "One known firmware release, independent of emulation or bulk-read support.",
+      "properties": {
+        "boot_rom": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BootRomIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Supplied processor boot ROM associated with this firmware release."
+        },
+        "download_url": {
+          "description": "Official camera firmware page with current releases and update instructions.",
+          "type": "string"
+        },
+        "firmware_id": {
+          "description": "Stable identity of the firmware release.",
+          "type": "string"
+        },
+        "internal_version": {
+          "description": "Native BCD version, LEN build identifier, or three-part HCE version.",
+          "type": "string"
+        },
+        "product": {
+          "description": "Camera product name.",
+          "type": "string"
+        },
+        "update_sha256": {
+          "description": "SHA-256 of the official update from which the mapping was extracted.",
+          "type": "string"
+        },
+        "version": {
+          "description": "Public release version shown on Fujifilm's download page.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "firmware_id",
+        "product",
+        "version",
+        "internal_version",
+        "update_sha256",
+        "download_url"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/firmware-versions.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Generated mappings for known updates, including bodies without emulator profiles.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/firmware-versions.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "releases": {
+      "description": "Known releases. Internal versions are comparable only within one product.",
+      "items": {
+        "$ref": "#/$defs/FirmwareVersion"
+      },
+      "type": "array"
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "releases"
+  ],
+  "title": "FirmwareVersions",
+  "type": "object"
+}

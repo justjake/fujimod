@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "xt3-serial-nor",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "serial-nor-flash",
+      "jedec_id": 0,
+      "erase_bytes": 131072,
+      "page_bytes": 256
+    }
+  }
+}

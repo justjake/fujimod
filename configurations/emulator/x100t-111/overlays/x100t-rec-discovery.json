@@ -1,0 +1,43 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "x100t-rec-discovery",
+  "configuration_id": "x100t-111",
+  "change": {
+    "kind": "preset",
+    "preset": {
+      "factory_options": {
+        "instructions_per_tick": 24,
+        "storage_profile": "erased",
+        "irq_tie_profile": "kernel-active-scan-order",
+        "graphics_profile": "mode1-abgr8888-straight",
+        "backdrop_profile": "declared-black-canvas-unmeasured",
+        "copy_profile": "vg-32bpp-untile-unrotated",
+        "clear_profile": "declared-vg-ui-primitives-unmeasured",
+        "input_processing_profile": "stock-mode0-81-packed-writes",
+        "input_phase_profile": "xm1-150-phase2-ack-unmeasured",
+        "input_event_profile": "xm1-150-configured-phase-clock-unmeasured",
+        "input_event_ticks": 200000,
+        "pulse_timer_profile": "exr2-configured-interval-clocks-unmeasured",
+        "auxiliary_control_profile": "stock-control3-bit0-clear-ack-unmeasured",
+        "producer_stop_profile": "stock-idle-stop-handshakes-unmeasured",
+        "image_work_stop_profile": "stock-initial-image-banks-bit0-stop-ack-unmeasured",
+        "image_work_data_profile": "xm1-150-declared-continuous-postisp-scene-unmeasured",
+        "image_work_data_ticks": 50000,
+        "movrsz_profile": "declared-packed-yycbcr-pyramid-unmeasured",
+        "movrsz_ticks": 50000,
+        "producer_data_profile": "xm1-150-declared-continuous-statistics-scene-unmeasured",
+        "rectangle_profile": "xm1-150-declared-luma-rectangle-overlay-unmeasured"
+      },
+      "execution": {
+        "mode": "strict",
+        "engine": "unicorn",
+        "quantum": 1000,
+        "instructions_per_tick": {
+          "numerator": 24,
+          "denominator": 1
+        }
+      }
+    }
+  }
+}

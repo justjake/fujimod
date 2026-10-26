@@ -37,7 +37,7 @@ interface Configuration {
   configurationName?: string;
   interfaces: Interface[];
 }
-function bytes(data: BufferSource): Uint8Array {
+function bytes(data: BufferSource | Uint8Array): Uint8Array {
   return ArrayBuffer.isView(data)
     ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength).slice()
     : new Uint8Array(data).slice();
@@ -192,7 +192,7 @@ export class EmulatedUsbDevice {
     if (data.length > length) return { status: 'babble', data: view(data) };
     return { status: 'ok', data: view(data) };
   }
-  async controlTransferOut(setup: UsbSetup, data: BufferSource = new ArrayBuffer(0)) {
+  async controlTransferOut(setup: UsbSetup, data: BufferSource | Uint8Array = new ArrayBuffer(0)) {
     this.requireOpen();
     return { status: 'ok', bytesWritten: await this.bus.controlOut(setup, bytes(data)) };
   }
@@ -214,39 +214,14 @@ export class EmulatedUsbDevice {
     const data = await this.bus.bulkIn(endpoint | 128, length);
     return { status: data.length > length ? 'babble' : 'ok', data: view(data) };
   }
-  async transferOut(endpoint: number, data: BufferSource) {
+  async transferOut(endpoint: number, data: BufferSource | Uint8Array) {
     this.endpoint(endpoint, 'out');
     return { status: 'ok', bytesWritten: await this.bus.bulkOut(endpoint, bytes(data)) };
+  }
+  async clearHalt(_direction: string, _endpoint: number): Promise<void> {
+    throw new DOMException('Emulator endpoint halt recovery is not exposed.', 'NotSupportedError');
   }
   async reset(): Promise<void> {
     throw new DOMException('Emulator bus reset is not exposed.', 'NotSupportedError');
   }
-}
-/** Install only inside the dedicated emulator worker; never replace physical USB. */
-export function emulatedUsb(device: EmulatedUsbDevice): EventTarget & {
-  getDevices(): Promise<EmulatedUsbDevice[]>;
-  requestDevice(options: {
-    filters: { vendorId?: number; productId?: number; serialNumber?: string }[];
-  }): Promise<EmulatedUsbDevice>;
-} {
-  return Object.assign(new EventTarget(), {
-    async getDevices() {
-      return [device];
-    },
-    async requestDevice(options: {
-      filters: { vendorId?: number; productId?: number; serialNumber?: string }[];
-    }) {
-      if (
-        !options.filters.length ||
-        options.filters.some(
-          (f) =>
-            (f.vendorId === undefined || f.vendorId === device.vendorId) &&
-            (f.productId === undefined || f.productId === device.productId) &&
-            (f.serialNumber === undefined || f.serialNumber === device.serialNumber),
-        )
-      )
-        return device;
-      throw new DOMException('Emulated USB device does not match the filter.', 'NotFoundError');
-    },
-  });
 }

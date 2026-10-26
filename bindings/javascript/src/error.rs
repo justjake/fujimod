@@ -13,14 +13,16 @@ pub enum ErrorKind {
     Busy,
     Closed,
     Abandoned,
-    Cancelled,
+    Canceled,
     Definition,
     ServiceCommand,
+    Workflow,
 }
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProtocolFailureKind {
+    ExpectationMismatch,
     ReplyLength,
     CommandEcho,
     FunctionEcho,
@@ -34,7 +36,7 @@ pub enum ProtocolFailureKind {
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TransferFailureKind {
-    Cancelled,
+    Canceled,
     Stall,
     Disconnected,
     Fault,
@@ -60,7 +62,7 @@ fn stage(value: &JsValue, stage: usb::error::TransferStage) {
 pub(crate) fn transfer_failure(source: nusb::transfer::TransferError) -> TransferFailureKind {
     use nusb::transfer::TransferError;
     match source {
-        TransferError::Cancelled => TransferFailureKind::Cancelled,
+        TransferError::Cancelled => TransferFailureKind::Canceled,
         TransferError::Stall => TransferFailureKind::Stall,
         TransferError::Disconnected => TransferFailureKind::Disconnected,
         TransferError::Fault => TransferFailureKind::Fault,
@@ -87,6 +89,7 @@ fn protocol(value: &JsValue, source: usb::error::ProtocolError) {
             ProtocolFailureKind::FunctionEcho
         }
         P::ParameterEcho => ProtocolFailureKind::ParameterEcho,
+        P::ExpectationMismatch => ProtocolFailureKind::ExpectationMismatch,
         P::ReservedField(raw) => {
             property(value, "reserved", raw);
             ProtocolFailureKind::ReservedField
@@ -118,13 +121,13 @@ pub(crate) fn record(kind: u32, fields: &[(&str, JsValue)]) -> JsValue {
     }
     js_sys::Object::freeze(&object).into()
 }
-pub(crate) fn fail(kind: ErrorKind, message: &str) -> JsValue {
+pub fn fail(kind: ErrorKind, message: &str) -> JsValue {
     let value: JsValue = JsError::new(message).into();
     property(&value, "name", "FujiModUsbError");
     property(&value, "kind", kind as u32);
     value
 }
-pub(crate) fn error(source: usb::Error) -> JsValue {
+pub fn error(source: usb::Error) -> JsValue {
     let kind = match &source {
         usb::Error::CompletionUnknown => ErrorKind::CompletionUnknown,
         usb::Error::DeviceStatus { .. } => ErrorKind::DeviceStatus,
@@ -215,7 +218,7 @@ pub(crate) fn bytes(data: impl AsRef<[u8]>) -> JsValue {
     Uint8Array::from(data.as_ref()).into()
 }
 
-pub(crate) fn integer(value: JsValue, maximum: u32) -> Result<u32, JsValue> {
+pub fn integer(value: JsValue, maximum: u32) -> Result<u32, JsValue> {
     checked_integer(value, 0.0, f64::from(maximum)).map(|n| n as u32)
 }
 
@@ -236,7 +239,7 @@ fn checked_integer(value: JsValue, minimum: f64, maximum: f64) -> Result<f64, Js
     Ok(value)
 }
 
-pub(crate) fn buffer(value: JsValue) -> Result<Vec<u8>, JsValue> {
+pub fn buffer(value: JsValue) -> Result<Vec<u8>, JsValue> {
     use wasm_bindgen::JsCast;
     value
         .dyn_into::<Uint8Array>()

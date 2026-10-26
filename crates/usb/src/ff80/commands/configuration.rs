@@ -102,7 +102,7 @@ impl ReadConfiguration {
             length,
         })
     }
-    pub(crate) fn encode(self) -> Vec<u8> {
+    pub fn encode(self) -> Vec<u8> {
         memory_request(0x1a0002, 2, &self.params, &[])
     }
     pub(crate) fn decode(self, bytes: Vec<u8>) -> Result<Vec<u8>> {
@@ -129,7 +129,7 @@ impl WriteConfiguration {
             data,
         })
     }
-    pub(crate) fn encode(&self) -> Vec<u8> {
+    pub fn encode(&self) -> Vec<u8> {
         memory_request(0x1a0002, 3, &self.params, &self.data)
     }
     pub(crate) fn decode(&self, bytes: Vec<u8>) -> Result<()> {

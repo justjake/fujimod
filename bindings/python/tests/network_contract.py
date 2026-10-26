@@ -1,9 +1,15 @@
 """Shared native/Pyodide network and NAND command value contract."""
 
+from collections.abc import Callable
 
-def check_network_values():
+from contract_assertions import expect
+from fujimod.usb import app80
+
+
+def check_network_values() -> bool:
     import json
-    from fujimod import defs
+
+    from fujimod import catalog
     from fujimod.usb import app80 as a
 
     layouts = [
@@ -39,26 +45,28 @@ def check_network_values():
         entries=entries,
     )
     service = a.Service(
-        defs.service.Definition.from_json(
-            json.dumps(doc), defs.FirmwareIdentity("radio-b", "ab" * 32)
+        catalog.service.Definition.from_json(
+            json.dumps(doc), catalog.FirmwareIdentity("radio-b", "ab" * 32)
         )
     )
-    modes = defs.service.ServiceModes(4)
+    modes = catalog.service.ServiceModes(4)
 
-    def prepare(command):
+    def prepare(command: app80.Command) -> app80.Invocation:
         return service.prepare(modes, command)
 
-    def logical(p, codec):
+    def logical(p: app80.Invocation, codec: str) -> list[int]:
         return [p.raw[1 + i] for i in slots[codec]]
 
-    def decode(p, codec, index, raw):
+    def decode(
+        p: app80.Invocation, codec: str, index: int, raw: int
+    ) -> app80.ReplyValue:
         buf = bytearray(p.raw)
         buf[1 + slots[codec][index]] = raw
         reply = p.decode(buf)
         assert reply.raw == buf
         return reply.value
 
-    def invalid(create, kind):
+    def invalid(create: Callable[[], object], kind: app80.ArgumentKind) -> None:
         try:
             create()
         except a.CommandError as error:
@@ -72,7 +80,10 @@ def check_network_values():
     invalid(lambda: a.RadioChannel(15), a.ArgumentKind.RadioChannel)
     invalid(lambda: a.RadioPower(128), a.ArgumentKind.RadioPower)
     for size in [0, 5, 7]:
-        invalid(lambda: a.PeerAddress(bytes(size)), a.ArgumentKind.PeerAddressLength)
+        invalid(
+            lambda size=size: a.PeerAddress(bytes(size)),
+            a.ArgumentKind.PeerAddressLength,
+        )
     for mode, wire in [(a.RadioMode.Mode0, 0), (a.RadioMode.Mode1, 1)]:
         for channel in [0, 14]:
             assert a.RadioChannel(channel).value == channel
@@ -122,7 +133,9 @@ def check_network_values():
                     value.status, variant
                 )
                 if variant is a.NandReadResult.Unknown:
-                    assert value.status.raw_status == raw
+                    assert (
+                        expect(value.status, a.NandReadResult.Unknown).raw_status == raw
+                    )
     p = prepare(a.Command.Option41())
     assert logical(p, "option41") == [255]
     for raw, variant in [
@@ -136,7 +149,7 @@ def check_network_values():
             value.state, variant
         )
         if variant is a.Option41State.Unknown:
-            assert value.state.raw_status == raw
+            assert expect(value.state, a.Option41State.Unknown).raw_status == raw
     data = bytearray(range(6))
     address = a.PeerAddress(data)
     data[:] = bytes(6)
@@ -151,18 +164,19 @@ def check_network_values():
         value = decode(iperf, "iperf", 0, raw)
         assert isinstance(value, a.ReplyValue.Iperf) and value.raw_result == raw
     for create in [
-        lambda: a.Command.NandReadBlocks(spare=1, block_group=0),
+        lambda: a.Command.NandReadBlocks(spare=1, block_group=0),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
         lambda: a.RadioAction.Secondary(
-            mode=a.Toggle.Enabled, channel=a.RadioChannel(1)
+            mode=a.Toggle.Enabled,  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
+            channel=a.RadioChannel(1),
         ),
         lambda: a.RadioAction.Primary(
             mode=a.RadioMode.Mode0,
-            channel=1,
+            channel=1,  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
             power=a.RadioPower(1),
             option=a.Toggle.Enabled,
         ),
-        lambda: a.Command.WlanControl(enabled=1),
-        lambda: a.Command.SignalStrength(address=b"123456"),
+        lambda: a.Command.WlanControl(enabled=1),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
+        lambda: a.Command.SignalStrength(address=b"123456"),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     ]:
         try:
             create()
@@ -171,7 +185,7 @@ def check_network_values():
         else:
             raise AssertionError("untyped network selector accepted")
     for data in [b"", b"12345", b"1234567", bytes(range(6))]:
-        invalid(lambda: a.WpsPeerAddress(data), a.ArgumentKind.WpsPeerAddress)
+        invalid(lambda data=data: a.WpsPeerAddress(data), a.ArgumentKind.WpsPeerAddress)
     data = bytearray([2, 1, 2, 3, 4, 5])
     peer = a.WpsPeerAddress(data)
     data[:] = bytes(6)
@@ -193,7 +207,10 @@ def check_network_values():
             assert isinstance(value, a.ReplyValue.WpsCallback)
             assert isinstance(value.snapshot, variant)
             if variant is a.WpsCallbackResult.Unknown:
-                assert value.snapshot.raw_status == raw
+                assert (
+                    expect(value.snapshot, a.WpsCallbackResult.Unknown).raw_status
+                    == raw
+                )
     for action, code in [(a.WpsAction.Stop(), 0), (a.WpsAction.Connect(), 2)]:
         p = prepare(a.Command.Wps(action=action))
         assert logical(p, "wps") == [code, 0, 0, 0, 0, 0, 0, 0]
@@ -246,10 +263,10 @@ def check_network_values():
             assert isinstance(value, a.ReplyValue.StationScan)
             assert (value.raw_result, value.raw_count) == (raw, 255 - raw)
     for create in [
-        lambda: a.WpsTarget.Peer(address=a.PeerAddress(b"123456")),
-        lambda: a.WpsAction.Start(target=1),
-        lambda: a.Command.Wps(action=a.StationAction.Stop()),
-        lambda: a.StationAction.Scan(mode=a.Toggle.Enabled),
+        lambda: a.WpsTarget.Peer(address=a.PeerAddress(b"123456")),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
+        lambda: a.WpsAction.Start(target=1),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
+        lambda: a.Command.Wps(action=a.StationAction.Stop()),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
+        lambda: a.StationAction.Scan(mode=a.Toggle.Enabled),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     ]:
         try:
             create()
@@ -283,7 +300,9 @@ def check_network_values():
         255,
         255,
     ]
-    assert bytes(p.decode(p.raw).value.data) == bytes([255] * 6)
+    assert bytes(
+        expect(p.decode(p.raw).value, a.ReplyValue.NetworkConfiguration).data
+    ) == bytes([255] * 6)
     for radio, radio_wire in [
         (a.AccessPointRadioMode.Mode2, 0),
         (a.AccessPointRadioMode.Mode3, 1),
@@ -335,7 +354,7 @@ def check_network_values():
         a.NetworkReconfigureAction.Apply(
             number=1,
             channel=a.RadioChannel(1),
-            radio=a.RadioMode.Mode0,
+            radio=a.RadioMode.Mode0,  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
             security=a.AccessPointSecurity.Option0,
             country=country,
         )

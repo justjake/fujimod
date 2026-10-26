@@ -1,0 +1,327 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+  "schema": 1,
+  "id": "xt4-212",
+  "purpose": "rom_boot",
+  "body_id": "xt4",
+  "firmware_id": "xt4-212",
+  "start": {
+    "kind": "loader"
+  },
+  "execution": null,
+  "inputs": {
+    "kind": "xp4",
+    "ticks_per_second": 54000000,
+    "blocks": [
+      {
+        "kind": "adc",
+        "block_id": "adc",
+        "samples": [
+          2048,
+          0,
+          0,
+          4095,
+          0,
+          0,
+          0,
+          0,
+          2048,
+          0,
+          2048,
+          0
+        ]
+      },
+      {
+        "kind": "gpio",
+        "block_id": "gpio",
+        "levels": [
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "outputs": []
+      },
+      {
+        "kind": "temperature",
+        "block_id": "temperature",
+        "millicelsius": 25000
+      },
+      {
+        "kind": "flash",
+        "block_id": "flash-aperture",
+        "part_id": "xt3-serial-nor",
+        "source": "firmware_update",
+        "erased_tail": null,
+        "seeds": []
+      },
+      {
+        "kind": "serial_line",
+        "block_id": "spi1",
+        "idle_high": false
+      },
+      {
+        "kind": "serial_line",
+        "block_id": "spi4",
+        "idle_high": false
+      },
+      {
+        "kind": "serial_line",
+        "block_id": "spi5",
+        "idle_high": false
+      }
+    ],
+    "parts": [
+      {
+        "kind": "register_words",
+        "part_id": "xt3-power-registers",
+        "registers": [
+          {
+            "register": 0,
+            "value": 0
+          },
+          {
+            "register": 1,
+            "value": 0
+          },
+          {
+            "register": 2,
+            "value": 0
+          },
+          {
+            "register": 3,
+            "value": 512
+          },
+          {
+            "register": 4,
+            "value": 0
+          },
+          {
+            "register": 5,
+            "value": 0
+          },
+          {
+            "register": 6,
+            "value": 0
+          },
+          {
+            "register": 16,
+            "value": 0
+          },
+          {
+            "register": 32,
+            "value": 0
+          },
+          {
+            "register": 34,
+            "value": 0
+          },
+          {
+            "register": 35,
+            "value": 0
+          }
+        ],
+        "rtc_ticks_per_second": 54000000
+      }
+    ],
+    "timings": [
+      {
+        "kind": "delay",
+        "block_ids": [
+          "adc"
+        ],
+        "operation": "sample",
+        "ticks": 16
+      },
+      {
+        "kind": "delay",
+        "block_ids": [
+          "temperature"
+        ],
+        "operation": "sample",
+        "ticks": 5000
+      },
+      {
+        "kind": "delay",
+        "block_ids": [
+          "sd-host-clock-0",
+          "sd-host-clock-1",
+          "sd-host-clock-2",
+          "sd-host-clock-3"
+        ],
+        "operation": "settle",
+        "ticks": 8
+      },
+      {
+        "kind": "delay",
+        "block_ids": [
+          "sensor-command"
+        ],
+        "operation": "command",
+        "ticks": 5400
+      },
+      {
+        "kind": "delay",
+        "block_ids": [
+          "imaging-receiver"
+        ],
+        "operation": "reset",
+        "ticks": 8
+      },
+      {
+        "kind": "delay",
+        "block_ids": [
+          "input-buffer"
+        ],
+        "operation": "reset",
+        "ticks": 8
+      },
+      {
+        "kind": "delay",
+        "block_ids": [
+          "control-request-0",
+          "control-request-1",
+          "control-request-2",
+          "control-request-3",
+          "control-request-4",
+          "control-request-5",
+          "control-request-6",
+          "control-request-7",
+          "control-request-8",
+          "control-request-9",
+          "control-request-10",
+          "control-request-11",
+          "control-request-12"
+        ],
+        "operation": "acknowledge",
+        "ticks": 8
+      },
+      {
+        "kind": "delay",
+        "block_ids": [
+          "lcdc0"
+        ],
+        "operation": "pixel",
+        "ticks": 2
+      },
+      {
+        "kind": "delay",
+        "block_ids": [
+          "lcdc1"
+        ],
+        "operation": "pixel",
+        "ticks": 2
+      },
+      {
+        "kind": "delay",
+        "block_ids": [
+          "movdc0"
+        ],
+        "operation": "reset",
+        "ticks": 8
+      },
+      {
+        "kind": "delay",
+        "block_ids": [
+          "movdc1"
+        ],
+        "operation": "reset",
+        "ticks": 8
+      },
+      {
+        "kind": "parent_clock",
+        "block_ids": [
+          "spi1"
+        ],
+        "ticks_per_parent": 1
+      },
+      {
+        "kind": "parent_clock",
+        "block_ids": [
+          "spi4"
+        ],
+        "ticks_per_parent": 1
+      },
+      {
+        "kind": "parent_clock",
+        "block_ids": [
+          "spi5"
+        ],
+        "ticks_per_parent": 1
+      },
+      {
+        "kind": "delay",
+        "block_ids": [
+          "serial-flash"
+        ],
+        "operation": "command",
+        "ticks": 8
+      },
+      {
+        "kind": "throughput",
+        "block_id": "dma",
+        "setup_ticks": 16,
+        "bytes_per_tick": 16
+      },
+      {
+        "kind": "storage_programming",
+        "part_id": "xt3-serial-nor",
+        "erase_ticks": 4096,
+        "page_ticks": 512
+      }
+    ]
+  },
+  "scene": {
+    "kind": "xp4",
+    "frames": [
+      {
+        "block_ids": [
+          "movdc0",
+          "movdc1"
+        ],
+        "period_ticks": 900900,
+        "active_ticks": null,
+        "luma": 128
+      },
+      {
+        "block_ids": [
+          "imaging-receiver"
+        ],
+        "period_ticks": 900900,
+        "active_ticks": 450450,
+        "luma": null
+      }
+    ],
+    "statistics": [
+      {
+        "block_id": "input-buffer",
+        "luma": 2048,
+        "samples_per_cell": 1024,
+        "black_level": 1024,
+        "signal_shift": 2
+      }
+    ],
+    "command_images": []
+  },
+  "overlays": [],
+  "preset": {
+    "factory_options": {},
+    "hardware_selection": {
+      "soc_profile_id": "xp4",
+      "body_profile_id": "xt4-discovery"
+    },
+    "hardware_inputs_id": "xt4-discovery"
+  }
+}

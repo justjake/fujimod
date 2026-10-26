@@ -1,0 +1,159 @@
+{
+  "$schema": "https://fujimod.com/schemas/bulk.generated.schema.json",
+  "schema": 1,
+  "id": "xq1-121-bulk",
+  "firmware_id": "xq1-121",
+  "product": "XQ1",
+  "internal_version": "1.81",
+  "code_alias": 1073741824,
+  "source": {
+    "mechanism": "query",
+    "tag": 128,
+    "callback_table": 1097546580,
+    "callback_offset": 12,
+    "stock_callback": 14792864,
+    "base": 1212363840,
+    "source_state": 1097461372,
+    "capacities": [
+      1048576,
+      1081344
+    ],
+    "wrapping": true
+  },
+  "window": {
+    "address": 1073741824,
+    "size": 536870912
+  },
+  "code_checks": [
+    {
+      "name": "bulk_poll",
+      "address": 14510128,
+      "size": 236,
+      "sha256": "2c1b4b6d6bdda62553fd8be5d8836f380ed574c1d6bb1e4caace526fc2596d4d"
+    },
+    {
+      "name": "bulk_e1",
+      "address": 14512776,
+      "size": 156,
+      "sha256": "77d878563e110ff6b2fcb287f6118625611a8e97a46dcfbf1664d9d26f0f4ded"
+    },
+    {
+      "name": "bulk_query_request",
+      "address": 14515972,
+      "size": 144,
+      "sha256": "e248f5c971e1995dcd23849ccb1e5bf82668b456227b109d9b051855b2c87bca"
+    },
+    {
+      "name": "bulk_be32",
+      "address": 14511124,
+      "size": 52,
+      "sha256": "d3e38695c25f2e7986eaba2c13351981eb64eae3a48faa040a6f95f2ad4233ec"
+    },
+    {
+      "name": "bulk_be16",
+      "address": 14511088,
+      "size": 36,
+      "sha256": "021e7842dcb68d7687102dbd303d6e0b23fb736b5160d1225a82e90b77f7a3d7"
+    },
+    {
+      "name": "bulk_reject",
+      "address": 14511228,
+      "size": 40,
+      "sha256": "9901ec64a396bfd37091c9662012a426bc9f87f2ff7dfaaaba32b4afcb96d41e"
+    },
+    {
+      "name": "bulk_accept",
+      "address": 14511268,
+      "size": 40,
+      "sha256": "c1607547a010a8d6b78e3decd219d90a58c0498ddb355bf3de07464e1fea7d03"
+    },
+    {
+      "name": "bulk_le32",
+      "address": 14511176,
+      "size": 52,
+      "sha256": "da0d1aafabe4a745ed52912b524c18f05e372191fb6684b975400cc689e8456b"
+    },
+    {
+      "name": "bulk_store_le32",
+      "address": 14511040,
+      "size": 48,
+      "sha256": "b1f17d650142b33b046f67ef8db482b89864f9e12ffaf52185d45838ceaf4863"
+    },
+    {
+      "name": "bulk_opcode_compare",
+      "address": 14517236,
+      "size": 16,
+      "sha256": "b1cc7881d5e9f24c0fa6c46a8f1e6e3e227a29c5c4904a092e5341e2c2cf38ce"
+    },
+    {
+      "name": "bulk_opcode_case",
+      "address": 14517392,
+      "size": 20,
+      "sha256": "b40f8e6bb97e92051d16fedf29ef24a55e9965d38b33af7dec1e379851786e53"
+    },
+    {
+      "name": "bulk_flag",
+      "address": 7518032,
+      "size": 32,
+      "sha256": "6cbc8d778a17de717349d9d6d332d3eb1d29aa9bf66531f2b669f76b1e6334b8"
+    },
+    {
+      "name": "bulk_query_source",
+      "address": 14754484,
+      "size": 56,
+      "sha256": "72d1a1263338b242afee63e44dc348083e0bcceeda402d965d5fafa3e44f9af5"
+    },
+    {
+      "name": "bulk_query_selector",
+      "address": 14792864,
+      "size": 528,
+      "sha256": "25c384807658559c7e67eef061cde33b2cea1bbb557e1705837b7787524e0016"
+    },
+    {
+      "name": "bulk_query_forward",
+      "address": 14524136,
+      "size": 52,
+      "sha256": "d936b784d94ad2bf2e59a4c01e166d3223fb5d72b2aa7a5f45a2ae87d027478b"
+    }
+  ],
+  "probes": [
+    {
+      "address": 1088251952,
+      "size": 128
+    },
+    {
+      "address": 1088254600,
+      "size": 128
+    }
+  ],
+  "mapped_probe": {
+    "name": "bulk_mapped_probe",
+    "address": 14510128,
+    "size": 4096,
+    "sha256": "70bdc96bd69eac9262395e1d80e58b6a8d28aaf883074cb9859444349c29d0dc"
+  },
+  "scopes": [
+    {
+      "name": "quick",
+      "basis": "Mapped update ranges in the RAM window through the highest located transfer-state address, rounded to 1 MiB. Static BSS and heap extents beyond it are not established.",
+      "ranges": [
+        {
+          "name": "firmware",
+          "address": 1080033280,
+          "size": 18874368
+        }
+      ]
+    },
+    {
+      "name": "full",
+      "basis": "The located uncached DRAM aperture. Physical chip density is not established.",
+      "ranges": [
+        {
+          "name": "dram",
+          "address": 1073741824,
+          "size": 536870912
+        }
+      ]
+    }
+  ]
+}

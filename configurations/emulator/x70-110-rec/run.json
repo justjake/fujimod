@@ -1,0 +1,289 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+  "schema": 1,
+  "id": "x70-110-rec",
+  "body_id": "x70",
+  "firmware_id": "x70-110",
+  "start": {
+    "kind": "rom"
+  },
+  "execution": {
+    "mode": "strict",
+    "engine": "unicorn",
+    "quantum": 1000,
+    "instructions_per_tick": {
+      "numerator": 24,
+      "denominator": 1
+    }
+  },
+  "inputs": {
+    "kind": "exr2",
+    "gpio": {
+      "block_id": "gpio",
+      "unassigned_input_level": false,
+      "keys": [
+        {
+          "connection_id": "controls-gpio-2-12",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-2-11",
+          "pressed": true
+        },
+        {
+          "connection_id": "s1",
+          "pressed": false
+        },
+        {
+          "connection_id": "s2",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-0-11",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-3-3",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-2-9",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-3-8",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-3-9",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-0-10",
+          "pressed": false
+        },
+        {
+          "connection_id": "controls-gpio-1-1",
+          "pressed": true
+        }
+      ],
+      "connections": [
+        {
+          "connection_id": "power",
+          "connected": true
+        },
+        {
+          "connection_id": "hdmi",
+          "connected": false
+        },
+        {
+          "connection_id": "remote",
+          "connected": false
+        },
+        {
+          "connection_id": "hot-shoe",
+          "connected": false
+        }
+      ],
+      "outputs": [
+        {
+          "connection_id": "display-select",
+          "signal_index": 0,
+          "high": true
+        },
+        {
+          "connection_id": "display-select",
+          "signal_index": 1,
+          "high": true
+        },
+        {
+          "connection_id": "lens-select",
+          "signal_index": 0,
+          "high": true
+        }
+      ]
+    },
+    "encoders": [
+      {
+        "connection_id": "controls-encoder-3-6-3-7",
+        "phase": 0
+      }
+    ],
+    "adc": {
+      "block_id": "adc",
+      "samples": [
+        0,
+        0,
+        1023,
+        63,
+        534,
+        640,
+        0,
+        825,
+        1023,
+        60,
+        0,
+        0
+      ]
+    },
+    "power": {
+      "part_id": "power-control",
+      "powered_on": true,
+      "boot_reply": 0,
+      "spi_status": []
+    },
+    "mcu": {
+      "part_id": "mcu-interface",
+      "packet": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        170,
+        86
+      ],
+      "rtc": {
+        "ticks_per_second": 12000000,
+        "maximum_seconds": 1609459199,
+        "started": 0
+      }
+    },
+    "serial_registers": [
+      {
+        "part_id": "mcu-interface",
+        "values": [
+          {
+            "register": 69,
+            "value": 0
+          },
+          {
+            "register": 70,
+            "value": 0
+          },
+          {
+            "register": 73,
+            "value": 0
+          },
+          {
+            "register": 74,
+            "value": 0
+          },
+          {
+            "register": 75,
+            "value": 0
+          },
+          {
+            "register": 76,
+            "value": 0
+          },
+          {
+            "register": 78,
+            "value": 0
+          },
+          {
+            "register": 96,
+            "value": 0
+          },
+          {
+            "register": 104,
+            "value": 0
+          },
+          {
+            "register": 105,
+            "value": 0
+          },
+          {
+            "register": 106,
+            "value": 0
+          }
+        ]
+      }
+    ],
+    "usb": {
+      "connection_id": "usb",
+      "connected": false
+    },
+    "card": {
+      "connection_id": "sd-card",
+      "present": false,
+      "write_protected": false
+    },
+    "settings": {
+      "camera": "reference",
+      "requested": {
+        "language": "en",
+        "setup": "done"
+      }
+    }
+  },
+  "scene": {
+    "kind": "exr2",
+    "frame_period_ticks": 400000,
+    "generated_assets": [
+      {
+        "id": "x70-110-rec.live-pixels",
+        "pattern": [
+          64,
+          64,
+          128,
+          128
+        ],
+        "size": 4258176
+      },
+      {
+        "id": "x70-110-rec.live-statistics",
+        "pattern": [
+          0
+        ],
+        "size": 1024
+      },
+      {
+        "id": "x70-110-rec.capture-sensor",
+        "pattern": [
+          128,
+          128,
+          128
+        ],
+        "size": 3
+      }
+    ],
+    "images": {
+      "live_image": {
+        "width": 2496,
+        "height": 853,
+        "stride": 4992,
+        "asset": "x70-110-rec.live-pixels"
+      }
+    },
+    "statistics": {
+      "live_statistics": [
+        {
+          "destination": 2,
+          "offset": 0,
+          "asset": "x70-110-rec.live-statistics"
+        }
+      ]
+    }
+  },
+  "overlays": [],
+  "purpose": "rom_boot",
+  "preset": {
+    "factory_options": {},
+    "hardware_selection": {
+      "soc_profile_id": "exr2",
+      "body_profile_id": "x70"
+    },
+    "hardware_inputs_id": "x70",
+    "firmware_profile_id": "x70-110"
+  }
+}

@@ -27,4 +27,4 @@ body:
       description: Attach the report downloaded by the bug-report page.
     validations:
       required: true
-      accept: ".gz,.tgz,.zip"
+      accept: '.gz,.tgz,.zip'

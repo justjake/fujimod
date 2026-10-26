@@ -29,19 +29,6 @@
   display: block;
   margin: 20px 0;
 }
-.bug-report textarea {
-  display: block;
-  box-sizing: border-box;
-  width: 100%;
-  margin: 10px 0 20px;
-  padding: 12px;
-  background: #08090a;
-  color: inherit;
-  border: 1px solid var(--edge);
-  border-radius: 6px;
-  font: inherit;
-  resize: vertical;
-}
 .bug-report button {
   margin: 8px 10px 0 0;
 }
@@ -83,27 +70,17 @@
 .bug-contents li {
   margin: 10px 0;
 }
-.bug-inventory {
-  padding: 0;
-  list-style: none;
-}
-.bug-inventory li {
+.bug-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px;
-}
-.bug-inventory code {
-  overflow-wrap: anywhere;
-}
-.bug-inventory span {
-  color: var(--dim);
-  font-size: 13px;
-}
-.bug-delete {
-  display: flex !important;
-  align-items: center;
   gap: 10px;
+  margin: 18px 0;
+}
+.bug-actions .pill {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .bug-wait {
   color: var(--dim);

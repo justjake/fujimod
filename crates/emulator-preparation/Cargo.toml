@@ -1,0 +1,32 @@
+[package]
+name = "fujimod-emulator-preparation"
+description = "Declared session inputs: NAND media from persistent inputs and settings layouts, cards, images and sensors"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-emulator-exr2-resources.workspace = true
+fujimod-emulator-devices.workspace = true
+fujimod-emulator-storage.workspace = true
+fujimod-emulator-exr2-plan.workspace = true
+fujimod-catalog-settings.workspace = true
+fujimod-settings.workspace = true
+serde_json = "1"
+serde = { version = "1", features = ["derive", "rc"] }
+ruzstd = "0.9.1"
+fujimod-workspace-hack.workspace = true
+
+[dev-dependencies]
+sha2 = "0.10"
+
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+sha2 = { version = "0.10", features = ["asm-aarch64"] }
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

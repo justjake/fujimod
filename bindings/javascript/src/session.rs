@@ -24,8 +24,8 @@ impl Cancellation {
     pub(crate) fn error(self) -> JsValue {
         match self {
             Self::Interrupted => fail(
-                ErrorKind::Cancelled,
-                "host operation was cancelled; inspect session state before further I/O",
+                ErrorKind::Canceled,
+                "host operation was canceled; inspect session state before further I/O",
             ),
             Self::Abandoned => fail(
                 ErrorKind::Abandoned,
@@ -37,7 +37,7 @@ impl Cancellation {
 pub(crate) enum Slot {
     Open(ff80::Session),
     InFlight(oneshot::Sender<Cancellation>),
-    Cancelling,
+    Canceling,
     Range(Weak<RefCell<range::ReaderState>>),
     Closed,
     CompletionUnknown,
@@ -46,7 +46,7 @@ pub(crate) enum Slot {
 impl Slot {
     fn unavailable(&self) -> JsValue {
         match self {
-            Self::InFlight(_) | Self::Cancelling | Self::Range(_) => {
+            Self::InFlight(_) | Self::Canceling | Self::Range(_) => {
                 fail(ErrorKind::Busy, "session is owned by an active operation")
             }
             Self::Open(_) | Self::CompletionUnknown => {
@@ -105,7 +105,7 @@ impl Drop for Lease {
     fn drop(&mut self) {
         let mut slot = self.owner.borrow_mut();
         let resource = std::mem::replace(&mut self.resource, LeasedSession::Closing);
-        if matches!(*slot, Slot::InFlight(_) | Slot::Cancelling) {
+        if matches!(*slot, Slot::InFlight(_) | Slot::Canceling) {
             *slot = match resource {
                 LeasedSession::Open(native) => Slot::Open(native),
                 LeasedSession::Closed => Slot::Closed,
@@ -122,7 +122,7 @@ pub struct Session {
     max_reply_bytes: u32,
 }
 impl Session {
-    pub(crate) fn wrap(native: ff80::Session, limits: FirmwareLimits) -> Self {
+    pub fn wrap(native: ff80::Session, limits: FirmwareLimits) -> Self {
         let info = native.info();
         let max_reply_bytes = native.max_reply_bytes().get();
         Self {
@@ -132,8 +132,8 @@ impl Session {
             max_reply_bytes,
         }
     }
-    fn call(&self, operation: Operation) -> Result<js_sys::Promise, JsValue> {
-        let (cancel, mut cancelled) = oneshot::channel();
+    pub(crate) fn call(&self, operation: Operation) -> Result<js_sys::Promise, JsValue> {
+        let (cancel, mut canceled) = oneshot::channel();
         let native = take_native(
             &self.owner,
             Slot::InFlight(cancel),
@@ -148,7 +148,7 @@ impl Session {
             // cancellation state. Abandoning sends no firmware cleanup.
             futures_lite::future::or(
                 async {
-                    Err((&mut cancelled)
+                    Err((&mut canceled)
                         .await
                         .unwrap_or(Cancellation::Abandoned)
                         .error())
@@ -157,6 +157,51 @@ impl Session {
             )
             .await
         }))
+    }
+}
+impl Session {
+    pub(crate) fn open_named(
+        device: &connection::Device,
+        interface: &InterfaceSelection,
+        limits: &FirmwareLimits,
+        options: &TransferOptions,
+        tool: Option<String>,
+    ) -> js_sys::Promise {
+        let info = device.inner.clone();
+        let proxy = device.proxy.clone();
+        let interface = interface.inner;
+        let trace = options.trace.clone();
+        let options = options.inner;
+        let limits = *limits;
+
+        wasm_bindgen_futures::future_to_promise(async move {
+            let mut claim = proxy
+                .as_ref()
+                .map(|proxy| proxy.acquire(tool.clone()))
+                .transpose()
+                .map_err(|e| error(e.into()))?;
+            let connection = usb::connection::Connection::open(&info, interface, options).await;
+            let mut connection = match connection {
+                Ok(connection) => connection,
+                Err(failure) => {
+                    if let Some(claim) = &mut claim {
+                        claim.release();
+                    }
+                    return Err(error(failure));
+                }
+            };
+            if let Some(tool) = tool {
+                connection.set_tool(tool);
+            }
+            if let Some(claim) = claim {
+                connection.observe_remote(claim);
+            }
+            Ok(Self::wrap(
+                connection.begin_session(trace).await.map_err(error)?,
+                limits,
+            )
+            .into())
+        })
     }
 }
 #[wasm_bindgen]
@@ -168,22 +213,7 @@ impl Session {
         limits: &FirmwareLimits,
         options: &TransferOptions,
     ) -> js_sys::Promise {
-        let info = device.inner.clone();
-        let interface = interface.inner;
-        let trace = options.trace.clone();
-        let options = options.inner;
-        let limits = *limits;
-
-        wasm_bindgen_futures::future_to_promise(async move {
-            let connection = usb::connection::Connection::open(&info, interface, options)
-                .await
-                .map_err(error)?;
-            Ok(Self::wrap(
-                connection.begin_session(trace).await.map_err(error)?,
-                limits,
-            )
-            .into())
-        })
+        Self::open_named(device, interface, limits, options, None)
     }
     #[wasm_bindgen(getter)]
     pub fn state(&self) -> SessionState {
@@ -192,7 +222,7 @@ impl Session {
                 ff80::SessionState::Ready => SessionState::Ready,
                 ff80::SessionState::CompletionUnknown => SessionState::CompletionUnknown,
             },
-            Slot::InFlight(_) | Slot::Cancelling => SessionState::InFlight,
+            Slot::InFlight(_) | Slot::Canceling => SessionState::InFlight,
             Slot::Range(_) => SessionState::ReadingRange,
             Slot::Closed => SessionState::Closed,
             Slot::CompletionUnknown => SessionState::CompletionUnknown,
@@ -223,7 +253,7 @@ impl Session {
     pub fn cancel_pending(&self) {
         let mut slot = self.owner.borrow_mut();
         if matches!(*slot, Slot::InFlight(_)) {
-            let Slot::InFlight(cancel) = std::mem::replace(&mut *slot, Slot::Cancelling) else {
+            let Slot::InFlight(cancel) = std::mem::replace(&mut *slot, Slot::Canceling) else {
                 unreachable!()
             };
             let _ = cancel.send(Cancellation::Interrupted);
@@ -475,6 +505,23 @@ impl Session {
     }
 }
 pub(crate) enum Operation {
+    Workflow(crate::workflows::Workflow),
+    Bulk(crate::workflows::BulkRead),
+    StateDump(crate::workflows::StateDump),
+    FlashBackup(Box<crate::workflows::FlashBackup>),
+    UploadOwned(
+        fujimod_workflows::install::OwnedUpload,
+        fujimod_workflows::install::UploadDestination,
+        usb::ff80::commands::memory::DebugMemoryLimits,
+    ),
+    VerifyOwned(
+        fujimod_workflows::install::OwnedUpload,
+        usb::operations::data::DataWindow,
+    ),
+    Sequence(
+        Vec<usb::ff80::sequence::SequenceCommand>,
+        usb::ff80::commands::memory::DebugMemoryLimits,
+    ),
     Ping,
     Close,
     Info(InfoSelector),
@@ -498,8 +545,11 @@ pub(crate) enum Operation {
     Log(NonZeroU32),
     Research(usb::ff80::commands::research::Request),
     Upload(Vec<u8>, NonZeroU32, DataWriteMode),
-    App80(usb::operations::app80::Mailbox, usb::app80::Request),
-    Service(usb::operations::app80::Invocation),
+    App80(
+        fujimod_usb_app80::operations::Mailbox,
+        fujimod_usb_app80_types::Request,
+    ),
+    Service(fujimod_usb_app80::operations::Invocation),
     ReadRange(MemoryRange, usb::ff80::commands::memory::DebugMemoryLimits),
     WriteRange(
         Address,
@@ -525,6 +575,24 @@ impl Operation {
             unreachable!("ordinary operation owns its native session")
         };
         match self {
+            Self::Workflow(workflow) => return workflow.run(s).await,
+            Self::Bulk(read) => return read.run(s).await,
+            Self::StateDump(dump) => return dump.run(s).await,
+            Self::FlashBackup(backup) => return backup.run(s).await,
+            Self::UploadOwned(image, destination, limits) => image
+                .upload(s, destination, limits)
+                .await
+                .map(|inner| UploadReply { inner }.into()),
+            Self::VerifyOwned(image, window) => {
+                image.verify(s, window).await.map(|_| JsValue::UNDEFINED)
+            }
+            Self::Sequence(commands, limits) => s.sequence(commands, limits).await.map(|replies| {
+                replies
+                    .into_iter()
+                    .map(bytes)
+                    .collect::<js_sys::Array>()
+                    .into()
+            }),
             Self::Ping => s.ping().await.map(bytes),
             Self::Close => unreachable!(),
             Self::Info(selector) => s
@@ -652,6 +720,19 @@ pub fn execute_app80(
         ));
     }
     session.call(Operation::Service(invocation.inner.clone()))
+}
+#[wasm_bindgen]
+impl Session {
+    #[wasm_bindgen(js_name=executeSequence,unchecked_return_type="Promise<Uint8Array[]>")]
+    pub fn execute_sequence(
+        &self,
+        sequence: &crate::sequence::CommandSequence,
+    ) -> Result<js_sys::Promise, JsValue> {
+        self.call(Operation::Sequence(
+            sequence.commands.clone(),
+            self.limits.memory,
+        ))
+    }
 }
 #[wasm_bindgen(js_name=readMemoryRange,unchecked_return_type="Promise<Uint8Array>")]
 pub fn read_memory_range(

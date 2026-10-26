@@ -1,0 +1,213 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "three-byte-stabilized-lens",
+  "model": {
+    "kind": "lens-mechanism",
+    "protocol": "three-byte",
+    "motors": [
+      {
+        "initial_position": 0,
+        "travel_limits": [
+          -32767,
+          32767
+        ],
+        "ticks_per_step": 1000,
+        "settle_ticks": 4000,
+        "home": {
+          "threshold": 32,
+          "side": "above"
+        }
+      },
+      {
+        "initial_position": 0,
+        "travel_limits": [
+          -32767,
+          32767
+        ],
+        "ticks_per_step": 1000,
+        "settle_ticks": 4000,
+        "home": null
+      }
+    ],
+    "encoder": null,
+    "zoom": null,
+    "clock_modes": [
+      {
+        "kind": "fixed"
+      }
+    ],
+    "motor_counters": [
+      {
+        "motor": 0,
+        "channel": 4,
+        "divider": 1
+      }
+    ]
+  },
+  "attachment": {
+    "pulse": {
+      "counter_channels": [
+        0,
+        4
+      ],
+      "timer_channels": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        9,
+        10,
+        11
+      ],
+      "quadrature": false,
+      "initial_phase": 0,
+      "capture_channel": null
+    },
+    "interrupts": [
+      {
+        "core": 0,
+        "line": 20
+      },
+      {
+        "core": 0,
+        "line": 21
+      },
+      {
+        "core": 0,
+        "line": 22
+      },
+      {
+        "core": 0,
+        "line": 23
+      },
+      {
+        "core": 0,
+        "line": 24
+      },
+      {
+        "core": 0,
+        "line": 25
+      },
+      {
+        "core": 0,
+        "line": 26
+      },
+      {
+        "core": 0,
+        "line": 27
+      },
+      {
+        "core": 0,
+        "line": 28
+      },
+      {
+        "core": 0,
+        "line": 29
+      },
+      {
+        "core": 0,
+        "line": 30
+      },
+      {
+        "core": 0,
+        "line": 31
+      }
+    ],
+    "completion_interrupts": [
+      {
+        "core": 0,
+        "line": 14
+      },
+      {
+        "core": 0,
+        "line": 17
+      }
+    ],
+    "gpio_interrupts": [
+      {
+        "pin": {
+          "port": 0,
+          "pin": 0
+        },
+        "edge": "both",
+        "outputs": [
+          {
+            "core": 0,
+            "line": 8
+          }
+        ]
+      }
+    ],
+    "limits": [],
+    "motor_home_pins": [
+      {
+        "port": 0,
+        "pin": 0
+      },
+      null
+    ],
+    "serial_routes": [
+      {
+        "controller_address": 4294459520,
+        "formats": [
+          {
+            "control": 192,
+            "configuration": 4,
+            "bits": 8,
+            "receive": false
+          }
+        ],
+        "selection": [
+          {
+            "pin": {
+              "port": 13,
+              "pin": 9
+            },
+            "high": false
+          }
+        ],
+        "transfer_ticks": 4,
+        "queue": "single",
+        "endpoint_part_id": "three-byte-stabilized-lens"
+      },
+      {
+        "controller_address": 4294459456,
+        "formats": [
+          {
+            "control": 192,
+            "configuration": 6,
+            "bits": 8,
+            "receive": true
+          },
+          {
+            "control": 65728,
+            "configuration": 2,
+            "bits": 8,
+            "receive": false
+          }
+        ],
+        "selection": [
+          {
+            "pin": {
+              "port": 12,
+              "pin": 2
+            },
+            "high": false
+          },
+          {
+            "pin": {
+              "port": 12,
+              "pin": 3
+            },
+            "high": true
+          }
+        ],
+        "transfer_ticks": 4,
+        "queue": "fifo",
+        "endpoint_part_id": "lens-image-stabilizer"
+      }
+    ]
+  }
+}

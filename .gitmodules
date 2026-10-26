@@ -1,0 +1,3 @@
+[submodule "emulator-unicorn"]
+	path = crates/emulator-cpu-unicorn/vendor/unicorn
+	url = https://github.com/justjake/unicorn.git

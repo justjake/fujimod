@@ -1,9 +1,13 @@
 """Shared native/Pyodide service-transfer control contract."""
 
+from contract_assertions import expect
+from fujimod.usb import app80
 
-def check_transfer_values():
+
+def check_transfer_values() -> bool:
     import json
-    from fujimod import defs
+
+    from fujimod import catalog
     from fujimod.usb import app80 as a
 
     layouts = [
@@ -48,19 +52,21 @@ def check_transfer_values():
         entries=entries,
     )
     service = a.Service(
-        defs.service.Definition.from_json(
-            json.dumps(doc), defs.FirmwareIdentity("transfer-b", "ab" * 32)
+        catalog.service.Definition.from_json(
+            json.dumps(doc), catalog.FirmwareIdentity("transfer-b", "ab" * 32)
         )
     )
-    modes = defs.service.ServiceModes(4)
+    modes = catalog.service.ServiceModes(4)
 
-    def prepare(command):
+    def prepare(command: app80.Command) -> app80.Invocation:
         return service.prepare(modes, command)
 
-    def logical(p, codec):
+    def logical(p: app80.Invocation, codec: str) -> list[int]:
         return [p.raw[1 + i] for i in slots[codec]]
 
-    def decode(p, codec, index, raw):
+    def decode(
+        p: app80.Invocation, codec: str, index: int, raw: int
+    ) -> app80.ReplyValue:
         data = bytearray(p.raw)
         data[1 + slots[codec][index]] = raw
         reply = p.decode(data)
@@ -97,29 +103,25 @@ def check_transfer_values():
         (a.TransferOperation.Operation3, 3),
         (a.TransferOperation.Operation6, 255),
     ]:
-        cases.append(
-            (
-                a.Command.TransferSelectOperation(operation=operation),
-                "transfer_select_operation",
-                [wire, 255],
-                1,
-                a.ReplyValue.TransferOperationSelected,
-            )
-        )
+        cases.append((
+            a.Command.TransferSelectOperation(operation=operation),
+            "transfer_select_operation",
+            [wire, 255],
+            1,
+            a.ReplyValue.TransferOperationSelected,
+        ))
     for channel, wire in [
         (a.TransferChannel.Operation1, 0),
         (a.TransferChannel.Operation3, 1),
         (a.TransferChannel.Operation4, 2),
     ]:
-        cases.append(
-            (
-                a.Command.TransferSelectChannel(channel=channel),
-                "transfer_select_channel",
-                [wire, 255],
-                1,
-                a.ReplyValue.TransferChannelSelected,
-            )
-        )
+        cases.append((
+            a.Command.TransferSelectChannel(channel=channel),
+            "transfer_select_channel",
+            [wire, 255],
+            1,
+            a.ReplyValue.TransferChannelSelected,
+        ))
     for command, codec, expected, index, reply_type in cases:
         p = prepare(command)
         assert logical(p, codec) == expected
@@ -138,10 +140,14 @@ def check_transfer_values():
                 cls = variants.get(raw, a.TransferResult.Unknown)
             assert isinstance(value.result, cls)
             if cls in [a.TransferPrepareResult.Unknown, a.TransferResult.Unknown]:
+                assert isinstance(
+                    value.result,
+                    (a.TransferPrepareResult.Unknown, a.TransferResult.Unknown),
+                )
                 assert value.result.raw_status == raw
     for create in [
-        lambda: a.Command.TransferSelectOperation(operation=1),
-        lambda: a.Command.TransferSelectChannel(channel=a.TransferOperation.Operation1),
+        lambda: a.Command.TransferSelectOperation(operation=1),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
+        lambda: a.Command.TransferSelectChannel(channel=a.TransferOperation.Operation1),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     ]:
         try:
             create()
@@ -153,12 +159,14 @@ def check_transfer_values():
         try:
             a.TransferWordAddress(value)
         except a.CommandError as error:
+            assert isinstance(error.reason, a.CommandFailure.Argument)
             assert error.reason.kind == a.ArgumentKind.TransferWordAddress
         else:
             raise AssertionError("invalid transfer word address")
     try:
         a.TransferPairFirst(512)
     except a.CommandError as error:
+        assert isinstance(error.reason, a.CommandFailure.Argument)
         assert error.reason.kind == a.ArgumentKind.TransferPairFirst
     else:
         raise AssertionError("invalid transfer pair field")
@@ -202,11 +210,19 @@ def check_transfer_values():
             value.result, cls
         )
         if raw == 0:
-            assert value.result.raw_value == 0x89ABCDEF
+            assert (
+                expect(value.result, a.TransferWordReadResult.Value).raw_value
+                == 0x89ABCDEF
+            )
         if raw == 255:
-            assert value.result.raw_status == 255
+            assert (
+                expect(value.result, a.TransferWordReadResult.Unknown).raw_status == 255
+            )
     assert isinstance(
-        decode(write, "transfer_word", 9, 1).result, a.TransferResult.Failed
+        expect(
+            decode(write, "transfer_word", 9, 1), a.ReplyValue.TransferWordWritten
+        ).result,
+        a.TransferResult.Failed,
     )
     p = prepare(a.Command.TransferPair(first=a.TransferPairFirst(511), second=65535))
     assert logical(p, "transfer_pair") == [1, 255, 255, 255, 255, 255, 255]
@@ -217,12 +233,15 @@ def check_transfer_values():
         (6, a.TransferPairResult.WaitError),
         (255, a.TransferPairResult.Unknown),
     ]:
-        value = decode(p, "transfer_pair", 6, raw)
+        value = expect(decode(p, "transfer_pair", 6, raw), a.ReplyValue.TransferPair)
         assert isinstance(value.result, cls)
         if raw == 0:
-            assert (value.result.first, value.result.second) == (255, 255)
+            assert (
+                expect(value.result, a.TransferPairResult.Values).first,
+                expect(value.result, a.TransferPairResult.Values).second,
+            ) == (255, 255)
         if raw == 255:
-            assert value.result.raw_status == 255
+            assert expect(value.result, a.TransferPairResult.Unknown).raw_status == 255
     payload = a.TransferPayloadByte(255)
     assert payload.value == 255
     p = prepare(a.Command.TransferBitfields(mode=payload, first=0x1234, second=0xABCD))
@@ -234,12 +253,16 @@ def check_transfer_values():
     ]:
         p = prepare(command)
         assert logical(p, codec) == [255, 255, 255]
-        assert bytes(decode(p, codec, 1, 0).data) == bytes([0, 255])
+        assert bytes(
+            expect(decode(p, codec, 1, 0), a.ReplyValue.TransferBytes).data
+        ) == bytes([0, 255])
     address = a.TransferHalfwordAddress(0xFFFFFFFF)
     assert address.value == 0xFFFFFFFF
     p = prepare(a.Command.TransferReadHalfword(address=address))
     assert logical(p, "transfer_halfword") == [0, 255, 255, 255, 255, 255, 255]
-    assert p.decode(p.raw).value.raw_value == 65535
+    assert (
+        expect(p.decode(p.raw).value, a.ReplyValue.TransferHalfword).raw_value == 65535
+    )
     p = prepare(a.Command.TransferWriteHalfword(address=address, value=0x89AB))
     assert logical(p, "transfer_halfword") == [1, 255, 255, 255, 255, 137, 171]
     assert isinstance(p.decode(p.raw).value, a.ReplyValue.NoPayload)
@@ -250,7 +273,10 @@ def check_transfer_values():
             )
         )
         assert logical(p, "transfer_option_word") == [n % 4, n // 4, 255, 255, 255, 255]
-        assert p.decode(p.raw).value.raw_value == 0xFFFFFFFF
+        assert (
+            expect(p.decode(p.raw).value, a.ReplyValue.TransferOptionWord).raw_value
+            == 0xFFFFFFFF
+        )
     for kind, selection, mode in [
         (a.TransferSelectedWordKind.Kind9, 2, 1),
         (a.TransferSelectedWordKind.Kind10, 2, 0),
@@ -296,10 +322,10 @@ def check_transfer_values():
         p = prepare(a.Command.TransferLoadTest(mode=mode))
         assert logical(p, "transfer_load_test") == [wire]
     for create in [
-        lambda: a.Command.TransferReadWord(address=a.WordAddress(4)),
-        lambda: a.Command.TransferReadHalfword(address=a.TransferWordAddress(4)),
-        lambda: a.Command.TransferReadOptionWord(option=1),
-        lambda: a.Command.TransferSetWord7(kind=a.TransferWord16Kind.Kind16, value=1),
+        lambda: a.Command.TransferReadWord(address=a.WordAddress(4)),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
+        lambda: a.Command.TransferReadHalfword(address=a.TransferWordAddress(4)),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
+        lambda: a.Command.TransferReadOptionWord(option=1),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
+        lambda: a.Command.TransferSetWord7(kind=a.TransferWord16Kind.Kind16, value=1),  # ty: ignore[invalid-argument-type]  # Deliberately invalid input: verify runtime rejection.
     ]:
         try:
             create()

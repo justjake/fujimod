@@ -1,0 +1,272 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "x20-rec",
+  "body_id": "x20",
+  "reset": {
+    "inputs": {
+      "gpio": {
+        "gpio_inputs": {
+          "0": 3116,
+          "2": 4608,
+          "3": 776,
+          "12": 128,
+          "11": 0
+        },
+        "profile_name": "Synthetic normal-power small-page boot with released shutter GPIO0.2/3 high and keypad ADC8/9=1023; remaining lines borrowed/unmeasured.",
+        "boot_source": 0
+      },
+      "power": {
+        "profile_name": "Explicit X20 MCU status0x43: ring enabled and PLAY released; ADC7=0 satisfies the stock ring-ON comparator. Register60 is an external input, never command loopback. Other ADC inputs and packet remain borrowed and unmeasured. Selector ADC8=0 releases the stock flag10 ladder; ADC9 remains1023 for the separate MENU/OK ladder.",
+        "adc_samples": [
+          0,
+          0,
+          1023,
+          63,
+          534,
+          640,
+          0,
+          0,
+          0,
+          1023,
+          0,
+          0
+        ],
+        "boot_reply": 67,
+        "spi0_input_profile": "absent-hot-shoe-flash-fixed-low-miso",
+        "spi_status_registers": [
+          [
+            9,
+            96
+          ]
+        ],
+        "panel_contract": [
+          [
+            224,
+            6
+          ],
+          [
+            11,
+            3,
+            0,
+            12,
+            3,
+            1
+          ],
+          [
+            16,
+            null,
+            null
+          ],
+          1
+        ]
+      },
+      "mcu_packet_hex": "00000000d00700ff008000040000aafc",
+      "usb_connected": false
+    },
+    "autofocus_gate": {
+      "first_boot_instructions": 100000000,
+      "restart_instructions": 500000000,
+      "scan_instructions": 100000000,
+      "setup_keys": [],
+      "key_hold_ticks": 2400000,
+      "key_release_ticks": 6000000,
+      "scene_settle_ticks": 1200000,
+      "completion_hold_ticks": 1200000,
+      "shutter": {
+        "port": 0,
+        "pin": 2,
+        "active_level": 0
+      },
+      "card": {
+        "sd_card_profile": "declared-blank-sdhc-default-speed-unmeasured",
+        "sd_card_present": true,
+        "sd_card_sectors": 16777216,
+        "sd_card_format": {
+          "filesystem": "fat32",
+          "label": "CAMERA",
+          "partition_start": 8192,
+          "sectors_per_cluster": 64
+        }
+      },
+      "firmwares": {
+        "x20-103": {
+          "ui": 9541536,
+          "system": 9567828,
+          "rec_ui": 2,
+          "sample_slots": [
+            24972792,
+            24972840
+          ],
+          "code_witnesses": [
+            {
+              "address": 19053940,
+              "sha256": "a9cd6e202f783d63620a9eb17ac857d757be6c4c4033dde837e18b7edc97af74",
+              "bytes": 284
+            },
+            {
+              "address": 19044888,
+              "sha256": "60371b443de4c4af7897ebad0236f780cfc4bc7e2ace27211fceb2909a0c89f3",
+              "bytes": 996
+            },
+            {
+              "address": 7618052,
+              "sha256": "d1143545befeee9ed4c543a5f756787aaf9da0b036391002963d0f78129798c9",
+              "bytes": 36
+            },
+            {
+              "address": 7731284,
+              "sha256": "6519e22049da97ece37448d6d5917d0025d54ba618b59f551be7968ffc69116d",
+              "bytes": 88
+            }
+          ],
+          "diagnostics": [
+            {
+              "name": "key7_stable",
+              "address": 8643137,
+              "size": 1
+            },
+            {
+              "name": "key7_sample",
+              "address": 8643138,
+              "size": 1
+            },
+            {
+              "name": "key8_stable",
+              "address": 8643165,
+              "size": 1
+            },
+            {
+              "name": "key8_sample",
+              "address": 8643166,
+              "size": 1
+            },
+            {
+              "name": "key40_stable",
+              "address": 8643221,
+              "size": 1
+            },
+            {
+              "name": "key40_sample",
+              "address": 8643222,
+              "size": 1
+            },
+            {
+              "name": "key43_stable",
+              "address": 8643249,
+              "size": 1
+            },
+            {
+              "name": "key43_sample",
+              "address": 8643250,
+              "size": 1
+            },
+            {
+              "name": "key46_stable",
+              "address": 8643277,
+              "size": 1
+            },
+            {
+              "name": "key46_sample",
+              "address": 8643278,
+              "size": 1
+            },
+            {
+              "name": "key47_stable",
+              "address": 8643305,
+              "size": 1
+            },
+            {
+              "name": "key47_sample",
+              "address": 8643306,
+              "size": 1
+            },
+            {
+              "name": "key24_stable",
+              "address": 8643333,
+              "size": 1
+            },
+            {
+              "name": "key24_sample",
+              "address": 8643334,
+              "size": 1
+            },
+            {
+              "name": "key33_stable",
+              "address": 8644397,
+              "size": 1
+            },
+            {
+              "name": "key33_sample",
+              "address": 8644398,
+              "size": 1
+            },
+            {
+              "name": "key31_stable",
+              "address": 8644425,
+              "size": 1
+            },
+            {
+              "name": "key31_sample",
+              "address": 8644426,
+              "size": 1
+            },
+            {
+              "name": "key32_stable",
+              "address": 8644453,
+              "size": 1
+            },
+            {
+              "name": "key32_sample",
+              "address": 8644454,
+              "size": 1
+            }
+          ],
+          "result_query": {
+            "address": 9441488,
+            "valid_offset": 8,
+            "class_offset": 12,
+            "position_offset": 16
+          }
+        }
+      },
+      "control_overrides": {},
+      "boot_entry": "rom",
+      "external_inputs": {
+        "gpio": [
+          {
+            "port": 3,
+            "pin": 6,
+            "level": 1
+          },
+          {
+            "port": 3,
+            "pin": 7,
+            "level": 0
+          },
+          {
+            "port": 3,
+            "pin": 10,
+            "level": 1
+          },
+          {
+            "port": 3,
+            "pin": 13,
+            "level": 1
+          },
+          {
+            "port": 2,
+            "pin": 11,
+            "level": 1
+          },
+          {
+            "port": 4,
+            "pin": 4,
+            "level": 1
+          }
+        ]
+      }
+    },
+    "execution_scope": "offline-boot-development"
+  }
+}

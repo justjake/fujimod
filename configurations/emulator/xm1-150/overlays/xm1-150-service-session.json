@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xm1-150-service-session",
+  "configuration_id": "xm1-150",
+  "change": {
+    "kind": "preset",
+    "preset": {
+      "factory_options": {},
+      "execution_scope": "offline-boot-development",
+      "purpose": "service_session",
+      "hardware_selection": {
+        "soc_profile_id": "exr2-service-transports",
+        "body_profile_id": "xm1-service-session"
+      },
+      "hardware_inputs_id": "xm1-service-session",
+      "firmware_profile_id": "xm1-150-service-session"
+    }
+  }
+}

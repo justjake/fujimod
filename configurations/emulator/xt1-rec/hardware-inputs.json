@@ -1,0 +1,65 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "xt1-rec",
+  "body_id": "xt1",
+  "reset": {
+    "inputs": {
+      "gpio": {
+        "gpio_inputs": {
+          "0": 3116,
+          "2": 4608,
+          "3": 777,
+          "12": 128,
+          "11": 0,
+          "4": 32,
+          "8": 24576,
+          "15": 2
+        },
+        "profile_name": "Synthetic X-T1 REC: absent SD at GPIO15.1, released Q at GPIO4.5 and empty mic/remote socket at GPIO3.0, released shutter/keys; remaining wiring borrowed."
+      },
+      "power": {
+        "profile_name": "Synthetic boot reason0; ADC6=512 selects AF-S in the stock 391..730 band; remaining ADC borrowed.",
+        "adc_samples": [
+          0,
+          0,
+          1023,
+          63,
+          534,
+          640,
+          512,
+          825,
+          1023,
+          1023,
+          0,
+          0
+        ],
+        "boot_reply": 0,
+        "spi0_input_profile": "absent-hot-shoe-flash-fixed-low-miso",
+        "panel_contract": [
+          [
+            131296,
+            32
+          ],
+          [
+            11,
+            3,
+            0,
+            12,
+            3,
+            1
+          ],
+          [
+            16,
+            null,
+            null
+          ],
+          1
+        ]
+      },
+      "mcu_packet_hex": "00000000d00700ff008000040000aafc",
+      "usb_connected": false
+    },
+    "execution_scope": "offline-boot-development"
+  }
+}

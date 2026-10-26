@@ -1,0 +1,1265 @@
+{
+  "$defs": {
+    "BindingChoices": {
+      "additionalProperties": false,
+      "description": "Exact binding picker owners.",
+      "properties": {
+        "count": {
+          "description": "Selectable count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mod_owners": {
+          "description": "Curated mod owners.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "native_owners": {
+          "description": "Native prefix owners.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "count",
+        "native_owners",
+        "mod_owners"
+      ],
+      "type": "object"
+    },
+    "BindingLayout": {
+      "additionalProperties": false,
+      "description": "Compiler-produced BindingLayout offsets.",
+      "properties": {
+        "apply": {
+          "description": "Apply.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "binding_size": {
+          "description": "Binding size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "capacity": {
+          "description": "Capacity.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "magic": {
+          "description": "Magic.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "version": {
+          "description": "Version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "magic",
+        "version",
+        "binding_size",
+        "apply",
+        "capacity"
+      ],
+      "type": "object"
+    },
+    "BuildArtifact": {
+      "additionalProperties": false,
+      "description": "A build output bound to this manifest.",
+      "properties": {
+        "file": {
+          "description": "Relative build file.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Content digest.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Byte length.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "file",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "BuildMemory": {
+      "additionalProperties": false,
+      "description": "A linked address range backed by an installed artifact.",
+      "properties": {
+        "address": {
+          "description": "Address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "file": {
+          "description": "File.",
+          "type": "string"
+        },
+        "offset": {
+          "description": "Offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size",
+        "file",
+        "offset"
+      ],
+      "type": "object"
+    },
+    "CanvasHost": {
+      "additionalProperties": false,
+      "description": "Declared canvas screen identities.",
+      "properties": {
+        "identity": {
+          "description": "Owning menu identity.",
+          "type": "string"
+        },
+        "screens": {
+          "description": "Declared screen IDs.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "identity",
+        "screens"
+      ],
+      "type": "object"
+    },
+    "CanvasLayout": {
+      "additionalProperties": false,
+      "description": "Compiler-produced CanvasLayout offsets.",
+      "properties": {
+        "host_size": {
+          "description": "Host size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "description": "Id.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "live_busy": {
+          "description": "Live busy.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "live_host": {
+          "description": "Live host.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "live_screen": {
+          "description": "Live screen.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "magic": {
+          "description": "Magic.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "screen_count": {
+          "description": "Screen count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "screen_size": {
+          "description": "Screen size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "screens": {
+          "description": "Screens.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "version": {
+          "description": "Version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "magic",
+        "version",
+        "host_size",
+        "screens",
+        "screen_count",
+        "screen_size",
+        "id",
+        "live_host",
+        "live_screen",
+        "live_busy"
+      ],
+      "type": "object"
+    },
+    "DeclarationLayout": {
+      "additionalProperties": false,
+      "description": "Compiler-produced DeclarationLayout offsets.",
+      "properties": {
+        "activate": {
+          "description": "Activate.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "binding_id": {
+          "description": "Binding id.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cursor_active": {
+          "description": "Cursor active.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "event": {
+          "description": "Event.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fn_action": {
+          "description": "Fn action.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "input": {
+          "description": "Input.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_size": {
+          "description": "Item size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "key": {
+          "description": "Key.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "label": {
+          "description": "Label.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "magic": {
+          "description": "Magic.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "node_size": {
+          "description": "Node size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "open_page": {
+          "description": "Open page.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page": {
+          "description": "Page.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parent": {
+          "description": "Parent.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parent_item": {
+          "description": "Parent item.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "q_assignable": {
+          "description": "Q assignable.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "version": {
+          "description": "Version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "magic",
+        "version",
+        "item_size",
+        "parent",
+        "parent_item",
+        "label",
+        "key",
+        "page",
+        "open_page",
+        "event",
+        "input",
+        "activate",
+        "fn_action",
+        "q_assignable",
+        "node_size",
+        "cursor_active",
+        "binding_id"
+      ],
+      "type": "object"
+    },
+    "InlineChoices": {
+      "additionalProperties": false,
+      "description": "Compiler-declared canvas choice observation.",
+      "properties": {
+        "accepted_values": {
+          "description": "Selectable values.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "callback": {
+          "description": "Callback.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "count": {
+          "description": "Count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "host": {
+          "description": "Host.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "identity": {
+          "description": "identity.",
+          "type": "string"
+        },
+        "last_value": {
+          "description": "Last value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mod": {
+          "description": "owning_mod.",
+          "type": "string"
+        },
+        "name": {
+          "description": "name.",
+          "type": "string"
+        },
+        "owner": {
+          "description": "Owner.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row": {
+          "description": "Row.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "screen": {
+          "description": "Screen.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stride": {
+          "description": "Stride.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "table_count": {
+          "description": "Table count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value_address": {
+          "description": "Value address.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "values": {
+          "description": "Values.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "owner",
+        "host",
+        "screen",
+        "row",
+        "count",
+        "value_address",
+        "callback",
+        "values",
+        "table_count",
+        "stride",
+        "last_value",
+        "name",
+        "mod",
+        "identity",
+        "accepted_values"
+      ],
+      "type": "object"
+    },
+    "LinkedSymbol": {
+      "additionalProperties": false,
+      "description": "Linked symbol identity.",
+      "properties": {
+        "address": {
+          "description": "Linked address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared byte size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size"
+      ],
+      "type": "object"
+    },
+    "MenuItem": {
+      "additionalProperties": false,
+      "description": "One compiled UI owner with placement and stable option identities.",
+      "properties": {
+        "activate": {
+          "description": "Activate.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "address": {
+          "description": "Address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "binding": {
+          "description": "Binding.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "choice_capacity": {
+          "description": "Declared choice capacity.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "choice_count": {
+          "description": "Selectable choice count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "event": {
+          "description": "Event.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fn_action": {
+          "description": "Fn action.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "identity": {
+          "description": "Identity.",
+          "type": "string"
+        },
+        "inline": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InlineChoices"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Inline."
+        },
+        "input": {
+          "description": "Input.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "key": {
+          "description": "Native row key.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "label": {
+          "description": "Label.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "label_text": {
+          "description": "Declared label.",
+          "type": "string"
+        },
+        "mod": {
+          "description": "Owning_mod.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Name.",
+          "type": "string"
+        },
+        "native": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NativeSetting"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Native."
+        },
+        "open_page": {
+          "description": "Open page.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "options": {
+          "description": "Stable named choices; open catalogs may have unnamed entries.",
+          "items": {
+            "$ref": "#/$defs/MenuOption"
+          },
+          "type": "array"
+        },
+        "page": {
+          "description": "Page.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parent": {
+          "description": "Parent.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parent_item": {
+          "description": "Parent item.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "q_assignable": {
+          "description": "Whether Q assignment is declared.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stock_node": {
+          "description": "Stock node.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "stock_parent_setting": {
+          "description": "Stock parent setting.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "surfaces": {
+          "description": "Declared surfaces.",
+          "items": {
+            "$ref": "#/$defs/Surface"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "mod",
+        "identity",
+        "address",
+        "binding",
+        "parent",
+        "parent_item",
+        "label",
+        "page",
+        "open_page",
+        "event",
+        "input",
+        "activate",
+        "fn_action",
+        "key",
+        "q_assignable",
+        "label_text",
+        "surfaces",
+        "choice_capacity",
+        "choice_count",
+        "options"
+      ],
+      "type": "object"
+    },
+    "MenuOption": {
+      "additionalProperties": false,
+      "description": "Stable option identity and native key.",
+      "properties": {
+        "key": {
+          "description": "Native choice key or normalized option index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Stable name supplied by the declaration.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Persisted value when declared.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "key"
+      ],
+      "type": "object"
+    },
+    "NativeSetting": {
+      "additionalProperties": false,
+      "description": "Compiler-declared stock choice observation.",
+      "properties": {
+        "canonical": {
+          "description": "Canonical.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "capacity": {
+          "description": "Capacity.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "children": {
+          "description": "Children.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "dynamic_count": {
+          "description": "Dynamic count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "dynamic_key_first": {
+          "description": "Dynamic key first.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "dynamic_value_first": {
+          "description": "Dynamic value first.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "identity": {
+          "description": "identity.",
+          "type": "string"
+        },
+        "key": {
+          "description": "Key.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "keys": {
+          "description": "keys.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "mod": {
+          "description": "owning_mod.",
+          "type": "string"
+        },
+        "name": {
+          "description": "name.",
+          "type": "string"
+        },
+        "node": {
+          "description": "Node.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "owner": {
+          "description": "Owner.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parent": {
+          "description": "Parent.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setting": {
+          "description": "Setting.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "static_count": {
+          "description": "Static count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "static_values": {
+          "description": "Static values.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "surface": {
+          "description": "Surface.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "surface_name": {
+          "description": "surface_name.",
+          "type": "string"
+        },
+        "value_address": {
+          "description": "Value address.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "values": {
+          "description": "values.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "owner",
+        "canonical",
+        "node",
+        "setting",
+        "children",
+        "static_count",
+        "dynamic_count",
+        "dynamic_key_first",
+        "dynamic_value_first",
+        "value_address",
+        "surface",
+        "parent",
+        "key",
+        "static_values",
+        "capacity",
+        "name",
+        "mod",
+        "identity",
+        "surface_name",
+        "keys",
+        "values"
+      ],
+      "type": "object"
+    },
+    "QfnLayout": {
+      "additionalProperties": false,
+      "description": "Compiler-produced QfnLayout offsets.",
+      "properties": {
+        "active": {
+          "description": "Active.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "assignments": {
+          "description": "Assignments.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "binding_size": {
+          "description": "Binding size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "bindings": {
+          "description": "Bindings.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "capacity": {
+          "description": "Capacity.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "choices": {
+          "description": "Choices.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fn_action": {
+          "description": "Fn action.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "magic": {
+          "description": "Magic.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "owner": {
+          "description": "Owner.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "session": {
+          "description": "Session.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setting": {
+          "description": "Setting.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setting_apply": {
+          "description": "Setting apply.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setting_context": {
+          "description": "Setting context.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setting_size": {
+          "description": "Setting size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "staged": {
+          "description": "Staged.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stock_choice": {
+          "description": "Stock choice.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "trigger_phase": {
+          "description": "Trigger phase.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "used": {
+          "description": "Used.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "version": {
+          "description": "Version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "magic",
+        "version",
+        "binding_size",
+        "owner",
+        "choices",
+        "fn_action",
+        "setting",
+        "setting_size",
+        "setting_context",
+        "setting_apply",
+        "used",
+        "bindings",
+        "staged",
+        "active",
+        "session",
+        "trigger_phase",
+        "capacity",
+        "assignments",
+        "stock_choice"
+      ],
+      "type": "object"
+    },
+    "Surface": {
+      "description": "Surfaces on which an owner is available.",
+      "enum": [
+        "menu",
+        "q",
+        "fn"
+      ],
+      "type": "string"
+    },
+    "WalkthroughMetadata": {
+      "additionalProperties": false,
+      "description": "Build-time validated observation layouts and coverage.",
+      "properties": {
+        "binding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BindingLayout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Binding layout."
+        },
+        "binding_choices": {
+          "additionalProperties": false,
+          "description": "Exact binding picker enrollment.",
+          "patternProperties": {
+            "^\\d+$": {
+              "$ref": "#/$defs/BindingChoices"
+            }
+          },
+          "type": "object"
+        },
+        "canvas": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CanvasLayout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Canvas layout."
+        },
+        "canvas_hosts": {
+          "additionalProperties": false,
+          "description": "Enrolled host screen identities.",
+          "patternProperties": {
+            "^\\d+$": {
+              "$ref": "#/$defs/CanvasHost"
+            }
+          },
+          "type": "object"
+        },
+        "choice_sets": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Shared choice storage identities.",
+          "type": "object"
+        },
+        "menu": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeclarationLayout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Menu layout."
+        },
+        "option_requirements": {
+          "description": "Required selections.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "qfn": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QfnLayout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Qfn layout."
+        },
+        "requirements": {
+          "description": "Required surface observations.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "$ref": "#/$defs/Surface"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "screen_requirements": {
+          "description": "Required screen observations.",
+          "items": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "choice_sets",
+        "binding_choices",
+        "canvas_hosts",
+        "requirements",
+        "option_requirements",
+        "screen_requirements"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/build-menu.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Build-owned menu declarations; never a snapshot of the live menu tree.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/build-menu.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "artifacts": {
+      "description": "Installed region and changed-section identities.",
+      "items": {
+        "$ref": "#/$defs/BuildArtifact"
+      },
+      "type": "array"
+    },
+    "elf_sha256": {
+      "description": "Digest of the compiler input used to extract declarations.",
+      "type": "string"
+    },
+    "firmware_id": {
+      "description": "Firmware identity.",
+      "type": "string"
+    },
+    "firmware_sha256": {
+      "description": "Firmware content digest.",
+      "type": "string"
+    },
+    "items": {
+      "description": "Declared menu, native and inline owners.",
+      "items": {
+        "$ref": "#/$defs/MenuItem"
+      },
+      "type": "array"
+    },
+    "memory": {
+      "description": "Build-file spans for immutable declaration/artwork reads.",
+      "items": {
+        "$ref": "#/$defs/BuildMemory"
+      },
+      "type": "array"
+    },
+    "owner_constants": {
+      "additionalProperties": {
+        "format": "uint32",
+        "minimum": 0,
+        "type": "integer"
+      },
+      "description": "Compiler-produced owner layout constants.",
+      "type": "object"
+    },
+    "schema": {
+      "description": "Format version; currently 1.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "symbols": {
+      "additionalProperties": {
+        "$ref": "#/$defs/LinkedSymbol"
+      },
+      "description": "Linked symbol addresses and extents.",
+      "type": "object"
+    },
+    "walkthrough": {
+      "$ref": "#/$defs/WalkthroughMetadata",
+      "description": "Compiler-derived coverage and observation metadata."
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "firmware_id",
+    "firmware_sha256",
+    "elf_sha256",
+    "artifacts",
+    "items",
+    "symbols",
+    "memory",
+    "owner_constants",
+    "walkthrough"
+  ],
+  "title": "BuildMenuManifest",
+  "type": "object"
+}

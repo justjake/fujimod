@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FujiMod body control calibration parameters",
+  "type": "object",
+  "required": ["$schema", "schema", "analog_levels"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "schema": {"const": 1},
+    "analog_levels": {"type": "integer", "minimum": 1}
+  },
+  "additionalProperties": false
+}

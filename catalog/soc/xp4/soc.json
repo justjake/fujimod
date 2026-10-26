@@ -1,0 +1,832 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc.schema.json",
+  "schema": 1,
+  "id": "xp4",
+  "architecture": "arm32",
+  "processors": [
+    {
+      "id": "core0",
+      "model": "cortex-a7",
+      "released": null,
+      "registers": [],
+      "mprofile": null,
+      "rprofile": null
+    },
+    {
+      "id": "core1",
+      "model": "cortex-a7",
+      "released": null,
+      "registers": [],
+      "mprofile": null,
+      "rprofile": null
+    },
+    {
+      "id": "core2",
+      "model": "cortex-a7",
+      "released": null,
+      "registers": [],
+      "mprofile": null,
+      "rprofile": null
+    },
+    {
+      "id": "core3",
+      "model": "cortex-a7",
+      "released": null,
+      "registers": [],
+      "mprofile": null,
+      "rprofile": null
+    }
+  ],
+  "memory_regions": [
+    {
+      "id": "dram",
+      "base": 0,
+      "size": {
+        "kind": "body_dram"
+      },
+      "kind": "dram"
+    },
+    {
+      "id": "input-buffer-sram",
+      "base": 4293984256,
+      "size": {
+        "kind": "bytes",
+        "bytes": 57344
+      },
+      "kind": "sram"
+    }
+  ],
+  "blocks": [
+    {
+      "id": "gic-distributor",
+      "base": 4294905856,
+      "size": 4096,
+      "kind": "interrupt-controller",
+      "clock_id": null
+    },
+    {
+      "id": "gic-cpu-interface",
+      "base": 4294909952,
+      "size": 4096,
+      "kind": "interrupt-controller",
+      "clock_id": null
+    },
+    {
+      "id": "gpio",
+      "base": 4294184960,
+      "size": 1024,
+      "kind": "gpio",
+      "clock_id": null
+    },
+    {
+      "id": "adc",
+      "base": 4294180864,
+      "size": 72,
+      "kind": "adc",
+      "clock_id": null
+    },
+    {
+      "id": "temperature",
+      "base": 4294211600,
+      "size": 68,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "dmp",
+      "base": 4294770688,
+      "size": 12288,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
+      "id": "sd-host-clock-0",
+      "base": 4294721580,
+      "size": 2,
+      "kind": "clock-controller",
+      "clock_id": null
+    },
+    {
+      "id": "sd-host-clock-1",
+      "base": 4294730284,
+      "size": 2,
+      "kind": "clock-controller",
+      "clock_id": null
+    },
+    {
+      "id": "sd-host-clock-2",
+      "base": 4294737964,
+      "size": 2,
+      "kind": "clock-controller",
+      "clock_id": null
+    },
+    {
+      "id": "sd-host-clock-3",
+      "base": 4294746668,
+      "size": 2,
+      "kind": "clock-controller",
+      "clock_id": null
+    },
+    {
+      "id": "movdc0",
+      "base": 4294385664,
+      "size": 268,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "movdc1",
+      "base": 4294389760,
+      "size": 268,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "lcdc0",
+      "base": 4294418432,
+      "size": 1540,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
+      "id": "lcdc1",
+      "base": 4294610944,
+      "size": 1540,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
+      "id": "sensor-command",
+      "base": 4294361088,
+      "size": 580,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-receiver",
+      "base": 4294348800,
+      "size": 596,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "input-buffer",
+      "base": 4294377472,
+      "size": 748,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "control-request-0",
+      "base": 4285534336,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null
+    },
+    {
+      "id": "control-request-1",
+      "base": 4285534848,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null
+    },
+    {
+      "id": "control-request-2",
+      "base": 4285535360,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null
+    },
+    {
+      "id": "control-request-3",
+      "base": 4285535872,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null
+    },
+    {
+      "id": "control-request-4",
+      "base": 4285536384,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null
+    },
+    {
+      "id": "control-request-5",
+      "base": 4285536896,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null
+    },
+    {
+      "id": "control-request-6",
+      "base": 4285537408,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null
+    },
+    {
+      "id": "control-request-7",
+      "base": 4285538432,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null
+    },
+    {
+      "id": "control-request-8",
+      "base": 4285542528,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null
+    },
+    {
+      "id": "control-request-9",
+      "base": 4285546624,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null
+    },
+    {
+      "id": "control-request-10",
+      "base": 4285550720,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null
+    },
+    {
+      "id": "control-request-11",
+      "base": 4285554816,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null
+    },
+    {
+      "id": "control-request-12",
+      "base": 4285567104,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null
+    },
+    {
+      "id": "io-groups",
+      "base": 4294189056,
+      "size": 160,
+      "kind": "gpio",
+      "clock_id": null
+    },
+    {
+      "id": "decompressor",
+      "base": 4294414336,
+      "size": 108,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "spi1",
+      "base": 4294127616,
+      "size": 40,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "spi4",
+      "base": 4294139904,
+      "size": 40,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "spi5",
+      "base": 4294144000,
+      "size": 40,
+      "kind": "serial-controller",
+      "clock_id": null
+    },
+    {
+      "id": "serial-flash",
+      "base": 4294803456,
+      "size": 256,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "flash-aperture",
+      "base": 4026531840,
+      "size": 134217728,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "dma",
+      "base": 4294836224,
+      "size": 65536,
+      "kind": "dma",
+      "clock_id": null
+    },
+    {
+      "id": "dma-request-mux",
+      "base": 4294223104,
+      "size": 32,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "interval-timer",
+      "base": 4294165248,
+      "size": 80,
+      "kind": "timer",
+      "clock_id": null
+    }
+  ],
+  "interrupts": [],
+  "clocks": [],
+  "mappings": [],
+  "dma_mappings": [],
+  "decoders": [],
+  "peripherals": [],
+  "reset": {
+    "release": null,
+    "coprocessor_writes": []
+  },
+  "hardware": {
+    "application": {
+      "kind": "armv7a",
+      "configuration_base": 4294901760,
+      "caches": {
+        "l1_data_bytes": 32768,
+        "l1_instruction_bytes": 32768,
+        "l2_bytes": 1048576
+      }
+    },
+    "interrupt_controller": {
+      "kind": "gic_v2",
+      "distributor_block_id": "gic-distributor",
+      "cpu_interface_block_id": "gic-cpu-interface",
+      "lines": 512
+    },
+    "interrupt_inputs": [
+      {
+        "source_block_id": "dmp",
+        "output_id": "interrupt",
+        "line": 92
+      },
+      {
+        "source_block_id": "movdc0",
+        "output_id": "interrupt",
+        "line": 107
+      },
+      {
+        "source_block_id": "movdc1",
+        "output_id": "interrupt",
+        "line": 108
+      },
+      {
+        "source_block_id": "lcdc0",
+        "output_id": "channel0",
+        "line": 112
+      },
+      {
+        "source_block_id": "lcdc0",
+        "output_id": "channel1",
+        "line": 113
+      },
+      {
+        "source_block_id": "lcdc1",
+        "output_id": "channel0",
+        "line": 117
+      },
+      {
+        "source_block_id": "lcdc1",
+        "output_id": "channel1",
+        "line": 118
+      },
+      {
+        "source_block_id": "imaging-receiver",
+        "output_id": "normal0",
+        "line": 296
+      },
+      {
+        "source_block_id": "imaging-receiver",
+        "output_id": "normal1",
+        "line": 298
+      },
+      {
+        "source_block_id": "imaging-receiver",
+        "output_id": "error0",
+        "line": 297
+      },
+      {
+        "source_block_id": "imaging-receiver",
+        "output_id": "error1",
+        "line": 297
+      },
+      {
+        "source_block_id": "sensor-command",
+        "output_id": "timing0",
+        "line": 102
+      },
+      {
+        "source_block_id": "sensor-command",
+        "output_id": "timing1",
+        "line": 100
+      },
+      {
+        "source_block_id": "input-buffer",
+        "output_id": "interrupt",
+        "line": 106
+      },
+      {
+        "source_block_id": "decompressor",
+        "output_id": "interrupt",
+        "line": 128
+      },
+      {
+        "source_block_id": "serial-flash",
+        "output_id": "interrupt",
+        "line": 37
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "channel0",
+        "line": 207
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "channel1",
+        "line": 208
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "channel2",
+        "line": 209
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "channel3",
+        "line": 210
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "channel4",
+        "line": 211
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "channel5",
+        "line": 212
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "channel6",
+        "line": 213
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "channel7",
+        "line": 214
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "channel8",
+        "line": 215
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "channel9",
+        "line": 216
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "channel10",
+        "line": 217
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "channel11",
+        "line": 218
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "channel12",
+        "line": 219
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "channel13",
+        "line": 220
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "channel14",
+        "line": 221
+      },
+      {
+        "source_block_id": "dma",
+        "output_id": "channel15",
+        "line": 222
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel0",
+        "line": 57
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel1",
+        "line": 58
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel2",
+        "line": 59
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel3",
+        "line": 60
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel4",
+        "line": 61
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel5",
+        "line": 62
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel6",
+        "line": 63
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel7",
+        "line": 64
+      }
+    ],
+    "companion": null,
+    "blocks": {
+      "lcdc0": {
+        "kind": "display",
+        "picture_layout": null,
+        "video_layout": null
+      },
+      "lcdc1": {
+        "kind": "display",
+        "picture_layout": "bgra8888-straight",
+        "video_layout": "yycbcr422"
+      },
+      "input-buffer": {
+        "kind": "imaging_input_buffer",
+        "sram_region_id": "input-buffer-sram",
+        "bank_bytes": 28672
+      },
+      "serial-flash": {
+        "kind": "serial_flash",
+        "aperture_block_id": "flash-aperture"
+      },
+      "dma": {
+        "kind": "dma",
+        "channels": 16,
+        "request_mux_block_id": "dma-request-mux"
+      }
+    },
+    "profiles": {
+      "xp4": {
+        "cpu_model": "Cortex-A7",
+        "runtime_abi": "armv7a-unicorn-v1",
+        "mmu": "Unicorn ARMv7-A CPU page-table walker; guest CP15 and page tables",
+        "register_maps": {
+          "sd_host_clocks": {
+            "words": [
+              4294721580,
+              4294730284,
+              4294737964,
+              4294746668
+            ],
+            "settle_ticks": 8,
+            "basis": "Declared catalog input."
+          },
+          "gpio": {
+            "base": 4294184960,
+            "size": 1024,
+            "basis": "Declared catalog input."
+          },
+          "temperature": {
+            "base": 4294211600,
+            "size": 68,
+            "sample_ticks": 5000,
+            "basis": "Declared catalog input."
+          },
+          "adc": {
+            "base": 4294180864,
+            "size": 72,
+            "sample_ticks": 16,
+            "basis": "Declared catalog input."
+          },
+          "dmp": {
+            "base": 4294770688,
+            "size": 12288,
+            "irq_route": 92,
+            "basis": "Declared catalog input."
+          },
+          "movdc": [
+            {
+              "base": 4294385664,
+              "irq": 107,
+              "reset_ticks": 8
+            },
+            {
+              "base": 4294389760,
+              "irq": 108,
+              "reset_ticks": 8
+            }
+          ],
+          "lcdc": [
+            {
+              "base": 4294418432,
+              "pixel_clock_ticks": 2,
+              "irq_routes": [
+                112,
+                113
+              ],
+              "basis": "Declared catalog input."
+            },
+            {
+              "base": 4294610944,
+              "pixel_clock_ticks": 2,
+              "irq_routes": [
+                117,
+                118
+              ],
+              "picture_layout": "bgra8888-straight",
+              "video_layout": "yycbcr422",
+              "basis": "Declared catalog input."
+            }
+          ],
+          "imaging": {
+            "command_base": 4294361088,
+            "receiver_base": 4294348800,
+            "normal_irqs": [
+              296,
+              298
+            ],
+            "error_irqs": [
+              297,
+              297
+            ],
+            "timing_irqs": [
+              102,
+              100
+            ],
+            "input_buffer": {
+              "base": 4294377472,
+              "irq": 106,
+              "reset_ticks": 8,
+              "sram_base": 4293984256,
+              "bank_size": 28672,
+              "basis": "Declared catalog input."
+            },
+            "command_ticks": 5400,
+            "reset_ticks": 8,
+            "basis": "Declared catalog input."
+          },
+          "control_requests": {
+            "registers": [
+              4285534336,
+              4285534848,
+              4285535360,
+              4285535872,
+              4285536384,
+              4285536896,
+              4285537408,
+              4285538432,
+              4285542528,
+              4285546624,
+              4285550720,
+              4285554816,
+              4285567104
+            ],
+            "ack_ticks": 8,
+            "basis": "Declared catalog input."
+          },
+          "io_groups": {
+            "base": 4294189056,
+            "basis": "Declared catalog input."
+          },
+          "decompressor": {
+            "base": 4294414336,
+            "irq_route": 128,
+            "basis": "Declared catalog input."
+          },
+          "spi": {
+            "1": {
+              "base": 4294127616,
+              "parent_clock_ticks": 1,
+              "basis": "Declared catalog input."
+            },
+            "4": {
+              "base": 4294139904,
+              "parent_clock_ticks": 1,
+              "basis": "Declared catalog input."
+            },
+            "5": {
+              "base": 4294144000,
+              "parent_clock_ticks": 1,
+              "basis": "Declared catalog input."
+            }
+          },
+          "serial_flash": {
+            "irq_route": 37,
+            "native_dependencies": [
+              "dma"
+            ],
+            "base": 4294803456,
+            "aperture": 4026531840,
+            "size": 134217728,
+            "timing": "8 guest ticks per command acceptance; functional latency, not measured silicon timing.",
+            "basis": "Declared catalog input."
+          },
+          "dma": {
+            "base": 4294836224,
+            "channels": 16,
+            "request_mux": 4294223104,
+            "native_dependencies": [
+              "serial_flash"
+            ],
+            "timing": "16 guest setup ticks plus ceil(bytes/16); functional transfer timing, not measured bus bandwidth.",
+            "irq_routes": [
+              207,
+              208,
+              209,
+              210,
+              211,
+              212,
+              213,
+              214,
+              215,
+              216,
+              217,
+              218,
+              219,
+              220,
+              221,
+              222
+            ],
+            "basis": "Declared catalog input."
+          },
+          "gic": {
+            "distributor": 4294905856,
+            "cpu_interface": 4294909952,
+            "lines": 512,
+            "basis": "Declared catalog input."
+          },
+          "interval_timer": {
+            "base": 4294165248,
+            "routes": [
+              {
+                "channel": 0,
+                "irq": 57
+              },
+              {
+                "channel": 1,
+                "irq": 58
+              },
+              {
+                "channel": 2,
+                "irq": 59
+              },
+              {
+                "channel": 3,
+                "irq": 60
+              },
+              {
+                "channel": 4,
+                "irq": 61
+              },
+              {
+                "channel": 5,
+                "irq": 62
+              },
+              {
+                "channel": 6,
+                "irq": 63
+              },
+              {
+                "channel": 7,
+                "irq": 64
+              }
+            ],
+            "clock": "one 54 MHz timer cycle per aggregate CPU instruction; synthetic ratio",
+            "layout": "xp4",
+            "basis": "Declared catalog input."
+          }
+        },
+        "limits": [],
+        "cache_basis": "Declared catalog input."
+      }
+    }
+  }
+}

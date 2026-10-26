@@ -1,4 +1,6 @@
 .site-nav {
+  display: inline-flex;
+  gap: 16px;
   margin-left: 20px;
   font-size: 12px;
   white-space: nowrap;
@@ -7,11 +9,9 @@
   color: var(--dim);
   text-decoration: none;
 }
-.site-nav a:hover {
+.site-nav a[aria-current] {
   color: #eee;
 }
-@media (max-width: 480px) {
-  header .build-info a:last-child {
-    display: none;
-  }
+.site-nav a:hover {
+  color: #eee;
 }

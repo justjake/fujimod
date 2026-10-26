@@ -1,0 +1,293 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "x30-103-settings",
+  "firmware_id": "x30-103",
+  "source": {
+    "flash_offset": 1441792,
+    "address": 9044992,
+    "size": 3648416,
+    "sha256": "19bd9d935f4493fd998f5812d9c5bca234584c854f5b479a998eb40e726238f3"
+  },
+  "bank": {
+    "descriptor": {
+      "address": 11701184,
+      "size": 12,
+      "sha256": "324cd67e633dc7d4f9fb8de449632dd2938ffe7d7159d77fee4c462131eb34e2"
+    },
+    "kind": 2,
+    "blocks": 40,
+    "first_block": 931,
+    "logical_first": 41,
+    "bytes": 4325376
+  },
+  "defaults": {
+    "address": 11700496,
+    "size": 536,
+    "sha256": "d01b71caacb59e7fb362b09d1351c747f6a701284b4c7f9cbdedd73bf579dfa8"
+  },
+  "fields": [
+    {
+      "offset": 256,
+      "bytes": [
+        203,
+        4
+      ],
+      "basis": "Normal USB vendor ID."
+    },
+    {
+      "offset": 318,
+      "bytes": [
+        193,
+        2
+      ],
+      "basis": "Normal USB product ID."
+    },
+    {
+      "offset": 348,
+      "bytes": [
+        88,
+        51,
+        48,
+        0
+      ],
+      "basis": "Body product name."
+    },
+    {
+      "offset": 514,
+      "bytes": [
+        85,
+        170
+      ],
+      "basis": "Settings bank signature."
+    },
+    {
+      "offset": 516,
+      "bytes": [
+        1,
+        83
+      ],
+      "basis": "Internal version."
+    }
+  ],
+  "profile": {
+    "header": {
+      "address": 11745620,
+      "size": 16,
+      "sha256": "70f7e6411d8c85ecb6bb240a79c2e3202bc217ab4d531abd0c207e754fd5f69f"
+    },
+    "records": {
+      "main": {
+        "block": 976,
+        "managed_index": 86,
+        "bytes": 4096,
+        "defaults": {
+          "address": 12689200,
+          "size": 3700,
+          "sha256": "0c06f062d320f2ec2b4c41b06cf207f04dcedf71410a05a6331fecaca55956c0"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 3964,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Main record marker after the sequence word."
+          },
+          {
+            "offset": 132,
+            "bytes": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ],
+            "basis": "Erased main record bytes before the pages."
+          }
+        ]
+      },
+      "custom": {
+        "block": 978,
+        "managed_index": 88,
+        "bytes": 4096,
+        "defaults": {
+          "address": 11745636,
+          "size": 1792,
+          "sha256": "584b43c68d93401cc097d9bd98a9b16fcef5ff6d9231e1973488e387c48666f6"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 3964,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Custom record marker after the sequence word."
+          }
+        ]
+      }
+    }
+  },
+  "settings": {
+    "debug": {
+      "store": "bank",
+      "offset": 247,
+      "values": {
+        "off": [
+          0
+        ],
+        "on": [
+          1
+        ]
+      }
+    },
+    "language": {
+      "store": "main",
+      "offset": 671,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    },
+    "setup": {
+      "store": "header",
+      "offset": 11,
+      "values": {
+        "done": [
+          7
+        ]
+      }
+    }
+  },
+  "sections": []
+}

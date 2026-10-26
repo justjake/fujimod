@@ -2,7 +2,19 @@
 
 
 class UsbError(RuntimeError):
-    pass
+    command: int
+    primary: int
+    secondary: int
+    transferred: int | None
+    expected: int
+    actual: int
+    available: int
+    declared: int
+    requested: int
+    limit: int
+    reserved: int
+    partial: bytes
+    transfer_error: UsbError
 
 
 class TransferError(UsbError):

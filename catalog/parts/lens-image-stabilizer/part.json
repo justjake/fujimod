@@ -1,0 +1,269 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "lens-image-stabilizer",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "stabilizer",
+      "commands": [
+        {
+          "code": 1,
+          "bits": 3,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 3,
+          "bits": 8,
+          "operation": {
+            "kind": "ram_write",
+            "bank": 2
+          }
+        },
+        {
+          "code": 4,
+          "bits": 1,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 5,
+          "bits": 1,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 6,
+          "bits": 0,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 7,
+          "bits": 10,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 9,
+          "bits": 1,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 15,
+          "bits": 18,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 16,
+          "bits": 13,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 17,
+          "bits": 13,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 18,
+          "bits": 8,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 19,
+          "bits": 8,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 20,
+          "bits": 8,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 21,
+          "bits": 8,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 22,
+          "bits": 8,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 23,
+          "bits": 8,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 25,
+          "bits": 16,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 26,
+          "bits": 16,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 27,
+          "bits": 3,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 29,
+          "bits": 3,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 33,
+          "bits": 8,
+          "operation": {
+            "kind": "ram_write",
+            "bank": 32
+          }
+        },
+        {
+          "code": 36,
+          "bits": 24,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 37,
+          "bits": 2,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 40,
+          "bits": 0,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 41,
+          "bits": 3,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 42,
+          "bits": 1,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 43,
+          "bits": 12,
+          "operation": {
+            "kind": "write"
+          }
+        },
+        {
+          "code": 2,
+          "bits": 8,
+          "operation": {
+            "kind": "select"
+          }
+        },
+        {
+          "code": 8,
+          "bits": 0,
+          "operation": {
+            "kind": "select"
+          }
+        },
+        {
+          "code": 14,
+          "bits": 0,
+          "operation": {
+            "kind": "select"
+          }
+        },
+        {
+          "code": 24,
+          "bits": 3,
+          "operation": {
+            "kind": "select"
+          }
+        },
+        {
+          "code": 28,
+          "bits": 2,
+          "operation": {
+            "kind": "select"
+          }
+        },
+        {
+          "code": 30,
+          "bits": 2,
+          "operation": {
+            "kind": "select"
+          }
+        },
+        {
+          "code": 32,
+          "bits": 0,
+          "operation": {
+            "kind": "select"
+          }
+        },
+        {
+          "code": 38,
+          "bits": 0,
+          "operation": {
+            "kind": "select"
+          }
+        },
+        {
+          "code": 39,
+          "bits": 0,
+          "operation": {
+            "kind": "select"
+          }
+        }
+      ],
+      "status": 144,
+      "telemetry": 0
+    }
+  }
+}

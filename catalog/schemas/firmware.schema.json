@@ -1,0 +1,3717 @@
+{
+  "$defs": {
+    "AdditionalUiModes": {
+      "additionalProperties": false,
+      "description": "Firmware UI mode numbers beyond the REC and setup modes used by boot.",
+      "properties": {
+        "play": {
+          "description": "Playback UI mode.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setup_play": {
+          "description": "Playback setup UI mode.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "play",
+        "setup_play"
+      ],
+      "type": "object"
+    },
+    "AddressIdentity": {
+      "additionalProperties": false,
+      "description": "An identified firmware address range without its contents.",
+      "properties": {
+        "address": {
+          "description": "Start address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "SHA-256 of the range.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Byte length.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "BitmapLayout": {
+      "additionalProperties": false,
+      "description": "Bitmap record fields, with explicit widths.",
+      "properties": {
+        "data_bytes": {
+          "description": "Data bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "data_offset": {
+          "description": "Data offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "height_bytes": {
+          "description": "Height bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "height_offset": {
+          "description": "Height offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind_bytes": {
+          "description": "Kind bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind_offset": {
+          "description": "Kind offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width_bytes": {
+          "description": "Width bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width_offset": {
+          "description": "Width offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "data_bytes",
+        "data_offset",
+        "height_bytes",
+        "height_offset",
+        "kind_bytes",
+        "kind_offset",
+        "width_bytes",
+        "width_offset"
+      ],
+      "type": "object"
+    },
+    "BitmapResources": {
+      "additionalProperties": false,
+      "description": "Native bitmap descriptor table layout.",
+      "properties": {
+        "final_first_index": {
+          "description": "Final first index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "final_table": {
+          "description": "Final table.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "last_index": {
+          "description": "Last index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "last_record": {
+          "description": "Last record.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "layout": {
+          "$ref": "#/$defs/BitmapLayout",
+          "description": "Layout."
+        },
+        "stride": {
+          "description": "Stride.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "table": {
+          "description": "Table.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "table",
+        "stride",
+        "final_table",
+        "final_first_index",
+        "last_index",
+        "last_record",
+        "layout"
+      ],
+      "type": "object"
+    },
+    "BootRomIdentity": {
+      "additionalProperties": false,
+      "description": "A verified boot ROM image and its load address.",
+      "properties": {
+        "address": {
+          "description": "Address where the ROM image is loaded.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "content": {
+          "$ref": "#/$defs/ContentIdentity",
+          "description": "Boot ROM content identity."
+        }
+      },
+      "required": [
+        "content",
+        "address"
+      ],
+      "type": "object"
+    },
+    "ConfigurationLocation": {
+      "description": "A configuration block addressed directly or through a firmware pointer.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Firmware address containing a configuration-block pointer.",
+          "properties": {
+            "address": {
+              "description": "Pointer address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "pointer",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "address"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Fixed configuration-block base address.",
+          "properties": {
+            "address": {
+              "description": "Block address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "direct",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "address"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ContentIdentity": {
+      "additionalProperties": false,
+      "description": "A firmware content identity.",
+      "properties": {
+        "sha256": {
+          "description": "Lowercase SHA-256 digest.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Content size in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "CursorFields": {
+      "additionalProperties": false,
+      "description": "Live cursor word offsets.",
+      "properties": {
+        "cursor": {
+          "description": "Cursor.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "filtered_count": {
+          "description": "Filtered count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pointer": {
+          "description": "Pointer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "raw_count": {
+          "description": "Raw count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "subcursor": {
+          "description": "Subcursor.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value_cursor": {
+          "description": "Value cursor.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "visible_count": {
+          "description": "Visible count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pointer",
+        "cursor",
+        "subcursor",
+        "visible_count",
+        "value_cursor",
+        "raw_count",
+        "filtered_count"
+      ],
+      "type": "object"
+    },
+    "CursorLayout": {
+      "additionalProperties": false,
+      "description": "Live menu cursor and status-array offsets.",
+      "properties": {
+        "fields": {
+          "$ref": "#/$defs/CursorFields",
+          "description": "Cursor word offsets."
+        },
+        "size": {
+          "description": "Cursor byte size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status_offset": {
+          "description": "Status offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status_stride": {
+          "description": "Status stride.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status_width": {
+          "description": "Status width.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "fields",
+        "status_offset",
+        "status_stride",
+        "status_width"
+      ],
+      "type": "object"
+    },
+    "FirmwareBootLayout": {
+      "additionalProperties": false,
+      "description": "Declared boot layout facts.",
+      "properties": {
+        "flash_slices": {
+          "description": "Declared flash slices.",
+          "items": {
+            "$ref": "#/$defs/FirmwareFlashSlices"
+          },
+          "type": "array"
+        },
+        "units": {
+          "description": "Declared units.",
+          "items": {
+            "$ref": "#/$defs/FirmwareUnits"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "flash_slices",
+        "units"
+      ],
+      "type": "object"
+    },
+    "FirmwareCfgdata": {
+      "additionalProperties": false,
+      "description": "Declared cfgdata facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "defaults_sha256": {
+          "description": "Declared defaults sha256.",
+          "type": "string"
+        },
+        "pointer_address": {
+          "description": "Declared pointer address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "remapping": {
+          "description": "Declared remapping.",
+          "items": {
+            "$ref": "#/$defs/FirmwareRemapping"
+          },
+          "type": "array"
+        },
+        "selector_address": {
+          "description": "Declared selector address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "synthetic_byte_fields": {
+          "description": "Declared synthetic byte fields.",
+          "items": {
+            "$ref": "#/$defs/FirmwareSyntheticByteFields"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "synthetic_scalar_bytes": {
+          "description": "Declared synthetic scalar bytes.",
+          "items": {
+            "$ref": "#/$defs/FirmwareSyntheticScalarBytes"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "synthetic_signature": {
+          "$ref": "#/$defs/FirmwareSyntheticSignature",
+          "description": "Declared synthetic signature."
+        }
+      },
+      "required": [
+        "address",
+        "defaults_sha256",
+        "pointer_address",
+        "remapping",
+        "size",
+        "synthetic_signature"
+      ],
+      "type": "object"
+    },
+    "FirmwareConfigurationBanks": {
+      "additionalProperties": false,
+      "description": "Declared configuration banks facts.",
+      "properties": {
+        "cfg_offset": {
+          "description": "Declared cfg offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "fill": {
+          "description": "Declared fill.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "row": {
+          "description": "Declared row.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "row"
+      ],
+      "type": "object"
+    },
+    "FirmwareConfigurationDefaults": {
+      "additionalProperties": false,
+      "description": "Declared configuration defaults facts.",
+      "properties": {
+        "builder_entry": {
+          "description": "Declared builder entry.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "code_checks": {
+          "description": "Declared code checks.",
+          "items": {
+            "$ref": "#/$defs/FirmwareUsbInterruptTables"
+          },
+          "type": "array"
+        },
+        "final_version_bytes": {
+          "description": "Declared final version bytes.",
+          "items": {
+            "$ref": "#/$defs/FirmwareFinalVersionBytes"
+          },
+          "type": "array"
+        },
+        "limits": {
+          "description": "Declared limits.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "max_instructions": {
+          "description": "Declared max instructions.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output": {
+          "$ref": "#/$defs/FirmwareConfigurationdefaultsOutput",
+          "description": "Declared output."
+        },
+        "pointer_address": {
+          "description": "Declared pointer address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sections": {
+          "description": "Declared sections.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "static_oracle_sha256": {
+          "description": "Declared static oracle sha256.",
+          "type": "string"
+        },
+        "store_limit": {
+          "description": "Declared store limit.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "table": {
+          "$ref": "#/$defs/FirmwareTable",
+          "description": "Declared table."
+        }
+      },
+      "required": [
+        "builder_entry",
+        "code_checks",
+        "final_version_bytes",
+        "limits",
+        "max_instructions",
+        "output",
+        "pointer_address",
+        "sections",
+        "static_oracle_sha256",
+        "store_limit",
+        "table"
+      ],
+      "type": "object"
+    },
+    "FirmwareConfigurationdefaultsOutput": {
+      "additionalProperties": false,
+      "description": "Declared configurationdefaults output facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size"
+      ],
+      "type": "object"
+    },
+    "FirmwareControlBusTables": {
+      "additionalProperties": false,
+      "description": "Declared control bus tables facts.",
+      "properties": {
+        "descriptors": {
+          "$ref": "#/$defs/FirmwareDescriptors",
+          "description": "Declared descriptors."
+        },
+        "limits": {
+          "description": "Declared limits.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "polarity_words": {
+          "$ref": "#/$defs/FirmwareDescriptor",
+          "description": "Declared polarity words."
+        }
+      },
+      "required": [
+        "descriptors",
+        "limits",
+        "polarity_words"
+      ],
+      "type": "object"
+    },
+    "FirmwareCpu": {
+      "additionalProperties": false,
+      "description": "Declared cpu facts.",
+      "properties": {
+        "cpsr": {
+          "description": "Declared cpsr.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "description": "Declared id.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pc": {
+          "description": "Declared pc.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "regs": {
+          "$ref": "#/$defs/FirmwareRegs",
+          "description": "Declared regs."
+        },
+        "running": {
+          "description": "Declared running.",
+          "type": "boolean"
+        },
+        "sysregs": {
+          "$ref": "#/$defs/FirmwareSysregs",
+          "description": "Declared sysregs."
+        }
+      },
+      "required": [
+        "cpsr",
+        "id",
+        "pc",
+        "regs",
+        "running",
+        "sysregs"
+      ],
+      "type": "object"
+    },
+    "FirmwareCustomDefaults": {
+      "additionalProperties": false,
+      "description": "Declared custom defaults facts.",
+      "properties": {
+        "entry_view": {
+          "description": "Declared entry view.",
+          "type": "string"
+        },
+        "output_address": {
+          "description": "Declared output address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "slot_bytes": {
+          "description": "Declared slot bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "slots": {
+          "description": "Declared slots.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "entry_view",
+        "output_address",
+        "size",
+        "slot_bytes",
+        "slots"
+      ],
+      "type": "object"
+    },
+    "FirmwareDefaultCopies": {
+      "additionalProperties": false,
+      "description": "Declared default copies facts.",
+      "properties": {
+        "offset": {
+          "description": "Declared offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "view": {
+          "description": "Declared view.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "offset",
+        "view"
+      ],
+      "type": "object"
+    },
+    "FirmwareDescriptor": {
+      "additionalProperties": false,
+      "description": "Declared descriptor facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sampling": {
+          "description": "Declared sampling.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Declared sha256.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "sampling",
+        "sha256",
+        "size"
+      ],
+      "type": "object"
+    },
+    "FirmwareDescriptors": {
+      "additionalProperties": false,
+      "description": "Declared descriptors facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "count": {
+          "description": "Declared count.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "format": {
+          "description": "Declared format.",
+          "type": "string"
+        },
+        "sampling": {
+          "description": "Declared sampling.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Declared sha256.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "count",
+        "format",
+        "sampling",
+        "sha256",
+        "size"
+      ],
+      "type": "object"
+    },
+    "FirmwareFacts": {
+      "additionalProperties": false,
+      "description": "Firmware-specific remote inputs, without snapshots of live tables.",
+      "properties": {
+        "$schema": {
+          "description": "Schema identity.",
+          "type": "string"
+        },
+        "body_id": {
+          "description": "Physical body identity.",
+          "type": "string"
+        },
+        "configuration": {
+          "$ref": "#/$defs/ConfigurationLocation",
+          "description": "Settings block location."
+        },
+        "firmware_id": {
+          "description": "Firmware identity.",
+          "type": "string"
+        },
+        "firmware_sha256": {
+          "description": "Update content digest.",
+          "type": "string"
+        },
+        "identity_checks": {
+          "description": "Firmware content checks.",
+          "items": {
+            "$ref": "#/$defs/AddressIdentity"
+          },
+          "type": "array"
+        },
+        "menus": {
+          "$ref": "#/$defs/MenuTables",
+          "description": "Live menu tables and cursor layout."
+        },
+        "resources": {
+          "$ref": "#/$defs/Resources",
+          "description": "Live text and glyph resource layout."
+        },
+        "scanout": {
+          "$ref": "#/$defs/Scanout",
+          "description": "Scanout memory layout."
+        },
+        "schema": {
+          "description": "Format version; currently 1.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "$ref": "#/$defs/FirmwareObservation",
+          "description": "UI mode and readiness addresses."
+        },
+        "uncached_alias": {
+          "description": "Alias applied to physical RAM reads.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "firmware_id",
+        "firmware_sha256",
+        "body_id",
+        "uncached_alias",
+        "identity_checks",
+        "configuration",
+        "state",
+        "menus",
+        "scanout",
+        "resources"
+      ],
+      "type": "object"
+    },
+    "FirmwareFe80Programs": {
+      "additionalProperties": false,
+      "description": "Declared fe80 programs facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "descriptor": {
+          "$ref": "#/$defs/FirmwareDescriptor",
+          "description": "Declared descriptor."
+        },
+        "period": {
+          "description": "Declared period.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "program": {
+          "$ref": "#/$defs/FirmwareDescriptor",
+          "description": "Declared program."
+        },
+        "setup_phase": {
+          "description": "Declared setup phase.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "basis",
+        "descriptor",
+        "period",
+        "program"
+      ],
+      "type": "object"
+    },
+    "FirmwareFinalVersionBytes": {
+      "additionalProperties": false,
+      "description": "Declared final version bytes facts.",
+      "properties": {
+        "offset": {
+          "description": "Declared offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Declared value.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "value"
+      ],
+      "type": "object"
+    },
+    "FirmwareFirmwareView": {
+      "description": "Closed layout families retained by the firmware catalog.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Firmware configuration-default builder and its source identities.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/FirmwareConfigurationDefaults"
+            },
+            "kind": {
+              "const": "configuration_defaults",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Firmware control-bus descriptor and polarity tables.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/FirmwareControlBusTables"
+            },
+            "kind": {
+              "const": "control_bus_tables",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "data"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Firmware-managed persistent records, journals and table identities.",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/FirmwareStorageLayout"
+            },
+            "kind": {
+              "const": "storage_layout",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "data"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "FirmwareFixtureLayouts": {
+      "additionalProperties": false,
+      "description": "Declared fixture layouts facts.",
+      "properties": {
+        "status": {
+          "description": "Declared status.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "type": "object"
+    },
+    "FirmwareFlashImage": {
+      "additionalProperties": false,
+      "description": "Declared flash image facts.",
+      "properties": {
+        "dat_origin": {
+          "description": "Declared dat origin.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "xor": {
+          "description": "Declared xor.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "dat_origin",
+        "xor"
+      ],
+      "type": "object"
+    },
+    "FirmwareFlashSlices": {
+      "additionalProperties": false,
+      "description": "Declared flash slices facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "offset": {
+          "description": "Declared offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "Declared sha256.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "name",
+        "offset",
+        "sha256",
+        "size"
+      ],
+      "type": "object"
+    },
+    "FirmwareGeneratedFacts": {
+      "additionalProperties": false,
+      "description": "Generated firmware facts that inform state observation and initial setup.",
+      "properties": {
+        "additional_ui_modes": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdditionalUiModes"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Additional playback UI mode values."
+        },
+        "cfgdata_location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConfigurationLocation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Firmware configuration-block location."
+        },
+        "identity_checks": {
+          "description": "Hash-identified firmware address ranges used for identity checks.",
+          "items": {
+            "$ref": "#/$defs/AddressIdentity"
+          },
+          "type": "array"
+        },
+        "menu_cursor": {
+          "default": null,
+          "description": "Firmware menu-cursor structure base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "menu_keys": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MenuKeys"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Logical keys used by menu controls."
+        },
+        "observation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwareObservation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Addresses and values used to observe firmware readiness."
+        },
+        "remote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwareFacts"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Layouts and declarations used by remote camera control."
+        },
+        "uncached_alias": {
+          "default": null,
+          "description": "Uncached alias used to access RAM addresses.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "identity_checks"
+      ],
+      "type": "object"
+    },
+    "FirmwareGicRedistributorInitial": {
+      "additionalProperties": false,
+      "description": "Declared gic redistributor initial facts.",
+      "properties": {
+        "core": {
+          "description": "Declared core.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "description": "Declared offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Declared value.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "core",
+        "offset",
+        "size",
+        "value"
+      ],
+      "type": "object"
+    },
+    "FirmwareHeader": {
+      "additionalProperties": false,
+      "description": "Declared header facts.",
+      "properties": {
+        "checksum_offset": {
+          "description": "Declared checksum offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "registers_view": {
+          "description": "Declared registers view.",
+          "type": "string"
+        },
+        "view": {
+          "description": "Declared view.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "checksum_offset",
+        "registers_view",
+        "view"
+      ],
+      "type": "object"
+    },
+    "FirmwareImageSection": {
+      "additionalProperties": false,
+      "description": "A mapped firmware image section identified by address and content digest.",
+      "properties": {
+        "address": {
+          "description": "Address where the section is mapped.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Stable section name.",
+          "type": "string"
+        },
+        "native_flash_offset": {
+          "default": null,
+          "description": "Native flash offset, when identified.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "sha256": {
+          "description": "SHA-256 of the mapped section.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Mapped section size in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "FirmwareInstallation": {
+      "additionalProperties": false,
+      "description": "The flash layout used to install a firmware update.",
+      "properties": {
+        "entry_labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Named executable entry addresses consumed by firmware tooling.",
+          "type": "object"
+        },
+        "flash_offset": {
+          "description": "Offset from the update input to the flash image.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "image_sections": {
+          "description": "Named sections in the installed firmware image.",
+          "items": {
+            "$ref": "#/$defs/FirmwareImageSection"
+          },
+          "type": "array"
+        },
+        "loader_validation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwareLoaderValidation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Loader validation entry and the mapped sections required by the loader."
+        }
+      },
+      "required": [
+        "flash_offset",
+        "entry_labels",
+        "image_sections"
+      ],
+      "type": "object"
+    },
+    "FirmwareJournals": {
+      "additionalProperties": false,
+      "description": "Declared journals facts.",
+      "properties": {
+        "bank_rows": {
+          "description": "Declared bank rows.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "check_view": {
+          "description": "Declared check view.",
+          "type": "string"
+        },
+        "default_copies": {
+          "description": "Declared default copies.",
+          "items": {
+            "$ref": "#/$defs/FirmwareDefaultCopies"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "description": "Declared kind.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "nondefault_edits": {
+          "description": "Declared nondefault edits.",
+          "items": {
+            "$ref": "#/$defs/FirmwareNondefaultEdits"
+          },
+          "type": "array"
+        },
+        "parity_context": {
+          "description": "Declared parity context.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "payload_size": {
+          "description": "Declared payload size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "prepare_view": {
+          "description": "Declared prepare view.",
+          "type": "string"
+        },
+        "query_view": {
+          "description": "Declared query view.",
+          "type": "string"
+        },
+        "record": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwareRecord"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared record."
+        },
+        "record_copies": {
+          "description": "Declared record copies.",
+          "items": {
+            "$ref": "#/$defs/FirmwareRecordCopies"
+          },
+          "type": "array"
+        },
+        "record_tags": {
+          "description": "Declared record tags.",
+          "items": {
+            "$ref": "#/$defs/FirmwareDefaultCopies"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "bank_rows",
+        "check_view",
+        "default_copies",
+        "kind",
+        "name",
+        "nondefault_edits",
+        "parity_context",
+        "payload_size",
+        "prepare_view",
+        "query_view",
+        "record_copies",
+        "record_tags"
+      ],
+      "type": "object"
+    },
+    "FirmwareLayouts": {
+      "additionalProperties": false,
+      "description": "Located firmware layouts grouped by stable profile and view identity.",
+      "properties": {
+        "profiles": {
+          "additionalProperties": {
+            "$ref": "#/$defs/FirmwareProfile"
+          },
+          "description": "Boot and device layout profiles for this firmware.",
+          "type": "object"
+        },
+        "views": {
+          "additionalProperties": {
+            "$ref": "#/$defs/FirmwareFirmwareView"
+          },
+          "description": "Immutable tables and storage layouts addressed by semantic identity.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "profiles",
+        "views"
+      ],
+      "type": "object"
+    },
+    "FirmwareLoaderValidation": {
+      "additionalProperties": false,
+      "description": "A firmware loader entry and the named sections it validates.",
+      "properties": {
+        "entry": {
+          "description": "Firmware entry address validated by the loader.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sections": {
+          "description": "Mapped section names required by the validation.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "entry",
+        "sections"
+      ],
+      "type": "object"
+    },
+    "FirmwareManaged": {
+      "additionalProperties": false,
+      "description": "Declared managed facts.",
+      "properties": {
+        "banks_view": {
+          "description": "Declared banks view.",
+          "type": "string"
+        },
+        "logical_capacity": {
+          "description": "Declared logical capacity.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start": {
+          "description": "Declared start.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "banks_view",
+        "logical_capacity",
+        "start"
+      ],
+      "type": "object"
+    },
+    "FirmwareNondefaultEdits": {
+      "additionalProperties": false,
+      "description": "Declared nondefault edits facts.",
+      "properties": {
+        "mask": {
+          "description": "Declared mask.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "description": "Declared offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "values": {
+          "description": "Declared values.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "mask",
+        "offset",
+        "values"
+      ],
+      "type": "object"
+    },
+    "FirmwareObservation": {
+      "additionalProperties": false,
+      "description": "Firmware addresses used by a supported run observer.",
+      "properties": {
+        "menu_active": {
+          "description": "Firmware address containing the menu-active flag.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_node": {
+          "description": "Firmware address containing the current menu node.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pending_mode": {
+          "description": "Firmware address containing the pending UI mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "readiness": {
+          "$ref": "#/$defs/ReadinessAddresses",
+          "description": "Readiness observer addresses."
+        },
+        "rec_mode": {
+          "description": "REC mode value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setup_mode": {
+          "description": "Setup mode value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "system_mode": {
+          "description": "Firmware address containing the system mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ui_mode": {
+          "description": "Firmware address containing the UI mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ui_mode",
+        "system_mode",
+        "menu_active",
+        "pending_mode",
+        "menu_node",
+        "rec_mode",
+        "setup_mode",
+        "readiness"
+      ],
+      "type": "object"
+    },
+    "FirmwarePersistentAssetLayout": {
+      "additionalProperties": false,
+      "description": "Hash-qualified source asset before placement in persistent storage.",
+      "properties": {
+        "bytes": {
+          "description": "Source window extent in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "file_offset": {
+          "description": "Offset of the source window within the supplied file.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "normalized_sha256": {
+          "description": "SHA-256 after declared byte edits.",
+          "type": "string"
+        },
+        "patches": {
+          "description": "Explicit small edits used to normalize the input.",
+          "items": {
+            "$ref": "#/$defs/PersistentPatch"
+          },
+          "type": "array"
+        },
+        "sha256": {
+          "description": "SHA-256 before declared byte edits.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file_offset",
+        "bytes",
+        "sha256",
+        "normalized_sha256",
+        "patches"
+      ],
+      "type": "object"
+    },
+    "FirmwarePersistentInputs": {
+      "additionalProperties": false,
+      "description": "Declared persistent inputs facts.",
+      "properties": {
+        "assets": {
+          "additionalProperties": {
+            "$ref": "#/$defs/FirmwarePersistentAssetLayout"
+          },
+          "description": "Declared assets.",
+          "type": "object"
+        },
+        "geometry": {
+          "$ref": "#/$defs/FirmwarePersistentInputsGeometry",
+          "description": "Declared geometry."
+        },
+        "sets": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PersistentSet"
+          },
+          "description": "Declared sets.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "assets",
+        "geometry",
+        "sets"
+      ],
+      "type": "object"
+    },
+    "FirmwarePersistentInputsGeometry": {
+      "additionalProperties": false,
+      "description": "Declared persistent inputs geometry facts.",
+      "properties": {
+        "bytes": {
+          "description": "Declared bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_bytes": {
+          "description": "Declared page bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pages_per_block": {
+          "description": "Declared pages per block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "spare_bytes": {
+          "description": "Declared spare bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bytes",
+        "page_bytes",
+        "pages_per_block",
+        "spare_bytes"
+      ],
+      "type": "object"
+    },
+    "FirmwarePreload": {
+      "additionalProperties": false,
+      "description": "Declared preload facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "dat_offset": {
+          "description": "Declared dat offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "length": {
+          "description": "Declared length.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "sha256": {
+          "description": "Declared sha256.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "value": {
+          "description": "Declared value.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "word_size": {
+          "description": "Declared word size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "words": {
+          "description": "Declared words.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "address"
+      ],
+      "type": "object"
+    },
+    "FirmwareProfile": {
+      "additionalProperties": false,
+      "description": "Declared firmware profile facts.",
+      "properties": {
+        "boot_layout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwareBootLayout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared boot layout."
+        },
+        "browser_configuration_id": {
+          "description": "Declared browser configuration id.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "control_bus_tables_id": {
+          "description": "Declared control bus tables id.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cpu": {
+          "description": "Declared cpu.",
+          "items": {
+            "$ref": "#/$defs/FirmwareCpu"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "execution_scope": {
+          "description": "Declared execution scope.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fe80_programs": {
+          "description": "Declared fe80 programs.",
+          "items": {
+            "$ref": "#/$defs/FirmwareFe80Programs"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "fe80_setup_views": {
+          "description": "Declared fe80 setup views.",
+          "items": {
+            "$ref": "#/$defs/FirmwareDescriptor"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "fixture_layouts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwareFixtureLayouts"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared fixture layouts."
+        },
+        "flash_image": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwareFlashImage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared flash image."
+        },
+        "gic_initial": {
+          "additionalProperties": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Declared gic initial.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "gic_redistributor_initial": {
+          "description": "Declared gic redistributor initial.",
+          "items": {
+            "$ref": "#/$defs/FirmwareGicRedistributorInitial"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "hdmi_configuration_id": {
+          "description": "Declared hdmi configuration id.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limits": {
+          "description": "Declared limits.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "persistent_inputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwarePersistentInputs"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared persistent inputs."
+        },
+        "preload": {
+          "description": "Declared preload.",
+          "items": {
+            "$ref": "#/$defs/FirmwarePreload"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "reset_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareResetRelease"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Firmware-qualified secondary-core release mechanism."
+        },
+        "rom_basis": {
+          "description": "Declared rom basis.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sdio_inputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwareSdioInputs"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared sdio inputs."
+        },
+        "storage_layout_id": {
+          "description": "Declared storage layout id.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "usb_interrupt_tables": {
+          "description": "Declared usb interrupt tables.",
+          "items": {
+            "$ref": "#/$defs/FirmwareUsbInterruptTables"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "viewer_abi": {
+          "description": "Declared viewer abi.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "FirmwareRawRecords": {
+      "additionalProperties": false,
+      "description": "Declared raw records facts.",
+      "properties": {
+        "bank_rows": {
+          "description": "Declared bank rows.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "consumer_view": {
+          "description": "Declared consumer view.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "nondefault_bytes": {
+          "description": "Declared nondefault bytes.",
+          "items": {
+            "$ref": "#/$defs/FirmwareSyntheticSignature"
+          },
+          "type": "array"
+        },
+        "seed_sequences": {
+          "description": "Declared seed sequences.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bank_rows",
+        "basis",
+        "consumer_view",
+        "name",
+        "nondefault_bytes",
+        "seed_sequences",
+        "size"
+      ],
+      "type": "object"
+    },
+    "FirmwareRecord": {
+      "additionalProperties": false,
+      "description": "Declared record facts.",
+      "properties": {
+        "protected_bytes": {
+          "description": "Declared protected bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "protected_bytes",
+        "size"
+      ],
+      "type": "object"
+    },
+    "FirmwareRecordCopies": {
+      "additionalProperties": false,
+      "description": "Declared record copies facts.",
+      "properties": {
+        "payload_offset": {
+          "description": "Declared payload offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "record_offset": {
+          "description": "Declared record offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "payload_offset",
+        "record_offset",
+        "size"
+      ],
+      "type": "object"
+    },
+    "FirmwareRegs": {
+      "additionalProperties": false,
+      "description": "Declared regs facts.",
+      "properties": {
+        "x19": {
+          "description": "Declared x19.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "x20": {
+          "description": "Declared x20.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "x21": {
+          "description": "Declared x21.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x19",
+        "x20",
+        "x21"
+      ],
+      "type": "object"
+    },
+    "FirmwareRemapping": {
+      "additionalProperties": false,
+      "description": "Declared remapping facts.",
+      "properties": {
+        "delta": {
+          "description": "Declared delta.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "selector": {
+          "description": "Declared selector.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start": {
+          "description": "Declared start.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "delta",
+        "selector",
+        "size",
+        "start"
+      ],
+      "type": "object"
+    },
+    "FirmwareSdioInputs": {
+      "additionalProperties": false,
+      "description": "Declared sdio inputs facts.",
+      "properties": {
+        "firmware_bytes": {
+          "description": "Declared firmware bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mac_address": {
+          "description": "Declared mac address.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "ssid": {
+          "description": "Declared ssid.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "firmware_bytes",
+        "mac_address",
+        "ssid"
+      ],
+      "type": "object"
+    },
+    "FirmwareStorageLayout": {
+      "additionalProperties": false,
+      "description": "Declared storage layout facts.",
+      "properties": {
+        "cfgdata": {
+          "$ref": "#/$defs/FirmwareCfgdata",
+          "description": "Declared cfgdata."
+        },
+        "configuration_banks": {
+          "description": "Declared configuration banks.",
+          "items": {
+            "$ref": "#/$defs/FirmwareConfigurationBanks"
+          },
+          "type": "array"
+        },
+        "custom_defaults": {
+          "$ref": "#/$defs/FirmwareCustomDefaults",
+          "description": "Declared custom defaults."
+        },
+        "geometry": {
+          "$ref": "#/$defs/FirmwareStoragelayoutGeometry",
+          "description": "Declared geometry."
+        },
+        "header": {
+          "$ref": "#/$defs/FirmwareHeader",
+          "description": "Declared header."
+        },
+        "journals": {
+          "description": "Declared journals.",
+          "items": {
+            "$ref": "#/$defs/FirmwareJournals"
+          },
+          "type": "array"
+        },
+        "limits": {
+          "description": "Declared limits.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "managed": {
+          "$ref": "#/$defs/FirmwareManaged",
+          "description": "Declared managed."
+        },
+        "max_instructions": {
+          "description": "Declared max instructions.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "raw_records": {
+          "description": "Declared raw records.",
+          "items": {
+            "$ref": "#/$defs/FirmwareRawRecords"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "record": {
+          "$ref": "#/$defs/FirmwareStoragelayoutRecord",
+          "description": "Declared record."
+        },
+        "scratch_record": {
+          "description": "Declared scratch record.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sections": {
+          "description": "Declared sections.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "views": {
+          "description": "Declared views.",
+          "items": {
+            "$ref": "#/$defs/FirmwareUsbInterruptTables"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "cfgdata",
+        "configuration_banks",
+        "custom_defaults",
+        "geometry",
+        "header",
+        "journals",
+        "limits",
+        "managed",
+        "max_instructions",
+        "record",
+        "scratch_record",
+        "sections",
+        "views"
+      ],
+      "type": "object"
+    },
+    "FirmwareStoragelayoutGeometry": {
+      "additionalProperties": false,
+      "description": "Declared storagelayout geometry facts.",
+      "properties": {
+        "blocks": {
+          "description": "Declared blocks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_bytes": {
+          "description": "Declared page bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pages_per_block": {
+          "description": "Declared pages per block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "spare_bytes": {
+          "description": "Declared spare bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "blocks",
+        "page_bytes",
+        "pages_per_block",
+        "spare_bytes"
+      ],
+      "type": "object"
+    },
+    "FirmwareStoragelayoutRecord": {
+      "additionalProperties": false,
+      "description": "Declared storagelayout record facts.",
+      "properties": {
+        "empty_fill": {
+          "description": "Declared empty fill.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "protected_bytes": {
+          "description": "Declared protected bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "seed_sequences": {
+          "description": "Declared seed sequences.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "sequence_offset": {
+          "description": "Declared sequence offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "empty_fill",
+        "protected_bytes",
+        "seed_sequences",
+        "sequence_offset",
+        "size"
+      ],
+      "type": "object"
+    },
+    "FirmwareSyntheticByteFields": {
+      "additionalProperties": false,
+      "description": "Declared synthetic byte fields facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "field": {
+          "description": "Declared field.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row": {
+          "description": "Declared row.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "view": {
+          "description": "Declared view.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "basis",
+        "field",
+        "row",
+        "view"
+      ],
+      "type": "object"
+    },
+    "FirmwareSyntheticScalarBytes": {
+      "additionalProperties": false,
+      "description": "Declared synthetic scalar bytes facts.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "field": {
+          "description": "Declared field.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_offset": {
+          "description": "Declared source offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "view": {
+          "description": "Declared view.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "basis",
+        "field",
+        "source_offset",
+        "view"
+      ],
+      "type": "object"
+    },
+    "FirmwareSyntheticSignature": {
+      "additionalProperties": false,
+      "description": "Declared synthetic signature facts.",
+      "properties": {
+        "offset": {
+          "description": "Declared offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset"
+      ],
+      "type": "object"
+    },
+    "FirmwareSysregs": {
+      "additionalProperties": false,
+      "description": "Declared sysregs facts.",
+      "properties": {
+        "CPACR_EL1": {
+          "description": "Declared CPACR EL1.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ICC_IGRPEN0_EL1": {
+          "description": "Declared ICC IGRPEN0 EL1.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ICC_IGRPEN1_EL1": {
+          "description": "Declared ICC IGRPEN1 EL1.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ICC_PMR_EL1": {
+          "description": "Declared ICC PMR EL1.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "SCTLR_EL1": {
+          "description": "Declared SCTLR EL1.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "SP_EL0": {
+          "description": "Declared SP EL0.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "SP_EL1": {
+          "description": "Declared SP EL1.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "VBAR_EL1": {
+          "description": "Declared VBAR EL1.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "CPACR_EL1",
+        "ICC_IGRPEN0_EL1",
+        "ICC_IGRPEN1_EL1",
+        "ICC_PMR_EL1",
+        "SCTLR_EL1",
+        "SP_EL0",
+        "SP_EL1",
+        "VBAR_EL1"
+      ],
+      "type": "object"
+    },
+    "FirmwareTable": {
+      "additionalProperties": false,
+      "description": "Declared table facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "count": {
+          "description": "Declared count.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "sampling": {
+          "description": "Declared sampling.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Declared sha256.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "count",
+        "name",
+        "sampling",
+        "sha256",
+        "size"
+      ],
+      "type": "object"
+    },
+    "FirmwareUnits": {
+      "additionalProperties": false,
+      "description": "Declared units facts.",
+      "properties": {
+        "unit": {
+          "description": "Declared unit.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "unit"
+      ],
+      "type": "object"
+    },
+    "FirmwareUsbInterruptTables": {
+      "additionalProperties": false,
+      "description": "Declared usb interrupt tables facts.",
+      "properties": {
+        "address": {
+          "description": "Declared address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "sampling": {
+          "description": "Declared sampling.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Declared sha256.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "name",
+        "sampling",
+        "sha256",
+        "size"
+      ],
+      "type": "object"
+    },
+    "GlyphResources": {
+      "additionalProperties": false,
+      "description": "Registry layout locating the native icon font resource.",
+      "properties": {
+        "data_address_offset": {
+          "description": "Byte offset of the font data pointer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "data_size_offset": {
+          "description": "Byte offset of the font byte length.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "icon_index": {
+          "description": "Icon font record index.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "record_size": {
+          "description": "Registry record size in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "registry_address": {
+          "description": "Resource registry base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "registry_address",
+        "record_size",
+        "icon_index",
+        "data_address_offset",
+        "data_size_offset"
+      ],
+      "type": "object"
+    },
+    "HardwareResetCheck": {
+      "additionalProperties": false,
+      "description": "A checked word at a secondary processor release destination.",
+      "properties": {
+        "address": {
+          "description": "Address of the expected word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "expected_hex": {
+          "description": "Expected bytes in memory order.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "address",
+        "expected_hex"
+      ],
+      "type": "object"
+    },
+    "HardwareResetRelease": {
+      "additionalProperties": false,
+      "description": "Declared reset release facts.",
+      "properties": {
+        "basis": {
+          "description": "Qualification of the release mechanism for this firmware.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checks": {
+          "description": "Immutable instruction words expected at the release destination.",
+          "items": {
+            "$ref": "#/$defs/HardwareResetCheck"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "mask": {
+          "description": "Declared mask.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register": {
+          "description": "Declared register.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "description": "Declared source.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target": {
+          "description": "Declared target.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mask",
+        "register",
+        "source",
+        "target"
+      ],
+      "type": "object"
+    },
+    "MenuFields": {
+      "additionalProperties": false,
+      "description": "Native menu descriptor word offsets.",
+      "properties": {
+        "flags_word": {
+          "description": "Flags word.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "handlers_pointer": {
+          "description": "Handlers pointer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_array": {
+          "description": "Item array.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_id": {
+          "description": "Menu id.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parent_pointer": {
+          "description": "Parent pointer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows_per_page": {
+          "description": "Rows per page.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setting_id": {
+          "description": "Setting id.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type_code": {
+          "description": "Type code.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "menu_id",
+        "type_code",
+        "setting_id",
+        "rows_per_page",
+        "flags_word",
+        "parent_pointer",
+        "item_array",
+        "handlers_pointer"
+      ],
+      "type": "object"
+    },
+    "MenuKeys": {
+      "additionalProperties": false,
+      "description": "Firmware key identities used to navigate menus.",
+      "properties": {
+        "back": {
+          "description": "Back key identity.",
+          "type": "string"
+        },
+        "down": {
+          "description": "Down key identity.",
+          "type": "string"
+        },
+        "menu": {
+          "description": "Accept or open-menu key identity.",
+          "type": "string"
+        },
+        "up": {
+          "description": "Up key identity.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "menu",
+        "back",
+        "up",
+        "down"
+      ],
+      "type": "object"
+    },
+    "MenuLayout": {
+      "additionalProperties": false,
+      "description": "Offsets within a native menu descriptor and row.",
+      "properties": {
+        "caption_words": {
+          "description": "Caption words.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fields": {
+          "$ref": "#/$defs/MenuFields",
+          "description": "Node word offsets."
+        },
+        "max_kind": {
+          "description": "Max kind.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "nowrap_flags": {
+          "description": "Nowrap flags.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row_child": {
+          "description": "Row child.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row_key": {
+          "description": "Row key.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row_size": {
+          "description": "Row size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sentinel": {
+          "description": "Sentinel.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Node byte size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "fields",
+        "row_size",
+        "row_key",
+        "row_child",
+        "caption_words",
+        "sentinel",
+        "max_kind",
+        "nowrap_flags"
+      ],
+      "type": "object"
+    },
+    "MenuNavigation": {
+      "additionalProperties": false,
+      "description": "Native menu tab bounds.",
+      "properties": {
+        "setup_first_tab": {
+          "description": "Setup first tab.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shooting_first_tab": {
+          "description": "Shooting first tab.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "shooting_last_tab": {
+          "description": "Shooting last tab.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "shooting_first_tab",
+        "shooting_last_tab",
+        "setup_first_tab"
+      ],
+      "type": "object"
+    },
+    "MenuTables": {
+      "additionalProperties": false,
+      "description": "Live menu roots, row descriptors and navigation.",
+      "properties": {
+        "cursor": {
+          "$ref": "#/$defs/CursorLayout",
+          "description": "Cursor and row status layout."
+        },
+        "cursor_address": {
+          "description": "Cursor structure base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "layout": {
+          "$ref": "#/$defs/MenuLayout",
+          "description": "Node and row layout."
+        },
+        "navigation": {
+          "$ref": "#/$defs/MenuNavigation",
+          "description": "Tab navigation bounds."
+        },
+        "page_tabs": {
+          "additionalProperties": false,
+          "description": "Root indices mapped to first tab keys.",
+          "patternProperties": {
+            "^\\d+$": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "q_grid": {
+          "$ref": "#/$defs/QuickGrid",
+          "description": "Quick menu geometry and menu ID."
+        },
+        "roles": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Named root indices.",
+          "type": "object"
+        },
+        "root_count": {
+          "description": "Number of root pointers.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "root_routes": {
+          "additionalProperties": false,
+          "description": "Declared root entry strategies.",
+          "patternProperties": {
+            "^\\d+$": {
+              "$ref": "#/$defs/RootRoute"
+            }
+          },
+          "type": "object"
+        },
+        "root_titles": {
+          "additionalProperties": false,
+          "description": "Root indices mapped to caption resource IDs.",
+          "patternProperties": {
+            "^\\d+$": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "roots_address": {
+          "description": "Address of the root pointer table.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "roots_address",
+        "root_count",
+        "roles",
+        "root_titles",
+        "root_routes",
+        "page_tabs",
+        "navigation",
+        "layout",
+        "cursor_address",
+        "cursor",
+        "q_grid"
+      ],
+      "type": "object"
+    },
+    "PersistentJournalAppend": {
+      "additionalProperties": false,
+      "description": "Explicit journal-record construction and destination.",
+      "properties": {
+        "checksum_offset": {
+          "description": "XOR checksum offset in the record.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parity_offset": {
+          "description": "Parity bitmap offset in the record.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "payload_asset": {
+          "description": "Source payload asset identity.",
+          "type": "string"
+        },
+        "payload_bytes": {
+          "description": "Payload length.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "payload_offset": {
+          "description": "Source payload offset.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "physical_offset": {
+          "description": "Destination offset in the NAND main area.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "record_asset": {
+          "description": "Source record asset identity.",
+          "type": "string"
+        },
+        "record_payload_offset": {
+          "description": "Payload destination offset in the record.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "record_asset",
+        "payload_asset",
+        "payload_offset",
+        "payload_bytes",
+        "record_payload_offset",
+        "parity_offset",
+        "checksum_offset",
+        "physical_offset"
+      ],
+      "type": "object"
+    },
+    "PersistentPacket": {
+      "description": "A complete packet or a bounded source window, never a file path.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Explicit packet bytes.",
+          "properties": {
+            "bytes": {
+              "description": "Packet content.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "bytes",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "bytes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Packet extracted from an identity-checked asset.",
+          "properties": {
+            "asset": {
+              "description": "Asset identity.",
+              "type": "string"
+            },
+            "bytes": {
+              "description": "Window length.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "window",
+              "type": "string"
+            },
+            "offset": {
+              "description": "Byte offset in that asset.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "asset",
+            "offset",
+            "bytes"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "PersistentPatch": {
+      "additionalProperties": false,
+      "description": "An explicit byte edit within a source window.",
+      "properties": {
+        "bytes": {
+          "description": "Replacement bytes.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "offset": {
+          "description": "Byte offset within the source window.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "bytes"
+      ],
+      "type": "object"
+    },
+    "PersistentPlacement": {
+      "additionalProperties": false,
+      "description": "Place a bounded source window into the selected body's NAND.",
+      "properties": {
+        "asset": {
+          "description": "Source asset identity.",
+          "type": "string"
+        },
+        "bytes": {
+          "description": "Number of main-area bytes.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "managed_index": {
+          "description": "First logical managed-block index, if synthetic tags are requested.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "physical_offset": {
+          "description": "Main-area offset within the selected NAND.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_offset": {
+          "description": "Starting byte within the source asset.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "asset",
+        "source_offset",
+        "bytes",
+        "physical_offset"
+      ],
+      "type": "object"
+    },
+    "PersistentSet": {
+      "additionalProperties": false,
+      "description": "External NAND and MCU state selected together by identity.",
+      "properties": {
+        "append": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PersistentJournalAppend"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit journal append, when selected."
+        },
+        "mcu_packet": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PersistentPacket"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional persistent MCU packet source."
+        },
+        "placements": {
+          "description": "NAND main-area windows and their optional managed block tags.",
+          "items": {
+            "$ref": "#/$defs/PersistentPlacement"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "placements"
+      ],
+      "type": "object"
+    },
+    "PixelFormat": {
+      "description": "Implemented scanout encodings.",
+      "enum": [
+        "bgra8888"
+      ],
+      "type": "string"
+    },
+    "QuickGrid": {
+      "additionalProperties": false,
+      "description": "Quick menu dimensions.",
+      "properties": {
+        "columns": {
+          "description": "Columns.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_code": {
+          "description": "Menu code.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "description": "Rows.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "rows",
+        "columns",
+        "menu_code"
+      ],
+      "type": "object"
+    },
+    "ReadinessAddresses": {
+      "additionalProperties": false,
+      "description": "Addresses used to check REC readiness.",
+      "properties": {
+        "category_one": {
+          "description": "Firmware address for readiness category one.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "category_two": {
+          "description": "Firmware address for readiness category two.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "excluded_mask": {
+          "description": "Mask of readiness bits excluded from the check.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "input_pending": {
+          "description": "Firmware address for pending input state.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operation_alert_timer": {
+          "description": "Firmware address for the operation-alert timer.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "override_address": {
+          "description": "Firmware address used to override readiness.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "category_one",
+        "category_two",
+        "input_pending",
+        "excluded_mask",
+        "operation_alert_timer",
+        "override_address"
+      ],
+      "type": "object"
+    },
+    "Resources": {
+      "additionalProperties": false,
+      "description": "Native text and bitmap resource table layouts.",
+      "properties": {
+        "bitmaps": {
+          "$ref": "#/$defs/BitmapResources",
+          "description": "Bitmaps."
+        },
+        "glyph_first": {
+          "description": "Glyph first.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "glyph_last": {
+          "description": "Glyph last.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "glyphs": {
+          "$ref": "#/$defs/GlyphResources",
+          "description": "Registry layout locating the icon font in live memory."
+        },
+        "language": {
+          "$ref": "#/$defs/ConfigurationLocation",
+          "description": "Language."
+        },
+        "last_caption": {
+          "description": "Last caption.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "private_text_bias": {
+          "description": "Private text bias.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "private_text_first": {
+          "description": "Private text first.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "private_text_last": {
+          "description": "Private text last.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "supplementary_address": {
+          "description": "Supplementary address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "supplementary_first": {
+          "description": "Supplementary first.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "supplementary_max_units": {
+          "description": "Supplementary max units.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "supplementary_stride": {
+          "description": "Supplementary stride.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_max_units": {
+          "description": "Text max units.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_metrics_offset": {
+          "description": "Text metrics offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_pointer_offset": {
+          "description": "Text pointer offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_record_size": {
+          "description": "Text record size.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_unit_bytes": {
+          "description": "Text unit bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text_variants_offset": {
+          "description": "Text variants offset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "language",
+        "text_record_size",
+        "text_variants_offset",
+        "text_metrics_offset",
+        "text_pointer_offset",
+        "text_unit_bytes",
+        "text_max_units",
+        "private_text_first",
+        "private_text_last",
+        "private_text_bias",
+        "glyph_first",
+        "glyph_last",
+        "supplementary_address",
+        "supplementary_first",
+        "last_caption",
+        "supplementary_stride",
+        "supplementary_max_units",
+        "bitmaps",
+        "glyphs"
+      ],
+      "type": "object"
+    },
+    "RootRoute": {
+      "additionalProperties": false,
+      "description": "A root menu entry strategy.",
+      "properties": {
+        "entry": {
+          "description": "Navigation role used to open the root.",
+          "type": "string"
+        },
+        "tab": {
+          "default": null,
+          "description": "Optional tab key.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "entry"
+      ],
+      "type": "object"
+    },
+    "Scanout": {
+      "additionalProperties": false,
+      "description": "A located framebuffer and its live selection pointer.",
+      "properties": {
+        "address": {
+          "description": "Address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "address_mask": {
+          "description": "Address mask.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "channel": {
+          "description": "Channel.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "height": {
+          "description": "Height.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "instance": {
+          "description": "Instance.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "layer": {
+          "description": "Layer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pixel_format": {
+          "$ref": "#/$defs/PixelFormat",
+          "description": "Pixel format."
+        },
+        "pointer_address": {
+          "description": "Pointer address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stride_bytes": {
+          "description": "Stride bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width": {
+          "description": "Width.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "width",
+        "height",
+        "pixel_format",
+        "stride_bytes",
+        "instance",
+        "layer",
+        "channel",
+        "pointer_address",
+        "address_mask"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/firmware.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A named firmware version and the content identities needed to run it.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/firmware.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "body_id": {
+      "description": "Body identity that carries this firmware.",
+      "type": "string"
+    },
+    "boot_rom": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BootRomIdentity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Boot ROM content and its physical load address, when applicable."
+    },
+    "generated_facts": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FirmwareGeneratedFacts"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Generated observation facts consumed by supported runs."
+    },
+    "id": {
+      "description": "Stable firmware identity.",
+      "type": "string"
+    },
+    "installation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FirmwareInstallation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Firmware installation and loader facts consumed by the emulator."
+    },
+    "layouts": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FirmwareLayouts"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Located boot, device and persistent-storage layout facts."
+    },
+    "schema": {
+      "description": "Firmware record version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "update": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ContentIdentity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Firmware update content, when distributed for this version."
+    },
+    "version": {
+      "description": "Human-readable firmware version string.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "body_id",
+    "version"
+  ],
+  "title": "Firmware",
+  "type": "object"
+}

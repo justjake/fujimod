@@ -1,0 +1,303 @@
+.catalog {
+  /* Icon optical size as a multiple of the adjacent text's capital height (scripts/icon-metrics.ts). */
+  --icon-size: 1.62cap;
+  max-width: 880px;
+  margin: 0 auto 40px;
+  scroll-margin-top: 20px;
+}
+.catalog h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dim);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin: 0 0 4px;
+}
+.catalog h3 {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--faint);
+  margin: 22px 0 8px;
+}
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 28px 24px;
+}
+.catalog-tile-preview {
+  position: relative;
+  display: block;
+  margin: 0 0 10px;
+  aspect-ratio: 3 / 2;
+  background: #000;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.catalog-tile-preview img,
+.catalog-tile-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.catalog-tile-video {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.catalog-tile-video.playing {
+  opacity: 1;
+}
+/* A preview fades in and out over its still; only its loop fades to black. */
+.catalog-tile-preview:has(.catalog-tile-video[data-fade]:not(.leaving)) img {
+  visibility: hidden;
+}
+.catalog-tile-video,
+.catalog-card-video {
+  transition: opacity 350ms ease;
+}
+.catalog-tile-video[data-fade],
+.catalog-tile-video.leaving,
+.catalog-card-video[data-fade] {
+  opacity: 0;
+}
+.catalog-tile h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.catalog-tile p {
+  margin: 6px 0 0;
+  color: var(--dim);
+  font-size: 13px;
+  line-height: 1.5;
+}
+/* Every icon is cropped to its ink and sized to one optical size (--w, --h from the metrics),
+   centered in a fixed column so labels line up. Vertically it is centered on the capitals,
+   then lifted by a quarter of its overhang: half of the height beyond the capitals sits
+   above them and half below the baseline, so tall icons do not look low. */
+.catalog-icon {
+  --icon-column: 1.556;
+  width: calc(var(--w) * var(--icon-size));
+  height: calc(var(--h) * var(--icon-size));
+  margin-inline: calc((var(--icon-column) - var(--w)) / 2 * var(--icon-size));
+  vertical-align: calc((1cap - var(--h) * var(--icon-size)) / 2);
+  translate: 0 calc((1cap - var(--h) * var(--icon-size)) / 4);
+  flex: none;
+  overflow: visible;
+  color: #eee;
+  fill: currentColor;
+}
+.catalog-ratio {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+.catalog .nowrap {
+  white-space: nowrap;
+}
+.catalog-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+}
+.catalog-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--key2);
+  border-radius: 999px;
+  padding: 2px 8px 2px 6px;
+  font-size: 11px;
+  color: #ddd;
+}
+.catalog-chip .catalog-icon {
+  margin-inline: 0;
+  color: inherit;
+}
+/* The X70's own options: dimmed, so FujiMod's additions read on their own. */
+.catalog-chip.stock {
+  background: transparent;
+  color: var(--faint);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.catalog-chip.action {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--edge);
+  letter-spacing: 0.02em;
+}
+.catalog-ref {
+  cursor: help;
+  outline-offset: 2px;
+}
+.catalog-tile h4 .catalog-ref,
+.catalog-sub h5 .catalog-ref {
+  border-bottom: 1px dotted var(--faint);
+}
+.catalog-ref:hover,
+.catalog-ref:focus-visible {
+  color: var(--blue);
+}
+.catalog-sub {
+  margin-top: 10px;
+}
+.catalog-sub h5 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #ccc;
+}
+.catalog-sub .catalog-chips {
+  margin-top: 0;
+}
+/* The menus above a tile's or card's title, ending in ›. */
+.catalog-path {
+  margin: 0 0 3px;
+  font-size: 11px;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  color: var(--faint);
+}
+.catalog-card .catalog-path {
+  color: var(--dim);
+}
+.catalog-premiere {
+  --icon-size: 1.5cap;
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #eee;
+}
+.catalog-premiere .catalog-icon {
+  margin-inline: 0;
+}
+/* INSPIRED BY and THANKS: icon in a hanging column, so wrapped lines align with the text. */
+.catalog-credits {
+  --icon-size: 1.5cap;
+  --credit-indent: calc(1.556 * var(--icon-size) + 0.45em);
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--dim);
+}
+.catalog-credits li {
+  padding-left: var(--credit-indent);
+  text-indent: calc(-1 * var(--credit-indent));
+}
+.catalog-credits li + li {
+  margin-top: 1px;
+}
+.catalog-credits .catalog-icon {
+  margin-left: calc((1.556 - var(--w)) / 2 * var(--icon-size));
+  margin-right: calc((1.556 - var(--w)) / 2 * var(--icon-size) + 0.45em);
+}
+.catalog-credits b {
+  color: #eee;
+}
+/* On tiles credits sit behind the summary and options: label and icon dimmed, text faint. */
+.catalog-tile .catalog-credits {
+  color: var(--faint);
+}
+.catalog-tile .catalog-credits b,
+.catalog-tile .catalog-credits a,
+.catalog-tile .catalog-credits .catalog-icon {
+  color: var(--dim);
+}
+.catalog-tile .catalog-credits a:hover,
+.catalog-tile .catalog-credits a:focus-visible {
+  color: var(--blue);
+}
+.catalog-credits a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+.catalog-credits a:hover,
+.catalog-credits a:focus-visible {
+  color: var(--blue);
+  border-color: currentColor;
+}
+.catalog-card {
+  position: fixed;
+  z-index: 20;
+  width: min(340px, calc(100vw - 16px));
+  padding: 14px 16px 10px;
+  background: var(--key2);
+  color: #eee;
+  border: 1px solid var(--edge);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 60%);
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
+  pointer-events: none;
+}
+.catalog-card.on {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.catalog-card > :last-child {
+  margin-bottom: 0;
+}
+.catalog-card-video {
+  display: block;
+  width: calc(100% + 32px);
+  margin: -14px -16px 12px;
+  aspect-ratio: 3 / 2;
+  object-fit: contain;
+  background: #000;
+  border-radius: 13px 13px 0 0;
+}
+.catalog-card-title {
+  margin: 0 0 4px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.catalog-card p {
+  font-size: 14px;
+  margin: 0 0 6px;
+  line-height: 1.35;
+}
+.catalog-card .catalog-premiere {
+  margin: 0 0 6px;
+}
+.catalog-card .catalog-credits {
+  margin: 0 0 6px;
+}
+.catalog-card-heading {
+  margin: 10px 0 3px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #ccc;
+}
+.catalog-card-related {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  line-height: 1.4;
+  font-size: 12px;
+  color: var(--dim);
+}
+.catalog-card-related b {
+  color: #eee;
+}

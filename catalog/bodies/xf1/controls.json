@@ -1,0 +1,469 @@
+{
+  "$schema": "https://fujimod.com/schemas/physical-controls.schema.json",
+  "schema": 1,
+  "id": "xf1-controls",
+  "body_id": "xf1",
+  "manual": {
+    "url": "https://dl.fujifilm-x.com/support/manual/x/fujifilm_xf1_manual_en.pdf",
+    "title": "XF1 Owner’s Manual",
+    "pages": [
+      2,
+      3,
+      4,
+      5,
+      8,
+      9,
+      15,
+      21,
+      22,
+      26,
+      27,
+      28,
+      29,
+      30,
+      49,
+      50,
+      51,
+      53,
+      54,
+      55,
+      62,
+      71,
+      81,
+      108,
+      142
+    ]
+  },
+  "analog_levels": null,
+  "controls": {
+    "mode_dial": {
+      "name": "Mode dial",
+      "location": "top",
+      "manual_page": 30,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Selects the shooting mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "P",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "S",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "A",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "M",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "C1",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "C2",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "SP",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "Adv.",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "B (AUTO)",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "EXR",
+              "key": null,
+              "asserted": null
+            }
+          ]
+        },
+        "press": null,
+        "endless": null
+      },
+      "positions": [
+        {
+          "id": "P",
+          "label": "P",
+          "description": null
+        },
+        {
+          "id": "S",
+          "label": "S",
+          "description": null
+        },
+        {
+          "id": "A",
+          "label": "A",
+          "description": null
+        },
+        {
+          "id": "M",
+          "label": "M",
+          "description": null
+        },
+        {
+          "id": "C1",
+          "label": "C1",
+          "description": null
+        },
+        {
+          "id": "C2",
+          "label": "C2",
+          "description": null
+        },
+        {
+          "id": "SP",
+          "label": "SP",
+          "description": null
+        },
+        {
+          "id": "Adv.",
+          "label": "Adv.",
+          "description": null
+        },
+        {
+          "id": "B (AUTO)",
+          "label": "B (AUTO)",
+          "description": null
+        },
+        {
+          "id": "EXR",
+          "label": "EXR",
+          "description": null
+        }
+      ],
+      "short_name": "MODE"
+    },
+    "shutter_button": {
+      "name": "Shutter button",
+      "location": "top",
+      "manual_page": 28,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Half-press to set focus and exposure; press the rest of the way down to take a picture.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "shutter",
+        "stages": {
+          "half_press": null,
+          "full_press": null
+        }
+      },
+      "positions": [],
+      "short_name": "SHUTTER"
+    },
+    "fn_button": {
+      "name": "Fn (function) button",
+      "location": "top",
+      "manual_page": 54,
+      "face": "Fn",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": true,
+      "pushable": true,
+      "default_function": "N (flash); its role can be changed in the Fn BUTTON menu.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": null
+      },
+      "positions": []
+    },
+    "zoom_ring_power_switch": {
+      "name": "Zoom ring (ON/OFF switch)",
+      "location": "lens",
+      "manual_page": 22,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Rotate to zoom and frame the picture; rotate to STANDBY to turn the camera off or to 25 to turn it on. Pull or press the ring to release or lock the lens in portable mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "ring",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "STANDBY",
+              "key": null,
+              "asserted": null
+            },
+            {
+              "id": "25",
+              "key": null,
+              "asserted": null
+            }
+          ]
+        },
+        "press": null,
+        "endless": null
+      },
+      "positions": [
+        {
+          "id": "STANDBY",
+          "label": "STANDBY",
+          "description": null
+        },
+        {
+          "id": "25",
+          "label": "25",
+          "description": null
+        }
+      ],
+      "short_name": "ZOOM"
+    },
+    "selector_button": {
+      "name": "Selector button",
+      "location": "rear",
+      "manual_page": 2,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": true,
+      "pushable": true,
+      "default_function": "Moves the cursor; up adjusts exposure compensation in shooting or deletes in playback, left selects macro, right selects flash, and down selects the self-timer. Its directional functions can be assigned in the E-Fn BUTTON CUSTOM SETTING menu.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": null
+      },
+      "positions": [],
+      "short_name": "SELECTOR"
+    },
+    "menu_ok_button": {
+      "name": "MENU/OK button",
+      "location": "rear",
+      "manual_page": 2,
+      "face": "MENU/OK",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Displays or confirms menu selections.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": null
+      },
+      "positions": []
+    },
+    "main_command_dial": {
+      "name": "Main-command dial",
+      "location": "rear",
+      "manual_page": 4,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Rotate to set the aperture value or shutter speed and to select items; press the center for some operations, such as switching the setting item in M mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "steps",
+          "decrease": null,
+          "increase": null
+        },
+        "press": null,
+        "endless": null
+      },
+      "positions": [],
+      "short_name": "MAIN DIAL"
+    },
+    "sub_command_dial": {
+      "name": "Sub-command dial",
+      "location": "rear",
+      "manual_page": 4,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Rotate to set the aperture value or shutter speed and to select items; rotate to adjust focus in manual focus mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "steps",
+          "decrease": null,
+          "increase": null
+        },
+        "press": null,
+        "endless": null
+      },
+      "positions": [],
+      "short_name": "SUB DIAL"
+    },
+    "flash_pop_up_switch": {
+      "name": "Flash pop-up switch",
+      "location": "rear",
+      "manual_page": 51,
+      "face": null,
+      "icon": "flash",
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Slides to pop up the flash.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch",
+        "positions": []
+      },
+      "positions": []
+    },
+    "playback_button": {
+      "name": "Playback button",
+      "location": "rear",
+      "manual_page": 29,
+      "face": null,
+      "icon": "playback",
+      "connection_ids": [],
+      "assignable": true,
+      "pushable": true,
+      "default_function": "Starts playback; pressing for about a second turns the camera on and begins playback. Its role can be assigned in the E-Fn menu.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": null
+      },
+      "positions": []
+    },
+    "movie_recording_button": {
+      "name": "Movie recording button",
+      "location": "rear",
+      "manual_page": 81,
+      "face": null,
+      "icon": "record",
+      "connection_ids": [],
+      "assignable": true,
+      "pushable": true,
+      "default_function": "Press to start movie recording and press again to end it; its role can be assigned in the E-Fn menu.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": null
+      },
+      "positions": []
+    },
+    "e_fn_button": {
+      "name": "E-Fn (extended function) button",
+      "location": "rear",
+      "manual_page": 55,
+      "face": "E-Fn",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Opens or exits the E-Fn menu; press and hold to enable monitor sunlight mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": null
+      },
+      "positions": []
+    },
+    "disp_back_button": {
+      "name": "DISP (display)/BACK button",
+      "location": "rear",
+      "manual_page": 9,
+      "face": "DISP/BACK",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Cycles display modes and backs out of menus; press and hold to toggle silent mode.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": null
+      },
+      "positions": []
+    },
+    "battery_chamber_cover_latch": {
+      "name": "Battery-chamber cover latch",
+      "location": "bottom",
+      "manual_page": 15,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Slide the latch to open the battery-chamber cover.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "lever",
+        "positions": [],
+        "momentary": null
+      },
+      "positions": [],
+      "short_name": "COVER"
+    },
+    "battery_latch": {
+      "name": "Battery latch",
+      "location": "bottom",
+      "manual_page": 15,
+      "face": null,
+      "icon": null,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "To remove the battery, press the battery latch to the side, and slide the battery out of the camera.",
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "lever",
+        "positions": [],
+        "momentary": null
+      },
+      "positions": [],
+      "short_name": "BATTERY"
+    }
+  }
+}

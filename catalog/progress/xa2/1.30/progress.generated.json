@@ -1,0 +1,87 @@
+{
+  "$schema": "https://fujimod.com/schemas/progress.generated.schema.json",
+  "schema": 1,
+  "firmware_id": "xa2-130",
+  "model": "X-A2",
+  "version": "1.30",
+  "facts": {
+    "located": 29,
+    "total": 33
+  },
+  "boot_rom": null,
+  "stages": {
+    "research": "pass",
+    "analysis": "not-run",
+    "rec": "pass",
+    "menu": "pass",
+    "camera-identity": "not-run",
+    "camera-snapshot": "not-run",
+    "camera-menu": "not-run",
+    "mod-target": "not-run",
+    "mod-build": "not-run",
+    "sd-image": "not-run",
+    "sd-boot": "not-run"
+  },
+  "stock": {
+    "record-picture": {
+      "result": "not-run"
+    },
+    "record-movie": {
+      "result": "not-run"
+    },
+    "control-input": {
+      "result": "not-run"
+    },
+    "focus": {
+      "result": "not-run"
+    },
+    "lens": {
+      "result": "not-run"
+    },
+    "film-simulations": {
+      "result": "not-run"
+    },
+    "playback-picture": {
+      "result": "not-run"
+    },
+    "playback-movie": {
+      "result": "not-run"
+    },
+    "develop-raw": {
+      "result": "not-run"
+    },
+    "sd": {
+      "result": "not-run"
+    },
+    "control-layout": {
+      "result": "not-run"
+    }
+  },
+  "mods": {
+    "af": "not-run",
+    "fujimod": "not-run",
+    "aspect-ratio": "not-run",
+    "surround-view": "not-run",
+    "desqueeze": "not-run",
+    "desqueeze-jpeg": "not-run",
+    "jpeg-max": "not-run",
+    "framing-guideline": "not-run",
+    "film-sims": "not-run",
+    "card-films": "not-run",
+    "film-editor": "not-run",
+    "highlight-meter": "not-run",
+    "raw-view": "not-run",
+    "raw-exposure": "not-run",
+    "hdmi-rec": "not-run",
+    "controls": "not-run",
+    "menu-theme": "not-run",
+    "menu-tap": "not-run",
+    "recipes": "not-run",
+    "snap-focus": "not-run",
+    "usb-debug": "not-run",
+    "af-scene-capture": "not-run",
+    "bug-report": "not-run",
+    "sd-volume-name": "not-run",
+    "date-folders": "not-run"
+  }
+}

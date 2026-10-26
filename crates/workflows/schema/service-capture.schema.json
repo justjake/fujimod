@@ -1,0 +1,316 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/justjake/fujimod/service-capture.schema.json",
+  "title": "Service capture facts (partial offline plans are allowed)",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "format_version": {
+      "const": 1
+    },
+    "firmware_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "firmware_sha256": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{64}$"
+    },
+    "normal_usb": {
+      "description": "Optional native OS descriptor recognition; not required for service reads.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/usb_ids"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "service_usb": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/usb_ids"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "product": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "internal_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "entry": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/entry"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "read_gate": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "slow_read_bytes": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "maximum": 4294967295
+    },
+    "read_mode": {
+      "enum": [
+        "bulk",
+        "slow"
+      ]
+    },
+    "ram": {
+      "description": "Explicit finite read range. A slow probe may test unknown readability; this is not a claim about physical RAM size.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/region"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "bulk": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/bulk"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "code_checks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/code_check"
+      }
+    }
+  },
+  "required": [
+    "format_version",
+    "firmware_id",
+    "firmware_sha256",
+    "service_usb",
+    "product",
+    "internal_version",
+    "entry",
+    "read_gate",
+    "slow_read_bytes",
+    "read_mode",
+    "ram",
+    "bulk",
+    "code_checks"
+  ],
+  "$defs": {
+    "usb_ids": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "vendor_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "product_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      },
+      "required": [
+        "vendor_id",
+        "product_id"
+      ]
+    },
+    "region": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        }
+      },
+      "required": [
+        "address",
+        "size"
+      ]
+    },
+    "code_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "region": {
+          "$ref": "#/$defs/region"
+        },
+        "sha256": {
+          "type": "array",
+          "minItems": 32,
+          "maxItems": 32,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
+        }
+      },
+      "required": [
+        "region",
+        "sha256"
+      ]
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "physical_keys": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "usb_condition": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "physical_keys",
+        "usb_condition"
+      ]
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "enabled_value": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 255
+        },
+        "ram_only": {
+          "const": true
+        }
+      },
+      "required": [
+        "offset",
+        "enabled_value",
+        "ram_only"
+      ]
+    },
+    "bulk": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tag": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "base": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "capacities": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4294967295
+          }
+        },
+        "wrapping_offsets": {
+          "type": "boolean"
+        },
+        "callback_pointer": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "callback_offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "callback": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "source_state": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "probes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/region"
+          }
+        },
+        "mapped_probe": {
+          "$ref": "#/$defs/code_check"
+        },
+        "chunk_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        }
+      },
+      "required": [
+        "tag",
+        "base",
+        "capacities",
+        "wrapping_offsets",
+        "callback_pointer",
+        "callback_offset",
+        "callback",
+        "source_state",
+        "probes",
+        "mapped_probe",
+        "chunk_bytes"
+      ]
+    }
+  }
+}

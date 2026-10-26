@@ -1,8 +1,36 @@
 """Typed Python values. Wire encoding and decoding remain in Rust."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
-from .._bridge import Handle, jsusb, call, uint, enum_in, enum_out, buffer_out, snapshot
+from typing import TYPE_CHECKING, Self
+
+from .._bridge import Handle, buffer_out, call, enum_in, enum_out, jsusb, snapshot, uint
+
+if TYPE_CHECKING:
+    from _fujimod_js import (
+        JsCapabilitiesReply as JsCapabilitiesReply,
+    )
+    from _fujimod_js import (
+        JsConfigurationGeometry as JsConfigurationGeometry,
+    )
+    from _fujimod_js import (
+        JsConsoleReply as JsConsoleReply,
+    )
+    from _fujimod_js import (
+        JsDiagnosticReply as JsDiagnosticReply,
+    )
+    from _fujimod_js import (
+        JsFirmwareDownloadReply as JsFirmwareDownloadReply,
+    )
+    from _fujimod_js import (
+        JsFirmwareLimits as JsFirmwareLimits,
+    )
+    from _fujimod_js import (
+        JsInterfaceSelection as JsInterfaceSelection,
+    )
+    from _fujimod_js import (
+        JsLogReply as JsLogReply,
+    )
 
 
 class InfoSelector(Enum):
@@ -80,14 +108,13 @@ class FirmwareDownloadState(Enum):
 
 
 @dataclass(frozen=True, kw_only=True)
-class FirmwareLimits(Handle):
+class FirmwareLimits(Handle["JsFirmwareLimits"]):
     memory_read: int
     memory_write: int
     configuration: int
     console: int
-    _js: object = field(init=False, repr=False, compare=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         object.__setattr__(
             self,
             "_js",
@@ -107,13 +134,12 @@ class FirmwareLimits(Handle):
 
 
 @dataclass(frozen=True, kw_only=True)
-class InterfaceSelection(Handle):
+class InterfaceSelection(Handle["JsInterfaceSelection"]):
     configuration: int
     interface: int
     alternate: int
-    _js: object = field(init=False, repr=False, compare=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         object.__setattr__(
             self,
             "_js",
@@ -127,7 +153,7 @@ class InterfaceSelection(Handle):
         )
 
     @classmethod
-    def _from_js(cls, item):
+    def _from_js(cls, item: JsInterfaceSelection) -> Self:
         return snapshot(
             item,
             lambda v: cls(
@@ -138,38 +164,70 @@ class InterfaceSelection(Handle):
         )
 
 
-class Device(Handle):
-    def __init__(self):
+class Device(Handle["JsDevice"]):
+    def __init__(self) -> None:
         raise TypeError("use discover() or request_device()")
 
-    vendor_id = property(lambda self: self._js.vendorId)
-    product_id = property(lambda self: self._js.productId)
+    @property
+    def vendor_id(self) -> int:
+        return self._js.vendorId
+
+    @property
+    def product_id(self) -> int:
+        return self._js.productId
+
     # WebUSB does not expose OS bus/address/port identifiers.
-    bus_id = property(lambda self: None)
-    address = property(lambda self: None)
-    ports = property(lambda self: None)
-    manufacturer = property(lambda self: self._js.manufacturer)
-    product = property(lambda self: self._js.productName)
-    serial = property(lambda self: self._js.serialNumber)
+    @property
+    def bus_id(self) -> str | None:
+        return None
+
+    @property
+    def address(self) -> int | None:
+        return None
+
+    @property
+    def ports(self) -> list[int] | None:
+        return None
+
+    @property
+    def manufacturer(self) -> str | None:
+        return self._js.manufacturer
+
+    @property
+    def product(self) -> str | None:
+        return self._js.productName
+
+    @property
+    def serial(self) -> str | None:
+        return self._js.serialNumber
 
 
-class DiagnosticTag(Handle):
-    def __init__(self):
+class DiagnosticTag(Handle["JsDiagnosticTag"]):
+    def __init__(self) -> None:
         raise TypeError("use bulk_source() or research(value)")
 
     @classmethod
-    def bulk_source(cls):
+    def bulk_source(cls) -> Self:
         return cls._wrap(call(jsusb.DiagnosticTag.bulkSource))
 
     @classmethod
-    def research(cls, value):
+    def research(cls, value: int) -> Self:
         return cls._wrap(call(jsusb.DiagnosticTag.research, uint(value)))
 
-    value = property(lambda self: self._js.value)
+    @property
+    def value(self) -> int:
+        return self._js.value
 
 
-class DataWindow(Handle):
-    def __init__(self, base, address, length, capacity, offset_mode):
+class DataWindow(Handle["JsDataWindow"]):
+    def __init__(
+        self,
+        base: int,
+        address: int,
+        length: int,
+        capacity: int,
+        offset_mode: OffsetMode,
+    ) -> None:
         self._js = call(
             jsusb.DataWindow.new,
             uint(base),
@@ -179,7 +237,9 @@ class DataWindow(Handle):
             enum_in(offset_mode, OffsetMode),
         )
 
-    capacity = property(lambda self: self._js.capacity)
+    @property
+    def capacity(self) -> int:
+        return self._js.capacity
 
 
 @dataclass(frozen=True)
@@ -187,12 +247,15 @@ class DiagnosticReply:
     status: CommandStatus
     primary: int
     secondary: int
-    _fields: tuple
+    _fields: tuple[int, ...]
     raw: bytes
-    fields = property(lambda self: list(self._fields))
+
+    @property
+    def fields(self) -> list[int]:
+        return list(self._fields)
 
     @classmethod
-    def _from_js(cls, value):
+    def _from_js(cls, value: JsDiagnosticReply) -> Self:
         return snapshot(
             value,
             lambda v: cls(
@@ -213,7 +276,7 @@ class FirmwareDownloadReply:
     raw: bytes
 
     @classmethod
-    def _from_js(cls, value):
+    def _from_js(cls, value: JsFirmwareDownloadReply) -> Self:
         return snapshot(
             value,
             lambda v: cls(
@@ -232,7 +295,7 @@ class ConfigurationGeometry:
     raw: bytes
 
     @classmethod
-    def _from_js(cls, value):
+    def _from_js(cls, value: JsConfigurationGeometry) -> Self:
         return snapshot(
             value, lambda v: cls(v.capacity, v.pageBytes, buffer_out(v.raw))
         )
@@ -244,7 +307,7 @@ class CapabilitiesReply:
     raw: bytes
 
     @classmethod
-    def _from_js(cls, value):
+    def _from_js(cls, value: JsCapabilitiesReply) -> Self:
         return snapshot(value, lambda v: cls(v.byteLength, buffer_out(v.raw)))
 
 
@@ -254,7 +317,7 @@ class LogReply:
     data: bytes
 
     @classmethod
-    def _from_js(cls, value):
+    def _from_js(cls, value: JsLogReply) -> Self:
         return snapshot(value, lambda v: cls(v.status, buffer_out(v.data)))
 
 
@@ -266,7 +329,7 @@ class ConsoleReply:
     output: bytes
 
     @classmethod
-    def _from_js(cls, value):
+    def _from_js(cls, value: JsConsoleReply) -> Self:
         return snapshot(
             value,
             lambda v: cls(
@@ -305,3 +368,9 @@ for _value in (
     ConsoleReply,
 ):
     _value.__module__ = "fujimod.usb"
+
+
+if TYPE_CHECKING:
+    from _fujimod_js import JsDataWindow as JsDataWindow
+    from _fujimod_js import JsDevice as JsDevice
+    from _fujimod_js import JsDiagnosticTag as JsDiagnosticTag

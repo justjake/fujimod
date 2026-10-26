@@ -1,0 +1,30 @@
+[package]
+name = "fujimod-python-usb"
+description = "Python bindings for USB sessions, tracing, workflows and firmware files"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+test = false
+doctest = false
+
+[features]
+
+[dependencies]
+fujimod-python-usb-base = { path = "../usb-base" }
+fujimod-catalog-camera.workspace = true
+fujimod-catalog-firmware-identity.workspace = true
+fujimod-firmware.workspace = true
+fujimod-recovery.workspace = true
+serde_json.workspace = true
+fujimod-usb.workspace = true
+fujimod-workflows.workspace = true
+pyo3.workspace = true
+futures-lite.workspace = true
+futures-channel.workspace = true
+nusb.workspace = true
+fujimod-workspace-hack.workspace = true
+

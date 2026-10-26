@@ -1,0 +1,23 @@
+[package]
+name = "fujimod-emulator-exr2-boot-serial"
+description = "EXR II boot serial register blocks"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-emulator-devices.workspace = true
+fujimod-emulator-exr2-plan.workspace = true
+fujimod-emulator-exr2-serial.workspace = true
+fujimod-emulator-parts-io.workspace = true
+serde_json = "1"
+serde = { version = "1", features = ["derive", "rc"] }
+fujimod-workspace-hack.workspace = true
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

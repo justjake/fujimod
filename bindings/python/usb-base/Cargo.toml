@@ -1,0 +1,17 @@
+[package]
+name = "fujimod-python-usb-base"
+description = "USB exceptions, error conversion and the session hooks binding crates share with the USB bindings"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+test = false
+doctest = false
+
+[dependencies]
+fujimod-usb.workspace = true
+pyo3.workspace = true
+fujimod-workspace-hack.workspace = true

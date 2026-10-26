@@ -1,67 +1,55 @@
 # Production hosting
 
-The website is intentionally unpublished. Its Worker has been removed and the
-website publication workflow is disabled. The separate `apps/domain-endpoint`
-Worker maintains DNS and HTTPS for `fujimod.com` and `www.fujimod.com`, returning
-an empty 404 for every HTTPS request and redirecting HTTP to HTTPS. It has no
-website assets. Deploying the sharing service for testing does not authorize
-publishing the website.
-
-The retained website configuration reserves `fujimod.com` and `www.fujimod.com`
-for a future explicitly requested publication. The separate
-[USB sharing Worker](../usb-sharing/README.md) is available for testing at
-`https://share.fujimod.com`; its WebSocket endpoint is
+`fujimod.com` and `www.fujimod.com` serve the static website through the
+`fujimod-web` Cloudflare Worker. The separate [USB sharing Worker](../usb-sharing/README.md)
+serves `share.fujimod.com`; its signaling endpoint is
 `wss://share.fujimod.com/usb-proxy/signal`.
 
-Gandi remains the registrar. Cloudflare hosts the entire DNS zone, delegated to
-`ali.ns.cloudflare.com` and `rudy.ns.cloudflare.com`. Mail, SPF, DKIM, webmail and
-mail service-discovery records were imported from Gandi before delegation changed.
-Worker custom domains manage the website's DNS records and HTTPS certificates.
+## Deploy
 
-DNS migration completed on 2026-10-17. GitHub Pages is disabled. The sharing
-endpoint passed live owner/controller signaling and owner-revocation checks.
-The website was briefly deployed during migration and then taken offline at the
-owner's request; it is not part of the currently hosted service.
+Website deployment is independent of mod publication. GitHub Releases contain
+`patches.json` and mod patches only. Generated emulator runtimes, the camera
+catalog, and feature media are uploaded directly to Cloudflare with the website.
+Generated assets stay outside Git.
 
-The withdrawn initial static deployment used committed source `04bd01c12db5` and no local
-simulator bundles or unpublished mod artifacts. There were no published GitHub
-releases to stage, so its catalog offers USB devices without simulator runtimes.
-The sharing Worker currently has no TURN secrets and provides STUN only. TURN
-usage monitoring and a budget cutoff must be implemented before enabling relay
-credentials; the existing issuance quota is not a spending cap.
-
-## Releases
-
-`.github/workflows/cloudflare.yml` builds main, checks the application, stages
-verified published release artifacts, and deploys `dist/` with `wrangler.jsonc`.
-It runs when a release is published or is manually dispatched on main. Review
-branches cannot deploy production. GitHub Pages is no longer a deployment target.
-
-The GitHub repository secret `CLOUDFLARE_API_TOKEN` must grant Workers Scripts
-Write for this account and Workers Routes Write / Zone Read for this zone.
-Cloudflare must permit the token to manage the configured custom domains.
-Cloudflare account email verification is required for both Worker deployment
-and deployment-token creation. Do not store a personal CLI OAuth token in CI.
-
-For a manual deployment, stage release artifacts and build with:
+From `apps/web`, use the locally generated asset directories:
 
 ```sh
-npm run prepare:release
-FUJIMOD_SIGNAL_URL=wss://share.fujimod.com/usb-proxy/signal npm run build
-npx wrangler deploy
+FUJIMOD_SIGNAL_URL=wss://share.fujimod.com/usb-proxy/signal npm run deploy -- \
+  --runtime /path/to/runtime \
+  --patches /path/to/mod-artifacts \
+  --media /path/to/feature-media
 ```
 
-Use Wrangler sign-in or a deployment API token. `cf` keeps its OAuth credentials
-separately from Wrangler. No Cloudflare secret belongs in the static build.
-Build only committed source and approved release artifacts; local simulator
-bundles, firmware inputs and unpublished mod builds are not production assets.
+Deploys authenticate with the Cloudflare CLI's sign-in (`cf auth login`) through
+[`scripts/cloudflare/wrangler.ts`](../../scripts/cloudflare/wrangler.ts); a
+`CLOUDFLARE_API_TOKEN` in the environment takes precedence. No Wrangler login is needed. Install the USB sharing
+Worker's dependencies for its pinned Wrangler CLI. The runtime directory contains
+`catalog.json` and one qualified bundle per advertised emulator, including
+the standalone Wasm module, its loader, cold inputs, and license notices. The patch
+directory contains a verified mod release. The media directory contains `media.json` and the
+content-addressed MP4 and WebP files it names, keyed by feature card. Each card
+shows its newest recording, even when the card's text changed after it was recorded;
+staging leaves out recordings of cards the homepage no longer has. Locally, set
+`FUJIMOD_MEDIA` to a media directory to serve it at `/artifacts/docs/`.
 
-## Verify
+The command validates and stages these assets, runs application checks and tests,
+builds the website, and deploys `dist/client` using `wrangler.jsonc`. Staging fails
+before replacing installed assets if a required file or qualification is missing.
+Use `--prepare-only` to stage assets without building or deploying. The generated
+`site-assets.json` records file sizes and SHA-256 hashes for deployment verification.
+A mod release never triggers or supplies a website deployment.
 
-Check HTTPS at both web hostnames, the Dev Tools route `/dev-tools/`, and the
-sharing Worker's `/health` endpoint. Compare deployed static asset hashes with
-the build. Verify MX, SPF, DKIM and service records after DNS changes.
+Verify both HTTPS hostnames, `/dev-tools/`, camera launch controls, an actual
+emulator boot, and feature media after deployment. Firmware DATs are selected
+locally in the browser and are not website assets.
 
-Keep GitHub Pages available until the Cloudflare deployment and its certificates
-have been verified, then disable Pages in the repository settings. DNS caches may
-continue using the former nameservers until their delegation TTL expires.
+## DNS and sharing
+
+Gandi is the registrar. Cloudflare hosts DNS, delegated to `ali.ns.cloudflare.com`
+and `rudy.ns.cloudflare.com`. Mail records remain in the zone. Worker custom
+domains manage the website records and HTTPS certificates. GitHub Pages is disabled.
+
+The sharing Worker currently provides STUN only. TURN usage monitoring and a
+budget cutoff are required before enabling relay credentials; its issuance quota
+is not a spending cap.

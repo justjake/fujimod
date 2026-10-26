@@ -5,41 +5,45 @@
   "type": "module",
   "scripts": {
     "dev": "vp dev --host 127.0.0.1",
-    "build": "vp check --no-fmt && vp build && node scripts/verify-models.mjs dist",
+    "build": "vp check --no-fmt && vp build && node scripts/prerender.ts dist",
     "preview": "vp preview --host 127.0.0.1",
-    "test": "vp test run",
-    "prepare:release": "node scripts/prepare-pages.mjs",
-    "build:local-preview": "vp check --no-fmt && vp build --mode local-preview && node scripts/verify-models.mjs dist-local-preview",
+    "test": "npm --prefix ../../packages/emulator-ui test && vp test run",
+    "build:local-preview": "vp check --no-fmt && vp build --mode local-preview && node scripts/prerender.ts dist-local-preview",
     "test:watch": "vp test",
-    "check": "vp check --no-fmt",
-    "lint": "vp lint",
-    "format": "vp fmt",
-    "docs:solid": "node scripts/fetch-solid-docs.mjs",
-    "format:check": "vp fmt --check",
+    "check": "vp check --no-fmt && node scripts/icon-metrics.ts --check && npm --prefix ../../packages/emulator-ui run check",
+    "icons:metrics": "node scripts/icon-metrics.ts",
+    "lint": "vp lint && npm --prefix ../../packages/emulator-ui run lint",
+    "format": "vp fmt && npm --prefix ../../packages/emulator-ui run format",
+    "docs:solid": "node scripts/fetch-solid-docs.ts",
+    "format:check": "vp fmt --check && npm --prefix ../../packages/emulator-ui run format:check",
     "build:usb": "npm --prefix ../../bindings/javascript run build",
     "predev": "npm run build:usb",
     "prebuild": "npm run build:usb",
     "prebuild:local-preview": "npm run build:usb",
-    "pretest": "npm run build:usb",
+    "pretest": "npm run build:usb && node ../../crates/simulation/build-web.ts",
     "precheck": "npm run build:usb",
-    "test:dev-tools:browser": "node src/dev-tools/browser.mjs"
+    "test:debug-mode:browser": "node src/dev-tools/debug-mode/browser.ts",
+    "test:dev-tools:browser": "node src/dev-tools/browser.ts",
+    "test:layout-editor:browser": "node src/home/layout-editor.browser.ts",
+    "test:prerender": "node scripts/test-prerender.ts",
+    "deploy": "node scripts/deploy.ts"
   },
   "dependencies": {
-    "@solidjs/web": "2.0.0-rc.15",
-    "solid-js": "2.0.0-rc.15",
-    "three": "^0.186.1",
-    "fujimod": "file:../../bindings/javascript"
+    "@fujimod/emulator-ui": "file:../../packages/emulator-ui",
+    "@solidjs/web": "2.0.0-rc.17",
+    "animejs": "4.5.0",
+    "fujimod": "file:../../bindings/javascript",
+    "solid-js": "2.0.0-rc.17"
   },
   "devDependencies": {
     "@solidjs/vite-plugin": "3.0.0-next.50",
     "@types/node": "^26.6.5",
-    "@types/three": "^0.186.0",
     "eslint-plugin-solid": "0.18.1",
     "jsdom": "30.1.3",
+    "playwright": "1.64.1",
     "typescript": "^7.0.2",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.3.0",
-    "vite-plus": "1.3.0",
-    "playwright": "1.64.1"
+    "vite-plus": "1.3.0"
   },
   "overrides": {
     "vite": "$vite"
