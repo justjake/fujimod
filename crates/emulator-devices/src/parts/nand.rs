@@ -278,6 +278,8 @@ impl Nand {
         })
         .map_err(|e| e.to_string())
     }
+    /// Imports media against this receiver's geometry and immutable base identity.
+    /// Overlays and spare inputs come from the image.
     pub fn restore_committed(&self, bytes: &[u8]) -> Result<Self, String> {
         use sha2::{Digest, Sha256};
         if bytes.len() > 128 << 20 {

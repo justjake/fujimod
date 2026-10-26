@@ -35,6 +35,8 @@ Enable the `emulator` feature for `fujimod::emulator`; execution, device models
 and processor backends live in separate crates under `crates/emulator*`.
 The Python package exposes the same execution core through `fujimod.emulator`.
 
+`fujimod_emulator_devices::parts::nand::Nand` exports committed media through `committed_image()` and imports it into a fresh medium through `restore_committed()`. The caller supplies the board geometry and immutable base; import checks both geometry and base identity, then restores overlays, spare inputs, programmed pages and erased pages without CPU/controller/session state. Equivalent committed state produces deterministic bytes. The schema belongs to FujiMod, not a board-specific retained emulator format.
+
 ```sh
 cargo test --workspace --all-features
 cargo clippy --workspace --all-targets --all-features -- -D warnings
