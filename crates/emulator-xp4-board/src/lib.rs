@@ -1350,6 +1350,9 @@ impl Session {
         if self.inner.cp(core, 1, 0, 0, 0)? & ((1 << 25) | 1) != 0 {
             return Err("Driver guard requires MMU-off little-endian execution".to_owned());
         }
+        self.inner
+            .memory_pointer(return_address, 4, 4)
+            .map_err(|_| "Driver guard return sentinel requires executable physical backing")?;
         state.driver_guard = Some(driver_guard::Guard::new(
             core,
             executable,

@@ -82,3 +82,42 @@ fn guarded_high_rom_call_records_its_sparse_sram_store() {
     assert_eq!(guard.stores, vec![(0, 0xfff00004, 0xfff10000, 4, 42)]);
     session.driver_guard_end();
 }
+
+#[test]
+fn guarded_return_sentinel_requires_executable_backing() {
+    for permissions in [3, 5] {
+        let mut input = definition();
+        input["memory_regions"][1]["permissions"] = json!(permissions);
+        input["initial_registers"][0]
+            .as_array_mut()
+            .unwrap()
+            .push(json!([{ "Arm32": { "R": 14 } }, 0xfff10000u32]));
+        let session = Session::new(serde_json::from_value(input).unwrap(), None).unwrap();
+        session
+            .write(0xfff00000, &0xe12fff1eu32.to_le_bytes())
+            .unwrap();
+        let admitted = session.driver_guard_begin(
+            vec![(0xfff00000, 0xfff00004)],
+            vec![],
+            vec![],
+            0xfff10000,
+            8,
+            0,
+        );
+        if permissions == 3 {
+            assert!(
+                admitted.is_err(),
+                "non-executable sentinel must be rejected"
+            );
+            assert!(session.driver_guard_state().is_none());
+            assert!(session.state(false).failure.is_none());
+        } else {
+            admitted.unwrap();
+            session.run(0, 16).unwrap();
+            let guard = session.driver_guard_state().unwrap();
+            assert!(guard.returned);
+            assert!(guard.failure.is_none());
+            assert!(session.state(false).failure.is_none());
+        }
+    }
+}
