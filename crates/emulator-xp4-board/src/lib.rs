@@ -1,9 +1,9 @@
 //! ARM application-profile cluster alongside the shared R-profile runtime.
 //! The typed CPU backend, backing owner and discovery ledger are shared.
 mod abort;
-pub mod memory;
 mod client;
 mod definition;
+pub mod memory;
 pub use definition::Definition;
 pub mod observation;
 use observation::Call;
@@ -1282,6 +1282,22 @@ impl Session {
             ] {
                 unsafe { inner.cpus[core].install_hook(hook) }?;
             }
+            for window in &inner.memory {
+                if window.permissions & 2 != 0 {
+                    unsafe {
+                        inner.cpus[core].install_hook(CpuHook::Memory {
+                            callback: store,
+                            data,
+                            read: false,
+                            write: true,
+                            range: HookRange::Inclusive {
+                                begin: window.base,
+                                end: window.base + window.data.len() as u64 - 1,
+                            },
+                        })
+                    }?;
+                }
+            }
             inner.write_reg(core, arm::CPSR, 0xd3)?;
             if let Some(registers) = initial_registers.get(core) {
                 for &(register, value) in registers {
@@ -1341,7 +1357,14 @@ impl Session {
             writable,
             return_address,
             store_limit,
-            self.inner.ram.len() as u64,
+            std::iter::once((0, self.inner.ram.len() as u64))
+                .chain(
+                    self.inner
+                        .memory
+                        .iter()
+                        .map(|window| (window.base, window.base + window.data.len() as u64)),
+                )
+                .collect(),
         )?);
         Ok(())
     }
@@ -1528,11 +1551,7 @@ impl Session {
     pub fn write(&self, address: usize, data: &[u8]) -> Result<(), String> {
         let target = self.inner.memory_pointer(address as u64, data.len(), 0)?;
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                data.as_ptr(),
-                target,
-                data.len(),
-            );
+            std::ptr::copy_nonoverlapping(data.as_ptr(), target, data.len());
         }
         Ok(())
     }
@@ -1804,7 +1823,10 @@ impl Session {
             }),
         }
     }
-    pub fn frontier(&self, by_count: bool) -> Vec<fujimod_emulator::board::discovery::FrontierEntry> {
+    pub fn frontier(
+        &self,
+        by_count: bool,
+    ) -> Vec<fujimod_emulator::board::discovery::FrontierEntry> {
         unsafe { (*self.inner.state.get()).discovery.frontier(by_count) }
     }
     pub fn discovery_shadow(&self) -> Vec<(u64, u8)> {

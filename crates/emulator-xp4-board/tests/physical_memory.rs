@@ -52,3 +52,33 @@ fn cpu_cannot_write_read_only_rom() {
     assert_eq!(u32::from_le_bytes(actual), 0xe3a0102a);
     assert!(session.state(false).failure.is_some());
 }
+
+#[test]
+fn guarded_high_rom_call_records_its_sparse_sram_store() {
+    let mut input = definition();
+    input["initial_registers"][0]
+        .as_array_mut()
+        .unwrap()
+        .push(json!([{ "Arm32": { "R": 14 } }, 0x8000]));
+    let definition: Definition = serde_json::from_value(input).unwrap();
+    let session = Session::new(definition, None).unwrap();
+    let code = [0xe3a0102au32, 0xe5801000, 0xe12fff1e];
+    let code: Vec<u8> = code.into_iter().flat_map(u32::to_le_bytes).collect();
+    session.write(0xfff00000, &code).unwrap();
+    session
+        .driver_guard_begin(
+            vec![(0xfff00000, 0xfff0000c)],
+            vec![(0xfff10000, 0xfff10004)],
+            vec![(0xfff10000, 0xfff10004)],
+            0x8000,
+            8,
+            0,
+        )
+        .unwrap();
+    session.run(0, 16).unwrap();
+    let guard = session.driver_guard_state().unwrap();
+    assert!(guard.returned);
+    assert!(guard.failure.is_none());
+    assert_eq!(guard.stores, vec![(0, 0xfff00004, 0xfff10000, 4, 42)]);
+    session.driver_guard_end();
+}

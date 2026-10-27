@@ -24,17 +24,80 @@ fn contains(spans: &[Span], address: u64, size: u64) -> bool {
     })
 }
 
-fn spans(mut values: Vec<Span>, ram_size: u64) -> Result<Vec<Span>, String> {
+fn spans(mut values: Vec<Span>, backing: &[Span]) -> Result<Vec<Span>, String> {
     values.sort_unstable();
     if values.len() > 4096
         || values
             .iter()
-            .any(|&(low, high)| low >= high || high > ram_size)
+            .any(|&(low, high)| low >= high || !contains(backing, low, high - low))
         || values.windows(2).any(|p| p[0].1 > p[1].0)
     {
-        return Err("Driver guard ranges must be disjoint, nonempty physical RAM spans".into());
+        return Err(
+            "Driver guard ranges must be disjoint, nonempty declared physical spans".into(),
+        );
     }
     Ok(values)
+}
+
+#[cfg(test)]
+mod sparse_backing_tests {
+    use super::Guard;
+
+    fn guard(
+        backing: Vec<(u64, u64)>,
+        read: Vec<(u64, u64)>,
+        sentinel: u64,
+    ) -> Result<Guard, String> {
+        Guard::new(
+            0,
+            vec![(0xff000000, 0xff000010)],
+            read,
+            vec![(0x1000, 0x1004)],
+            sentinel,
+            8,
+            backing,
+        )
+    }
+
+    #[test]
+    fn sparse_backing_admits_high_code_without_admitting_the_hole() {
+        let backing = vec![(0, 0x4000), (0xff000000, 0xff001000)];
+        let mut accepted = guard(backing.clone(), vec![(0x1000, 0x1004)], 0x3000).unwrap();
+        assert!(accepted.fetch(0, 0xff000000, 4).unwrap());
+        assert!(!accepted.fetch(0, 0x3000, 4).unwrap());
+        assert!(guard(backing, vec![(0x4000, 0x4004)], 0x3000).is_err());
+    }
+
+    #[test]
+    fn sparse_backing_rejects_crossing_windows_and_invalid_sentinels() {
+        let backing = vec![(0, 0x4000), (0xff000000, 0xff001000)];
+        assert!(guard(backing.clone(), vec![(0x3ffc, 0x4004)], 0x3000).is_err());
+        assert!(guard(backing.clone(), vec![], 0x5000).is_err());
+        assert!(guard(backing.clone(), vec![], 0xff000000).is_err());
+        assert!(guard(backing, vec![], 0xffff_fffc).is_err());
+    }
+
+    #[test]
+    fn sparse_backing_does_not_weaken_code_write_exclusion() {
+        assert!(
+            Guard::new(
+                0,
+                vec![(0xff000000, 0xff000010)],
+                vec![],
+                vec![(0xff000000, 0xff000004)],
+                0x3000,
+                8,
+                vec![(0, 0x4000), (0xff000000, 0xff001000)]
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn sparse_backing_rejects_overlapping_or_out_of_address_space_backing() {
+        assert!(guard(vec![(0, 0x4000), (0x3000, 0x5000)], vec![], 0x2000).is_err());
+        assert!(guard(vec![(0, 0x1_0000_0001)], vec![], 0x3000).is_err());
+    }
 }
 
 impl Guard {
@@ -46,16 +109,17 @@ impl Guard {
         writable: Vec<Span>,
         return_address: u64,
         store_limit: usize,
-        ram_size: u64,
+        physical_backing: Vec<Span>,
     ) -> Result<Self, String> {
-        let executable = spans(executable, ram_size)?;
-        let readable = spans(readable, ram_size)?;
-        let writable = spans(writable, ram_size)?;
+        let physical_backing = spans(physical_backing, &[(0, 1 << 32)])?;
+        let executable = spans(executable, &physical_backing)?;
+        let readable = spans(readable, &physical_backing)?;
+        let writable = spans(writable, &physical_backing)?;
         if executable.is_empty()
             || store_limit == 0
             || store_limit > 1 << 20
             || return_address & 3 != 0
-            || return_address > ram_size.saturating_sub(4)
+            || !contains(&physical_backing, return_address, 4)
             || executable
                 .iter()
                 .any(|&(lo, hi)| return_address >= lo && return_address < hi)
