@@ -6,25 +6,25 @@
   "reset": {
     "adc_input": {
       "samples": [
-        382,
-        302,
-        1017,
-        1023,
+        372,
+        600,
+        1014,
+        1022,
         842,
         599,
         59,
-        608,
-        471,
+        711,
+        439,
         1021,
-        381,
-        302
+        372,
+        600
       ],
-      "basis": "Measured: the twelve key-row values seg5 0xc8ce9c keeps at 0xfdb018, read from a service-mode RAM capture of an X-T20 2.11 with all keys released, assigned to channels 0-11 in order (the xpro-lab emulator model). Channel 3 is the ladder for the 4-way pad, OK, Q and DISP/BACK; channel 2 carries the S1/S2 thresholds 0x28/0x1d0. The channel order and the values of channels 10 and 11 are not confirmed against the converter registers."
+      "basis": "Measured: the twelve key-row values seg5 0xc8ce9c keeps at 0xfdb018, read over the live service in REC after a normal power-on with all keys released (X-T20 2.11, 2026-10-29), assigned to channels 0-11 in order (the xpro-lab emulator model). Channel 3 is the ladder for the 4-way pad, OK, Q and DISP/BACK; channel 2 carries the S1/S2 thresholds 0x28/0x1d0. Channels 0, 1, 7, 8, 10 and 11 vary between power-ons. The channel order and the values of channels 10 and 11 are not confirmed against the converter registers."
     },
     "gpio_input": {
       "levels": [
         58615,
-        4156,
+        4116,
         394,
         559,
         0,
@@ -34,13 +34,13 @@
         24,
         0,
         644,
-        3040,
+        4064,
         65,
         537,
         12,
         1
       ],
-      "basis": "Measured: the sixteen GPIO input words X-T20 2.11 stage 2 snapshots into the boot information (+0x00), read from a service-mode RAM capture with lens attached, card inserted and PLAY released, adjusted to a normal power-on without a cable: bank 0 bits 0/1 (S1/S2, released high) are set, since the capture held the shutter for service mode, and bank 1 bit 14 (VBUS, polled by the USB detection) is clear, since the capture was taken over USB; with VBUS high the start mode becomes JIG. Pin roles from seg5 key rows (table 0xec6e10): bank 0 bit 11 LENS_DET and bank 10 bit 4 CARD_DET active low."
+      "basis": "Measured: the sixteen GPIO input words X-T20 2.11 stage 2 snapshots into the boot information (+0x00), read over the live service after a normal SD-boot power-on without a cable (2026-10-29): shutter released, VBUS (bank 1 bit 14) low, lens attached, card inserted. A second normal power-on (2026-10-22) differs only in bank 1 bits 3/5. With VBUS high the start mode becomes JIG. Pin roles from seg5 key rows (table 0xec6e10): bank 0 bit 11 LENS_DET and bank 10 bit 4 CARD_DET active low."
     },
     "pll_input": {
       "running": [
@@ -63,7 +63,7 @@
         {
           "name": "gpio_bank1",
           "offset": 4,
-          "value": 4156
+          "value": 4116
         },
         {
           "name": "gpio_bank2",
@@ -93,7 +93,7 @@
         {
           "name": "gpio_bank11",
           "offset": 44,
-          "value": 3040
+          "value": 4064
         },
         {
           "name": "gpio_bank12",
@@ -123,7 +123,7 @@
         {
           "name": "captured_0x044",
           "offset": 68,
-          "value": 305
+          "value": 303
         },
         {
           "name": "captured_0x048",
@@ -133,31 +133,11 @@
         {
           "name": "captured_0x04c",
           "offset": 76,
-          "value": 208362
+          "value": 173031
         },
         {
           "name": "captured_0x050",
           "offset": 80,
-          "value": 16777728
-        },
-        {
-          "name": "captured_0x054",
-          "offset": 84,
-          "value": 209055
-        },
-        {
-          "name": "captured_0x058",
-          "offset": 88,
-          "value": 285213184
-        },
-        {
-          "name": "captured_0x05c",
-          "offset": 92,
-          "value": 2411155
-        },
-        {
-          "name": "captured_0x060",
-          "offset": 96,
           "value": 1398031684
         },
         {
@@ -168,7 +148,7 @@
         {
           "name": "captured_0x0c4",
           "offset": 196,
-          "value": 178049
+          "value": 180208
         },
         {
           "name": "captured_0x0c8",
@@ -178,7 +158,7 @@
         {
           "name": "captured_0x0cc",
           "offset": 204,
-          "value": 258592
+          "value": 1222203
         },
         {
           "name": "captured_0x0d0",
@@ -188,7 +168,7 @@
         {
           "name": "captured_0x0d4",
           "offset": 212,
-          "value": 267312
+          "value": 1229232
         },
         {
           "name": "captured_0x0d8",
@@ -198,7 +178,7 @@
         {
           "name": "captured_0x0dc",
           "offset": 220,
-          "value": 267969
+          "value": 1229731
         },
         {
           "name": "captured_0x0e0",
@@ -208,7 +188,7 @@
         {
           "name": "power_on_cause",
           "offset": 320,
-          "value": 16
+          "value": 18
         },
         {
           "name": "captured_0x144",
@@ -223,22 +203,22 @@
         {
           "name": "captured_0x150",
           "offset": 336,
-          "value": 4190142464
+          "value": 4284907606
         },
         {
           "name": "captured_0x154",
           "offset": 340,
-          "value": 732561436
+          "value": 699007004
         },
         {
           "name": "captured_0x188",
           "offset": 392,
-          "value": 394
+          "value": 347
         },
         {
           "name": "captured_0x18c",
           "offset": 396,
-          "value": 324
+          "value": 624
         },
         {
           "name": "captured_0x190",
@@ -248,7 +228,7 @@
         {
           "name": "captured_0x194",
           "offset": 404,
-          "value": 22
+          "value": 1023
         },
         {
           "name": "captured_0x198",
@@ -258,7 +238,7 @@
         {
           "name": "captured_0x19c",
           "offset": 412,
-          "value": 84
+          "value": 516
         },
         {
           "name": "captured_0x1a0",
@@ -268,12 +248,12 @@
         {
           "name": "captured_0x1a4",
           "offset": 420,
-          "value": 629
+          "value": 731
         },
         {
           "name": "captured_0x1a8",
           "offset": 424,
-          "value": 406
+          "value": 427
         },
         {
           "name": "captured_0x1ac",
@@ -291,7 +271,7 @@
           "value": 4
         }
       ],
-      "basis": "Camera capture: the 0x5c0-byte stage-2 block the kernel copies to 0x7f4fc, read over ff80 in a service-mode power-on (X-T20 2.11, 2026-10-20; SHA-256 d7cca82d81be252c32012d9392b6f9143a5729d52bd04f21c2a90c1c54e54cca). +0x00 holds the 16 power-on GPIO input words, adjusted to a normal power-on without a cable as in gpio_input: bank 0 bits 0/1 (S1/S2) set (captured 0xe4f4, shutter held for service mode) and bank 1 bit 14 (VBUS) clear (captured 0x503c, taken over USB), and +0x140 the sub-CPU power-on cause 0x10, which section 5 decodes as a normal start. Placed in a free RAM gap; kernel entry bypasses the boot ROM and stage 2."
+      "basis": "Camera capture: the 0x5c0-byte stage-2 block the kernel copies to 0x7f4fc, read over the resident live service in REC after a normal SD-boot power-on without a cable (X-T20 2.11, 2026-10-29; block SHA-256 ab399d185a974beeee3ce66c91e64c74b02d1b9f9800d7c0309ed0ebea0a7fad, ram_low SHA-256 3065c7420bc1cad0edb97504e6715e38d1e0a3b2db791e7f7eef626f07146430). +0x00 holds the 16 power-on GPIO input words, +0x140 the sub-CPU power-on cause 0x12 and +0x188 the stage-2 ADC words. Placed in a free RAM gap; kernel entry bypasses the boot ROM and stage 2."
     },
     "flash_aperture": {
       "contents": "registered-update",
