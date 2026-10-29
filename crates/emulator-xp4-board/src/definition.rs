@@ -48,6 +48,9 @@ pub struct Definition {
     /// `xpp_storage`, `xpp_reset_gates` and the GPIO banks.
     #[serde(default)]
     pub xpp_lens: Option<XppLens>,
+    /// Shutter motor and position sensors on the GPIO banks.
+    #[serde(default)]
+    pub xpp_shutter: Option<XppShutter>,
     #[serde(default)]
     pub xpp_display_frames: Option<XppDisplayFrames>,
     #[serde(default)]
@@ -173,6 +176,21 @@ pub struct XppLens {
     pub ready_ticks: u64,
     pub release_ticks: u64,
     pub drive_ticks: u64,
+    pub poll_ticks: u64,
+}
+
+/// Shutter: the motor pins' mode register (bank, register) and pins, the
+/// sensor inputs (bank, pin), their external interrupt line, the sensor
+/// levels in the order the motor reaches them and the declared ticks.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppShutter {
+    pub mode: (usize, usize),
+    pub motor: (usize, usize),
+    pub sensors: Vec<(usize, usize)>,
+    pub line: usize,
+    pub positions: Vec<Vec<bool>>,
+    pub step_ticks: u64,
     pub poll_ticks: u64,
 }
 

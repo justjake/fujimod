@@ -903,6 +903,30 @@ impl Devices {
         self.windows.push((base, base + REGISTERS, id));
         Ok(())
     }
+    pub fn xpp_shutter(&mut self, shutter: crate::definition::XppShutter) -> Result<(), String> {
+        use fujimod_emulator_xpp::shutter::{Shutter, Timing, Wiring};
+        let pins = self
+            .pins
+            .as_ref()
+            .ok_or("The shutter requires GPIO wiring")?
+            .clone();
+        let model = Shutter::new(
+            Wiring {
+                mode: shutter.mode,
+                motor: shutter.motor,
+                sensors: shutter.sensors,
+                line: shutter.line,
+            },
+            Timing {
+                step: shutter.step_ticks,
+                poll: shutter.poll_ticks,
+            },
+            shutter.positions,
+            pins,
+        )?;
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
     pub fn xpp_sd(
         &mut self,
         sd: crate::definition::XppSd,

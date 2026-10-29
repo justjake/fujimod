@@ -15,6 +15,7 @@ pub mod lens;
 pub mod resets;
 pub mod sd;
 pub mod serial;
+pub mod shutter;
 pub mod statistics;
 pub mod sync;
 pub mod timer;

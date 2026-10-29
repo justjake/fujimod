@@ -179,6 +179,17 @@
           ],
           "description": "Declared serial flash."
         },
+        "shutter": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetShutterInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared shutter."
+        },
         "spi_inputs": {
           "additionalProperties": {
             "$ref": "#/$defs/ResetSpiInputs"
@@ -2453,6 +2464,112 @@
         "active_level",
         "pin",
         "port"
+      ],
+      "type": "object"
+    },
+    "ResetShutterInput": {
+      "additionalProperties": false,
+      "description": "The shutter's motor and position sensors on the GPIO banks.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "line": {
+          "description": "External interrupt line the sensors' edges reach.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode": {
+          "description": "Bank and register of the motor pins' mode bits.",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "motor": {
+          "description": "The two motor pins.",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "poll_ticks": {
+          "description": "Ticks between samples of the motor modes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "positions": {
+          "description": "Sensor levels in the order the turning motor reaches them.",
+          "items": {
+            "items": {
+              "type": "boolean"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "sensors": {
+          "description": "Sensor inputs as bank and pin.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "step_ticks": {
+          "description": "Ticks per motor step.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "line",
+        "mode",
+        "motor",
+        "poll_ticks",
+        "positions",
+        "sensors",
+        "step_ticks"
       ],
       "type": "object"
     },

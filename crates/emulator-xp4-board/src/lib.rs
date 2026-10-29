@@ -932,6 +932,7 @@ impl Session {
             xpp_serial,
             xpp_sub_cpu,
             xpp_lens,
+            xpp_shutter,
             xpp_display_frames,
             xpp_adc,
             xpp_display_outputs,
@@ -1230,6 +1231,11 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_lens(lens, link, lines)?;
+        }
+        if let Some(shutter) = xpp_shutter {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_shutter(shutter)?;
         }
         if let Some((value, ticks)) = temperature {
             devices

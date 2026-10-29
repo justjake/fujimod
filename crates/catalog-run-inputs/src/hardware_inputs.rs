@@ -676,6 +676,30 @@ pub struct LensRegistration {
     pub sha256: String,
 }
 
+/// The shutter's motor and position sensors on the GPIO banks.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetShutterInput"))]
+pub struct ShutterInput {
+    /// Declared basis.
+    pub basis: String,
+    /// External interrupt line the sensors' edges reach.
+    pub line: u64,
+    /// Bank and register of the motor pins' mode bits.
+    pub mode: (u64, u64),
+    /// The two motor pins.
+    pub motor: (u64, u64),
+    /// Ticks between samples of the motor modes.
+    pub poll_ticks: u64,
+    /// Sensor levels in the order the turning motor reaches them.
+    pub positions: Vec<Vec<bool>>,
+    /// Sensor inputs as bank and pin.
+    pub sensors: Vec<(u64, u64)>,
+    /// Ticks per motor step.
+    pub step_ticks: u64,
+}
+
 /// PLLs running at kernel entry.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1145,6 +1169,9 @@ pub struct HardwareReset {
     /// Declared serial flash.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub serial_flash: Option<SerialFlash>,
+    /// Declared shutter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shutter: Option<ShutterInput>,
     /// Declared spi inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spi_inputs: Option<BTreeMap<String, SpiInputs>>,
