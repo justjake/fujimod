@@ -2329,6 +2329,12 @@ class HardwareDmp(TypedDict, total=False):
     size: Required[int]
 
 
+class HardwareDramController(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    size: Required[int]
+
+
 class HardwareEncoder(TypedDict, total=False):
     counter: NotRequired[str | None]
     name: Required[str]
@@ -2609,6 +2615,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     display_outputs: NotRequired[list[HardwareDisplayOutput] | None]
     dma: NotRequired[HardwareDma | None]
     dmp: NotRequired[HardwareDmp | None]
+    dram_controller: NotRequired[HardwareDramController | None]
     flash_controller: NotRequired[HardwareFlashController | None]
     gic: NotRequired[HardwareGic | None]
     gpio: NotRequired[HardwareGpio | None]
@@ -2630,6 +2637,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     spi: NotRequired[dict[str, HardwareSpi] | None]
     temperature: NotRequired[HardwareAdc | None]
     usb: NotRequired[HardwareUsbRegisters | None]
+    xpp_i2c: NotRequired[HardwareXppI2cBuses | None]
     xpp_sd: NotRequired[HardwareXppSdHost | None]
 
 
@@ -2805,6 +2813,17 @@ class HardwareWindowAnalysis(TypedDict, total=False):
     basis: Required[str]
     profile: Required[str]
     ticks_per_window: Required[int]
+
+
+class HardwareXppI2cBuses(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    clock_hz: Required[int]
+    fifo_depth: Required[int]
+    irq_routes: Required[list[int]]
+    size: Required[int]
+    stride: Required[int]
+    tick_hz: Required[int]
 
 
 class HardwareXppSdHost(TypedDict, total=False):
@@ -4945,6 +4964,7 @@ type SocBlockKind = Literal[
     "imaging-controller",
     "reset-controller",
     "clock-controller",
+    "memory-controller",
     "address-window",
 ]
 

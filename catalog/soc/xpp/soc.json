@@ -110,6 +110,27 @@
       "clock_id": null
     },
     {
+      "id": "dram-controller",
+      "base": 4293976064,
+      "size": 4096,
+      "kind": "memory-controller",
+      "clock_id": null
+    },
+    {
+      "id": "i2c0",
+      "base": 4294045696,
+      "size": 4096,
+      "kind": "control-bus",
+      "clock_id": null
+    },
+    {
+      "id": "i2c1",
+      "base": 4294049792,
+      "size": 4096,
+      "kind": "control-bus",
+      "clock_id": null
+    },
+    {
       "id": "sd0",
       "base": 4294516736,
       "size": 4096,
@@ -355,6 +376,16 @@
         "line": 83
       },
       {
+        "source_block_id": "i2c0",
+        "output_id": "interrupt",
+        "line": 68
+      },
+      {
+        "source_block_id": "i2c1",
+        "output_id": "interrupt",
+        "line": 69
+      },
+      {
         "source_block_id": "display",
         "output_id": "output0-event0",
         "line": 112
@@ -554,6 +585,21 @@
             "base": 4293959680,
             "size": 4096,
             "basis": "Reset and gate controls of X-T20 2.11 section 5. SD start-up 0xc65b18 drives +0x1c bit 18, 19 or 20 low and then high for SD channel 0, 1 or 2 and then sets bit 0; the UHS-II fallback at 0xc65dc4 repeats it before rewriting the host power and clock words by read-modify-write, so a falling edge resets that SD host. 0xc65a04/0xc65e58 set and clear +0x14 bit 22 around the UHS-II attempt and 0xc621d0/0xc620b8 set and clear pad bits in +0x70 and +0x88; +0x08, +0x20 and +0x6c are read-modify-written by 0xc621a0, 0xc694fc, 0xcc0590 and 0xc65c7c. Words read back their last write; what the gate bits switch is not modeled."
+          },
+          "dram_controller": {
+            "base": 4293976064,
+            "size": 4096,
+            "basis": "DRAM controller of X-T20 2.11 section 5. 0xc8f09c reads the refresh-rate level from bits 8..10 of +0xec (caching it at 0xfdbea8 + 5) and, when it changes, rewrites the low half of the refresh words +0x9c and +0xa0 through 0xc8f044: 0xc30 below level 4, 0x618 at level 4; above level 4 it reports event 0x8015. A second controller at 0xfff0f000 is used only when 0xfda438 is set, which it is not in the s1-s3 captures. The boot code that programs the controller before the kernel is not modeled."
+          },
+          "xpp_i2c": {
+            "base": 4294045696,
+            "stride": 4096,
+            "size": 4096,
+            "irq_routes": [68, 69],
+            "fifo_depth": 8,
+            "clock_hz": 266000000,
+            "tick_hz": 48000000,
+            "basis": "DesignWare APB I2C masters of X-T20 2.11 section 5: transfer 0xc52b30, API 0xc5328c and interrupt handler 0xc52df8 (bus entries 0xc53264/0xc53278). Bus n is at 0xfff1f000 + 0x1000*n; interrupt descriptor rows 0x50/0x51 of table 0xed471c connect buses 0/1 to interrupts 68/69. Each transfer disables the bus, writes SCL counts 0x533/0x545 (standard) and 0x13f/0x151 (fast), IC_CON speed and restart enable, IC_TAR, the 0x5f interrupt mask and zero FIFO thresholds, then enables it; the handler feeds DATA_CMD on TX_EMPTY while IC_STATUS.TFNF is set, with STOP on the last byte and RESTART on the first read of a write-then-read, drains it on RX_FULL and ends on TX_ABRT, and the task then polls IC_STATUS.MST_ACTIVITY. The interrupt mask is written before IC_ENABLE, so TX_EMPTY is taken as asserted only while enabled. An ic_clk of 266 MHz is inferred from the standard-mode counts giving a symmetric 5 us/5 us 100 kHz clock; it is not measured. The FIFO depth is declared, not measured. Ticks are the 48 MHz timer ticks."
           },
           "xpp_sd": {
             "base": 4294516736,

@@ -589,6 +589,40 @@ pub struct SdCardInput {
     pub sectors: u64,
 }
 
+/// Refresh-rate level the DRAM device reports to its controller.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetDramRefreshInput"))]
+pub struct DramRefreshInput {
+    /// Declared basis.
+    pub basis: String,
+    /// Three-bit refresh-rate level.
+    pub level: u64,
+}
+
+/// A register-file part on an I2C bus at power-on.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetI2cPartInput"))]
+pub struct I2cPartInput {
+    /// 7-bit address the part acknowledges.
+    pub address: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Bus index on the SoC's I2C controllers.
+    pub bus: u64,
+    /// Register values are sent least-significant byte first.
+    pub little_endian: bool,
+    /// Declared register values, as register and value pairs.
+    pub registers: Vec<(u64, u64)>,
+    /// Bits of the first written byte that select the register.
+    pub select_mask: u64,
+    /// Bytes per register: 1 or 2.
+    pub width: u64,
+}
+
 /// PLLs running at kernel entry.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1031,6 +1065,12 @@ pub struct HardwareReset {
     /// Declared SD card in the slot at power-on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sd_card: Option<SdCardInput>,
+    /// Declared register-file parts on the I2C buses.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub i2c_parts: Vec<I2cPartInput>,
+    /// Declared DRAM refresh-rate level the memory device reports.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dram_refresh: Option<DramRefreshInput>,
     /// Declared inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inputs: Option<HardwareresetInputs>,

@@ -37,6 +37,17 @@
           ],
           "description": "Declared autofocus gate."
         },
+        "dram_refresh": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetDramRefreshInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared DRAM refresh-rate level the memory device reports."
+        },
         "execution_scope": {
           "description": "Declared execution scope.",
           "type": [
@@ -65,6 +76,13 @@
             }
           ],
           "description": "Declared gpio input."
+        },
+        "i2c_parts": {
+          "description": "Declared register-file parts on the I2C buses.",
+          "items": {
+            "$ref": "#/$defs/ResetI2cPartInput"
+          },
+          "type": "array"
         },
         "inputs": {
           "anyOf": [
@@ -682,6 +700,27 @@
       ],
       "type": "object"
     },
+    "ResetDramRefreshInput": {
+      "additionalProperties": false,
+      "description": "Refresh-rate level the DRAM device reports to its controller.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "level": {
+          "description": "Three-bit refresh-rate level.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "level"
+      ],
+      "type": "object"
+    },
     "ResetEndpoints": {
       "additionalProperties": false,
       "description": "Declared endpoints facts.",
@@ -1034,6 +1073,75 @@
         "mcu_packet_hex",
         "power",
         "usb_connected"
+      ],
+      "type": "object"
+    },
+    "ResetI2cPartInput": {
+      "additionalProperties": false,
+      "description": "A register-file part on an I2C bus at power-on.",
+      "properties": {
+        "address": {
+          "description": "7-bit address the part acknowledges.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "bus": {
+          "description": "Bus index on the SoC's I2C controllers.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "little_endian": {
+          "description": "Register values are sent least-significant byte first.",
+          "type": "boolean"
+        },
+        "registers": {
+          "description": "Declared register values, as register and value pairs.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "select_mask": {
+          "description": "Bits of the first written byte that select the register.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width": {
+          "description": "Bytes per register: 1 or 2.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "basis",
+        "bus",
+        "little_endian",
+        "registers",
+        "select_mask",
+        "width"
       ],
       "type": "object"
     },

@@ -1176,6 +1176,42 @@ pub struct PllClocks {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDramController"))]
+pub struct DramController {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Declared size.
+    pub size: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareXppI2cBuses"))]
+pub struct XppI2cBuses {
+    /// Base of bus 0; bus n follows at `base + n * stride`.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// The `ic_clk` the SCL high and low counts divide.
+    pub clock_hz: u64,
+    /// TX and RX FIFO depth in entries.
+    pub fifo_depth: u64,
+    /// Interrupt line of each bus, in bus order.
+    pub irq_routes: Vec<u32>,
+    /// Declared size of one bus window.
+    pub size: u64,
+    /// Distance between bus windows.
+    pub stride: u64,
+    /// Device ticks per second.
+    pub tick_hz: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareXppSdHost"))]
 pub struct XppSdHost {
     /// Declared base.
@@ -1561,6 +1597,12 @@ pub struct RegisterLayouts {
     /// Declared X-Processor Pro reset and gate controls.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reset_gates: Option<ResetGates>,
+    /// Declared X-Processor Pro DesignWare I2C buses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xpp_i2c: Option<XppI2cBuses>,
+    /// Declared X-Processor Pro DRAM controller.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dram_controller: Option<DramController>,
     /// Declared interrupts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interrupts: Option<Interrupts>,

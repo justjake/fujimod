@@ -1209,6 +1209,34 @@
       ],
       "type": "object"
     },
+    "HardwareDramController": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro SD channel: wrapper reset at +0, vendor words and a\nrelocated SDHCI bank, with its interrupt and hardware reset line.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "size"
+      ],
+      "type": "object"
+    },
     "HardwareFlashController": {
       "additionalProperties": false,
       "description": "Declared memory-mapped flash controller facts.",
@@ -1942,6 +1970,17 @@
           ],
           "description": "Declared dmp."
         },
+        "dram_controller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareDramController"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro DRAM controller."
+        },
         "flash_controller": {
           "anyOf": [
             {
@@ -2169,6 +2208,17 @@
             }
           ],
           "description": "Declared usb."
+        },
+        "xpp_i2c": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareXppI2cBuses"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro DesignWare I2C buses."
         },
         "xpp_sd": {
           "anyOf": [
@@ -2634,9 +2684,73 @@
       ],
       "type": "object"
     },
+    "HardwareXppI2cBuses": {
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "description": "Base of bus 0; bus n follows at `base + n * stride`.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "clock_hz": {
+          "description": "The `ic_clk` the SCL high and low counts divide.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fifo_depth": {
+          "description": "TX and RX FIFO depth in entries.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq_routes": {
+          "description": "Interrupt line of each bus, in bus order.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "size": {
+          "description": "Declared size of one bus window.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stride": {
+          "description": "Distance between bus windows.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tick_hz": {
+          "description": "Device ticks per second.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "clock_hz",
+        "fifo_depth",
+        "irq_routes",
+        "size",
+        "stride",
+        "tick_hz"
+      ],
+      "type": "object"
+    },
     "HardwareXppSdHost": {
       "additionalProperties": false,
-      "description": "X-Processor Pro SD channel: wrapper reset at +0, vendor words and a\nrelocated SDHCI bank, with its interrupt and hardware reset line.",
       "properties": {
         "base": {
           "description": "Declared base.",
@@ -3265,6 +3379,11 @@
         {
           "const": "clock-controller",
           "description": "Clock controller.",
+          "type": "string"
+        },
+        {
+          "const": "memory-controller",
+          "description": "Memory controller.",
           "type": "string"
         },
         {

@@ -937,6 +937,8 @@ impl Session {
             xpp_imaging_control,
             xpp_reset_gates,
             xpp_sd,
+            xpp_i2c,
+            xpp_dram,
             xpp_clocks,
             cache_sizes,
             io_group_base,
@@ -1108,6 +1110,16 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_sd(sd, reset)?;
+        }
+        if let Some((base, level)) = xpp_dram {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_dram(base, level)?;
+        }
+        for bus in xpp_i2c {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_i2c(bus)?;
         }
         for output in &xpp_display_outputs {
             devices

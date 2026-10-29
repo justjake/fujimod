@@ -61,6 +61,59 @@
       "rca": 1,
       "sectors": 16777216
     },
+    "i2c_parts": [
+      {
+        "address": 1,
+        "basis": "Part at 0x01 on bus 1 (device 13 of the X-T20 2.11 I2C descriptor table 0xed412c). Start-up selects page 0x3e or 0x3f through register 0xff (0xc9ac8c) and writes registers 0x3e11, 0x3e12 and 0x3fdc; the reads of 0xc9af8c are not reached before REC. Its identity is not established; presence is declared, not measured, and no registers are declared.",
+        "bus": 1,
+        "little_endian": true,
+        "registers": [],
+        "select_mask": 255,
+        "width": 1
+      },
+      {
+        "address": 27,
+        "basis": "Part at 0x1b on bus 1 (device 12). Start-up 0xceb630 writes register 0 with configuration byte 0x3d7; nothing is read before REC. Its identity is not established; presence is declared, not measured, and no registers are declared.",
+        "bus": 1,
+        "little_endian": true,
+        "registers": [],
+        "select_mask": 255,
+        "width": 1
+      },
+      {
+        "address": 28,
+        "basis": "Three-axis accelerometer at 0x1c on bus 1 (device 8). 0xc7a6e0 writes the configuration table (register 0x2a = 0x65 last) and 0xc7a77c reads six bytes from register 1 as 12-bit left-justified big-endian X, Y and Z. The values are the median of the five samples in the rings at 0xfdad50 + 0x46/0x5a/0x6e of the s1 REC capture (2026-10-29): X -1024, Y 26, Z -92 counts; s2 and s3 agree within 3 counts.",
+        "bus": 1,
+        "little_endian": false,
+        "registers": [
+          [1, 192],
+          [2, 0],
+          [3, 1],
+          [4, 160],
+          [5, 250],
+          [6, 64]
+        ],
+        "select_mask": 255,
+        "width": 1
+      },
+      {
+        "address": 57,
+        "basis": "Eye-sensor proximity part at 0x39 on bus 1 (device 4). Its command byte is 0xa0 | address (0xc76484). Start-up writes the thresholds and ENABLE = 0x2f; 0xc76500 reads STATUS 0x13 (bit 5: proximity interrupt) and the count at 0x18/0x19, low byte first. The s1-s3 captures hold eye state 2 (no eye, 0xfdad40) with a far-to-near threshold of 662. The declared count 0 is below that threshold and the status has no interrupt pending; neither value is measured.",
+        "bus": 1,
+        "little_endian": true,
+        "registers": [
+          [19, 0],
+          [24, 0],
+          [25, 0]
+        ],
+        "select_mask": 31,
+        "width": 1
+      }
+    ],
+    "dram_refresh": {
+      "basis": "Measured: X-T20 2.11 0xc8f09c caches the refresh-rate level from bits 8..10 of DRAM controller +0xec at 0xfdbea8 + 5; the s1, s2 and s3 REC captures (2026-10-29) hold level 2 there, with refresh word 0xc30 at 0xfdbea8 and no second controller (0xfda438 = 0).",
+      "level": 2
+    },
     "kernel_unit": "kernel",
     "loader_handoff": {
       "address": 9437184,

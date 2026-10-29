@@ -61,6 +61,12 @@ pub struct Definition {
     pub xpp_reset_gates: Option<u64>,
     #[serde(default)]
     pub xpp_sd: Option<XppSd>,
+    /// X-Processor Pro DesignWare I2C buses with their declared parts.
+    #[serde(default)]
+    pub xpp_i2c: Vec<XppI2c>,
+    /// X-Processor Pro DRAM controller base and refresh-rate level.
+    #[serde(default)]
+    pub xpp_dram: Option<(u64, u8)>,
     #[serde(default)]
     pub cache_sizes: Option<(u32, u32, u32)>,
     #[serde(default)]
@@ -162,6 +168,14 @@ pub struct XppSd {
     /// SD channel of the reset-gate line; requires `xpp_reset_gates`.
     #[serde(default)]
     pub reset_channel: Option<usize>,
+}
+
+/// One X-Processor Pro DesignWare I2C bus and the parts that answer on it.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppI2c {
+    pub options: fujimod_emulator_ip::dw_i2c::Options,
+    pub parts: Vec<fujimod_emulator_xpp::i2c::Part>,
 }
 
 /// X-Processor Pro ADC: register base, twelve 10-bit samples and the ticks a

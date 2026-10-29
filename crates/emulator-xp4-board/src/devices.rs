@@ -869,6 +869,38 @@ impl Devices {
         self.windows.push((base, base + 0x1000, id));
         Ok(())
     }
+    pub fn xpp_dram(&mut self, base: u64, refresh_level: u8) -> Result<(), String> {
+        use fujimod_emulator_xpp::dram::{Controller, WINDOW};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(WINDOW))
+        {
+            return Err("Overlapping X-Processor Pro DRAM controller".into());
+        }
+        let model = Controller::new(base, refresh_level)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + WINDOW, id));
+        Ok(())
+    }
+    pub fn xpp_i2c(&mut self, bus: crate::definition::XppI2c) -> Result<(), String> {
+        use fujimod_emulator_ip::dw_i2c::{Controller, WINDOW};
+        let base = bus.options.base;
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(WINDOW))
+        {
+            return Err("Overlapping X-Processor Pro I2C bus".into());
+        }
+        let parts = fujimod_emulator_xpp::i2c::Parts::new(bus.parts)?;
+        let model = Controller::new(bus.options, parts)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + WINDOW, id));
+        Ok(())
+    }
     pub fn xpp_imaging_control(&mut self, base: u64) -> Result<(), String> {
         use fujimod_emulator_xpp::imaging::{Control, WINDOW};
         if self
