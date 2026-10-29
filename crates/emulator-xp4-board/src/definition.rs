@@ -161,7 +161,8 @@ pub struct XppDisplayFrames {
 }
 
 /// X-Processor Pro display output registers: word offsets whose status bits
-/// read set or clear regardless of the last write.
+/// read set or clear regardless of the last write, and the optional
+/// (host output, capture period in ticks) of its OSD layer scanout.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct XppDisplayOutput {
@@ -169,6 +170,8 @@ pub struct XppDisplayOutput {
     pub size: u64,
     pub set_bits: Vec<(u64, u32)>,
     pub clear_bits: Vec<(u64, u32)>,
+    #[serde(default)]
+    pub scanout: Option<(usize, u64)>,
 }
 
 /// X-Processor Pro SD channel with a freshly formatted card in the slot.

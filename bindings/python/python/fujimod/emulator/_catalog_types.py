@@ -2296,8 +2296,14 @@ class HardwareDisplayOutput(TypedDict, total=False):
     base: Required[int]
     basis: Required[str]
     clear_bits: Required[list[HardwareDisplayStatusBits]]
+    scanout: NotRequired[HardwareDisplayScanout | None]
     set_bits: Required[list[HardwareDisplayStatusBits]]
     size: Required[int]
+
+
+class HardwareDisplayScanout(TypedDict, total=False):
+    output: Required[int]
+    period_ticks: Required[int]
 
 
 class HardwareDisplayStatusBits(TypedDict, total=False):

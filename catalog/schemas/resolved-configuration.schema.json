@@ -10901,6 +10901,17 @@
           },
           "type": "array"
         },
+        "scanout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareDisplayScanout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "OSD layer capture, when the output is scanned out."
+        },
         "set_bits": {
           "description": "Bits that report a completed request as set.",
           "items": {
@@ -10921,6 +10932,29 @@
         "clear_bits",
         "set_bits",
         "size"
+      ],
+      "type": "object"
+    },
+    "HardwareDisplayScanout": {
+      "additionalProperties": false,
+      "description": "Host output index and capture period of a display output's OSD layers.",
+      "properties": {
+        "output": {
+          "description": "Host output index of the captured frames.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "period_ticks": {
+          "description": "Capture period in ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "output",
+        "period_ticks"
       ],
       "type": "object"
     },

@@ -1107,6 +1107,21 @@ pub struct DisplayOutput {
     pub set_bits: Vec<DisplayStatusBits>,
     /// Declared size.
     pub size: u64,
+    /// OSD layer capture, when the output is scanned out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scanout: Option<DisplayScanout>,
+}
+
+/// Host output index and capture period of a display output's OSD layers.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayScanout"))]
+pub struct DisplayScanout {
+    /// Host output index of the captured frames.
+    pub output: u64,
+    /// Capture period in ticks.
+    pub period_ticks: u64,
 }
 
 /// Declared dmp facts.

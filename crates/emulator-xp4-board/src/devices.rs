@@ -788,6 +788,9 @@ impl Devices {
             size,
             &output.set_bits,
             &output.clear_bits,
+            output
+                .scanout
+                .map(|(output, period)| fujimod_emulator_xpp::display::Scanout { output, period }),
         )?;
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));

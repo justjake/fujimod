@@ -786,13 +786,14 @@
               "size": 12288,
               "set_bits": [{ "offset": 0, "mask": 65536 }],
               "clear_bits": [{ "offset": 8192, "mask": 268435456 }],
-              "basis": "Output 1 of the display controller, 0xfff64000-0xfff67000, as word registers that read back their last write. Two status laws from X-T20 2.11 seg5: 0xca37ac saves +0, writes bit 16, clears it and polls until bit 16 reads set before restoring the saved word with bit 16; 0xca9df0 sets bit 28 of +0x2000 and polls until it reads clear. Both requests complete at once; the controller's real latency (likely one frame) is not measured. Output 0 at 0xfff59000 follows the same bit-16 law in 0xca37ac but is not exercised up to REC and is not declared."
+              "scanout": { "output": 0, "period_ticks": 800000 },
+              "basis": "Output 1 of the display controller, 0xfff64000-0xfff67000, as word registers that read back their last write. Two status laws from X-T20 2.11 seg5: 0xca37ac saves +0, writes bit 16, clears it and polls until bit 16 reads set before restoring the saved word with bit 16; 0xca9df0 sets bit 28 of +0x2000 and polls until it reads clear. Both requests complete at once; the controller's real latency (likely one frame) is not measured. Output 0 at 0xfff59000 follows the same bit-16 law in 0xca37ac but is not exercised up to REC and is not declared. Scanout: the commit routine 0xca5a0c copies its shadow block to the OSD layer group (+0x200 layer enable bits; four origins +0x210, sizes +0x220 and buffers +0x230). Camera RAM (live-service reads 2026-10-29) holds the same layer as enable 1, size 0x2cf01df and buffer 0x384d000 in REC and 0x354d000 in the menu, with 720 x 480 premultiplied RGBA buffers at a 2880-byte pitch. The output is captured as host output 0 (the rear panel) at the frame period, OSD layers over black; the video layer is not captured."
             }
           ]
         },
         "limits": [
           "Two cores are a declared discovery input from a public dual Cortex-A7 listing; the count is not measured.",
-          "Storage covers the flash aperture, PL330 memory-to-memory programs and the method-4 decompressor. The DMP renderer and display output 1 registers are declared; no pixels are scanned out.",
+          "Storage covers the flash aperture, PL330 memory-to-memory programs and the method-4 decompressor. The DMP renderer and display output 1 registers are declared; output 1 scans out its OSD layers only.",
           "No boot ROM, reset-release controller or external peripheral replies are assumed."
         ],
         "cache_basis": "Declared discovery input: the XP4 Cortex-A7 capacities, unmeasured. Not a cache timing model."
