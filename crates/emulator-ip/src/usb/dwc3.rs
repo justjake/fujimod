@@ -42,6 +42,10 @@ struct Endpoint {
     events: u8,
     trb: Option<u64>,
     cursor: u32,
+    /// Control phase (0 outside control transfers) of the XferNotReady last
+    /// reported without a transfer started since.
+    #[serde(default)]
+    not_ready: Option<u8>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -262,6 +266,7 @@ impl Dwc3 {
                 }
                 endpoint.trb = Some(address);
                 endpoint.cursor = 0;
+                endpoint.not_ready = None;
                 resource = 1;
             }
             7 if endpoint.trb.is_some() && value >> 16 & 0x7f == 1 => resource = 1,
@@ -305,13 +310,16 @@ impl Dwc3 {
             return Ok(Reply::Stall);
         }
         let Some(trb) = endpoint.trb else {
-            if endpoint.events & 4 != 0 {
-                let phase = if ep < 2 {
-                    if self.state.control.status { 2 } else { 1 }
-                } else {
-                    0
-                };
-                self.event_word(cx, (ep as u32) << 1 | 3 << 6 | phase << 12)?;
+            // The core reports a not-ready endpoint once per transfer, or per
+            // control phase, however often the host retries the NAKed token.
+            let phase = if ep < 2 {
+                if self.state.control.status { 2 } else { 1 }
+            } else {
+                0
+            };
+            if endpoint.events & 4 != 0 && endpoint.not_ready != Some(phase) {
+                self.event_word(cx, (ep as u32) << 1 | 3 << 6 | u32::from(phase) << 12)?;
+                self.state.endpoints[ep].not_ready = Some(phase);
             }
             return Ok(Reply::Nak);
         };

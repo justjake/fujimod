@@ -409,3 +409,39 @@ fn control_out_data_trb_may_cover_whole_packets_beyond_wlength() {
     d.event(&mut cx, 0);
     assert!(cx.refusal().is_some());
 }
+
+#[test]
+fn not_ready_is_reported_once_per_transfer_however_often_the_host_retries() {
+    let (mut d, mut b) = ready(0x2468);
+    endpoint(&mut d, &mut b, 3, 8);
+    let nak = |d: &mut Dwc3, b: &mut Board| {
+        let id = d.transaction(b.now, 3, false, None).unwrap();
+        let at = b.now + 4;
+        tick(d, b, at);
+        assert_eq!(d.reply(id), Some(&Reply::Nak));
+    };
+    let cursor = 0x1000 + d.state.ring_cursor as usize;
+    for _ in 0..3 {
+        nak(&mut d, &mut b);
+    }
+    // One XferNotReady (event 3) for physical endpoint 3, not one per NAK.
+    assert_eq!(d.reg(0xc40c), 4);
+    assert_eq!(
+        &b.ram[cursor..cursor + 4],
+        &(3u32 << 1 | 3 << 6).to_le_bytes()
+    );
+    write(&mut d, &mut b, 0xc40c, 4).unwrap();
+    b.ram[0x3000..0x3003].copy_from_slice(b"abc");
+    trb(&mut b, 0x2000, 0x3000, 3, 1);
+    start(&mut d, &mut b, 3, 0x2000);
+    let data = d.transaction(b.now, 3, false, None).unwrap();
+    let at = b.now + 4;
+    tick(&mut d, &mut b, at);
+    assert_eq!(d.reply(data), Some(&Reply::Data(b"abc".to_vec())));
+    let count = d.reg(0xc40c);
+    write(&mut d, &mut b, 0xc40c, count).unwrap();
+    // The started transfer re-arms the report for the next empty endpoint.
+    nak(&mut d, &mut b);
+    nak(&mut d, &mut b);
+    assert_eq!(d.reg(0xc40c), 4);
+}
