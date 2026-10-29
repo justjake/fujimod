@@ -2467,6 +2467,14 @@ class HardwareImagingRegisters(TypedDict, total=False):
     timing_irqs: Required[list[int]]
 
 
+class HardwareImagingStatistics(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    irq_route: Required[int]
+    period_ticks: Required[int]
+    size: Required[int]
+
+
 class HardwareInputBuffer(TypedDict, total=False):
     bank_size: Required[int]
     base: Required[int]
@@ -2643,6 +2651,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     hdmi_tx: NotRequired[HardwareHdmiTransmitter | None]
     imaging: NotRequired[HardwareImagingRegisters | None]
     imaging_control: NotRequired[HardwareImagingControl | None]
+    imaging_statistics: NotRequired[HardwareImagingStatistics | None]
     interrupts: NotRequired[HardwareInterrupts | None]
     interval_timer: NotRequired[HardwareIntervalTimer | None]
     io_groups: NotRequired[HardwareIoGroups | None]

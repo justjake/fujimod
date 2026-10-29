@@ -1248,6 +1248,24 @@ pub struct ResetGates {
     pub size: u64,
 }
 
+/// X-Processor Pro imaging statistics engine.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareImagingStatistics"))]
+pub struct ImagingStatistics {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Interrupt line of the completion status.
+    pub irq_route: u32,
+    /// Frame period in device ticks, the frame sync's.
+    pub period_ticks: u64,
+    /// Declared size.
+    pub size: u64,
+}
+
 /// DesignWare HDMI TX controller with no sink attached.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1640,6 +1658,9 @@ pub struct RegisterLayouts {
     /// Declared X-Processor Pro imaging frame sync.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frame_sync: Option<FrameSync>,
+    /// Declared X-Processor Pro imaging statistics engine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imaging_statistics: Option<ImagingStatistics>,
     /// Declared HDMI transmitter without a sink.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hdmi_tx: Option<HdmiTransmitter>,

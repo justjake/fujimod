@@ -869,6 +869,21 @@ impl Devices {
         self.windows.push((base, base + 0x1000, id));
         Ok(())
     }
+    pub fn xpp_statistics(&mut self, base: u64, irq: u32, period: u64) -> Result<(), String> {
+        use fujimod_emulator_xpp::statistics::{Engine, WINDOW};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(WINDOW))
+        {
+            return Err("Overlapping X-Processor Pro statistics engine".into());
+        }
+        let model = Engine::new(base, irq, period)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + WINDOW, id));
+        Ok(())
+    }
     /// DesignWare HDMI TX with no sink attached.
     pub fn xpp_hdmi(&mut self, base: u64) -> Result<(), String> {
         use fujimod_emulator_ip::dw_hdmi::{Transmitter, WINDOW};

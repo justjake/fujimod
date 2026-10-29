@@ -13,5 +13,6 @@ pub mod imaging;
 pub mod resets;
 pub mod sd;
 pub mod serial;
+pub mod statistics;
 pub mod sync;
 pub mod timer;

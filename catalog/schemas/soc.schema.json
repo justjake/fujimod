@@ -1550,6 +1550,48 @@
       ],
       "type": "object"
     },
+    "HardwareImagingStatistics": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro imaging statistics engine.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "irq_route": {
+          "description": "Interrupt line of the completion status.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "period_ticks": {
+          "description": "Frame period in device ticks, the frame sync's.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "irq_route",
+        "period_ticks",
+        "size"
+      ],
+      "type": "object"
+    },
     "HardwareInputBuffer": {
       "additionalProperties": false,
       "description": "Declared input buffer facts.",
@@ -2158,6 +2200,17 @@
             }
           ],
           "description": "Declared X-Processor Pro imaging control page."
+        },
+        "imaging_statistics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareImagingStatistics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro imaging statistics engine."
         },
         "interrupts": {
           "anyOf": [
