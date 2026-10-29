@@ -8,6 +8,9 @@ mod xp4;
 mod xp5;
 mod xpp;
 pub use checkpoint::Checkpoint;
+use fujimod_emulator_ip::usb::dwc3::Dwc3;
+/// A scanout frame: (output, sequence, width, height, RGBA bytes).
+type Frame<'py> = (usize, u64, u32, u32, Bound<'py, PyBytes>);
 use fujimod_python_base::xp4_backend;
 mod device;
 use fujimod_emulator_preparation as preparation;
@@ -1457,6 +1460,108 @@ impl Board {
     fn device_buffer<'py>(&self, py: Python<'py>, kind: &str, name: &str) -> PyResult<Bound<'py, PyBytes>> {
         let bytes = self.board()?.device_buffer(kind, name).map_err(error)?;
         Ok(PyBytes::new(py, &bytes))
+    }
+    /// Set one X-Processor Pro ADC channel's result (a key on a resistor
+    /// ladder) on the stopped board.
+    fn xpp_adc_input(&mut self, node: &str, channel: usize, sample: u16) -> PyResult<()> {
+        let id = *self
+            .session()?
+            .nodes
+            .get(node)
+            .ok_or_else(|| error("unknown X-Processor Pro ADC node".into()))?;
+        self.board_mut()?
+            .with_device_inputs::<fujimod_emulator_xpp::adc::Converter, _>(id, |adc, _| {
+                adc.set_input(channel, sample)
+            })
+            .map_err(error)
+    }
+    fn xpp_node(&self, node: &str) -> PyResult<usize> {
+        self.session()?
+            .nodes
+            .get(node)
+            .copied()
+            .ok_or_else(|| error(format!("unknown X-Processor Pro node {node}")))
+    }
+    /// An external level on a Socionext GPIO input (VBUS, contacts).
+    fn xpp_gpio_input(&mut self, node: &str, port: usize, pin: usize, high: bool) -> PyResult<()> {
+        let id = self.xpp_node(node)?;
+        self.board_mut()?
+            .with_device_inputs::<fujimod_emulator_ip::socionext::gpio::Gpio, _>(id, |gpio, _| {
+                gpio.set_input(port, pin, high)
+            })
+            .map_err(error)
+    }
+    /// The DWC3 physical link (cable data lines) at the current device time.
+    fn xpp_usb_link(&mut self, node: &str, connected: bool) -> PyResult<()> {
+        let id = self.xpp_node(node)?;
+        self.board_mut()?
+            .with_device_inputs::<Dwc3, _>(id, |usb, now| usb.link(now, connected))
+            .map_err(error)
+    }
+    fn xpp_usb_bus_reset(&mut self, node: &str) -> PyResult<()> {
+        let id = self.xpp_node(node)?;
+        self.board_mut()?
+            .with_device_inputs::<Dwc3, _>(id, |usb, now| usb.bus_reset(now))
+            .map_err(error)
+    }
+    /// Queue one host transaction on a physical endpoint; returns its id.
+    #[pyo3(signature=(node, endpoint, setup, out=None))]
+    fn xpp_usb_transaction(
+        &mut self,
+        node: &str,
+        endpoint: usize,
+        setup: bool,
+        out: Option<Vec<u8>>,
+    ) -> PyResult<u64> {
+        let id = self.xpp_node(node)?;
+        self.board_mut()?
+            .with_device_inputs::<Dwc3, _>(id, |usb, now| {
+                usb.transaction(now, endpoint, setup, out)
+            })
+            .map_err(error)
+    }
+    /// A completed transaction's reply as JSON ("Ack", "Nak", "Stall" or
+    /// {"Data": [...]}), or None while it is pending.
+    fn xpp_usb_reply(&self, node: &str, transaction: u64) -> PyResult<Option<String>> {
+        let id = self.xpp_node(node)?;
+        self.board()?
+            .with_device::<Dwc3, _>(id, |usb| {
+                usb.reply(transaction)
+                    .map(|r| serde_json::to_string(r).unwrap())
+            })
+            .map_err(error)
+    }
+    fn xpp_usb_consume(&mut self, node: &str, transaction: u64) -> PyResult<()> {
+        let id = self.xpp_node(node)?;
+        self.board_mut()?
+            .with_device_inputs::<Dwc3, _>(id, |usb, _| usb.consume_reply(transaction))
+            .map_err(error)
+    }
+    /// The DWC3 saved state (registers, endpoints, running) as JSON.
+    fn xpp_usb_state(&self, node: &str) -> PyResult<String> {
+        use fujimod_emulator_devices::Device;
+        let id = self.xpp_node(node)?;
+        self.board()?
+            .with_device::<Dwc3, _>(id, |usb| usb.save().to_string())
+            .map_err(error)
+    }
+    /// Latest scanout frame per output since the previous call, as
+    /// (output, sequence, width, height, RGBA bytes).
+    fn take_frames<'py>(&mut self, py: Python<'py>) -> PyResult<Vec<Frame<'py>>> {
+        Ok(self
+            .board_mut()?
+            .take_frames()
+            .into_iter()
+            .map(|f| {
+                (
+                    f.output,
+                    f.sequence,
+                    f.width,
+                    f.height,
+                    PyBytes::new(py, &f.rgba),
+                )
+            })
+            .collect())
     }
     fn state(&self, py: Python<'_>) -> PyResult<String> {
         if let Some(Backend::Xp4(session)) = &self.backend {

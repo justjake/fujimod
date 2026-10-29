@@ -51,6 +51,14 @@ impl Gpio {
         }
         Ok(Self { base, pins })
     }
+    /// An external level on input `pin` of bank `port`.
+    pub fn set_input(&mut self, port: usize, pin: usize, high: bool) -> Result<(), String> {
+        if port >= 16 || pin >= 16 {
+            return Err("Invalid GPIO input pin".into());
+        }
+        self.pins.lock().unwrap().set_input(port, pin, high);
+        Ok(())
+    }
 }
 impl Device for Gpio {
     fn name(&self) -> &'static str {

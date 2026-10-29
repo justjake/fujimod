@@ -606,6 +606,30 @@ impl Board {
         state.bus.inputs_changed(source)?;
         state.refresh_deadlines()
     }
+    /// Change a stopped device's external inputs through its concrete
+    /// model at the current device time (`f`'s second argument), then
+    /// publish the change as `inputs_changed` does.
+    pub fn with_device_inputs<T: fujimod_emulator_devices::Device, R>(
+        &mut self,
+        id: usize,
+        f: impl FnOnce(&mut T, u64) -> Result<R, String>,
+    ) -> Result<R, String> {
+        let result = {
+            let mut s = self.state.borrow_mut();
+            let now = s.timeline.now();
+            f(s.bus.device_mut::<T>(id)?, now)?
+        };
+        self.inputs_changed(id)?;
+        Ok(result)
+    }
+    /// Observe a device through its concrete model without changing it.
+    pub fn with_device<T: fujimod_emulator_devices::Device, R>(
+        &self,
+        id: usize,
+        f: impl FnOnce(&T) -> R,
+    ) -> Result<R, String> {
+        Ok(f(self.state.borrow().bus.device::<T>(id)?))
+    }
     pub fn configure_core_interrupts(
         &mut self,
         core: usize,
