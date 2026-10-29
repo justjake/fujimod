@@ -869,6 +869,22 @@ impl Devices {
         self.windows.push((base, base + 0x1000, id));
         Ok(())
     }
+    /// DesignWare HDMI TX with no sink attached.
+    pub fn xpp_hdmi(&mut self, base: u64) -> Result<(), String> {
+        use fujimod_emulator_ip::dw_hdmi::{Transmitter, WINDOW};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(WINDOW))
+        {
+            return Err("Overlapping DesignWare HDMI TX".into());
+        }
+        let model = Transmitter::new(base)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + WINDOW, id));
+        Ok(())
+    }
     pub fn xpp_dram(&mut self, base: u64, refresh_level: u8) -> Result<(), String> {
         use fujimod_emulator_xpp::dram::{Controller, WINDOW};
         if self

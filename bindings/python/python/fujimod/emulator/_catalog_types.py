@@ -2432,6 +2432,12 @@ class HardwareGpio(TypedDict, total=False):
     size: Required[int]
 
 
+class HardwareHdmiTransmitter(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    size: Required[int]
+
+
 class HardwareImaging(TypedDict, total=False):
     af_extraction: NotRequired[HardwareAfExtraction | None]
     capture_color: NotRequired[HardwareCaptureColor | None]
@@ -2634,6 +2640,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     frame_sync: NotRequired[HardwareFrameSync | None]
     gic: NotRequired[HardwareGic | None]
     gpio: NotRequired[HardwareGpio | None]
+    hdmi_tx: NotRequired[HardwareHdmiTransmitter | None]
     imaging: NotRequired[HardwareImagingRegisters | None]
     imaging_control: NotRequired[HardwareImagingControl | None]
     interrupts: NotRequired[HardwareInterrupts | None]

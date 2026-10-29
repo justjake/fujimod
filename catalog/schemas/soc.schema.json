@@ -1417,6 +1417,34 @@
       ],
       "type": "object"
     },
+    "HardwareHdmiTransmitter": {
+      "additionalProperties": false,
+      "description": "DesignWare HDMI TX controller with no sink attached.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "size"
+      ],
+      "type": "object"
+    },
     "HardwareImagingControl": {
       "additionalProperties": false,
       "description": "X-Processor Pro imaging control page: block stop and register-bus channels.",
@@ -2097,6 +2125,17 @@
             }
           ],
           "description": "Declared gpio."
+        },
+        "hdmi_tx": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareHdmiTransmitter"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared HDMI transmitter without a sink."
         },
         "imaging": {
           "anyOf": [

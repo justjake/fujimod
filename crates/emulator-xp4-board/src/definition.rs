@@ -67,6 +67,9 @@ pub struct Definition {
     /// X-Processor Pro DRAM controller base and refresh-rate level.
     #[serde(default)]
     pub xpp_dram: Option<(u64, u8)>,
+    /// DesignWare HDMI TX base; the board has no sink attached.
+    #[serde(default)]
+    pub xpp_hdmi: Option<u64>,
     /// X-Processor Pro imaging frame sync; its interrupt words lie inside
     /// the imaging control page.
     #[serde(default)]
