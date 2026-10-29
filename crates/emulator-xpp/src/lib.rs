@@ -2,6 +2,7 @@
 //! address, so they are separate implementations selected by the SoC record.
 //! Addresses and IRQ routing are explicit SoC inputs, never software-derived.
 pub mod adc;
+pub mod blocks;
 pub mod board;
 pub mod boot;
 pub mod clocks;

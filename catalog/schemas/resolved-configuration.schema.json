@@ -11714,6 +11714,42 @@
       },
       "type": "object"
     },
+    "HardwareImagingBlock": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro imaging register block with no work in flight.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "idle_bits": {
+          "description": "Status bits that always read set.",
+          "items": {
+            "$ref": "#/$defs/HardwareImagingIdleBits"
+          },
+          "type": "array"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "idle_bits",
+        "size"
+      ],
+      "type": "object"
+    },
     "HardwareImagingControl": {
       "additionalProperties": false,
       "description": "X-Processor Pro imaging control page: block stop and register-bus channels.",
@@ -11739,6 +11775,29 @@
         "base",
         "basis",
         "size"
+      ],
+      "type": "object"
+    },
+    "HardwareImagingIdleBits": {
+      "additionalProperties": false,
+      "description": "Status bits of an imaging block that always read set.",
+      "properties": {
+        "mask": {
+          "description": "Bits that read set.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "description": "Word offset in the block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mask",
+        "offset"
       ],
       "type": "object"
     },
@@ -12847,6 +12906,13 @@
             }
           ],
           "description": "Declared imaging."
+        },
+        "imaging_blocks": {
+          "description": "Declared X-Processor Pro imaging register blocks.",
+          "items": {
+            "$ref": "#/$defs/HardwareImagingBlock"
+          },
+          "type": "array"
         },
         "imaging_control": {
           "anyOf": [

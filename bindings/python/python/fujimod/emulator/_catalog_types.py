@@ -2449,10 +2449,22 @@ class HardwareImaging(TypedDict, total=False):
     sensor_capture: NotRequired[HardwareSensorCapture | None]
 
 
+class HardwareImagingBlock(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    idle_bits: Required[list[HardwareImagingIdleBits]]
+    size: Required[int]
+
+
 class HardwareImagingControl(TypedDict, total=False):
     base: Required[int]
     basis: Required[str]
     size: Required[int]
+
+
+class HardwareImagingIdleBits(TypedDict, total=False):
+    mask: Required[int]
+    offset: Required[int]
 
 
 class HardwareImagingRegisters(TypedDict, total=False):
@@ -2650,6 +2662,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     gpio: NotRequired[HardwareGpio | None]
     hdmi_tx: NotRequired[HardwareHdmiTransmitter | None]
     imaging: NotRequired[HardwareImagingRegisters | None]
+    imaging_blocks: NotRequired[list[HardwareImagingBlock]]
     imaging_control: NotRequired[HardwareImagingControl | None]
     imaging_statistics: NotRequired[HardwareImagingStatistics | None]
     interrupts: NotRequired[HardwareInterrupts | None]

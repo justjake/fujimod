@@ -1248,6 +1248,34 @@ pub struct ResetGates {
     pub size: u64,
 }
 
+/// Status bits of an imaging block that always read set.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareImagingIdleBits"))]
+pub struct ImagingIdleBits {
+    /// Bits that read set.
+    pub mask: u32,
+    /// Word offset in the block.
+    pub offset: u64,
+}
+
+/// X-Processor Pro imaging register block with no work in flight.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareImagingBlock"))]
+pub struct ImagingBlock {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Status bits that always read set.
+    pub idle_bits: Vec<ImagingIdleBits>,
+    /// Declared size.
+    pub size: u64,
+}
+
 /// X-Processor Pro imaging statistics engine.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1658,6 +1686,9 @@ pub struct RegisterLayouts {
     /// Declared X-Processor Pro imaging frame sync.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frame_sync: Option<FrameSync>,
+    /// Declared X-Processor Pro imaging register blocks.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub imaging_blocks: Vec<ImagingBlock>,
     /// Declared X-Processor Pro imaging statistics engine.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imaging_statistics: Option<ImagingStatistics>,

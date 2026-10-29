@@ -869,6 +869,24 @@ impl Devices {
         self.windows.push((base, base + 0x1000, id));
         Ok(())
     }
+    pub fn xpp_imaging_block(
+        &mut self,
+        block: crate::definition::XppImagingBlock,
+    ) -> Result<(), String> {
+        let model = fujimod_emulator_xpp::blocks::Block::new(block.base, block.size, block.idle)?;
+        let end = block.base + model.window();
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| block.base < hi && lo < end)
+        {
+            return Err("Overlapping X-Processor Pro imaging block".into());
+        }
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((block.base, end, id));
+        Ok(())
+    }
     pub fn xpp_statistics(&mut self, base: u64, irq: u32, period: u64) -> Result<(), String> {
         use fujimod_emulator_xpp::statistics::{Engine, WINDOW};
         if self

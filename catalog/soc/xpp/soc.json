@@ -110,6 +110,41 @@
       "clock_id": null
     },
     {
+      "id": "imaging-fff3a000",
+      "base": 4294156288,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff3b000",
+      "base": 4294160384,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff47000",
+      "base": 4294209536,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-unit-0",
+      "base": 4294266880,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-unit-1",
+      "base": 4294270976,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
       "id": "imaging-statistics",
       "base": 4294262784,
       "size": 512,
@@ -615,8 +650,63 @@
           "imaging_control": {
             "base": 4294152192,
             "size": 4096,
-            "basis": "Imaging control page of X-T20 2.11 section 5: +0x000 bit 0 is a run bit that 0xc33ec8 clears and then waits to read set (stopped); six register-bus channels at +0x200 + 0x40*n (0xc345b4..0xc34c50) send a RAM frame 0x81 hi lo value (write) or 0x82 hi lo (read) to a select in configuration bits 8-12 and return the reply byte in bits 15:8 of eight receive words at +0x1c. The imaging-side chip is a register file: the start-up writes a register and reads it back until it matches (seg6 0x17fa434). Commands and stops complete at once; what the chip does with the values is not modeled."
+            "basis": "Imaging control page of X-T20 2.11 section 5: +0x000 bit 0 is a run bit that 0xc33ec8 clears and then waits to read set (stopped); one register-bus channel at +0x200 (0xc345b4..0xc34864) sends a RAM frame 0x81 hi lo value (write) or 0x82 hi lo (read) to a select in configuration bits 8-12 and returns the reply byte in bits 15:8 of eight receive words at +0x21c. The imaging-side chip is a register file: the start-up writes a register and reads it back until it matches (seg6 0x17fa434). Commands and stops complete at once; what the chip does with the values is not modeled. Six transfer channels at +0x240 + 0x40*n (0xc34910..0xc34e94) are configured with mode, address and length words and started and stopped by +0x04 bit 0 (seg6 0x156a754 and 0x156a7b0); those words read back, and no data moves."
           },
+          "imaging_blocks": [
+            {
+              "base": 4294156288,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Imaging block of X-T20 2.11 section 5 configured by 0xc54b9c..0xc55318 (words +0x04..+0xd0); 0xc54dc4 and 0xc54e4c update +0x40 bit 8 with read-modify-write. No status word is waited on. The words read back their last write; what the block computes is not modeled."
+            },
+            {
+              "base": 4294160384,
+              "size": 4096,
+              "idle_bits": [
+                {
+                  "offset": 0,
+                  "mask": 1
+                }
+              ],
+              "basis": "Imaging block of X-T20 2.11 section 5 configured by 0xc3c100..0xc3f8c4 (words +0x04..+0x204), with enable bits in +0x04 updated by read-modify-write. The stop 0xc3c0c0 writes 0 to +0x00 and waits until bit 0 reads set, so bit 0 is declared idle. The words read back their last write; what the block computes is not modeled."
+            },
+            {
+              "base": 4294209536,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Imaging block of X-T20 2.11 written only by the register-table copier 0xc41d30 from section-5 tables (for example 0xf73428 and 0xf795a0); no read of the block is known. The words read back their last write; what the block computes is not modeled."
+            },
+            {
+              "base": 4294266880,
+              "size": 4096,
+              "idle_bits": [
+                {
+                  "offset": 0,
+                  "mask": 1
+                },
+                {
+                  "offset": 216,
+                  "mask": 256
+                }
+              ],
+              "basis": "Imaging unit 0 of X-T20 2.11 section 5 at (0xfff55 + n) << 12 (0xc3a954, 0xc3be40): a 31-entry 17-bit table at +0x40..+0xb8 (0xc3b450), buffer address +0xc0, line width +0xc4 and start bit 28 of +0xc8 (0xc3a98c). The stop 0xc3be40 clears the start bit and waits for +0xd8 bit 8, then 0xc3a954 writes 0 to +0x00 and waits for bit 0; both are declared idle, as no frame is in flight. The words read back their last write; no data is written to the buffers."
+            },
+            {
+              "base": 4294270976,
+              "size": 4096,
+              "idle_bits": [
+                {
+                  "offset": 0,
+                  "mask": 1
+                },
+                {
+                  "offset": 216,
+                  "mask": 256
+                }
+              ],
+              "basis": "Imaging unit 1 of X-T20 2.11 section 5 at (0xfff55 + n) << 12 (0xc3a954, 0xc3be40): a 31-entry 17-bit table at +0x40..+0xb8 (0xc3b450), buffer address +0xc0, line width +0xc4 and start bit 28 of +0xc8 (0xc3a98c). The stop 0xc3be40 clears the start bit and waits for +0xd8 bit 8, then 0xc3a954 writes 0 to +0x00 and waits for bit 0; both are declared idle, as no frame is in flight. The words read back their last write; no data is written to the buffers."
+            }
+          ],
           "imaging_statistics": {
             "base": 4294262784,
             "size": 512,
