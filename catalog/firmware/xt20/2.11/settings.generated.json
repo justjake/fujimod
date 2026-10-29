@@ -1,0 +1,1177 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "xt20-211-settings",
+  "firmware_id": "xt20-211",
+  "source": {
+    "flash_offset": 2293760,
+    "address": 11866112,
+    "size": 4411492,
+    "sha256": "ea4bbc47aadcddb95c8b80c731f40a90d77c4cce23aaaf3320dc8de952041b6c"
+  },
+  "configuration": {
+    "flash_offset": 786432,
+    "bytes": 262144,
+    "sha256": "ce4bd6bc2547cf109c622b909fb1a3e9bb6ab5d3fa0e789f2c71e4d092b54302",
+    "basis": "An erased configuration store (NOR 0x3840000) is filled by a DMA copy of these installed flash bytes at startup; configuration reader 0xcd7488 then reads that copy."
+  },
+  "defaults": null,
+  "fields": [],
+  "profile": {
+    "header": {
+      "address": 16079900,
+      "size": 16,
+      "sha256": "2e99e8c30aeb4434dcd0fe83deea0a22c5631b5aa35eeec16a45be91ddd44856"
+    },
+    "records": {
+      "main": {
+        "block": 990,
+        "bytes": 4096,
+        "defaults": {
+          "address": 16273904,
+          "size": 3700,
+          "sha256": "5d79e153c8bf09e8aec986226351d9c096e480a5e2b5e77bf9e053b242ded26e"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 3964,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Main record marker after the sequence word."
+          },
+          {
+            "offset": 196,
+            "bytes": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ],
+            "basis": "Erased main record bytes before the pages."
+          },
+          {
+            "offset": 3960,
+            "bytes": [
+              2,
+              17
+            ],
+            "basis": "Stock writer 0xcdce04 stamps version bytes from 0xf55561/0xf55567 into main record +0xf78/+0xf79."
+          }
+        ]
+      },
+      "custom": {
+        "block": 994,
+        "bytes": 4096,
+        "defaults": {
+          "address": 16079916,
+          "size": 1792,
+          "sha256": "b73c906ffbfb83dbdeeca58a733a06e2350bcc205f7ee7a4448591c6b26f3de4"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 3964,
+        "fields": []
+      }
+    },
+    "derived_fields": [
+      {
+        "store": "main",
+        "offset": 3962,
+        "bytes": 2,
+        "source": {
+          "kind": "fill",
+          "value": 255
+        },
+        "basis": "Main record buffer begins erased; bytes after the two writer version bytes stay erased."
+      },
+      {
+        "store": "main",
+        "offset": 387,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 523,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 0
+            },
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            },
+            {
+              "input": 4,
+              "output": 4
+            },
+            {
+              "input": 5,
+              "output": 5
+            },
+            {
+              "input": 6,
+              "output": 6
+            },
+            {
+              "input": 7,
+              "output": 7
+            },
+            {
+              "input": 8,
+              "output": 8
+            },
+            {
+              "input": 9,
+              "output": 9
+            },
+            {
+              "input": 10,
+              "output": 10
+            },
+            {
+              "input": 11,
+              "output": 11
+            },
+            {
+              "input": 12,
+              "output": 12
+            },
+            {
+              "input": 13,
+              "output": 13
+            },
+            {
+              "input": 14,
+              "output": 14
+            },
+            {
+              "input": 15,
+              "output": 15
+            },
+            {
+              "input": 16,
+              "output": 16
+            },
+            {
+              "input": 17,
+              "output": 17
+            },
+            {
+              "input": 18,
+              "output": 18
+            },
+            {
+              "input": 19,
+              "output": 19
+            },
+            {
+              "input": 20,
+              "output": 20
+            },
+            {
+              "input": 21,
+              "output": 21
+            },
+            {
+              "input": 22,
+              "output": 22
+            },
+            {
+              "input": 23,
+              "output": 23
+            },
+            {
+              "input": 24,
+              "output": 24
+            },
+            {
+              "input": 25,
+              "output": 25
+            },
+            {
+              "input": 26,
+              "output": 26
+            },
+            {
+              "input": 27,
+              "output": 27
+            },
+            {
+              "input": 28,
+              "output": 28
+            },
+            {
+              "input": 29,
+              "output": 29
+            },
+            {
+              "input": 30,
+              "output": 30
+            },
+            {
+              "input": 31,
+              "output": 31
+            },
+            {
+              "input": 32,
+              "output": 32
+            },
+            {
+              "input": 33,
+              "output": 33
+            },
+            {
+              "input": 34,
+              "output": 34
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "settings_defaults_load 0xcdcf74 copies configuration language 0x20b into profile +0x8f; values above 0x22 fall back to 1."
+      },
+      {
+        "store": "main",
+        "offset": 389,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 533,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "settings_defaults_load 0xcdcf74 keeps configuration byte 0x215 in profile +0x91 only when it is 1 or 2."
+      },
+      {
+        "store": "main",
+        "offset": 395,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 534,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "settings_defaults_load 0xcdcf74 stores configuration flag 0x216 as a Boolean in profile +0x97."
+      },
+      {
+        "store": "main",
+        "offset": 446,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 35427
+        },
+        "basis": "settings_defaults_load 0xcdcf74 copies configuration byte 0x8a63 into profile +0xca."
+      },
+      {
+        "store": "main",
+        "offset": 527,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "settings_defaults_load 0xcdcf74 decodes configuration image size 0x217 into profile +0x11b."
+      },
+      {
+        "store": "main",
+        "offset": 528,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "settings_defaults_load 0xcdcf74 decodes configuration orientation 0x219 into profile +0x11c."
+      },
+      {
+        "store": "main",
+        "offset": 529,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "settings_defaults_load 0xcdcf74 stores the inverted configuration flag 0x218 in profile +0x11d."
+      },
+      {
+        "store": "main",
+        "offset": 828,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 523,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 1
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Japanese configuration language 0x20b sets profile flag +0x248 in settings_defaults_load 0xcdcf74."
+      },
+      {
+        "store": "main",
+        "offset": 854,
+        "bytes": 4,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 339
+        },
+        "basis": "settings_defaults_load 0xcdcf74 copies the configuration file-name prefix 0x153 into profile +0x262."
+      },
+      {
+        "store": "main",
+        "offset": 858,
+        "bytes": 4,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 331
+        },
+        "basis": "settings_defaults_load 0xcdcf74 copies the configuration folder prefix 0x14b into profile +0x266."
+      },
+      {
+        "store": "main",
+        "offset": 862,
+        "bytes": 32,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 35394
+        },
+        "basis": "settings_defaults_load 0xcdcf74 copies the configuration wireless name 0x8a42 into profile +0x26a."
+      },
+      {
+        "store": "custom",
+        "offset": 295,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets image size from configuration byte 0x217 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 296,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets orientation from configuration byte 0x219 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 297,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets inverted flag from configuration byte 0x218 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 551,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets image size from configuration byte 0x217 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 552,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets orientation from configuration byte 0x219 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 553,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets inverted flag from configuration byte 0x218 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 807,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets image size from configuration byte 0x217 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 808,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets orientation from configuration byte 0x219 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 809,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets inverted flag from configuration byte 0x218 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1063,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets image size from configuration byte 0x217 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1064,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets orientation from configuration byte 0x219 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1065,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets inverted flag from configuration byte 0x218 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1319,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets image size from configuration byte 0x217 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1320,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets orientation from configuration byte 0x219 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1321,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets inverted flag from configuration byte 0x218 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1575,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets image size from configuration byte 0x217 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1576,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets orientation from configuration byte 0x219 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1577,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets inverted flag from configuration byte 0x218 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1831,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets image size from configuration byte 0x217 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1832,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets orientation from configuration byte 0x219 in each of the seven custom pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1833,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Custom defaults loader 0xcdf534 sets inverted flag from configuration byte 0x218 in each of the seven custom pages."
+      }
+    ]
+  },
+  "settings": {
+    "language": {
+      "store": "main",
+      "offset": 387,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    },
+    "setup": {
+      "store": "header",
+      "offset": 12,
+      "values": {
+        "done": [
+          30
+        ]
+      }
+    }
+  },
+  "sections": []
+}

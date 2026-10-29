@@ -1691,6 +1691,39 @@
         }
       ]
     },
+    "ConfigurationWindow": {
+      "additionalProperties": false,
+      "description": "Bytes of the installed flash image that stock firmware copies into its\nconfiguration store when that store is erased.",
+      "properties": {
+        "basis": {
+          "description": "The stock copy that fills the configuration store from this window.",
+          "type": "string"
+        },
+        "bytes": {
+          "description": "Window length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "flash_offset": {
+          "description": "Offset of the window in the installed flash image.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "Lowercase hexadecimal SHA-256 of the window.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "flash_offset",
+        "bytes",
+        "sha256",
+        "basis"
+      ],
+      "type": "object"
+    },
     "ConnectionKind": {
       "description": "Physical connection categories.",
       "oneOf": [
@@ -8279,8 +8312,26 @@
           "type": "string"
         },
         "bank": {
-          "$ref": "#/$defs/SettingsBank",
-          "description": "Where the bank lives in flash."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SettingsBank"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Where the bank lives in flash, when the firmware keeps one."
+        },
+        "configuration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConfigurationWindow"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The update window the firmware copies into its erased configuration\nstore, for firmware without a bank. Derived profile fields read it as\nthe `bank` store; it is never placed in flash."
         },
         "defaults": {
           "anyOf": [
@@ -8350,7 +8401,6 @@
         "id",
         "firmware_id",
         "source",
-        "bank",
         "fields",
         "settings",
         "sections"
@@ -10218,6 +10268,138 @@
       ],
       "type": "object"
     },
+    "HardwareDisplayFrames": {
+      "additionalProperties": false,
+      "description": "Display frame interrupts declared as a law without controller registers.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "irq_routes": {
+          "description": "Lines receiving one edge per frame.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "period_ticks": {
+          "description": "Frame period in guest ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "irq_routes",
+        "period_ticks"
+      ],
+      "type": "object"
+    },
+    "HardwareDisplayOutput": {
+      "additionalProperties": false,
+      "description": "Register window of one display output with status bits that read fixed.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "clear_bits": {
+          "description": "Bits a completed request leaves clear.",
+          "items": {
+            "$ref": "#/$defs/HardwareDisplayStatusBits"
+          },
+          "type": "array"
+        },
+        "scanout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareDisplayScanout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "OSD layer capture, when the output is scanned out."
+        },
+        "set_bits": {
+          "description": "Bits that report a completed request as set.",
+          "items": {
+            "$ref": "#/$defs/HardwareDisplayStatusBits"
+          },
+          "type": "array"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "clear_bits",
+        "set_bits",
+        "size"
+      ],
+      "type": "object"
+    },
+    "HardwareDisplayScanout": {
+      "additionalProperties": false,
+      "description": "Host output index and capture period of a display output's OSD layers.",
+      "properties": {
+        "output": {
+          "description": "Host output index of the captured frames.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "period_ticks": {
+          "description": "Capture period in ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "output",
+        "period_ticks"
+      ],
+      "type": "object"
+    },
+    "HardwareDisplayStatusBits": {
+      "additionalProperties": false,
+      "description": "Status bits of one display output register.",
+      "properties": {
+        "mask": {
+          "description": "Bits that read with the declared level.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "description": "Word offset from the output base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "mask"
+      ],
+      "type": "object"
+    },
     "HardwareDisplayTiming": {
       "additionalProperties": false,
       "description": "Declared display timing facts.",
@@ -10344,6 +10526,55 @@
       ],
       "type": "object"
     },
+    "HardwareDramAlias": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro read-only DRAM alias: physical `base` onwards returns body\nDRAM from address 0.",
+      "properties": {
+        "base": {
+          "description": "Declared physical base of the alias.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "HardwareDramController": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro SD channel: wrapper reset at +0, vendor words and a\nrelocated SDHCI bank, with its interrupt and hardware reset line.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "size"
+      ],
+      "type": "object"
+    },
     "HardwareEncoder": {
       "additionalProperties": false,
       "description": "Declared encoders facts.",
@@ -10398,6 +10629,48 @@
         "phase_ticks",
         "pins",
         "rest_phase"
+      ],
+      "type": "object"
+    },
+    "HardwareFaceDetection": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro face detection engine.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "irq_route": {
+          "description": "Interrupt line of the completion status.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "run_ticks": {
+          "description": "Time from a start to the completion of its run, in device ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "irq_route",
+        "run_ticks",
+        "size"
       ],
       "type": "object"
     },
@@ -10533,6 +10806,15 @@
         "basis": {
           "description": "Declared basis.",
           "type": "string"
+        },
+        "irq_route": {
+          "description": "Interrupt line of the controller status, when declared.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "size": {
           "description": "Read aperture size in bytes.",
@@ -10689,6 +10971,79 @@
       ],
       "type": "object"
     },
+    "HardwareFrameSource": {
+      "additionalProperties": false,
+      "description": "One frame interrupt source of the X-Processor Pro frame sync.",
+      "properties": {
+        "irq_route": {
+          "description": "Interrupt line the source drives.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status_bit": {
+          "description": "Status and enable bit of the source: 0, 8 or 16.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "irq_route",
+        "status_bit"
+      ],
+      "type": "object"
+    },
+    "HardwareFrameSync": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro imaging frame sync and its frame interrupt words.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "interrupts": {
+          "description": "Address of the frame interrupt enable word; the status word follows.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "period_ticks": {
+          "description": "Frame period in device ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sources": {
+          "description": "Sources every frame latches.",
+          "items": {
+            "$ref": "#/$defs/HardwareFrameSource"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "interrupts",
+        "period_ticks",
+        "size",
+        "sources"
+      ],
+      "type": "object"
+    },
     "HardwareGic": {
       "additionalProperties": false,
       "description": "Declared gic facts.",
@@ -10727,6 +11082,34 @@
     "HardwareGpio": {
       "additionalProperties": false,
       "description": "Declared gpio facts.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "size"
+      ],
+      "type": "object"
+    },
+    "HardwareHdmiTransmitter": {
+      "additionalProperties": false,
+      "description": "DesignWare HDMI TX controller with no sink attached.",
       "properties": {
         "base": {
           "description": "Declared base.",
@@ -10847,6 +11230,34 @@
       },
       "type": "object"
     },
+    "HardwareImagingControl": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro imaging control page: block stop and register-bus channels.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "size"
+      ],
+      "type": "object"
+    },
     "HardwareImagingRegisters": {
       "additionalProperties": false,
       "description": "Declared register maps imaging facts.",
@@ -10921,6 +11332,48 @@
         "receiver_base",
         "reset_ticks",
         "timing_irqs"
+      ],
+      "type": "object"
+    },
+    "HardwareImagingStatistics": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro imaging statistics engine.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "irq_route": {
+          "description": "Interrupt line of the completion status.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "period_ticks": {
+          "description": "Frame period in device ticks, the frame sync's.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "irq_route",
+        "period_ticks",
+        "size"
       ],
       "type": "object"
     },
@@ -11447,6 +11900,69 @@
       ],
       "type": "object"
     },
+    "HardwarePllClocks": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro clock bank: dividers, gates and five PLLs with lock status.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "lock_ticks": {
+          "description": "Ticks from a PLL enable to its lock bit.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "lock_ticks",
+        "size"
+      ],
+      "type": "object"
+    },
+    "HardwarePowerControl": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro power control: supply hold and power domains.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "size"
+      ],
+      "type": "object"
+    },
     "HardwarePreviewActivity": {
       "additionalProperties": false,
       "description": "Declared preview activity facts.",
@@ -11697,6 +12213,109 @@
       ],
       "type": "object"
     },
+    "HardwareRegisterBlock": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro register block with no work in flight.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "frames": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareRegisterBlockFrames"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Frames the block finishes while started."
+        },
+        "idle_bits": {
+          "description": "Status bits that always read set.",
+          "items": {
+            "$ref": "#/$defs/HardwareRegisterIdleBits"
+          },
+          "type": "array"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "idle_bits",
+        "size"
+      ],
+      "type": "object"
+    },
+    "HardwareRegisterBlockFrames": {
+      "additionalProperties": false,
+      "description": "Frame law of a register block: one interrupt edge per frame period while\nthe start bit is set; the stopped bit reads set only while it is clear.",
+      "properties": {
+        "irq_route": {
+          "description": "Interrupt line of the frame edge.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "period_ticks": {
+          "description": "Frame period in device ticks, the frame sync's.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start": {
+          "$ref": "#/$defs/HardwareRegisterIdleBits",
+          "description": "Start bit."
+        },
+        "stopped": {
+          "$ref": "#/$defs/HardwareRegisterIdleBits",
+          "description": "Bit that reads set while stopped."
+        }
+      },
+      "required": [
+        "irq_route",
+        "period_ticks",
+        "start",
+        "stopped"
+      ],
+      "type": "object"
+    },
+    "HardwareRegisterIdleBits": {
+      "additionalProperties": false,
+      "description": "Status bits of a register block that always read set.",
+      "properties": {
+        "mask": {
+          "description": "Bits that read set.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "description": "Word offset in the block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mask",
+        "offset"
+      ],
+      "type": "object"
+    },
     "HardwareRegisterLayouts": {
       "additionalProperties": false,
       "description": "Declared register maps facts.",
@@ -11756,6 +12375,27 @@
           ],
           "description": "Declared decompressor."
         },
+        "display_frames": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareDisplayFrames"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared display frame interrupts."
+        },
+        "display_outputs": {
+          "description": "Declared display output register windows.",
+          "items": {
+            "$ref": "#/$defs/HardwareDisplayOutput"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "dma": {
           "anyOf": [
             {
@@ -11778,6 +12418,39 @@
           ],
           "description": "Declared dmp."
         },
+        "dram_alias": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareDramAlias"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro read-only DRAM alias."
+        },
+        "dram_controller": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareDramController"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro DRAM controller."
+        },
+        "face_detection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareFaceDetection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro face detection engine."
+        },
         "flash_controller": {
           "anyOf": [
             {
@@ -11788,6 +12461,17 @@
             }
           ],
           "description": "Declared flash controller."
+        },
+        "frame_sync": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareFrameSync"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro imaging frame sync."
         },
         "gic": {
           "anyOf": [
@@ -11811,6 +12495,17 @@
           ],
           "description": "Declared gpio."
         },
+        "hdmi_tx": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareHdmiTransmitter"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared HDMI transmitter without a sink."
+        },
         "imaging": {
           "anyOf": [
             {
@@ -11821,6 +12516,28 @@
             }
           ],
           "description": "Declared imaging."
+        },
+        "imaging_control": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareImagingControl"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro imaging control page."
+        },
+        "imaging_statistics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareImagingStatistics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro imaging statistics engine."
         },
         "interrupts": {
           "anyOf": [
@@ -11908,6 +12625,46 @@
           ],
           "description": "Declared PL330 DMA controller."
         },
+        "pll_clocks": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwarePllClocks"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro clock bank."
+        },
+        "power_control": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwarePowerControl"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro power control."
+        },
+        "register_blocks": {
+          "description": "Declared X-Processor Pro register blocks with no work in flight.",
+          "items": {
+            "$ref": "#/$defs/HardwareRegisterBlock"
+          },
+          "type": "array"
+        },
+        "reset_gates": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareResetGates"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro reset and gate controls."
+        },
         "sd_host_clocks": {
           "anyOf": [
             {
@@ -11972,6 +12729,39 @@
             }
           ],
           "description": "Declared usb."
+        },
+        "xpp_i2c": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareXppI2cBuses"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro DesignWare I2C buses."
+        },
+        "xpp_sd": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareXppSdHost"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro SD channel."
+        },
+        "xpp_usb": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareXppUsb"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro USB device controller."
         }
       },
       "type": "object"
@@ -12047,6 +12837,34 @@
       "required": [
         "address",
         "expected_hex"
+      ],
+      "type": "object"
+    },
+    "HardwareResetGates": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro reset and gate controls; SD channel reset lines.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "size"
       ],
       "type": "object"
     },
@@ -12903,6 +13721,189 @@
         "basis",
         "profile",
         "ticks_per_window"
+      ],
+      "type": "object"
+    },
+    "HardwareXppI2cBuses": {
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "description": "Base of bus 0; bus n follows at `base + n * stride`.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "clock_hz": {
+          "description": "The `ic_clk` the SCL high and low counts divide.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fifo_depth": {
+          "description": "TX and RX FIFO depth in entries.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq_routes": {
+          "description": "Interrupt line of each bus, in bus order.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "size": {
+          "description": "Declared size of one bus window.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stride": {
+          "description": "Distance between bus windows.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tick_hz": {
+          "description": "Device ticks per second.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "clock_hz",
+        "fifo_depth",
+        "irq_routes",
+        "size",
+        "stride",
+        "tick_hz"
+      ],
+      "type": "object"
+    },
+    "HardwareXppSdHost": {
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "clock_ticks": {
+          "description": "Ticks for the internal clock to report stable.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq_route": {
+          "description": "Interrupt line of the SDHCI status.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register_offset": {
+          "description": "Offset of the SDHCI bank inside the window.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reset_channel": {
+          "description": "SD channel of the reset-gate line that resets this host.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reset_ticks": {
+          "description": "Ticks of the wrapper reset at +0.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transfer_ticks": {
+          "description": "Ticks of one command or data transfer.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "clock_ticks",
+        "irq_route",
+        "register_offset",
+        "reset_channel",
+        "reset_ticks",
+        "size",
+        "transfer_ticks"
+      ],
+      "type": "object"
+    },
+    "HardwareXppUsb": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro DesignWare USB3 device controller.",
+      "properties": {
+        "base": {
+          "description": "Declared base; the core registers start at +0xc100.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "command_ticks": {
+          "description": "Time an endpoint command takes, in device ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq_route": {
+          "description": "Interrupt line of the event buffer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transaction_ticks": {
+          "description": "Time a bus transaction takes, in device ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "command_ticks",
+        "irq_route",
+        "size",
+        "transaction_ticks"
       ],
       "type": "object"
     },
@@ -16295,7 +17296,7 @@
       "description": "One journal record: stock defaults and fixed bytes, sealed with one parity\nbit per data word and an XOR checksum of the data words in its last four bytes.",
       "properties": {
         "block": {
-          "description": "Physical flash block holding the record at its start.",
+          "description": "Physical flash block holding the record at its start: a NAND block, or\na 64 KiB region unit of a NOR array.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
@@ -16324,11 +17325,14 @@
           "type": "array"
         },
         "managed_index": {
-          "description": "Managed logical index of that block.",
+          "description": "Managed logical index of that block; NOR arrays have none.",
           "format": "uint16",
           "maximum": 65535,
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "parity_offset": {
           "description": "Record offset of the parity bitmap; the data words precede it.",
@@ -16339,7 +17343,6 @@
       },
       "required": [
         "block",
-        "managed_index",
         "bytes",
         "defaults",
         "defaults_offset",
@@ -17917,6 +18920,11 @@
         {
           "const": "clock-controller",
           "description": "Clock controller.",
+          "type": "string"
+        },
+        {
+          "const": "memory-controller",
+          "description": "Memory controller.",
           "type": "string"
         },
         {

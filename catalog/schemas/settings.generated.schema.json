@@ -23,6 +23,39 @@
       ],
       "type": "object"
     },
+    "ConfigurationWindow": {
+      "additionalProperties": false,
+      "description": "Bytes of the installed flash image that stock firmware copies into its\nconfiguration store when that store is erased.",
+      "properties": {
+        "basis": {
+          "description": "The stock copy that fills the configuration store from this window.",
+          "type": "string"
+        },
+        "bytes": {
+          "description": "Window length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "flash_offset": {
+          "description": "Offset of the window in the installed flash image.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "Lowercase hexadecimal SHA-256 of the window.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "flash_offset",
+        "bytes",
+        "sha256",
+        "basis"
+      ],
+      "type": "object"
+    },
     "NamedSetting": {
       "additionalProperties": false,
       "description": "A setting a run requests by name, such as `debug` or `language`.",
@@ -226,7 +259,7 @@
       "description": "One journal record: stock defaults and fixed bytes, sealed with one parity\nbit per data word and an XOR checksum of the data words in its last four bytes.",
       "properties": {
         "block": {
-          "description": "Physical flash block holding the record at its start.",
+          "description": "Physical flash block holding the record at its start: a NAND block, or\na 64 KiB region unit of a NOR array.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
@@ -255,11 +288,14 @@
           "type": "array"
         },
         "managed_index": {
-          "description": "Managed logical index of that block.",
+          "description": "Managed logical index of that block; NOR arrays have none.",
           "format": "uint16",
           "maximum": 65535,
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "parity_offset": {
           "description": "Record offset of the parity bitmap; the data words precede it.",
@@ -270,7 +306,6 @@
       },
       "required": [
         "block",
-        "managed_index",
         "bytes",
         "defaults",
         "defaults_offset",
@@ -579,8 +614,26 @@
       "type": "string"
     },
     "bank": {
-      "$ref": "#/$defs/SettingsBank",
-      "description": "Where the bank lives in flash."
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SettingsBank"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Where the bank lives in flash, when the firmware keeps one."
+    },
+    "configuration": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ConfigurationWindow"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The update window the firmware copies into its erased configuration\nstore, for firmware without a bank. Derived profile fields read it as\nthe `bank` store; it is never placed in flash."
     },
     "defaults": {
       "anyOf": [
@@ -650,7 +703,6 @@
     "id",
     "firmware_id",
     "source",
-    "bank",
     "fields",
     "settings",
     "sections"

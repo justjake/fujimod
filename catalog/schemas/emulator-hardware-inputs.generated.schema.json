@@ -37,6 +37,39 @@
           ],
           "description": "Declared autofocus gate."
         },
+        "battery_gauge": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetBatteryGauge"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared battery gauge."
+        },
+        "dram_refresh": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetDramRefreshInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared DRAM refresh-rate level the memory device reports."
+        },
+        "execution_clock": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetExecutionClock"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared execution clock."
+        },
         "execution_scope": {
           "description": "Declared execution scope.",
           "type": [
@@ -66,6 +99,13 @@
           ],
           "description": "Declared gpio input."
         },
+        "i2c_parts": {
+          "description": "Declared register-file parts on the I2C buses.",
+          "items": {
+            "$ref": "#/$defs/ResetI2cPartInput"
+          },
+          "type": "array"
+        },
         "inputs": {
           "anyOf": [
             {
@@ -84,6 +124,17 @@
             "null"
           ]
         },
+        "lens": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetLensInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared lens on the mount."
+        },
         "loader_handoff": {
           "anyOf": [
             {
@@ -95,6 +146,17 @@
           ],
           "description": "Declared loader handoff."
         },
+        "pll_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetPllInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared PLLs running at kernel entry."
+        },
         "processed_frame_input": {
           "anyOf": [
             {
@@ -105,6 +167,17 @@
             }
           ],
           "description": "Declared processed frame input."
+        },
+        "sd_card": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetSdCardInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared SD card in the slot at power-on."
         },
         "sensor_input": {
           "anyOf": [
@@ -128,6 +201,17 @@
           ],
           "description": "Declared serial flash."
         },
+        "shutter": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetShutterInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared shutter."
+        },
         "spi_inputs": {
           "additionalProperties": {
             "$ref": "#/$defs/ResetSpiInputs"
@@ -137,6 +221,17 @@
             "object",
             "null"
           ]
+        },
+        "sub_cpu": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetSubCpu"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared register-file peer on a serial port."
         },
         "temperature_input": {
           "anyOf": [
@@ -148,6 +243,17 @@
             }
           ],
           "description": "Declared temperature input."
+        },
+        "usb_cable": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetUsbCable"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared USB port: the cable's VBUS pin and the link speed a host\nnegotiates."
         }
       },
       "type": "object"
@@ -176,10 +282,13 @@
       "description": "Declared adc input facts.",
       "properties": {
         "ambient_celsius": {
-          "description": "Declared ambient celsius.",
+          "description": "Declared ambient celsius, for converters with thermal channels.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "basis": {
           "description": "Declared basis.",
@@ -201,14 +310,15 @@
             "minimum": 0,
             "type": "integer"
           },
-          "type": "array"
+          "type": [
+            "array",
+            "null"
+          ]
         }
       },
       "required": [
-        "ambient_celsius",
         "basis",
-        "samples",
-        "thermal_channels"
+        "samples"
       ],
       "type": "object"
     },
@@ -493,6 +603,35 @@
       ],
       "type": "object"
     },
+    "ResetBatteryGauge": {
+      "additionalProperties": false,
+      "description": "Declared byte-frame register peer behind one serial port.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "port": {
+          "description": "Serial port base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "registers": {
+          "description": "Sixteen-bit registers, named by the even command byte, that do not\nread zero after reset.",
+          "items": {
+            "$ref": "#/$defs/ResetSubCpuRegister"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "port",
+        "registers"
+      ],
+      "type": "object"
+    },
     "ResetCard": {
       "additionalProperties": false,
       "description": "Declared card facts.",
@@ -645,6 +784,27 @@
       ],
       "type": "object"
     },
+    "ResetDramRefreshInput": {
+      "additionalProperties": false,
+      "description": "Refresh-rate level the DRAM device reports to its controller.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "level": {
+          "description": "Three-bit refresh-rate level.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "level"
+      ],
+      "type": "object"
+    },
     "ResetEndpoints": {
       "additionalProperties": false,
       "description": "Declared endpoints facts.",
@@ -717,6 +877,39 @@
       },
       "required": [
         "kind"
+      ],
+      "type": "object"
+    },
+    "ResetExecutionClock": {
+      "additionalProperties": false,
+      "description": "Instruction throughput of each core against the tick clock.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "instructions_per_tick": {
+          "description": "Instructions per tick as numerator and denominator.",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "instructions_per_tick"
       ],
       "type": "object"
     },
@@ -832,11 +1025,78 @@
         "contents": {
           "description": "Declared contents.",
           "type": "string"
+        },
+        "nor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetFlashApertureNor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "NOR device that accepts erase and page-program commands, when declared."
         }
       },
       "required": [
         "basis",
         "contents"
+      ],
+      "type": "object"
+    },
+    "ResetFlashApertureNor": {
+      "additionalProperties": false,
+      "description": "Declared NOR register device and array behind one flash-aperture chip select.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "chip_select": {
+          "description": "Chip select, each covering half of the aperture.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "enhanced_volatile_reset": {
+          "description": "Enhanced volatile configuration register value after reset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "erase_ticks": {
+          "description": "Declared erase ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_bytes": {
+          "description": "Declared page bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_ticks": {
+          "description": "Declared page ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register_write_ticks": {
+          "description": "Ticks until a register write completes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "chip_select",
+        "enhanced_volatile_reset",
+        "erase_ticks",
+        "page_bytes",
+        "page_ticks",
+        "register_write_ticks"
       ],
       "type": "object"
     },
@@ -930,6 +1190,75 @@
         "mcu_packet_hex",
         "power",
         "usb_connected"
+      ],
+      "type": "object"
+    },
+    "ResetI2cPartInput": {
+      "additionalProperties": false,
+      "description": "A register-file part on an I2C bus at power-on.",
+      "properties": {
+        "address": {
+          "description": "7-bit address the part acknowledges.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "bus": {
+          "description": "Bus index on the SoC's I2C controllers.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "little_endian": {
+          "description": "Register values are sent least-significant byte first.",
+          "type": "boolean"
+        },
+        "registers": {
+          "description": "Declared register values, as register and value pairs.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "select_mask": {
+          "description": "Bits of the first written byte that select the register.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width": {
+          "description": "Bytes per register: 1 or 2.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "basis",
+        "bus",
+        "little_endian",
+        "registers",
+        "select_mask",
+        "width"
       ],
       "type": "object"
     },
@@ -1078,6 +1407,214 @@
       ],
       "type": "object"
     },
+    "ResetLensInput": {
+      "additionalProperties": false,
+      "description": "An X-mount lens attached at power-on, answering on its serial link.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "contacts": {
+          "description": "Contact levels the attached lens presents, as bank, pin and level.",
+          "items": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "boolean"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "drive_ticks": {
+          "description": "Ticks a focus drive holds the ready line low.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "line": {
+          "description": "External interrupt line of the ready pin.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page": {
+          "description": "Information page the lens sends in a read session, as hex (at most\n128 bytes).",
+          "type": "string"
+        },
+        "poll_ticks": {
+          "description": "Ticks between samples of the body's power output.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "description": "Serial port base of the link.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "power": {
+          "description": "The body's power output: bank, register and bit.",
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "ready": {
+          "description": "Ready pin: bank and pin.",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "ready_ticks": {
+          "description": "Ticks from power-on until the lens pulls the ready line low.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "registration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetLensRegistration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The body's stored records for this lens, placed with a user profile."
+        },
+        "release_ticks": {
+          "description": "Ticks the ready line stays low during the lens's initialization.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "replies": {
+          "description": "Command replies, as command and data pairs.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "contacts",
+        "drive_ticks",
+        "line",
+        "page",
+        "poll_ticks",
+        "port",
+        "power",
+        "ready",
+        "ready_ticks",
+        "release_ticks",
+        "replies"
+      ],
+      "type": "object"
+    },
+    "ResetLensRegistration": {
+      "additionalProperties": false,
+      "description": "Body flash records of a registered lens: an asset holding the bytes of\neach flash region in order.",
+      "properties": {
+        "asset": {
+          "description": "Asset identity in the configuration assets.",
+          "type": "string"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "regions": {
+          "description": "Flash regions the asset fills, as offset and size.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "sha256": {
+          "description": "SHA-256 of the asset.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "asset",
+        "basis",
+        "regions",
+        "sha256"
+      ],
+      "type": "object"
+    },
     "ResetLoaderHandoff": {
       "additionalProperties": false,
       "description": "Declared loader handoff facts.",
@@ -1204,6 +1741,30 @@
       },
       "required": [
         "kind"
+      ],
+      "type": "object"
+    },
+    "ResetPllInput": {
+      "additionalProperties": false,
+      "description": "PLLs running at kernel entry.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "running": {
+          "description": "Indices of the PLLs already powered, enabled and locked.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "running"
       ],
       "type": "object"
     },
@@ -1757,6 +2318,44 @@
       ],
       "type": "object"
     },
+    "ResetSdCardInput": {
+      "additionalProperties": false,
+      "description": "SD card in the slot at power-on: identity, size and filesystem.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "format": {
+          "$ref": "#/$defs/ResetSdCardFormat",
+          "description": "Declared filesystem format."
+        },
+        "high_speed": {
+          "description": "The card offers high speed (CMD6 group 1 function 1).",
+          "type": "boolean"
+        },
+        "rca": {
+          "description": "Relative card address the card publishes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sectors": {
+          "description": "Declared 512-byte sectors.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "format",
+        "high_speed",
+        "rca",
+        "sectors"
+      ],
+      "type": "object"
+    },
     "ResetSeed": {
       "additionalProperties": false,
       "description": "Declared seed facts.",
@@ -1963,6 +2562,112 @@
       ],
       "type": "object"
     },
+    "ResetShutterInput": {
+      "additionalProperties": false,
+      "description": "The shutter's motor and position sensors on the GPIO banks.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "line": {
+          "description": "External interrupt line the sensors' edges reach.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode": {
+          "description": "Bank and register of the motor pins' mode bits.",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "motor": {
+          "description": "The two motor pins.",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "poll_ticks": {
+          "description": "Ticks between samples of the motor modes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "positions": {
+          "description": "Sensor levels in the order the turning motor reaches them.",
+          "items": {
+            "items": {
+              "type": "boolean"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "sensors": {
+          "description": "Sensor inputs as bank and pin.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "step_ticks": {
+          "description": "Ticks per motor step.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "line",
+        "mode",
+        "motor",
+        "poll_ticks",
+        "positions",
+        "sensors",
+        "step_ticks"
+      ],
+      "type": "object"
+    },
     "ResetSpi0": {
       "additionalProperties": false,
       "description": "Declared spi0 facts.",
@@ -2116,6 +2821,125 @@
       ],
       "type": "object"
     },
+    "ResetSubCpu": {
+      "additionalProperties": false,
+      "description": "Declared register-file peer behind one serial port.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "clock": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetSubCpuClock"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Seconds count kept in the register file."
+        },
+        "port": {
+          "description": "Serial port base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "profile_header": {
+          "description": "First of sixteen consecutive registers holding the stock user-profile\nheader, which a selected profile fills.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "registers": {
+          "description": "Registers that do not read zero after reset.",
+          "items": {
+            "$ref": "#/$defs/ResetSubCpuRegister"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "port",
+        "registers"
+      ],
+      "type": "object"
+    },
+    "ResetSubCpuClock": {
+      "additionalProperties": false,
+      "description": "Seconds count in four consecutive sub-CPU registers, least significant\nbyte first, that advances with device time while its hold register's bit 0\nis set.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "first": {
+          "description": "First of the four count registers.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "hold": {
+          "description": "Register whose bit 0 runs the count.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "seconds": {
+          "description": "Count at power-on.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ticks_per_second": {
+          "description": "Device ticks per second.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "first",
+        "hold",
+        "seconds",
+        "ticks_per_second"
+      ],
+      "type": "object"
+    },
+    "ResetSubCpuRegister": {
+      "additionalProperties": false,
+      "description": "One register of a declared sub-CPU register file.",
+      "properties": {
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "register": {
+          "description": "Register number, bits 14..8 of a send word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Value after reset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "register",
+        "value"
+      ],
+      "type": "object"
+    },
     "ResetTemperatureInput": {
       "additionalProperties": false,
       "description": "Declared temperature input facts.",
@@ -2134,6 +2958,39 @@
       "required": [
         "basis",
         "millicelsius"
+      ],
+      "type": "object"
+    },
+    "ResetUsbCable": {
+      "additionalProperties": false,
+      "description": "USB port of a body: VBUS reaches a GPIO input pin, and a host on the data\nlines negotiates `speed` (\"high\" or \"super\").",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "speed": {
+          "description": "Link speed a host negotiates.",
+          "type": "string"
+        },
+        "vbus_bank": {
+          "description": "GPIO bank of the VBUS input.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "vbus_pin": {
+          "description": "GPIO pin of the VBUS input.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "vbus_bank",
+        "vbus_pin",
+        "speed"
       ],
       "type": "object"
     },

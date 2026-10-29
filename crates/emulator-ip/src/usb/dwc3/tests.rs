@@ -339,3 +339,109 @@ fn event_ring_wraps_and_irq_remains_high_until_all_bytes_are_acknowledged() {
     assert!(write(&mut d, &mut b, 0xc40c, 4).is_err());
     assert_eq!(d.save(), before);
 }
+
+#[test]
+fn handler_masks_the_event_buffer_with_unread_events_but_cannot_resize_it() {
+    let (mut d, mut b) = ready(0x1350);
+    let cursor = d.state.ring_cursor;
+    d.link(b.now, false).unwrap();
+    d.link(b.now, true).unwrap();
+    let at = b.now + 4;
+    tick(&mut d, &mut b, at);
+    let pending = d.reg(0xc40c);
+    assert!(pending >= 4 && b.irq);
+    // X-T20 2.11 0x1527070: mask, walk the ring later, acknowledge, unmask.
+    write(&mut d, &mut b, 0xc408, 0x8000_0100).unwrap();
+    assert!(!b.irq);
+    assert!(write(&mut d, &mut b, 0xc408, 0x8000_0080).is_err());
+    write(&mut d, &mut b, 0xc40c, pending).unwrap();
+    write(&mut d, &mut b, 0xc408, 0x100).unwrap();
+    assert!(!b.irq);
+    // Masking keeps the ring position; only a resize restarts it.
+    assert_eq!(d.state.ring_cursor, cursor + pending);
+}
+
+#[test]
+fn control_out_data_trb_may_cover_whole_packets_beyond_wlength() {
+    let (mut d, mut b) = ready(0x1234);
+    endpoint(&mut d, &mut b, 0, 64);
+    endpoint(&mut d, &mut b, 1, 64);
+    trb(&mut b, 0x2000, 0x3000, 8, 2);
+    start(&mut d, &mut b, 0, 0x2000);
+    let setup = d
+        .transaction(b.now, 0, true, Some(vec![0x43, 0, 0, 0, 0, 0, 5, 0]))
+        .unwrap();
+    let at = b.now + 4;
+    tick(&mut d, &mut b, at);
+    assert_eq!(d.reply(setup), Some(&Reply::Ack));
+    assert!(!d.state.control.data_in);
+    // X-T20 2.11: the data stage TRB is a whole 64-byte packet.
+    trb(&mut b, 0x2020, 0x3100, 64, 5);
+    start(&mut d, &mut b, 0, 0x2020);
+    let data = d
+        .transaction(b.now, 0, false, Some(b"hello".to_vec()))
+        .unwrap();
+    let at = b.now + 4;
+    tick(&mut d, &mut b, at);
+    assert_eq!(d.reply(data), Some(&Reply::Ack));
+    assert_eq!(&b.ram[0x3100..0x3105], b"hello");
+    assert!(d.state.control.status);
+    assert_eq!(
+        u32::from_le_bytes(b.ram[0x2028..0x202c].try_into().unwrap()) & 0xffffff,
+        59
+    );
+    // A TRB beyond the packet that carries wLength is still refused.
+    let (mut d, mut b) = ready(0x1234);
+    endpoint(&mut d, &mut b, 0, 64);
+    trb(&mut b, 0x2000, 0x3000, 8, 2);
+    start(&mut d, &mut b, 0, 0x2000);
+    d.transaction(b.now, 0, true, Some(vec![0x43, 0, 0, 0, 0, 0, 5, 0]))
+        .unwrap();
+    let at = b.now + 4;
+    tick(&mut d, &mut b, at);
+    trb(&mut b, 0x2020, 0x3100, 128, 5);
+    start(&mut d, &mut b, 0, 0x2020);
+    d.transaction(b.now, 0, false, Some(b"hello".to_vec()))
+        .unwrap();
+    b.now += 4;
+    let pc = b.pc;
+    let mut cx = Cx::new(&mut b, 0, pc, 0);
+    d.event(&mut cx, 0);
+    assert!(cx.refusal().is_some());
+}
+
+#[test]
+fn not_ready_is_reported_once_per_transfer_however_often_the_host_retries() {
+    let (mut d, mut b) = ready(0x2468);
+    endpoint(&mut d, &mut b, 3, 8);
+    let nak = |d: &mut Dwc3, b: &mut Board| {
+        let id = d.transaction(b.now, 3, false, None).unwrap();
+        let at = b.now + 4;
+        tick(d, b, at);
+        assert_eq!(d.reply(id), Some(&Reply::Nak));
+    };
+    let cursor = 0x1000 + d.state.ring_cursor as usize;
+    for _ in 0..3 {
+        nak(&mut d, &mut b);
+    }
+    // One XferNotReady (event 3) for physical endpoint 3, not one per NAK.
+    assert_eq!(d.reg(0xc40c), 4);
+    assert_eq!(
+        &b.ram[cursor..cursor + 4],
+        &(3u32 << 1 | 3 << 6).to_le_bytes()
+    );
+    write(&mut d, &mut b, 0xc40c, 4).unwrap();
+    b.ram[0x3000..0x3003].copy_from_slice(b"abc");
+    trb(&mut b, 0x2000, 0x3000, 3, 1);
+    start(&mut d, &mut b, 3, 0x2000);
+    let data = d.transaction(b.now, 3, false, None).unwrap();
+    let at = b.now + 4;
+    tick(&mut d, &mut b, at);
+    assert_eq!(d.reply(data), Some(&Reply::Data(b"abc".to_vec())));
+    let count = d.reg(0xc40c);
+    write(&mut d, &mut b, 0xc40c, count).unwrap();
+    // The started transfer re-arms the report for the next empty endpoint.
+    nak(&mut d, &mut b);
+    nak(&mut d, &mut b);
+    assert_eq!(d.reg(0xc40c), 4);
+}

@@ -1065,6 +1065,65 @@ pub struct Dma {
     pub timing: String,
 }
 
+/// Display frame interrupts declared as a law without controller registers.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayFrames"))]
+pub struct DisplayFrames {
+    /// Declared basis.
+    pub basis: String,
+    /// Lines receiving one edge per frame.
+    pub irq_routes: Vec<u64>,
+    /// Frame period in guest ticks.
+    pub period_ticks: u64,
+}
+
+/// Status bits of one display output register.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayStatusBits"))]
+pub struct DisplayStatusBits {
+    /// Word offset from the output base.
+    pub offset: u64,
+    /// Bits that read with the declared level.
+    pub mask: u64,
+}
+
+/// Register window of one display output with status bits that read fixed.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayOutput"))]
+pub struct DisplayOutput {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Bits a completed request leaves clear.
+    pub clear_bits: Vec<DisplayStatusBits>,
+    /// Bits that report a completed request as set.
+    pub set_bits: Vec<DisplayStatusBits>,
+    /// Declared size.
+    pub size: u64,
+    /// OSD layer capture, when the output is scanned out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scanout: Option<DisplayScanout>,
+}
+
+/// Host output index and capture period of a display output's OSD layers.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayScanout"))]
+pub struct DisplayScanout {
+    /// Host output index of the captured frames.
+    pub output: u64,
+    /// Capture period in ticks.
+    pub period_ticks: u64,
+}
+
 /// Declared dmp facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1103,6 +1162,290 @@ pub struct Gic {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareGpio"))]
 pub struct Gpio {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Declared size.
+    pub size: u64,
+}
+
+/// X-Processor Pro clock bank: dividers, gates and five PLLs with lock status.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwarePllClocks"))]
+pub struct PllClocks {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Ticks from a PLL enable to its lock bit.
+    pub lock_ticks: u64,
+    /// Declared size.
+    pub size: u64,
+}
+
+/// X-Processor Pro SD channel: wrapper reset at +0, vendor words and a
+/// relocated SDHCI bank, with its interrupt and hardware reset line.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDramController"))]
+pub struct DramController {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Declared size.
+    pub size: u64,
+}
+
+/// X-Processor Pro read-only DRAM alias: physical `base` onwards returns body
+/// DRAM from address 0.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDramAlias"))]
+pub struct DramAlias {
+    /// Declared physical base of the alias.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+}
+
+/// X-Processor Pro DesignWare USB3 device controller.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareXppUsb"))]
+pub struct XppUsb {
+    /// Declared base; the core registers start at +0xc100.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Time an endpoint command takes, in device ticks.
+    pub command_ticks: u64,
+    /// Interrupt line of the event buffer.
+    pub irq_route: u32,
+    /// Declared size.
+    pub size: u64,
+    /// Time a bus transaction takes, in device ticks.
+    pub transaction_ticks: u64,
+}
+
+/// X-Processor Pro power control: supply hold and power domains.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwarePowerControl"))]
+pub struct PowerControl {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Declared size.
+    pub size: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareXppI2cBuses"))]
+pub struct XppI2cBuses {
+    /// Base of bus 0; bus n follows at `base + n * stride`.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// The `ic_clk` the SCL high and low counts divide.
+    pub clock_hz: u64,
+    /// TX and RX FIFO depth in entries.
+    pub fifo_depth: u64,
+    /// Interrupt line of each bus, in bus order.
+    pub irq_routes: Vec<u32>,
+    /// Declared size of one bus window.
+    pub size: u64,
+    /// Distance between bus windows.
+    pub stride: u64,
+    /// Device ticks per second.
+    pub tick_hz: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareXppSdHost"))]
+pub struct XppSdHost {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Ticks for the internal clock to report stable.
+    pub clock_ticks: u64,
+    /// Interrupt line of the SDHCI status.
+    pub irq_route: u32,
+    /// Offset of the SDHCI bank inside the window.
+    pub register_offset: u64,
+    /// SD channel of the reset-gate line that resets this host.
+    pub reset_channel: u64,
+    /// Ticks of the wrapper reset at +0.
+    pub reset_ticks: u64,
+    /// Declared size.
+    pub size: u64,
+    /// Ticks of one command or data transfer.
+    pub transfer_ticks: u64,
+}
+
+/// X-Processor Pro reset and gate controls; SD channel reset lines.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareResetGates"))]
+pub struct ResetGates {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Declared size.
+    pub size: u64,
+}
+
+/// Status bits of a register block that always read set.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterIdleBits"))]
+pub struct RegisterIdleBits {
+    /// Bits that read set.
+    pub mask: u32,
+    /// Word offset in the block.
+    pub offset: u64,
+}
+
+/// X-Processor Pro register block with no work in flight.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterBlock"))]
+pub struct RegisterBlock {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Status bits that always read set.
+    pub idle_bits: Vec<RegisterIdleBits>,
+    /// Frames the block finishes while started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frames: Option<RegisterBlockFrames>,
+    /// Declared size.
+    pub size: u64,
+}
+
+/// Frame law of a register block: one interrupt edge per frame period while
+/// the start bit is set; the stopped bit reads set only while it is clear.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterBlockFrames"))]
+pub struct RegisterBlockFrames {
+    /// Interrupt line of the frame edge.
+    pub irq_route: u32,
+    /// Frame period in device ticks, the frame sync's.
+    pub period_ticks: u64,
+    /// Start bit.
+    pub start: RegisterIdleBits,
+    /// Bit that reads set while stopped.
+    pub stopped: RegisterIdleBits,
+}
+
+/// X-Processor Pro imaging statistics engine.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareImagingStatistics"))]
+pub struct ImagingStatistics {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Interrupt line of the completion status.
+    pub irq_route: u32,
+    /// Frame period in device ticks, the frame sync's.
+    pub period_ticks: u64,
+    /// Declared size.
+    pub size: u64,
+}
+
+/// X-Processor Pro face detection engine.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareFaceDetection"))]
+pub struct FaceDetection {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Interrupt line of the completion status.
+    pub irq_route: u32,
+    /// Time from a start to the completion of its run, in device ticks.
+    pub run_ticks: u64,
+    /// Declared size.
+    pub size: u64,
+}
+
+/// DesignWare HDMI TX controller with no sink attached.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareHdmiTransmitter"))]
+pub struct HdmiTransmitter {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Declared size.
+    pub size: u64,
+}
+
+/// One frame interrupt source of the X-Processor Pro frame sync.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareFrameSource"))]
+pub struct FrameSource {
+    /// Interrupt line the source drives.
+    pub irq_route: u32,
+    /// Status and enable bit of the source: 0, 8 or 16.
+    pub status_bit: u32,
+}
+
+/// X-Processor Pro imaging frame sync and its frame interrupt words.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareFrameSync"))]
+pub struct FrameSync {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Address of the frame interrupt enable word; the status word follows.
+    pub interrupts: u64,
+    /// Frame period in device ticks.
+    pub period_ticks: u64,
+    /// Declared size.
+    pub size: u64,
+    /// Sources every frame latches.
+    pub sources: Vec<FrameSource>,
+}
+
+/// X-Processor Pro imaging control page: block stop and register-bus channels.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareImagingControl"))]
+pub struct ImagingControl {
     /// Declared base.
     pub base: u64,
     /// Declared basis.
@@ -1223,6 +1566,9 @@ pub struct FlashController {
     pub aperture: u64,
     /// Read aperture size in bytes.
     pub size: u64,
+    /// Interrupt line of the controller status, when declared.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub irq_route: Option<u64>,
     /// Declared basis.
     pub basis: String,
 }
@@ -1410,6 +1756,12 @@ pub struct RegisterLayouts {
     /// Declared dma.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dma: Option<Dma>,
+    /// Declared display frame interrupts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_frames: Option<DisplayFrames>,
+    /// Declared display output register windows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_outputs: Option<Vec<DisplayOutput>>,
     /// Declared dmp.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dmp: Option<Dmp>,
@@ -1425,6 +1777,48 @@ pub struct RegisterLayouts {
     /// Declared imaging.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imaging: Option<ImagingRegisters>,
+    /// Declared X-Processor Pro clock bank.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pll_clocks: Option<PllClocks>,
+    /// Declared X-Processor Pro imaging control page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imaging_control: Option<ImagingControl>,
+    /// Declared X-Processor Pro imaging frame sync.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame_sync: Option<FrameSync>,
+    /// Declared X-Processor Pro register blocks with no work in flight.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub register_blocks: Vec<RegisterBlock>,
+    /// Declared X-Processor Pro imaging statistics engine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imaging_statistics: Option<ImagingStatistics>,
+    /// Declared X-Processor Pro face detection engine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub face_detection: Option<FaceDetection>,
+    /// Declared HDMI transmitter without a sink.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hdmi_tx: Option<HdmiTransmitter>,
+    /// Declared X-Processor Pro SD channel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xpp_sd: Option<XppSdHost>,
+    /// Declared X-Processor Pro reset and gate controls.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reset_gates: Option<ResetGates>,
+    /// Declared X-Processor Pro DesignWare I2C buses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xpp_i2c: Option<XppI2cBuses>,
+    /// Declared X-Processor Pro DRAM controller.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dram_controller: Option<DramController>,
+    /// Declared X-Processor Pro read-only DRAM alias.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dram_alias: Option<DramAlias>,
+    /// Declared X-Processor Pro power control.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power_control: Option<PowerControl>,
+    /// Declared X-Processor Pro USB device controller.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xpp_usb: Option<XppUsb>,
     /// Declared interrupts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interrupts: Option<Interrupts>,

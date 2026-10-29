@@ -477,6 +477,13 @@ class ConfigurationLocationVariant1(TypedDict, total=False):
     kind: Required[Literal["direct"]]
 
 
+class ConfigurationWindow(TypedDict, total=False):
+    basis: Required[str]
+    bytes: Required[int]
+    flash_offset: Required[int]
+    sha256: Required[str]
+
+
 type ConnectionKind = Literal[
     "control",
     "usb",
@@ -1892,7 +1899,8 @@ FirmwareSettings = TypedDict(
     "FirmwareSettings",
     {
         "$schema": Required["str"],
-        "bank": Required["SettingsBank"],
+        "bank": NotRequired["SettingsBank | None"],
+        "configuration": NotRequired["ConfigurationWindow | None"],
         "defaults": NotRequired["UpdateRange | None"],
         "fields": Required["list[SettingsField]"],
         "firmware_id": Required["str"],
@@ -2281,6 +2289,31 @@ class HardwareDiscoveryWindow(TypedDict, total=False):
     size: Required[int]
 
 
+class HardwareDisplayFrames(TypedDict, total=False):
+    basis: Required[str]
+    irq_routes: Required[list[int]]
+    period_ticks: Required[int]
+
+
+class HardwareDisplayOutput(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    clear_bits: Required[list[HardwareDisplayStatusBits]]
+    scanout: NotRequired[HardwareDisplayScanout | None]
+    set_bits: Required[list[HardwareDisplayStatusBits]]
+    size: Required[int]
+
+
+class HardwareDisplayScanout(TypedDict, total=False):
+    output: Required[int]
+    period_ticks: Required[int]
+
+
+class HardwareDisplayStatusBits(TypedDict, total=False):
+    mask: Required[int]
+    offset: Required[int]
+
+
 class HardwareDisplayTiming(TypedDict, total=False):
     basis: Required[str]
     frame_period_ticks: Required[int]
@@ -2305,6 +2338,17 @@ class HardwareDmp(TypedDict, total=False):
     size: Required[int]
 
 
+class HardwareDramAlias(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+
+
+class HardwareDramController(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    size: Required[int]
+
+
 class HardwareEncoder(TypedDict, total=False):
     counter: NotRequired[str | None]
     name: Required[str]
@@ -2315,6 +2359,14 @@ class HardwareEncoderTiming(TypedDict, total=False):
     phase_ticks: Required[int]
     pins: Required[list[PartAssemblyPin]]
     rest_phase: Required[int]
+
+
+class HardwareFaceDetection(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    irq_route: Required[int]
+    run_ticks: Required[int]
+    size: Required[int]
 
 
 class HardwareFaceDetector(TypedDict, total=False):
@@ -2344,6 +2396,7 @@ class HardwareFlashController(TypedDict, total=False):
     aperture: Required[int]
     base: Required[int]
     basis: Required[str]
+    irq_route: NotRequired[int | None]
     size: Required[int]
 
 
@@ -2374,6 +2427,20 @@ class HardwareFocusImagingOptics(TypedDict, total=False):
     target_position: Required[int]
 
 
+class HardwareFrameSource(TypedDict, total=False):
+    irq_route: Required[int]
+    status_bit: Required[int]
+
+
+class HardwareFrameSync(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    interrupts: Required[int]
+    period_ticks: Required[int]
+    size: Required[int]
+    sources: Required[list[HardwareFrameSource]]
+
+
 class HardwareGic(TypedDict, total=False):
     basis: Required[str]
     cpu_interface: Required[int]
@@ -2382,6 +2449,12 @@ class HardwareGic(TypedDict, total=False):
 
 
 class HardwareGpio(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    size: Required[int]
+
+
+class HardwareHdmiTransmitter(TypedDict, total=False):
     base: Required[int]
     basis: Required[str]
     size: Required[int]
@@ -2398,6 +2471,12 @@ class HardwareImaging(TypedDict, total=False):
     sensor_capture: NotRequired[HardwareSensorCapture | None]
 
 
+class HardwareImagingControl(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    size: Required[int]
+
+
 class HardwareImagingRegisters(TypedDict, total=False):
     basis: Required[str]
     command_base: Required[int]
@@ -2408,6 +2487,14 @@ class HardwareImagingRegisters(TypedDict, total=False):
     receiver_base: Required[int]
     reset_ticks: Required[int]
     timing_irqs: Required[list[int]]
+
+
+class HardwareImagingStatistics(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    irq_route: Required[int]
+    period_ticks: Required[int]
+    size: Required[int]
 
 
 class HardwareInputBuffer(TypedDict, total=False):
@@ -2514,6 +2601,19 @@ class HardwarePl330(TypedDict, total=False):
     timing: Required[str]
 
 
+class HardwarePllClocks(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    lock_ticks: Required[int]
+    size: Required[int]
+
+
+class HardwarePowerControl(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    size: Required[int]
+
+
 class HardwarePreviewActivity(TypedDict, total=False):
     high: Required[bool]
     pin: Required[PartAssemblyPin]
@@ -2561,18 +2661,47 @@ class HardwareRaster(TypedDict, total=False):
     width: Required[int]
 
 
+class HardwareRegisterBlock(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    frames: NotRequired[HardwareRegisterBlockFrames | None]
+    idle_bits: Required[list[HardwareRegisterIdleBits]]
+    size: Required[int]
+
+
+class HardwareRegisterBlockFrames(TypedDict, total=False):
+    irq_route: Required[int]
+    period_ticks: Required[int]
+    start: Required[HardwareRegisterIdleBits]
+    stopped: Required[HardwareRegisterIdleBits]
+
+
+class HardwareRegisterIdleBits(TypedDict, total=False):
+    mask: Required[int]
+    offset: Required[int]
+
+
 class HardwareRegisterLayouts(TypedDict, total=False):
     adc: NotRequired[HardwareAdc | None]
     control_bus0: NotRequired[HardwarePrimaryBusRegisters | None]
     control_bus1: NotRequired[HardwareSecondaryBusRegistersAddress | None]
     control_requests: NotRequired[HardwareControlRequests | None]
     decompressor: NotRequired[HardwareDecompressor | None]
+    display_frames: NotRequired[HardwareDisplayFrames | None]
+    display_outputs: NotRequired[list[HardwareDisplayOutput] | None]
     dma: NotRequired[HardwareDma | None]
     dmp: NotRequired[HardwareDmp | None]
+    dram_alias: NotRequired[HardwareDramAlias | None]
+    dram_controller: NotRequired[HardwareDramController | None]
+    face_detection: NotRequired[HardwareFaceDetection | None]
     flash_controller: NotRequired[HardwareFlashController | None]
+    frame_sync: NotRequired[HardwareFrameSync | None]
     gic: NotRequired[HardwareGic | None]
     gpio: NotRequired[HardwareGpio | None]
+    hdmi_tx: NotRequired[HardwareHdmiTransmitter | None]
     imaging: NotRequired[HardwareImagingRegisters | None]
+    imaging_control: NotRequired[HardwareImagingControl | None]
+    imaging_statistics: NotRequired[HardwareImagingStatistics | None]
     interrupts: NotRequired[HardwareInterrupts | None]
     interval_timer: NotRequired[HardwareIntervalTimer | None]
     io_groups: NotRequired[HardwareIoGroups | None]
@@ -2581,12 +2710,19 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     movdc: NotRequired[list[HardwareMovdc] | None]
     nand: NotRequired[HardwareLoaderDma | None]
     pl330: NotRequired[HardwarePl330 | None]
+    pll_clocks: NotRequired[HardwarePllClocks | None]
+    power_control: NotRequired[HardwarePowerControl | None]
+    register_blocks: NotRequired[list[HardwareRegisterBlock]]
+    reset_gates: NotRequired[HardwareResetGates | None]
     sd_host_clocks: NotRequired[HardwareSdHostClocks | None]
     serial_flash: NotRequired[HardwareSerialFlash | None]
     serial_ports: NotRequired[HardwareSerialPorts | None]
     spi: NotRequired[dict[str, HardwareSpi] | None]
     temperature: NotRequired[HardwareAdc | None]
     usb: NotRequired[HardwareUsbRegisters | None]
+    xpp_i2c: NotRequired[HardwareXppI2cBuses | None]
+    xpp_sd: NotRequired[HardwareXppSdHost | None]
+    xpp_usb: NotRequired[HardwareXppUsb | None]
 
 
 class HardwareRegisterWindow(TypedDict, total=False):
@@ -2601,6 +2737,12 @@ class HardwareRegisterWindow(TypedDict, total=False):
 class HardwareResetCheck(TypedDict, total=False):
     address: Required[int]
     expected_hex: Required[str]
+
+
+class HardwareResetGates(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    size: Required[int]
 
 
 class HardwareResetRelease(TypedDict, total=False):
@@ -2755,6 +2897,38 @@ class HardwareWindowAnalysis(TypedDict, total=False):
     basis: Required[str]
     profile: Required[str]
     ticks_per_window: Required[int]
+
+
+class HardwareXppI2cBuses(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    clock_hz: Required[int]
+    fifo_depth: Required[int]
+    irq_routes: Required[list[int]]
+    size: Required[int]
+    stride: Required[int]
+    tick_hz: Required[int]
+
+
+class HardwareXppSdHost(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    clock_ticks: Required[int]
+    irq_route: Required[int]
+    register_offset: Required[int]
+    reset_channel: Required[int]
+    reset_ticks: Required[int]
+    size: Required[int]
+    transfer_ticks: Required[int]
+
+
+class HardwareXppUsb(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    command_ticks: Required[int]
+    irq_route: Required[int]
+    size: Required[int]
+    transaction_ticks: Required[int]
 
 
 class HomeSwitch(TypedDict, total=False):
@@ -3630,7 +3804,7 @@ class ProfileRecord(TypedDict, total=False):
     defaults: Required[UpdateRange]
     defaults_offset: Required[int]
     fields: Required[list[SettingsField]]
-    managed_index: Required[int]
+    managed_index: NotRequired[int | None]
     parity_offset: Required[int]
 
 
@@ -4883,6 +5057,7 @@ type SocBlockKind = Literal[
     "imaging-controller",
     "reset-controller",
     "clock-controller",
+    "memory-controller",
     "address-window",
 ]
 

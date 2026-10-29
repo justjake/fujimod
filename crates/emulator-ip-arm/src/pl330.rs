@@ -1,5 +1,10 @@
-//! ARM PL330 DMA controller (ARM DDI 0424), bounded to memory-to-memory
-//! programs started through the debug instruction interface.
+//! ARM PL330 DMA controller (ARM DDI 0424), bounded to programs started
+//! through the debug instruction interface.
+//!
+//! Peripheral transfers use the same loads and stores: a peripheral's
+//! request is always asserted, so DMAWFP and DMAFLUSHP complete at once and
+//! DMALDP/DMASTP transfer like DMALD/DMAST. A peripheral data register is a
+//! [`Source`] window.
 //!
 //! Eight channel threads run programs from physical RAM. A program runs whole
 //! when its transfer time elapses; the time is an explicit setup cost plus a
@@ -18,6 +23,15 @@ pub trait Source: Send + Sync {
     fn contains(&self, address: u64, len: usize) -> bool;
     /// Bytes at `address`.
     fn read(&self, address: u64, len: usize) -> Result<Vec<u8>, String>;
+    /// Whether stores into this window reach [`Source::write`]; otherwise a
+    /// program storing into it refuses before it starts.
+    fn writable(&self) -> bool {
+        false
+    }
+    /// Stores `bytes` at `address` when the transfer completes.
+    fn write(&self, _address: u64, _bytes: &[u8]) -> Result<(), String> {
+        Err("PL330 store into a read-only source".into())
+    }
 }
 
 /// Transfer time: `setup_ticks + ceil(bytes / bytes_per_tick)`.
@@ -134,8 +148,11 @@ impl Pl330 {
                         destination: first[1].unwrap_or(0),
                     });
                 }
-                // DMALD
-                0x04 => {
+                // DMALD, DMALDP<S|B>
+                0x04 | 0x25 | 0x27 => {
+                    if op != 0x04 {
+                        len = 2;
+                    }
                     let count = ((1u32 << (t.ccr >> 1 & 7)) * ((t.ccr >> 4 & 15) + 1)) as usize;
                     first[0].get_or_insert(t.sar);
                     if apply {
@@ -147,8 +164,11 @@ impl Pl330 {
                         t.sar = t.sar.wrapping_add(count as u32);
                     }
                 }
-                // DMAST
-                0x08 => {
+                // DMAST, DMASTP<S|B>
+                0x08 | 0x29 | 0x2b => {
+                    if op != 0x08 {
+                        len = 2;
+                    }
                     let count = ((1u32 << (t.ccr >> 15 & 7)) * ((t.ccr >> 18 & 15) + 1)) as usize;
                     if fifo.len() < count {
                         return Err("PL330 store exceeds loaded data".into());
@@ -156,11 +176,13 @@ impl Pl330 {
                     let data: Vec<u8> = fifo.drain(..count).collect();
                     first[1].get_or_insert(t.dar);
                     let at = u64::from(t.dar);
-                    if self.sources.iter().any(|s| s.contains(at, count)) {
-                        return Err("PL330 store into a read-only source".into());
-                    }
-                    if apply {
-                        cx.ram_write(at, &data)?;
+                    match self.sources.iter().find(|s| s.contains(at, count)) {
+                        Some(source) if !source.writable() => {
+                            return Err("PL330 store into a read-only source".into());
+                        }
+                        Some(source) if apply => source.write(at, &data)?,
+                        None if apply => cx.ram_write(at, &data)?,
+                        _ => {}
                     }
                     bytes += count as u64;
                     if t.ccr >> 14 & 1 != 0 {
@@ -169,6 +191,8 @@ impl Pl330 {
                 }
                 // DMARMB, DMAWMB, DMANOP
                 0x12 | 0x13 | 0x18 => {}
+                // DMAWFP<S|P|B>, DMAFLUSHP
+                0x30..=0x32 | 0x35 => len = 2,
                 // DMALP lc0/lc1
                 0x20 | 0x22 => {
                     len = 2;
@@ -522,5 +546,96 @@ mod tests {
         let mut cx = Cx::new(&mut h, 0, 0, 0);
         dma.write(&mut cx, BASE + 0xd04, 4, 0);
         assert!(cx.refusal().is_some());
+    }
+
+    struct Sink(std::sync::Mutex<Vec<(u64, Vec<u8>)>>);
+    impl Source for Sink {
+        fn contains(&self, address: u64, len: usize) -> bool {
+            address >= ROM && address + len as u64 <= ROM + 0x100
+        }
+        fn read(&self, _: u64, _: usize) -> Result<Vec<u8>, String> {
+            Err("unused".into())
+        }
+        fn writable(&self) -> bool {
+            true
+        }
+        fn write(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
+            self.0.lock().unwrap().push((address, bytes.to_vec()));
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn stores_into_a_writable_window_arrive_when_the_transfer_completes() {
+        let timing = Throughput {
+            setup_ticks: 1,
+            bytes_per_tick: 1,
+        };
+        let sink = Arc::new(Sink(Default::default()));
+        let mut dma = Pl330::new(BASE, vec![207], vec![sink.clone()], timing).unwrap();
+        let mut h = TestHost {
+            ram: vec![0; 0x2000],
+            ..TestHost::default()
+        };
+        h.ram[0x1000..0x1010].copy_from_slice(&[7; 16]);
+        // DMAMOV SAR RAM, DAR window, CCR 16-byte bursts; DMALD; DMAST; DMAEND.
+        let mut program = vec![0xbc, 0];
+        program.extend(0x1000u32.to_le_bytes());
+        program.extend([0xbc, 2]);
+        program.extend((ROM as u32 + 0x20).to_le_bytes());
+        program.extend([0xbc, 1]);
+        program.extend(0x5c017u32.to_le_bytes());
+        program.extend([0x04, 0x08, 0]);
+        h.ram[0x100..0x100 + program.len()].copy_from_slice(&program);
+        write(&mut dma, &mut h, 0xd08, 0xa20000);
+        write(&mut dma, &mut h, 0xd0c, 0x100);
+        write(&mut dma, &mut h, 0xd04, 0);
+        assert!(sink.0.lock().unwrap().is_empty());
+        h.now = 17;
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        dma.event(&mut cx, 0);
+        assert_eq!(cx.refusal(), None);
+        assert_eq!(*sink.0.lock().unwrap(), [(ROM + 0x20, vec![7; 16])]);
+    }
+
+    #[test]
+    fn peripheral_handshakes_complete_at_once() {
+        let timing = Throughput {
+            setup_ticks: 1,
+            bytes_per_tick: 1,
+        };
+        let sink = Arc::new(Sink(Default::default()));
+        let mut dma = Pl330::new(BASE, vec![207, 208], vec![sink.clone()], timing).unwrap();
+        let mut h = TestHost {
+            ram: vec![0; 0x2000],
+            ..TestHost::default()
+        };
+        h.ram[0x1000..0x1004].copy_from_slice(b"lens");
+        // The X-T20 lens transmit program: byte transfers into a fixed
+        // register; DMALP 4 { DMALD; DMAWFP 5; DMASTPS 5 }; DMAFLUSHP 5;
+        // DMAWMB; DMASEV 1; DMAEND.
+        let mut program = vec![0xbc, 0];
+        program.extend(0x1000u32.to_le_bytes());
+        program.extend([0xbc, 2]);
+        program.extend((ROM as u32 + 0x60).to_le_bytes());
+        program.extend([0xbc, 1]);
+        program.extend(0x0080_0201u32.to_le_bytes());
+        program.extend([0x20, 3, 0x04, 0x30, 5 << 3, 0x29, 5 << 3, 0x38, 5]);
+        program.extend([0x35, 5 << 3, 0x13, 0x34, 1 << 3, 0]);
+        h.ram[0x100..0x100 + program.len()].copy_from_slice(&program);
+        write(&mut dma, &mut h, 0x20, 2);
+        write(&mut dma, &mut h, 0xd08, 0xa20000);
+        write(&mut dma, &mut h, 0xd0c, 0x100);
+        write(&mut dma, &mut h, 0xd04, 0);
+        h.now = 5;
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        dma.event(&mut cx, 0);
+        assert_eq!(cx.refusal(), None);
+        let stores = sink.0.lock().unwrap().clone();
+        assert_eq!(stores.len(), 4);
+        assert!(stores.iter().all(|(at, _)| *at == ROM + 0x60));
+        let bytes: Vec<u8> = stores.into_iter().flat_map(|(_, b)| b).collect();
+        assert_eq!(bytes, b"lens");
+        assert_eq!(h.irqs, vec![(208, true)]);
     }
 }

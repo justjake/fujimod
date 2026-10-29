@@ -2,13 +2,17 @@
 //!
 //! Control word +0: bit `16 + n` clear selects channel `n`, bit `n` then
 //! starts or stops it. Per-channel configuration words sit at `+0x10 + n*4`
-//! and retain writes. Channel blocks at `+0x100 + n*0x10` hold the count,
+//! and retain writes; bit 4 selects one-shot counting, which stops the channel
+//! at its expiry (X-T20 2.11 kernel 0x59710 sets it for mode 1, and 0x5a1b4
+//! then writes reload 0). Channel blocks at `+0x100 + n*0x10` hold the count,
 //! the reload and two retained words. The counting law is the XP4 one.
 use fujimod_emulator_xp4_io::interval_timers::Counter;
 
 /// Register window size in bytes.
 pub const WINDOW: u32 = 0x200;
 const CHANNELS: usize = 16;
+/// Configuration bit selecting one-shot counting.
+const ONE_SHOT: u32 = 1 << 4;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -63,9 +67,15 @@ impl TickTimers {
     pub fn tick(&mut self, now: u64) -> Vec<usize> {
         let mut fired = Vec::new();
         for (channel, c) in self.counters.iter_mut().enumerate() {
-            if c.expire(now)
-                && let Some(irq) = self.irqs[channel]
-            {
+            if !c.expire(now) {
+                continue;
+            }
+            if self.configuration[channel] & ONE_SHOT != 0 {
+                c.value = 0;
+                c.enabled = false;
+                c.next = None;
+            }
+            if let Some(irq) = self.irqs[channel] {
                 fired.push(irq);
             }
         }
@@ -170,5 +180,30 @@ mod tests {
         );
         assert!(t.access(110, WINDOW, 4, false, 0).is_err());
         assert!(TickTimers::new(&[(16, 63)]).is_err());
+    }
+
+    #[test]
+    fn one_shot_channel_fires_once_and_stops() {
+        let mut t = TickTimers::new(&[(12, 60)]).unwrap();
+        // Kernel 0x5a1b4 for mode 1: one-shot bit, count, reload 0, start.
+        t.access(0, 0x40, 4, true, 0x10010).unwrap();
+        t.access(0, 0x1c0, 4, true, 9).unwrap();
+        t.access(0, 0x1c4, 4, true, 0).unwrap();
+        t.access(0, 0, 4, true, 0xefff1000).unwrap();
+        assert_eq!(t.next_event_tick(0), Some(10));
+        assert_eq!(t.tick(12), vec![60]);
+        assert_eq!(t.next_event_tick(12), None);
+        assert_eq!(t.tick(20), Vec::<usize>::new());
+        assert_eq!(t.access(20, 0, 4, false, 0).unwrap(), 0);
+        assert_eq!(t.access(20, 0x1c0, 4, false, 0).unwrap(), 0);
+        let mut resumed = TickTimers::new(&[(12, 60)]).unwrap();
+        resumed.restore(&t.save()).unwrap();
+        // A periodic channel (bit 4 clear) keeps its reload period.
+        t.access(20, 0x40, 4, true, 0x10000).unwrap();
+        t.access(20, 0x1c0, 4, true, 4).unwrap();
+        t.access(20, 0x1c4, 4, true, 4).unwrap();
+        t.access(20, 0, 4, true, 0xefff1000).unwrap();
+        assert_eq!(t.tick(25), vec![60]);
+        assert_eq!(t.next_event_tick(25), Some(30));
     }
 }

@@ -1,0 +1,440 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "xt20-discovery",
+  "body_id": "xt20",
+  "reset": {
+    "adc_input": {
+      "samples": [
+        372,
+        600,
+        1014,
+        1022,
+        842,
+        599,
+        59,
+        711,
+        439,
+        1021,
+        372,
+        600
+      ],
+      "basis": "Measured: the twelve key-row values seg5 0xc8ce9c keeps at 0xfdb018, read over the live service in REC after a normal power-on with all keys released (X-T20 2.11, 2026-10-29), assigned to channels 0-11 in order (the xpro-lab emulator model). Channel 3 is the ladder for the 4-way pad, OK, Q and DISP/BACK; channel 2 carries the S1/S2 thresholds 0x28/0x1d0. Channels 0, 1, 7, 8, 10 and 11 vary between power-ons. The channel order and the values of channels 10 and 11 are not confirmed against the converter registers."
+    },
+    "gpio_input": {
+      "levels": [
+        58615,
+        4116,
+        394,
+        559,
+        0,
+        0,
+        16,
+        0,
+        24,
+        0,
+        644,
+        4064,
+        65,
+        537,
+        12,
+        1
+      ],
+      "basis": "Measured: the sixteen GPIO input words X-T20 2.11 stage 2 snapshots into the boot information (+0x00), read over the live service after a normal SD-boot power-on without a cable (2026-10-29): shutter released, VBUS (bank 1 bit 14) low, lens attached, card inserted. A second normal power-on (2026-10-22) differs only in bank 1 bits 3/5. With VBUS high the start mode becomes JIG. Pin roles from seg5 key rows (table 0xec6e10): bank 0 bit 11 LENS_DET and bank 10 bit 4 CARD_DET active low."
+    },
+    "pll_input": {
+      "running": [
+        0,
+        3
+      ],
+      "basis": "Firmware: the kernel entry bypasses stage 2, whose PLL table 0xe0e8 (X-T20 2.11) powers PLL 0 and 3 up (clear bits 27:26, set bit 26, wait for the lock at 0xfff0b06c; 0x7e64), powers PLL 2 down (bit 27) and leaves PLL 1 and 4 at reset. Section 5 later re-enables PLL 0 by setting only bit 26 (0xc6aa74), which assumes it is powered. The reset values of PLL 1 and 4 are not measured."
+    },
+    "sd_card": {
+      "basis": "Declared, not measured: an empty 8 GiB SDHC card with high speed and without UHS-I or UHS-II modes, formatted as one FAT32 partition from sector 8192 with 32 KiB clusters, the layout of the other FujiMod REC configurations. A card was inserted during the measured power-ons (bank 10 bit 4 CARD_DET low); its identity, size and contents are not read.",
+      "format": {
+        "filesystem": "fat32",
+        "label": "CAMERA",
+        "partition_start": 8192,
+        "sectors_per_cluster": 64
+      },
+      "high_speed": true,
+      "rca": 1,
+      "sectors": 16777216
+    },
+    "i2c_parts": [
+      {
+        "address": 1,
+        "basis": "Touch-panel controller at 0x01 on bus 1 (device 13 of the X-T20 2.11 I2C descriptor table 0xed412c), driven only by the touchPanel task (mailbox 0x4a, entry 0xc9aff4, created by 0xc9b7a8). Start-up selects page 0x3e or 0x3f through register 0xff (0xc9ac8c) and writes registers 0x3e11, 0x3e12 and 0x3fdc. The task reads a touch report (ten bytes from register 0x3f00 through 0xc9af8c) only on its event bit 0x10 (0xc9b208); the strict REC and menu runs never take that path, which would stop on an undeclared register read. Presence is declared, not measured, and no registers are declared.",
+        "bus": 1,
+        "little_endian": true,
+        "registers": [],
+        "select_mask": 255,
+        "width": 1
+      },
+      {
+        "address": 27,
+        "basis": "Part at 0x1b on bus 1 (device 12). Start-up 0xceb630 writes register 0 with configuration byte 0x3d7; nothing is read before REC. Its identity is not established; presence is declared, not measured, and no registers are declared.",
+        "bus": 1,
+        "little_endian": true,
+        "registers": [],
+        "select_mask": 255,
+        "width": 1
+      },
+      {
+        "address": 28,
+        "basis": "Three-axis accelerometer at 0x1c on bus 1 (device 8). 0xc7a6e0 writes the configuration table (register 0x2a = 0x65 last) and 0xc7a77c reads six bytes from register 1 as 12-bit left-justified big-endian X, Y and Z. The values are the median of the five samples in the rings at 0xfdad50 + 0x46/0x5a/0x6e of the s1 REC capture (2026-10-29): X -1024, Y 26, Z -92 counts; s2 and s3 agree within 3 counts.",
+        "bus": 1,
+        "little_endian": false,
+        "registers": [
+          [1, 192],
+          [2, 0],
+          [3, 1],
+          [4, 160],
+          [5, 250],
+          [6, 64]
+        ],
+        "select_mask": 255,
+        "width": 1
+      },
+      {
+        "address": 57,
+        "basis": "Eye-sensor proximity part at 0x39 on bus 1 (device 4). Its command byte is 0xa0 | address (0xc76484). Start-up writes the thresholds and ENABLE = 0x2f; 0xc76500 reads STATUS 0x13 (bit 5: proximity interrupt) and the count at 0x18/0x19, low byte first. The s1-s3 captures hold eye state 2 (no eye, 0xfdad40) with a far-to-near threshold of 662. The declared count 0 is below that threshold and the status has no interrupt pending; neither value is measured.",
+        "bus": 1,
+        "little_endian": true,
+        "registers": [
+          [19, 0],
+          [24, 0],
+          [25, 0]
+        ],
+        "select_mask": 31,
+        "width": 1
+      }
+    ],
+    "dram_refresh": {
+      "basis": "Measured: X-T20 2.11 0xc8f09c caches the refresh-rate level from bits 8..10 of DRAM controller +0xec at 0xfdbea8 + 5; the s1, s2 and s3 REC captures (2026-10-29) hold level 2 there, with refresh word 0xc30 at 0xfdbea8 and no second controller (0xfda438 = 0).",
+      "level": 2
+    },
+    "execution_clock": {
+      "basis": "Estimated from camera timing: the marker log read over the live service on 2026-10-22 (a REC re-entry) times step 0x02010100 at 0.182 ms and step 0x02040100 at 0.128 ms (medians of 2 and 3); the strict REC run executes 36082 and 24216 instructions in them, about 198 and 189 million instructions per second, or 4 per 48 MHz tick. Both steps send messages and set state without waiting for hardware; steps with waits give lower rates (0x02010200 141, 0x02010500 139, live-view frames 147 million per second) and 0x02010300, whose busy-wait costs instructions in proportion to the clock, a higher one. Without a declared clock each core executes one instruction per tick, about 20 times fewer than the xpro-lab model's 1 ns per instruction.",
+      "instructions_per_tick": [4, 1]
+    },
+    "lens": {
+      "basis": "The lens of the s1, s2 and s3 REC captures (2026-10-29) and of the 2026-10-22 live-view dump: its information page as the body keeps it at 0x11e3958 (\"LY043A\", \"FLSNW039AF 25/1.7 XF\") and the replies of the link history 0x11d542c (commands 0x20 -> 0x300 and 0x26 -> 0x1c, the only commands of 90 s of idle traffic recorded on 2026-10-22); start-up commands are not recorded and are answered with 0. Wiring from X-T20 2.11 section 5: link on serial channel 0 (0xfff28000, resource 0xe); lswatch checks the contacts bank 14 bits 0/1 high and bank 11 bits 0/1/2 high/low/high, then switches bank 14 register 1 bit 0 high; the ready ISRs 0xc7b36c / 0xc7b338 sample bank 14 bit 1 after interrupt 166 (rows 0x52/0x53 of 0xed471c; 0xc5cfd4 maps it to external line 15). The delays (20 ms to the ready signal, 200 ms of initialization, 60 ms per focus drive) and the 1 ms power sampling are assumptions from the xpro-lab lens model, not measurements; the camera's lens step 0x01091300 takes about 86 ms. The body's stored records for the lens are in `registration`.",
+      "port": 4294082560,
+      "page": "4c59303433410000464c534e5730333941462032352f312e372058462020202020200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000033334130353333400000010501030270027102718a010100000000000000000000000000000000000000000000000000",
+      "replies": [[32, 768], [38, 28]],
+      "power": [14, 1, 0],
+      "ready": [14, 1],
+      "line": 15,
+      "contacts": [[14, 0, true], [11, 0, true], [11, 1, false], [11, 2, true]],
+      "ready_ticks": 960000,
+      "registration": {
+        "asset": "xt20-211-lens-registration",
+        "basis": "Camera capture: the body's registered-lens list and this lens's correction block, from the s1 REC capture (X-T20 2.11, 2026-10-29; ram_low SHA-256 3065c7420bc1cad0edb97504e6715e38d1e0a3b2db791e7f7eef626f07146430, ram_main SHA-256 f200fb1607b18fd95827a80265518a0594f17e328f1f706205e70b6d1a16c7da). Segment 5 copies flash 0x3820000 to the list at 0xfd1fc0 (header 01 00 02 ff: two entries of 0x80 bytes from 0xfd1fc8, the XF18-55mm and this lens at index 1); the asset holds those 0xa00 bytes as the capture holds them, identical in the 2026-10-20 service dump. lensdata matches the attached lens by name, serial and version bytes (0xc83a3c) and copies its 256 KiB block from flash (0x332 + 4 * index) << 16 = 0x3360000 to the configuration store at +0x1a0000; the asset's second region is that copy (\"FLSNW039\", \"LY043A\", \"VILTROX\"). Without a matching entry the body asks the lens for its data over the link (command 0xc0, 2048-byte sessions), which the lens input does not answer. Placed with the user profile only: an erased flash is a body that has never seen the lens.",
+        "regions": [[58851328, 2560], [53870592, 262144]],
+        "sha256": "ed3b7ce4282e9038fc5efe67bfe490145c1756f6333f9950aed43b574691b0fd"
+      },
+      "release_ticks": 9600000,
+      "drive_ticks": 2880000,
+      "poll_ticks": 48000
+    },
+    "shutter": {
+      "basis": "Shutter of X-T20 2.11. imgdc (section 6 0x17d3800..0x17d4600) arms one sensor's external interrupt source through 0xd09c3c (source 32 from 0x17d3b50 with line 3 inverted, 0xfff0a008 <- 0x8000b; source 31 from 0x17d3b98 with line 3 not inverted, <- 0x80003; rows 0xf67188 and resources 0x55/0x56 give GIC 154, which the distributor configures edge triggered: ICFGR 0xffff1c24 <- 0xa80000), drives the motor (0x17fbc54(1, ..): bank 1 +0x0c <- 0x30001 then 0xc0000, pin 0 in mode 1, pin 1 in mode 0) and waits up to 100 ms for the interrupt, then brakes (0x17fbc54(2, 0)). The sensors are the sources' inputs in table 0xf67220: 31 = bank 0 bit 3, 32 = bank 10 bit 2. At the end of a sequence 0x17c46ec wants both high (and source 33, bank 15 bit 1, low); otherwise imgdc reports an error that re-initializes REC (flags 0x11d0843/0x11d0844, both 0 in the s1 capture). The power-on GPIO words hold 31 low and 32 high, and the boot runs a wait on 32, then one on 31. The positions (31, 32) = (0, 1), (0, 0), (1, 1) and the 30 ms step are inferred from those checks (xpro-lab ShutterMotor), not measured; the 1 ms sampling of the motor modes is a model choice. Each step gives line 3 one edge.",
+      "line": 3,
+      "mode": [1, 3],
+      "motor": [0, 1],
+      "poll_ticks": 48000,
+      "positions": [[false, true], [false, false], [true, true]],
+      "sensors": [[0, 3], [10, 2]],
+      "step_ticks": 1440000
+    },
+    "kernel_unit": "kernel",
+    "loader_handoff": {
+      "address": 9437184,
+      "size": 1472,
+      "fill": 0,
+      "words": [
+        {
+          "name": "gpio_bank0",
+          "offset": 0,
+          "value": 58615
+        },
+        {
+          "name": "gpio_bank1",
+          "offset": 4,
+          "value": 4116
+        },
+        {
+          "name": "gpio_bank2",
+          "offset": 8,
+          "value": 394
+        },
+        {
+          "name": "gpio_bank3",
+          "offset": 12,
+          "value": 559
+        },
+        {
+          "name": "gpio_bank6",
+          "offset": 24,
+          "value": 16
+        },
+        {
+          "name": "gpio_bank8",
+          "offset": 32,
+          "value": 24
+        },
+        {
+          "name": "gpio_bank10",
+          "offset": 40,
+          "value": 644
+        },
+        {
+          "name": "gpio_bank11",
+          "offset": 44,
+          "value": 4064
+        },
+        {
+          "name": "gpio_bank12",
+          "offset": 48,
+          "value": 65
+        },
+        {
+          "name": "gpio_bank13",
+          "offset": 52,
+          "value": 537
+        },
+        {
+          "name": "gpio_bank14",
+          "offset": 56,
+          "value": 12
+        },
+        {
+          "name": "gpio_bank15",
+          "offset": 60,
+          "value": 1
+        },
+        {
+          "name": "captured_0x040",
+          "offset": 64,
+          "value": 16777216
+        },
+        {
+          "name": "captured_0x044",
+          "offset": 68,
+          "value": 303
+        },
+        {
+          "name": "captured_0x048",
+          "offset": 72,
+          "value": 285212672
+        },
+        {
+          "name": "captured_0x04c",
+          "offset": 76,
+          "value": 173031
+        },
+        {
+          "name": "captured_0x050",
+          "offset": 80,
+          "value": 1398031684
+        },
+        {
+          "name": "captured_0x0c0",
+          "offset": 192,
+          "value": 16777984
+        },
+        {
+          "name": "captured_0x0c4",
+          "offset": 196,
+          "value": 180208
+        },
+        {
+          "name": "captured_0x0c8",
+          "offset": 200,
+          "value": 16778240
+        },
+        {
+          "name": "captured_0x0cc",
+          "offset": 204,
+          "value": 1222203
+        },
+        {
+          "name": "captured_0x0d0",
+          "offset": 208,
+          "value": 285213696
+        },
+        {
+          "name": "captured_0x0d4",
+          "offset": 212,
+          "value": 1229232
+        },
+        {
+          "name": "captured_0x0d8",
+          "offset": 216,
+          "value": 285213440
+        },
+        {
+          "name": "captured_0x0dc",
+          "offset": 220,
+          "value": 1229731
+        },
+        {
+          "name": "captured_0x0e0",
+          "offset": 224,
+          "value": 1398031684
+        },
+        {
+          "name": "power_on_cause",
+          "offset": 320,
+          "value": 18
+        },
+        {
+          "name": "captured_0x144",
+          "offset": 324,
+          "value": 1
+        },
+        {
+          "name": "captured_0x14c",
+          "offset": 332,
+          "value": 4278192080
+        },
+        {
+          "name": "captured_0x150",
+          "offset": 336,
+          "value": 4284907606
+        },
+        {
+          "name": "captured_0x154",
+          "offset": 340,
+          "value": 699007004
+        },
+        {
+          "name": "captured_0x188",
+          "offset": 392,
+          "value": 347
+        },
+        {
+          "name": "captured_0x18c",
+          "offset": 396,
+          "value": 624
+        },
+        {
+          "name": "captured_0x190",
+          "offset": 400,
+          "value": 1023
+        },
+        {
+          "name": "captured_0x194",
+          "offset": 404,
+          "value": 1023
+        },
+        {
+          "name": "captured_0x198",
+          "offset": 408,
+          "value": 862
+        },
+        {
+          "name": "captured_0x19c",
+          "offset": 412,
+          "value": 516
+        },
+        {
+          "name": "captured_0x1a0",
+          "offset": 416,
+          "value": 81
+        },
+        {
+          "name": "captured_0x1a4",
+          "offset": 420,
+          "value": 731
+        },
+        {
+          "name": "captured_0x1a8",
+          "offset": 424,
+          "value": 427
+        },
+        {
+          "name": "captured_0x1ac",
+          "offset": 428,
+          "value": 1023
+        },
+        {
+          "name": "captured_0x1c4",
+          "offset": 452,
+          "value": 98304
+        },
+        {
+          "name": "captured_0x5bc",
+          "offset": 1468,
+          "value": 4
+        }
+      ],
+      "basis": "Camera capture: the 0x5c0-byte stage-2 block the kernel copies to 0x7f4fc, read over the resident live service in REC after a normal SD-boot power-on without a cable (X-T20 2.11, 2026-10-29; block SHA-256 ab399d185a974beeee3ce66c91e64c74b02d1b9f9800d7c0309ed0ebea0a7fad, ram_low SHA-256 3065c7420bc1cad0edb97504e6715e38d1e0a3b2db791e7f7eef626f07146430). +0x00 holds the 16 power-on GPIO input words, +0x140 the sub-CPU power-on cause 0x12 and +0x188 the stage-2 ADC words. Placed in a free RAM gap; kernel entry bypasses the boot ROM and stage 2."
+    },
+    "flash_aperture": {
+      "contents": "registered-update",
+      "basis": "Declared discovery input: the update image from its flash offset; bytes past it read erased, including the configuration store at flash 0x3840000, which the firmware then rebuilds from its defaults.",
+      "nor": {
+        "chip_select": 0,
+        "enhanced_volatile_reset": 255,
+        "register_write_ticks": 16,
+        "page_bytes": 256,
+        "erase_ticks": 4096,
+        "page_ticks": 512,
+        "basis": "Declared discovery input. The X-T20 2.11 driver addresses chip select 0 below aperture 0xf4000000 (0xc505dc) and uses 4 KiB (0x21), 64 KiB (0xdc) erase and 256-byte 4PP (0x12) page programs (command table 0xed3f9c). The chip part, its reset configuration and all latencies are not measured; the ticks are synthetic."
+      }
+    },
+    "battery_gauge": {
+      "port": 4294098944,
+      "registers": [
+        {
+          "name": "status",
+          "register": 0,
+          "value": 64848
+        },
+        {
+          "name": "reading_0c",
+          "register": 12,
+          "value": 514
+        },
+        {
+          "name": "reading_10",
+          "register": 16,
+          "value": 694
+        },
+        {
+          "name": "usb_detect",
+          "register": 84,
+          "value": 1
+        }
+      ],
+      "basis": "Measured: the battery task of X-T20 2.11 keeps the gauge's replies in its block at 0xfda4fc (status register 0 at +0, register 8 at +4, 0x0c at +6, 0x10 at +8; 0xc711f0..0xc712bc), read over the live service in the s1 REC capture (2026-10-29). The s2 and s3 captures and the 2026-10-22 live-view dumps agree on register 0 and register 8 (0); register 0x0c ranges over 0x1cb..0x202 and 0x10 over 0x2b6..0x2bf. Wiring from section 5: the gauge sits on serial port 4 (resource 0xf of 0xed389c, chip select bank 13 bit 8, 8-bit transfers). 0xc70748 sends register << 16 | value as three bytes inside one enabled transfer (+0x08 written 1 by 0xc4b87c and 0 by 0xc4b8c0); the first byte names the register and bit 0 writes it, and the bytes read back from +0x60 carry the value, high byte first. The start-up 0xc70e7c polls register 0 until bit 15 is set and then writes 0x405 to register 0x60. Unlisted registers read zero, including 0x1c and the updater's 0x54; they are not measured. Register 0x54 is the data-line detection: after a cable raises VBUS, the USB manager 0x168ece0 writes 0xb00 to register 0x50 and reads 0x54, and (value & 0xd) == 1 means a PC, anything else a charger. It is declared 1, so a cable always reaches a PC; the camera's value is not measured."
+    },
+    "usb_cable": {
+      "vbus_bank": 1,
+      "vbus_pin": 14,
+      "speed": "high",
+      "basis": "Declared input. VBUS of the USB port is GPIO bank 1 pin 14 (0xc4e138(0x1000e), 0x1527d94), 1 = cable: the USB driver task polls it every 25 ms (message 0x1433, 0x152e334) and after 16 equal polls posts 0x142f (connected) or 0x1430 (removed) through 0x152d82c. The X-T20's Micro-B port is USB 2.0, so a host negotiates high speed; the driver also programs DCFG for high speed (0x20000)."
+    },
+    "sub_cpu": {
+      "port": 4294090752,
+      "registers": [
+        {
+          "name": "power_on_cause",
+          "register": 96,
+          "value": 16
+        }
+      ],
+      "profile_header": 80,
+      "clock": {
+        "first": 65,
+        "hold": 69,
+        "seconds": 846555480,
+        "ticks_per_second": 48000000,
+        "basis": "Declared input. The sub-CPU keeps the calendar as seconds since 2000-01-01 00:00 in registers 0x41..0x44 (register-table rows 9..12 of 0xed6a0c), least significant byte first: 0xc70058 reads the four bytes until the low byte reads the same twice, and 0xc75800 converts the count (0xce7230). 0xc700c0 sets the clock: it writes 0 to register 0x45 (row 13), the four bytes, 1 to 0x45 and 0 to 0x46. No code reads 0x45, so it is taken as the run/hold control. The count is not measured on the camera; 846555480 is 2026-10-29 02:18, the local time of the s1 reference capture. Device time runs at 48 MHz."
+      },
+      "basis": "Declared discovery input. Segment 5 reaches the sub-CPU through 16-bit words on serial port 2 (0xc6fb10, 0xc6fbb4; register table 0xed6a0c): bits 14..8 name the register, bit 15 writes the low byte, and the word read back from +0x60 (0xc4b964) carries the register value. Register 0x60 is the power-on cause; 0x10 is the normal start the camera reported (loader handoff word power_on_cause). Registers 0x50-0x5f hold the 16-byte settings header that 0xcdd670 validates; a selected user profile places its header there (profile_header); otherwise they read zero, so the firmware loads its defaults and writes the stock header back. Unlisted registers read zero; the register file is not measured beyond these reads."
+    }
+  }
+}

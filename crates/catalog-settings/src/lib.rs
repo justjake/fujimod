@@ -2,7 +2,9 @@
 //!
 //! Stock firmware loads its settings from a bank of flash blocks at startup,
 //! and its user profile from a header the power controller keeps and from
-//! journal records in flash. The document locates the bank, the stock defaults
+//! journal records in flash. X-Processor Pro firmware keeps no such bank: it
+//! copies a configuration window of the update into its erased configuration
+//! store, and the profile initialization reads that copy instead. The document locates the bank, the stock defaults
 //! tables in the update, the fields every valid bank and record carries, and
 //! the named settings a run may request. It holds addresses, sizes and hashes;
 //! bank and record bytes are built from the update.
@@ -34,8 +36,14 @@ pub struct FirmwareSettings {
     pub firmware_id: String,
     /// The decoded update section holding the bank descriptor and defaults table.
     pub source: SettingsSource,
-    /// Where the bank lives in flash.
-    pub bank: SettingsBank,
+    /// Where the bank lives in flash, when the firmware keeps one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bank: Option<SettingsBank>,
+    /// The update window the firmware copies into its erased configuration
+    /// store, for firmware without a bank. Derived profile fields read it as
+    /// the `bank` store; it is never placed in flash.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configuration: Option<ConfigurationWindow>,
     /// Stock default values applied to an otherwise zero bank, when the
     /// firmware has a defaults table.
     pub defaults: Option<UpdateRange>,
@@ -212,6 +220,26 @@ pub struct BankByteValue {
     pub output: u8,
 }
 
+/// Bytes of the installed flash image that stock firmware copies into its
+/// configuration store when that store is erased.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
+pub struct ConfigurationWindow {
+    /// Offset of the window in the installed flash image.
+    pub flash_offset: u64,
+    /// Window length in bytes.
+    pub bytes: u64,
+    /// Lowercase hexadecimal SHA-256 of the window.
+    pub sha256: String,
+    /// The stock copy that fills the configuration store from this window.
+    pub basis: String,
+}
+
 /// One journal record: stock defaults and fixed bytes, sealed with one parity
 /// bit per data word and an XOR checksum of the data words in its last four bytes.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -222,10 +250,12 @@ pub struct BankByteValue {
     derive(tsify::Tsify)
 )]
 pub struct ProfileRecord {
-    /// Physical flash block holding the record at its start.
+    /// Physical flash block holding the record at its start: a NAND block, or
+    /// a 64 KiB region unit of a NOR array.
     pub block: u32,
-    /// Managed logical index of that block.
-    pub managed_index: u16,
+    /// Managed logical index of that block; NOR arrays have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub managed_index: Option<u16>,
     /// Record length in bytes.
     pub bytes: u64,
     /// Stock defaults copied into the record.
@@ -341,13 +371,38 @@ impl FirmwareSettings {
         if self.schema_uri != SETTINGS_SCHEMA_URI || self.schema != 1 {
             return fail("unsupported schema");
         }
-        let bank = &self.bank;
-        if bank.blocks == 0 || bank.bytes == 0 || bank.descriptor.size != 12 {
-            return fail("empty bank or descriptor");
-        }
+        let bank_bytes = match (&self.bank, &self.configuration) {
+            (Some(bank), None) => {
+                if bank.blocks == 0 || bank.bytes == 0 || bank.descriptor.size != 12 {
+                    return fail("empty bank or descriptor");
+                }
+                bank.bytes
+            }
+            (None, Some(window)) => {
+                if window.bytes == 0
+                    || window.flash_offset.checked_add(window.bytes).is_none()
+                    || window.basis.is_empty()
+                    || !hex_digest(&window.sha256)
+                    || self.defaults.is_some()
+                    || !self.fields.is_empty()
+                    || !self.sections.is_empty()
+                    || self
+                        .settings
+                        .values()
+                        .any(|setting| setting.store == "bank")
+                {
+                    return fail("configuration window with bank contents or settings");
+                }
+                window.bytes
+            }
+            _ => return fail("settings need exactly one bank or configuration window"),
+        };
         let source_end = self.source.address.checked_add(self.source.size);
         let profile = self.profile.as_ref();
-        let ranges = std::iter::once(&bank.descriptor)
+        let ranges = self
+            .bank
+            .iter()
+            .map(|bank| &bank.descriptor)
             .chain(&self.defaults)
             .chain(profile.map(|profile| &profile.header))
             .chain(
@@ -367,11 +422,7 @@ impl FirmwareSettings {
             }
             if range.size == 0
                 || range.address.checked_add(range.size).is_none()
-                || range.sha256.len() != 64
-                || !range
-                    .sha256
-                    .bytes()
-                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                || !hex_digest(&range.sha256)
             {
                 return fail("invalid update range");
             }
@@ -385,7 +436,7 @@ impl FirmwareSettings {
         }
         // Store extents, each with the offsets its fields and settings occupy.
         let mut stores: BTreeMap<&str, (u64, BTreeSet<u64>)> = BTreeMap::new();
-        stores.insert("bank", (bank.bytes, BTreeSet::new()));
+        stores.insert("bank", (bank_bytes, BTreeSet::new()));
         if let Some(profile) = profile {
             if profile.header.size != 16 {
                 return fail("profile header is not sixteen bytes");
@@ -457,9 +508,9 @@ impl FirmwareSettings {
             match &field.source {
                 ProfileFieldSource::Fill { .. } => {}
                 ProfileFieldSource::BankCopy { offset }
-                    if within(*offset, field.bytes, bank.bytes) => {}
+                    if within(*offset, field.bytes, bank_bytes) => {}
                 ProfileFieldSource::BankBits { offset, mask }
-                    if field.bytes == 1 && *offset < bank.bytes && *mask != 0 => {}
+                    if field.bytes == 1 && *offset < bank_bytes && *mask != 0 => {}
                 ProfileFieldSource::BankMap {
                     offset,
                     mask,
@@ -467,7 +518,7 @@ impl FirmwareSettings {
                     otherwise,
                     otherwise_high,
                 } if field.bytes == 1
-                    && *offset < bank.bytes
+                    && *offset < bank_bytes
                     && *mask != 0
                     && values
                         .iter()
@@ -489,7 +540,7 @@ impl FirmwareSettings {
             let within = |offset: u64, size: u64| {
                 offset
                     .checked_add(size)
-                    .is_some_and(|end| end <= bank.bytes)
+                    .is_some_and(|end| end <= bank_bytes)
             };
             let length = match section.length {
                 SectionLength::Fixed { bytes } if bytes > 0 => within(section.offset, bytes),
@@ -507,6 +558,14 @@ impl FirmwareSettings {
         }
         Ok(())
     }
+}
+
+/// A lowercase hexadecimal SHA-256.
+fn hex_digest(digest: &str) -> bool {
+    digest.len() == 64
+        && digest
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 #[cfg(test)]

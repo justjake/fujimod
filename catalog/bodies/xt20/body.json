@@ -1,0 +1,43 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "xt20",
+  "soc_id": "xpp",
+  "dram_bytes": 1073741824,
+  "nand": null,
+  "sensor": null,
+  "lens": null,
+  "display": null,
+  "microcontroller": null,
+  "power_control": null,
+  "card_slot": null,
+  "control_bus_chips": [],
+  "connections": [
+    {
+      "id": "flash-storage",
+      "kind": "control",
+      "signals": []
+    }
+  ],
+  "parts": [
+    "xt20-flash"
+  ],
+  "wiring": [
+    {
+      "source_id": "flash-controller",
+      "target_id": "xt20-flash",
+      "signal": "storage"
+    }
+  ],
+  "hardware": {
+    "serial_attachments": [],
+    "gpio_feedback": [],
+    "keypad_samples": {},
+    "thermal_connection_ids": [],
+    "profiles": {
+      "xt20-discovery": {
+        "dram_basis": "Camera MMU first-level table (X-T20 2.11, ff80 read of 0x108000, 2026-10-20): virtual 0-0x3fffffff is normal memory over physical 0. The second bank at 0x80000000 is not declared; no RAM population was measured."
+      }
+    }
+  }
+}

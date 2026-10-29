@@ -517,6 +517,8 @@ pub enum SocBlockKind {
     ResetController,
     /// Clock controller.
     ClockController,
+    /// Memory controller.
+    MemoryController,
     /// Addressable register window with no assigned functional category.
     AddressWindow,
 }

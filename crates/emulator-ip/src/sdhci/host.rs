@@ -1,5 +1,8 @@
 //! SDHCI memory-card host with explicit register-base wiring. MMC, erase, tuning,
 //! and UHS refuse. Latencies and card identity are declared inputs.
+//! The UHS-II interface enable, its mode select and VDD2 power are stored: the
+//! card is not UHS-II, so present-state bit 31 stays clear and commands refuse
+//! while the interface is enabled (X-T20 2.11 0xc658cc then 0xc65d90).
 //! SDMA writes bytes before status and IRQ; boundaries require W1C/resume.
 use super::{Clocks, registers::Registers};
 use fujimod_emulator_devices::bus::FastReadWord;
@@ -42,6 +45,10 @@ pub struct Options {
     pub ram_bytes: u64,
     #[serde(default)]
     pub initialization_fault: InitializationFault,
+    /// The card offers high speed (CMD6 group 1 function 1). Without it the
+    /// card answers only the CMD6 check of function 1 with default speed.
+    #[serde(default)]
+    pub high_speed: bool,
 }
 const MAX_DATA_FAULTS: usize = 32;
 const COMMAND_TIMEOUT_ERROR: u16 = 1;
@@ -90,6 +97,8 @@ struct Request {
     app: bool,
     block_length: usize,
     bus_width: u8,
+    #[serde(default, skip_serializing_if = "default_speed")]
+    access_mode: u8,
     response: [u8; 16],
     payload: Payload,
     transfer: Transfer,
@@ -124,6 +133,7 @@ pub struct SdHost {
     app: bool,
     block_length: usize,
     bus_width: u8,
+    access_mode: u8,
     response: [u8; 16],
     request: Option<Request>,
     fifo: ReadFifo,
@@ -132,6 +142,40 @@ pub struct SdHost {
     rom_fifo_ready: bool,
     faults: Vec<DataFault>,
     fault_history: Vec<DataFaultEvent>,
+}
+/// CMD6 status (SD Physical Layer 4.3.10) of a card whose group 1 offers
+/// default and high speed and whose groups 2-6 offer function 0 only.
+/// Function 15 keeps a group unchanged; an unsupported request reads 15.
+/// A switch (bit 31) selects the access mode; bus timing is not modeled.
+/// Returns the status and the group 1 selection.
+fn switch_status(argument: u32, access_mode: u8) -> ([u8; 64], u8) {
+    let mut bytes = [0; 64];
+    let mut access = access_mode;
+    for group in 0..6 {
+        let support: u16 = if group == 0 { 0x8003 } else { 0x8001 };
+        let at = 12 - 2 * group;
+        bytes[at..at + 2].copy_from_slice(&support.to_be_bytes());
+        let requested = (argument >> (4 * group) & 15) as u16;
+        let selected = match requested {
+            15 if group == 0 => access_mode,
+            15 => 0,
+            f if support & (1 << f) != 0 => f as u8,
+            _ => 15,
+        };
+        if group == 0 {
+            access = selected;
+        }
+        let byte = 16 - group / 2;
+        bytes[byte] |= if group % 2 == 0 {
+            selected
+        } else {
+            selected << 4
+        };
+    }
+    (bytes, access)
+}
+fn default_speed(mode: &u8) -> bool {
+    *mode == 0
 }
 impl SdHost {
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
@@ -170,6 +214,7 @@ impl SdHost {
             app: false,
             block_length: 512,
             bus_width: 1,
+            access_mode: 0,
             response: [0; 16],
             request: None,
             fifo: ReadFifo::new(512)?,
@@ -264,6 +309,15 @@ impl SdHost {
         self.card.initialize_revision(revision);
         Ok(())
     }
+    /// A reset input pulse: the same effect as Software Reset For All.
+    pub fn hardware_reset(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
+        self.request = None;
+        self.rom_fifo_ready = false;
+        self.regs = Registers::new();
+        self.response = [0; 16];
+        self.clocks.write(cx, self.options.base + 0x2c, 2, 0);
+        self.signal(cx)
+    }
     pub fn busy(&self) -> bool {
         self.request.is_some() || self.rom_fifo_ready
     }
@@ -318,16 +372,16 @@ impl SdHost {
                 0
             }
     }
-    fn physical(&self, address: u32, len: usize, rom: bool) -> Result<u64, String> {
+    /// `keep_alias`: a DRAM-alias address stays aliased (ROM and single-block
+    /// reads, while physical low RAM may be shadowed by ROM). Outside the
+    /// alias, only the ROM protocol refuses; others address DRAM directly.
+    fn physical(&self, address: u32, len: usize, keep_alias: bool) -> Result<u64, String> {
         let a = address as u64;
-        if rom && !(0x40000000..0x60000000).contains(&a) {
+        let alias = (0x40000000..0x60000000).contains(&a);
+        if self.options.protocol == Protocol::Rom && !alias {
             return Err("ROM SDMA requires DRAM alias".into());
         }
-        let physical = if (0x40000000..0x60000000).contains(&a) {
-            a & 0x3fffffff
-        } else {
-            a
-        };
+        let physical = if alias { a & 0x3fffffff } else { a };
         if address & 3 != 0
             || len == 0
             || len > 0x2000000
@@ -337,8 +391,7 @@ impl SdHost {
         {
             return Err("SD DMA exceeds aligned DRAM".into());
         }
-        // ROM must retain the alias while physical low RAM is shadowed by ROM.
-        Ok(if rom { a } else { physical })
+        Ok(if keep_alias && alias { a } else { physical })
     }
     fn plan(&self, word: u32, argument: u32) -> Result<Request, String> {
         let command = (word >> 24 & 63) as u8;
@@ -392,6 +445,7 @@ impl SdHost {
             app: false,
             block_length: self.block_length,
             bus_width: self.bus_width,
+            access_mode: self.access_mode,
             response: [0; 16],
             payload: Payload::None,
             transfer: Transfer::Dma,
@@ -405,11 +459,15 @@ impl SdHost {
         };
         let mut response = self.r1();
         let rca = (self.options.rca as u32) << 16;
+        // SCR (ACMD51), SD Status (ACMD13) and the CMD6 status have fixed
+        // lengths; SET_BLOCKLEN does not apply to them. X-T20 2.11 sends
+        // CMD16 only with 512 (0xc5f290) and reads the SCR at 0xc5ee64.
         let bad = match command {
             0 => {
                 request.state = State::Idle;
                 request.block_length = 512;
                 request.bus_width = 1;
+                request.access_mode = 0;
                 response = 0;
                 argument != 0
             }
@@ -506,19 +564,27 @@ impl SdHost {
                 bytes[0] = 0x80;
                 bytes[10] = 0x70;
                 request.payload = Payload::Metadata { bytes, len: 64 };
-                argument != 0 || self.block_length != 64 || self.bus_width != 4
+                argument != 0 || self.bus_width != 4
             }
             51 if app && !rom => {
                 let mut bytes = [0; 64];
                 bytes[..2].copy_from_slice(&[2, 5]);
                 request.payload = Payload::Metadata { bytes, len: 8 };
-                argument != 0 || self.block_length != 8
+                argument != 0
+            }
+            6 if !rom && self.options.high_speed => {
+                let (bytes, selected) = switch_status(argument, self.access_mode);
+                if argument >> 31 != 0 && selected != 15 {
+                    request.access_mode = selected;
+                }
+                request.payload = Payload::Metadata { bytes, len: 64 };
+                argument & 0x7f000000 != 0
             }
             6 if !rom => {
                 let mut bytes = [0; 64];
                 bytes[13] = 1;
                 request.payload = Payload::Metadata { bytes, len: 64 };
-                argument != 1 || self.block_length != 64
+                argument != 1
             }
             17 | 18 | 25 => {
                 let count = if command == 17 {
@@ -543,8 +609,8 @@ impl SdHost {
                 }
                 self.block_length != 512
                     || command == 25 && self.contacts.protected()
-                    || (rom || single)
-                        && (self.regs.get(6) != 1 || ![0x10, 0x11].contains(&(word as u16)))
+                    || rom && self.regs.get(6) != 1
+                    || (rom || single) && ![0x10, 0x11].contains(&(word as u16))
             }
             12 if !rom => argument != 0,
             13 if !rom => argument != rca,
@@ -552,7 +618,8 @@ impl SdHost {
         };
         if bad {
             return Err(format!(
-                "SD CMD{command} argument or card state unsupported"
+                "SD CMD{command} argument {argument:#x} or card state {:?} unsupported",
+                self.state
             ));
         }
         if !matches!(command, 2 | 9) {
@@ -578,6 +645,9 @@ impl SdHost {
             || rom && self.regs.get(0x28) >> 8 & 15 != 15
         {
             return Err("SD command before clock/power setup".into());
+        }
+        if self.regs.get(0x3e) & 0x100 != 0 {
+            return Err("SD command with the UHS-II interface enabled".into());
         }
         let argument = self.regs.word(8);
         let mut r = self.plan(word, argument)?;
@@ -644,6 +714,7 @@ impl SdHost {
         self.app = r.app;
         self.block_length = r.block_length;
         self.bus_width = r.bus_width;
+        self.access_mode = r.access_mode;
         self.response = r.response;
         self.regs.set(0x30, self.regs.get(0x30) | status);
         self.signal(cx)
@@ -1012,9 +1083,9 @@ impl SdHost {
         if self.request.is_some() {
             return Err("SD configuration changed during command".into());
         }
-        if offset == 0x28 && !rom && value & !0xfff != 0
+        if offset == 0x28 && !rom && value & !0xffff != 0
             || offset == 4 && value & 0x8000 != 0
-            || offset == 0x3e && value != 0
+            || offset == 0x3e && !matches!(value, 0 | 0x100 | 0x107)
             || offset == 0x100 && value & !7 != 0
             || offset == 0x104 && value != 0
         {
@@ -1048,6 +1119,8 @@ struct Snapshot {
     app: bool,
     block_length: usize,
     bus_width: u8,
+    #[serde(default, skip_serializing_if = "default_speed")]
+    access_mode: u8,
     response: [u8; 16],
     request: Option<Request>,
     #[serde(with = "fujimod_emulator_devices::checkpoint::array")]
@@ -1082,6 +1155,8 @@ impl Device for SdHost {
             app: bool,
             block_length: usize,
             bus_width: u8,
+            #[serde(skip_serializing_if = "default_speed")]
+            access_mode: u8,
             response: [u8; 16],
             request: &'a Option<Request>,
             fifo: &'a [u8],
@@ -1105,6 +1180,7 @@ impl Device for SdHost {
                 app: self.app,
                 block_length: self.block_length,
                 bus_width: self.bus_width,
+                access_mode: self.access_mode,
                 response: self.response,
                 request: &self.request,
                 fifo: &fifo,
@@ -1147,6 +1223,7 @@ impl Device for SdHost {
         self.app = s.app;
         self.block_length = s.block_length;
         self.bus_width = s.bus_width;
+        self.access_mode = s.access_mode;
         self.response = s.response;
         self.request = s.request;
         self.scratch = s.scratch;
@@ -1170,13 +1247,15 @@ impl Device for SdHost {
                 "payload":payload,"transfer":r.transfer,"quantity":r.quantity,"cursor":r.cursor,"address":r.address,"phase":r.phase,
                 "due":r.due,"command":r.command,"fault":r.fault})
         });
-        Ok(
-            serde_json::json!({"reads":self.reads,"card":self.card.fingerprint(),"contacts":[self.contacts.present(),self.contacts.protected()],"registers":self.regs.0.as_slice(),
+        let mut value = serde_json::json!({"reads":self.reads,"card":self.card.fingerprint(),"contacts":[self.contacts.present(),self.contacts.protected()],"registers":self.regs.0.as_slice(),
             "clocks":self.clocks.save(),"state":self.state,"app":self.app,"block_length":self.block_length,"bus_width":self.bus_width,
             "response":self.response,"request":request,"fifo":fujimod_emulator_devices::fingerprint::bytes(&fifo),"scratch":fujimod_emulator_devices::fingerprint::bytes(&self.scratch),
             "fifo_position":fifo_position,"rom_fifo_ready":self.rom_fifo_ready,
-            "initialization_fault":self.options.initialization_fault,"faults":self.faults,"fault_history":self.fault_history}),
-        )
+            "initialization_fault":self.options.initialization_fault,"faults":self.faults,"fault_history":self.fault_history});
+        if self.access_mode != 0 {
+            value["access_mode"] = self.access_mode.into();
+        }
+        Ok(value)
     }
     fn name(&self) -> &'static str {
         "sdhci-memory-card"
@@ -1346,6 +1425,7 @@ mod tests {
                 rca: 0x1234,
                 ram_bytes: 0x10000,
                 initialization_fault: InitializationFault::None,
+                high_speed: false,
             },
             Wiring {
                 card: Card::new(sd_card::Options {
@@ -1458,6 +1538,18 @@ mod tests {
             assert!(other.restore_checkpoint(&saved).is_err());
             m.restore_checkpoint(&saved).unwrap();
         }
+    }
+    #[test]
+    fn switch_status_selects_high_speed_and_refuses_unsupported_functions() {
+        let (bytes, mode) = switch_status(0x80fffff1, 0);
+        assert_eq!(mode, 1);
+        assert_eq!(bytes[12..14], [0x80, 0x03]);
+        assert_eq!(bytes[2..4], [0x80, 0x01]);
+        assert_eq!(bytes[14..18], [0, 0, 1, 0]);
+        let (bytes, mode) = switch_status(0x00fffff3, 1);
+        assert_eq!((bytes[16], mode), (0x0f, 15));
+        let (bytes, mode) = switch_status(0x00ffffff, 1);
+        assert_eq!((bytes[16], mode), (1, 1));
     }
     #[test]
     fn fingerprint_distinguishes_media_with_the_same_diagnostic_summary() {

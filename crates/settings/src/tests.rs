@@ -1,7 +1,8 @@
 use super::*;
 use fujimod_catalog_settings::{
-    NamedSetting, ProfileRecord, SETTINGS_SCHEMA_URI, SectionLength, SettingsBank, SettingsField,
-    SettingsProfile, SettingsSection, SettingsSource,
+    ConfigurationWindow, NamedSetting, ProfileField, ProfileFieldSource, ProfileRecord,
+    SETTINGS_SCHEMA_URI, SectionLength, SettingsBank, SettingsField, SettingsProfile,
+    SettingsSection, SettingsSource,
 };
 
 /// An update holding one literal-only method-4 stream, stored inverted.
@@ -54,14 +55,15 @@ fn fixture() -> (Vec<u8>, FirmwareSettings) {
             size: section.len() as u64,
             sha256: fujimod_firmware::sha256(&section),
         },
-        bank: SettingsBank {
+        bank: Some(SettingsBank {
             descriptor: range(0x1000, &descriptor),
             kind: 2,
             blocks: 40,
             first_block: 931,
             logical_first: 41,
             bytes: 0x400,
-        },
+        }),
+        configuration: None,
         defaults: Some(range(0x1010, &table)),
         fields: vec![SettingsField {
             offset: 0x202,
@@ -114,7 +116,7 @@ fn banks_take_stock_defaults_fields_and_requested_settings() {
     let requested = BTreeMap::from([("debug".into(), "on".into())]);
     let settings = build(&layout, &flash, &requested, None).unwrap();
     assert_eq!(settings.profile, None);
-    let bank = settings.bank;
+    let bank = settings.bank.unwrap();
     assert_eq!(
         (bank.first_block, bank.blocks, bank.logical_first),
         (931, 40, 41)
@@ -171,7 +173,7 @@ fn profile_fixture() -> (Vec<u8>, FirmwareSettings) {
             "main".into(),
             ProfileRecord {
                 block: 976,
-                managed_index: 86,
+                managed_index: Some(86),
                 bytes: 0x100,
                 defaults: range(0x102c, &record),
                 defaults_offset: 0x10,
@@ -204,6 +206,65 @@ fn profile_fixture() -> (Vec<u8>, FirmwareSettings) {
 }
 
 #[test]
+fn configuration_windows_feed_derived_fields_and_place_no_bank() {
+    let (source, mut layout) = profile_fixture();
+    let flash = flash_image(&source, 4).unwrap();
+    let window = &flash[0x10..0x30];
+    layout.bank = None;
+    layout.configuration = Some(ConfigurationWindow {
+        flash_offset: 0x10,
+        bytes: 0x20,
+        sha256: fujimod_firmware::sha256(window),
+        basis: "Sample configuration copy.".into(),
+    });
+    layout.defaults = None;
+    layout.fields.clear();
+    layout.sections.clear();
+    layout.settings.remove("debug");
+    let record = layout
+        .profile
+        .as_mut()
+        .unwrap()
+        .records
+        .get_mut("main")
+        .unwrap();
+    record.managed_index = None;
+    layout.profile.as_mut().unwrap().derived_fields = vec![ProfileField {
+        store: "main".into(),
+        offset: 0x20,
+        bytes: 4,
+        source: ProfileFieldSource::BankCopy { offset: 0x1c },
+        basis: "Sample copy from the configuration store.".into(),
+    }];
+    let requested = BTreeMap::from([("setup".into(), "done".into())]);
+    let settings = build(&layout, &flash, &requested, None).unwrap();
+    assert_eq!(settings.bank, None);
+    let profile = settings.profile.unwrap();
+    assert_eq!(profile.header[11], 7);
+    let record = &profile.records[0];
+    assert_eq!((record.block, record.managed_index), (976, None));
+    assert_eq!(&record.bytes[0x20..0x24], &window[0x1c..0x20]);
+    let camera = BTreeMap::from([("configuration".into(), vec![0; 4])]);
+    assert!(build(&layout, &flash, &requested, Some(&camera)).is_err());
+    let mut changed = flash.clone();
+    changed[0x2f] ^= 1;
+    assert!(build(&layout, &changed, &requested, None).is_err());
+    let mut banked = layout.clone();
+    banked.settings.insert(
+        "debug".into(),
+        NamedSetting {
+            store: "bank".into(),
+            offset: 0,
+            values: BTreeMap::from([("on".into(), vec![1])]),
+        },
+    );
+    assert!(banked.validate().is_err());
+    let mut both = layout.clone();
+    both.bank = fixture().1.bank;
+    assert!(both.validate().is_err());
+}
+
+#[test]
 fn profiles_take_stock_defaults_settings_and_sealed_records() {
     let (source, layout) = profile_fixture();
     let flash = flash_image(&source, 4).unwrap();
@@ -221,7 +282,7 @@ fn profiles_take_stock_defaults_settings_and_sealed_records() {
         0
     );
     let record = &profile.records[0];
-    assert_eq!((record.block, record.managed_index), (976, 86));
+    assert_eq!((record.block, record.managed_index), (976, Some(86)));
     assert_eq!(&record.bytes[..4], [0, 0, 0xff, 0xff]);
     assert_eq!(&record.bytes[0x10..0x18], [1, 2, 1, 4, 5, 6, 7, 8]);
     let mut sealed = record.bytes.clone();
@@ -255,6 +316,7 @@ fn camera_sections_replace_the_stock_bank_and_take_requested_settings() {
     let bank = build(&layout, &flash, &requested, Some(&camera))
         .unwrap()
         .bank
+        .unwrap()
         .bytes;
     assert_eq!(&bank[..0xf7], &configuration[..0xf7]);
     assert_eq!(bank[0xf7], 1, "requested bank settings still apply");
@@ -350,7 +412,10 @@ fn profile_fields_use_the_requested_bank_and_preserve_masked_bits() {
         ]);
         let result = build(&layout, &flash, &requested, None).unwrap();
         let record = &result.profile.unwrap().records[0].bytes;
-        assert_eq!(&record[0x30..0x34], &result.bank.bytes[0x200..0x204]);
+        assert_eq!(
+            &record[0x30..0x34],
+            &result.bank.as_ref().unwrap().bytes[0x200..0x204]
+        );
         assert_eq!((record[0x35], record[0x36]), (mapped, 0xf9));
         assert_eq!(record[0x12], 0xc1);
         let mut sealed = record.clone();

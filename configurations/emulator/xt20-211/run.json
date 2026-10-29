@@ -1,0 +1,23 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+  "schema": 1,
+  "id": "xt20-211",
+  "purpose": "rom_boot",
+  "body_id": "xt20",
+  "firmware_id": "xt20-211",
+  "start": {
+    "kind": "loader"
+  },
+  "execution": null,
+  "inputs": null,
+  "scene": null,
+  "overlays": [],
+  "preset": {
+    "factory_options": {},
+    "hardware_selection": {
+      "soc_profile_id": "xpp",
+      "body_profile_id": "xt20-discovery"
+    },
+    "hardware_inputs_id": "xt20-discovery"
+  }
+}

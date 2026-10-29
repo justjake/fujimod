@@ -1,6 +1,9 @@
 //! Micron-compatible serial NOR control registers, independent of array data.
 //! Only status, write-enable and enhanced volatile configuration commands are
 //! supported; array commands and other register protocols refuse explicitly.
+//! An array erase or program is started by its owner through
+//! [`Registers::begin_array_write`], which applies the write-enable and busy
+//! rules; the array bytes stay with the owner.
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,6 +20,9 @@ pub struct Registers {
     enhanced_volatile: u8,
     write_enable: bool,
     pending: Option<(u64, u8)>,
+    /// Deadline of a running array erase or program.
+    #[serde(default)]
+    array_busy: Option<u64>,
 }
 
 impl Registers {
@@ -29,6 +35,7 @@ impl Registers {
             options,
             write_enable: false,
             pending: None,
+            array_busy: None,
         })
     }
     pub fn advance(&mut self, now: u64) {
@@ -38,12 +45,41 @@ impl Registers {
             self.enhanced_volatile = value;
             self.pending = None;
         }
+        if self.array_busy.is_some_and(|due| due <= now) {
+            self.array_busy = None;
+        }
     }
     pub fn next_deadline(&self) -> Option<u64> {
-        self.pending.map(|(due, _)| due)
+        self.pending
+            .map(|(due, _)| due)
+            .into_iter()
+            .chain(self.array_busy)
+            .min()
+    }
+    fn busy(&self) -> bool {
+        self.pending.is_some() || self.array_busy.is_some()
+    }
+    /// Starts an array erase or program lasting `ticks`: requires write-enable
+    /// and an idle device, clears write-enable and reports busy until the
+    /// returned deadline.
+    pub fn begin_array_write(&mut self, now: u64, ticks: u64) -> Result<u64, String> {
+        self.advance(now);
+        if self.busy() || !self.write_enable {
+            return Err("Serial NOR array write while busy or write-disabled".into());
+        }
+        let due = now
+            .checked_add(ticks)
+            .filter(|_| ticks > 0)
+            .ok_or("Invalid serial NOR array write latency")?;
+        self.write_enable = false;
+        self.array_busy = Some(due);
+        Ok(due)
     }
     pub fn validate_restore(&self, saved: &Self) -> Result<(), String> {
-        if self.options != saved.options || (saved.pending.is_some() && saved.write_enable) {
+        if self.options != saved.options
+            || (saved.busy() && saved.write_enable)
+            || (saved.pending.is_some() && saved.array_busy.is_some())
+        {
             return Err("Serial NOR register checkpoint differs or is inconsistent".into());
         }
         Ok(())
@@ -56,12 +92,12 @@ impl Registers {
         receive: usize,
     ) -> Result<Vec<u8>, String> {
         self.advance(now);
-        if self.pending.is_some() && opcode != 0x05 {
-            return Err("Serial NOR is busy writing a register".into());
+        if self.busy() && opcode != 0x05 {
+            return Err("Serial NOR is busy writing".into());
         }
         match (opcode, transmit, receive) {
             (0x05, [], 1) => Ok(vec![
-                u8::from(self.pending.is_some()) | (u8::from(self.write_enable) << 1),
+                u8::from(self.busy()) | (u8::from(self.write_enable) << 1),
             ]),
             (0x06, [], 0) => {
                 self.write_enable = true;
@@ -116,5 +152,31 @@ mod tests {
         assert_eq!(device.next_deadline(), Some(10));
         assert_eq!(device.command(10, 0x65, &[], 1).unwrap(), [0xf5]);
         assert!(device.command(10, 0x03, &[], 1).is_err());
+    }
+
+    #[test]
+    fn array_writes_take_write_enable_and_report_busy_until_their_deadline() {
+        let mut device = Registers::new(Options {
+            enhanced_volatile_reset: 0xff,
+            write_ticks: 7,
+        })
+        .unwrap();
+        assert!(device.begin_array_write(0, 20).is_err());
+        device.command(0, 0x06, &[], 0).unwrap();
+        assert!(device.begin_array_write(0, 0).is_err());
+        assert_eq!(device.begin_array_write(1, 20).unwrap(), 21);
+        assert_eq!(device.command(5, 0x05, &[], 1).unwrap(), [1]);
+        assert!(device.command(5, 0x06, &[], 0).is_err());
+        assert_eq!(device.next_deadline(), Some(21));
+        let saved = serde_json::to_value(&device).unwrap();
+        assert_eq!(device.command(21, 0x05, &[], 1).unwrap(), [0]);
+        assert!(device.begin_array_write(21, 20).is_err());
+        let mut resumed: Registers = serde_json::from_value(saved).unwrap();
+        device.validate_restore(&resumed).unwrap();
+        assert_eq!(resumed.command(20, 0x05, &[], 1).unwrap(), [1]);
+        let mut legacy = serde_json::to_value(&resumed).unwrap();
+        legacy.as_object_mut().unwrap().remove("array_busy");
+        let legacy: Registers = serde_json::from_value(legacy).unwrap();
+        assert_eq!(legacy.next_deadline(), None);
     }
 }

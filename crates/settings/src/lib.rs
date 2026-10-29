@@ -9,10 +9,11 @@
 use fujimod_catalog_settings::{FirmwareSettings, ProfileFieldSource, SectionLength, UpdateRange};
 use std::collections::BTreeMap;
 
-/// Settings ready to place before cold boot.
+/// Settings ready to place before cold boot. Firmware with a configuration
+/// window instead of a bank has no bank to place.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Settings {
-    pub bank: Bank,
+    pub bank: Option<Bank>,
     pub profile: Option<Profile>,
 }
 
@@ -28,7 +29,7 @@ pub struct Profile {
 pub struct Record {
     pub bytes: Vec<u8>,
     pub block: u32,
-    pub managed_index: u16,
+    pub managed_index: Option<u16>,
 }
 
 /// A settings bank ready to place in flash.
@@ -106,7 +107,9 @@ pub fn seal_journal(record: &mut [u8], parity_offset: usize) -> Result<(), Strin
 /// Build the settings for `requested` settings (`name -> value name`) from the
 /// installed flash image. With a camera's NAND sections (`name -> bytes`), the
 /// bank is that camera's: erased except for the sections the layout declares.
-/// Without, it is the update's defaults table and the layout's fields.
+/// Without, it is the update's defaults table and the layout's fields. A layout
+/// with a configuration window reads that window of the flash image as its
+/// bank and builds only the profile.
 pub fn build(
     layout: &FirmwareSettings,
     flash: &[u8],
@@ -115,7 +118,14 @@ pub fn build(
 ) -> Result<Settings, String> {
     layout.validate()?;
     let section = source(layout, flash)?;
-    let bank = &layout.bank;
+    let mut stores: BTreeMap<&str, Vec<u8>> = BTreeMap::new();
+    let Some(bank) = &layout.bank else {
+        if camera.is_some() {
+            return Err(format!("{} has no settings bank", layout.firmware_id));
+        }
+        stores.insert("bank", configuration(layout, flash)?);
+        return profile(layout, &section, requested, stores, None);
+    };
     let descriptor = read(&section, layout, &bank.descriptor)?;
     if [
         word(&descriptor, 0),
@@ -126,7 +136,6 @@ pub fn build(
         return Err("stock bank descriptor differs from the layout".into());
     }
     let size = usize::try_from(bank.bytes).map_err(|_| "bank too large")?;
-    let mut stores: BTreeMap<&str, Vec<u8>> = BTreeMap::new();
     let mut bytes = match camera {
         Some(sections) => camera_bank(layout, size, sections)?,
         None => vec![0; size],
@@ -151,8 +160,42 @@ pub fn build(
     }
     stores.insert("bank", bytes);
     apply_requested(layout, requested, &mut stores, true)?;
+    let placed = Bank {
+        bytes: Vec::new(),
+        first_block: bank.first_block,
+        blocks: bank.blocks,
+        logical_first: bank.logical_first,
+    };
+    profile(layout, &section, requested, stores, Some(placed))
+}
+
+/// The configuration window of the flash image, checked against the layout.
+fn configuration(layout: &FirmwareSettings, flash: &[u8]) -> Result<Vec<u8>, String> {
+    let window = layout
+        .configuration
+        .as_ref()
+        .ok_or("settings layout has neither bank nor configuration window")?;
+    let bytes = usize::try_from(window.flash_offset)
+        .ok()
+        .zip(usize::try_from(window.bytes).ok())
+        .and_then(|(start, size)| flash.get(start..start.checked_add(size)?))
+        .ok_or("configuration window is outside the flash image")?;
+    if fujimod_firmware::sha256(bytes) != window.sha256 {
+        return Err("configuration window differs from the layout".into());
+    }
+    Ok(bytes.to_vec())
+}
+
+/// The profile built over the prepared `bank` store, then the placed bank.
+fn profile<'a>(
+    layout: &'a FirmwareSettings,
+    section: &[u8],
+    requested: &BTreeMap<String, String>,
+    mut stores: BTreeMap<&'a str, Vec<u8>>,
+    placed: Option<Bank>,
+) -> Result<Settings, String> {
     if let Some(profile) = &layout.profile {
-        let header = read(&section, layout, &profile.header)?;
+        let header = read(section, layout, &profile.header)?;
         if header[14] != 0xaa {
             return Err("stock profile header has no marker".into());
         }
@@ -162,7 +205,7 @@ pub fn build(
             put(
                 &mut bytes,
                 record.defaults_offset,
-                &read(&section, layout, &record.defaults)?,
+                &read(section, layout, &record.defaults)?,
             );
             for field in &record.fields {
                 put(&mut bytes, field.offset, &field.bytes);
@@ -230,13 +273,12 @@ pub fn build(
             Some(Profile { header, records })
         }
     };
+    let bank = stores.remove("bank").expect("bank store");
     Ok(Settings {
-        bank: Bank {
-            bytes: stores.remove("bank").expect("bank store"),
-            first_block: bank.first_block,
-            blocks: bank.blocks,
-            logical_first: bank.logical_first,
-        },
+        bank: placed.map(|placed| Bank {
+            bytes: bank,
+            ..placed
+        }),
         profile,
     })
 }

@@ -75,6 +75,237 @@
       "clock_id": null
     },
     {
+      "id": "decompressor",
+      "base": 4294443008,
+      "size": 108,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "dmp",
+      "base": 4294475776,
+      "size": 12288,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
+      "id": "gpio",
+      "base": 4293967872,
+      "size": 1024,
+      "kind": "gpio",
+      "clock_id": null
+    },
+    {
+      "id": "clocks",
+      "base": 4293963776,
+      "size": 4096,
+      "kind": "clock-controller",
+      "clock_id": null
+    },
+    {
+      "id": "reset-gates",
+      "base": 4293959680,
+      "size": 4096,
+      "kind": "reset-controller",
+      "clock_id": null
+    },
+    {
+      "id": "window-fff1b000",
+      "base": 4294029312,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff3a000",
+      "base": 4294156288,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff3b000",
+      "base": 4294160384,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff3f000",
+      "base": 4294176768,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff40000",
+      "base": 4294180864,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff41000",
+      "base": 4294184960,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff42000",
+      "base": 4294189056,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff43000",
+      "base": 4294193152,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff44000",
+      "base": 4294197248,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff45000",
+      "base": 4294201344,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff46000",
+      "base": 4294205440,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff47000",
+      "base": 4294209536,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff7f000",
+      "base": 4294438912,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-unit-0",
+      "base": 4294266880,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-unit-1",
+      "base": 4294270976,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-statistics",
+      "base": 4294262784,
+      "size": 512,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "face-detection",
+      "base": 4294381568,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "hdmi-tx",
+      "base": 4160749568,
+      "size": 131072,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
+      "id": "frame-sync",
+      "base": 4294148096,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "dram-controller",
+      "base": 4293976064,
+      "size": 4096,
+      "kind": "memory-controller",
+      "clock_id": null
+    },
+    {
+      "id": "usb",
+      "base": 4292870144,
+      "size": 65536,
+      "kind": "usb-controller",
+      "clock_id": null
+    },
+    {
+      "id": "power-control",
+      "base": 4293984256,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "i2c0",
+      "base": 4294045696,
+      "size": 4096,
+      "kind": "control-bus",
+      "clock_id": null
+    },
+    {
+      "id": "i2c1",
+      "base": 4294049792,
+      "size": 4096,
+      "kind": "control-bus",
+      "clock_id": null
+    },
+    {
+      "id": "sd0",
+      "base": 4294516736,
+      "size": 4096,
+      "kind": "sd-card-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-control",
+      "base": 4294152192,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "adc",
+      "base": 4294021120,
+      "size": 64,
+      "kind": "adc",
+      "clock_id": null
+    },
+    {
+      "id": "display",
+      "base": 4294328320,
+      "size": 12288,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
       "id": "serial0",
       "base": 4294082560,
       "size": 256,
@@ -153,13 +384,88 @@
     "interrupt_inputs": [
       {
         "source_block_id": "interval-timer",
+        "output_id": "channel0",
+        "line": 48
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel1",
+        "line": 49
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel2",
+        "line": 50
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel3",
+        "line": 51
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel4",
+        "line": 52
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel5",
+        "line": 53
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel6",
+        "line": 54
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel7",
+        "line": 55
+      },
+      {
+        "source_block_id": "interval-timer",
         "output_id": "channel8",
         "line": 56
       },
       {
         "source_block_id": "interval-timer",
+        "output_id": "channel9",
+        "line": 57
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel10",
+        "line": 58
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel11",
+        "line": 59
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel12",
+        "line": 60
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel13",
+        "line": 61
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel14",
+        "line": 62
+      },
+      {
+        "source_block_id": "interval-timer",
         "output_id": "channel15",
         "line": 63
+      },
+      {
+        "source_block_id": "flash-controller",
+        "output_id": "interrupt",
+        "line": 35
       },
       {
         "source_block_id": "dma",
@@ -200,6 +506,91 @@
         "source_block_id": "dma",
         "output_id": "event7",
         "line": 214
+      },
+      {
+        "source_block_id": "decompressor",
+        "output_id": "interrupt",
+        "line": 129
+      },
+      {
+        "source_block_id": "dmp",
+        "output_id": "interrupt",
+        "line": 92
+      },
+      {
+        "source_block_id": "sd0",
+        "output_id": "status",
+        "line": 83
+      },
+      {
+        "source_block_id": "imaging-statistics",
+        "output_id": "status",
+        "line": 106
+      },
+      {
+        "source_block_id": "face-detection",
+        "output_id": "status",
+        "line": 124
+      },
+      {
+        "source_block_id": "imaging-unit-0",
+        "output_id": "frame",
+        "line": 107
+      },
+      {
+        "source_block_id": "imaging-unit-1",
+        "output_id": "frame",
+        "line": 108
+      },
+      {
+        "source_block_id": "frame-sync",
+        "output_id": "frame-status-0",
+        "line": 102
+      },
+      {
+        "source_block_id": "frame-sync",
+        "output_id": "frame-status-8",
+        "line": 100
+      },
+      {
+        "source_block_id": "i2c0",
+        "output_id": "interrupt",
+        "line": 68
+      },
+      {
+        "source_block_id": "i2c1",
+        "output_id": "interrupt",
+        "line": 69
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output0-event0",
+        "line": 112
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output0-event1",
+        "line": 113
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output0-event2",
+        "line": 114
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output1-event0",
+        "line": 117
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output1-event1",
+        "line": 118
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output1-event2",
+        "line": 119
       }
     ],
     "companion": null,
@@ -226,8 +617,64 @@
             "layout": "xpp",
             "routes": [
               {
+                "channel": 0,
+                "irq": 48
+              },
+              {
+                "channel": 1,
+                "irq": 49
+              },
+              {
+                "channel": 2,
+                "irq": 50
+              },
+              {
+                "channel": 3,
+                "irq": 51
+              },
+              {
+                "channel": 4,
+                "irq": 52
+              },
+              {
+                "channel": 5,
+                "irq": 53
+              },
+              {
+                "channel": 6,
+                "irq": 54
+              },
+              {
+                "channel": 7,
+                "irq": 55
+              },
+              {
                 "channel": 8,
                 "irq": 56
+              },
+              {
+                "channel": 9,
+                "irq": 57
+              },
+              {
+                "channel": 10,
+                "irq": 58
+              },
+              {
+                "channel": 11,
+                "irq": 59
+              },
+              {
+                "channel": 12,
+                "irq": 60
+              },
+              {
+                "channel": 13,
+                "irq": 61
+              },
+              {
+                "channel": 14,
+                "irq": 62
               },
               {
                 "channel": 15,
@@ -235,13 +682,14 @@
               }
             ],
             "clock": "one timer cycle per aggregate CPU instruction; synthetic ratio, not measured",
-            "basis": "Control +0 is written with an inverted select mask, per-channel configuration at +0x10+n*4, count and reload at +0x100+n*0x10; one channel is read as a running counter. Channel n raising IRQ 48+n is a declared discovery input inferred from the two enabled GIC lines, not traced."
+            "basis": "Control +0 is written with an inverted select mask, per-channel configuration at +0x10+n*4, count and reload at +0x100+n*0x10; one channel is read as a running counter. Channel n raises interrupt 48+n: the X-T20 2.11 timer library (0xc4bcd0) maps channel n through byte table 0xed3b58 to row n+2 of interrupt descriptor table 0xed4720, whose first word is 0x30+n."
           },
           "flash_controller": {
             "base": 4294000640,
             "aperture": 4026531840,
             "size": 134217728,
-            "basis": "Flash reads go through the aperture at 0xf0000000+offset by CPU copies and DMA; the controller's configuration words are written around each copy and no status bit is polled. Registers only retain writes."
+            "irq_route": 35,
+            "basis": "Flash reads go through the aperture at 0xf0000000+offset by CPU copies and DMA; the controller's configuration words are written around each copy. Commands: +0x00 opcode, +0x04 aperture address, +0x10 control (chip select in bits 6-7), +0x20 phase count, +0x1c start; +0x24 status and +0x28 mask, where a set mask bit also acknowledges its status. Page programs are aperture stores while the registers hold opcode 0x12, ended by +0x30 bit 0. X-T20 2.11 driver 0xc5182c/0xc5220c; its handler 0xc501c0 is connected through descriptor 0xed4804, interrupt 0x23."
           },
           "pl330": {
             "base": 4294017024,
@@ -271,11 +719,271 @@
               4294107136
             ],
             "basis": "Declared discovery input: a provisional status law without a peer. Sends complete at once and set done bit 2, writes to +0x2c clear status bits, bit 3 reads set and received words read zero. The attached peers are not identified."
-          }
+          },
+          "decompressor": {
+            "base": 4294443008,
+            "irq_route": 129,
+            "basis": "Method-4 streaming decompressor with the XP4 register interface: the X-T20 2.11 section-6 loader resets it through +0 (0xc5d584), waits for +0 to read nonzero and for +0x24 to read 0x10001, and connects interrupt descriptor row 0x12 of 0xed4720 (interrupt 0x81) with handler 0xc5d348 (0xc5d440)."
+          },
+          "dmp": {
+            "base": 4294475776,
+            "size": 12288,
+            "irq_route": 92,
+            "basis": "DMP SMAPH vector-graphics renderer with the XP4 register interface. The X-T20 2.11 OpenVG/EGL driver (seg5 0xdda65c onward, kernel tasks smaphk/smaphp) programs command words at +0x1c, the copy unit at +0xc00-+0xc18 (initialization 0xdda748 sets +0xc1c to 0x8000) and command lists at +0x10d0/+0x10e0. Its interrupt 92 handler 0xdda2fc reads status +0x34, and waiter 0xdda3cc reports bits 31, 30 and 26."
+          },
+          "adc": {
+            "base": 4294021120,
+            "size": 64,
+            "sample_ticks": 16,
+            "basis": "Twelve-channel ADC with the X-T20 2.11 kernel contract (0x5ac00..0x5adf8): control +0 with start bit 0, continuous-mode bit 1 and channel enables in bits 16-25, clock divider +4, and 10-bit results at +0x10 + 4*channel. Reader 0x5ad8c requires bit 0 and the channel enable; a single conversion clears bit 0 when done (stage 2 0x13d8 waits for it). The conversion clock is unmeasured; sample_ticks is a declared input."
+          },
+          "display_frames": {
+            "irq_routes": [112, 113, 114, 117, 118, 119],
+            "period_ticks": 800000,
+            "basis": "Frame interrupts of the display controller, as an interrupt law without its registers. Seg5 source table 0xed4720 rows 73-78 connect lines 112-114 and 117-119 (edge) to handlers that run the callbacks queued by 0xc9dc38 for output 0 or 1 and event 0-2 (0xc9d854, 0xc9d994); the handlers read no controller register. The X-T20 2.11 vglib thread clears bit 16 of 0xfff65000 or 0xfff5a000, queues such a callback and yields at priority 7 until it runs (0xcad290), which starves flashload before section 7 loads. The period is an assumed 60 Hz in 48 MHz timer ticks (the 10 ms system tick reloads 480000); the panel rate is not measured."
+          },
+          "gpio": {
+            "base": 4293967872,
+            "size": 1024,
+            "basis": "Sixteen GPIO banks with a 0x40 stride and input levels at +0x14, the same layout as the XP4 banks: X-T20 2.11 stage 2 (0x102c) copies the sixteen input words into the boot information and seg5 0xc4e138 reads the live register. Discovery up to REC writes only registers 0-7 of each bank."
+          },
+          "pll_clocks": {
+            "base": 4293963776,
+            "size": 4096,
+            "lock_ticks": 4800,
+            "basis": "Clock bank of X-T20 2.11 section 5: table 0xed5538 lists five PLLs as (configuration, configuration, control, lock bit) = (+0x28, +0x2c, +0x30, 2), (+0x34, +0x38, +0x3c, 4), (+0x40, +0x44, +0x48, 16), (+0x4c, +0x50, +0x54, 8), (+0x78, +0x7c, +0x80, 1); 0xc6aa74 sets control bit 26 and polls +0x6c for the lock bit, 0xc6aa30 clears bit 26. +0x58..+0x64 hold paired 12-bit divider fields (0xc6ae68) and 0xc6a6e0 polls divider busy bits at +0x68, which read clear. The lock time is an assumed 100 us in 48 MHz ticks; it is not measured."
+          },
+          "imaging_control": {
+            "base": 4294152192,
+            "size": 4096,
+            "basis": "Imaging control page of X-T20 2.11 section 5: +0x000 bit 0 is a run bit that 0xc33ec8 clears and then waits to read set (stopped); one register-bus channel at +0x200 (0xc345b4..0xc34864) sends a RAM frame 0x81 hi lo value (write) or 0x82 hi lo (read) to a select in configuration bits 8-12 and returns the reply byte in bits 15:8 of eight receive words at +0x21c. The imaging-side chip is a register file: the start-up writes a register and reads it back until it matches (seg6 0x17fa434). Commands and stops complete at once; what the chip does with the values is not modeled. Six transfer channels at +0x240 + 0x40*n (0xc34910..0xc34e94) are configured with mode, address and length words and started and stopped by +0x04 bit 0 (seg6 0x156a754 and 0x156a7b0). A reset pulse on +0x00 (0xc348d8) also stops a channel: seg6 0x16b7fbc resets the channels in its mask and then waits at 0x16b8118 for channel 0's run bit to read clear, which leaving SETUP for REC requires. Those words read back, and no data moves."
+          },
+          "register_blocks": [
+            {
+              "base": 4294029312,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Unidentified block of X-T20 2.11 section 5 with channels at 0xfff1b000 + 0x1000*n (0xc53c9c maps channel 0..2). 0xc538bc reads +0x1f4 and, only when bit 4 is set, writes a mode to +0x10 (0xc54014); its caller 0xccfad8, reached through function tables at 0xf7be60.., first programs clocks and pins (0xc698b8, 0xc6a4b4, 0xc6a508). Its drivers 0xc53660..0xc54100 are called only from the sound code between the sound task entries (0xcc8af8, 0xccb9cc) and the wave task (0xccfc08..0xccff20, 0xcd4cfc..0xcd5428), so the block is most likely the audio interface; the sound, audio, beep, wave and voicecont tasks wait for messages in REC and the menu. Other words are written by 0xc53ccc..0xc53fd4. What +0x1f4 bit 4 reports on the camera is not known and no capture records it; the block reads it clear, so 0xc538bc returns -255 without writing the mode, as in the xpro-lab emulator. The words read back their last write."
+            },
+            {
+              "base": 4294156288,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Imaging block of X-T20 2.11 section 5 configured by 0xc54b9c..0xc55318 (words +0x04..+0xd0); 0xc54dc4 and 0xc54e4c update +0x40 bit 8 with read-modify-write. No status word is waited on. The words read back their last write; what the block computes is not modeled."
+            },
+            {
+              "base": 4294160384,
+              "size": 4096,
+              "idle_bits": [
+                {
+                  "offset": 0,
+                  "mask": 1
+                }
+              ],
+              "basis": "Imaging block of X-T20 2.11 section 5 configured by 0xc3c100..0xc3f8c4 (words +0x04..+0x204), with enable bits in +0x04 updated by read-modify-write. The stop 0xc3c0c0 writes 0 to +0x00 and waits until bit 0 reads set, so bit 0 is declared idle. The words read back their last write; what the block computes is not modeled."
+            },
+            {
+              "base": 4294176768,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Coordinate table of the X-T20 2.11 section-5 imaging driver (0xc3c100..0xc3f8c4, beside the block at 0xfff3b000), one page of four (0xfff3f000..0xfff42fff). 0xc3d2c8 writes one word per entry of a list of at most 0x1000 entries to 0xfff3f200 + 4*n: two 13-bit coordinates in bits 0-12 and 16-28, each offset by a word of the list header, with two flag bits each (13-14, 29-30). It then reads the last word back and sets its bit 31; an empty list writes 0x1fff/0x1fff with bit 31 to +0x200 and +0x204. The list comes from the body's flash data: a strict boot with a camera's own flash regions writes +0x200 at 162.9M instructions, while the update image's defaults do not reach it before REC. The words read back their last write; what the table does is not modeled."
+            },
+            {
+              "base": 4294180864,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Coordinate table of the X-T20 2.11 section-5 imaging driver (0xc3c100..0xc3f8c4, beside the block at 0xfff3b000), one page of four (0xfff3f000..0xfff42fff). 0xc3d2c8 writes one word per entry of a list of at most 0x1000 entries to 0xfff3f200 + 4*n: two 13-bit coordinates in bits 0-12 and 16-28, each offset by a word of the list header, with two flag bits each (13-14, 29-30). It then reads the last word back and sets its bit 31; an empty list writes 0x1fff/0x1fff with bit 31 to +0x200 and +0x204. The list comes from the body's flash data: a strict boot with a camera's own flash regions writes +0x200 at 162.9M instructions, while the update image's defaults do not reach it before REC. The words read back their last write; what the table does is not modeled."
+            },
+            {
+              "base": 4294184960,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Coordinate table of the X-T20 2.11 section-5 imaging driver (0xc3c100..0xc3f8c4, beside the block at 0xfff3b000), one page of four (0xfff3f000..0xfff42fff). 0xc3d2c8 writes one word per entry of a list of at most 0x1000 entries to 0xfff3f200 + 4*n: two 13-bit coordinates in bits 0-12 and 16-28, each offset by a word of the list header, with two flag bits each (13-14, 29-30). It then reads the last word back and sets its bit 31; an empty list writes 0x1fff/0x1fff with bit 31 to +0x200 and +0x204. The list comes from the body's flash data: a strict boot with a camera's own flash regions writes +0x200 at 162.9M instructions, while the update image's defaults do not reach it before REC. The words read back their last write; what the table does is not modeled."
+            },
+            {
+              "base": 4294189056,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Coordinate table of the X-T20 2.11 section-5 imaging driver (0xc3c100..0xc3f8c4, beside the block at 0xfff3b000), one page of four (0xfff3f000..0xfff42fff). 0xc3d2c8 writes one word per entry of a list of at most 0x1000 entries to 0xfff3f200 + 4*n: two 13-bit coordinates in bits 0-12 and 16-28, each offset by a word of the list header, with two flag bits each (13-14, 29-30). It then reads the last word back and sets its bit 31; an empty list writes 0x1fff/0x1fff with bit 31 to +0x200 and +0x204. The list comes from the body's flash data: a strict boot with a camera's own flash regions writes +0x200 at 162.9M instructions, while the update image's defaults do not reach it before REC. The words read back their last write; what the table does is not modeled."
+            },
+            {
+              "base": 4294193152,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Table memory of X-T20 2.11 imaging, one page of four (0xfff43000..0xfff46fff). Section-5 loaders at 0xc3dd40.. (0xc3dd64..0xc3e960, each through the register helper 0x5ab4c) fill nine 64-word tables at 0xfff43200 + 0x100*n from four bytes each and twelve 256-word tables at 0xfff43c00 + 0x400*n, packing three 10-bit fields per word; the recording start-up reaches 0xc3e538 after lens step 0x01091300. Section 6 copies the same tables back word by word (0x169c27c.., 0x169b8f8), so the words read back their last write. No status word is known; what the tables do is not modeled."
+            },
+            {
+              "base": 4294197248,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Table memory of X-T20 2.11 imaging, one page of four (0xfff43000..0xfff46fff). Section-5 loaders at 0xc3dd40.. (0xc3dd64..0xc3e960, each through the register helper 0x5ab4c) fill nine 64-word tables at 0xfff43200 + 0x100*n from four bytes each and twelve 256-word tables at 0xfff43c00 + 0x400*n, packing three 10-bit fields per word; the recording start-up reaches 0xc3e538 after lens step 0x01091300. Section 6 copies the same tables back word by word (0x169c27c.., 0x169b8f8), so the words read back their last write. No status word is known; what the tables do is not modeled."
+            },
+            {
+              "base": 4294201344,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Table memory of X-T20 2.11 imaging, one page of four (0xfff43000..0xfff46fff). Section-5 loaders at 0xc3dd40.. (0xc3dd64..0xc3e960, each through the register helper 0x5ab4c) fill nine 64-word tables at 0xfff43200 + 0x100*n from four bytes each and twelve 256-word tables at 0xfff43c00 + 0x400*n, packing three 10-bit fields per word; the recording start-up reaches 0xc3e538 after lens step 0x01091300. Section 6 copies the same tables back word by word (0x169c27c.., 0x169b8f8), so the words read back their last write. No status word is known; what the tables do is not modeled."
+            },
+            {
+              "base": 4294205440,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Table memory of X-T20 2.11 imaging, one page of four (0xfff43000..0xfff46fff). Section-5 loaders at 0xc3dd40.. (0xc3dd64..0xc3e960, each through the register helper 0x5ab4c) fill nine 64-word tables at 0xfff43200 + 0x100*n from four bytes each and twelve 256-word tables at 0xfff43c00 + 0x400*n, packing three 10-bit fields per word; the recording start-up reaches 0xc3e538 after lens step 0x01091300. Section 6 copies the same tables back word by word (0x169c27c.., 0x169b8f8), so the words read back their last write. No status word is known; what the tables do is not modeled."
+            },
+            {
+              "base": 4294209536,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Imaging block of X-T20 2.11 written only by the register-table copier 0xc41d30 from section-5 tables (for example 0xf73428 and 0xf795a0); no read of the block is known. The words read back their last write; what the block computes is not modeled."
+            },
+            {
+              "base": 4294266880,
+              "size": 4096,
+              "idle_bits": [
+                {
+                  "offset": 0,
+                  "mask": 1
+                }
+              ],
+              "frames": {
+                "start": { "offset": 200, "mask": 268435456 },
+                "stopped": { "offset": 216, "mask": 256 },
+                "irq_route": 107,
+                "period_ticks": 800000
+              },
+              "basis": "Live-view output unit 0 of X-T20 2.11 section 5 at (0xfff55 + n) << 12 (0xc3a954, 0xc3be40): a 31-entry 17-bit table at +0x40..+0xb8 (0xc3b450), buffer address +0xc0, line width +0xc4 and start bit 28 of +0xc8 (0xc3a98c). While started the unit finishes a frame at every frame-sync tick and raises edge interrupt 107 (descriptor row 0x2f of 0xed471c, config 3); its handler (0xc3abe8 / 0xc3abbc, registered by 0xc3bd20) sets +0xd8 bit 0 and reports the frame to the section-6 imaging dispatcher 0x1698f8c, which runs the live-view job callback. The stop 0xc3be40 clears the start bit and waits for +0xd8 bit 8, which reads set while the unit is stopped; 0xc3a954 then writes 0 to +0x00 and waits for bit 0, declared idle. The same law runs live view in the xpro-lab emulator, where REC frames match the camera's marker sequence. The words read back their last write; no data is written to the buffers."
+            },
+            {
+              "base": 4294270976,
+              "size": 4096,
+              "idle_bits": [
+                {
+                  "offset": 0,
+                  "mask": 1
+                }
+              ],
+              "frames": {
+                "start": { "offset": 200, "mask": 268435456 },
+                "stopped": { "offset": 216, "mask": 256 },
+                "irq_route": 108,
+                "period_ticks": 800000
+              },
+              "basis": "Live-view output unit 1 of X-T20 2.11 section 5 at (0xfff55 + n) << 12 (0xc3a954, 0xc3be40): a 31-entry 17-bit table at +0x40..+0xb8 (0xc3b450), buffer address +0xc0, line width +0xc4 and start bit 28 of +0xc8 (0xc3a98c). While started the unit finishes a frame at every frame-sync tick and raises edge interrupt 108 (descriptor row 0x30 of 0xed471c, config 3); its handler (0xc3abe8 / 0xc3abbc, registered by 0xc3bd20) sets +0xd8 bit 0 and reports the frame to the section-6 imaging dispatcher 0x1698f8c, which runs the live-view job callback. The stop 0xc3be40 clears the start bit and waits for +0xd8 bit 8, which reads set while the unit is stopped; 0xc3a954 then writes 0 to +0x00 and waits for bit 0, declared idle. The same law runs live view in the xpro-lab emulator, where REC frames match the camera's marker sequence. The words read back their last write; no data is written to the buffers."
+            },
+            {
+              "base": 4294438912,
+              "size": 4096,
+              "idle_bits": [
+                {
+                  "offset": 0,
+                  "mask": 1
+                },
+                {
+                  "offset": 64,
+                  "mask": 65537
+                }
+              ],
+              "basis": "Imaging block of X-T20 2.11 section 6 (driver 0x1558424..0x1558a94, beside the unit at 0xfffc4000 whose handler 0x1558a98 takes interrupt 132). The stop 0x1558424 clears +0x00 bit 0 and waits until it reads set. 0x15589c4 waits until +0x40 reads bits 0 and 16 set, sets bits 12 and 28 of +0x3c and bit 0 of +0x04; 0x1558a2c clears the two +0x3c bits and waits for +0x40 again; 0x1558a78 reads +0x44 and 0x1558468 writes 1 to it. A strict boot with the camera's own settings (face detection selected) reads +0x00 at 182.7M instructions. Both handshakes complete at once; no interrupt of this block is known, and what it computes is not modeled."
+            }
+          ],
+          "imaging_statistics": {
+            "base": 4294262784,
+            "size": 512,
+            "irq_route": 106,
+            "period_ticks": 800000,
+            "basis": "Imaging statistics engine of X-T20 2.11 section 5: configuration and output buffer words +0x04..+0x1e4, interrupt enables in the low ten bits of +0x04 and start bit 28 of +0x1e8. Descriptor row 0x32 connects it to interrupt 106 (level); handler 0xc36280 reads the status +0x08 and writes it back to clear it. The stop sequence 0xc365a8 clears +0x00 bit 0, waits until +0x00 reads 1 and +0x1ec bit 16 (idle) reads set, then clears the start bit; 0xc398c4 waits for the same idle bit. While started, the model finishes a frame at every frame-sync tick and reports every enabled status bit, so a frame is never in flight; the statistics are not computed and the buffers are not written. Without these completions, REC re-entry after a USB session stops in imgdc job 0x26 (observed in an independent X-T20 emulator)."
+          },
+          "face_detection": {
+            "base": 4294381568,
+            "size": 4096,
+            "irq_route": 124,
+            "run_ticks": 508800,
+            "basis": "Face detection engine of X-T20 2.11 section 6, driven by task face (0x1861000..0x186c000). The stop 0x18610b0 writes 0 to +0x00 and waits until it reads non-zero; the start and stop paths 0x186bcd0/0x186bf20 wait until +0x818 reads non-zero. A run is programmed through +0x08..+0x838 and started with bit 0 of +0x04. Descriptor row 0x34 of 0xed471c connects it to interrupt 124 (level); the handler 0x18659b8 acknowledges with 0x11111 written to the status +0x834 (0x1861e88) and calls the registered callback. The engine runs only when face detection is selected: a strict boot with the camera's own settings (2026-10-29 REC dump) writes +0x14 at 180M instructions. Each start completes one run after run_ticks, sets status bit 0 and finds no face; the image is not read. run_ticks is the camera's measured 10.6 ms face-detection step after a shot (marker 0x06029d00), in 48 MHz timer ticks; the live-view run time is not measured."
+          },
+          "hdmi_tx": {
+            "base": 4160749568,
+            "size": 131072,
+            "basis": "Synopsys DesignWare HDMI TX controller of X-T20 2.11 section 5, byte registers at a four-byte stride (generated accessors 0xcb29xx..0xcb8xxx): IH_FC_STAT0.. at +0x400, IH_MUTE_FC_STAT0.. at +0x600, IH_MUTE at +0x7fc (0xcb3c98), FC_DBGFORCE/FC_DBGTMDS0-2 at +0x4800/+0x4864..+0x486c and PHY_CONF0..PHY_POL0 at +0xc000..+0xc01c. 0xcbe578 reads PHY_STAT0 (+0xc010, 0xcb7df8) and takes bit 1 as hot plug and bits 4-7 as receiver sense; 0xcbe5e0 starts the connection only on hot plug. No HDMI cable was attached during the reference captures, so the controller is an idle law: PHY_STAT0 and the interrupt status registers read 0 and the other used registers read back."
+          },
+          "frame_sync": {
+            "base": 4294148096,
+            "size": 4096,
+            "interrupts": 4294152512,
+            "sources": [
+              {
+                "status_bit": 0,
+                "irq_route": 102
+              },
+              {
+                "status_bit": 8,
+                "irq_route": 100
+              }
+            ],
+            "period_ticks": 800000,
+            "basis": "Imaging frame sync of X-T20 2.11 section 5. 0xc3fd10..0xc401b4 program the timing words +0x04..+0x58; +0x00 takes bit 1 from 0xc3fc98, bits 0, 1 and 4 from 0xc3fcb8 and loses bit 1 in 0xc3fce0, and seg6 0x16b91bc clears bit 0 and waits until it reads set while bit 1 may be clear, so bit 0 is a frame flag set every frame from tick zero; the other bits read back, and whether they gate the frames is not known. The frame interrupt words are imaging control +0x140 (enable, written by 0xc35a08) and +0x144 (status, write 1 to clear, 0xc359b4) with bits 0, 8 and 16. 0xd09dc8 connects frame source n to descriptor row byte 0xf67188 + 3n and handler word 0xf64858 + 4n: source 0 is row 0x2a (interrupt 100, level) with handler 0xd099ec, which clears status bit 8; source 1 is row 0x2c (interrupt 102, edge) with handler 0xd09958, which clears bit 0. Row 0x2b (interrupt 101, bit 16) has no handler word and is not modeled. Without interrupt 102 the recording start-up never receives completion 0x11cd; without 100, REC re-entry after a USB session stops after step 0x02010200 (observed in an independent X-T20 emulator). Both sources latch on the same frame tick; the phase between them is not known. The period is an assumed 60 Hz in 48 MHz timer ticks; what the timing words select is not modeled."
+          },
+          "reset_gates": {
+            "base": 4293959680,
+            "size": 4096,
+            "basis": "Reset and gate controls of X-T20 2.11 section 5. SD start-up 0xc65b18 drives +0x1c bit 18, 19 or 20 low and then high for SD channel 0, 1 or 2 and then sets bit 0; the UHS-II fallback at 0xc65dc4 repeats it before rewriting the host power and clock words by read-modify-write, so a falling edge resets that SD host. 0xc65a04/0xc65e58 set and clear +0x14 bit 22 around the UHS-II attempt and 0xc621d0/0xc620b8 set and clear pad bits in +0x70 and +0x88; the section 6 USB start-up 0x15274f0 sets +0x100 bit 5, clears +0x118 bit 13 and +0x110 bit 2 and drives +0x10c bit 0 low and high again before it programs the DWC3; +0x08, +0x20 and +0x6c are read-modify-written by 0xc621a0, 0xc694fc, 0xcc0590 and 0xc65c7c. +0x08 holds the polarity of the sixteen external interrupt lines (0xc694d4 sets or clears bit n; set inverts line n), and line n is interrupt 151 + n (0xc5cfd4 maps interrupt rows 151..166 to lines 0..15): a line with a connected part drives its interrupt at the pin level, inverted by its polarity bit, and lines without one stay low. Words read back their last write; what the gate bits switch is not modeled."
+          },
+          "dram_controller": {
+            "base": 4293976064,
+            "size": 4096,
+            "basis": "DRAM controller of X-T20 2.11 section 5. 0xc8f09c reads the refresh-rate level from bits 8..10 of +0xec (caching it at 0xfdbea8 + 5) and, when it changes, rewrites the low half of the refresh words +0x9c and +0xa0 through 0xc8f044: 0xc30 below level 4, 0x618 at level 4; above level 4 it reports event 0x8015. A second controller at 0xfff0f000 is used only when 0xfda438 is set, which it is not in the s1-s3 captures. The boot code that programs the controller before the kernel is not modeled."
+          },
+          "dram_alias": {
+            "base": 1073741824,
+            "basis": "X-T20 camera translation table (service-mode reads of the L1 table at 0x108000, docs/hardware/log.md lines 98-108 of the fuji-xt20-mod research): virtual 0x40000000-0x7fffffff is a read-only, uncached supersection onto physical 0x40000000, and reads through it return the DRAM content from physical 0. Section 5 accesses it as the uncached view of RAM; the ff80 service read handler reads memory at 0x40000000 + address. Mapped read-only, since no write through the alias is known."
+          },
+          "power_control": {
+            "base": 4293984256,
+            "size": 4096,
+            "basis": "Power control of X-T20 2.11 stage 2 (0xc098..0xc4ec) and section 5 (0xc4cbec..0xc4d284). Five power domains, numbered 2..6, use masks 0x1, 0x20, 0x40, 0x80 and 0x100. Switching on (0xc4d108) sets the mask in +0x0c, waits for it in the status +0x2c, sets it in +0x08 and waits for the mask shifted left by 16. Switching off (0xc4cbec) clears it in +0x14 and +0x08, waits for the shifted mask to clear, clears it in +0x10 and +0x0c and waits until the status masked with the domain and bits 30..31 reads 0xc0000000. The status carries +0x0c bits 0..15 and +0x08 bits 0..13 in bits 16..29, with bits 30 and 31 set: switching completes at once. +0x10, +0x14 and +0x38 (bits 0, 1 and 4, 0xc4cf20/0xc4cfbc) read back their last write; the words start at 0, because the values the stage before the kernel leaves are not known. +0x00 reads 6 and +0x04 reads 1 on the running camera (service-mode reads). 0xc4cb94 clears +0x04 bit 0 only on the shutdown and fatal-stop paths (via 0xc4c9a4 from 0xc4d4ec), which end in endless loops, so a cleared bit 0 ends the run as supply off. No domain switches before REC and the menu."
+          },
+          "xpp_usb": {
+            "base": 4292870144,
+            "size": 65536,
+            "irq_route": 82,
+            "command_ticks": 48,
+            "transaction_ticks": 6000,
+            "basis": "DesignWare USB3 device controller of X-T20 2.11 section 6 (driver 0x1526e50..0x152b000), core registers from +0xc100, device registers from +0xc700, endpoint commands at +0xc800 + 0x10 n. Interrupt source 0x1c of the section 5 table 0xed4720 is interrupt 82, level. Init 0x15274f0 sets DCTL.CSFTRST, clears GUSB2PHYCFG SUSPHY, places the event buffer (GEVNTADR, 64 events), writes DCFG = 0x20000, DEVTEN = 7 and DALEPENA = 3 and sets DCTL.RUN_STOP; the ISR 0x1527070 masks GEVNTSIZ and posts message 0x1434, and the driver task walks the ring from GEVNTCOUNT (0x152908c). Endpoint commands are written as DEPCMD = 0x400 | command and polled until CMDACT clears (0x15272d4). The driver starts only after a cable is seen (VBUS and the power IC's data-line detection); a boot without a cable never touches the controller. Endpoint commands complete after 48 ticks (1 us) and bus transactions after 6000 ticks (one 125 us high-speed microframe); neither time is measured."
+          },
+          "xpp_i2c": {
+            "base": 4294045696,
+            "stride": 4096,
+            "size": 4096,
+            "irq_routes": [68, 69],
+            "fifo_depth": 8,
+            "clock_hz": 266000000,
+            "tick_hz": 48000000,
+            "basis": "DesignWare APB I2C masters of X-T20 2.11 section 5: transfer 0xc52b30, API 0xc5328c and interrupt handler 0xc52df8 (bus entries 0xc53264/0xc53278). Bus n is at 0xfff1f000 + 0x1000*n; interrupt descriptor rows 0x50/0x51 of table 0xed471c connect buses 0/1 to interrupts 68/69. Each transfer disables the bus, writes SCL counts 0x533/0x545 (standard) and 0x13f/0x151 (fast), IC_CON speed and restart enable, IC_TAR, the 0x5f interrupt mask and zero FIFO thresholds, then enables it; the handler feeds DATA_CMD on TX_EMPTY while IC_STATUS.TFNF is set, with STOP on the last byte and RESTART on the first read of a write-then-read, drains it on RX_FULL and ends on TX_ABRT, and the task then polls IC_STATUS.MST_ACTIVITY. The interrupt mask is written before IC_ENABLE, so TX_EMPTY is taken as asserted only while enabled. An ic_clk of 266 MHz is inferred from the standard-mode counts giving a symmetric 5 us/5 us 100 kHz clock; it is not measured. The FIFO depth is declared, not measured. Ticks are the 48 MHz timer ticks."
+          },
+          "xpp_sd": {
+            "base": 4294516736,
+            "size": 4096,
+            "register_offset": 512,
+            "irq_route": 83,
+            "reset_channel": 0,
+            "transfer_ticks": 4800,
+            "clock_ticks": 48,
+            "reset_ticks": 48,
+            "basis": "SD channel 0 of X-T20 2.11 section 5 (0xc6164c..0xc65f24): channel n is at 0xfff92000 + 0x1000*n with its SDHCI bank at +0x200 for channel 0 and +0x100 otherwise. 0xc6592c..0xc65a48 program vendor words +0x20, +0x24 and +0xec; 0xc658cc then tries the UHS-II interface (VDD2 power, host control 2 = 0x107, internal clock) and 0xc65d90 reads present-state bit 31, which is clear for a card without UHS-II, so the driver resets the host through the reset gates and starts the 3.3 V interface. Interrupt descriptor row 0x19 of table 0xed471c connects channel 0 to interrupt 83 (rows 0x1a/0x1b: channels 1/2, 84/85). Channels 1 and 2 (0xfff93000, used from 0xc64cbc, and 0xfff94000) are not mapped: the driver logs SDIO errors (0xc673b8..0xc67804), but which channel carries the Wi-Fi module is not established, and the wificont and netdrv tasks wait for messages in REC and the menu, so a strict run that reached either channel would stop on the unmapped access. Clock settle (1 us), transfer (100 us) and wrapper reset (1 us) times are assumed, not measured."
+          },
+          "display_outputs": [
+            {
+              "base": 4294328320,
+              "size": 12288,
+              "set_bits": [{ "offset": 0, "mask": 65536 }],
+              "clear_bits": [{ "offset": 8192, "mask": 268435456 }],
+              "scanout": { "output": 0, "period_ticks": 800000 },
+              "basis": "Output 1 of the display controller, 0xfff64000-0xfff67000, as word registers that read back their last write. Two status laws from X-T20 2.11 seg5: 0xca37ac saves +0, writes bit 16, clears it and polls until bit 16 reads set before restoring the saved word with bit 16; 0xca9df0 sets bit 28 of +0x2000 and polls until it reads clear. Both requests complete at once; the controller's real latency (likely one frame) is not measured. Output 0 at 0xfff59000 follows the same bit-16 law in 0xca37ac but is not exercised up to REC and is not declared. Scanout: the commit routine 0xca5a0c copies its shadow block to the OSD layer group (+0x200 layer enable bits; four origins +0x210, sizes +0x220 and buffers +0x230). Camera RAM (live-service reads 2026-10-29) holds the same layer as enable 1, size 0x2cf01df and buffer 0x384d000 in REC and 0x354d000 in the menu, with 720 x 480 premultiplied RGBA buffers at a 2880-byte pitch. The output is captured as host output 0 (the rear panel) at the frame period, OSD layers over black; the video layer is not captured."
+            }
+          ]
         },
         "limits": [
           "Two cores are a declared discovery input from a public dual Cortex-A7 listing; the count is not measured.",
-          "Storage covers the flash aperture and PL330 memory-to-memory programs only; no decompressor or display block is declared.",
+          "Storage covers the flash aperture, PL330 memory-to-memory programs and the method-4 decompressor. The DMP renderer and display output 1 registers are declared; output 1 scans out its OSD layers only.",
           "No boot ROM, reset-release controller or external peripheral replies are assumed."
         ],
         "cache_basis": "Declared discovery input: the XP4 Cortex-A7 capacities, unmeasured. Not a cache timing model."

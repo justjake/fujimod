@@ -1,0 +1,18 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xt20-211-rec",
+  "configuration_id": "xt20-211",
+  "change": {
+    "kind": "preset",
+    "preset": {
+      "factory_options": {
+        "storage_profile": "profile",
+        "camera_settings": {
+          "setup": "done",
+          "language": "en"
+        }
+      }
+    }
+  }
+}

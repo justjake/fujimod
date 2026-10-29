@@ -303,6 +303,8 @@ pub fn build(
                     flash::Options {
                         base: controller,
                         transfer_ticks,
+                        irq: None,
+                        array: None,
                     },
                     source.clone(),
                     ports,

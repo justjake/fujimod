@@ -54,6 +54,7 @@ pub struct Devices {
     prior_records: usize,
     pins: Option<fujimod_emulator_ip::socionext::gpio::SharedPins>,
     adc: Option<(usize, Arc<Mutex<Adc>>)>,
+    xpp_adc: Option<Arc<Mutex<fujimod_emulator_xpp::adc::Converter>>>,
     usb: Option<Arc<Mutex<Dwc3>>>,
     pub frames: BTreeMap<usize, Frame>,
     pub outputs: BTreeMap<usize, serde_json::Value>,
@@ -138,6 +139,9 @@ impl Devices {
         channel: usize,
         sample: u16,
     ) -> Result<(), String> {
+        if let Some(adc) = &self.xpp_adc {
+            return adc.lock().unwrap().set_input(channel, sample);
+        }
         let (id, adc) = self.adc.as_ref().ok_or("XP4 ADC inputs are not wired")?;
         let mut host = PhysicalHost {
             cluster: c,
@@ -163,15 +167,14 @@ impl Devices {
             .set_input(port, pin, high);
         Ok(())
     }
-    pub fn gpio(&mut self, inputs: [u16; 16]) -> Result<(), String> {
-        let base = 0xfff41000;
+    pub fn gpio(&mut self, base: u64, inputs: [u16; 16]) -> Result<(), String> {
         if self.pins.is_some()
             || self
                 .windows
                 .iter()
                 .any(|&(lo, hi, _)| base < hi && lo < base + 0x400)
         {
-            return Err("Overlapping XP4 GPIO wiring".into());
+            return Err("Overlapping GPIO wiring".into());
         }
         let pins = fujimod_emulator_ip::socionext::gpio::Pins::new(inputs);
         let id = self.models.len();
@@ -559,6 +562,7 @@ impl Devices {
             prior_records: 0,
             pins: None,
             adc: None,
+            xpp_adc: None,
             usb: None,
             frames: BTreeMap::new(),
             outputs: BTreeMap::new(),
@@ -642,6 +646,7 @@ impl Devices {
             prior_records: 0,
             pins: None,
             adc: None,
+            xpp_adc: None,
             usb: None,
             frames: BTreeMap::new(),
             outputs: BTreeMap::new(),
@@ -659,6 +664,7 @@ impl Devices {
         &mut self,
         storage: super::definition::XppStorage,
         image: Vec<u8>,
+        windows: Vec<Arc<dyn fujimod_emulator_ip_arm::pl330::Source>>,
     ) -> Result<(), String> {
         use fujimod_emulator_xpp::flash::{self, Aperture, FlashController};
         struct ApertureSource(Arc<Aperture>);
@@ -669,19 +675,44 @@ impl Devices {
             fn read(&self, address: u64, len: usize) -> Result<Vec<u8>, String> {
                 self.0.read(address, len)
             }
+            fn writable(&self) -> bool {
+                true
+            }
+            fn write(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
+                self.0.store(address, bytes)
+            }
         }
         let aperture = Arc::new(Aperture::new(
             storage.aperture,
             storage.aperture_size,
             image,
         )?);
+        let (array, nor) = match storage.nor {
+            Some(nor) => (
+                Some(nor.array),
+                BTreeMap::from([(
+                    nor.chip_select,
+                    fujimod_emulator_devices::parts::micron_nor::Registers::new(nor.registers)?,
+                )]),
+            ),
+            None => (None, BTreeMap::new()),
+        };
         let controller = FlashController::new(
-            flash::Options {base:storage.flash_controller,transfer_ticks:1},
-            aperture.clone(), BTreeMap::new())?;
+            flash::Options {
+                base: storage.flash_controller,
+                transfer_ticks: 1,
+                irq: storage.irq,
+                array,
+            },
+            aperture.clone(),
+            nor,
+        )?;
         let dma = fujimod_emulator_ip_arm::pl330::Pl330::new(
             storage.dma,
             storage.dma_irq_routes,
-            vec![Arc::new(ApertureSource(aperture.clone()))],
+            std::iter::once(Arc::new(ApertureSource(aperture.clone())) as Arc<_>)
+                .chain(windows)
+                .collect(),
             fujimod_emulator_ip_arm::pl330::Throughput {
                 setup_ticks: storage.dma_setup_ticks,
                 bytes_per_tick: storage.dma_bytes_per_tick,
@@ -709,8 +740,13 @@ impl Devices {
         self.windows.push((ranges[2].0, ranges[2].1, id + 1));
         Ok(())
     }
-    /// One X-Processor Pro serial port without a peer.
-    pub fn xpp_serial(&mut self, base: u64) -> Result<(), String> {
+    /// One X-Processor Pro serial port with its declared peer.
+    pub fn xpp_serial(
+        &mut self,
+        base: u64,
+        peer: fujimod_emulator_xpp::serial::Peer,
+        clock: Option<fujimod_emulator_xpp::serial::Clock>,
+    ) -> Result<(), String> {
         use fujimod_emulator_xpp::serial::{REGISTERS, DiscoveryPort};
         if self
             .windows
@@ -719,10 +755,394 @@ impl Devices {
         {
             return Err("Overlapping X-Processor Pro serial port".into());
         }
-        let model = DiscoveryPort::new(base)?;
+        let mut model = DiscoveryPort::attached(base, peer)?;
+        if let Some(clock) = clock {
+            model = model.with_clock(clock)?;
+        }
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + REGISTERS, id));
+        Ok(())
+    }
+    /// X-Processor Pro ADC with declared samples.
+    pub fn xpp_adc(
+        &mut self,
+        base: u64,
+        samples: &[u16],
+        conversion_ticks: u64,
+    ) -> Result<(), String> {
+        use fujimod_emulator_xpp::adc::{Converter, WINDOW};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base + WINDOW)
+        {
+            return Err("Overlapping X-Processor Pro ADC".into());
+        }
+        let model = Arc::new(Mutex::new(Converter::new(base, samples, conversion_ticks)?));
+        let id = self.models.len();
+        self.models.push(Some(Box::new(Connected(model.clone()))));
+        self.xpp_adc = Some(model);
+        self.windows.push((base, base + WINDOW, id));
+        Ok(())
+    }
+    pub fn xpp_display_output(
+        &mut self,
+        output: &crate::definition::XppDisplayOutput,
+    ) -> Result<(), String> {
+        let (base, size) = (output.base, output.size);
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(size))
+        {
+            return Err("Overlapping X-Processor Pro display output".into());
+        }
+        let model = fujimod_emulator_xpp::display::Output::new(
+            base,
+            size,
+            &output.set_bits,
+            &output.clear_bits,
+            output
+                .scanout
+                .map(|(output, period)| fujimod_emulator_xpp::display::Scanout { output, period }),
+        )?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + size, id));
+        Ok(())
+    }
+    pub fn xpp_clocks(
+        &mut self,
+        base: u64,
+        lock_ticks: u64,
+        running: Vec<usize>,
+    ) -> Result<(), String> {
+        use fujimod_emulator_xpp::clocks::{ClockControl, Options};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(0x1000))
+        {
+            return Err("Overlapping X-Processor Pro clock bank".into());
+        }
+        let model = ClockControl::new(Options {
+            base,
+            lock_ticks,
+            running,
+        })?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + 0x1000, id));
+        Ok(())
+    }
+    /// The reset/gate bank; returns the SD channel reset lines and the
+    /// external interrupt lines.
+    pub fn xpp_reset_gates(
+        &mut self,
+        base: u64,
+    ) -> Result<
+        (
+            Vec<fujimod_emulator_xpp::resets::ResetPulses>,
+            fujimod_emulator_xpp::resets::ExternalLines,
+        ),
+        String,
+    > {
+        use fujimod_emulator_xpp::resets::{Gates, WINDOW};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(WINDOW))
+        {
+            return Err("Overlapping X-Processor Pro reset/gate bank".into());
+        }
+        let model = Gates::new(base)?;
+        let lines = (0..3)
+            .map(|channel| model.sd_reset(channel))
+            .collect::<Result<Vec<_>, _>>()?;
+        let external = model.external_lines();
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + WINDOW, id));
+        Ok((lines, external))
+    }
+    /// An X-mount lens on its serial port, sharing `link` with the PL330.
+    pub fn xpp_lens(
+        &mut self,
+        lens: crate::definition::XppLens,
+        link: &fujimod_emulator_xpp::lens::LensLink,
+        lines: fujimod_emulator_xpp::resets::ExternalLines,
+    ) -> Result<(), String> {
+        use fujimod_emulator_xpp::lens::{LensPort, Profile, Timing, Wiring};
+        use fujimod_emulator_xpp::serial::REGISTERS;
+        let base = lens.port;
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base + REGISTERS)
+        {
+            return Err("Overlapping X-Processor Pro lens port".into());
+        }
+        let pins = self
+            .pins
+            .as_ref()
+            .ok_or("The lens requires GPIO wiring")?
+            .clone();
+        let model = LensPort::new(
+            link,
+            Profile {
+                page: lens.page,
+                replies: lens.replies.into_iter().collect(),
+            },
+            Timing {
+                ready: lens.ready_ticks,
+                release: lens.release_ticks,
+                drive: lens.drive_ticks,
+                poll: lens.poll_ticks,
+            },
+            Wiring {
+                base,
+                power: lens.power,
+                ready: lens.ready,
+                line: lens.line,
+                contacts: lens.contacts,
+            },
+            pins,
+            lines,
+        )?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + REGISTERS, id));
+        Ok(())
+    }
+    pub fn xpp_shutter(&mut self, shutter: crate::definition::XppShutter) -> Result<(), String> {
+        use fujimod_emulator_xpp::shutter::{Shutter, Timing, Wiring};
+        let pins = self
+            .pins
+            .as_ref()
+            .ok_or("The shutter requires GPIO wiring")?
+            .clone();
+        let model = Shutter::new(
+            Wiring {
+                mode: shutter.mode,
+                motor: shutter.motor,
+                sensors: shutter.sensors,
+                line: shutter.line,
+            },
+            Timing {
+                step: shutter.step_ticks,
+                poll: shutter.poll_ticks,
+            },
+            shutter.positions,
+            pins,
+        )?;
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
+    pub fn xpp_sd(
+        &mut self,
+        sd: crate::definition::XppSd,
+        reset: Option<fujimod_emulator_xpp::resets::ResetPulses>,
+    ) -> Result<(), String> {
+        let base = sd.options.base;
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(0x1000))
+        {
+            return Err("Overlapping X-Processor Pro SD channel".into());
+        }
+        let card = fujimod_emulator_storage::fat::format(&sd.card, &[])?;
+        let contacts = fujimod_emulator_devices::parts::card_contacts::Contacts::new(true, false);
+        let mut model = fujimod_emulator_xpp::sd::Controller::new(
+            sd.options,
+            card,
+            contacts,
+            sd.irq.map(fujimod_emulator_devices::bus::InterruptLine::Shared),
+        )?;
+        if let Some(line) = reset {
+            model = model.with_reset(line);
+        }
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + 0x1000, id));
+        Ok(())
+    }
+    pub fn xpp_register_block(
+        &mut self,
+        block: crate::definition::XppRegisterBlock,
+    ) -> Result<(), String> {
+        let frames = block.frames.map(|f| fujimod_emulator_xpp::blocks::Frames {
+            start: f.start,
+            stopped: f.stopped,
+            irq: f.irq,
+            period: f.period_ticks,
+        });
+        let model =
+            fujimod_emulator_xpp::blocks::Block::new(block.base, block.size, block.idle, frames)?;
+        let end = block.base + model.window();
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| block.base < hi && lo < end)
+        {
+            return Err("Overlapping X-Processor Pro register block".into());
+        }
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((block.base, end, id));
+        Ok(())
+    }
+    pub fn xpp_statistics(&mut self, base: u64, irq: u32, period: u64) -> Result<(), String> {
+        use fujimod_emulator_xpp::statistics::{Engine, WINDOW};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(WINDOW))
+        {
+            return Err("Overlapping X-Processor Pro statistics engine".into());
+        }
+        let model = Engine::new(base, irq, period)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + WINDOW, id));
+        Ok(())
+    }
+    pub fn xpp_face(&mut self, base: u64, irq: u32, run_ticks: u64) -> Result<(), String> {
+        use fujimod_emulator_xpp::face::{Engine, WINDOW};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(WINDOW))
+        {
+            return Err("Overlapping X-Processor Pro face detection engine".into());
+        }
+        let model = Engine::new(base, irq, run_ticks)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + WINDOW, id));
+        Ok(())
+    }
+    /// DesignWare HDMI TX with no sink attached.
+    pub fn xpp_hdmi(&mut self, base: u64) -> Result<(), String> {
+        use fujimod_emulator_ip::dw_hdmi::{Transmitter, WINDOW};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(WINDOW))
+        {
+            return Err("Overlapping DesignWare HDMI TX".into());
+        }
+        let model = Transmitter::new(base)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + WINDOW, id));
+        Ok(())
+    }
+    pub fn xpp_power(&mut self, base: u64) -> Result<(), String> {
+        use fujimod_emulator_xpp::power::{Control, WINDOW};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(WINDOW))
+        {
+            return Err("Overlapping X-Processor Pro power control".into());
+        }
+        let model = Control::new(base)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + WINDOW, id));
+        Ok(())
+    }
+    pub fn xpp_dram(&mut self, base: u64, refresh_level: u8) -> Result<(), String> {
+        use fujimod_emulator_xpp::dram::{Controller, WINDOW};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(WINDOW))
+        {
+            return Err("Overlapping X-Processor Pro DRAM controller".into());
+        }
+        let model = Controller::new(base, refresh_level)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + WINDOW, id));
+        Ok(())
+    }
+    pub fn xpp_i2c(&mut self, bus: crate::definition::XppI2c) -> Result<(), String> {
+        use fujimod_emulator_ip::dw_i2c::{Controller, WINDOW};
+        let base = bus.options.base;
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(WINDOW))
+        {
+            return Err("Overlapping X-Processor Pro I2C bus".into());
+        }
+        let parts = fujimod_emulator_xpp::i2c::Parts::new(bus.parts)?;
+        let model = Controller::new(bus.options, parts)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + WINDOW, id));
+        Ok(())
+    }
+    /// The imaging control page, less the frame interrupt words at `hole`
+    /// that the frame sync owns.
+    pub fn xpp_imaging_control(&mut self, base: u64, hole: Option<u64>) -> Result<(), String> {
+        use fujimod_emulator_xpp::imaging::{Control, WINDOW};
+        use fujimod_emulator_xpp::sync::INTERRUPT_WINDOW;
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(WINDOW))
+        {
+            return Err("Overlapping X-Processor Pro imaging control".into());
+        }
+        let end = base + WINDOW;
+        let ranges = match hole {
+            None => vec![(base, end)],
+            Some(at) if at > base && at & 7 == 0 && at + INTERRUPT_WINDOW < end => {
+                vec![(base, at), (at + INTERRUPT_WINDOW, end)]
+            }
+            Some(_) => return Err("Frame interrupt words outside the imaging control page".into()),
+        };
+        let model = Control::new(base)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows
+            .extend(ranges.into_iter().map(|(lo, hi)| (lo, hi, id)));
+        Ok(())
+    }
+    pub fn xpp_frame_sync(&mut self, sync: crate::definition::XppFrameSync) -> Result<(), String> {
+        use fujimod_emulator_xpp::sync::{Generator, INTERRUPT_WINDOW, WINDOW};
+        let ranges = [
+            (sync.base, sync.base.saturating_add(WINDOW)),
+            (
+                sync.interrupts,
+                sync.interrupts.saturating_add(INTERRUPT_WINDOW),
+            ),
+        ];
+        if ranges
+            .iter()
+            .any(|&(a, b)| self.windows.iter().any(|&(lo, hi, _)| a < hi && lo < b))
+        {
+            return Err("Overlapping X-Processor Pro frame sync".into());
+        }
+        let model = Generator::new(
+            sync.base,
+            sync.interrupts,
+            sync.frame_lines,
+            sync.period_ticks,
+        )?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.extend(ranges.map(|(lo, hi)| (lo, hi, id)));
+        Ok(())
+    }
+    /// X-Processor Pro display frame interrupts; the law has no register window.
+    pub fn xpp_display_frames(&mut self, irqs: Vec<u32>, period: u64) -> Result<(), String> {
+        let model = fujimod_emulator_xpp::display::FrameClock::new(irqs, period)?;
+        self.models.push(Some(Box::new(model)));
         Ok(())
     }
     fn owner(&self, address: u64, size: u32) -> Option<usize> {

@@ -16,14 +16,16 @@ pub struct Empty {}
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetAdcInput"))]
 pub struct AdcInput {
-    /// Declared ambient celsius.
-    pub ambient_celsius: u64,
+    /// Declared ambient celsius, for converters with thermal channels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ambient_celsius: Option<u64>,
     /// Declared basis.
     pub basis: String,
     /// Declared samples.
     pub samples: Vec<u64>,
     /// Declared thermal channels.
-    pub thermal_channels: Vec<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thermal_channels: Option<Vec<u64>>,
 }
 
 /// Declared adc facts.
@@ -569,6 +571,159 @@ pub struct AutofocusGate {
     pub shutter: Shutter,
 }
 
+/// SD card in the slot at power-on: identity, size and filesystem.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetSdCardInput"))]
+pub struct SdCardInput {
+    /// Declared basis.
+    pub basis: String,
+    /// Declared filesystem format.
+    pub format: SdCardFormat,
+    /// The card offers high speed (CMD6 group 1 function 1).
+    pub high_speed: bool,
+    /// Relative card address the card publishes.
+    pub rca: u64,
+    /// Declared 512-byte sectors.
+    pub sectors: u64,
+}
+
+/// Refresh-rate level the DRAM device reports to its controller.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetDramRefreshInput"))]
+pub struct DramRefreshInput {
+    /// Declared basis.
+    pub basis: String,
+    /// Three-bit refresh-rate level.
+    pub level: u64,
+}
+
+/// A register-file part on an I2C bus at power-on.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetI2cPartInput"))]
+pub struct I2cPartInput {
+    /// 7-bit address the part acknowledges.
+    pub address: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Bus index on the SoC's I2C controllers.
+    pub bus: u64,
+    /// Register values are sent least-significant byte first.
+    pub little_endian: bool,
+    /// Declared register values, as register and value pairs.
+    pub registers: Vec<(u64, u64)>,
+    /// Bits of the first written byte that select the register.
+    pub select_mask: u64,
+    /// Bytes per register: 1 or 2.
+    pub width: u64,
+}
+
+/// An X-mount lens attached at power-on, answering on its serial link.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetLensInput"))]
+pub struct LensInput {
+    /// Declared basis.
+    pub basis: String,
+    /// Contact levels the attached lens presents, as bank, pin and level.
+    pub contacts: Vec<(u64, u64, bool)>,
+    /// Ticks a focus drive holds the ready line low.
+    pub drive_ticks: u64,
+    /// External interrupt line of the ready pin.
+    pub line: u64,
+    /// Information page the lens sends in a read session, as hex (at most
+    /// 128 bytes).
+    pub page: String,
+    /// Ticks between samples of the body's power output.
+    pub poll_ticks: u64,
+    /// Serial port base of the link.
+    pub port: u64,
+    /// The body's power output: bank, register and bit.
+    pub power: (u64, u64, u64),
+    /// Ready pin: bank and pin.
+    pub ready: (u64, u64),
+    /// Ticks from power-on until the lens pulls the ready line low.
+    pub ready_ticks: u64,
+    /// The body's stored records for this lens, placed with a user profile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub registration: Option<LensRegistration>,
+    /// Ticks the ready line stays low during the lens's initialization.
+    pub release_ticks: u64,
+    /// Command replies, as command and data pairs.
+    pub replies: Vec<(u64, u64)>,
+}
+
+/// Body flash records of a registered lens: an asset holding the bytes of
+/// each flash region in order.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetLensRegistration"))]
+pub struct LensRegistration {
+    /// Asset identity in the configuration assets.
+    pub asset: String,
+    /// Declared basis.
+    pub basis: String,
+    /// Flash regions the asset fills, as offset and size.
+    pub regions: Vec<(u64, u64)>,
+    /// SHA-256 of the asset.
+    pub sha256: String,
+}
+
+/// The shutter's motor and position sensors on the GPIO banks.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetShutterInput"))]
+pub struct ShutterInput {
+    /// Declared basis.
+    pub basis: String,
+    /// External interrupt line the sensors' edges reach.
+    pub line: u64,
+    /// Bank and register of the motor pins' mode bits.
+    pub mode: (u64, u64),
+    /// The two motor pins.
+    pub motor: (u64, u64),
+    /// Ticks between samples of the motor modes.
+    pub poll_ticks: u64,
+    /// Sensor levels in the order the turning motor reaches them.
+    pub positions: Vec<Vec<bool>>,
+    /// Sensor inputs as bank and pin.
+    pub sensors: Vec<(u64, u64)>,
+    /// Ticks per motor step.
+    pub step_ticks: u64,
+}
+
+/// Instruction throughput of each core against the tick clock.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetExecutionClock"))]
+pub struct ExecutionClock {
+    /// Declared basis.
+    pub basis: String,
+    /// Instructions per tick as numerator and denominator.
+    pub instructions_per_tick: (u64, u64),
+}
+
+/// PLLs running at kernel entry.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetPllInput"))]
+pub struct PllInput {
+    /// Declared basis.
+    pub basis: String,
+    /// Indices of the PLLs already powered, enabled and locked.
+    pub running: Vec<u64>,
+}
+
 /// Declared gpio input facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -748,6 +903,31 @@ pub struct FlashApertureContents {
     pub basis: String,
     /// Declared contents.
     pub contents: String,
+    /// NOR device that accepts erase and page-program commands, when declared.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nor: Option<FlashApertureNor>,
+}
+
+/// Declared NOR register device and array behind one flash-aperture chip select.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetFlashApertureNor"))]
+pub struct FlashApertureNor {
+    /// Declared basis.
+    pub basis: String,
+    /// Chip select, each covering half of the aperture.
+    pub chip_select: u64,
+    /// Enhanced volatile configuration register value after reset.
+    pub enhanced_volatile_reset: u64,
+    /// Declared erase ticks.
+    pub erase_ticks: u64,
+    /// Declared page bytes.
+    pub page_bytes: u64,
+    /// Declared page ticks.
+    pub page_ticks: u64,
+    /// Ticks until a register write completes.
+    pub register_write_ticks: u64,
 }
 
 /// Declared serial flash geometry facts.
@@ -913,6 +1093,93 @@ pub struct TemperatureInput {
     pub millicelsius: u64,
 }
 
+/// One register of a declared sub-CPU register file.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetSubCpuRegister"))]
+pub struct SubCpuRegister {
+    /// Declared name.
+    pub name: String,
+    /// Register number, bits 14..8 of a send word.
+    pub register: u64,
+    /// Value after reset.
+    pub value: u64,
+}
+
+/// Declared register-file peer behind one serial port.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetSubCpu"))]
+pub struct SubCpuInputs {
+    /// Declared basis.
+    pub basis: String,
+    /// Serial port base address.
+    pub port: u64,
+    /// Registers that do not read zero after reset.
+    pub registers: Vec<SubCpuRegister>,
+    /// First of sixteen consecutive registers holding the stock user-profile
+    /// header, which a selected profile fills.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_header: Option<u64>,
+    /// Seconds count kept in the register file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clock: Option<SubCpuClock>,
+}
+
+/// USB port of a body: VBUS reaches a GPIO input pin, and a host on the data
+/// lines negotiates `speed` ("high" or "super").
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetUsbCable"))]
+pub struct UsbCableInput {
+    /// Declared basis.
+    pub basis: String,
+    /// GPIO bank of the VBUS input.
+    pub vbus_bank: u64,
+    /// GPIO pin of the VBUS input.
+    pub vbus_pin: u64,
+    /// Link speed a host negotiates.
+    pub speed: String,
+}
+
+/// Seconds count in four consecutive sub-CPU registers, least significant
+/// byte first, that advances with device time while its hold register's bit 0
+/// is set.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetSubCpuClock"))]
+pub struct SubCpuClock {
+    /// Declared basis.
+    pub basis: String,
+    /// First of the four count registers.
+    pub first: u64,
+    /// Register whose bit 0 runs the count.
+    pub hold: u64,
+    /// Count at power-on.
+    pub seconds: u64,
+    /// Device ticks per second.
+    pub ticks_per_second: u64,
+}
+
+/// Declared byte-frame register peer behind one serial port.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetBatteryGauge"))]
+pub struct BatteryGaugeInputs {
+    /// Declared basis.
+    pub basis: String,
+    /// Serial port base address.
+    pub port: u64,
+    /// Sixteen-bit registers, named by the even command byte, that do not
+    /// read zero after reset.
+    pub registers: Vec<SubCpuRegister>,
+}
+
 /// Declared hardware reset facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -921,9 +1188,15 @@ pub struct HardwareReset {
     /// Declared adc input.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adc_input: Option<AdcInput>,
+    /// Declared execution clock.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_clock: Option<ExecutionClock>,
     /// Declared application inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub application_inputs: Option<ApplicationInputs>,
+    /// Declared battery gauge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub battery_gauge: Option<BatteryGaugeInputs>,
     /// Declared autofocus gate.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub autofocus_gate: Option<AutofocusGate>,
@@ -936,6 +1209,21 @@ pub struct HardwareReset {
     /// Declared gpio input.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpio_input: Option<GpioInput>,
+    /// Declared PLLs running at kernel entry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pll_input: Option<PllInput>,
+    /// Declared SD card in the slot at power-on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sd_card: Option<SdCardInput>,
+    /// Declared register-file parts on the I2C buses.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub i2c_parts: Vec<I2cPartInput>,
+    /// Declared DRAM refresh-rate level the memory device reports.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dram_refresh: Option<DramRefreshInput>,
+    /// Declared lens on the mount.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lens: Option<LensInput>,
     /// Declared inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inputs: Option<HardwareresetInputs>,
@@ -954,9 +1242,19 @@ pub struct HardwareReset {
     /// Declared serial flash.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub serial_flash: Option<SerialFlash>,
+    /// Declared shutter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shutter: Option<ShutterInput>,
     /// Declared spi inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spi_inputs: Option<BTreeMap<String, SpiInputs>>,
+    /// Declared register-file peer on a serial port.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sub_cpu: Option<SubCpuInputs>,
+    /// Declared USB port: the cable's VBUS pin and the link speed a host
+    /// negotiates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usb_cable: Option<UsbCableInput>,
     /// Declared temperature input.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temperature_input: Option<TemperatureInput>,

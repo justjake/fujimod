@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/state.generated.schema.json",
+  "schema": 1,
+  "id": "xt20-211-state",
+  "firmware_id": "xt20-211",
+  "regions": [
+    {
+      "name": "dram",
+      "address": 0,
+      "size": 1073741824,
+      "constant": false
+    }
+  ]
+}

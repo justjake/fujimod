@@ -24,6 +24,14 @@ impl Pins {
             self.changes[port][pin],
         )
     }
+    /// Input level of a pin.
+    pub fn input(&self, port: usize, pin: usize) -> bool {
+        self.inputs[port] & (1 << pin) != 0
+    }
+    /// Value of register `register` of bank `port`.
+    pub fn register(&self, port: usize, register: usize) -> u32 {
+        self.regs[port][register]
+    }
     pub fn set_input(&mut self, port: usize, pin: usize, high: bool) {
         if high {
             self.inputs[port] |= 1 << pin;

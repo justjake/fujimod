@@ -181,7 +181,9 @@ fn settings_medium(
     let block_bytes = options.page_bytes as u64 * options.pages_per_block as u64;
     let mut placements = Vec::new();
     if with_bank {
-        let bank = settings.bank;
+        let bank = settings
+            .bank
+            .ok_or_else(|| format!("{} has no settings bank", layout.firmware_id))?;
         let mut bytes = vec![0xff; (u64::from(bank.blocks) * block_bytes) as usize];
         bytes
             .get_mut(..bank.bytes.len())
@@ -196,7 +198,10 @@ fn settings_medium(
             .get_mut(..record.bytes.len())
             .ok_or("Profile record exceeds its flash block")?
             .copy_from_slice(&record.bytes);
-        placements.push((u64::from(record.block), block, record.managed_index));
+        let managed_index = record
+            .managed_index
+            .ok_or("A NAND profile record needs a managed block index")?;
+        placements.push((u64::from(record.block), block, managed_index));
     }
     let mut overlays: Vec<Overlay> = Vec::new();
     let mut spare = BTreeMap::new();

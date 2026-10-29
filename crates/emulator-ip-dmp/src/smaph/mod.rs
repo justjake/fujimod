@@ -1260,6 +1260,18 @@ mod tests {
         );
     }
     #[test]
+    fn copy_unit_configuration_stores_only_the_initialization_value() {
+        let mut renderer = Renderer::new(0xfff88000, 92).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 0, 0xdda2ec, 0);
+        assert_eq!(renderer.read(&mut cx, 0xfff88c1c, 4), 0);
+        renderer.write(&mut cx, 0xfff88c1c, 4, 0x8000);
+        assert!(cx.refusal().is_none(), "{:?}", cx.refusal());
+        assert_eq!(renderer.read(&mut cx, 0xfff88c1c, 4), 0x8000);
+        renderer.write(&mut cx, 0xfff88c1c, 4, 0x4000);
+        assert!(cx.refusal().is_some());
+    }
+    #[test]
     fn linear_gradient_fifo_projection_spread_and_premultiplication() {
         let mut words = vec![0x16bf004, 0, 0x16cf3fc];
         words.extend((0..128).map(|i| u32::from_le_bytes([i * 2, 0, 0, 255])));
@@ -1839,6 +1851,11 @@ impl Device for Renderer {
                     return Err("DMP unknown list synchronization mode".into());
                 }
                 0x1298 if v != 0 => return Err("DMP unknown list setup".into()),
+                // X-T20 2.11 initialization 0xdda748 sets bit 15 once by a
+                // masked read-modify-write; no other value is observed.
+                0xc1c if v != 0x8000 => {
+                    return Err("DMP unknown copy-unit configuration".into());
+                }
                 _ => {
                     s.regs.insert(o, v);
                 }

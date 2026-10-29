@@ -42,6 +42,10 @@ struct Endpoint {
     events: u8,
     trb: Option<u64>,
     cursor: u32,
+    /// Control phase (0 outside control transfers) of the XferNotReady last
+    /// reported without a transfer started since.
+    #[serde(default)]
+    not_ready: Option<u8>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -153,8 +157,12 @@ impl Dwc3 {
     }
     /// An explicitly negotiated physical link input; not a synthetic USB reply.
     pub fn link(&mut self, now: u64, connected: bool) -> Result<(), String> {
-        self.queue(now, self.config.transaction_ticks, Operation::Link(connected))
-            .map(|_| ())
+        self.queue(
+            now,
+            self.config.transaction_ticks,
+            Operation::Link(connected),
+        )
+        .map(|_| ())
     }
     pub fn bus_reset(&mut self, now: u64) -> Result<(), String> {
         self.queue(now, self.config.transaction_ticks, Operation::BusReset)
@@ -258,6 +266,7 @@ impl Dwc3 {
                 }
                 endpoint.trb = Some(address);
                 endpoint.cursor = 0;
+                endpoint.not_ready = None;
                 resource = 1;
             }
             7 if endpoint.trb.is_some() && value >> 16 & 0x7f == 1 => resource = 1,
@@ -301,13 +310,16 @@ impl Dwc3 {
             return Ok(Reply::Stall);
         }
         let Some(trb) = endpoint.trb else {
-            if endpoint.events & 4 != 0 {
-                let phase = if ep < 2 {
-                    if self.state.control.status { 2 } else { 1 }
-                } else {
-                    0
-                };
-                self.event_word(cx, (ep as u32) << 1 | 3 << 6 | phase << 12)?;
+            // The core reports a not-ready endpoint once per transfer, or per
+            // control phase, however often the host retries the NAKed token.
+            let phase = if ep < 2 {
+                if self.state.control.status { 2 } else { 1 }
+            } else {
+                0
+            };
+            if endpoint.events & 4 != 0 && endpoint.not_ready != Some(phase) {
+                self.event_word(cx, (ep as u32) << 1 | 3 << 6 | u32::from(phase) << 12)?;
+                self.state.endpoints[ep].not_ready = Some(phase);
             }
             return Ok(Reply::Nak);
         };
@@ -339,9 +351,17 @@ impl Dwc3 {
             .ok_or("DWC3 TRB cursor exceeds its transfer length")?;
         let maximum = u32::from(endpoint.max_packet);
         let events = endpoint.events;
+        // An OUT data TRB covers whole packets (databook: OUT transfer sizes
+        // are multiples of MaxPacketSize), so it may exceed wLength.
+        let expected = u32::from(self.state.control.remaining);
+        let capacity = if ep & 1 == 0 {
+            expected.div_ceil(maximum.max(1)) * maximum.max(1)
+        } else {
+            expected
+        };
         if kind == 2 && remaining != 8
             || matches!(kind, 3 | 4) && remaining != 0
-            || kind == 5 && remaining > u32::from(self.state.control.remaining)
+            || kind == 5 && remaining > capacity
         {
             return Err("DWC3 control TRB length disagrees with its bus phase".into());
         }
@@ -364,7 +384,10 @@ impl Dwc3 {
         };
         let left = remaining - quantity;
         let short = quantity < maximum;
-        let complete = left == 0 || short;
+        // The data stage also ends when wLength bytes have arrived.
+        let complete = left == 0
+            || short
+            || kind == 5 && ep & 1 == 0 && quantity == u32::from(self.state.control.remaining);
         if kind == 2 {
             let setup = setup_bytes.ok_or("DWC3 SETUP needs eight bus bytes")?;
             let remaining = u16::from_le_bytes([setup[6], setup[7]]);
@@ -549,14 +572,19 @@ impl Device for Dwc3 {
                 }
                 0xc408 => {
                     let size = value & 0xffff;
+                    // INTMASK (bit 31) may change with unread events, as a
+                    // handler masks the buffer before it walks the ring.
+                    let resized = size != self.reg(offset) & 0xffff;
                     if value & !0x8000fffc != 0
                         || size < 4
                         || size & 3 != 0
-                        || self.reg(0xc40c) != 0
+                        || resized && self.reg(0xc40c) != 0
                     {
                         return Err("Invalid DWC3 event ring size or unread reconfiguration".into());
                     }
-                    self.state.ring_cursor = 0;
+                    if resized {
+                        self.state.ring_cursor = 0;
+                    }
                     self.state.registers.insert(offset, value);
                 }
                 0xc400 | 0xc404 => {

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xt20-211",
+  "body_id": "xt20",
+  "version": "2.11",
+  "update": {
+    "size": 53543984,
+    "sha256": "b37faf524e6e2c72410e615a48feff05d6d2236f73f5cc6027c25863d7d48fad"
+  },
+  "boot_rom": {
+    "address": 4293918720,
+    "content": {
+      "size": 65536,
+      "sha256": "781bd91b2fd60f659016f9070bc03dec5e0325064d649d00f8016f38ead9c1e6"
+    }
+  },
+  "installation": null,
+  "generated_facts": null
+}
