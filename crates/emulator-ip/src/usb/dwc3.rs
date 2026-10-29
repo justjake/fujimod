@@ -343,9 +343,17 @@ impl Dwc3 {
             .ok_or("DWC3 TRB cursor exceeds its transfer length")?;
         let maximum = u32::from(endpoint.max_packet);
         let events = endpoint.events;
+        // An OUT data TRB covers whole packets (databook: OUT transfer sizes
+        // are multiples of MaxPacketSize), so it may exceed wLength.
+        let expected = u32::from(self.state.control.remaining);
+        let capacity = if ep & 1 == 0 {
+            expected.div_ceil(maximum.max(1)) * maximum.max(1)
+        } else {
+            expected
+        };
         if kind == 2 && remaining != 8
             || matches!(kind, 3 | 4) && remaining != 0
-            || kind == 5 && remaining > u32::from(self.state.control.remaining)
+            || kind == 5 && remaining > capacity
         {
             return Err("DWC3 control TRB length disagrees with its bus phase".into());
         }
@@ -368,7 +376,10 @@ impl Dwc3 {
         };
         let left = remaining - quantity;
         let short = quantity < maximum;
-        let complete = left == 0 || short;
+        // The data stage also ends when wLength bytes have arrived.
+        let complete = left == 0
+            || short
+            || kind == 5 && ep & 1 == 0 && quantity == u32::from(self.state.control.remaining);
         if kind == 2 {
             let setup = setup_bytes.ok_or("DWC3 SETUP needs eight bus bytes")?;
             let remaining = u16::from_le_bytes([setup[6], setup[7]]);

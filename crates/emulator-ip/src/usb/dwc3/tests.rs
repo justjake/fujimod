@@ -360,3 +360,52 @@ fn handler_masks_the_event_buffer_with_unread_events_but_cannot_resize_it() {
     // Masking keeps the ring position; only a resize restarts it.
     assert_eq!(d.state.ring_cursor, cursor + pending);
 }
+
+#[test]
+fn control_out_data_trb_may_cover_whole_packets_beyond_wlength() {
+    let (mut d, mut b) = ready(0x1234);
+    endpoint(&mut d, &mut b, 0, 64);
+    endpoint(&mut d, &mut b, 1, 64);
+    trb(&mut b, 0x2000, 0x3000, 8, 2);
+    start(&mut d, &mut b, 0, 0x2000);
+    let setup = d
+        .transaction(b.now, 0, true, Some(vec![0x43, 0, 0, 0, 0, 0, 5, 0]))
+        .unwrap();
+    let at = b.now + 4;
+    tick(&mut d, &mut b, at);
+    assert_eq!(d.reply(setup), Some(&Reply::Ack));
+    assert!(!d.state.control.data_in);
+    // X-T20 2.11: the data stage TRB is a whole 64-byte packet.
+    trb(&mut b, 0x2020, 0x3100, 64, 5);
+    start(&mut d, &mut b, 0, 0x2020);
+    let data = d
+        .transaction(b.now, 0, false, Some(b"hello".to_vec()))
+        .unwrap();
+    let at = b.now + 4;
+    tick(&mut d, &mut b, at);
+    assert_eq!(d.reply(data), Some(&Reply::Ack));
+    assert_eq!(&b.ram[0x3100..0x3105], b"hello");
+    assert!(d.state.control.status);
+    assert_eq!(
+        u32::from_le_bytes(b.ram[0x2028..0x202c].try_into().unwrap()) & 0xffffff,
+        59
+    );
+    // A TRB beyond the packet that carries wLength is still refused.
+    let (mut d, mut b) = ready(0x1234);
+    endpoint(&mut d, &mut b, 0, 64);
+    trb(&mut b, 0x2000, 0x3000, 8, 2);
+    start(&mut d, &mut b, 0, 0x2000);
+    d.transaction(b.now, 0, true, Some(vec![0x43, 0, 0, 0, 0, 0, 5, 0]))
+        .unwrap();
+    let at = b.now + 4;
+    tick(&mut d, &mut b, at);
+    trb(&mut b, 0x2020, 0x3100, 128, 5);
+    start(&mut d, &mut b, 0, 0x2020);
+    d.transaction(b.now, 0, false, Some(b"hello".to_vec()))
+        .unwrap();
+    b.now += 4;
+    let pc = b.pc;
+    let mut cx = Cx::new(&mut b, 0, pc, 0);
+    d.event(&mut cx, 0);
+    assert!(cx.refusal().is_some());
+}
