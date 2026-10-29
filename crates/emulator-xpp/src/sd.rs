@@ -1,11 +1,24 @@
 //! The X-Processor Pro SD wrapper: reset at +0 and a relocated SDHCI bank.
 //! Word accesses are decomposed into the standard registers they cover.
+//! Vendor words +0x20, +0x24 and +0xec read back their last write (X-T20
+//! 2.11 0xc6592c..0xc65a48 programs bit fields there before the UHS-II
+//! attempt); what they configure is not modeled. +0x10 is an update
+//! handshake (0xc64ac8): bits 0-5 select and 8-12 value, bit 24 requests the
+//! update and bit 26 acknowledges it while bit 24 is set (polled up to 1000
+//! times at 0xc64bd8); updates complete at once. An optional reset input
+//! line resets the SDHCI bank once per pulse, before the next access.
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_ip::sdhci::host::{self, SdHost};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::collections::BTreeMap;
 
-#[derive(Clone, PartialEq, Eq, Deserialize, Serialize)]
+const VENDOR: [u64; 4] = [0x10, 0x20, 0x24, 0xec];
+const UPDATE: u64 = 0x10;
+const UPDATE_REQUEST: u32 = 1 << 24;
+const UPDATE_DONE: u32 = 1 << 26;
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
     pub base: u64,
@@ -15,11 +28,17 @@ pub struct Options {
     pub reset_ticks: u64,
     pub rca: u16,
     pub ram_bytes: u64,
+    /// The card offers high speed (CMD6 group 1 function 1).
+    #[serde(default)]
+    pub high_speed: bool,
 }
+type Saved = (Options, Option<u64>, BTreeMap<u64, u32>, Option<u64>);
 pub struct Controller {
     options: Options,
     host: SdHost,
     reset_due: Option<u64>,
+    vendor: BTreeMap<u64, u32>,
+    reset: Option<(crate::resets::ResetPulses, u64)>,
 }
 impl Controller {
     pub fn new(
@@ -39,6 +58,7 @@ impl Controller {
             rca: options.rca,
             ram_bytes: options.ram_bytes,
             initialization_fault: host::InitializationFault::None,
+            high_speed: options.high_speed,
         };
         let host = if let Some(irq) = irq {
             SdHost::new(
@@ -56,7 +76,15 @@ impl Controller {
             options,
             host,
             reset_due: None,
+            vendor: BTreeMap::new(),
+            reset: None,
         })
+    }
+    /// Connect a hardware reset line; pulses before this call are ignored.
+    pub fn with_reset(mut self, line: crate::resets::ResetPulses) -> Self {
+        let seen = line.count();
+        self.reset = Some((line, seen));
+        self
     }
     fn transfer(
         &mut self,
@@ -69,6 +97,30 @@ impl Controller {
             return Err("SD register access width/value".into());
         }
         self.advance(cx);
+        if let Some((line, seen)) = &mut self.reset
+            && line.count() != *seen
+        {
+            *seen = line.count();
+            self.reset_due = None;
+            self.host.hardware_reset(cx)?;
+        }
+        let vendor = address.wrapping_sub(self.options.base);
+        if size == 4 && VENDOR.contains(&vendor) {
+            if let Some(v) = value {
+                if vendor == UPDATE && v as u32 & UPDATE_DONE != 0 {
+                    return Err("SD update acknowledge is read-only".into());
+                }
+                self.vendor.insert(vendor, v as u32);
+                return Ok(0);
+            }
+            let word = self.vendor.get(&vendor).copied().unwrap_or(0);
+            return Ok(if vendor == UPDATE && word & UPDATE_REQUEST != 0 {
+                word | UPDATE_DONE
+            } else {
+                word
+            }
+            .into());
+        }
         if address == self.options.base && size == 4 {
             if let Some(v) = value {
                 if v != 1 {
@@ -86,7 +138,10 @@ impl Controller {
         }
         let Some(offset) = address.checked_sub(self.options.base + self.options.register_offset)
         else {
-            return Err("SD access outside register bank".into());
+            return Err(format!(
+                "SD access outside register bank: +{:#x}/{size}",
+                address - self.options.base
+            ));
         };
         if offset + u64::from(size) > 0x108 || address & u64::from(size - 1) != 0 {
             return Err("SD register alignment/extent".into());
@@ -157,7 +212,7 @@ impl Device for Controller {
             .min()
     }
     fn save(&self) -> Value {
-        json!({"reset_due":self.reset_due,"host":self.host.save()})
+        json!({"reset_due":self.reset_due,"vendor":self.vendor,"reset_seen":self.reset.as_ref().map(|r| r.1),"host":self.host.save()})
     }
     fn card_slot(&self) -> Option<&(dyn fujimod_emulator_devices::capability::CardSlot + 'static)> {
         self.host.card_slot()
@@ -171,7 +226,12 @@ impl Device for Controller {
         // The SD host owns the exact card, FIFO, pending command and clocks.
         Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             self.name(),
-            &(&self.options, self.reset_due),
+            &(
+                &self.options,
+                self.reset_due,
+                &self.vendor,
+                self.reset.as_ref().map(|r| r.1),
+            ),
         )?
         .with_children(vec![self.host.checkpoint()?]))
     }
@@ -179,9 +239,14 @@ impl Device for Controller {
         &self,
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
-        let (options, _): (Options, Option<u64>) = saved.decode(self.name())?;
+        let (options, _, vendor, seen): Saved = saved.decode(self.name())?;
         if options != self.options {
             return Err("SD wrapper checkpoint wiring differs".into());
+        }
+        if vendor.keys().any(|offset| !VENDOR.contains(offset))
+            || seen.is_some() != self.reset.is_some()
+        {
+            return Err("SD wrapper checkpoint vendor/reset shape differs".into());
         }
         if saved.children().len() != 1 {
             return Err("SD wrapper checkpoint child count differs".into());
@@ -194,8 +259,12 @@ impl Device for Controller {
     ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         self.host.restore_checkpoint(&saved.children()[0])?;
-        let (_, due): (Options, Option<u64>) = saved.decode(self.name())?;
+        let (_, due, vendor, seen): Saved = saved.decode(self.name())?;
         self.reset_due = due;
+        self.vendor = vendor;
+        if let (Some((_, current)), Some(seen)) = (&mut self.reset, seen) {
+            *current = seen;
+        }
         Ok(())
     }
     fn restore(&mut self, _: &Value) -> Result<(), String> {
@@ -231,6 +300,7 @@ mod tests {
                 reset_ticks: 3,
                 rca: 1,
                 ram_bytes: 0x10000,
+                high_speed: false,
             };
             let mut d = Controller::new(options, card, Contacts::new(true, false), None).unwrap();
             let mut h = TestHost::new();
@@ -287,5 +357,61 @@ mod tests {
             advance(&mut d, &mut h, now);
             assert_eq!(read(&mut d, &mut h, registers + 0x30) & 2, 2);
         }
+    }
+    #[test]
+    fn vendor_words_read_back_and_a_reset_pulse_clears_the_sdhci_bank() {
+        let base = 0xfff92000;
+        let card = Card::new(CardOptions {
+            sectors: 0x800000,
+            max_dirty_sectors: 4,
+        })
+        .unwrap();
+        let options = Options {
+            base,
+            register_offset: 0x200,
+            transfer_ticks: 10,
+            clock_ticks: 2,
+            reset_ticks: 3,
+            rca: 1,
+            ram_bytes: 0x10000,
+            high_speed: false,
+        };
+        let mut gates = crate::resets::Gates::new(0xfff0a000).unwrap();
+        let mut d = Controller::new(options, card, Contacts::new(true, false), None)
+            .unwrap()
+            .with_reset(gates.sd_reset(0).unwrap());
+        let mut h = TestHost::new();
+        write(&mut d, &mut h, base + 0x20, 0x8770);
+        write(&mut d, &mut h, base + 0x24, 0x790080c);
+        write(&mut d, &mut h, base + 0xec, 1);
+        assert_eq!(read(&mut d, &mut h, base + 0x24), 0x790080c);
+        write(&mut d, &mut h, base + 0x10, 0x1000501);
+        assert_eq!(read(&mut d, &mut h, base + 0x10), 0x5000501);
+        write(&mut d, &mut h, base + 0x10, 0x501);
+        assert_eq!(read(&mut d, &mut h, base + 0x10), 0x501);
+        let half = |d: &mut Controller, h: &mut TestHost, offset: u64, value: Option<u64>| {
+            let mut cx = h.cx();
+            let result = match value {
+                Some(v) => {
+                    d.write(&mut cx, base + 0x200 + offset, 2, v);
+                    0
+                }
+                None => d.read(&mut cx, base + 0x200 + offset, 2),
+            };
+            assert!(cx.refusal().is_none(), "{:?}", cx.refusal());
+            result
+        };
+        half(&mut d, &mut h, 0x28, Some(0xbfc0));
+        half(&mut d, &mut h, 0x3e, Some(0x107));
+        let saved = d.checkpoint().unwrap();
+        let gates_saved = gates.save();
+        write(&mut gates, &mut h, 0xfff0a01c, 0x40000);
+        write(&mut gates, &mut h, 0xfff0a01c, 0);
+        assert_eq!(half(&mut d, &mut h, 0x3e, None), 0);
+        assert_eq!(half(&mut d, &mut h, 0x28, None), 0);
+        assert_eq!(read(&mut d, &mut h, base + 0x20), 0x8770);
+        gates.restore(&gates_saved).unwrap();
+        d.restore_checkpoint(&saved).unwrap();
+        assert_eq!(half(&mut d, &mut h, 0x3e, None), 0x107);
     }
 }

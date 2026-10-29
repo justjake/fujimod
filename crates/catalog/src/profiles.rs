@@ -1171,6 +1171,47 @@ pub struct PllClocks {
     pub size: u64,
 }
 
+/// X-Processor Pro SD channel: wrapper reset at +0, vendor words and a
+/// relocated SDHCI bank, with its interrupt and hardware reset line.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareXppSdHost"))]
+pub struct XppSdHost {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Ticks for the internal clock to report stable.
+    pub clock_ticks: u64,
+    /// Interrupt line of the SDHCI status.
+    pub irq_route: u32,
+    /// Offset of the SDHCI bank inside the window.
+    pub register_offset: u64,
+    /// SD channel of the reset-gate line that resets this host.
+    pub reset_channel: u64,
+    /// Ticks of the wrapper reset at +0.
+    pub reset_ticks: u64,
+    /// Declared size.
+    pub size: u64,
+    /// Ticks of one command or data transfer.
+    pub transfer_ticks: u64,
+}
+
+/// X-Processor Pro reset and gate controls; SD channel reset lines.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareResetGates"))]
+pub struct ResetGates {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Declared size.
+    pub size: u64,
+}
+
 /// X-Processor Pro imaging control page: block stop and register-bus channels.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1514,6 +1555,12 @@ pub struct RegisterLayouts {
     /// Declared X-Processor Pro imaging control page.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imaging_control: Option<ImagingControl>,
+    /// Declared X-Processor Pro SD channel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xpp_sd: Option<XppSdHost>,
+    /// Declared X-Processor Pro reset and gate controls.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reset_gates: Option<ResetGates>,
     /// Declared interrupts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interrupts: Option<Interrupts>,

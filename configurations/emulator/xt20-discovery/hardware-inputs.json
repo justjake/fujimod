@@ -49,6 +49,18 @@
       ],
       "basis": "Firmware: the kernel entry bypasses stage 2, whose PLL table 0xe0e8 (X-T20 2.11) powers PLL 0 and 3 up (clear bits 27:26, set bit 26, wait for the lock at 0xfff0b06c; 0x7e64), powers PLL 2 down (bit 27) and leaves PLL 1 and 4 at reset. Section 5 later re-enables PLL 0 by setting only bit 26 (0xc6aa74), which assumes it is powered. The reset values of PLL 1 and 4 are not measured."
     },
+    "sd_card": {
+      "basis": "Declared, not measured: an empty 8 GiB SDHC card with high speed and without UHS-I or UHS-II modes, formatted as one FAT32 partition from sector 8192 with 32 KiB clusters, the layout of the other FujiMod REC configurations. A card was inserted during the measured power-ons (bank 10 bit 4 CARD_DET low); its identity, size and contents are not read.",
+      "format": {
+        "filesystem": "fat32",
+        "label": "CAMERA",
+        "partition_start": 8192,
+        "sectors_per_cluster": 64
+      },
+      "high_speed": true,
+      "rca": 1,
+      "sectors": 16777216
+    },
     "kernel_unit": "kernel",
     "loader_handoff": {
       "address": 9437184,

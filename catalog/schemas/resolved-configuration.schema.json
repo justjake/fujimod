@@ -12752,6 +12752,17 @@
           ],
           "description": "Declared X-Processor Pro clock bank."
         },
+        "reset_gates": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareResetGates"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro reset and gate controls."
+        },
         "sd_host_clocks": {
           "anyOf": [
             {
@@ -12816,6 +12827,17 @@
             }
           ],
           "description": "Declared usb."
+        },
+        "xpp_sd": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareXppSdHost"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro SD channel."
         }
       },
       "type": "object"
@@ -12891,6 +12913,34 @@
       "required": [
         "address",
         "expected_hex"
+      ],
+      "type": "object"
+    },
+    "HardwareResetGates": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro reset and gate controls; SD channel reset lines.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "size"
       ],
       "type": "object"
     },
@@ -13766,6 +13816,76 @@
         "basis",
         "profile",
         "ticks_per_window"
+      ],
+      "type": "object"
+    },
+    "HardwareXppSdHost": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro SD channel: wrapper reset at +0, vendor words and a\nrelocated SDHCI bank, with its interrupt and hardware reset line.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "clock_ticks": {
+          "description": "Ticks for the internal clock to report stable.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq_route": {
+          "description": "Interrupt line of the SDHCI status.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register_offset": {
+          "description": "Offset of the SDHCI bank inside the window.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reset_channel": {
+          "description": "SD channel of the reset-gate line that resets this host.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reset_ticks": {
+          "description": "Ticks of the wrapper reset at +0.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transfer_ticks": {
+          "description": "Ticks of one command or data transfer.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "clock_ticks",
+        "irq_route",
+        "register_offset",
+        "reset_channel",
+        "reset_ticks",
+        "size",
+        "transfer_ticks"
       ],
       "type": "object"
     },

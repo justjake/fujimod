@@ -2623,12 +2623,14 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     nand: NotRequired[HardwareLoaderDma | None]
     pl330: NotRequired[HardwarePl330 | None]
     pll_clocks: NotRequired[HardwarePllClocks | None]
+    reset_gates: NotRequired[HardwareResetGates | None]
     sd_host_clocks: NotRequired[HardwareSdHostClocks | None]
     serial_flash: NotRequired[HardwareSerialFlash | None]
     serial_ports: NotRequired[HardwareSerialPorts | None]
     spi: NotRequired[dict[str, HardwareSpi] | None]
     temperature: NotRequired[HardwareAdc | None]
     usb: NotRequired[HardwareUsbRegisters | None]
+    xpp_sd: NotRequired[HardwareXppSdHost | None]
 
 
 class HardwareRegisterWindow(TypedDict, total=False):
@@ -2643,6 +2645,12 @@ class HardwareRegisterWindow(TypedDict, total=False):
 class HardwareResetCheck(TypedDict, total=False):
     address: Required[int]
     expected_hex: Required[str]
+
+
+class HardwareResetGates(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    size: Required[int]
 
 
 class HardwareResetRelease(TypedDict, total=False):
@@ -2797,6 +2805,18 @@ class HardwareWindowAnalysis(TypedDict, total=False):
     basis: Required[str]
     profile: Required[str]
     ticks_per_window: Required[int]
+
+
+class HardwareXppSdHost(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    clock_ticks: Required[int]
+    irq_route: Required[int]
+    register_offset: Required[int]
+    reset_channel: Required[int]
+    reset_ticks: Required[int]
+    size: Required[int]
+    transfer_ticks: Required[int]
 
 
 class HomeSwitch(TypedDict, total=False):

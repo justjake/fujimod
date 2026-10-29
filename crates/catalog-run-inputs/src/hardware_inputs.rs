@@ -571,6 +571,24 @@ pub struct AutofocusGate {
     pub shutter: Shutter,
 }
 
+/// SD card in the slot at power-on: identity, size and filesystem.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetSdCardInput"))]
+pub struct SdCardInput {
+    /// Declared basis.
+    pub basis: String,
+    /// Declared filesystem format.
+    pub format: SdCardFormat,
+    /// The card offers high speed (CMD6 group 1 function 1).
+    pub high_speed: bool,
+    /// Relative card address the card publishes.
+    pub rca: u64,
+    /// Declared 512-byte sectors.
+    pub sectors: u64,
+}
+
 /// PLLs running at kernel entry.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1010,6 +1028,9 @@ pub struct HardwareReset {
     /// Declared PLLs running at kernel entry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pll_input: Option<PllInput>,
+    /// Declared SD card in the slot at power-on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sd_card: Option<SdCardInput>,
     /// Declared inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inputs: Option<HardwareresetInputs>,

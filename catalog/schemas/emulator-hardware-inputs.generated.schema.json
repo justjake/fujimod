@@ -117,6 +117,17 @@
           ],
           "description": "Declared processed frame input."
         },
+        "sd_card": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetSdCardInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared SD card in the slot at power-on."
+        },
         "sensor_input": {
           "anyOf": [
             {
@@ -1871,6 +1882,44 @@
         "label",
         "partition_start",
         "sectors_per_cluster"
+      ],
+      "type": "object"
+    },
+    "ResetSdCardInput": {
+      "additionalProperties": false,
+      "description": "SD card in the slot at power-on: identity, size and filesystem.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "format": {
+          "$ref": "#/$defs/ResetSdCardFormat",
+          "description": "Declared filesystem format."
+        },
+        "high_speed": {
+          "description": "The card offers high speed (CMD6 group 1 function 1).",
+          "type": "boolean"
+        },
+        "rca": {
+          "description": "Relative card address the card publishes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sectors": {
+          "description": "Declared 512-byte sectors.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "format",
+        "high_speed",
+        "rca",
+        "sectors"
       ],
       "type": "object"
     },

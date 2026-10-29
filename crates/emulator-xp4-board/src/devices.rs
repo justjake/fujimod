@@ -818,6 +818,57 @@ impl Devices {
         self.windows.push((base, base + 0x1000, id));
         Ok(())
     }
+    /// The reset/gate bank; returns the SD channel reset lines.
+    pub fn xpp_reset_gates(
+        &mut self,
+        base: u64,
+    ) -> Result<Vec<fujimod_emulator_xpp::resets::ResetPulses>, String> {
+        use fujimod_emulator_xpp::resets::{Gates, WINDOW};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(WINDOW))
+        {
+            return Err("Overlapping X-Processor Pro reset/gate bank".into());
+        }
+        let model = Gates::new(base)?;
+        let lines = (0..3)
+            .map(|channel| model.sd_reset(channel))
+            .collect::<Result<Vec<_>, _>>()?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + WINDOW, id));
+        Ok(lines)
+    }
+    pub fn xpp_sd(
+        &mut self,
+        sd: crate::definition::XppSd,
+        reset: Option<fujimod_emulator_xpp::resets::ResetPulses>,
+    ) -> Result<(), String> {
+        let base = sd.options.base;
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(0x1000))
+        {
+            return Err("Overlapping X-Processor Pro SD channel".into());
+        }
+        let card = fujimod_emulator_storage::fat::format(&sd.card, &[])?;
+        let contacts = fujimod_emulator_devices::parts::card_contacts::Contacts::new(true, false);
+        let mut model = fujimod_emulator_xpp::sd::Controller::new(
+            sd.options,
+            card,
+            contacts,
+            sd.irq.map(fujimod_emulator_devices::bus::InterruptLine::Shared),
+        )?;
+        if let Some(line) = reset {
+            model = model.with_reset(line);
+        }
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + 0x1000, id));
+        Ok(())
+    }
     pub fn xpp_imaging_control(&mut self, base: u64) -> Result<(), String> {
         use fujimod_emulator_xpp::imaging::{Control, WINDOW};
         if self

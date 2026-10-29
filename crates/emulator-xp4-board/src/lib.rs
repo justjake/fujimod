@@ -935,6 +935,8 @@ impl Session {
             xpp_adc,
             xpp_display_outputs,
             xpp_imaging_control,
+            xpp_reset_gates,
+            xpp_sd,
             xpp_clocks,
             cache_sizes,
             io_group_base,
@@ -1081,6 +1083,31 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_imaging_control(base)?;
+        }
+        let reset_gates = match xpp_reset_gates {
+            Some(base) => Some(
+                devices
+                    .get_or_insert_with(devices::Devices::empty)
+                    .xpp_reset_gates(base)?,
+            ),
+            None => None,
+        };
+        if let Some(sd) = xpp_sd {
+            let reset = match (sd.reset_channel, &reset_gates) {
+                (Some(channel), Some(lines)) => Some(
+                    lines
+                        .get(channel)
+                        .cloned()
+                        .ok_or("Invalid X-Processor Pro SD reset channel")?,
+                ),
+                (Some(_), None) => {
+                    return Err("X-Processor Pro SD reset line without reset gates".into());
+                }
+                (None, _) => None,
+            };
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_sd(sd, reset)?;
         }
         for output in &xpp_display_outputs {
             devices

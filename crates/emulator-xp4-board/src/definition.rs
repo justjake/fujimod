@@ -56,6 +56,11 @@ pub struct Definition {
     /// X-Processor Pro imaging control page base.
     #[serde(default)]
     pub xpp_imaging_control: Option<u64>,
+    /// X-Processor Pro reset and gate controls base.
+    #[serde(default)]
+    pub xpp_reset_gates: Option<u64>,
+    #[serde(default)]
+    pub xpp_sd: Option<XppSd>,
     #[serde(default)]
     pub cache_sizes: Option<(u32, u32, u32)>,
     #[serde(default)]
@@ -144,6 +149,19 @@ pub struct XppDisplayOutput {
     pub size: u64,
     pub set_bits: Vec<(u64, u32)>,
     pub clear_bits: Vec<(u64, u32)>,
+}
+
+/// X-Processor Pro SD channel with a freshly formatted card in the slot.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppSd {
+    pub options: fujimod_emulator_xpp::sd::Options,
+    pub card: fujimod_emulator_storage::fat::Options,
+    #[serde(default)]
+    pub irq: Option<u32>,
+    /// SD channel of the reset-gate line; requires `xpp_reset_gates`.
+    #[serde(default)]
+    pub reset_channel: Option<usize>,
 }
 
 /// X-Processor Pro ADC: register base, twelve 10-bit samples and the ticks a

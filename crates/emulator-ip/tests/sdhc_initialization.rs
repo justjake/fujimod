@@ -17,6 +17,7 @@ fn options(protocol: Protocol, initialization_fault: InitializationFault) -> Opt
         rca: 7,
         ram_bytes: 0x4000,
         initialization_fault,
+        high_speed: false,
     }
 }
 
@@ -284,4 +285,28 @@ fn protected_media_refuses_dma_and_pio_writes_but_still_reads() {
     due(&mut host, &mut ram);
     assert!(!host.busy());
     assert_eq!(host.card().sector(1).unwrap(), [0x72; 512]);
+}
+
+#[test]
+fn uhs2_interface_attempt_finds_no_uhs2_card_and_falls_back_after_reset() {
+    let (mut host, _, mut ram) = host(Protocol::Sdhc, InitializationFault::None);
+    // X-T20 2.11 0xc61e40, 0xc65a40 and 0xc61ce4: VDD1 3.3 V, VDD2 and the
+    // UHS-II interface with mode select 7, then the internal clock.
+    write(&mut host, &mut ram, 0x28, 2, 0xbfc0);
+    write(&mut host, &mut ram, 0x3e, 2, 0x100);
+    write(&mut host, &mut ram, 0x3e, 2, 0x107);
+    write(&mut host, &mut ram, 0x2c, 2, 1);
+    ram.now += 2;
+    assert_eq!(read(&mut host, &mut ram, 0x2c, 2), 3);
+    write(&mut host, &mut ram, 0x2c, 2, 7);
+    assert_eq!(read(&mut host, &mut ram, 0x24, 4) >> 31, 0);
+    let mut cx = ram.cx();
+    host.write(&mut cx, BASE + 12, 4, 0);
+    assert!(cx.refusal().is_some());
+    let mut cx = ram.cx();
+    host.hardware_reset(&mut cx).unwrap();
+    assert_eq!(read(&mut host, &mut ram, 0x3e, 2), 0);
+    assert_eq!(read(&mut host, &mut ram, 0x28, 2), 0);
+    setup(&mut host, &mut ram, Protocol::Sdhc);
+    enumerate(&mut host, &mut ram);
 }

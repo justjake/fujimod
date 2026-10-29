@@ -24,6 +24,7 @@ fn card_session() -> Session {
             rca: 0x1234,
             ram_bytes: 0x1000,
             initialization_fault: sdhc::InitializationFault::None,
+            high_speed: false,
         },
         sdhc::Wiring {
             card,
