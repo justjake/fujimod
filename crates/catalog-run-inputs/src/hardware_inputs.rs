@@ -571,6 +571,18 @@ pub struct AutofocusGate {
     pub shutter: Shutter,
 }
 
+/// PLLs running at kernel entry.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetPllInput"))]
+pub struct PllInput {
+    /// Declared basis.
+    pub basis: String,
+    /// Indices of the PLLs already powered, enabled and locked.
+    pub running: Vec<u64>,
+}
+
 /// Declared gpio input facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -995,6 +1007,9 @@ pub struct HardwareReset {
     /// Declared gpio input.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpio_input: Option<GpioInput>,
+    /// Declared PLLs running at kernel entry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pll_input: Option<PllInput>,
     /// Declared inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inputs: Option<HardwareresetInputs>,

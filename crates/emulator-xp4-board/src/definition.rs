@@ -50,6 +50,9 @@ pub struct Definition {
     pub xpp_adc: Option<XppAdc>,
     #[serde(default)]
     pub xpp_display_outputs: Vec<XppDisplayOutput>,
+    /// X-Processor Pro clock bank: base, PLL lock ticks and running PLLs.
+    #[serde(default)]
+    pub xpp_clocks: Option<(u64, u64, Vec<usize>)>,
     /// X-Processor Pro imaging control page base.
     #[serde(default)]
     pub xpp_imaging_control: Option<u64>,

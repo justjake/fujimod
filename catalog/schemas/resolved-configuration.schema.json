@@ -12213,6 +12213,41 @@
       ],
       "type": "object"
     },
+    "HardwarePllClocks": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro clock bank: dividers, gates and five PLLs with lock status.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "lock_ticks": {
+          "description": "Ticks from a PLL enable to its lock bit.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "lock_ticks",
+        "size"
+      ],
+      "type": "object"
+    },
     "HardwarePreviewActivity": {
       "additionalProperties": false,
       "description": "Declared preview activity facts.",
@@ -12705,6 +12740,17 @@
             }
           ],
           "description": "Declared PL330 DMA controller."
+        },
+        "pll_clocks": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwarePllClocks"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro clock bank."
         },
         "sd_host_clocks": {
           "anyOf": [

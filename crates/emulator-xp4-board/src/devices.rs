@@ -794,6 +794,30 @@ impl Devices {
         self.windows.push((base, base + size, id));
         Ok(())
     }
+    pub fn xpp_clocks(
+        &mut self,
+        base: u64,
+        lock_ticks: u64,
+        running: Vec<usize>,
+    ) -> Result<(), String> {
+        use fujimod_emulator_xpp::clocks::{ClockControl, Options};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(0x1000))
+        {
+            return Err("Overlapping X-Processor Pro clock bank".into());
+        }
+        let model = ClockControl::new(Options {
+            base,
+            lock_ticks,
+            running,
+        })?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + 0x1000, id));
+        Ok(())
+    }
     pub fn xpp_imaging_control(&mut self, base: u64) -> Result<(), String> {
         use fujimod_emulator_xpp::imaging::{Control, WINDOW};
         if self

@@ -96,6 +96,13 @@
       "clock_id": null
     },
     {
+      "id": "clocks",
+      "base": 4293963776,
+      "size": 4096,
+      "kind": "clock-controller",
+      "clock_id": null
+    },
+    {
       "id": "imaging-control",
       "base": 4294152192,
       "size": 4096,
@@ -512,6 +519,12 @@
             "base": 4293967872,
             "size": 1024,
             "basis": "Sixteen GPIO banks with a 0x40 stride and input levels at +0x14, the same layout as the XP4 banks: X-T20 2.11 stage 2 (0x102c) copies the sixteen input words into the boot information and seg5 0xc4e138 reads the live register. Discovery up to REC writes only registers 0-7 of each bank."
+          },
+          "pll_clocks": {
+            "base": 4293963776,
+            "size": 4096,
+            "lock_ticks": 4800,
+            "basis": "Clock bank of X-T20 2.11 section 5: table 0xed5538 lists five PLLs as (configuration, configuration, control, lock bit) = (+0x28, +0x2c, +0x30, 2), (+0x34, +0x38, +0x3c, 4), (+0x40, +0x44, +0x48, 16), (+0x4c, +0x50, +0x54, 8), (+0x78, +0x7c, +0x80, 1); 0xc6aa74 sets control bit 26 and polls +0x6c for the lock bit, 0xc6aa30 clears bit 26. +0x58..+0x64 hold paired 12-bit divider fields (0xc6ae68) and 0xc6a6e0 polls divider busy bits at +0x68, which read clear. The lock time is an assumed 100 us in 48 MHz ticks; it is not measured."
           },
           "imaging_control": {
             "base": 4294152192,

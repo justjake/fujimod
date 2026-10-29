@@ -42,6 +42,13 @@
       ],
       "basis": "Measured: the sixteen GPIO input words X-T20 2.11 stage 2 snapshots into the boot information (+0x00), read from a service-mode RAM capture with lens attached, card inserted and PLAY released, adjusted to a normal power-on without a cable: bank 0 bits 0/1 (S1/S2, released high) are set, since the capture held the shutter for service mode, and bank 1 bit 14 (VBUS, polled by the USB detection) is clear, since the capture was taken over USB; with VBUS high the start mode becomes JIG. Pin roles from seg5 key rows (table 0xec6e10): bank 0 bit 11 LENS_DET and bank 10 bit 4 CARD_DET active low."
     },
+    "pll_input": {
+      "running": [
+        0,
+        3
+      ],
+      "basis": "Firmware: the kernel entry bypasses stage 2, whose PLL table 0xe0e8 (X-T20 2.11) powers PLL 0 and 3 up (clear bits 27:26, set bit 26, wait for the lock at 0xfff0b06c; 0x7e64), powers PLL 2 down (bit 27) and leaves PLL 1 and 4 at reset. Section 5 later re-enables PLL 0 by setting only bit 26 (0xc6aa74), which assumes it is powered. The reset values of PLL 1 and 4 are not measured."
+    },
     "kernel_unit": "kernel",
     "loader_handoff": {
       "address": 9437184,

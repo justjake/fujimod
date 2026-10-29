@@ -1155,6 +1155,22 @@ pub struct Gpio {
     pub size: u64,
 }
 
+/// X-Processor Pro clock bank: dividers, gates and five PLLs with lock status.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwarePllClocks"))]
+pub struct PllClocks {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Ticks from a PLL enable to its lock bit.
+    pub lock_ticks: u64,
+    /// Declared size.
+    pub size: u64,
+}
+
 /// X-Processor Pro imaging control page: block stop and register-bus channels.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1492,6 +1508,9 @@ pub struct RegisterLayouts {
     /// Declared imaging.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imaging: Option<ImagingRegisters>,
+    /// Declared X-Processor Pro clock bank.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pll_clocks: Option<PllClocks>,
     /// Declared X-Processor Pro imaging control page.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imaging_control: Option<ImagingControl>,

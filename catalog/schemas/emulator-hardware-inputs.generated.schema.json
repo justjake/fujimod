@@ -95,6 +95,17 @@
           ],
           "description": "Declared loader handoff."
         },
+        "pll_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetPllInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared PLLs running at kernel entry."
+        },
         "processed_frame_input": {
           "anyOf": [
             {
@@ -1286,6 +1297,30 @@
       },
       "required": [
         "kind"
+      ],
+      "type": "object"
+    },
+    "ResetPllInput": {
+      "additionalProperties": false,
+      "description": "PLLs running at kernel entry.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "running": {
+          "description": "Indices of the PLLs already powered, enabled and locked.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "running"
       ],
       "type": "object"
     },
