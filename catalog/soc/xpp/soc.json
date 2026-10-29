@@ -131,6 +131,34 @@
       "clock_id": null
     },
     {
+      "id": "imaging-fff43000",
+      "base": 4294193152,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff44000",
+      "base": 4294197248,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff45000",
+      "base": 4294201344,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff46000",
+      "base": 4294205440,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
       "id": "imaging-fff47000",
       "base": 4294209536,
       "size": 4096,
@@ -692,6 +720,30 @@
                 }
               ],
               "basis": "Imaging block of X-T20 2.11 section 5 configured by 0xc3c100..0xc3f8c4 (words +0x04..+0x204), with enable bits in +0x04 updated by read-modify-write. The stop 0xc3c0c0 writes 0 to +0x00 and waits until bit 0 reads set, so bit 0 is declared idle. The words read back their last write; what the block computes is not modeled."
+            },
+            {
+              "base": 4294193152,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Table memory of X-T20 2.11 imaging, one page of four (0xfff43000..0xfff46fff). Section-5 loaders at 0xc3dd40.. (0xc3dd64..0xc3e960, each through the register helper 0x5ab4c) fill nine 64-word tables at 0xfff43200 + 0x100*n from four bytes each and twelve 256-word tables at 0xfff43c00 + 0x400*n, packing three 10-bit fields per word; the recording start-up reaches 0xc3e538 after lens step 0x01091300. Section 6 copies the same tables back word by word (0x169c27c.., 0x169b8f8), so the words read back their last write. No status word is known; what the tables do is not modeled."
+            },
+            {
+              "base": 4294197248,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Table memory of X-T20 2.11 imaging, one page of four (0xfff43000..0xfff46fff). Section-5 loaders at 0xc3dd40.. (0xc3dd64..0xc3e960, each through the register helper 0x5ab4c) fill nine 64-word tables at 0xfff43200 + 0x100*n from four bytes each and twelve 256-word tables at 0xfff43c00 + 0x400*n, packing three 10-bit fields per word; the recording start-up reaches 0xc3e538 after lens step 0x01091300. Section 6 copies the same tables back word by word (0x169c27c.., 0x169b8f8), so the words read back their last write. No status word is known; what the tables do is not modeled."
+            },
+            {
+              "base": 4294201344,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Table memory of X-T20 2.11 imaging, one page of four (0xfff43000..0xfff46fff). Section-5 loaders at 0xc3dd40.. (0xc3dd64..0xc3e960, each through the register helper 0x5ab4c) fill nine 64-word tables at 0xfff43200 + 0x100*n from four bytes each and twelve 256-word tables at 0xfff43c00 + 0x400*n, packing three 10-bit fields per word; the recording start-up reaches 0xc3e538 after lens step 0x01091300. Section 6 copies the same tables back word by word (0x169c27c.., 0x169b8f8), so the words read back their last write. No status word is known; what the tables do is not modeled."
+            },
+            {
+              "base": 4294205440,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Table memory of X-T20 2.11 imaging, one page of four (0xfff43000..0xfff46fff). Section-5 loaders at 0xc3dd40.. (0xc3dd64..0xc3e960, each through the register helper 0x5ab4c) fill nine 64-word tables at 0xfff43200 + 0x100*n from four bytes each and twelve 256-word tables at 0xfff43c00 + 0x400*n, packing three 10-bit fields per word; the recording start-up reaches 0xc3e538 after lens step 0x01091300. Section 6 copies the same tables back word by word (0x169c27c.., 0x169b8f8), so the words read back their last write. No status word is known; what the tables do is not modeled."
             },
             {
               "base": 4294209536,
