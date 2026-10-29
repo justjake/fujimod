@@ -131,6 +131,34 @@
       "clock_id": null
     },
     {
+      "id": "imaging-fff3f000",
+      "base": 4294176768,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff40000",
+      "base": 4294180864,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff41000",
+      "base": 4294184960,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "imaging-fff42000",
+      "base": 4294189056,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
       "id": "imaging-fff43000",
       "base": 4294193152,
       "size": 4096,
@@ -739,6 +767,30 @@
                 }
               ],
               "basis": "Imaging block of X-T20 2.11 section 5 configured by 0xc3c100..0xc3f8c4 (words +0x04..+0x204), with enable bits in +0x04 updated by read-modify-write. The stop 0xc3c0c0 writes 0 to +0x00 and waits until bit 0 reads set, so bit 0 is declared idle. The words read back their last write; what the block computes is not modeled."
+            },
+            {
+              "base": 4294176768,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Coordinate table of the X-T20 2.11 section-5 imaging driver (0xc3c100..0xc3f8c4, beside the block at 0xfff3b000), one page of four (0xfff3f000..0xfff42fff). 0xc3d2c8 writes one word per entry of a list of at most 0x1000 entries to 0xfff3f200 + 4*n: two 13-bit coordinates in bits 0-12 and 16-28, each offset by a word of the list header, with two flag bits each (13-14, 29-30). It then reads the last word back and sets its bit 31; an empty list writes 0x1fff/0x1fff with bit 31 to +0x200 and +0x204. The list comes from the body's flash data: a strict boot with a camera's own flash regions writes +0x200 at 162.9M instructions, while the update image's defaults do not reach it before REC. The words read back their last write; what the table does is not modeled."
+            },
+            {
+              "base": 4294180864,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Coordinate table of the X-T20 2.11 section-5 imaging driver (0xc3c100..0xc3f8c4, beside the block at 0xfff3b000), one page of four (0xfff3f000..0xfff42fff). 0xc3d2c8 writes one word per entry of a list of at most 0x1000 entries to 0xfff3f200 + 4*n: two 13-bit coordinates in bits 0-12 and 16-28, each offset by a word of the list header, with two flag bits each (13-14, 29-30). It then reads the last word back and sets its bit 31; an empty list writes 0x1fff/0x1fff with bit 31 to +0x200 and +0x204. The list comes from the body's flash data: a strict boot with a camera's own flash regions writes +0x200 at 162.9M instructions, while the update image's defaults do not reach it before REC. The words read back their last write; what the table does is not modeled."
+            },
+            {
+              "base": 4294184960,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Coordinate table of the X-T20 2.11 section-5 imaging driver (0xc3c100..0xc3f8c4, beside the block at 0xfff3b000), one page of four (0xfff3f000..0xfff42fff). 0xc3d2c8 writes one word per entry of a list of at most 0x1000 entries to 0xfff3f200 + 4*n: two 13-bit coordinates in bits 0-12 and 16-28, each offset by a word of the list header, with two flag bits each (13-14, 29-30). It then reads the last word back and sets its bit 31; an empty list writes 0x1fff/0x1fff with bit 31 to +0x200 and +0x204. The list comes from the body's flash data: a strict boot with a camera's own flash regions writes +0x200 at 162.9M instructions, while the update image's defaults do not reach it before REC. The words read back their last write; what the table does is not modeled."
+            },
+            {
+              "base": 4294189056,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Coordinate table of the X-T20 2.11 section-5 imaging driver (0xc3c100..0xc3f8c4, beside the block at 0xfff3b000), one page of four (0xfff3f000..0xfff42fff). 0xc3d2c8 writes one word per entry of a list of at most 0x1000 entries to 0xfff3f200 + 4*n: two 13-bit coordinates in bits 0-12 and 16-28, each offset by a word of the list header, with two flag bits each (13-14, 29-30). It then reads the last word back and sets its bit 31; an empty list writes 0x1fff/0x1fff with bit 31 to +0x200 and +0x204. The list comes from the body's flash data: a strict boot with a camera's own flash regions writes +0x200 at 162.9M instructions, while the update image's defaults do not reach it before REC. The words read back their last write; what the table does is not modeled."
             },
             {
               "base": 4294193152,
