@@ -44,6 +44,8 @@ pub struct Definition {
     pub xpp_serial: Vec<u64>,
     #[serde(default)]
     pub xpp_sub_cpu: Option<XppSubCpu>,
+    #[serde(default)]
+    pub xpp_battery_gauge: Option<XppBatteryGauge>,
     /// X-mount lens on an X-Processor Pro serial port; requires
     /// `xpp_storage`, `xpp_reset_gates` and the GPIO banks.
     #[serde(default)]
@@ -152,6 +154,15 @@ pub enum TimerLayout {
     Xp4,
     /// Sixteen channels; select bits clear in the control word.
     Xpp,
+}
+
+/// Byte-frame peer on one X-Processor Pro serial port: (even register,
+/// 16-bit value) pairs after reset; unlisted registers read zero.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppBatteryGauge {
+    pub port: u64,
+    pub registers: Vec<(u8, u16)>,
 }
 
 /// Register-file peer on one X-Processor Pro serial port: (register, value)

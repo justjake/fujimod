@@ -1125,6 +1125,21 @@ pub struct SubCpuInputs {
     pub profile_header: Option<u64>,
 }
 
+/// Declared byte-frame register peer behind one serial port.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetBatteryGauge"))]
+pub struct BatteryGaugeInputs {
+    /// Declared basis.
+    pub basis: String,
+    /// Serial port base address.
+    pub port: u64,
+    /// Sixteen-bit registers, named by the even command byte, that do not
+    /// read zero after reset.
+    pub registers: Vec<SubCpuRegister>,
+}
+
 /// Declared hardware reset facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1139,6 +1154,9 @@ pub struct HardwareReset {
     /// Declared application inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub application_inputs: Option<ApplicationInputs>,
+    /// Declared battery gauge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub battery_gauge: Option<BatteryGaugeInputs>,
     /// Declared autofocus gate.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub autofocus_gate: Option<AutofocusGate>,

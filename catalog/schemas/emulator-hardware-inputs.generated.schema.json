@@ -37,6 +37,17 @@
           ],
           "description": "Declared autofocus gate."
         },
+        "battery_gauge": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetBatteryGauge"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared battery gauge."
+        },
         "dram_refresh": {
           "anyOf": [
             {
@@ -578,6 +589,35 @@
         "sample_slots",
         "system",
         "ui"
+      ],
+      "type": "object"
+    },
+    "ResetBatteryGauge": {
+      "additionalProperties": false,
+      "description": "Declared byte-frame register peer behind one serial port.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "port": {
+          "description": "Serial port base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "registers": {
+          "description": "Sixteen-bit registers, named by the even command byte, that do not\nread zero after reset.",
+          "items": {
+            "$ref": "#/$defs/ResetSubCpuRegister"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "port",
+        "registers"
       ],
       "type": "object"
     },

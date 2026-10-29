@@ -385,6 +385,27 @@
         "basis": "Declared discovery input. The X-T20 2.11 driver addresses chip select 0 below aperture 0xf4000000 (0xc505dc) and uses 4 KiB (0x21), 64 KiB (0xdc) erase and 256-byte 4PP (0x12) page programs (command table 0xed3f9c). The chip part, its reset configuration and all latencies are not measured; the ticks are synthetic."
       }
     },
+    "battery_gauge": {
+      "port": 4294098944,
+      "registers": [
+        {
+          "name": "status",
+          "register": 0,
+          "value": 64848
+        },
+        {
+          "name": "reading_0c",
+          "register": 12,
+          "value": 514
+        },
+        {
+          "name": "reading_10",
+          "register": 16,
+          "value": 694
+        }
+      ],
+      "basis": "Measured: the battery task of X-T20 2.11 keeps the gauge's replies in its block at 0xfda4fc (status register 0 at +0, register 8 at +4, 0x0c at +6, 0x10 at +8; 0xc711f0..0xc712bc), read over the live service in the s1 REC capture (2026-10-29). The s2 and s3 captures and the 2026-10-22 live-view dumps agree on register 0 and register 8 (0); register 0x0c ranges over 0x1cb..0x202 and 0x10 over 0x2b6..0x2bf. Wiring from section 5: the gauge sits on serial port 4 (resource 0xf of 0xed389c, chip select bank 13 bit 8, 8-bit transfers). 0xc70748 sends register << 16 | value as three bytes inside one enabled transfer (+0x08 written 1 by 0xc4b87c and 0 by 0xc4b8c0); the first byte names the register and bit 0 writes it, and the bytes read back from +0x60 carry the value, high byte first. The start-up 0xc70e7c polls register 0 until bit 15 is set and then writes 0x405 to register 0x60. Unlisted registers read zero, including 0x1c and the updater's 0x54; they are not measured."
+    },
     "sub_cpu": {
       "port": 4294090752,
       "registers": [

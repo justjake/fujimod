@@ -931,6 +931,7 @@ impl Session {
             xpp_storage,
             xpp_serial,
             xpp_sub_cpu,
+            xpp_battery_gauge,
             xpp_lens,
             xpp_shutter,
             xpp_display_frames,
@@ -1096,6 +1097,15 @@ impl Session {
             }
             None => None,
         };
+        let mut battery_gauge = match xpp_battery_gauge {
+            Some(peer) if xpp_serial.contains(&peer.port) => {
+                Some((peer.port, peer.registers.into_iter().collect()))
+            }
+            Some(_) => {
+                return Err("X-Processor Pro battery gauge needs a declared serial port".to_owned());
+            }
+            None => None,
+        };
         if let Some(adc) = xpp_adc {
             devices
                 .get_or_insert_with(devices::Devices::empty)
@@ -1191,13 +1201,22 @@ impl Session {
             if xpp_lens.as_ref().is_some_and(|lens| lens.port == base) {
                 continue;
             }
-            let peer = match &sub_cpu {
-                Some((port, _)) if *port == base => sub_cpu.take().map(|(_, r)| r),
-                _ => None,
+            use fujimod_emulator_xpp::serial::Peer;
+            let peer = match (&sub_cpu, &battery_gauge) {
+                (Some((port, _)), _) if *port == base => {
+                    Peer::Registers(sub_cpu.take().map(|(_, r)| r).unwrap_or_default())
+                }
+                (_, Some((port, _))) if *port == base => {
+                    Peer::Frames(battery_gauge.take().map(|(_, r)| r).unwrap_or_default())
+                }
+                _ => Peer::None,
             };
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_serial(base, peer)?;
+        }
+        if battery_gauge.is_some() {
+            return Err("X-Processor Pro battery gauge shares its serial port".to_owned());
         }
         if let Some((inputs, sample_ticks)) = adc {
             devices
