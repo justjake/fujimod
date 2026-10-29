@@ -64,7 +64,7 @@
     "i2c_parts": [
       {
         "address": 1,
-        "basis": "Part at 0x01 on bus 1 (device 13 of the X-T20 2.11 I2C descriptor table 0xed412c). Start-up selects page 0x3e or 0x3f through register 0xff (0xc9ac8c) and writes registers 0x3e11, 0x3e12 and 0x3fdc; the reads of 0xc9af8c are not reached before REC. Its identity is not established; presence is declared, not measured, and no registers are declared.",
+        "basis": "Touch-panel controller at 0x01 on bus 1 (device 13 of the X-T20 2.11 I2C descriptor table 0xed412c), driven only by the touchPanel task (mailbox 0x4a, entry 0xc9aff4, created by 0xc9b7a8). Start-up selects page 0x3e or 0x3f through register 0xff (0xc9ac8c) and writes registers 0x3e11, 0x3e12 and 0x3fdc. The task reads a touch report (ten bytes from register 0x3f00 through 0xc9af8c) only on its event bit 0x10 (0xc9b208); the strict REC and menu runs never take that path, which would stop on an undeclared register read. Presence is declared, not measured, and no registers are declared.",
         "bus": 1,
         "little_endian": true,
         "registers": [],
