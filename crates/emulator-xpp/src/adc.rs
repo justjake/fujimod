@@ -9,9 +9,14 @@
 //! stays set. Results are explicit inputs, not analog hardware, and read the
 //! same before and after a conversion. The power-down bit is stored only;
 //! conversions do not depend on it.
+//!
+//! [`Converter::set_input`] changes a channel's result, as a key on the
+//! X-T20's channel 3 ladder does (pad, MENU/OK, Q, DISP/BACK; bands from the
+//! configuration store). The changed results are part of the checkpoint.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
 
 /// Register window size in bytes.
 pub const WINDOW: u64 = 0x40;
@@ -26,6 +31,8 @@ struct State {
     divider: u32,
     power_down: u32,
     deadline: Option<u64>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    inputs: BTreeMap<usize, u16>,
 }
 pub struct Converter {
     base: u64,
@@ -48,6 +55,25 @@ impl Converter {
             state: State::default(),
         })
     }
+    /// An external input: `channel` reads `sample` until the next change.
+    pub fn set_input(&mut self, channel: usize, sample: u16) -> Result<(), String> {
+        if channel >= CHANNELS || sample > 0x3ff {
+            return Err("Invalid X-Processor Pro ADC input".into());
+        }
+        if sample == self.samples[channel] {
+            self.state.inputs.remove(&channel);
+        } else {
+            self.state.inputs.insert(channel, sample);
+        }
+        Ok(())
+    }
+    fn sample(&self, channel: usize) -> u16 {
+        self.state
+            .inputs
+            .get(&channel)
+            .copied()
+            .unwrap_or(self.samples[channel])
+    }
 }
 impl Device for Converter {
     fn name(&self) -> &'static str {
@@ -63,7 +89,7 @@ impl Device for Converter {
             0 => self.state.control,
             4 => self.state.divider,
             8 => self.state.power_down,
-            0x10..WINDOW => u32::from(self.samples[((o - 0x10) / 4) as usize]),
+            0x10..WINDOW => u32::from(self.sample(((o - 0x10) / 4) as usize)),
             _ => {
                 cx.unmodeled();
                 0
@@ -116,6 +142,13 @@ impl Device for Converter {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         if state.deadline.is_some() != (state.control & (START | CONTINUOUS) == START) {
             return Err("X-Processor Pro ADC checkpoint deadline differs from its control".into());
+        }
+        if state
+            .inputs
+            .iter()
+            .any(|(&channel, &sample)| channel >= CHANNELS || sample > 0x3ff)
+        {
+            return Err("Invalid X-Processor Pro ADC checkpoint input".into());
         }
         self.state = state;
         Ok(())
@@ -178,5 +211,27 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn external_inputs_change_results_and_checkpoint() {
+        let mut adc = converter();
+        let mut h = TestHost::new();
+        let saved = adc.save();
+        // MENU/OK on the X-T20 ladder: band 350..516 on channel 3.
+        adc.set_input(3, 433).unwrap();
+        assert_eq!(read(&mut adc, &mut h, BASE + 0x10 + 4 * 3), 433);
+        let pressed = adc.save();
+        adc.restore(&saved).unwrap();
+        assert_eq!(read(&mut adc, &mut h, BASE + 0x10 + 4 * 3), 30);
+        adc.restore(&pressed).unwrap();
+        assert_eq!(read(&mut adc, &mut h, BASE + 0x10 + 4 * 3), 433);
+        adc.set_input(3, 30).unwrap();
+        assert_eq!(adc.save(), saved);
+        assert!(adc.set_input(12, 0).is_err());
+        assert!(adc.set_input(3, 0x400).is_err());
+        let mut state = pressed;
+        state["inputs"] = serde_json::json!({"12": 1});
+        assert!(adc.restore(&state).is_err());
     }
 }

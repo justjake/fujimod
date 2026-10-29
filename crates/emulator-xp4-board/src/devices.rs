@@ -54,6 +54,7 @@ pub struct Devices {
     prior_records: usize,
     pins: Option<fujimod_emulator_ip::socionext::gpio::SharedPins>,
     adc: Option<(usize, Arc<Mutex<Adc>>)>,
+    xpp_adc: Option<Arc<Mutex<fujimod_emulator_xpp::adc::Converter>>>,
     usb: Option<Arc<Mutex<Dwc3>>>,
     pub frames: BTreeMap<usize, Frame>,
     pub outputs: BTreeMap<usize, serde_json::Value>,
@@ -138,6 +139,9 @@ impl Devices {
         channel: usize,
         sample: u16,
     ) -> Result<(), String> {
+        if let Some(adc) = &self.xpp_adc {
+            return adc.lock().unwrap().set_input(channel, sample);
+        }
         let (id, adc) = self.adc.as_ref().ok_or("XP4 ADC inputs are not wired")?;
         let mut host = PhysicalHost {
             cluster: c,
@@ -558,6 +562,7 @@ impl Devices {
             prior_records: 0,
             pins: None,
             adc: None,
+            xpp_adc: None,
             usb: None,
             frames: BTreeMap::new(),
             outputs: BTreeMap::new(),
@@ -641,6 +646,7 @@ impl Devices {
             prior_records: 0,
             pins: None,
             adc: None,
+            xpp_adc: None,
             usb: None,
             frames: BTreeMap::new(),
             outputs: BTreeMap::new(),
@@ -768,9 +774,10 @@ impl Devices {
         {
             return Err("Overlapping X-Processor Pro ADC".into());
         }
-        let model = Converter::new(base, samples, conversion_ticks)?;
+        let model = Arc::new(Mutex::new(Converter::new(base, samples, conversion_ticks)?));
         let id = self.models.len();
-        self.models.push(Some(Box::new(model)));
+        self.models.push(Some(Box::new(Connected(model.clone()))));
+        self.xpp_adc = Some(model);
         self.windows.push((base, base + WINDOW, id));
         Ok(())
     }
