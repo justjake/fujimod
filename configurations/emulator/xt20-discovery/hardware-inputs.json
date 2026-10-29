@@ -114,6 +114,26 @@
       "basis": "Measured: X-T20 2.11 0xc8f09c caches the refresh-rate level from bits 8..10 of DRAM controller +0xec at 0xfdbea8 + 5; the s1, s2 and s3 REC captures (2026-10-29) hold level 2 there, with refresh word 0xc30 at 0xfdbea8 and no second controller (0xfda438 = 0).",
       "level": 2
     },
+    "lens": {
+      "basis": "The lens of the s1, s2 and s3 REC captures (2026-10-29) and of the 2026-10-22 live-view dump: its information page as the body keeps it at 0x11e3958 (\"LY043A\", \"FLSNW039AF 25/1.7 XF\") and the replies of the link history 0x11d542c (commands 0x20 -> 0x300 and 0x26 -> 0x1c, the only commands of 90 s of idle traffic recorded on 2026-10-22); start-up commands are not recorded and are answered with 0. Wiring from X-T20 2.11 section 5: link on serial channel 0 (0xfff28000, resource 0xe); lswatch checks the contacts bank 14 bits 0/1 high and bank 11 bits 0/1/2 high/low/high, then switches bank 14 register 1 bit 0 high; the ready ISRs 0xc7b36c / 0xc7b338 sample bank 14 bit 1 after interrupt 166 (rows 0x52/0x53 of 0xed471c; 0xc5cfd4 maps it to external line 15). The delays (20 ms to the ready signal, 200 ms of initialization, 60 ms per focus drive) and the 1 ms power sampling are assumptions from the xpro-lab lens model, not measurements; the camera's lens step 0x01091300 takes about 86 ms. The body's stored records for the lens are in `registration`.",
+      "port": 4294082560,
+      "page": "4c59303433410000464c534e5730333941462032352f312e372058462020202020200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000033334130353333400000010501030270027102718a010100000000000000000000000000000000000000000000000000",
+      "replies": [[32, 768], [38, 28]],
+      "power": [14, 1, 0],
+      "ready": [14, 1],
+      "line": 15,
+      "contacts": [[14, 0, true], [11, 0, true], [11, 1, false], [11, 2, true]],
+      "ready_ticks": 960000,
+      "registration": {
+        "asset": "xt20-211-lens-registration",
+        "basis": "Camera capture: the body's registered-lens list and this lens's correction block, from the s1 REC capture (X-T20 2.11, 2026-10-29; ram_low SHA-256 3065c7420bc1cad0edb97504e6715e38d1e0a3b2db791e7f7eef626f07146430, ram_main SHA-256 f200fb1607b18fd95827a80265518a0594f17e328f1f706205e70b6d1a16c7da). Segment 5 copies flash 0x3820000 to the list at 0xfd1fc0 (header 01 00 02 ff: two entries of 0x80 bytes from 0xfd1fc8, the XF18-55mm and this lens at index 1); the asset holds those 0xa00 bytes as the capture holds them, identical in the 2026-10-20 service dump. lensdata matches the attached lens by name, serial and version bytes (0xc83a3c) and copies its 256 KiB block from flash (0x332 + 4 * index) << 16 = 0x3360000 to the configuration store at +0x1a0000; the asset's second region is that copy (\"FLSNW039\", \"LY043A\", \"VILTROX\"). Without a matching entry the body asks the lens for its data over the link (command 0xc0, 2048-byte sessions), which the lens input does not answer. Placed with the user profile only: an erased flash is a body that has never seen the lens.",
+        "regions": [[58851328, 2560], [53870592, 262144]],
+        "sha256": "ed3b7ce4282e9038fc5efe67bfe490145c1756f6333f9950aed43b574691b0fd"
+      },
+      "release_ticks": 9600000,
+      "drive_ticks": 2880000,
+      "poll_ticks": 48000
+    },
     "kernel_unit": "kernel",
     "loader_handoff": {
       "address": 9437184,

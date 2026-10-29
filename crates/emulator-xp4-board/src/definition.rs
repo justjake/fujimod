@@ -44,6 +44,10 @@ pub struct Definition {
     pub xpp_serial: Vec<u64>,
     #[serde(default)]
     pub xpp_sub_cpu: Option<XppSubCpu>,
+    /// X-mount lens on an X-Processor Pro serial port; requires
+    /// `xpp_storage`, `xpp_reset_gates` and the GPIO banks.
+    #[serde(default)]
+    pub xpp_lens: Option<XppLens>,
     #[serde(default)]
     pub xpp_display_frames: Option<XppDisplayFrames>,
     #[serde(default)]
@@ -150,6 +154,26 @@ pub enum TimerLayout {
 pub struct XppSubCpu {
     pub port: u64,
     pub registers: Vec<(u8, u8)>,
+}
+
+/// X-mount lens: serial port base, information page and command replies,
+/// the body's power output (bank, register, bit), the ready pin (bank, pin)
+/// and its external interrupt line, the contact levels (bank, pin, high) and
+/// the declared delays in ticks.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppLens {
+    pub port: u64,
+    pub page: Vec<u8>,
+    pub replies: Vec<(u32, u16)>,
+    pub power: (usize, usize, usize),
+    pub ready: (usize, usize),
+    pub line: usize,
+    pub contacts: Vec<(usize, usize, bool)>,
+    pub ready_ticks: u64,
+    pub release_ticks: u64,
+    pub drive_ticks: u64,
+    pub poll_ticks: u64,
 }
 
 /// X-Processor Pro display frame interrupts: one edge per line each period.

@@ -623,6 +623,59 @@ pub struct I2cPartInput {
     pub width: u64,
 }
 
+/// An X-mount lens attached at power-on, answering on its serial link.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetLensInput"))]
+pub struct LensInput {
+    /// Declared basis.
+    pub basis: String,
+    /// Contact levels the attached lens presents, as bank, pin and level.
+    pub contacts: Vec<(u64, u64, bool)>,
+    /// Ticks a focus drive holds the ready line low.
+    pub drive_ticks: u64,
+    /// External interrupt line of the ready pin.
+    pub line: u64,
+    /// Information page the lens sends in a read session, as hex (at most
+    /// 128 bytes).
+    pub page: String,
+    /// Ticks between samples of the body's power output.
+    pub poll_ticks: u64,
+    /// Serial port base of the link.
+    pub port: u64,
+    /// The body's power output: bank, register and bit.
+    pub power: (u64, u64, u64),
+    /// Ready pin: bank and pin.
+    pub ready: (u64, u64),
+    /// Ticks from power-on until the lens pulls the ready line low.
+    pub ready_ticks: u64,
+    /// The body's stored records for this lens, placed with a user profile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub registration: Option<LensRegistration>,
+    /// Ticks the ready line stays low during the lens's initialization.
+    pub release_ticks: u64,
+    /// Command replies, as command and data pairs.
+    pub replies: Vec<(u64, u64)>,
+}
+
+/// Body flash records of a registered lens: an asset holding the bytes of
+/// each flash region in order.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetLensRegistration"))]
+pub struct LensRegistration {
+    /// Asset identity in the configuration assets.
+    pub asset: String,
+    /// Declared basis.
+    pub basis: String,
+    /// Flash regions the asset fills, as offset and size.
+    pub regions: Vec<(u64, u64)>,
+    /// SHA-256 of the asset.
+    pub sha256: String,
+}
+
 /// PLLs running at kernel entry.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1071,6 +1124,9 @@ pub struct HardwareReset {
     /// Declared DRAM refresh-rate level the memory device reports.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dram_refresh: Option<DramRefreshInput>,
+    /// Declared lens on the mount.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lens: Option<LensInput>,
     /// Declared inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inputs: Option<HardwareresetInputs>,

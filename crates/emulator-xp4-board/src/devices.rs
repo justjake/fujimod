@@ -658,6 +658,7 @@ impl Devices {
         &mut self,
         storage: super::definition::XppStorage,
         image: Vec<u8>,
+        windows: Vec<Arc<dyn fujimod_emulator_ip_arm::pl330::Source>>,
     ) -> Result<(), String> {
         use fujimod_emulator_xpp::flash::{self, Aperture, FlashController};
         struct ApertureSource(Arc<Aperture>);
@@ -703,7 +704,9 @@ impl Devices {
         let dma = fujimod_emulator_ip_arm::pl330::Pl330::new(
             storage.dma,
             storage.dma_irq_routes,
-            vec![Arc::new(ApertureSource(aperture.clone()))],
+            std::iter::once(Arc::new(ApertureSource(aperture.clone())) as Arc<_>)
+                .chain(windows)
+                .collect(),
             fujimod_emulator_ip_arm::pl330::Throughput {
                 setup_ticks: storage.dma_setup_ticks,
                 bytes_per_tick: storage.dma_bytes_per_tick,
@@ -821,11 +824,18 @@ impl Devices {
         self.windows.push((base, base + 0x1000, id));
         Ok(())
     }
-    /// The reset/gate bank; returns the SD channel reset lines.
+    /// The reset/gate bank; returns the SD channel reset lines and the
+    /// external interrupt lines.
     pub fn xpp_reset_gates(
         &mut self,
         base: u64,
-    ) -> Result<Vec<fujimod_emulator_xpp::resets::ResetPulses>, String> {
+    ) -> Result<
+        (
+            Vec<fujimod_emulator_xpp::resets::ResetPulses>,
+            fujimod_emulator_xpp::resets::ExternalLines,
+        ),
+        String,
+    > {
         use fujimod_emulator_xpp::resets::{Gates, WINDOW};
         if self
             .windows
@@ -838,10 +848,60 @@ impl Devices {
         let lines = (0..3)
             .map(|channel| model.sd_reset(channel))
             .collect::<Result<Vec<_>, _>>()?;
+        let external = model.external_lines();
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + WINDOW, id));
-        Ok(lines)
+        Ok((lines, external))
+    }
+    /// An X-mount lens on its serial port, sharing `link` with the PL330.
+    pub fn xpp_lens(
+        &mut self,
+        lens: crate::definition::XppLens,
+        link: &fujimod_emulator_xpp::lens::LensLink,
+        lines: fujimod_emulator_xpp::resets::ExternalLines,
+    ) -> Result<(), String> {
+        use fujimod_emulator_xpp::lens::{LensPort, Profile, Timing, Wiring};
+        use fujimod_emulator_xpp::serial::REGISTERS;
+        let base = lens.port;
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base + REGISTERS)
+        {
+            return Err("Overlapping X-Processor Pro lens port".into());
+        }
+        let pins = self
+            .pins
+            .as_ref()
+            .ok_or("The lens requires GPIO wiring")?
+            .clone();
+        let model = LensPort::new(
+            link,
+            Profile {
+                page: lens.page,
+                replies: lens.replies.into_iter().collect(),
+            },
+            Timing {
+                ready: lens.ready_ticks,
+                release: lens.release_ticks,
+                drive: lens.drive_ticks,
+                poll: lens.poll_ticks,
+            },
+            Wiring {
+                base,
+                power: lens.power,
+                ready: lens.ready,
+                line: lens.line,
+                contacts: lens.contacts,
+            },
+            pins,
+            lines,
+        )?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + REGISTERS, id));
+        Ok(())
     }
     pub fn xpp_sd(
         &mut self,

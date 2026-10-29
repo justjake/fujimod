@@ -102,6 +102,17 @@
             "null"
           ]
         },
+        "lens": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetLensInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared lens on the mount."
+        },
         "loader_handoff": {
           "anyOf": [
             {
@@ -1287,6 +1298,214 @@
         "channel",
         "interval",
         "kind"
+      ],
+      "type": "object"
+    },
+    "ResetLensInput": {
+      "additionalProperties": false,
+      "description": "An X-mount lens attached at power-on, answering on its serial link.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "contacts": {
+          "description": "Contact levels the attached lens presents, as bank, pin and level.",
+          "items": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "boolean"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "drive_ticks": {
+          "description": "Ticks a focus drive holds the ready line low.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "line": {
+          "description": "External interrupt line of the ready pin.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page": {
+          "description": "Information page the lens sends in a read session, as hex (at most\n128 bytes).",
+          "type": "string"
+        },
+        "poll_ticks": {
+          "description": "Ticks between samples of the body's power output.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "description": "Serial port base of the link.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "power": {
+          "description": "The body's power output: bank, register and bit.",
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "ready": {
+          "description": "Ready pin: bank and pin.",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "ready_ticks": {
+          "description": "Ticks from power-on until the lens pulls the ready line low.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "registration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetLensRegistration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The body's stored records for this lens, placed with a user profile."
+        },
+        "release_ticks": {
+          "description": "Ticks the ready line stays low during the lens's initialization.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "replies": {
+          "description": "Command replies, as command and data pairs.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "contacts",
+        "drive_ticks",
+        "line",
+        "page",
+        "poll_ticks",
+        "port",
+        "power",
+        "ready",
+        "ready_ticks",
+        "release_ticks",
+        "replies"
+      ],
+      "type": "object"
+    },
+    "ResetLensRegistration": {
+      "additionalProperties": false,
+      "description": "Body flash records of a registered lens: an asset holding the bytes of\neach flash region in order.",
+      "properties": {
+        "asset": {
+          "description": "Asset identity in the configuration assets.",
+          "type": "string"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "regions": {
+          "description": "Flash regions the asset fills, as offset and size.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "sha256": {
+          "description": "SHA-256 of the asset.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "asset",
+        "basis",
+        "regions",
+        "sha256"
       ],
       "type": "object"
     },

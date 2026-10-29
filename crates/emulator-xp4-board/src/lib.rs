@@ -931,6 +931,7 @@ impl Session {
             xpp_storage,
             xpp_serial,
             xpp_sub_cpu,
+            xpp_lens,
             xpp_display_frames,
             xpp_adc,
             xpp_display_outputs,
@@ -1024,6 +1025,17 @@ impl Session {
         let mut ledger = Discovery::default();
         ledger.enabled = discovery;
         let has_xpp_storage = xpp_storage.is_some();
+        let lens_link = match &xpp_lens {
+            Some(lens) if xpp_storage.is_some() && xpp_reset_gates.is_some() => {
+                Some(fujimod_emulator_xpp::lens::LensLink::new(lens.port)?)
+            }
+            Some(_) => {
+                return Err(
+                    "The X-Processor Pro lens needs its storage PL330 and reset gates".into(),
+                );
+            }
+            None => None,
+        };
         if storage_jedec.is_some() && xpp_storage.is_some() {
             return Err("XP4 and X-Processor Pro storage cannot be selected together".to_owned());
         }
@@ -1045,7 +1057,14 @@ impl Session {
             let image = storage_image
                 .ok_or_else(|| "X-Processor Pro flash requires explicit contents".to_owned())?;
             let mut devices = devices::Devices::empty();
-            devices.xpp_storage(storage, image)?;
+            let windows = lens_link
+                .iter()
+                .map(|link| {
+                    std::sync::Arc::new(link.clone())
+                        as std::sync::Arc<dyn fujimod_emulator_ip_arm::pl330::Source>
+                })
+                .collect();
+            devices.xpp_storage(storage, image, windows)?;
             Some(devices)
         } else {
             if !storage_dma_routes.is_empty()
@@ -1096,11 +1115,16 @@ impl Session {
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_frame_sync(sync)?;
         }
+        let mut external_lines = None;
         let reset_gates = match xpp_reset_gates {
             Some(base) => Some(
                 devices
                     .get_or_insert_with(devices::Devices::empty)
-                    .xpp_reset_gates(base)?,
+                    .xpp_reset_gates(base)
+                    .map(|(resets, lines)| {
+                        external_lines = Some(lines);
+                        resets
+                    })?,
             ),
             None => None,
         };
@@ -1157,6 +1181,9 @@ impl Session {
                 .xpp_display_frames(frames.irqs, frames.period_ticks)?;
         }
         for base in xpp_serial {
+            if xpp_lens.as_ref().is_some_and(|lens| lens.port == base) {
+                continue;
+            }
             let peer = match &sub_cpu {
                 Some((port, _)) if *port == base => sub_cpu.take().map(|(_, r)| r),
                 _ => None,
@@ -1198,6 +1225,11 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .gpio(gpio_base.unwrap_or(0xfff41000), inputs)?;
+        }
+        if let (Some(lens), Some(link), Some(lines)) = (xpp_lens, &lens_link, external_lines) {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_lens(lens, link, lines)?;
         }
         if let Some((value, ticks)) = temperature {
             devices
