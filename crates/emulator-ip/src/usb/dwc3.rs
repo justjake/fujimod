@@ -153,8 +153,12 @@ impl Dwc3 {
     }
     /// An explicitly negotiated physical link input; not a synthetic USB reply.
     pub fn link(&mut self, now: u64, connected: bool) -> Result<(), String> {
-        self.queue(now, self.config.transaction_ticks, Operation::Link(connected))
-            .map(|_| ())
+        self.queue(
+            now,
+            self.config.transaction_ticks,
+            Operation::Link(connected),
+        )
+        .map(|_| ())
     }
     pub fn bus_reset(&mut self, now: u64) -> Result<(), String> {
         self.queue(now, self.config.transaction_ticks, Operation::BusReset)
@@ -549,14 +553,19 @@ impl Device for Dwc3 {
                 }
                 0xc408 => {
                     let size = value & 0xffff;
+                    // INTMASK (bit 31) may change with unread events, as a
+                    // handler masks the buffer before it walks the ring.
+                    let resized = size != self.reg(offset) & 0xffff;
                     if value & !0x8000fffc != 0
                         || size < 4
                         || size & 3 != 0
-                        || self.reg(0xc40c) != 0
+                        || resized && self.reg(0xc40c) != 0
                     {
                         return Err("Invalid DWC3 event ring size or unread reconfiguration".into());
                     }
-                    self.state.ring_cursor = 0;
+                    if resized {
+                        self.state.ring_cursor = 0;
+                    }
                     self.state.registers.insert(offset, value);
                 }
                 0xc400 | 0xc404 => {

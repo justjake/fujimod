@@ -339,3 +339,24 @@ fn event_ring_wraps_and_irq_remains_high_until_all_bytes_are_acknowledged() {
     assert!(write(&mut d, &mut b, 0xc40c, 4).is_err());
     assert_eq!(d.save(), before);
 }
+
+#[test]
+fn handler_masks_the_event_buffer_with_unread_events_but_cannot_resize_it() {
+    let (mut d, mut b) = ready(0x1350);
+    let cursor = d.state.ring_cursor;
+    d.link(b.now, false).unwrap();
+    d.link(b.now, true).unwrap();
+    let at = b.now + 4;
+    tick(&mut d, &mut b, at);
+    let pending = d.reg(0xc40c);
+    assert!(pending >= 4 && b.irq);
+    // X-T20 2.11 0x1527070: mask, walk the ring later, acknowledge, unmask.
+    write(&mut d, &mut b, 0xc408, 0x8000_0100).unwrap();
+    assert!(!b.irq);
+    assert!(write(&mut d, &mut b, 0xc408, 0x8000_0080).is_err());
+    write(&mut d, &mut b, 0xc40c, pending).unwrap();
+    write(&mut d, &mut b, 0xc408, 0x100).unwrap();
+    assert!(!b.irq);
+    // Masking keeps the ring position; only a resize restarts it.
+    assert_eq!(d.state.ring_cursor, cursor + pending);
+}
