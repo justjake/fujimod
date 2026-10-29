@@ -89,6 +89,13 @@
       "clock_id": null
     },
     {
+      "id": "gpio",
+      "base": 4293967872,
+      "size": 1024,
+      "kind": "gpio",
+      "clock_id": null
+    },
+    {
       "id": "adc",
       "base": 4294021120,
       "size": 64,
@@ -493,6 +500,11 @@
             "irq_routes": [112, 113, 114, 117, 118, 119],
             "period_ticks": 800000,
             "basis": "Frame interrupts of the display controller, as an interrupt law without its registers. Seg5 source table 0xed4720 rows 73-78 connect lines 112-114 and 117-119 (edge) to handlers that run the callbacks queued by 0xc9dc38 for output 0 or 1 and event 0-2 (0xc9d854, 0xc9d994); the handlers read no controller register. The X-T20 2.11 vglib thread clears bit 16 of 0xfff65000 or 0xfff5a000, queues such a callback and yields at priority 7 until it runs (0xcad290), which starves flashload before section 7 loads. The period is an assumed 60 Hz in 48 MHz timer ticks (the 10 ms system tick reloads 480000); the panel rate is not measured."
+          },
+          "gpio": {
+            "base": 4293967872,
+            "size": 1024,
+            "basis": "Sixteen GPIO banks with a 0x40 stride and input levels at +0x14, the same layout as the XP4 banks: X-T20 2.11 stage 2 (0x102c) copies the sixteen input words into the boot information and seg5 0xc4e138 reads the live register. Discovery up to REC writes only registers 0-7 of each bank."
           },
           "display_outputs": [
             {

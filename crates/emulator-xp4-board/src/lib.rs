@@ -941,6 +941,7 @@ impl Session {
             dmp,
             adc,
             gpio,
+            gpio_base,
             temperature,
             power_spi,
             checksum_power_spi,
@@ -1120,7 +1121,7 @@ impl Session {
         if let Some(inputs) = gpio {
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .gpio(inputs)?;
+                .gpio(gpio_base.unwrap_or(0xfff41000), inputs)?;
         }
         if let Some((value, ticks)) = temperature {
             devices

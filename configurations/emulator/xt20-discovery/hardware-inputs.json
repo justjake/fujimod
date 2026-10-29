@@ -21,6 +21,27 @@
       ],
       "basis": "Measured: the twelve key-row values seg5 0xc8ce9c keeps at 0xfdb018, read from a service-mode RAM capture of an X-T20 2.11 with all keys released, assigned to channels 0-11 in order (the xpro-lab emulator model). Channel 3 is the ladder for the 4-way pad, OK, Q and DISP/BACK; channel 2 carries the S1/S2 thresholds 0x28/0x1d0. The channel order and the values of channels 10 and 11 are not confirmed against the converter registers."
     },
+    "gpio_input": {
+      "levels": [
+        58615,
+        4156,
+        394,
+        559,
+        0,
+        0,
+        16,
+        0,
+        24,
+        0,
+        644,
+        3040,
+        65,
+        537,
+        12,
+        1
+      ],
+      "basis": "Measured: the sixteen GPIO input words X-T20 2.11 stage 2 snapshots into the boot information (+0x00), read from a service-mode RAM capture with lens attached, card inserted and PLAY released, adjusted to a normal power-on without a cable: bank 0 bits 0/1 (S1/S2, released high) are set, since the capture held the shutter for service mode, and bank 1 bit 14 (VBUS, polled by the USB detection) is clear, since the capture was taken over USB; with VBUS high the start mode becomes JIG. Pin roles from seg5 key rows (table 0xec6e10): bank 0 bit 11 LENS_DET and bank 10 bit 4 CARD_DET active low."
+    },
     "kernel_unit": "kernel",
     "loader_handoff": {
       "address": 9437184,
@@ -30,12 +51,12 @@
         {
           "name": "gpio_bank0",
           "offset": 0,
-          "value": 58612
+          "value": 58615
         },
         {
           "name": "gpio_bank1",
           "offset": 4,
-          "value": 20540
+          "value": 4156
         },
         {
           "name": "gpio_bank2",
@@ -263,7 +284,7 @@
           "value": 4
         }
       ],
-      "basis": "Camera capture: the 0x5c0-byte stage-2 block the kernel copies to 0x7f4fc, read over ff80 in a service-mode power-on (X-T20 2.11, 2026-10-20; SHA-256 d7cca82d81be252c32012d9392b6f9143a5729d52bd04f21c2a90c1c54e54cca). +0x00 holds the 16 power-on GPIO input words and +0x140 the sub-CPU power-on cause 0x10, which section 5 decodes as a normal start. Placed in a free RAM gap; kernel entry bypasses the boot ROM and stage 2."
+      "basis": "Camera capture: the 0x5c0-byte stage-2 block the kernel copies to 0x7f4fc, read over ff80 in a service-mode power-on (X-T20 2.11, 2026-10-20; SHA-256 d7cca82d81be252c32012d9392b6f9143a5729d52bd04f21c2a90c1c54e54cca). +0x00 holds the 16 power-on GPIO input words, adjusted to a normal power-on without a cable as in gpio_input: bank 0 bits 0/1 (S1/S2) set (captured 0xe4f4, shutter held for service mode) and bank 1 bit 14 (VBUS) clear (captured 0x503c, taken over USB), and +0x140 the sub-CPU power-on cause 0x10, which section 5 decodes as a normal start. Placed in a free RAM gap; kernel entry bypasses the boot ROM and stage 2."
     },
     "flash_aperture": {
       "contents": "registered-update",

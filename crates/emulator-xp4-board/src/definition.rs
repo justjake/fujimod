@@ -64,6 +64,9 @@ pub struct Definition {
     pub adc: Option<([u16; 12], u64)>,
     #[serde(default)]
     pub gpio: Option<[u16; 16]>,
+    /// GPIO bank base; the XP4 0xfff41000 when absent.
+    #[serde(default)]
+    pub gpio_base: Option<u64>,
     #[serde(default)]
     pub temperature: Option<(i32, u64)>,
     #[serde(default)]
