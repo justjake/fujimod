@@ -1082,6 +1082,7 @@ impl Session {
             }
             None
         };
+        let mut sub_cpu_clock = None;
         let mut sub_cpu = match xpp_sub_cpu {
             Some(peer) => {
                 if !xpp_serial.contains(&peer.port) {
@@ -1094,6 +1095,7 @@ impl Session {
                         .ok_or("X-Processor Pro sub-CPU register out of range")?;
                     *slot = value;
                 }
+                sub_cpu_clock = peer.clock;
                 Some((peer.port, registers))
             }
             None => None,
@@ -1217,9 +1219,13 @@ impl Session {
                 }
                 _ => Peer::None,
             };
+            let clock = match peer {
+                Peer::Registers(_) => sub_cpu_clock.take(),
+                _ => None,
+            };
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .xpp_serial(base, peer)?;
+                .xpp_serial(base, peer, clock)?;
         }
         if battery_gauge.is_some() {
             return Err("X-Processor Pro battery gauge shares its serial port".to_owned());

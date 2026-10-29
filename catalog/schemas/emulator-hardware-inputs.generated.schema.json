@@ -2818,6 +2818,17 @@
           "description": "Declared basis.",
           "type": "string"
         },
+        "clock": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetSubCpuClock"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Seconds count kept in the register file."
+        },
         "port": {
           "description": "Serial port base address.",
           "format": "uint64",
@@ -2845,6 +2856,48 @@
         "basis",
         "port",
         "registers"
+      ],
+      "type": "object"
+    },
+    "ResetSubCpuClock": {
+      "additionalProperties": false,
+      "description": "Seconds count in four consecutive sub-CPU registers, least significant\nbyte first, that advances with device time while its hold register's bit 0\nis set.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "first": {
+          "description": "First of the four count registers.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "hold": {
+          "description": "Register whose bit 0 runs the count.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "seconds": {
+          "description": "Count at power-on.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ticks_per_second": {
+          "description": "Device ticks per second.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "first",
+        "hold",
+        "seconds",
+        "ticks_per_second"
       ],
       "type": "object"
     },

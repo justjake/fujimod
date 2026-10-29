@@ -175,6 +175,9 @@ pub struct XppBatteryGauge {
 pub struct XppSubCpu {
     pub port: u64,
     pub registers: Vec<(u8, u8)>,
+    /// Seconds count kept in the register file.
+    #[serde(default)]
+    pub clock: Option<fujimod_emulator_xpp::serial::Clock>,
 }
 
 /// X-mount lens: serial port base, information page and command replies,

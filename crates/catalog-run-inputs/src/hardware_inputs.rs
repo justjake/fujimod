@@ -1123,6 +1123,29 @@ pub struct SubCpuInputs {
     /// header, which a selected profile fills.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile_header: Option<u64>,
+    /// Seconds count kept in the register file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clock: Option<SubCpuClock>,
+}
+
+/// Seconds count in four consecutive sub-CPU registers, least significant
+/// byte first, that advances with device time while its hold register's bit 0
+/// is set.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetSubCpuClock"))]
+pub struct SubCpuClock {
+    /// Declared basis.
+    pub basis: String,
+    /// First of the four count registers.
+    pub first: u64,
+    /// Register whose bit 0 runs the count.
+    pub hold: u64,
+    /// Count at power-on.
+    pub seconds: u64,
+    /// Device ticks per second.
+    pub ticks_per_second: u64,
 }
 
 /// Declared byte-frame register peer behind one serial port.

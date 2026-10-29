@@ -745,6 +745,7 @@ impl Devices {
         &mut self,
         base: u64,
         peer: fujimod_emulator_xpp::serial::Peer,
+        clock: Option<fujimod_emulator_xpp::serial::Clock>,
     ) -> Result<(), String> {
         use fujimod_emulator_xpp::serial::{REGISTERS, DiscoveryPort};
         if self
@@ -754,7 +755,10 @@ impl Devices {
         {
             return Err("Overlapping X-Processor Pro serial port".into());
         }
-        let model = DiscoveryPort::attached(base, peer)?;
+        let mut model = DiscoveryPort::attached(base, peer)?;
+        if let Some(clock) = clock {
+            model = model.with_clock(clock)?;
+        }
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + REGISTERS, id));

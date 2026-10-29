@@ -11,6 +11,14 @@
 //! back from +0x60 is that register's value. Without a peer, +0x60 reads the
 //! last send word.
 //!
+//! A register-file peer may keep a clock: four registers holding a
+//! little-endian seconds count that advances with device time. Writing 0 to
+//! its hold register stops the count and writing 1 resumes it; a byte written
+//! into the count replaces that byte of the current value. The X-T20 sub-CPU
+//! keeps its calendar this way (registers 0x41..0x44, hold 0x45): 0xc70058
+//! reads the four bytes until the low byte reads the same twice, and 0xc700c0
+//! writes the hold register 0, the four bytes, then 1.
+//!
 //! A port may instead carry a byte-frame peer with 16-bit registers. Writing 1
 //! to +0x08 (the enable of each transfer) starts a frame. Its first byte names
 //! the register in bits 7..1 and writes it when bit 0 is set; the next two
@@ -169,6 +177,59 @@ impl FramePeer {
     }
 }
 
+/// Seconds count kept by a register-file peer.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Clock {
+    /// First of the four count registers, least significant byte first.
+    pub first: u8,
+    /// Register whose bit 0 runs the count.
+    pub hold: u8,
+    /// Count at device time 0.
+    pub seconds: u32,
+    /// Device ticks per second.
+    pub ticks_per_second: u64,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ClockState {
+    clock: Clock,
+    /// Count when it last started or stopped.
+    seconds: u32,
+    /// Device time at which a running count last started.
+    since: Option<u64>,
+}
+impl ClockState {
+    fn count(&self, now: u64) -> u32 {
+        match self.since {
+            Some(since) => self
+                .seconds
+                .wrapping_add((now.saturating_sub(since) / self.clock.ticks_per_second) as u32),
+            None => self.seconds,
+        }
+    }
+    /// The register's value, after applying a written byte.
+    fn transfer(&mut self, now: u64, register: u8, write: Option<u8>) -> Option<u8> {
+        let byte = register.wrapping_sub(self.clock.first);
+        if byte < 4 {
+            let mut bytes = self.count(now).to_le_bytes();
+            if let Some(value) = write {
+                bytes[byte as usize] = value;
+                self.seconds = u32::from_le_bytes(bytes);
+                self.since = self.since.map(|_| now);
+            }
+            return Some(bytes[byte as usize]);
+        }
+        if register == self.clock.hold
+            && let Some(value) = write
+        {
+            self.seconds = self.count(now);
+            self.since = (value & 1 != 0).then_some(now);
+        }
+        None
+    }
+}
+
 /// The peer declared behind a discovery port.
 pub enum Peer {
     None,
@@ -183,6 +244,7 @@ pub struct DiscoveryPort {
     base: u64,
     registers: Vec<u32>,
     peer: Option<Vec<u8>>,
+    clock: Option<ClockState>,
     frames: Option<FramePeer>,
 }
 impl DiscoveryPort {
@@ -194,6 +256,7 @@ impl DiscoveryPort {
             base,
             registers: vec![0; (REGISTERS / 4) as usize],
             peer: None,
+            clock: None,
             frames: None,
         })
     }
@@ -213,6 +276,27 @@ impl DiscoveryPort {
         let mut port = Self::new(base)?;
         port.peer = Some(registers);
         Ok(port)
+    }
+    /// Keep `clock` in the register-file peer; the count runs from device
+    /// time 0 and its hold register reads 1.
+    pub fn with_clock(mut self, clock: Clock) -> Result<Self, String> {
+        let Some(peer) = &mut self.peer else {
+            return Err("X-Processor Pro serial clock needs a register-file peer".into());
+        };
+        if usize::from(clock.first) + 4 > PEER_REGISTERS
+            || usize::from(clock.hold) >= PEER_REGISTERS
+            || clock.hold.wrapping_sub(clock.first) < 4
+            || clock.ticks_per_second == 0
+        {
+            return Err("Invalid X-Processor Pro serial clock registers".into());
+        }
+        peer[usize::from(clock.hold)] = 1;
+        self.clock = Some(ClockState {
+            seconds: clock.seconds,
+            since: Some(0),
+            clock,
+        });
+        Ok(self)
     }
     /// A port whose peer exchanges byte frames with these even-numbered
     /// 16-bit registers after reset; unlisted registers read zero.
@@ -272,10 +356,15 @@ impl Device for DiscoveryPort {
                 self.registers[(SEND / 4) as usize] = match &mut self.peer {
                     Some(peer) => {
                         let register = ((word >> 8) & 0x7f) as usize;
-                        if word & PEER_WRITE != 0 {
-                            peer[register] = word as u8;
+                        let write = (word & PEER_WRITE != 0).then_some(word as u8);
+                        if let Some(value) = write {
+                            peer[register] = value;
                         }
-                        peer[register].into()
+                        let counted = self
+                            .clock
+                            .as_mut()
+                            .and_then(|c| c.transfer(cx.now(), register as u8, write));
+                        counted.unwrap_or(peer[register]).into()
                     }
                     None => word,
                 };
@@ -292,6 +381,9 @@ impl Device for DiscoveryPort {
         if let Some(frames) = &self.frames {
             state["frames"] = json!(frames);
         }
+        if let Some(clock) = &self.clock {
+            state["clock"] = json!(clock);
+        }
         state
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
@@ -305,6 +397,13 @@ impl Device for DiscoveryPort {
             }
             None => None,
         };
+        let clock: Option<ClockState> = match value.get("clock") {
+            Some(clock) => Some(serde_json::from_value(clock.clone()).map_err(|e| e.to_string())?),
+            None => None,
+        };
+        if clock.as_ref().map(|c| &c.clock) != self.clock.as_ref().map(|c| &c.clock) {
+            return Err("X-Processor Pro serial clock checkpoint differs".into());
+        }
         if registers.len() != self.registers.len()
             || peer.as_ref().map(Vec::len) != self.peer.as_ref().map(Vec::len)
             || frames.is_some() != self.frames.is_some()
@@ -316,6 +415,7 @@ impl Device for DiscoveryPort {
         }
         self.registers = registers;
         self.peer = peer;
+        self.clock = clock;
         self.frames = frames;
         Ok(())
     }
@@ -402,6 +502,59 @@ mod tests {
         write(&mut port, &mut h, base + 0x60, 0x5c00);
         assert_eq!(read(&mut port, &mut h, base + 0x60), 0x12);
         assert!(DiscoveryPort::new(base).unwrap().restore(&saved).is_err());
+    }
+
+    #[test]
+    fn peer_clock_counts_seconds_and_holds_while_it_is_set() {
+        use fujimod_emulator_devices::test_host::advance;
+        let base = 0xfff2a000;
+        let clock = Clock {
+            first: 0x41,
+            hold: 0x45,
+            seconds: 0x0102_03ff,
+            ticks_per_second: 10,
+        };
+        assert!(
+            DiscoveryPort::new(base)
+                .unwrap()
+                .with_clock(clock.clone())
+                .is_err()
+        );
+        let mut port = DiscoveryPort::with_peer(base, vec![0; PEER_REGISTERS])
+            .unwrap()
+            .with_clock(clock)
+            .unwrap();
+        let mut h = TestHost::new();
+        fn get(port: &mut DiscoveryPort, h: &mut TestHost, register: u32) -> u8 {
+            write(port, h, 0xfff2a060, register << 8);
+            read(port, h, 0xfff2a060) as u8
+        }
+        // 0xc70058: least significant byte first.
+        fn count(port: &mut DiscoveryPort, h: &mut TestHost) -> u32 {
+            u32::from_le_bytes([0x41, 0x42, 0x43, 0x44].map(|r| get(port, h, r)))
+        }
+        assert_eq!(get(&mut port, &mut h, 0x45), 1);
+        assert_eq!(count(&mut port, &mut h), 0x0102_03ff);
+        advance(&mut port, &mut h, 25);
+        assert_eq!(count(&mut port, &mut h), 0x0102_0401);
+        // 0xc700c0: hold, write the bytes, resume.
+        write(&mut port, &mut h, base + 0x60, 0xc500);
+        for (register, byte) in [(0x41, 0x10), (0x42, 0), (0x43, 0), (0x44, 0)] {
+            write(
+                &mut port,
+                &mut h,
+                base + 0x60,
+                0x8000 | register << 8 | byte,
+            );
+        }
+        advance(&mut port, &mut h, 100);
+        assert_eq!(count(&mut port, &mut h), 0x10);
+        write(&mut port, &mut h, base + 0x60, 0xc501);
+        let saved = port.save();
+        advance(&mut port, &mut h, 130);
+        assert_eq!(count(&mut port, &mut h), 0x13);
+        port.restore(&saved).unwrap();
+        assert_eq!(count(&mut port, &mut h), 0x13);
     }
 
     #[test]
