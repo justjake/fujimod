@@ -2353,6 +2353,14 @@ class HardwareEncoderTiming(TypedDict, total=False):
     rest_phase: Required[int]
 
 
+class HardwareFaceDetection(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    irq_route: Required[int]
+    run_ticks: Required[int]
+    size: Required[int]
+
+
 class HardwareFaceDetector(TypedDict, total=False):
     mode: Required[str]
 
@@ -2592,6 +2600,12 @@ class HardwarePllClocks(TypedDict, total=False):
     size: Required[int]
 
 
+class HardwarePowerControl(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    size: Required[int]
+
+
 class HardwarePreviewActivity(TypedDict, total=False):
     high: Required[bool]
     pin: Required[PartAssemblyPin]
@@ -2670,6 +2684,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     dma: NotRequired[HardwareDma | None]
     dmp: NotRequired[HardwareDmp | None]
     dram_controller: NotRequired[HardwareDramController | None]
+    face_detection: NotRequired[HardwareFaceDetection | None]
     flash_controller: NotRequired[HardwareFlashController | None]
     frame_sync: NotRequired[HardwareFrameSync | None]
     gic: NotRequired[HardwareGic | None]
@@ -2687,6 +2702,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     nand: NotRequired[HardwareLoaderDma | None]
     pl330: NotRequired[HardwarePl330 | None]
     pll_clocks: NotRequired[HardwarePllClocks | None]
+    power_control: NotRequired[HardwarePowerControl | None]
     register_blocks: NotRequired[list[HardwareRegisterBlock]]
     reset_gates: NotRequired[HardwareResetGates | None]
     sd_host_clocks: NotRequired[HardwareSdHostClocks | None]

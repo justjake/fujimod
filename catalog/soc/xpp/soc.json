@@ -250,6 +250,13 @@
       "clock_id": null
     },
     {
+      "id": "power-control",
+      "base": 4293984256,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
       "id": "i2c0",
       "base": 4294045696,
       "size": 4096,
@@ -917,6 +924,11 @@
             "base": 4293976064,
             "size": 4096,
             "basis": "DRAM controller of X-T20 2.11 section 5. 0xc8f09c reads the refresh-rate level from bits 8..10 of +0xec (caching it at 0xfdbea8 + 5) and, when it changes, rewrites the low half of the refresh words +0x9c and +0xa0 through 0xc8f044: 0xc30 below level 4, 0x618 at level 4; above level 4 it reports event 0x8015. A second controller at 0xfff0f000 is used only when 0xfda438 is set, which it is not in the s1-s3 captures. The boot code that programs the controller before the kernel is not modeled."
+          },
+          "power_control": {
+            "base": 4293984256,
+            "size": 4096,
+            "basis": "Power control of X-T20 2.11 stage 2 (0xc098..0xc4ec) and section 5 (0xc4cbec..0xc4d284). Five power domains, numbered 2..6, use masks 0x1, 0x20, 0x40, 0x80 and 0x100. Switching on (0xc4d108) sets the mask in +0x0c, waits for it in the status +0x2c, sets it in +0x08 and waits for the mask shifted left by 16. Switching off (0xc4cbec) clears it in +0x14 and +0x08, waits for the shifted mask to clear, clears it in +0x10 and +0x0c and waits until the status masked with the domain and bits 30..31 reads 0xc0000000. The status carries +0x0c bits 0..15 and +0x08 bits 0..13 in bits 16..29, with bits 30 and 31 set: switching completes at once. +0x10, +0x14 and +0x38 (bits 0, 1 and 4, 0xc4cf20/0xc4cfbc) read back their last write; the words start at 0, because the values the stage before the kernel leaves are not known. +0x00 reads 6 and +0x04 reads 1 on the running camera (service-mode reads). 0xc4cb94 clears +0x04 bit 0 only on the shutdown and fatal-stop paths (via 0xc4c9a4 from 0xc4d4ec), which end in endless loops, so a cleared bit 0 ends the run as supply off. No domain switches before REC and the menu."
           },
           "xpp_i2c": {
             "base": 4294045696,

@@ -1201,6 +1201,20 @@ pub struct DramController {
     pub size: u64,
 }
 
+/// X-Processor Pro power control: supply hold and power domains.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwarePowerControl"))]
+pub struct PowerControl {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Declared size.
+    pub size: u64,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -1763,6 +1777,9 @@ pub struct RegisterLayouts {
     /// Declared X-Processor Pro DRAM controller.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dram_controller: Option<DramController>,
+    /// Declared X-Processor Pro power control.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power_control: Option<PowerControl>,
     /// Declared interrupts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interrupts: Option<Interrupts>,

@@ -1035,6 +1035,21 @@ impl Devices {
         self.windows.push((base, base + WINDOW, id));
         Ok(())
     }
+    pub fn xpp_power(&mut self, base: u64) -> Result<(), String> {
+        use fujimod_emulator_xpp::power::{Control, WINDOW};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(WINDOW))
+        {
+            return Err("Overlapping X-Processor Pro power control".into());
+        }
+        let model = Control::new(base)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + WINDOW, id));
+        Ok(())
+    }
     pub fn xpp_dram(&mut self, base: u64, refresh_level: u8) -> Result<(), String> {
         use fujimod_emulator_xpp::dram::{Controller, WINDOW};
         if self

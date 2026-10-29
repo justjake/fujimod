@@ -2044,6 +2044,34 @@
       ],
       "type": "object"
     },
+    "HardwarePowerControl": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro power control: supply hold and power domains.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "size"
+      ],
+      "type": "object"
+    },
     "HardwarePrimaryBusRegisters": {
       "additionalProperties": false,
       "description": "Declared register maps control bus0 facts.",
@@ -2498,6 +2526,17 @@
             }
           ],
           "description": "Declared X-Processor Pro clock bank."
+        },
+        "power_control": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwarePowerControl"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro power control."
         },
         "register_blocks": {
           "description": "Declared X-Processor Pro register blocks with no work in flight.",

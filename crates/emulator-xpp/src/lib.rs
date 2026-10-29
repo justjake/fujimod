@@ -13,6 +13,7 @@ pub mod flash;
 pub mod i2c;
 pub mod imaging;
 pub mod lens;
+pub mod power;
 pub mod resets;
 pub mod sd;
 pub mod serial;

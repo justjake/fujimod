@@ -942,6 +942,7 @@ impl Session {
             xpp_sd,
             xpp_i2c,
             xpp_dram,
+            xpp_power,
             xpp_frame_sync,
             xpp_hdmi,
             xpp_statistics,
@@ -1176,6 +1177,11 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_hdmi(base)?;
+        }
+        if let Some(base) = xpp_power {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_power(base)?;
         }
         if let Some((base, level)) = xpp_dram {
             devices
