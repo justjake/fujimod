@@ -445,3 +445,26 @@ fn not_ready_is_reported_once_per_transfer_however_often_the_host_retries() {
     nak(&mut d, &mut b);
     assert_eq!(d.reg(0xc40c), 4);
 }
+
+#[test]
+fn bus_reset_rearms_the_not_ready_report() {
+    let (mut d, mut b) = ready(0x2468);
+    endpoint(&mut d, &mut b, 3, 8);
+    let nak = |d: &mut Dwc3, b: &mut Board| {
+        let id = d.transaction(b.now, 3, false, None).unwrap();
+        let at = b.now + 4;
+        tick(d, b, at);
+        assert_eq!(d.reply(id), Some(&Reply::Nak));
+    };
+    nak(&mut d, &mut b);
+    assert_eq!(d.reg(0xc40c), 4);
+    write(&mut d, &mut b, 0xc40c, 4).unwrap();
+    d.bus_reset(b.now).unwrap();
+    let at = b.now + 4;
+    tick(&mut d, &mut b, at);
+    let count = d.reg(0xc40c);
+    write(&mut d, &mut b, 0xc40c, count).unwrap();
+    // A bus reset ends every transfer, so the next NAK reports again.
+    nak(&mut d, &mut b);
+    assert_eq!(d.reg(0xc40c), 4);
+}
