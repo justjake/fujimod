@@ -700,6 +700,18 @@ pub struct ShutterInput {
     pub step_ticks: u64,
 }
 
+/// Instruction throughput of each core against the tick clock.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetExecutionClock"))]
+pub struct ExecutionClock {
+    /// Declared basis.
+    pub basis: String,
+    /// Instructions per tick as numerator and denominator.
+    pub instructions_per_tick: (u64, u64),
+}
+
 /// PLLs running at kernel entry.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1121,6 +1133,9 @@ pub struct HardwareReset {
     /// Declared adc input.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adc_input: Option<AdcInput>,
+    /// Declared execution clock.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_clock: Option<ExecutionClock>,
     /// Declared application inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub application_inputs: Option<ApplicationInputs>,

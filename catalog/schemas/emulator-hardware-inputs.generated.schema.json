@@ -48,6 +48,17 @@
           ],
           "description": "Declared DRAM refresh-rate level the memory device reports."
         },
+        "execution_clock": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetExecutionClock"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared execution clock."
+        },
         "execution_scope": {
           "description": "Declared execution scope.",
           "type": [
@@ -815,6 +826,39 @@
       },
       "required": [
         "kind"
+      ],
+      "type": "object"
+    },
+    "ResetExecutionClock": {
+      "additionalProperties": false,
+      "description": "Instruction throughput of each core against the tick clock.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "instructions_per_tick": {
+          "description": "Instructions per tick as numerator and denominator.",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "instructions_per_tick"
       ],
       "type": "object"
     },
