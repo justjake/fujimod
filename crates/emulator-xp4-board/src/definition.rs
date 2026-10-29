@@ -78,6 +78,10 @@ pub struct Definition {
     /// frame period in ticks.
     #[serde(default)]
     pub xpp_statistics: Option<(u64, u32, u64)>,
+    /// X-Processor Pro face detection engine: base, interrupt line and run
+    /// time in ticks.
+    #[serde(default)]
+    pub xpp_face: Option<(u64, u32, u64)>,
     /// X-Processor Pro register blocks with no work in flight.
     #[serde(default)]
     pub xpp_register_blocks: Vec<XppRegisterBlock>,

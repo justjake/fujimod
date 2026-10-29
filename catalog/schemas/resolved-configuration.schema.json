@@ -11192,6 +11192,48 @@
       ],
       "type": "object"
     },
+    "HardwareFaceDetection": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro face detection engine.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "irq_route": {
+          "description": "Interrupt line of the completion status.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "run_ticks": {
+          "description": "Time from a start to the completion of its run, in device ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "irq_route",
+        "run_ticks",
+        "size"
+      ],
+      "type": "object"
+    },
     "HardwareFaceDetector": {
       "additionalProperties": false,
       "description": "Declared face detector facts.",
@@ -12918,6 +12960,17 @@
             }
           ],
           "description": "Declared X-Processor Pro DRAM controller."
+        },
+        "face_detection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareFaceDetection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro face detection engine."
         },
         "flash_controller": {
           "anyOf": [

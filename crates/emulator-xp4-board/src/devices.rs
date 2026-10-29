@@ -1003,6 +1003,21 @@ impl Devices {
         self.windows.push((base, base + WINDOW, id));
         Ok(())
     }
+    pub fn xpp_face(&mut self, base: u64, irq: u32, run_ticks: u64) -> Result<(), String> {
+        use fujimod_emulator_xpp::face::{Engine, WINDOW};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(WINDOW))
+        {
+            return Err("Overlapping X-Processor Pro face detection engine".into());
+        }
+        let model = Engine::new(base, irq, run_ticks)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + WINDOW, id));
+        Ok(())
+    }
     /// DesignWare HDMI TX with no sink attached.
     pub fn xpp_hdmi(&mut self, base: u64) -> Result<(), String> {
         use fujimod_emulator_ip::dw_hdmi::{Transmitter, WINDOW};

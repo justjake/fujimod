@@ -944,6 +944,7 @@ impl Session {
             xpp_frame_sync,
             xpp_hdmi,
             xpp_statistics,
+            xpp_face,
             xpp_register_blocks,
             xpp_clocks,
             cache_sizes,
@@ -1155,6 +1156,11 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_statistics(base, irq, period)?;
+        }
+        if let Some((base, irq, run_ticks)) = xpp_face {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_face(base, irq, run_ticks)?;
         }
         if let Some(base) = xpp_hdmi {
             devices

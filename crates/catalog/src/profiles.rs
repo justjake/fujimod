@@ -1329,6 +1329,24 @@ pub struct ImagingStatistics {
     pub size: u64,
 }
 
+/// X-Processor Pro face detection engine.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareFaceDetection"))]
+pub struct FaceDetection {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Interrupt line of the completion status.
+    pub irq_route: u32,
+    /// Time from a start to the completion of its run, in device ticks.
+    pub run_ticks: u64,
+    /// Declared size.
+    pub size: u64,
+}
+
 /// DesignWare HDMI TX controller with no sink attached.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1727,6 +1745,9 @@ pub struct RegisterLayouts {
     /// Declared X-Processor Pro imaging statistics engine.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imaging_statistics: Option<ImagingStatistics>,
+    /// Declared X-Processor Pro face detection engine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub face_detection: Option<FaceDetection>,
     /// Declared HDMI transmitter without a sink.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hdmi_tx: Option<HdmiTransmitter>,

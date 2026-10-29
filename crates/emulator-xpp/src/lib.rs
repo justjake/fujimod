@@ -8,6 +8,7 @@ pub mod boot;
 pub mod clocks;
 pub mod display;
 pub mod dram;
+pub mod face;
 pub mod flash;
 pub mod i2c;
 pub mod imaging;
