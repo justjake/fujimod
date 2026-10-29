@@ -932,6 +932,10 @@
             "size": 4096,
             "basis": "DRAM controller of X-T20 2.11 section 5. 0xc8f09c reads the refresh-rate level from bits 8..10 of +0xec (caching it at 0xfdbea8 + 5) and, when it changes, rewrites the low half of the refresh words +0x9c and +0xa0 through 0xc8f044: 0xc30 below level 4, 0x618 at level 4; above level 4 it reports event 0x8015. A second controller at 0xfff0f000 is used only when 0xfda438 is set, which it is not in the s1-s3 captures. The boot code that programs the controller before the kernel is not modeled."
           },
+          "dram_alias": {
+            "base": 1073741824,
+            "basis": "X-T20 camera translation table (service-mode reads of the L1 table at 0x108000, docs/hardware/log.md lines 98-108 of the fuji-xt20-mod research): virtual 0x40000000-0x7fffffff is a read-only, uncached supersection onto physical 0x40000000, and reads through it return the DRAM content from physical 0. Section 5 accesses it as the uncached view of RAM; the ff80 service read handler reads memory at 0x40000000 + address. Mapped read-only, since no write through the alias is known."
+          },
           "power_control": {
             "base": 4293984256,
             "size": 4096,

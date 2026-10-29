@@ -10499,6 +10499,27 @@
       ],
       "type": "object"
     },
+    "HardwareDramAlias": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro read-only DRAM alias: physical `base` onwards returns body\nDRAM from address 0.",
+      "properties": {
+        "base": {
+          "description": "Declared physical base of the alias.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base",
+        "basis"
+      ],
+      "type": "object"
+    },
     "HardwareDramController": {
       "additionalProperties": false,
       "description": "X-Processor Pro SD channel: wrapper reset at +0, vendor words and a\nrelocated SDHCI bank, with its interrupt and hardware reset line.",
@@ -12369,6 +12390,17 @@
             }
           ],
           "description": "Declared dmp."
+        },
+        "dram_alias": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareDramAlias"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro read-only DRAM alias."
         },
         "dram_controller": {
           "anyOf": [

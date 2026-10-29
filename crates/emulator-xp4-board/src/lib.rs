@@ -942,6 +942,7 @@ impl Session {
             xpp_sd,
             xpp_i2c,
             xpp_dram,
+            dram_alias,
             xpp_power,
             xpp_usb,
             xpp_frame_sync,
@@ -1014,6 +1015,18 @@ impl Session {
         }
         let ram = Backing::zeros(ram_size);
         let memory = memory::allocate(memory_regions, ram_size)?;
+        if let Some(base) = dram_alias {
+            let end = base.checked_add(ram_size as u64);
+            if base % 4096 != 0
+                || base < ram_size as u64
+                || !end.is_some_and(|end| end <= 1 << 32)
+                || memory.iter().any(|window| {
+                    base < window.base + window.data.len() as u64 && window.base < end.unwrap()
+                })
+            {
+                return Err("Invalid or overlapping ARM32 DRAM alias".into());
+            }
+        }
         if !initial_registers.is_empty() && initial_registers.len() != cores {
             return Err("Initial ARM32 register sets must name every processor".into());
         }
@@ -1447,6 +1460,17 @@ impl Session {
                     NonNull::new(inner.ram.as_ptr()).unwrap(),
                 )
             }?;
+            if let Some(base) = dram_alias {
+                unsafe {
+                    inner.cpus[core].map_physical(
+                        base,
+                        0,
+                        ram_size,
+                        1,
+                        NonNull::new(inner.ram.as_ptr()).unwrap(),
+                    )
+                }?;
+            }
             for window in &inner.memory {
                 unsafe {
                     inner.cpus[core].map_backing(

@@ -1201,6 +1201,19 @@ pub struct DramController {
     pub size: u64,
 }
 
+/// X-Processor Pro read-only DRAM alias: physical `base` onwards returns body
+/// DRAM from address 0.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDramAlias"))]
+pub struct DramAlias {
+    /// Declared physical base of the alias.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+}
+
 /// X-Processor Pro DesignWare USB3 device controller.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1797,6 +1810,9 @@ pub struct RegisterLayouts {
     /// Declared X-Processor Pro DRAM controller.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dram_controller: Option<DramController>,
+    /// Declared X-Processor Pro read-only DRAM alias.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dram_alias: Option<DramAlias>,
     /// Declared X-Processor Pro power control.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub power_control: Option<PowerControl>,

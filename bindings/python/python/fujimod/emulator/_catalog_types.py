@@ -2335,6 +2335,11 @@ class HardwareDmp(TypedDict, total=False):
     size: Required[int]
 
 
+class HardwareDramAlias(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+
+
 class HardwareDramController(TypedDict, total=False):
     base: Required[int]
     basis: Required[str]
@@ -2683,6 +2688,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     display_outputs: NotRequired[list[HardwareDisplayOutput] | None]
     dma: NotRequired[HardwareDma | None]
     dmp: NotRequired[HardwareDmp | None]
+    dram_alias: NotRequired[HardwareDramAlias | None]
     dram_controller: NotRequired[HardwareDramController | None]
     face_detection: NotRequired[HardwareFaceDetection | None]
     flash_controller: NotRequired[HardwareFlashController | None]
