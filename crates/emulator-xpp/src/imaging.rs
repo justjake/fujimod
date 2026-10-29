@@ -15,8 +15,12 @@
 //! +0x00 reset (written 1, then 0), +0x08 mode, +0x0c..+0x14 28-bit address
 //! and length words, +0x18 an optional word, and +0x04 bit 0 a run bit that
 //! section 6 sets to start a channel and clears to stop it (0xc34864 and
-//! 0xc34e24 refuse a channel already in the requested state). Those words
-//! read back their last write; no data moves.
+//! 0xc34e24 refuse a channel already in the requested state). A reset also
+//! stops the channel: section 6 0x16b7fbc configures the channels in its mask
+//! (0x156a654), resets each (0x156a5f8 via 0xc348d8) and then waits at
+//! 0x16b8118 for channel 0's run bit to read clear without clearing it
+//! itself. Leaving SETUP for REC takes that path with channel 0 running. The
+//! other words read back their last write; no data moves.
 //!
 //! +0x000 bit 0 is a run bit that reads set: 0xc33ec8 clears it and waits
 //! for it to read set again (stopped). Other words read back their last
@@ -35,6 +39,9 @@ const LENGTH: u64 = 0x210;
 const START: u64 = 0x204;
 const RECEIVE: std::ops::Range<u64> = 0x21c..0x23c;
 const BUSY: u32 = 1;
+const CHANNELS: std::ops::Range<u64> = 0x240..0x240 + 6 * CHANNEL;
+const CHANNEL: u64 = 0x40;
+const RUN: u64 = 0x04;
 const MAX_FRAME: u32 = 16;
 const WRITE: u8 = 0x81;
 const READ: u8 = 0x82;
@@ -116,6 +123,13 @@ impl Device for Control {
             START if value & BUSY != 0 => {
                 value &= !BUSY;
                 self.start(cx);
+            }
+            o if CHANNELS.contains(&o) && (o - CHANNELS.start) % CHANNEL == 0 && value & 1 != 0 => {
+                let run = o + RUN;
+                match self.word(run) & !1 {
+                    0 => self.words.remove(&run),
+                    stopped => self.words.insert(run, stopped),
+                };
             }
             _ => {}
         }
@@ -214,5 +228,24 @@ mod tests {
         write(&mut control, &mut h, channel + 4, 0);
         assert_eq!(read(&mut control, &mut h, channel + 4), 0);
         assert_eq!(read(&mut control, &mut h, BASE + 0x21c), 0);
+    }
+
+    #[test]
+    fn a_channel_reset_stops_a_running_channel() {
+        let mut control = Control::new(BASE).unwrap();
+        let mut h = TestHost::new();
+        let channel = BASE + 0x240;
+        write(&mut control, &mut h, channel + 8, 0x100);
+        write(&mut control, &mut h, channel + 4, 1);
+        // 0xc348d8 pulses the reset; 0x16b8118 then waits for the run bit to clear.
+        write(&mut control, &mut h, channel, 1);
+        assert_eq!(read(&mut control, &mut h, channel + 4), 0);
+        write(&mut control, &mut h, channel, 0);
+        assert_eq!(read(&mut control, &mut h, channel + 8), 0x100);
+        assert_eq!(read(&mut control, &mut h, channel), 0);
+        // Other channels keep running.
+        write(&mut control, &mut h, channel + 0x44, 1);
+        write(&mut control, &mut h, channel, 1);
+        assert_eq!(read(&mut control, &mut h, channel + 0x44), 1);
     }
 }
