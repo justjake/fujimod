@@ -166,6 +166,13 @@
       "clock_id": null
     },
     {
+      "id": "imaging-fff7f000",
+      "base": 4294438912,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
       "id": "imaging-unit-0",
       "base": 4294266880,
       "size": 4096,
@@ -796,6 +803,21 @@
                 "period_ticks": 800000
               },
               "basis": "Live-view output unit 1 of X-T20 2.11 section 5 at (0xfff55 + n) << 12 (0xc3a954, 0xc3be40): a 31-entry 17-bit table at +0x40..+0xb8 (0xc3b450), buffer address +0xc0, line width +0xc4 and start bit 28 of +0xc8 (0xc3a98c). While started the unit finishes a frame at every frame-sync tick and raises edge interrupt 108 (descriptor row 0x30 of 0xed471c, config 3); its handler (0xc3abe8 / 0xc3abbc, registered by 0xc3bd20) sets +0xd8 bit 0 and reports the frame to the section-6 imaging dispatcher 0x1698f8c, which runs the live-view job callback. The stop 0xc3be40 clears the start bit and waits for +0xd8 bit 8, which reads set while the unit is stopped; 0xc3a954 then writes 0 to +0x00 and waits for bit 0, declared idle. The same law runs live view in the xpro-lab emulator, where REC frames match the camera's marker sequence. The words read back their last write; no data is written to the buffers."
+            },
+            {
+              "base": 4294438912,
+              "size": 4096,
+              "idle_bits": [
+                {
+                  "offset": 0,
+                  "mask": 1
+                },
+                {
+                  "offset": 64,
+                  "mask": 65537
+                }
+              ],
+              "basis": "Imaging block of X-T20 2.11 section 6 (driver 0x1558424..0x1558a94, beside the unit at 0xfffc4000 whose handler 0x1558a98 takes interrupt 132). The stop 0x1558424 clears +0x00 bit 0 and waits until it reads set. 0x15589c4 waits until +0x40 reads bits 0 and 16 set, sets bits 12 and 28 of +0x3c and bit 0 of +0x04; 0x1558a2c clears the two +0x3c bits and waits for +0x40 again; 0x1558a78 reads +0x44 and 0x1558468 writes 1 to it. A strict boot with the camera's own settings (face detection selected) reads +0x00 at 182.7M instructions. Both handshakes complete at once; no interrupt of this block is known, and what it computes is not modeled."
             }
           ],
           "imaging_statistics": {
