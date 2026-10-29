@@ -1155,6 +1155,20 @@ pub struct Gpio {
     pub size: u64,
 }
 
+/// X-Processor Pro imaging control page: block stop and register-bus channels.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareImagingControl"))]
+pub struct ImagingControl {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Declared size.
+    pub size: u64,
+}
+
 /// Declared input buffer facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1478,6 +1492,9 @@ pub struct RegisterLayouts {
     /// Declared imaging.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imaging: Option<ImagingRegisters>,
+    /// Declared X-Processor Pro imaging control page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imaging_control: Option<ImagingControl>,
     /// Declared interrupts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interrupts: Option<Interrupts>,

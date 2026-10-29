@@ -934,6 +934,7 @@ impl Session {
             xpp_display_frames,
             xpp_adc,
             xpp_display_outputs,
+            xpp_imaging_control,
             cache_sizes,
             io_group_base,
             decompressor,
@@ -1069,6 +1070,11 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_adc(adc.base, &adc.samples, adc.conversion_ticks)?;
+        }
+        if let Some(base) = xpp_imaging_control {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_imaging_control(base)?;
         }
         for output in &xpp_display_outputs {
             devices

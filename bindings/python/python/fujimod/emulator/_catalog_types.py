@@ -2423,6 +2423,12 @@ class HardwareImaging(TypedDict, total=False):
     sensor_capture: NotRequired[HardwareSensorCapture | None]
 
 
+class HardwareImagingControl(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    size: Required[int]
+
+
 class HardwareImagingRegisters(TypedDict, total=False):
     basis: Required[str]
     command_base: Required[int]
@@ -2600,6 +2606,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     gic: NotRequired[HardwareGic | None]
     gpio: NotRequired[HardwareGpio | None]
     imaging: NotRequired[HardwareImagingRegisters | None]
+    imaging_control: NotRequired[HardwareImagingControl | None]
     interrupts: NotRequired[HardwareInterrupts | None]
     interval_timer: NotRequired[HardwareIntervalTimer | None]
     io_groups: NotRequired[HardwareIoGroups | None]

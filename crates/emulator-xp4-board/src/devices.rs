@@ -794,6 +794,21 @@ impl Devices {
         self.windows.push((base, base + size, id));
         Ok(())
     }
+    pub fn xpp_imaging_control(&mut self, base: u64) -> Result<(), String> {
+        use fujimod_emulator_xpp::imaging::{Control, WINDOW};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(WINDOW))
+        {
+            return Err("Overlapping X-Processor Pro imaging control".into());
+        }
+        let model = Control::new(base)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + WINDOW, id));
+        Ok(())
+    }
     /// X-Processor Pro display frame interrupts; the law has no register window.
     pub fn xpp_display_frames(&mut self, irqs: Vec<u32>, period: u64) -> Result<(), String> {
         let model = fujimod_emulator_xpp::display::FrameClock::new(irqs, period)?;

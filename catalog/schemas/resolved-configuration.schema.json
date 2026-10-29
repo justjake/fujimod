@@ -11585,6 +11585,34 @@
       },
       "type": "object"
     },
+    "HardwareImagingControl": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro imaging control page: block stop and register-bus channels.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "size"
+      ],
+      "type": "object"
+    },
     "HardwareImagingRegisters": {
       "additionalProperties": false,
       "description": "Declared register maps imaging facts.",
@@ -12580,6 +12608,17 @@
             }
           ],
           "description": "Declared imaging."
+        },
+        "imaging_control": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareImagingControl"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro imaging control page."
         },
         "interrupts": {
           "anyOf": [

@@ -7,6 +7,7 @@ pub mod boot;
 pub mod clocks;
 pub mod display;
 pub mod flash;
+pub mod imaging;
 pub mod sd;
 pub mod serial;
 pub mod timer;

@@ -50,6 +50,9 @@ pub struct Definition {
     pub xpp_adc: Option<XppAdc>,
     #[serde(default)]
     pub xpp_display_outputs: Vec<XppDisplayOutput>,
+    /// X-Processor Pro imaging control page base.
+    #[serde(default)]
+    pub xpp_imaging_control: Option<u64>,
     #[serde(default)]
     pub cache_sizes: Option<(u32, u32, u32)>,
     #[serde(default)]

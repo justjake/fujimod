@@ -96,6 +96,13 @@
       "clock_id": null
     },
     {
+      "id": "imaging-control",
+      "base": 4294152192,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
       "id": "adc",
       "base": 4294021120,
       "size": 64,
@@ -505,6 +512,11 @@
             "base": 4293967872,
             "size": 1024,
             "basis": "Sixteen GPIO banks with a 0x40 stride and input levels at +0x14, the same layout as the XP4 banks: X-T20 2.11 stage 2 (0x102c) copies the sixteen input words into the boot information and seg5 0xc4e138 reads the live register. Discovery up to REC writes only registers 0-7 of each bank."
+          },
+          "imaging_control": {
+            "base": 4294152192,
+            "size": 4096,
+            "basis": "Imaging control page of X-T20 2.11 section 5: +0x000 bit 0 is a run bit that 0xc33ec8 clears and then waits to read set (stopped); six register-bus channels at +0x200 + 0x40*n (0xc345b4..0xc34c50) send a RAM frame 0x81 hi lo value (write) or 0x82 hi lo (read) to a select in configuration bits 8-12 and return the reply byte in bits 15:8 of eight receive words at +0x1c. The imaging-side chip is a register file: the start-up writes a register and reads it back until it matches (seg6 0x17fa434). Commands and stops complete at once; what the chip does with the values is not modeled."
           },
           "display_outputs": [
             {
