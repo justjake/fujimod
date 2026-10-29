@@ -7,7 +7,10 @@
 //! rewrites power and clock words by read-modify-write, which relies on the
 //! cleared UHS-II settings. 0xc65a04/0xc65e58 set and clear +0x14 bit 22
 //! around the UHS-II attempt; 0xc621d0/0xc620b8 set and clear pad bits in
-//! +0x70 and +0x88. What those bits gate is not modeled.
+//! +0x70 and +0x88. The section 6 USB start-up 0x15274f0 sets +0x100 bit 5,
+//! clears +0x118 bit 13 and +0x110 bit 2, then drives +0x10c bit 0 low and
+//! high again before it programs the DWC3. What those bits gate is not
+//! modeled.
 //!
 //! +0x08 holds the polarity of the sixteen external interrupt lines: bit n
 //! set inverts line n (0xc694d4). Line n is interrupt 151 + n (0xc5cfd4 maps
@@ -26,7 +29,9 @@ use std::sync::{Arc, Mutex};
 
 /// Register window size in bytes.
 pub const WINDOW: u64 = 0x1000;
-const WORDS: [u64; 8] = [0x08, 0x14, 0x1c, 0x20, 0x6c, 0x70, 0x88, 0x9c];
+const WORDS: [u64; 12] = [
+    0x08, 0x14, 0x1c, 0x20, 0x6c, 0x70, 0x88, 0x9c, 0x100, 0x10c, 0x110, 0x118,
+];
 const SD_RESETS: u64 = 0x1c;
 const SD_CHANNELS: usize = 3;
 const SD_FIRST_BIT: u32 = 18;

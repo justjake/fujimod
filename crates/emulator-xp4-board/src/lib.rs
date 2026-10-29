@@ -943,6 +943,7 @@ impl Session {
             xpp_i2c,
             xpp_dram,
             xpp_power,
+            xpp_usb,
             xpp_frame_sync,
             xpp_hdmi,
             xpp_statistics,
@@ -1179,6 +1180,17 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_hdmi(base)?;
+        }
+        if let Some((base, irq, command_ticks, transaction_ticks, speed)) = xpp_usb {
+            devices.get_or_insert_with(devices::Devices::empty).usb(
+                fujimod_emulator_ip::usb::dwc3::Config {
+                    base,
+                    irq,
+                    command_ticks,
+                    transaction_ticks,
+                    speed,
+                },
+            )?;
         }
         if let Some(base) = xpp_power {
             devices

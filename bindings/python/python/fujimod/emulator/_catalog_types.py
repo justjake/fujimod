@@ -2713,6 +2713,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     usb: NotRequired[HardwareUsbRegisters | None]
     xpp_i2c: NotRequired[HardwareXppI2cBuses | None]
     xpp_sd: NotRequired[HardwareXppSdHost | None]
+    xpp_usb: NotRequired[HardwareXppUsb | None]
 
 
 class HardwareRegisterWindow(TypedDict, total=False):
@@ -2910,6 +2911,15 @@ class HardwareXppSdHost(TypedDict, total=False):
     reset_ticks: Required[int]
     size: Required[int]
     transfer_ticks: Required[int]
+
+
+class HardwareXppUsb(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    command_ticks: Required[int]
+    irq_route: Required[int]
+    size: Required[int]
+    transaction_ticks: Required[int]
 
 
 class HomeSwitch(TypedDict, total=False):

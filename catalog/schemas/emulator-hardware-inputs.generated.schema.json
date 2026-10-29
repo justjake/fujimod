@@ -243,6 +243,17 @@
             }
           ],
           "description": "Declared temperature input."
+        },
+        "usb_cable": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetUsbCable"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared USB port: the cable's VBUS pin and the link speed a host\nnegotiates."
         }
       },
       "type": "object"
@@ -2947,6 +2958,39 @@
       "required": [
         "basis",
         "millicelsius"
+      ],
+      "type": "object"
+    },
+    "ResetUsbCable": {
+      "additionalProperties": false,
+      "description": "USB port of a body: VBUS reaches a GPIO input pin, and a host on the data\nlines negotiates `speed` (\"high\" or \"super\").",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "speed": {
+          "description": "Link speed a host negotiates.",
+          "type": "string"
+        },
+        "vbus_bank": {
+          "description": "GPIO bank of the VBUS input.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "vbus_pin": {
+          "description": "GPIO pin of the VBUS input.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "vbus_bank",
+        "vbus_pin",
+        "speed"
       ],
       "type": "object"
     },

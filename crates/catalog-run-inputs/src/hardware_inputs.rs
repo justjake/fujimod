@@ -1128,6 +1128,23 @@ pub struct SubCpuInputs {
     pub clock: Option<SubCpuClock>,
 }
 
+/// USB port of a body: VBUS reaches a GPIO input pin, and a host on the data
+/// lines negotiates `speed` ("high" or "super").
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetUsbCable"))]
+pub struct UsbCableInput {
+    /// Declared basis.
+    pub basis: String,
+    /// GPIO bank of the VBUS input.
+    pub vbus_bank: u64,
+    /// GPIO pin of the VBUS input.
+    pub vbus_pin: u64,
+    /// Link speed a host negotiates.
+    pub speed: String,
+}
+
 /// Seconds count in four consecutive sub-CPU registers, least significant
 /// byte first, that advances with device time while its hold register's bit 0
 /// is set.
@@ -1234,6 +1251,10 @@ pub struct HardwareReset {
     /// Declared register-file peer on a serial port.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sub_cpu: Option<SubCpuInputs>,
+    /// Declared USB port: the cable's VBUS pin and the link speed a host
+    /// negotiates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usb_cable: Option<UsbCableInput>,
     /// Declared temperature input.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temperature_input: Option<TemperatureInput>,

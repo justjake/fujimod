@@ -76,6 +76,10 @@ pub struct Definition {
     /// X-Processor Pro DRAM controller base and refresh-rate level.
     #[serde(default)]
     pub xpp_dram: Option<(u64, u8)>,
+    /// X-Processor Pro DWC3: base, interrupt line, command and transaction
+    /// ticks, negotiated speed (0 high speed, 4 SuperSpeed).
+    #[serde(default)]
+    pub xpp_usb: Option<(u64, u32, u64, u64, u8)>,
     /// X-Processor Pro power control base (supply hold and power domains).
     #[serde(default)]
     pub xpp_power: Option<u64>,

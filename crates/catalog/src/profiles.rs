@@ -1201,6 +1201,26 @@ pub struct DramController {
     pub size: u64,
 }
 
+/// X-Processor Pro DesignWare USB3 device controller.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareXppUsb"))]
+pub struct XppUsb {
+    /// Declared base; the core registers start at +0xc100.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Time an endpoint command takes, in device ticks.
+    pub command_ticks: u64,
+    /// Interrupt line of the event buffer.
+    pub irq_route: u32,
+    /// Declared size.
+    pub size: u64,
+    /// Time a bus transaction takes, in device ticks.
+    pub transaction_ticks: u64,
+}
+
 /// X-Processor Pro power control: supply hold and power domains.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1780,6 +1800,9 @@ pub struct RegisterLayouts {
     /// Declared X-Processor Pro power control.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub power_control: Option<PowerControl>,
+    /// Declared X-Processor Pro USB device controller.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xpp_usb: Option<XppUsb>,
     /// Declared interrupts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interrupts: Option<Interrupts>,

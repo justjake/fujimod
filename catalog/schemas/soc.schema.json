@@ -2642,6 +2642,17 @@
             }
           ],
           "description": "Declared X-Processor Pro SD channel."
+        },
+        "xpp_usb": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareXppUsb"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro USB device controller."
         }
       },
       "type": "object"
@@ -3227,6 +3238,55 @@
         "reset_ticks",
         "size",
         "transfer_ticks"
+      ],
+      "type": "object"
+    },
+    "HardwareXppUsb": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro DesignWare USB3 device controller.",
+      "properties": {
+        "base": {
+          "description": "Declared base; the core registers start at +0xc100.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "command_ticks": {
+          "description": "Time an endpoint command takes, in device ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq_route": {
+          "description": "Interrupt line of the event buffer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transaction_ticks": {
+          "description": "Time a bus transaction takes, in device ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "command_ticks",
+        "irq_route",
+        "size",
+        "transaction_ticks"
       ],
       "type": "object"
     },
