@@ -199,14 +199,27 @@ pub struct XppFrameSync {
     pub period_ticks: u64,
 }
 
-/// X-Processor Pro register block: base, window size and the
-/// (offset, mask) status bits that always read set.
+/// X-Processor Pro register block: base, window size, the (offset, mask)
+/// status bits that always read set and an optional frame law.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct XppRegisterBlock {
     pub base: u64,
     pub size: u64,
     pub idle: Vec<(u64, u32)>,
+    #[serde(default)]
+    pub frames: Option<XppBlockFrames>,
+}
+
+/// Frame law of a register block: (offset, mask) of the start and stopped
+/// bits, the interrupt line and the frame period in ticks.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppBlockFrames {
+    pub start: (u64, u32),
+    pub stopped: (u64, u32),
+    pub irq: u32,
+    pub period_ticks: u64,
 }
 
 /// One X-Processor Pro DesignWare I2C bus and the parts that answer on it.

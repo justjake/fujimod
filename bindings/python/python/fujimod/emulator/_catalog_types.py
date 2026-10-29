@@ -2642,8 +2642,16 @@ class HardwareRaster(TypedDict, total=False):
 class HardwareRegisterBlock(TypedDict, total=False):
     base: Required[int]
     basis: Required[str]
+    frames: NotRequired[HardwareRegisterBlockFrames | None]
     idle_bits: Required[list[HardwareRegisterIdleBits]]
     size: Required[int]
+
+
+class HardwareRegisterBlockFrames(TypedDict, total=False):
+    irq_route: Required[int]
+    period_ticks: Required[int]
+    start: Required[HardwareRegisterIdleBits]
+    stopped: Required[HardwareRegisterIdleBits]
 
 
 class HardwareRegisterIdleBits(TypedDict, total=False):

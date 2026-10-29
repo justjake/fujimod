@@ -12717,6 +12717,17 @@
           "description": "Declared basis.",
           "type": "string"
         },
+        "frames": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareRegisterBlockFrames"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Frames the block finishes while started."
+        },
         "idle_bits": {
           "description": "Status bits that always read set.",
           "items": {
@@ -12736,6 +12747,39 @@
         "basis",
         "idle_bits",
         "size"
+      ],
+      "type": "object"
+    },
+    "HardwareRegisterBlockFrames": {
+      "additionalProperties": false,
+      "description": "Frame law of a register block: one interrupt edge per frame period while\nthe start bit is set; the stopped bit reads set only while it is clear.",
+      "properties": {
+        "irq_route": {
+          "description": "Interrupt line of the frame edge.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "period_ticks": {
+          "description": "Frame period in device ticks, the frame sync's.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start": {
+          "$ref": "#/$defs/HardwareRegisterIdleBits",
+          "description": "Start bit."
+        },
+        "stopped": {
+          "$ref": "#/$defs/HardwareRegisterIdleBits",
+          "description": "Bit that reads set while stopped."
+        }
+      },
+      "required": [
+        "irq_route",
+        "period_ticks",
+        "start",
+        "stopped"
       ],
       "type": "object"
     },

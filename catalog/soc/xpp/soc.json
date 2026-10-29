@@ -444,6 +444,16 @@
         "line": 106
       },
       {
+        "source_block_id": "imaging-unit-0",
+        "output_id": "frame",
+        "line": 107
+      },
+      {
+        "source_block_id": "imaging-unit-1",
+        "output_id": "frame",
+        "line": 108
+      },
+      {
         "source_block_id": "frame-sync",
         "output_id": "frame-status-0",
         "line": 102
@@ -696,13 +706,15 @@
                 {
                   "offset": 0,
                   "mask": 1
-                },
-                {
-                  "offset": 216,
-                  "mask": 256
                 }
               ],
-              "basis": "Imaging unit 0 of X-T20 2.11 section 5 at (0xfff55 + n) << 12 (0xc3a954, 0xc3be40): a 31-entry 17-bit table at +0x40..+0xb8 (0xc3b450), buffer address +0xc0, line width +0xc4 and start bit 28 of +0xc8 (0xc3a98c). The stop 0xc3be40 clears the start bit and waits for +0xd8 bit 8, then 0xc3a954 writes 0 to +0x00 and waits for bit 0; both are declared idle, as no frame is in flight. The words read back their last write; no data is written to the buffers."
+              "frames": {
+                "start": { "offset": 200, "mask": 268435456 },
+                "stopped": { "offset": 216, "mask": 256 },
+                "irq_route": 107,
+                "period_ticks": 800000
+              },
+              "basis": "Live-view output unit 0 of X-T20 2.11 section 5 at (0xfff55 + n) << 12 (0xc3a954, 0xc3be40): a 31-entry 17-bit table at +0x40..+0xb8 (0xc3b450), buffer address +0xc0, line width +0xc4 and start bit 28 of +0xc8 (0xc3a98c). While started the unit finishes a frame at every frame-sync tick and raises edge interrupt 107 (descriptor row 0x2f of 0xed471c, config 3); its handler (0xc3abe8 / 0xc3abbc, registered by 0xc3bd20) sets +0xd8 bit 0 and reports the frame to the section-6 imaging dispatcher 0x1698f8c, which runs the live-view job callback. The stop 0xc3be40 clears the start bit and waits for +0xd8 bit 8, which reads set while the unit is stopped; 0xc3a954 then writes 0 to +0x00 and waits for bit 0, declared idle. The same law runs live view in the xpro-lab emulator, where REC frames match the camera's marker sequence. The words read back their last write; no data is written to the buffers."
             },
             {
               "base": 4294270976,
@@ -711,13 +723,15 @@
                 {
                   "offset": 0,
                   "mask": 1
-                },
-                {
-                  "offset": 216,
-                  "mask": 256
                 }
               ],
-              "basis": "Imaging unit 1 of X-T20 2.11 section 5 at (0xfff55 + n) << 12 (0xc3a954, 0xc3be40): a 31-entry 17-bit table at +0x40..+0xb8 (0xc3b450), buffer address +0xc0, line width +0xc4 and start bit 28 of +0xc8 (0xc3a98c). The stop 0xc3be40 clears the start bit and waits for +0xd8 bit 8, then 0xc3a954 writes 0 to +0x00 and waits for bit 0; both are declared idle, as no frame is in flight. The words read back their last write; no data is written to the buffers."
+              "frames": {
+                "start": { "offset": 200, "mask": 268435456 },
+                "stopped": { "offset": 216, "mask": 256 },
+                "irq_route": 108,
+                "period_ticks": 800000
+              },
+              "basis": "Live-view output unit 1 of X-T20 2.11 section 5 at (0xfff55 + n) << 12 (0xc3a954, 0xc3be40): a 31-entry 17-bit table at +0x40..+0xb8 (0xc3b450), buffer address +0xc0, line width +0xc4 and start bit 28 of +0xc8 (0xc3a98c). While started the unit finishes a frame at every frame-sync tick and raises edge interrupt 108 (descriptor row 0x30 of 0xed471c, config 3); its handler (0xc3abe8 / 0xc3abbc, registered by 0xc3bd20) sets +0xd8 bit 0 and reports the frame to the section-6 imaging dispatcher 0x1698f8c, which runs the live-view job callback. The stop 0xc3be40 clears the start bit and waits for +0xd8 bit 8, which reads set while the unit is stopped; 0xc3a954 then writes 0 to +0x00 and waits for bit 0, declared idle. The same law runs live view in the xpro-lab emulator, where REC frames match the camera's marker sequence. The words read back their last write; no data is written to the buffers."
             }
           ],
           "imaging_statistics": {

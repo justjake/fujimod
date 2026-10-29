@@ -876,7 +876,14 @@ impl Devices {
         &mut self,
         block: crate::definition::XppRegisterBlock,
     ) -> Result<(), String> {
-        let model = fujimod_emulator_xpp::blocks::Block::new(block.base, block.size, block.idle)?;
+        let frames = block.frames.map(|f| fujimod_emulator_xpp::blocks::Frames {
+            start: f.start,
+            stopped: f.stopped,
+            irq: f.irq,
+            period: f.period_ticks,
+        });
+        let model =
+            fujimod_emulator_xpp::blocks::Block::new(block.base, block.size, block.idle, frames)?;
         let end = block.base + model.window();
         if self
             .windows

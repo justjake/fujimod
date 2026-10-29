@@ -1287,8 +1287,28 @@ pub struct RegisterBlock {
     pub basis: String,
     /// Status bits that always read set.
     pub idle_bits: Vec<RegisterIdleBits>,
+    /// Frames the block finishes while started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frames: Option<RegisterBlockFrames>,
     /// Declared size.
     pub size: u64,
+}
+
+/// Frame law of a register block: one interrupt edge per frame period while
+/// the start bit is set; the stopped bit reads set only while it is clear.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterBlockFrames"))]
+pub struct RegisterBlockFrames {
+    /// Interrupt line of the frame edge.
+    pub irq_route: u32,
+    /// Frame period in device ticks, the frame sync's.
+    pub period_ticks: u64,
+    /// Start bit.
+    pub start: RegisterIdleBits,
+    /// Bit that reads set while stopped.
+    pub stopped: RegisterIdleBits,
 }
 
 /// X-Processor Pro imaging statistics engine.
