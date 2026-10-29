@@ -31,7 +31,7 @@ export function StateCaptures(props: {
   const [failure, setFailure] = createSignal('');
   const [names, setNames] = createSignal<Record<string, string>>({});
   let abort: AbortController | undefined;
-  const set = () => props.set ?? emptySet(selection()!.firmware.id);
+  const set = () => props.set ?? emptySet(selection()!.firmware.firmware_id);
   const available = () =>
     Boolean(
       props.camera?.present && !props.camera.session && !props.camera.uncertain && !running(),
@@ -44,7 +44,7 @@ export function StateCaptures(props: {
   async function capture(state: CaptureState) {
     const current = scope();
     const camera = props.camera;
-    const firmwareId = selection()?.firmware.id;
+    const firmwareId = selection()?.firmware.firmware_id;
     const text = label(state);
     const file = props.onFile;
     if (!current || !camera || !firmwareId || !text || !available()) return;

@@ -1,0 +1,116 @@
+{
+  "$schema": "https://fujimod.com/schemas/bulk.generated.schema.json",
+  "schema": 1,
+  "id": "xt30ii-204-bulk",
+  "firmware_id": "xt30ii-204",
+  "product": "X-T30 II",
+  "internal_version": "1.46",
+  "code_alias": 0,
+  "source": {
+    "mechanism": "pattern",
+    "registered_buffer": 41296552,
+    "source_state": 53321716,
+    "capacity": 65536
+  },
+  "window": {
+    "address": 16777216,
+    "size": 36700160
+  },
+  "code_checks": [
+    {
+      "name": "code_1189804",
+      "address": 18388996,
+      "size": 100,
+      "sha256": "0f10b9b031b877c9443b0ae35bac0e2900a1dc262870459f5a528817e917e0da"
+    },
+    {
+      "name": "code_20fdc28",
+      "address": 34593832,
+      "size": 192,
+      "sha256": "e51b9c4d0b7a2687621e385214e1ebabba72024b463417bf9f3699c54b596391"
+    },
+    {
+      "name": "bulk_poll",
+      "address": 34182580,
+      "size": 252,
+      "sha256": "76557f887be4be6c81496758ba8d811deb263fedd728761e0e1d829d6c31eab8"
+    },
+    {
+      "name": "bulk_e1",
+      "address": 34185496,
+      "size": 196,
+      "sha256": "53740a0116b1141b523eb3c6a4fd43a47353d3a4ecad4681be0b02b780dda924"
+    },
+    {
+      "name": "bulk_be32",
+      "address": 34183560,
+      "size": 52,
+      "sha256": "82d680da35e199be8abad7f4180a111dd128fc64e91c6153a3b040da5bff664d"
+    },
+    {
+      "name": "bulk_pattern",
+      "address": 34189212,
+      "size": 220,
+      "sha256": "0cec4d1224ca41f35b393ab2f85d05ed6390a3449c0278f1645a6f5b1879f5ed"
+    },
+    {
+      "name": "bulk_register_buffer",
+      "address": 34186232,
+      "size": 132,
+      "sha256": "84aaaa17ccd50735161fcaac59b95f553604d7c4cca96ce81ef48acd4de1a9dc"
+    },
+    {
+      "name": "bulk_le32",
+      "address": 34183612,
+      "size": 52,
+      "sha256": "fd8d195a69e3ab7f1ea4fb72ba93c30a87131e866fa973f2fd509d0b05c87a1c"
+    },
+    {
+      "name": "bulk_store_le32",
+      "address": 34183512,
+      "size": 48,
+      "sha256": "a79a6f803e486fa12fea9be63b0ab18cc89d0c3efee1321d8b165d3944d13688"
+    },
+    {
+      "name": "pattern_opcode_compare",
+      "address": 34190148,
+      "size": 16,
+      "sha256": "4834466e7fb1001c65a7bce9b659537d136c1f80879bf3ed2ba932e28ff2714c"
+    },
+    {
+      "name": "pattern_opcode_case",
+      "address": 34190164,
+      "size": 20,
+      "sha256": "1ba1708e1928cf8be2c1e4dfd11b86ce4d9e1d63b880b66d0108b08aa1afcc4b"
+    }
+  ],
+  "probes": [
+    {
+      "address": 18388996,
+      "size": 100
+    },
+    {
+      "address": 34593832,
+      "size": 128
+    }
+  ],
+  "mapped_probe": {
+    "name": "bulk_mapped_probe",
+    "address": 34144256,
+    "size": 65536,
+    "sha256": "e14da2476471108afcb8694884b18a13306f6b0ca28e4900e700567ed47db17e"
+  },
+  "scopes": [
+    {
+      "name": "quick",
+      "basis": "Mapped update ranges in the RAM window through the highest located transfer-state address, rounded to 1 MiB. Static BSS and heap extents beyond it are not established.",
+      "ranges": [
+        {
+          "name": "firmware",
+          "address": 16777216,
+          "size": 36700160
+        }
+      ]
+    }
+  ]
+}

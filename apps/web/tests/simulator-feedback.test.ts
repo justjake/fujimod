@@ -53,7 +53,10 @@ test('both pathways prefill separate fields and preserve Unicode and punctuation
         assert.equal(query.get('mod-build'), modBuild);
         assert.equal(query.get('simulator-build'), 'abc123 / 2026-10-17');
         assert.equal(query.has('crash'), event === 'crash');
-        assert(!query.toString().includes('private+long+stack'));
+        if (event === 'crash') {
+          assert.match(query.get('crash')!, /The emulator stopped\nExecution fault\n/);
+          assert.match(query.get('crash')!, /firmware .* · build abc123 \/ 2026-10-17/);
+        }
         assert(!query.has('simulator-report'), 'a report attachment cannot be prefilled');
         for (const field of ['firmware', 'feedback', 'mod-build', 'simulator-build'])
           assert(template(event).includes(`id: ${field}\n`));

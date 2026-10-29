@@ -199,6 +199,12 @@ class Index:
     def pairs(self, reference: str, other: str) -> list[Pair]:
         return cast(list[Pair], self._query("pairs", reference=reference, other=other))
 
+    def pairs_for(self, function: int, other: str) -> list[Pair]:
+        """Return pair rows for one reference function without querying all families."""
+        return cast(
+            list[Pair], self._query("pairs_for", id=function, other=other)
+        )
+
     def names(
         self,
         function: int,

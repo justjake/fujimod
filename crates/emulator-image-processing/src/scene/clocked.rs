@@ -165,6 +165,13 @@ impl fujimod_emulator_devices::capability::FrameSource for ClockedFrames {
     fn frame_state(&self) -> serde_json::Value {
         self.save()
     }
+    fn sensor_sample_rgb(&self, width: usize, height: usize) -> Result<Vec<u8>, String> {
+        let image = self.images.0.lock().map_err(|_| "image frame poisoned")?;
+        match &image.pixels {
+            Pixels::Sensor(frame) => frame.sensor_sample_rgb(width, height),
+            Pixels::Packed(_) => Err("frame source has no latched sensor image".into()),
+        }
+    }
 }
 impl Device for ClockedFrames {
     fn frame_source(&self) -> Option<&(dyn fujimod_emulator_devices::capability::FrameSource + 'static)> {

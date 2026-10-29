@@ -55,7 +55,7 @@ fn ready(profile: Profile) -> (FaceResults, IrqRoutes, Clock) {
     routes.set(47, Some(0)).unwrap();
     let mut model = FaceResults::new(profile, routes.clone());
     let mut host = Clock::default();
-    assert_eq!(write(&mut model, &mut host, 0, 0x48, 0x42750000), None);
+    assert_eq!(write(&mut model, &mut host, 0, 0x48, 0x40001000), None);
     (model, routes, host)
 }
 
@@ -124,11 +124,11 @@ fn invalid_start_refuses_without_mutation_and_reset_cancels_pending_job() {
     let before = model.save();
     assert!(write(&mut model, &mut host, 1, 4, 1).is_some());
     assert_eq!(model.save(), before);
-    assert_eq!(write(&mut model, &mut host, 0, 0x48, 0x42750002), None);
+    assert_eq!(write(&mut model, &mut host, 0, 0x48, 4), None);
     let before = model.save();
     assert!(write(&mut model, &mut host, 0, 4, 1).is_some());
     assert_eq!(model.save(), before);
-    assert_eq!(write(&mut model, &mut host, 0, 0x48, 0x42750000), None);
+    assert_eq!(write(&mut model, &mut host, 0, 0x48, 0x40001000), None);
     assert_eq!(write(&mut model, &mut host, 0, 4, 1), None);
     let before = model.save();
     assert!(write(&mut model, &mut host, 0, 4, 1).is_some());
@@ -144,4 +144,47 @@ fn invalid_start_refuses_without_mutation_and_reset_cancels_pending_job() {
     let mut invalid = before;
     invalid["due"] = serde_json::json!(1);
     assert!(model.restore(&invalid).is_err());
+}
+
+#[test]
+fn image_source_addresses_latch_at_start_and_survive_restore() {
+    let (mut model, routes, mut host) = ready(Profile::Empty);
+    for address in [0x40000000, 0x4abc0000, 0x5ffffffc] {
+        assert_eq!(write(&mut model, &mut host, 0, 0x48, address), None);
+        assert_eq!(write(&mut model, &mut host, 0, 4, 1), None);
+        assert_eq!(
+            model.state.recent.back().unwrap().source_address,
+            address as u32
+        );
+        assert_eq!(write(&mut model, &mut host, 0, 0x48, 0x40002000), None);
+        assert_eq!(
+            model.state.recent.back().unwrap().source_address,
+            address as u32
+        );
+        let saved = model.save();
+        let mut restored = FaceResults::new(Profile::Empty, routes.clone());
+        restored.restore(&saved).unwrap();
+        assert_eq!(restored.save(), saved);
+        host.now += LATENCY;
+        tick(&mut model, &mut host);
+    }
+}
+
+#[test]
+fn invalid_source_addresses_refuse_start_and_saved_requests() {
+    for address in [0, 3, 0x3ffffffc, 0x40000001, 0x60000000, 0xfffffff8] {
+        let (mut model, _, mut host) = ready(Profile::Empty);
+        assert_eq!(write(&mut model, &mut host, 0, 0x48, address), None);
+        let before = model.save();
+        assert!(write(&mut model, &mut host, 0, 4, 1).is_some());
+        assert_eq!(model.save(), before);
+
+        assert_eq!(write(&mut model, &mut host, 0, 0x48, 0x40001000), None);
+        assert_eq!(write(&mut model, &mut host, 0, 4, 1), None);
+        let before = model.save();
+        let mut invalid = before.clone();
+        invalid["recent"][0]["source_address"] = serde_json::json!(address);
+        assert!(model.restore(&invalid).is_err());
+        assert_eq!(model.save(), before);
+    }
 }

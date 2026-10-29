@@ -1,7 +1,7 @@
 //! Runtime connection for the vector engine: physical DMA, routed IRQs and
 //! exact completion deadlines. The peripheral has no processor capability.
 use super::{CommandProcessor, IRQ, Inputs, Profile, recording};
-use fujimod_emulator_devices::{Action, Cx, Device, Unsupported};
+use fujimod_emulator_devices::{Action, Cx, Device, Unsupported, bus::HostRequest};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -26,6 +26,9 @@ pub struct VectorGpu {
     controllers: [Option<fujimod_emulator_devices::exr2::irq::Inputs>; 2],
     due: BTreeMap<u64, u64>,
     recording: Option<recording::Recorder>,
+    next_host_request: u64,
+    host_request: Option<HostRequest>,
+    host_request_published: bool,
 }
 impl VectorGpu {
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
@@ -85,6 +88,9 @@ impl VectorGpu {
             controllers,
             due: BTreeMap::new(),
             recording,
+            next_host_request: 0,
+            host_request: None,
+            host_request_published: false,
         })
     }
     fn actions(&mut self, cx: &mut Cx<'_>, actions: Vec<Action>) -> Result<(), String> {
@@ -135,6 +141,8 @@ impl VectorGpu {
 }
 struct Connected<'a, 'b> {
     cx: &'a mut Cx<'b>,
+    next_host_request: &'a mut u64,
+    host_request: &'a mut Option<HostRequest>,
     controllers: &'a [Option<fujimod_emulator_devices::exr2::irq::Inputs>; 2],
     dma_failure: Option<String>,
     capture: bool,
@@ -184,6 +192,29 @@ impl Inputs for Connected<'_, '_> {
             });
         }
         result
+    }
+    fn submit_webgpu_request(
+        &mut self,
+        kind: &str,
+        payload: Vec<u8>,
+    ) -> fujimod_emulator_devices::record::Result<Option<u64>> {
+        if !super::webgpu_bridge_enabled() {
+            return Ok(None);
+        }
+        if self.host_request.is_some() {
+            return Err(Unsupported("Vector GPU already has an asynchronous request".into()));
+        }
+        self.cx.request_pause().map_err(Unsupported)?;
+        let id = *self.next_host_request;
+        *self.next_host_request = id
+            .checked_add(1)
+            .ok_or_else(|| Unsupported("Vector WebGPU request ID exhausted".into()))?;
+        *self.host_request = Some(HostRequest {
+            id,
+            kind: kind.to_owned(),
+            payload,
+        });
+        Ok(Some(id))
     }
     fn targets(&mut self) -> fujimod_emulator_devices::record::Result<(usize, i64)> {
         let mut count = 0;
@@ -290,6 +321,8 @@ impl Device for VectorGpu {
         }
         let mut host = Connected {
             cx,
+            next_host_request: &mut self.next_host_request,
+            host_request: &mut self.host_request,
             controllers: &self.controllers,
             dma_failure: None,
             capture: self.recording.is_some(),
@@ -348,6 +381,38 @@ impl Device for VectorGpu {
             cx.fail(error);
         }
     }
+    fn take_host_request(&mut self) -> Option<HostRequest> {
+        if self.host_request_published {
+            return None;
+        }
+        let request = self.host_request.clone()?;
+        self.host_request_published = true;
+        Some(request)
+    }
+    fn has_host_request(&self) -> bool {
+        self.host_request.is_some()
+    }
+    fn complete_host_request(
+        &mut self,
+        cx: &mut Cx<'_>,
+        id: u64,
+        result: &[u8],
+    ) -> Result<(), String> {
+        if self
+            .host_request
+            .as_ref()
+            .is_none_or(|request| request.id != id || !self.host_request_published)
+        {
+            return Err("Vector WebGPU result has no matching published request".into());
+        }
+        let mut actions = Vec::new();
+        self.state
+            .complete_webgpu_request(id, result, &mut actions)
+            .map_err(|error| error.0)?;
+        self.host_request = None;
+        self.host_request_published = false;
+        self.actions(cx, actions)
+    }
     fn save(&self) -> serde_json::Value {
         // Host presentation samples this on every continuation. Pending DMA
         // pixels belong to the exact typed checkpoint and fingerprint, not
@@ -358,6 +423,10 @@ impl Device for VectorGpu {
             "clear_ack_offsets":s.clear_ack_offsets,"command_pending":s.command_pending,
             "busy":s.busy,"jobs_started":s.jobs_started,"jobs_completed":s.jobs_completed,
             "bytes_completed":s.bytes_completed,"irqs_raised":s.irqs_raised,
+            "cpu_raster_calls":s.cpu_raster_calls,
+            "cpu_vector_paint_calls":s.cpu_vector_paint_calls,
+            "gpu_gles_lists":s.gpu_gles_lists,
+            "gpu_vector_paint_calls":s.gpu_vector_paint_calls,
             "acknowledgments":s.acknowledgments,"last_job":s.last_job,
             "ram_bytes":s.ram_bytes,"max_fill_bytes":s.max_fill_bytes,
             "max_copy_bytes":s.max_copy_bytes,"max_clear_bytes":s.max_clear_bytes,

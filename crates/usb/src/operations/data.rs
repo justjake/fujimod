@@ -17,6 +17,46 @@ pub enum OffsetMode {
     Wrapping,
 }
 
+/// DMA constraints of a firmware's E1 source. The controller ignores source
+/// address bits below `address` and rounds each transfer length up to
+/// `granule`, so an unaligned range returns bytes from the aligned-down address
+/// and a length that is not a granule multiple fetches past the range's end.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DataAlignment {
+    address: NonZeroU32,
+    granule: NonZeroU32,
+}
+impl DataAlignment {
+    /// Both values are powers of two and `granule` is a multiple of `address`.
+    pub fn new(address: u32, granule: u32) -> Result<Self> {
+        if !address.is_power_of_two() || !granule.is_power_of_two() || granule < address {
+            return Err(Error::InvalidLength);
+        }
+        Ok(Self {
+            address: NonZeroU32::new(address).expect("power of two"),
+            granule: NonZeroU32::new(granule).expect("power of two"),
+        })
+    }
+    pub fn address(self) -> NonZeroU32 {
+        self.address
+    }
+    pub fn granule(self) -> NonZeroU32 {
+        self.granule
+    }
+    /// Refuse a range that starts unaligned or is not a whole number of granules.
+    pub fn check(self, range: MemoryRange) -> Result<()> {
+        if !range.address().0.is_multiple_of(self.address.get())
+            || !range.length().get().is_multiple_of(self.granule.get())
+        {
+            return Err(Error::MisalignedDataRange {
+                address: self.address.get(),
+                granule: self.granule.get(),
+            });
+        }
+        Ok(())
+    }
+}
+
 /// Firmware-qualified E1 mapping, supplied by the caller after setup/validation.
 ///
 /// `capacity` limits each command, not the total memory range. The aperture is
@@ -27,6 +67,7 @@ pub struct DataWindow {
     aperture: MemoryRange,
     capacity: NonZeroU32,
     mode: OffsetMode,
+    alignment: Option<DataAlignment>,
 }
 impl DataWindow {
     pub fn new(
@@ -43,7 +84,15 @@ impl DataWindow {
             aperture,
             capacity,
             mode,
+            alignment: None,
         })
+    }
+    /// Restrict ranges and per-command lengths to the source's DMA constraints.
+    pub fn with_alignment(self, alignment: DataAlignment) -> Self {
+        Self {
+            alignment: Some(alignment),
+            ..self
+        }
     }
     pub fn capacity(self) -> NonZeroU32 {
         self.capacity
@@ -53,7 +102,10 @@ impl DataWindow {
         if range.address().0 < self.aperture.address().0 || end(range) > end(self.aperture) {
             return Err(Error::OutsideDataWindow);
         }
-        Ok(())
+        match self.alignment {
+            Some(alignment) => alignment.check(range),
+            None => Ok(()),
+        }
     }
     fn offset(self, address: Address) -> Result<u32> {
         match self.mode {
@@ -97,9 +149,27 @@ impl<S: BorrowMut<Session>> DataReader<S> {
             return Ok(None);
         }
         let session = self.session.borrow_mut();
-        let count = (self.range.length().get() - self.completed)
-            .min(self.window.capacity.get())
+        let remaining = self.range.length().get() - self.completed;
+        let bound = self
+            .window
+            .capacity
+            .get()
             .min(session.max_reply_bytes().get());
+        let count = match self.window.alignment {
+            Some(alignment) if remaining > bound => {
+                let granule = alignment.granule().get();
+                match bound - bound % granule {
+                    0 => {
+                        return Err(Error::LengthLimit {
+                            requested: granule,
+                            limit: bound,
+                        });
+                    }
+                    whole => whole,
+                }
+            }
+            _ => remaining.min(bound),
+        };
         let address = Address(self.range.address().0 + self.completed);
         let offset = self.window.offset(address)?;
         let bytes = session

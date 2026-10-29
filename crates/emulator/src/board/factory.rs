@@ -186,7 +186,7 @@ impl Engines {
         processor: &Processor,
         options: &Options,
         translation_cache_size_bytes: u32,
-        memory: &fujimod_emulator_cpu_unicorn::rprofile::memory::Memory,
+        memory: &fujimod_emulator_cpu_unicorn::memory::Memory,
     ) -> Result<Box<dyn Cpu>, String> {
         let model = processor.model;
         if model == Model::ArmV8A && matches!(options.engine, Engine::Hypervisor) {
@@ -205,6 +205,12 @@ impl Engines {
             .as_ref()
             .ok_or("Unicorn engine was not constructed")?
             .open(model, translation_cache_size_bytes)?;
+        if model == Model::ArmV8A {
+            return Ok(Box::new(fujimod_emulator_cpu_unicorn::aprofile::Core::new(
+                raw,
+                memory.clone(),
+            )?));
+        }
         if let Some(config) = processor.rprofile {
             Ok(Box::new(
                 fujimod_emulator_cpu_unicorn::rprofile::core::Core::new(
@@ -335,6 +341,60 @@ impl Graph {
         self.validate_decoders(&spans)?;
         Ok(())
     }
+    /// Native engines map peripheral pages; byte windows still dispatch through
+    /// the bus, which refuses every hole outside a declared device window.
+    fn peripheral_pages(&self) -> Result<Vec<Peripheral>, String> {
+        let mut pages = Vec::<Peripheral>::new();
+        for p in &self.peripherals {
+            let grain = self.processors[p.core].mapping_granule();
+            let address = p.address & !(grain - 1);
+            let end = (p.address + p.size as u64)
+                .checked_add(grain - 1)
+                .ok_or("MMIO page envelope overflow")?
+                & !(grain - 1);
+            let physical = p
+                .physical
+                .checked_sub(p.address - address)
+                .ok_or("MMIO page identity underflow")?;
+            if self
+                .mappings
+                .iter()
+                .any(|m| m.core == p.core && m.address < end && address < m.address + m.size as u64)
+            {
+                return Err("MMIO page envelope overlaps RAM".into());
+            }
+            pages.push(Peripheral {
+                core: p.core,
+                address,
+                physical,
+                size: (end - address) as usize,
+            });
+        }
+        pages.sort_by_key(|p| (p.core, p.address));
+        let mut merged = Vec::<Peripheral>::new();
+        for p in pages {
+            if let Some(last) = merged.last_mut()
+                && last.core == p.core
+                && p.address <= last.address + last.size as u64
+            {
+                let offset = p.address - last.address;
+                if last.physical.checked_add(offset) == Some(p.physical) {
+                    last.size = last.size.max(
+                        (offset as usize)
+                            .checked_add(p.size)
+                            .ok_or("MMIO page size overflow")?,
+                    );
+                } else if p.address < last.address + last.size as u64 {
+                    return Err("MMIO page has conflicting physical identities".into());
+                } else {
+                    merged.push(p);
+                }
+            } else {
+                merged.push(p);
+            }
+        }
+        Ok(merged)
+    }
     pub fn build(
         self,
         options: Options,
@@ -342,6 +402,7 @@ impl Graph {
         interrupts: Option<InterruptMap>,
     ) -> Result<Board, String> {
         self.validate()?;
+        let peripheral_pages = self.peripheral_pages()?;
         // Validate maps before creating a process-wide native VM.
         let ram = super::memory::Memory::new(
             self.ram
@@ -362,7 +423,7 @@ impl Graph {
             None => translation_cache_size_bytes(unicorn_processors)?,
         };
         let engines = Engines::new(&self, &options)?;
-        let memory = fujimod_emulator_cpu_unicorn::rprofile::memory::Memory::default();
+        let memory = fujimod_emulator_cpu_unicorn::memory::Memory::default();
         let cpus = self
             .processors
             .iter()
@@ -385,11 +446,15 @@ impl Graph {
                         a.size,
                         a.permissions,
                         NonNull::new(pointer).ok_or("null RAM mapping")?,
-                    )?;
+                    )
+                    .map_err(|error| {
+                        format!("CPU{core} RAM {:#x}+{:#x}: {error}", a.address, a.size)
+                    })?;
                 }
             }
             for &(r, value) in &self.processors[core].registers {
-                set(&**cpu, r, value)?;
+                set(&**cpu, r, value)
+                    .map_err(|error| format!("CPU{core} initialize {r:?}={value:#x}: {error}"))?;
             }
         }
         let released = self.processors.iter().map(|p| p.released).collect();
@@ -419,8 +484,12 @@ impl Graph {
                 board.configure_mprofile(core, config, views)?;
             }
         }
-        for p in self.peripherals {
-            board.map_mmio(p.core, p.address, p.size, p.physical)?;
+        for p in peripheral_pages {
+            board
+                .map_mmio(p.core, p.address, p.size, p.physical)
+                .map_err(|error| {
+                    format!("CPU{} MMIO {:#x}+{:#x}: {error}", p.core, p.address, p.size)
+                })?;
         }
         board.retained_engines = Some(engines);
         Ok(board)
@@ -448,5 +517,86 @@ mod translation_cache_tests {
                 .contains("32 MiB")
         );
         assert!(browser_translation_cache_size_bytes((64 + 64) * mib, 0).is_err());
+    }
+}
+
+#[cfg(test)]
+mod peripheral_page_tests {
+    use super::*;
+    fn graph() -> Graph {
+        Graph {
+            processors: vec![Processor {
+                model: Model::ArmV8A,
+                registers: vec![],
+                released: true,
+                mprofile: None,
+                rprofile: None,
+            }],
+            ram: vec![Ram {
+                base: 0x10000,
+                size: 0x4000,
+            }],
+            mappings: vec![MemoryMap {
+                core: 0,
+                address: 0x10000,
+                physical: 0x10000,
+                size: 0x4000,
+                permissions: 7,
+            }],
+            dma_mappings: vec![],
+            decoders: vec![],
+            instructions_per_tick: Ratio::new(1, 1).unwrap(),
+            peripherals: vec![
+                Peripheral {
+                    core: 0,
+                    address: 0x20004,
+                    physical: 0x20004,
+                    size: 4,
+                },
+                Peripheral {
+                    core: 0,
+                    address: 0x20100,
+                    physical: 0x20100,
+                    size: 4,
+                },
+            ],
+        }
+    }
+    #[test]
+    fn sparse_registers_share_a_native_page() {
+        let pages = graph().peripheral_pages().unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(
+            (pages[0].address, pages[0].physical, pages[0].size),
+            (0x20000, 0x20000, 0x4000)
+        );
+    }
+    #[test]
+    fn conflicting_page_identities_and_ram_overlap_refuse() {
+        let mut graph = graph();
+        graph.peripherals[1].physical = 0x30100;
+        assert!(
+            graph
+                .peripheral_pages()
+                .err()
+                .unwrap()
+                .contains("conflicting")
+        );
+        graph.peripherals[1].address = 0x10004;
+        graph.peripherals[1].physical = 0x10004;
+        assert!(
+            graph
+                .peripheral_pages()
+                .err()
+                .unwrap()
+                .contains("overlaps RAM")
+        );
+    }
+    #[test]
+    fn adjacent_pages_can_have_different_physical_identities() {
+        let mut graph = graph();
+        graph.peripherals[1].address = 0x24000;
+        graph.peripherals[1].physical = 0x30000;
+        assert_eq!(graph.peripheral_pages().unwrap().len(), 2);
     }
 }

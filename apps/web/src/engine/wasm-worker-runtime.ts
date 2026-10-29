@@ -37,7 +37,18 @@ interface Loaded {
   module: EmulatorModule;
   manifest: EmulatorManifest;
   identity: string;
+  dmpWebGpu?: DmpWebGpuModule;
   loadTimings?: ReturnType<HostTimings['snapshot']>;
+}
+interface DmpWebGpuModule {
+  render_request(
+    request: Uint8Array,
+    read_guest: (address: bigint, length: number) => Uint8Array,
+  ): Promise<Uint8Array>;
+  render_vector_ui_request(
+    request: Uint8Array,
+    read_guest: (address: bigint, length: number) => Uint8Array,
+  ): Promise<Uint8Array>;
 }
 export async function loadWasm(
   bundle: string,
@@ -73,19 +84,56 @@ export async function loadWasm(
       });
     }),
   ]);
+  const dmpCpuRenderer = manifest.dmpCpuRenderer ?? true;
   const module = await timing.measureAsync('instantiate', () =>
     instantiateEmulatorModule(
       create,
       wasmBinary,
       (path) => new URL(path, new URL(manifest.wasm, new URL('wasm.json', bundle))).href,
-      { executionPolicy: manifest.executionPolicy },
+      {
+        executionPolicy: manifest.executionPolicy,
+        dmpCpuRenderer,
+      },
     ),
   );
-  const identity = await timing.measureAsync('binaryDigest', () => digest(wasmBinary));
+  let dmpWebGpu: DmpWebGpuModule | undefined;
+  let dmpWebGpuIdentity: string | undefined;
+  if (!dmpCpuRenderer) {
+    const base = new URL(manifest.wasm, new URL('wasm.json', bundle));
+    const moduleUrl = new URL('dmp_webgpu.js', base);
+    const wasmUrl = new URL('dmp_webgpu_bg.wasm', base);
+    const [imported, wasmResponse] = await Promise.all([
+      timing.measureAsync('dmpWebGpuImport', async () => import(/* @vite-ignore */ moduleUrl.href)),
+      timing.measureAsync('dmpWebGpuBinary', async () => fetch(wasmUrl.href)),
+    ]);
+    if (!wasmResponse.ok) throw Error('DMP WebGPU binary is unavailable.');
+    if (
+      imported === null ||
+      typeof imported !== 'object' ||
+      !('default' in imported) ||
+      typeof imported.default !== 'function' ||
+      !('render_request' in imported) ||
+      typeof imported.render_request !== 'function' ||
+      !('render_vector_ui_request' in imported) ||
+      typeof imported.render_vector_ui_request !== 'function'
+    )
+      throw Error('DMP WebGPU module has no renderer exports.');
+    const webgpuBinary = await wasmResponse.arrayBuffer();
+    dmpWebGpuIdentity = await digest(webgpuBinary);
+    await timing.measureAsync('dmpWebGpuInitialize', () =>
+      (imported.default as (input: ArrayBuffer) => Promise<unknown>)(webgpuBinary),
+    );
+    dmpWebGpu = imported as DmpWebGpuModule;
+  }
+  const cameraIdentity = await timing.measureAsync('binaryDigest', () => digest(wasmBinary));
+  const identity = dmpWebGpuIdentity
+    ? await digest(new TextEncoder().encode(`${cameraIdentity}:${dmpWebGpuIdentity}`))
+    : cameraIdentity;
   return {
     module,
     manifest,
     identity,
+    dmpWebGpu,
     loadTimings: timing.snapshot(),
   };
 }
@@ -116,6 +164,7 @@ export class WasmWorkerRuntime {
   private module?: EmulatorModule;
   private camera?: Camera;
   private manifest?: EmulatorManifest;
+  private dmpWebGpu?: DmpWebGpuModule;
   private config?: EngineConfig;
   private state?: SessionState;
   private scene?: Scene;
@@ -211,6 +260,52 @@ export class WasmWorkerRuntime {
     if (!this.camera) throw Error('Wasm session is not ready.');
     return this.camera;
   }
+  private async completeDmpRequests(): Promise<boolean> {
+    if (this.manifest?.dmpCpuRenderer !== false) return false;
+    const camera = this.require();
+    const renderer = this.dmpWebGpu;
+    if (!renderer) throw Error('DMP WebGPU request has no initialized renderer.');
+    const requests = camera.takeHostRequests();
+    if (requests.length === 0) return false;
+    try {
+      for (const request of requests) {
+        const readGuest = (address: bigint, length: number) => camera.memoryRead(address, length);
+        let result: Uint8Array;
+        if (request.kind === 'vector-ui-webgpu') {
+          result = await renderer.render_vector_ui_request(request.payload, readGuest);
+        } else if (['dmp-webgpu', 'vector-gles-webgpu'].includes(request.kind)) {
+          result = await renderer.render_request(request.payload, readGuest);
+        } else {
+          throw Error(`Unsupported asynchronous device request ${request.kind}.`);
+        }
+        camera.completeHostRequest(request.device, request.id, result);
+      }
+    } finally {
+      requests.forEach((request) => request.free());
+    }
+    return true;
+  }
+  private async runUntil(tick: bigint, progress?: (instructions: number) => void) {
+    const camera = this.require();
+    do {
+      camera.runUntil(tick, progress);
+    } while (await this.completeDmpRequests());
+  }
+  private async bootToRec(limit: bigint, progress?: (instructions: number) => void) {
+    const camera = this.require();
+    const initialInstructions = camera.status().instructions;
+    let report: ReturnType<Camera['bootToRec']> | undefined;
+    for (;;) {
+      const consumed = camera.status().instructions - initialInstructions;
+      if (consumed >= limit) {
+        if (!report) return camera.bootToRec(1n, progress);
+        report.status = 'instruction-limit';
+        return report;
+      }
+      report = camera.bootToRec(limit - consumed, progress);
+      if (!(await this.completeDmpRequests())) return report;
+    }
+  }
   private observe(state: SessionState) {
     this.state = state;
     this.send({ type: 'state', state });
@@ -264,7 +359,7 @@ export class WasmWorkerRuntime {
         return s.usbInToken(request.node, request.endpoint);
       case 'usb_step':
         // One explicit host scheduling quantum; status itself never advances time.
-        s.runUntil(
+        await this.runUntil(
           s.status().ticks + BigInt(Math.max(1, Math.floor(this.manifest!.ticksPerSecond / 1000))),
         );
         this.rebase();
@@ -372,6 +467,8 @@ export class WasmWorkerRuntime {
             ]),
           ),
         };
+      case 'device_states':
+        return s.deviceStates(request.kind);
       case 'save':
         return this.save();
       case 'replay': {
@@ -411,9 +508,10 @@ export class WasmWorkerRuntime {
   private async loadSnapshot(bytes: Uint8Array, config: EngineConfig) {
     if (this.camera) throw Error('Wasm worker already booted.');
     this.config = config;
-    const { module, manifest, identity, loadTimings } = await this.prepare(config.bundle);
+    const { module, manifest, identity, loadTimings, dmpWebGpu } = await this.prepare(config.bundle);
     this.loadTimings = loadTimings;
     this.module = module;
+    this.dmpWebGpu = dmpWebGpu;
     const session = module.Camera.fromSnapshot(bytes);
     this.camera = session;
     this.manifest = manifest;
@@ -447,9 +545,10 @@ export class WasmWorkerRuntime {
     const saved = config.camera ? await this.cameras.saved(config.camera.id) : undefined;
     this.scene = scene && 'rgb' in scene ? scene : undefined;
     this.send({ type: 'progress', message: 'Loading Wasm runtime…' });
-    const { module, manifest, identity, loadTimings } = await this.prepare(config.bundle);
+    const { module, manifest, identity, loadTimings, dmpWebGpu } = await this.prepare(config.bundle);
     this.loadTimings = loadTimings;
     this.module = module;
+    this.dmpWebGpu = dmpWebGpu;
     this.manifest = manifest;
     this.runtimeKey = await this.timings.measureAsync('runtimeIdentity', async () =>
       digest(
@@ -537,7 +636,7 @@ export class WasmWorkerRuntime {
     this.send({
       type: 'progress',
       message: 'Booting camera…',
-      assets: [loadingStep('build', 'complete'), bootProgress(0, manifest.bootInstructions)],
+      assets: [loadingStep('build', 'complete'), bootProgress(0, manifest.bootTicks || undefined)],
     });
     if (scene && 'raf' in scene) {
       showScene(session, scene);
@@ -580,20 +679,21 @@ export class WasmWorkerRuntime {
     if (this.scene) showScene(s, this.scene);
     if (this.state?.poweredOn !== false) {
       let lastProgress = -Infinity;
-      const reportProgress = (instructions: number) => {
+      const start = Number(s.status().ticks);
+      const reportProgress = (ticks: number) => {
         const now = performance.now();
         if (now - lastProgress < 100) return;
         lastProgress = now;
         this.send({
           type: 'progress',
           message: 'Booting camera…',
-          assets: [bootProgress(instructions, this.manifest!.bootInstructions)],
+          assets: [bootProgress(ticks - start, this.manifest!.bootTicks || undefined)],
         });
       };
       if (this.manifest!.bootTicks)
-        s.runUntil(s.status().ticks + BigInt(this.manifest!.bootTicks), reportProgress);
+        await this.runUntil(s.status().ticks + BigInt(this.manifest!.bootTicks), reportProgress);
       if (this.manifest!.construction === 'prepared') {
-        const report = s.bootToRec(2_000_000_000n, reportProgress);
+        const report = await this.bootToRec(2_000_000_000n, reportProgress);
         if (report.status !== 'rec')
           throw Error(report.failure ?? `Camera boot stopped: ${report.status}`);
       }
@@ -654,7 +754,7 @@ export class WasmWorkerRuntime {
             const maximum = now + BigInt(Math.max(1, Math.floor(rate / 10)));
             if (target > now && this.state?.poweredOn !== false) {
               // A whole presentation quantum avoids tiny history transactions at the pacing edge.
-              this.timings.measure('run', () => s.runUntil(maximum));
+              await this.timings.measureAsync('run', () => this.runUntil(maximum));
               if (
                 this.manifest!.construction !== 'resolved' &&
                 !this.manifest!.usb &&
@@ -732,7 +832,7 @@ export class WasmWorkerRuntime {
       const quantum = BigInt(Math.max(1, Math.floor(this.manifest!.ticksPerSecond / 10)));
       while (s.status().ticks < end) {
         const next = s.status().ticks + quantum;
-        s.runUntil(next < end ? next : end);
+        await this.runUntil(next < end ? next : end);
         if (
           this.manifest!.construction !== 'resolved' &&
           !this.manifest!.usb &&

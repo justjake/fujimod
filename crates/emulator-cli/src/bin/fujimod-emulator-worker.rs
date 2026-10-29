@@ -305,11 +305,13 @@ enum Command {
         until: u64,
     },
     State,
+    MemoryFingerprint,
     Progress,
     InstructionPoints { core: usize, addresses: Vec<u64> },
-    InstructionEvent,
+    InstructionEvent { core: usize },
     RunInstructions {
         count: u64,
+        until: Option<u64>,
     },
     ReadMemory {
         core: usize,
@@ -407,7 +409,7 @@ struct Worker {
     output_directory: PathBuf,
     archive: u64,
     unmodeled_devices: Vec<String>,
-    instruction_points: Option<(usize, Box<board::observation::InstructionPoints>)>,
+    instruction_points: BTreeMap<usize, Box<board::observation::InstructionPoints>>,
 }
 impl Worker {
     fn new(config: Config) -> Result<Self, String> {
@@ -604,11 +606,14 @@ impl Worker {
         )?;
         for (core, controller) in controllers.into_iter().enumerate() {
             if let Some(c) = controller {
-                board.configure_aprofile(core, c)?;
+                board.configure_aprofile(core, c)
+                    .map_err(|error| format!("CPU{core} A-profile: {error}"))?;
             }
         }
         for (address, image) in images {
-            board.write_memory(0, address, &image)?;
+            board.write_memory(0, address, &image).map_err(|error| {
+                format!("Image {address:#x}+{:#x}: {error}", image.len())
+            })?;
         }
         Ok(Self {
             board,
@@ -618,7 +623,7 @@ impl Worker {
             output_directory: config.output_directory,
             archive: 0,
             unmodeled_devices,
-            instruction_points: None,
+            instruction_points: BTreeMap::new(),
         })
     }
     fn state(&self) -> Value {
@@ -633,8 +638,8 @@ impl Worker {
                     json!({"now":self.board.now(),"failure":result.err(),"console":self.board.take_console()}),
                 )
             }
-            Command::RunInstructions { count } => {
-                let result = self.board.run_for_instructions(count, self.quantum);
+            Command::RunInstructions { count, until } => {
+                let result = self.board.run_with_limits(count, self.quantum, None, until);
                 Ok(
                     json!({"now":self.board.now(),"instructions":self.board.instruction_counts(),"failure":result.err(),"console":self.board.take_console()}),
                 )
@@ -644,18 +649,19 @@ impl Worker {
             }
             Command::InstructionPoints { core, addresses } => {
                 self.board.cpu(core)?;
-                if let Some((previous, mut points)) = self.instruction_points.take() {
-                    self.board.instruction_points_end(previous, &mut points)?;
+                if let Some(mut points) = self.instruction_points.remove(&core) {
+                    self.board.instruction_points_end(core, &mut points)?;
                 }
                 if !addresses.is_empty() {
-                    self.instruction_points = Some((core, self.board.instruction_points_begin(core, addresses)?));
+                    self.instruction_points.insert(core, self.board.instruction_points_begin(core, addresses)?);
                 }
                 Ok(Value::Null)
             }
-            Command::InstructionEvent => Ok(self.instruction_points.as_ref().and_then(|(core, points)| {
+            Command::InstructionEvent { core } => Ok(self.instruction_points.get(&core).and_then(|points| {
                 points.event().map(|address| json!({"core":core,"address":address}))
             }).unwrap_or(Value::Null)),
             Command::State => Ok(self.state()),
+            Command::MemoryFingerprint => self.board.memory_fingerprint(),
             Command::ReadMemory {
                 core,
                 address,

@@ -29,7 +29,10 @@ the standalone Wasm module, its loader, cold inputs, and license notices. The me
 content-addressed MP4 and WebP files it names, keyed by feature card. Each card
 shows its newest recording, even when the card's text changed after it was recorded;
 staging leaves out recordings of cards the homepage no longer has. Locally, set
-`FUJIMOD_MEDIA` to a media directory to serve it at `/artifacts/docs/`.
+`FUJIMOD_MEDIA_ROOT` to a recording workspace to preview its frontier, falling
+back to its current promotion. Media and recording outputs are served directly
+at workspace-relative URLs. `FUJIMOD_MEDIA` selects a standalone media directory
+at `/artifacts/docs/`; production builds read this explicit directory.
 
 The command validates and stages these assets, runs application checks and tests,
 builds the website, and deploys `dist/client` using `wrangler.jsonc`. Staging fails

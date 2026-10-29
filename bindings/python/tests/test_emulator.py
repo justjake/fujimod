@@ -324,25 +324,27 @@ def test_boot_report_decodes_the_stopped_guest_observation() -> None:
         _boot_report({"status": "ready"})
 
 
-def test_failure_poll_does_not_materialize_device_snapshots() -> None:
+def test_failure_poll_preserves_native_values_without_full_observation() -> None:
     class Native:
-        failure: dict[str, object] | None = None
+        failure_value: object = None
 
-        def observation(self) -> str:
+        def failure(self) -> str:
             import json
 
-            return json.dumps({"failure": self.failure})
+            return json.dumps(self.failure_value)
 
-        def state(self) -> str:
-            raise AssertionError("Failure polling must not snapshot devices")
+        def observation(self) -> str:
+            raise AssertionError("Failure polling must not read the full observation")
 
     native_board = Native()
     board = Board.__new__(Board)
     board._native = cast(native.Board, native_board)
     board._closed = False
     assert board.failure is None
-    native_board.failure = {"error": "unmapped access", "address": 0x1000}
-    assert board.failure == native_board.failure
+    native_board.failure_value = "unmapped access"
+    assert board.failure == {"message": "unmapped access"}
+    native_board.failure_value = {"error": "unmapped access", "address": 0x1000}
+    assert board.failure == native_board.failure_value
     board._closed = True
     with pytest.raises(RuntimeError, match="runtime is closed"):
         _ = board.failure

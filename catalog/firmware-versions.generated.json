@@ -428,7 +428,14 @@
       "version": "3.11",
       "internal_version": "1.90",
       "update_sha256": "141e8c3882dd456d3b954fd1dd3681b86e7d001f617dca2fb8d8dfd4f7eede53",
-      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-s10/"
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-s10/",
+      "boot_rom": {
+        "content": {
+          "size": 32768,
+          "sha256": "2a8b69986dd3fad0b73808c44e0834fa95c7b4e4f84e6c8664d4b0a82f7b24a4"
+        },
+        "address": 4293918720
+      }
     },
     {
       "firmware_id": "xs20-330",

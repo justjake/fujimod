@@ -646,7 +646,7 @@ fn per_core_irq_board_with_backend(counted: bool) -> (Board, Arc<Mutex<Vec<u64>>
         instructions_per_tick: Ratio::new(1, 1).unwrap(),
     };
     let mut board = if counted {
-        let memory = fujimod_emulator_cpu_unicorn::rprofile::memory::Memory::default();
+        let memory = fujimod_emulator_cpu_unicorn::memory::Memory::default();
         let backing = fujimod_emulator_cpu::memory::Backing::aligned_zeros(0x4000, 0x4000).unwrap();
         let library = Library::linked().unwrap();
         let cpus = graph

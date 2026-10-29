@@ -766,8 +766,8 @@
               "refs": {}
             },
             {
-              "name": "rawconversion",
-              "kind": "RawConversionRegisters",
+              "name": "windowanalysis",
+              "kind": "WindowAnalysisControl",
               "boot_entries": [
                 "loader"
               ],
@@ -1031,7 +1031,7 @@
             "nandcontroller",
             "fujidecompressor",
             "imagescaler",
-            "rawconversion",
+            "windowanalysis",
             "loadermemorydma",
             "powerdevices",
             "usbcontrol",
@@ -1074,7 +1074,7 @@
             "nandcontroller",
             "fujidecompressor",
             "imagescaler",
-            "rawconversion",
+            "windowanalysis",
             "loadermemorydma",
             "usbcontrol",
             "powerdevices",
@@ -1294,6 +1294,11 @@
               ]
             },
             "basis": "Declared catalog input."
+          },
+          "window_analysis": {
+            "profile": "declared-y16-window-gradients-and-local-tracking-unmeasured",
+            "ticks_per_window": 1000,
+            "basis": "Declared window-analysis numerical law and clock."
           }
         },
         "pin_interrupts": [
@@ -1688,8 +1693,8 @@
               "refs": {}
             },
             {
-              "name": "rawconversion",
-              "kind": "RawConversionRegisters",
+              "name": "windowanalysis",
+              "kind": "WindowAnalysisControl",
               "boot_entries": [
                 "loader"
               ],
@@ -1953,7 +1958,7 @@
             "nandcontroller",
             "fujidecompressor",
             "imagescaler",
-            "rawconversion",
+            "windowanalysis",
             "loadermemorydma",
             "powerdevices",
             "usbcontrol",
@@ -1996,7 +2001,7 @@
             "nandcontroller",
             "fujidecompressor",
             "imagescaler",
-            "rawconversion",
+            "windowanalysis",
             "loadermemorydma",
             "usbcontrol",
             "powerdevices",
@@ -2577,7 +2582,14 @@
           "sensor",
           "secondary-register-endpoint",
           "control-bus-device-9"
-        ]
+        ],
+        "controllers": {
+          "window_analysis": {
+            "profile": "declared-y16-window-gradients-and-local-tracking-unmeasured",
+            "ticks_per_window": 1000,
+            "basis": "Declared window-analysis numerical law and clock."
+          }
+        }
       },
       "x70-runtime": {
         "dram_basis": "Declared runtime memory map.",
@@ -4510,8 +4522,8 @@
               "refs": {}
             },
             {
-              "name": "rawconversion",
-              "kind": "RawConversionRegisters",
+              "name": "windowanalysis",
+              "kind": "WindowAnalysisControl",
               "boot_entries": [
                 "loader"
               ],
@@ -4775,7 +4787,7 @@
             "nandcontroller",
             "fujidecompressor",
             "imagescaler",
-            "rawconversion",
+            "windowanalysis",
             "loadermemorydma",
             "powerdevices",
             "usbcontrol",
@@ -4818,7 +4830,7 @@
             "nandcontroller",
             "fujidecompressor",
             "imagescaler",
-            "rawconversion",
+            "windowanalysis",
             "loadermemorydma",
             "usbcontrol",
             "powerdevices",
@@ -5564,6 +5576,11 @@
               "usb_connected": null
             },
             "basis": "Declared catalog input."
+          },
+          "window_analysis": {
+            "profile": "declared-y16-window-gradients-and-local-tracking-unmeasured",
+            "ticks_per_window": 1000,
+            "basis": "Declared window-analysis numerical law and clock."
           }
         },
         "control_bus_order": [

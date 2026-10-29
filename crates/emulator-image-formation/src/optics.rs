@@ -1,7 +1,7 @@
 //! A declared thin-lens subject plane and scalar box point-spread approximation.
 //! Only the physical focus wire, iris, scene pixels, and optical dimensions enter
 //! this law. It supplies pixels to every sensor consumer, never an AF decision.
-use super::exposure::ExposedFrame;
+use super::exposure::{ExposedFrame, NoiseResponse, adc};
 use fujimod_emulator_devices::parts::optics::FocusHandle;
 use fujimod_emulator_imaging::optics::{Illumination, Spec};
 use fujimod_emulator_imaging::scene::{Frame, FramePixels};
@@ -32,6 +32,7 @@ struct Prepared {
     linear: Arc<[[u16; 3]]>,
     response_scale: [f64; 3],
     illumination: Option<Field>,
+    noise: NoiseResponse,
     pixels: Arc<Projected>,
 }
 struct BinnedPrepared {
@@ -44,6 +45,7 @@ struct BinnedPrepared {
     linear: Arc<[[u16; 3]]>,
     response_scale: [f64; 3],
     illumination: Option<Field>,
+    noise: NoiseResponse,
     pixels: Arc<Projected>,
 }
 impl Projection {
@@ -177,7 +179,10 @@ impl Projection {
         });
         if let Some(i) = found {
             let old = &mut cache[i];
-            if old.response_scale != frame.response_scale || old.illumination != illumination {
+            if old.response_scale != frame.response_scale
+                || old.illumination != illumination
+                || old.noise != frame.noise_response()
+            {
                 old.pixels = Arc::new(Projected::new_axes(
                     scene,
                     old.coordinates.clone(),
@@ -187,9 +192,11 @@ impl Projection {
                     frame.response_scale,
                     [self.spec.sensor_width_mm, sensor_height],
                     illumination,
+                    frame.noise_response(),
                 ));
                 old.response_scale = frame.response_scale;
                 old.illumination = illumination;
+                old.noise = frame.noise_response();
             }
             frame.filtered = Some(super::exposure::Filtered::BinnedReadout(
                 dimensions,
@@ -225,6 +232,7 @@ impl Projection {
             frame.response_scale,
             [self.spec.sensor_width_mm, sensor_height],
             illumination,
+            frame.noise_response(),
         ));
         frame.filtered = Some(super::exposure::Filtered::BinnedReadout(
             dimensions,
@@ -248,6 +256,7 @@ impl Projection {
                 linear,
                 response_scale: frame.response_scale,
                 illumination,
+                noise: frame.noise_response(),
                 pixels,
             });
         }
@@ -337,7 +346,10 @@ impl Projection {
                 && old.radius == radius
                 && old.fraction == fraction
         }) {
-            if old.response_scale == frame.response_scale && old.illumination == illumination {
+            if old.response_scale == frame.response_scale
+                && old.illumination == illumination
+                && old.noise == frame.noise_response()
+            {
                 frame.filtered = Some(super::exposure::Filtered::projected(old.pixels.clone()));
                 return Ok(());
             }
@@ -365,6 +377,7 @@ impl Projection {
             frame.response_scale,
             self.spec.sensor_width_mm,
             illumination,
+            frame.noise_response(),
         ));
         frame.filtered = Some(super::exposure::Filtered::projected(pixels.clone()));
         // The scene is retained independently. Bound these sampled projection
@@ -378,6 +391,7 @@ impl Projection {
                 linear,
                 response_scale: frame.response_scale,
                 illumination,
+                noise: frame.noise_response(),
                 pixels,
             });
         } else {
@@ -400,7 +414,12 @@ enum FieldLaw {
 }
 impl Field {
     /// `sensor` is the image plane's width and height in millimetres.
-    fn new(spec: &Spec, frame: &Frame, shift: f64, sensor: [f64; 2]) -> Result<Option<Self>, String> {
+    fn new(
+        spec: &Spec,
+        frame: &Frame,
+        shift: f64,
+        sensor: [f64; 2],
+    ) -> Result<Option<Self>, String> {
         if !lens_illuminates(frame) {
             return Ok(None);
         }
@@ -420,8 +439,15 @@ impl Field {
                 let vertex = if r4 > 0. { -r2 / (2. * r4) } else { -1. };
                 let positive = 1. + r2 + r4 > 0.
                     && (!(0. ..1.).contains(&vertex) || 1. - r2 * r2 / (4. * r4) > 0.);
-                if !r2.is_finite() || !r4.is_finite() || !length.is_finite() || length <= 0. || !positive {
-                    return Err("radial illumination must be finite and positive over the frame".into());
+                if !r2.is_finite()
+                    || !r4.is_finite()
+                    || !length.is_finite()
+                    || length <= 0.
+                    || !positive
+                {
+                    return Err(
+                        "radial illumination must be finite and positive over the frame".into(),
+                    );
                 }
                 Ok(Some(Self {
                     length,
@@ -471,6 +497,7 @@ fn encode_response(
     dimensions: [usize; 2],
     sensor_width_mm: f64,
     illumination: Option<Field>,
+    noise: NoiseResponse,
 ) -> Arc<[u8]> {
     let mut pixels = vec![0; linear.len() * 6];
     let [width, height] = dimensions;
@@ -485,8 +512,13 @@ fn encode_response(
             )
         });
         for c in 0..3 {
-            let value = libm::rint(f64::from(pixel[c]) * scale[c] / 65535. * field)
-                .clamp(0., 16383.) as u16;
+            let value = adc(
+                f64::from(pixel[c]) * scale[c] / 65535. * field,
+                noise,
+                i % width,
+                i / width,
+                c,
+            );
             packed[c * 2..c * 2 + 2].copy_from_slice(&value.to_le_bytes());
         }
     }
@@ -499,6 +531,7 @@ fn encode_response_rect(
     dimensions: [usize; 2],
     sensor: [f64; 2],
     illumination: Option<Field>,
+    noise: NoiseResponse,
 ) -> Arc<[u8]> {
     let mut pixels = vec![0; linear.len() * 6];
     for (i, (pixel, out)) in linear.iter().zip(pixels.chunks_exact_mut(6)).enumerate() {
@@ -512,9 +545,14 @@ fn encode_response_rect(
         });
         for c in 0..3 {
             out[c * 2..c * 2 + 2].copy_from_slice(
-                &(libm::rint(f64::from(pixel[c]) * scale[c] / 65535. * field).clamp(0., 16383.)
-                    as u16)
-                    .to_le_bytes(),
+                &adc(
+                    f64::from(pixel[c]) * scale[c] / 65535. * field,
+                    noise,
+                    i % dimensions[0],
+                    i / dimensions[0],
+                    c,
+                )
+                .to_le_bytes(),
             );
         }
     }
@@ -527,6 +565,7 @@ fn encode_response_coordinates(
     sensor: [f64; 2],
     illumination: Option<Field>,
     coordinates: &Coordinates,
+    noise: NoiseResponse,
 ) -> Arc<[u8]> {
     let mut pixels: Arc<[u8]> = std::iter::repeat_n(0, linear.len() * 6).collect();
     let width = coordinates.xs.len();
@@ -553,39 +592,52 @@ fn encode_response_coordinates(
                 .unwrap()
                 .chunks_exact_mut(width * 6),
         )
-        .map(|((&y, linear), out)| (axis(y, dimensions[1], sensor[1]), linear, out));
+        .map(|((&y, linear), out)| (y, axis(y, dimensions[1], sensor[1]), linear, out));
     match illumination.map(|f| f.law) {
-        Some(FieldLaw::CosineFourth) => encode_rows(rows, &xs, scale, cosine_fourth),
-        Some(FieldLaw::RadialPolynomial { r2, r4 }) => {
-            encode_rows(rows, &xs, scale, move |xx, yy| radial_polynomial(r2, r4, xx, yy))
+        Some(FieldLaw::CosineFourth) => {
+            encode_rows(rows, &xs, scale, cosine_fourth, coordinates, noise)
         }
-        None => encode_rows(rows, &xs, scale, |_, _| 1.),
+        Some(FieldLaw::RadialPolynomial { r2, r4 }) => encode_rows(
+            rows,
+            &xs,
+            scale,
+            move |xx, yy| radial_polynomial(r2, r4, xx, yy),
+            coordinates,
+            noise,
+        ),
+        None => encode_rows(rows, &xs, scale, |_, _| 1., coordinates, noise),
     }
     pixels
 }
 #[inline(always)]
 fn encode_rows<'a>(
-    rows: impl Iterator<Item = (f64, &'a [[u16; 3]], &'a mut [u8])>,
+    rows: impl Iterator<Item = (usize, f64, &'a [[u16; 3]], &'a mut [u8])>,
     xs: &[f64],
     scale: [f64; 3],
     field: impl Fn(f64, f64) -> f64,
+    coordinates: &Coordinates,
+    noise: NoiseResponse,
 ) {
-    for (yy, linear, out) in rows {
+    for (y, yy, linear, out) in rows {
         // Array maps and chunked iterators are not inlined in this crate's
         // optimization profile; keep the channels and offsets explicit.
         let out = &mut out[..xs.len() * 6];
         for (i, (&xx, &[r, g, b])) in xs.iter().zip(linear).enumerate() {
             let out = &mut out[i * 6..i * 6 + 6];
             let field = field(xx, yy);
-            let encode = |v: u16, scale: f64| {
-                (f64::from(v) * scale / 65535. * field)
-                    .round_ties_even()
-                    .clamp(0., 16383.) as u16
+            let encode = |v: u16, scale: f64, color: usize| {
+                adc(
+                    f64::from(v) * scale / 65535. * field,
+                    noise,
+                    coordinates.xs[i],
+                    y,
+                    color,
+                )
             };
             let [r, g, b] = [
-                encode(r, scale[0]),
-                encode(g, scale[1]),
-                encode(b, scale[2]),
+                encode(r, scale[0], 0),
+                encode(g, scale[1], 1),
+                encode(b, scale[2], 2),
             ];
             out[0] = r as u8;
             out[1] = (r >> 8) as u8;
@@ -607,7 +659,14 @@ pub(crate) fn bin_exposure(frame: &mut ExposedFrame, dimensions: [usize; 2]) -> 
         .collect();
     frame.filtered = Some(super::exposure::Filtered::Grid(
         dimensions,
-        encode_response_rect(&linear, frame.response_scale, dimensions, [1., 1.], None),
+        encode_response_rect(
+            &linear,
+            frame.response_scale,
+            dimensions,
+            [1., 1.],
+            None,
+            frame.noise_response(),
+        ),
     ));
     Ok(())
 }
@@ -626,7 +685,10 @@ fn lens_illuminates(frame: &Frame) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_imaging::{exposure::{Calibration, Exposure}, scene::Frame};
+    use fujimod_emulator_imaging::{
+        exposure::{Calibration, Exposure},
+        scene::Frame,
+    };
     fn frame(rgb: Vec<u8>, seconds: f64) -> ExposedFrame {
         ExposedFrame::from_frame(
             Arc::new(Frame::new(64, 8, FramePixels::Rgb24(rgb.into())).unwrap()),
@@ -701,7 +763,8 @@ mod tests {
                             dims,
                             sensor,
                             illumination,
-                            &coordinates
+                            &coordinates,
+                            None
                         ),
                         expected
                     );
@@ -799,7 +862,14 @@ mod tests {
         assert_eq!(Field::cosine_fourth(1e-200).at_point(1e-200, 0.), 0.25);
         assert!((Field::cosine_fourth(18.5).at_point(18.5, 18.5) - 1. / 9.).abs() < 1e-15);
         let values = vec![[65535; 3]; 25];
-        let pixels = encode_response(&values, [20000.; 3], [5, 5], 10., Some(Field::cosine_fourth(2.)));
+        let pixels = encode_response(
+            &values,
+            [20000.; 3],
+            [5, 5],
+            10.,
+            Some(Field::cosine_fourth(2.)),
+            None,
+        );
         let sample = |x: usize, y: usize| {
             u16::from_le_bytes(
                 pixels[(y * 5 + x) * 6..(y * 5 + x) * 6 + 2]
@@ -849,7 +919,10 @@ mod tests {
     #[test]
     fn radial_polynomial_follows_the_half_diagonal_and_refuses_nonpositive_fields() {
         let mut spec = projection().spec.clone();
-        spec.relative_illumination = Illumination::RadialPolynomial { r2: 0.57, r4: 0.378 };
+        spec.relative_illumination = Illumination::RadialPolynomial {
+            r2: 0.57,
+            r4: 0.378,
+        };
         let rgb = Frame::new(64, 8, FramePixels::Rgb24(vec![128; 64 * 8 * 3].into())).unwrap();
         let field = Field::new(&spec, &rgb, 0., [3., 4.]).unwrap().unwrap();
         assert_eq!(field.at_point(0., 0.), 1.);

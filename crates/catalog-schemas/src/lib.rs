@@ -9,6 +9,12 @@ use std::collections::BTreeMap;
 pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     let mut documents = BTreeMap::new();
     documents.insert(
+        "generation.generated.schema.json",
+        schema::<fujimod_catalog::generation::GenerationResults>(
+            fujimod_catalog::generation::SCHEMA_URI,
+        ),
+    );
+    documents.insert(
         "flash.generated.schema.json",
         schema::<fujimod_catalog::capture::FirmwareFlash>(
             fujimod_catalog::capture::FLASH_SCHEMA_URI,

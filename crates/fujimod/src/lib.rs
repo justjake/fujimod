@@ -14,8 +14,8 @@ pub use fujimod_catalog_configuration as catalog_configuration;
 #[cfg(feature = "catalog-resolution")]
 pub use fujimod_catalog_resolution as catalog_resolution;
 
-#[cfg(feature = "catalog-camera")]
-pub use fujimod_catalog_camera as catalog_camera;
+#[cfg(feature = "catalog-workflows")]
+pub use fujimod_catalog_workflows as catalog_workflows;
 
 #[cfg(feature = "catalog-firmware-identity")]
 pub use fujimod_catalog_firmware_identity as catalog_firmware_identity;

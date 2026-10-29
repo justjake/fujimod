@@ -10,10 +10,10 @@
 //! RetainedWords instead exposes all aligned words in the 4 KiB bank, initially
 //! zero and freely reconfigurable, without interpreting requests or DMA fields.
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_imaging::exr2_isp::options::face_detector::{Mode, Options};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
-use fujimod_emulator_imaging::exr2_isp::options::face_detector::{Options, Mode};
 
 pub const BASE: u64 = 0xfff14000;
 
@@ -455,8 +455,7 @@ impl FaceDetector {
                 let Some(next_step) = next_step else {
                     return false;
                 };
-                if (offset == 0x48
-                    && (value & 3 != 0 || !(0x40000000..0x60000000).contains(&value)))
+                if (offset == 0x48 && !crate::valid_image_source_address(value))
                     || (offset == 0x578 && value != 0x000b000b)
                 {
                     return false;

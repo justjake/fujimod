@@ -143,6 +143,9 @@ impl SerialDma {
         }
     }
     fn start(&mut self) {
+        self.start_with_request_option(0);
+    }
+    fn start_with_request_option(&mut self, request_option: u32) {
         for (offset, value) in [(0, 0xc7), (0x10, 6), (4, 3), (0x24, 3)] {
             write(&mut self.serial, &mut self.h, SERIAL + offset, value);
         }
@@ -154,7 +157,13 @@ impl SerialDma {
                 &mut self.d,
                 &mut self.h,
                 BASE + 0x28 + lane * 0x30,
-                (ENABLE | ((lane as u32 + 2) << 20) | SERIAL_ACCESS | BLOCK | ACK_WRITE | 1) as u64,
+                (ENABLE
+                    | ((lane as u32 + 2) << 20)
+                    | SERIAL_ACCESS
+                    | request_option
+                    | BLOCK
+                    | ACK_WRITE
+                    | 1) as u64,
             );
         }
     }
@@ -176,6 +185,30 @@ impl SerialDma {
         }
     }
 }
+#[test]
+fn peripheral_request_option_does_not_change_transfer_execution() {
+    let mut without_option = SerialDma::fresh();
+    without_option.start();
+    without_option.until(13000);
+
+    let mut with_option = SerialDma::fresh();
+    with_option.start_with_request_option(REQUEST_OPTION);
+    with_option.until(13000);
+
+    assert_eq!(with_option.h.now, without_option.h.now);
+    assert_eq!(with_option.h.ram, without_option.h.ram);
+    assert_eq!(with_option.h.irqs, without_option.h.irqs);
+    assert_eq!(with_option.serial.save(), without_option.serial.save());
+    let mut channels = with_option.d.state.channels.clone();
+    for channel in &mut channels {
+        channel.control &= !REQUEST_OPTION;
+    }
+    assert_eq!(
+        serde_json::to_value(channels).unwrap(),
+        serde_json::to_value(&without_option.d.state.channels).unwrap()
+    );
+}
+
 #[test]
 fn peripheral_dma_waits_for_fifo_edges_and_rx_completion_follows_real_serial_data() {
     let mut s = SerialDma::fresh();

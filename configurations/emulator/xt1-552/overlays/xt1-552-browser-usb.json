@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xt1-552-browser-usb",
+  "configuration_id": "xt1-552",
+  "change": {
+    "kind": "preset",
+    "preset": {
+      "factory_options": {},
+      "limits": [
+        "The USB cable starts disconnected. Cable state and four-tick endpoint timing are declared emulator inputs; device behavior is not physically qualified."
+      ],
+      "usb_connected": false,
+      "hardware_selection": {
+        "soc_profile_id": "exr2-service-transports",
+        "body_profile_id": "xt1-service-transports"
+      }
+    }
+  }
+}

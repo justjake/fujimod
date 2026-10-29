@@ -6,6 +6,9 @@ Native Rust and `wasm32-unknown-unknown` use the same decoder.
 - `invert` applies whole-file XOR with `0xff`.
 - `decompress` validates a method-4 stream header and decodes bounded literal
   runs and overlapping back references, returning compression statistics.
+- `recompress` replaces a validated stream's decoded bytes while retaining
+  matches that still produce the replacement. Changed matches become literals;
+  overlapping and subsequent matches are checked against the new dictionary.
 - `inner_header` reads 32-bit or 64-bit initialized mappings.
 - `scan` finds and validates candidate streams in an encoded update file.
 - `raw` verifies explicit raw extents, hashes, optional inner headers and entry

@@ -1,7 +1,22 @@
 //! XP5 input-capture banks.
 //! Only disabled/reset and idle readback are supported. Active capture
 //! configuration refuses; no samples, cause bits or deadlines are invented.
-use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_devices::{dma::{self, Direction}, Cx, Device};
+
+pub struct TransmitSink;
+impl dma::Port for TransmitSink {
+    fn request(&self, direction: Direction, _burst: bool) -> Option<u64> {
+        (direction == Direction::Transmit).then_some(0)
+    }
+    fn receive(&mut self, _now: u64, _bytes: u8) -> Result<u64, String> {
+        Err("input-capture transmit sink cannot receive".into())
+    }
+    fn transmit(&mut self, _now: u64, _bytes: u8, _value: u64) -> Result<(), String> {
+        // Immediate acceptance with no downstream effect is a session assumption.
+        Ok(())
+    }
+}
+
 pub struct InputCapture {
     base: u64,
     channels: u64,

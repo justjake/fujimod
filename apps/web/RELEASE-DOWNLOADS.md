@@ -37,20 +37,20 @@ unless the release sets them:
   Accepted only when the release contains that body's `FPUPDATE.DAT` output.
 
 An optional `notes.md` (one per release, not per body) is referenced from
-`patches.json` by name, size and SHA-256. Without it no notes are shown. The
+`patches.json` by filename. Without it no notes are shown. The
 site renders it with a restricted Markdown renderer: headings, lists,
 emphasis, code and links (opening in a new tab); no raw HTML or images.
 
 ## Browser data API
 
 `loadRelease(baseUrl)` in `src/patch/release.ts` returns a `LoadedRelease` or
-`undefined` when no current release exists. Upstream errors and failed integrity
-checks throw. The loader verifies notes and checks every installable entry's
-patch for an `fpupdate` output before exposing it.
+`undefined` when no current release exists. Upstream errors throw. The loader
+fetches release metadata and Markdown text; firmware patches are downloaded
+and verified when used.
 
 `LoadedRelease` includes all validated `PatchIndex` fields plus `tag`, `name`,
 `published_at`, `prerelease`, the absolute `assetBase` URL and optional
-`notesText` (verified UTF-8 Markdown). `notes` retains the index's file identity.
+`notesText` (Markdown text). `notes` retains the index's filename.
 The home controller exposes this value as `state.release`. To find download
 availability, find the entry in `state.release.firmwares` by the chosen DAT's
 SHA-256 and read `entry.downloads.sd_card` or `entry.downloads.installable`.
@@ -109,12 +109,17 @@ Each download row opens a modal built from the same step components as the
 Recovery page (numbered steps, file list, `PowerComboKeys` from the body's
 boot data):
 
+Before each SD boot or firmware-update button combination, switch the camera
+OFF, then remove and reinsert the battery. Show the hand-drawn battery-cycle
+SVG beside this instruction.
+
 - **FujiMod SD boot:** 1. Download the SD card files, with the disclaimer
   below and a blue button. 2. Copy them to a FAT32 SD card (`ffsys.bin`,
   `ffboot.bin`). 3. Boot from the SD card with the `sd` combination only.
 - **FujiMod installable:** 1. Download the files, orange button. 2. Copy all files including `FPUPDATE.DAT`. 3. Try it from the SD card first
   (`sd` combination) and shoot normally until satisfied. 4. Install it: turn
-  the camera off and power on holding the `firmware_update` combination. 5. Optional: SET-UP → FUJIMOD DEVTOOLS → BUILD OVERLAY → OFF.
+  the camera OFF, remove and reinsert the battery, then power on holding the
+  `firmware_update` combination. 5. Optional: SET-UP → FUJIMOD DEVTOOLS → BUILD OVERLAY → OFF.
 
 Disclaimer, in bold above each download button:
 

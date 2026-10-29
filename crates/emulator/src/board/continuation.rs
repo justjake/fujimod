@@ -13,6 +13,19 @@ pub struct ReadSet {
     pub stores: Vec<(u64, u64)>,
     pub devices: BTreeSet<usize>,
 }
+/// The first observed event that ended a watched continuation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ContinuationStop {
+    /// A store intersected a watched physical range.
+    Store {
+        range_index: usize,
+        range: (u64, u64),
+        address: u64,
+        change_confirmed: bool,
+    },
+    /// A watched device published a changed state.
+    Device { id: usize },
+}
 #[derive(Default)]
 pub(super) struct Stops {
     pub stores: Vec<(u64, u64)>,
@@ -21,6 +34,7 @@ pub(super) struct Stops {
     pub values: Vec<Vec<u8>>,
     pub devices: BTreeSet<usize>,
     pub fired: bool,
+    pub first_stop: Option<ContinuationStop>,
 }
 /// Largest watched range whose bytes are kept to compare stores against.
 const COMPARED_RANGE_BYTES: u64 = 1 << 20;
@@ -32,16 +46,41 @@ impl Stops {
     pub fn store(&mut self, address: u64, written: &[u8]) {
         let end = address.saturating_add(written.len() as u64);
         let first = self.stores.partition_point(|&(_, hi)| hi <= address);
-        self.fired |= self.stores[first..]
+        for (offset, (&(lo, hi), before)) in self.stores[first..]
             .iter()
             .zip(&self.values[first..])
-            .take_while(|&(&(lo, _), _)| lo < end)
-            .any(|(&(lo, hi), before)| {
-                let (from, to) = (address.max(lo), end.min(hi));
-                before.is_empty()
-                    || written[(from - address) as usize..(to - address) as usize]
-                        != before[(from - lo) as usize..(to - lo) as usize]
-            });
+            .enumerate()
+            .take_while(|&(_, (&(lo, _), _))| lo < end)
+        {
+            let (from, to) = (address.max(lo), end.min(hi));
+            let new = &written[(from - address) as usize..(to - address) as usize];
+            if before.is_empty() {
+                self.first_stop.get_or_insert(ContinuationStop::Store {
+                    range_index: first + offset,
+                    range: (lo, hi),
+                    address: from,
+                    change_confirmed: false,
+                });
+                self.fired = true;
+                return;
+            }
+            let old = &before[(from - lo) as usize..(to - lo) as usize];
+            if let Some(changed) = new.iter().zip(old).position(|(new, old)| new != old) {
+                self.first_stop.get_or_insert(ContinuationStop::Store {
+                    range_index: first + offset,
+                    range: (lo, hi),
+                    address: from + changed as u64,
+                    change_confirmed: true,
+                });
+                self.fired = true;
+                return;
+            }
+        }
+    }
+    pub fn device(&mut self, id: usize) {
+        self.first_stop
+            .get_or_insert(ContinuationStop::Device { id });
+        self.fired = true;
     }
 }
 pub(super) fn fired(stops: &RefCell<Stops>) -> bool {
@@ -251,6 +290,7 @@ impl Board {
             values,
             devices,
             fired: false,
+            first_stop: None,
         };
         let cores = (0..self.cpus.len())
             .map(|core| {
@@ -345,6 +385,11 @@ impl Board {
         let fired = state.continuation.borrow().fired;
         *state.continuation.borrow_mut() = Stops::default();
         Ok(fired)
+    }
+    /// Return the first event that ended the active continuation, if any.
+    /// Read this before calling `continuation_end`, which clears the observation.
+    pub fn continuation_stop(&self) -> Option<ContinuationStop> {
+        self.state.borrow().continuation.borrow().first_stop.clone()
     }
     /// Remove the hooks retained from the last continuation.
     pub(super) fn release_store_watch(&mut self) -> Result<(), String> {

@@ -33,19 +33,23 @@ async def check(args: argparse.Namespace) -> None:
             # before real execution reaches the fault under test.
             await page.goto(args.url)
             await page.wait_for_function(
-                "document.documentElement.dataset.reportsReady === 'true'"
+                "() => document.documentElement.dataset.reportsReady === 'true'"
             )
             await page.locator('meta[name="fujimod-local-reports"]').evaluate(
                 "node => node.remove()"
             )
             await page.wait_for_function(
-                "document.querySelector('#live-label').textContent === 'STOPPED'",
+                "() => document.querySelector('#live-label').textContent === 'STOPPED'",
                 timeout=240000,
             )
             assert (
                 "Runtime did not initialize"
                 not in await page.locator("#fault-raw").inner_text()
             )
+            notification = [
+                await page.locator(selector).inner_text()
+                for selector in ["#fault-heading", "#fault-message", "#fault-raw"]
+            ]
             await page.locator("#error-report").click()
             await page.locator("#feedback-description").fill(
                 "Report delivery on iPhone"
@@ -57,11 +61,13 @@ async def check(args: argparse.Namespace) -> None:
             )
             await page.locator("#feedback-prepare").click()
             await page.wait_for_function(
-                "location.hostname === 'github.com'", timeout=60000
+                "() => location.hostname === 'github.com'", timeout=60000
             )
             assert len(context.pages) == 1
             assert "template=simulator-crash.yml" in page.url
             issue_url = page.url
+            crash = dict(parse_qsl(urlparse(issue_url).query))["crash"]
+            assert crash == "\n".join(text.strip() for text in notification)
             print(
                 f"{name}: one-click delivery attempted; same-tab navigation reached GitHub",
                 flush=True,

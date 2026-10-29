@@ -62,6 +62,15 @@
         "bytes": 1048576
       },
       "kind": "sram"
+    },
+    {
+      "id": "boot-sram",
+      "base": 4286578688,
+      "size": {
+        "kind": "bytes",
+        "bytes": 262144
+      },
+      "kind": "sram"
     }
   ],
   "blocks": [
@@ -467,7 +476,14 @@
     {
       "id": "peripheral-window-ff000000",
       "base": 4278190080,
-      "size": 16777216,
+      "size": 8388608,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-ff840000",
+      "base": 4286840832,
+      "size": 8126464,
       "kind": "address-window",
       "clock_id": null
     },
@@ -645,6 +661,11 @@
     },
     {
       "core": "core0",
+      "block_id": "peripheral-window-ff840000",
+      "address": 4286840832
+    },
+    {
+      "core": "core0",
       "block_id": "peripheral-window-fa000000",
       "address": 4194304000
     },
@@ -722,6 +743,11 @@
       "core": "core1",
       "block_id": "peripheral-window-ff000000",
       "address": 4278190080
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-ff840000",
+      "address": 4286840832
     },
     {
       "core": "core1",
@@ -802,6 +828,11 @@
       "core": "core2",
       "block_id": "peripheral-window-ff000000",
       "address": 4278190080
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-ff840000",
+      "address": 4286840832
     },
     {
       "core": "core2",
@@ -882,6 +913,11 @@
       "core": "core3",
       "block_id": "peripheral-window-ff000000",
       "address": 4278190080
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-ff840000",
+      "address": 4286840832
     },
     {
       "core": "core3",
@@ -962,6 +998,11 @@
       "core": "core4",
       "block_id": "peripheral-window-ff000000",
       "address": 1593835520
+    },
+    {
+      "core": "core4",
+      "block_id": "peripheral-window-ff840000",
+      "address": 1602486272
     }
   ],
   "reset": {
@@ -1019,7 +1060,11 @@
       "xp5": {
         "cpu_model": "Cortex-A53",
         "runtime_abi": "armv8a-shared-v1",
-        "limits": [],
+        "limits": [
+          "The reset-handshake request completes immediately as a functional session assumption; physical reset timing and effects are unmodeled.",
+          "Memory-configuration commit completion uses an explicit 1000-tick functional latency; physical training and retention transfers are unmodeled.",
+          "Write-only configuration bands retain 32-bit words; reads and physical side effects remain unmodeled."
+        ],
         "windows": [
           {
             "name": "timer",
@@ -1055,7 +1100,10 @@
             "name": "clock_gates",
             "base": 4287676416,
             "size": 4096,
-            "kind": "clock-gates"
+            "kind": "clock-gates",
+            "options": {
+              "configuration_word": 0
+            }
           },
           {
             "name": "power_gates",
@@ -1368,9 +1416,319 @@
             "base": 7516192768,
             "size": 4,
             "kind": "unmodeled-bus-drain"
+          },
+          {
+            "name": "reset_handshake",
+            "base": 4287741952,
+            "size": 4096,
+            "kind": "reset-handshake",
+            "options": {
+              "trigger_offset": 28
+            }
+          },
+          {
+            "name": "memory_configuration0",
+            "base": 4210053120,
+            "size": 4096,
+            "kind": "memory-configuration",
+            "options": {
+              "commit_ticks": 1000
+            }
+          },
+          {
+            "name": "memory_configuration1",
+            "base": 4210118656,
+            "size": 4096,
+            "kind": "memory-configuration",
+            "options": {
+              "commit_ticks": 1000
+            }
+          },
+          {
+            "name": "memory_configuration2",
+            "base": 4210184192,
+            "size": 4096,
+            "kind": "memory-configuration",
+            "options": {
+              "commit_ticks": 1000
+            }
+          },
+          {
+            "name": "memory_configuration3",
+            "base": 4210249728,
+            "size": 4096,
+            "kind": "memory-configuration",
+            "options": {
+              "commit_ticks": 1000
+            }
+          },
+          {
+            "name": "configuration_group0_words20",
+            "base": 4208984096,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group0_words40",
+            "base": 4208984128,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group1_words20",
+            "base": 4208984608,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group1_words40",
+            "base": 4208984640,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group2_words20",
+            "base": 4208985120,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group2_words40",
+            "base": 4208985152,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group3_words20",
+            "base": 4208985632,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group3_words40",
+            "base": 4208985664,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group4_words20",
+            "base": 4208986144,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group4_words40",
+            "base": 4208986176,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group5_words20",
+            "base": 4208986656,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group5_words40",
+            "base": 4208986688,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group6_words20",
+            "base": 4208987168,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group6_words40",
+            "base": 4208987200,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group7_words20",
+            "base": 4208987680,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group7_words40",
+            "base": 4208987712,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group8_words20",
+            "base": 4208988192,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group8_words40",
+            "base": 4208988224,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group9_words20",
+            "base": 4208988704,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group9_words40",
+            "base": 4208988736,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group10_words20",
+            "base": 4208989216,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group10_words40",
+            "base": 4208989248,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group11_words20",
+            "base": 4208989728,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group11_words40",
+            "base": 4208989760,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group12_words20",
+            "base": 4208990240,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group12_words40",
+            "base": 4208990272,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group13_words20",
+            "base": 4208990752,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group13_words40",
+            "base": 4208990784,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group14_words20",
+            "base": 4208991264,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group14_words40",
+            "base": 4208991296,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group15_words20",
+            "base": 4208991776,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group15_words40",
+            "base": 4208991808,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group16_words20",
+            "base": 4208992288,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group16_words40",
+            "base": 4208992320,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group17_words20",
+            "base": 4208992800,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group17_words40",
+            "base": 4208992832,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group18_words20",
+            "base": 4208993312,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group18_words40",
+            "base": 4208993344,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group19_words20",
+            "base": 4208993824,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group19_words40",
+            "base": 4208993856,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group20_words20",
+            "base": 4208994336,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group20_words40",
+            "base": 4208994368,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group21_words20",
+            "base": 4208994848,
+            "size": 16,
+            "kind": "write-only-registers"
+          },
+          {
+            "name": "configuration_group21_words40",
+            "base": 4208994880,
+            "size": 16,
+            "kind": "write-only-registers"
           }
         ],
         "engines": [
+          "unicorn",
           "hypervisor"
         ],
         "instructions_per_tick": {

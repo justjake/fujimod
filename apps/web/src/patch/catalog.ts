@@ -6,8 +6,6 @@ export interface ReleaseDownloads {
 }
 export interface ReleaseNotes {
   name: string;
-  bytes: number;
-  sha256: string;
 }
 export interface PatchFirmware {
   downloads: ReleaseDownloads;
@@ -57,11 +55,7 @@ export function validateIndex(value: unknown): PatchIndex {
     (!index.notes ||
       typeof index.notes.name !== 'string' ||
       !releaseFilename.test(index.notes.name) ||
-      !index.notes.name.endsWith('.md') ||
-      !Number.isSafeInteger(index.notes.bytes) ||
-      index.notes.bytes < 0 ||
-      index.notes.bytes > 1024 * 1024 ||
-      !hash.test(index.notes.sha256))
+      !index.notes.name.endsWith('.md'))
   )
     throw new Error('The release notes entry is invalid.');
   const seen = new Set();
@@ -134,11 +128,4 @@ export async function verifyPatch(index: PatchIndex, entry: PatchFirmware, data:
   )
     throw new Error('The patch does not match its release index.');
   return meta;
-}
-
-/** Decode only after checking the exact published bytes. */
-export async function verifyNotes(notes: ReleaseNotes, data: Uint8Array): Promise<string> {
-  if (data.length !== notes.bytes || (await sha256(data)) !== notes.sha256)
-    throw new Error('The downloaded release notes failed their integrity check.');
-  return new TextDecoder('utf-8', { fatal: true }).decode(data);
 }

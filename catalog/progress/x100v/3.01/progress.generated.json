@@ -5,8 +5,8 @@
   "model": "X100V",
   "version": "3.01",
   "facts": {
-    "located": 11,
-    "total": 12
+    "located": 16,
+    "total": 23
   },
   "boot_rom": null,
   "stages": {

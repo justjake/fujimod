@@ -173,6 +173,26 @@ fn stores_that_keep_watched_bytes_leave_the_wait_running() {
     assert!(!stops.fired);
     stops.store(0x107, &[0]);
     assert!(stops.fired);
+    assert_eq!(
+        stops.first_stop,
+        Some(super::ContinuationStop::Store {
+            range_index: 0,
+            range: (0x100, 0x108),
+            address: 0x107,
+            change_confirmed: true,
+        })
+    );
+    stops.store(0x100, &[9]);
+    assert_eq!(
+        stops.first_stop,
+        Some(super::ContinuationStop::Store {
+            range_index: 0,
+            range: (0x100, 0x108),
+            address: 0x107,
+            change_confirmed: true,
+        }),
+        "later stores must not replace the first stop"
+    );
     let mut large = super::Stops {
         stores: vec![(0x200, 0x30_0000)],
         values: vec![vec![]],
@@ -180,6 +200,15 @@ fn stores_that_keep_watched_bytes_leave_the_wait_running() {
     };
     large.store(0x200, &[0]);
     assert!(large.fired);
+    assert_eq!(
+        large.first_stop,
+        Some(super::ContinuationStop::Store {
+            range_index: 0,
+            range: (0x200, 0x30_0000),
+            address: 0x200,
+            change_confirmed: false,
+        })
+    );
     let mut many = super::Stops {
         stores: (0..512u64).map(|n| (n * 0x38, n * 0x38 + 4)).collect(),
         values: vec![vec![0; 4]; 512],
@@ -190,6 +219,63 @@ fn stores_that_keep_watched_bytes_leave_the_wait_running() {
     assert!(!many.fired);
     many.store(0x38 * 300 - 1, &[0, 0, 1]);
     assert!(many.fired);
+}
+
+#[test]
+fn continuation_stop_keeps_the_first_device_or_store_cause() {
+    let mut device = super::Stops::default();
+    device.device(7);
+    device.device(11);
+    assert!(device.fired);
+    assert_eq!(
+        device.first_stop,
+        Some(super::ContinuationStop::Device { id: 7 })
+    );
+
+    let mut store_then_device = super::Stops {
+        stores: vec![(0x100, 0x104)],
+        values: vec![vec![0; 4]],
+        ..Default::default()
+    };
+    store_then_device.store(0x102, &[1]);
+    store_then_device.device(7);
+    assert_eq!(
+        store_then_device.first_stop,
+        Some(super::ContinuationStop::Store {
+            range_index: 0,
+            range: (0x100, 0x104),
+            address: 0x102,
+            change_confirmed: true,
+        })
+    );
+}
+
+#[test]
+fn board_exposes_the_stop_until_continuation_end() {
+    let (mut board, maps) = two_view_board();
+    board
+        .write_physical(0x20000, &0xe5810000u32.to_le_bytes()) // str r0,[r1]
+        .unwrap();
+    board.write_register(0, Register::Pc, 0x20000).unwrap();
+    board.write_register(0, arm::CORE[0], 0x5a).unwrap();
+    board.write_register(0, arm::CORE[1], 0x10000).unwrap();
+    board
+        .continuation_begin(vec![(0x10000, 0x10004)], Default::default(), maps)
+        .unwrap();
+
+    board.run_for_instructions(10, 1).unwrap();
+    assert_eq!(
+        board.continuation_stop(),
+        Some(super::ContinuationStop::Store {
+            range_index: 0,
+            range: (0x10000, 0x10004),
+            address: 0x10000,
+            change_confirmed: true,
+        })
+    );
+    assert!(board.continuation_end().unwrap());
+    assert_eq!(board.continuation_stop(), None);
+    assert_eq!(board.instruction_counts(), vec![1]);
 }
 
 #[test]

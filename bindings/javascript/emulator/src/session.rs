@@ -373,6 +373,19 @@ impl Session {
         self.collect_frames();
         result
     }
+    pub fn take_host_requests(
+        &mut self,
+    ) -> Result<Vec<(usize, fujimod_emulator_devices::bus::HostRequest)>, String> {
+        self.core.board.take_host_requests()
+    }
+    pub fn complete_host_request(
+        &mut self,
+        device: usize,
+        id: u64,
+        result: &[u8],
+    ) -> Result<(), String> {
+        self.core.board.complete_host_request(device, id, result)
+    }
     pub fn input(&mut self, key: &str, pressed: bool, at: u64) -> Result<(), String> {
         if self.history.is_some() {
             return Err("legacy queued keys do not have a shared history input".into());

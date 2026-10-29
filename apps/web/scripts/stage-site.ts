@@ -22,6 +22,11 @@ export function runtimeBundleFiles(manifest: unknown) {
   const files = ['camera.wasm', 'camera.mjs', 'wasm.json', 'runtime-NOTICES.txt'];
   if (manifest === null || typeof manifest !== 'object' || !('construction' in manifest))
     throw Error('Runtime manifest has no construction kind.');
+  const dmpCpuRenderer = Reflect.get(manifest, 'dmpCpuRenderer');
+  if (dmpCpuRenderer !== undefined && typeof dmpCpuRenderer !== 'boolean')
+    throw Error('Runtime manifest has an invalid DMP renderer selection.');
+  if (dmpCpuRenderer === false)
+    files.push('dmp_webgpu.js', 'dmp_webgpu_bg.wasm');
   if (manifest.construction !== 'prepared') return files;
   if (
     !('prepared' in manifest) ||
@@ -118,11 +123,6 @@ export async function stageSite(inputs: SiteInputs, destination = 'public') {
       )
         throw Error(`Emulator qualification failed: ${firmware.id}`);
       await copyBundle(directory, config.bundle);
-      if (firmware.camera_table) {
-        if (firmware.camera_table !== config.bundle + 'camera.json')
-          throw Error(`Unexpected camera table location: ${firmware.id}`);
-        await copy(join(directory, 'camera.json'), firmware.camera_table);
-      }
       if (config.usb) {
         const bundle = config.usb.bundle;
         if (bundle !== `runtime/${firmware.id}-usb/`)
@@ -130,6 +130,13 @@ export async function stageSite(inputs: SiteInputs, destination = 'public') {
         const usb = join(inputs.runtime, `${firmware.id}-usb`);
         await copyBundle(usb, bundle);
       }
+    }
+    for (const firmware of catalog.firmwares) {
+      if (!firmware.service_workflow) continue;
+      const path = `runtime/${firmware.id}/service-workflow.generated.json`;
+      if (firmware.service_workflow !== path)
+        throw Error(`Unexpected service workflow location: ${firmware.id}`);
+      await copy(join(inputs.runtime, firmware.id, 'service-workflow.generated.json'), path);
     }
     const catalogBytes = Buffer.from(JSON.stringify(catalog));
     await writeFile(join(temporary, 'runtime/catalog.json'), catalogBytes);

@@ -47,7 +47,12 @@ class CorpusBinding(unittest.TestCase):
         self.assertEqual(
             i.names(f["id"], ["a"])["synthetic"][0]["sources"], ["invented-header"]
         )
-        self.assertEqual(i.pairs("a", "b")[0]["grade"], "identical")
+        pairs = i.pairs("a", "b")
+        self.assertEqual(pairs[0]["grade"], "identical")
+        self.assertEqual(
+            i.pairs_for(donor["id"], "b"),
+            [pair for pair in pairs if pair["reference"] == donor["key"]],
+        )
         self.assertEqual(len(i.members(f["family"])), 2)
         self.assertEqual(i.calls(f["id"]), [])
         self.assertEqual(i.data_references(f["id"]), [])

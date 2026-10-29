@@ -2,6 +2,7 @@
 //! latched exposure. Only the sensor's physical frame edge advances frame identity.
 use super::FrameEdge;
 use super::mosaic::{Cfa, MosaicSites, Radiance};
+use super::noise::SensorNoise;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex, OnceLock};
 #[derive(Serialize, Deserialize)]
@@ -30,6 +31,8 @@ pub struct Frame {
     /// Scene radiance of an sRGB white pixel, in cd/m².
     #[serde(default = "daylight_white")]
     pub white_luminance: f64,
+    #[serde(default)]
+    pub noise: Option<SensorNoise>,
     /// Mosaic cell means, derived once from the immutable pixels.
     #[serde(skip)]
     sites: OnceLock<MosaicSites>,
@@ -42,6 +45,8 @@ struct FrameState {
     pixels: FramePixels,
     #[serde(default = "daylight_white")]
     white_luminance: f64,
+    #[serde(default)]
+    noise: Option<SensorNoise>,
 }
 impl TryFrom<FrameState> for Frame {
     type Error = String;
@@ -51,6 +56,7 @@ impl TryFrom<FrameState> for Frame {
         }
         let mut frame = Self::new(state.width, state.height, state.pixels)?;
         frame.white_luminance = state.white_luminance;
+        frame.noise = state.noise.map(SensorNoise::validate).transpose()?;
         Ok(frame)
     }
 }
@@ -107,7 +113,11 @@ impl Frame {
                 serde_json::json!({"kind":"mosaic","cfa":cfa,"contents":fujimod_emulator_devices::fingerprint::float32s(radiance.values())})
             }
         };
-        serde_json::json!({"width":self.width,"height":self.height,"white_luminance":self.white_luminance,"pixels":pixels})
+        let mut result = serde_json::json!({"width":self.width,"height":self.height,"white_luminance":self.white_luminance,"pixels":pixels});
+        if let Some(noise) = self.noise {
+            result["noise"] = serde_json::json!(noise);
+        }
+        result
     }
     pub fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         let (kind, pixels): (PixelKind, Arc<[u8]>) = match &self.pixels {
@@ -130,13 +140,26 @@ impl Frame {
         };
         Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             "sensor-frame",
-            &(self.width, self.height, self.white_luminance, kind),
+            &(
+                self.width,
+                self.height,
+                self.white_luminance,
+                kind,
+                self.noise,
+            ),
         )?
         .with_blobs(vec![pixels]))
     }
-    pub fn from_checkpoint(saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<Self, String> {
-        let (width, height, white, kind): (usize, usize, f64, PixelKind) =
-            saved.decode("sensor-frame")?;
+    pub fn from_checkpoint(
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<Self, String> {
+        let (width, height, white, kind, noise): (
+            usize,
+            usize,
+            f64,
+            PixelKind,
+            Option<SensorNoise>,
+        ) = saved.decode("sensor-frame")?;
         let bytes_per_site = match kind {
             PixelKind::Rgb24 => 3,
             PixelKind::Raw16 => 2,
@@ -170,6 +193,7 @@ impl Frame {
         };
         let mut frame = Self::new(width, height, pixels)?;
         frame.white_luminance = white;
+        frame.noise = noise.map(SensorNoise::validate).transpose()?;
         Ok(frame)
     }
     pub fn new(width: usize, height: usize, pixels: FramePixels) -> Result<Self, String> {
@@ -204,6 +228,7 @@ impl Frame {
             height,
             pixels,
             white_luminance: daylight_white(),
+            noise: None,
             sites: OnceLock::new(),
         })
     }

@@ -76,6 +76,40 @@ fn scheduler_frames_console_and_outputs_are_detached_captured_data() {
 }
 
 #[test]
+fn event_record_hex_values_keep_their_variant_in_portable_archives() {
+    let (bytes, expected) = {
+        let source = board();
+        source
+            .state
+            .borrow_mut()
+            .records
+            .push(fujimod_emulator_devices::Record::new(
+                "portable-record",
+                [(
+                    "address",
+                    fujimod_emulator_devices::record::Value::Hex(0x1234),
+                )],
+            ));
+        (
+            source
+                .checkpoint(None)
+                .unwrap()
+                .export()
+                .unwrap()
+                .to_bytes()
+                .unwrap(),
+            source.fingerprint().unwrap(),
+        )
+    };
+    let mut target = board();
+    let checkpoint = target
+        .import_keyframe(&Encoded::from_bytes(&bytes).unwrap())
+        .unwrap();
+    target.restore_keyframe(&checkpoint).unwrap();
+    assert_eq!(target.fingerprint().unwrap(), expected);
+}
+
+#[test]
 fn invalid_topology_scheduler_or_mode_is_refused_without_mutating_the_receiver() {
     let mut source = board();
     source.run_until(13, 17).unwrap();

@@ -19,7 +19,7 @@ fujimod-firmware = { workspace = true, optional = true }
 fujimod-corpus = { path = "../corpus", optional = true }
 fujimod-catalog.workspace = true
 sha2.workspace = true
-fujimod-catalog-camera.workspace = true
+fujimod-catalog-workflows.workspace = true
 fujimod-catalog-bulk.workspace = true
 fujimod-usb.workspace = true
 thiserror.workspace = true

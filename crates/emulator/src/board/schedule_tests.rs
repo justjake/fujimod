@@ -31,7 +31,7 @@ impl Device for ResetLine {
 fn board(counted: bool) -> (Board, Arc<Mutex<Vec<u64>>>) {
     let library = Library::linked().unwrap();
     let backing = Backing::aligned_zeros(0x4000, 4096).unwrap();
-    let memory = rprofile::memory::Memory::default();
+    let memory = fujimod_emulator_cpu_unicorn::memory::Memory::default();
     let cpus = (0..2)
         .map(|core| {
             let raw = library.open(Model::CortexR5F, 1024 * 1024).unwrap();

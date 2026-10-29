@@ -9,7 +9,7 @@ use crate::{
     Limits,
     access::{Access, range},
 };
-use fujimod_catalog_camera::{CameraDefinition, CameraError, Guard};
+use fujimod_catalog_workflows::{Guard, ServiceSetup, WorkflowError};
 use fujimod_usb::{
     ff80::{
         Session, SessionState,
@@ -23,7 +23,7 @@ pub enum ServiceModeError {
     #[error(transparent)]
     Usb(#[from] fujimod_usb::Error),
     #[error(transparent)]
-    Definition(#[from] CameraError),
+    Definition(#[from] WorkflowError),
     #[error("connected device {0:?} is not the selected camera")]
     OtherCamera(String),
     #[error(
@@ -53,10 +53,11 @@ pub struct GuardArmed {
 }
 
 /// The connected device names the selected camera.
-pub(crate) async fn check_product(session: &mut Session, camera: &CameraDefinition) -> Result<()> {
+pub(crate) async fn check_product(session: &mut Session, camera: &ServiceSetup) -> Result<()> {
     let product = session.device_info(InfoSelector::Product).await?.text;
     let normalized = product.to_uppercase().replace('-', "");
     if camera
+        .identity
         .products
         .iter()
         .any(|name| normalized.contains(&name.to_uppercase().replace('-', "")))
@@ -91,7 +92,7 @@ pub(crate) async fn stock_state(access: &mut Access<'_>, guard: &Guard) -> Resul
 /// then arm the reset guard. `progress` receives one line per step as it runs.
 pub async fn arm_reset_guard(
     session: &mut Session,
-    camera: &CameraDefinition,
+    camera: &ServiceSetup,
     limits: Limits,
     progress: &mut (dyn FnMut(&str) + Send),
 ) -> Result<GuardArmed> {
@@ -102,7 +103,7 @@ pub async fn arm_reset_guard(
 /// configuration RAM for this boot. No stored setting is changed.
 pub async fn prepare_service_session(
     session: &mut Session,
-    camera: &CameraDefinition,
+    camera: &ServiceSetup,
     limits: Limits,
     progress: &mut (dyn FnMut(&str) + Send),
 ) -> Result<GuardArmed> {
@@ -111,20 +112,21 @@ pub async fn prepare_service_session(
 
 async fn prepare(
     session: &mut Session,
-    camera: &CameraDefinition,
+    camera: &ServiceSetup,
     limits: Limits,
     progress: &mut (dyn FnMut(&str) + Send),
     leave_debug_enabled: bool,
 ) -> Result<GuardArmed> {
-    let guard = camera.guard()?.clone();
-    let debug = camera.debug()?;
+    let limits = limits.for_setup(camera)?;
+    let guard = camera.guard.clone();
+    let debug = camera.debug_offset;
     progress("Checking the camera");
     check_product(session, camera).await?;
     let geometry = session
         .configuration_geometry(ConfigurationView::Ram)
         .await?;
     if geometry.capacity != camera.configuration.size
-        || geometry.page_bytes.get() != camera.configuration.max_read
+        || geometry.page_bytes.get() != camera.configuration.page_bytes
     {
         return Err(ServiceModeError::Configuration {
             capacity: geometry.capacity,
@@ -136,7 +138,7 @@ async fn prepare(
         camera,
         limits,
     };
-    let flag_before = access.byte(debug.flag_offset).await?;
+    let flag_before = access.byte(debug).await?;
     let guard_before = access.byte(guard.offset).await?;
     for (name, value) in [("debug flag", flag_before), ("reset guard", guard_before)] {
         if value > 1 {
@@ -149,7 +151,7 @@ async fn prepare(
     let outcome = arm(
         &mut access,
         &guard,
-        debug.flag_offset,
+        debug,
         flag_before,
         guard_before,
         progress,
@@ -163,8 +165,8 @@ async fn prepare(
     };
     if access.session.state() == SessionState::Ready {
         let cleanup = async {
-            if access.byte(debug.flag_offset).await? != target {
-                access.set(debug.flag_offset, target).await?;
+            if access.byte(debug).await? != target {
+                access.set(debug, target).await?;
             }
             Ok::<_, ServiceModeError>(())
         }

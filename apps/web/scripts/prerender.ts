@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Wizard, toolPath } from '../src/dev-tools/routes.ts';
 const tools = Object.values(Wizard).map(toolPath);
-export const routes = ['/', '/dev-tools/', ...tools, '/bug/', '/setup/', '/recovery/'];
+export const routes = ['/', '/dev-tools/', ...tools, '/bug/', '/recovery/'];
 /** Render through start mode's production handler, using the same entries as dev and hydration. */
 export async function prerender(output = 'dist') {
   const { handleRequest } = await import(pathToFileURL(resolve(output, 'server/server.js')).href);
@@ -20,7 +20,6 @@ export async function prerender(output = 'dist') {
           '/': 'id="workspace"',
           '/dev-tools/': 'Dev Tools',
           '/bug/': 'class="shell bug-report"',
-          '/setup/': 'class="setup"',
           '/recovery/': 'class="shell recovery"',
         }[route];
     if (!html.includes(expected) || !/<script[^>]+type="module"/.test(html))

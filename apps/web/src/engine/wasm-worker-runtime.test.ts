@@ -110,6 +110,7 @@ test('worker routes physical inputs, scene, card operations, restart, power, pro
       ],
     },
     { action: 'profile', limit: 5 },
+    { action: 'device_states', kind: 'dmp-smaph-h' },
     { action: 'rollback', seconds: 10 },
     {
       action: 'replay',
@@ -131,6 +132,7 @@ test('worker routes physical inputs, scene, card operations, restart, power, pro
   ]);
   assert.deepEqual(restart.bytes, [9, 8, 7]);
   assert.equal(f.calls.find((c) => c.action === 'card_read')!.options.revision, 1);
+  assert.equal(f.calls.find((c) => c.action === 'device_states')!.options.kind, 'dmp-smaph-h');
   assert(
     f.events.some((e) => e.type === 'metrics' && e.metrics.runtime?.ticksPerSecond === 12000000),
   );
@@ -523,10 +525,9 @@ test('RAF uploads are parsed once and not retained for cold boot or power cycles
   assert.equal(f.calls.filter((call) => call.action === 'scene_raf').length, 2);
 });
 
-test('boot reports executed instructions against the optional manifest baseline', async () => {
+test('boot reports guest ticks against the fixed boot run', async () => {
   const f = setup();
   f.manifest.bootTicks = 3000000;
-  f.manifest.bootInstructions = 4000000;
   const result = await f.send({
     action: 'boot',
     config: f.config,
@@ -542,12 +543,12 @@ test('boot reports executed instructions against the optional manifest baseline'
   );
   assert.deepEqual(
     boot.filter((asset) => asset.status === 'loading').map((asset) => asset.loaded),
-    [0, 6000000],
+    [0, 3000000],
   );
   assert(
     boot
       .filter((asset) => asset.status === 'loading')
-      .every((asset) => asset.unit === 'instructions' && asset.total === 4000000),
+      .every((asset) => asset.unit === 'ticks' && asset.total === 3000000),
   );
   assert.equal(boot.at(-1)?.status, 'complete');
   const metrics = f.events.filter((event) => event.type === 'metrics').at(-1);
@@ -555,9 +556,8 @@ test('boot reports executed instructions against the optional manifest baseline'
   assert.equal(metrics.metrics.guestTicks, 3000000);
 });
 
-test('an unmeasured firmware keeps boot progress indeterminate', async () => {
+test('a boot without a fixed tick run keeps boot progress indeterminate', async () => {
   const f = setup();
-  f.manifest.bootTicks = 1200000;
   await f.send({
     action: 'boot',
     config: f.config,
@@ -572,7 +572,7 @@ test('an unmeasured firmware keeps boot progress indeterminate', async () => {
         )
       : [],
   );
-  assert(boot.length > 1);
+  assert(boot.length > 0);
   assert(boot.every((asset) => asset.total === undefined));
 });
 

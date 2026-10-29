@@ -13,7 +13,7 @@ declare class Camera {
     /**
      * Native first-start and REC observation, bounded by an instruction budget.
      */
-    bootToRec(limit: bigint, progress?: (instructions: number) => void): RecReport;
+    bootToRec(limit: bigint, progress?: (ticks: number) => void): RecReport;
     cardFormat(): SessionState;
     cardInsert(present: boolean): SessionState;
     /**
@@ -31,6 +31,7 @@ declare class Camera {
      * Finish device work and release the session.
      */
     close(): void;
+    completeHostRequest(device: number, id: bigint, result: Uint8Array): void;
     deviceStates(kind: string): DeviceStates;
     /**
      * Set the stopped host worker preference (0 or 2) and report it.
@@ -95,7 +96,7 @@ declare class Camera {
     restore(id: string): Point;
     rollback(tick: bigint): Point;
     rotate(id: string, steps: number): SessionState;
-    runUntil(tick: bigint, progress?: (instructions: number) => void): void;
+    runUntil(tick: bigint, progress?: (ticks: number) => void): void;
     /**
      * Export committed storage; restore it with `restoreDurable`.
      */
@@ -111,6 +112,7 @@ declare class Camera {
     setScene(width: number, height: number, rgb: Uint8Array): void;
     state(): SessionState;
     status(): Status;
+    takeHostRequests(): HostRequest[];
     touch(id: string, phase: TouchPhase, x: number, y: number): SessionState;
     undo(): Point;
     usbInToken(node: string, endpoint: number): void;
@@ -138,6 +140,16 @@ declare class Frame {
      */
     readonly sequence: bigint;
     readonly width: number;
+}
+
+declare class HostRequest {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    readonly device: number;
+    readonly id: bigint;
+    readonly kind: string;
+    readonly payload: Uint8Array;
 }
 
 declare class Status {
@@ -470,6 +482,7 @@ export interface JitOptions {
 export interface ModuleOptions {
     executionPolicy?: ExecutionPolicyName;
     tcgJit?: JitSelection;
+    dmpCpuRenderer?: boolean;
 }
 
 export interface Preview {
@@ -522,9 +535,9 @@ interface BindgenModule {
   /* tslint:disable */
   /* eslint-disable */
   /**
-  * Select the board/CPU execution policy and browser JIT tier, once, before any camera.
+  * Select execution policy and browser renderers, initializing WebGPU before any camera.
   */
-    configure(options: ModuleOptions): void;
+    configure(options: ModuleOptions): Promise<void>;
     jitStatistics(): JitStatistics;
   /**
   * Current WebAssembly linear memory size in bytes.
@@ -532,6 +545,7 @@ interface BindgenModule {
     memoryBytes(): number;
     Camera: typeof Camera;
     Frame: typeof Frame;
+    HostRequest: typeof HostRequest;
     Status: typeof Status;
 }
 

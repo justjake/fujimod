@@ -43,3 +43,24 @@ test('release content cannot inject HTML, images or script links', () => {
   expect(host.querySelectorAll('a')).toHaveLength(1);
   expect(host.querySelector('a')?.getAttribute('href')).toBe('/recovery/');
 });
+
+test('wrapped bullet text stays in its list item without an extra paragraph', () => {
+  const host = document.createElement('div');
+  document.body.append(host);
+  dispose = render(
+    () => (
+      <ReleaseNotes
+        text={
+          '- **Faster menus.** Film simulation scrolling is about 4× cheaper, and themed\n  menus no longer redraw unchanged text.\n- Next item.'
+        }
+      />
+    ),
+    host,
+  );
+  expect(host.querySelectorAll('li')).toHaveLength(2);
+  expect(host.querySelectorAll('p')).toHaveLength(0);
+  expect(host.querySelector('li')?.textContent).toBe(
+    'Faster menus. Film simulation scrolling is about 4× cheaper, and themed menus no longer redraw unchanged text.',
+  );
+  expect(host.querySelector('strong')?.textContent).toBe('Faster menus.');
+});

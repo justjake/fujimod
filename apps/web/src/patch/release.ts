@@ -1,13 +1,13 @@
-import { validateIndex, verifyNotes, verifyPatch, type PatchIndex } from './catalog.ts';
+import { validateIndex, type PatchIndex } from './catalog.ts';
 import { validateReleaseInfo, type ReleaseInfo } from './releases.ts';
 
 export interface LoadedRelease extends PatchIndex, ReleaseInfo {
   /** Absolute same-origin /releases/<tag>/ URL, also passed to the patch worker. */
   assetBase: string;
-  /** Verified UTF-8 Markdown. Absent when the index has no notes. */
+  /** Release Markdown, read directly from editable source during development. */
   notesText?: string;
 }
-/** A missing release is normal; upstream and integrity failures remain errors. */
+/** Fetch release metadata and Markdown; a missing release is normal. */
 export async function loadRelease(
   base: string | URL,
   fetcher: typeof fetch = fetch,
@@ -25,22 +25,6 @@ export async function loadRelease(
   }
   const index = validateIndex(await (await asset('patches.json')).json());
   if (index.release !== info.tag) throw Error('The release index does not match its tag.');
-  const [notesText] = await Promise.all([
-    index.notes
-      ? asset(index.notes.name).then(async (response) =>
-          verifyNotes(index.notes!, new Uint8Array(await response.arrayBuffer())),
-        )
-      : undefined,
-    // The index alone cannot prove that an installable output exists.
-    ...index.firmwares
-      .filter((entry) => entry.downloads.installable)
-      .map(async (entry) =>
-        verifyPatch(
-          index,
-          entry,
-          new Uint8Array(await (await asset(index.patches[entry.sha256])).arrayBuffer()),
-        ),
-      ),
-  ]);
+  const notesText = index.notes ? await (await asset(index.notes.name)).text() : undefined;
   return { ...index, ...info, assetBase, ...(notesText === undefined ? {} : { notesText }) };
 }

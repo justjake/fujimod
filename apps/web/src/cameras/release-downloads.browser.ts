@@ -96,7 +96,7 @@ for (const engine of [chromium, webkit].filter(
         schema: 2,
         release: '0.0.1',
         patches: { [hash]: 'example.fmpatch' },
-        notes: { name: 'notes.md', bytes: notes.length, sha256: await sha256(notes) },
+        notes: { name: 'notes.md' },
         firmwares: [entry],
       };
       await context.route('**/runtime/catalog.json', (route) => route.fulfill({ json: catalog }));

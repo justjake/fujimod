@@ -9,8 +9,8 @@ use fujimod_emulator_exr2_resources::{
 };
 use fujimod_emulator_imaging::exr2_isp as isp;
 use fujimod_emulator_imaging::scene::{
-    Frame, FrameEdge, FramePixels, ImageFrames, SensorFrames, SensorFramesHandle,
-    StatisticsFrames, frames::sensor_decoders,
+    Frame, FrameEdge, FramePixels, ImageFrames, SensorFrames, SensorFramesHandle, StatisticsFrames,
+    frames::sensor_decoders,
 };
 use std::{
     any::Any,
@@ -119,7 +119,11 @@ pub fn wire<'a>(
 }
 
 /// The named image input, recorded as used by node `node`.
-pub fn image_input(resources: &mut Resources, name: &str, node: usize) -> Result<ImageFrames, String> {
+pub fn image_input(
+    resources: &mut Resources,
+    name: &str,
+    node: usize,
+) -> Result<ImageFrames, String> {
     let image = images(resources)?
         .images
         .get(name)
@@ -185,10 +189,14 @@ fn sensor_frame(frame: Arc<Frame>) -> SensorFrame {
 
 impl Images {
     fn image(&self, name: &str) -> Result<&ImageFrames, String> {
-        self.images.get(name).ok_or_else(|| "no such image input".into())
+        self.images
+            .get(name)
+            .ok_or_else(|| "no such image input".into())
     }
     fn sensor(&self, name: &str) -> Result<&SensorFramesHandle, String> {
-        self.sensors.get(name).ok_or_else(|| "no such sensor input".into())
+        self.sensors
+            .get(name)
+            .ok_or_else(|| "no such sensor input".into())
     }
 }
 
@@ -240,7 +248,13 @@ impl ImageResources for Images {
             .collect()
     }
 
-    fn prepare_rgb(&self, name: &str, width: usize, height: usize, bytes: &[u8]) -> Result<(), String> {
+    fn prepare_rgb(
+        &self,
+        name: &str,
+        width: usize,
+        height: usize,
+        bytes: &[u8],
+    ) -> Result<(), String> {
         self.image(name)?.prepare_rgb(width, height, bytes)
     }
     fn use_analytic(&self, name: &str) -> Result<(), String> {
@@ -274,7 +288,40 @@ impl ImageResources for Images {
             .set_frame(frame);
         Ok(())
     }
-    fn sensor_raw16(&self, name: &str, width: usize, height: usize, bytes: &[u8]) -> Result<(), String> {
+    fn sensor_rgb_noise(
+        &self,
+        name: &str,
+        width: usize,
+        height: usize,
+        bytes: &[u8],
+        white_luminance: f64,
+        noise: serde_json::Value,
+    ) -> Result<(), String> {
+        let noise: fujimod_emulator_imaging::scene::noise::SensorNoise =
+            serde_json::from_value(noise).map_err(|e| e.to_string())?;
+        let noise = noise.validate()?;
+        if !white_luminance.is_finite() || white_luminance <= 0. {
+            return Err("scene white luminance must be positive finite cd/m²".into());
+        }
+        if bytes.len() > 64 << 20 {
+            return Err("sensor RGB input exceeds 64 MiB".into());
+        }
+        let mut frame = Frame::new(width, height, FramePixels::Rgb24(bytes.to_vec().into()))?;
+        frame.white_luminance = white_luminance;
+        frame.noise = Some(noise);
+        self.sensor(name)?
+            .lock()
+            .map_err(|_| "sensor input is poisoned")?
+            .set_frame(frame);
+        Ok(())
+    }
+    fn sensor_raw16(
+        &self,
+        name: &str,
+        width: usize,
+        height: usize,
+        bytes: &[u8],
+    ) -> Result<(), String> {
         let input = self.sensor(name)?;
         let expected = width
             .checked_mul(height)

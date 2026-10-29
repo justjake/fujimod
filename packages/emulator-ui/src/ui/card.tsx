@@ -145,7 +145,8 @@ export function CardBrowser(props: {
     });
   }
   return (
-    <div class="sd" id="card-section" aria-label="SD card" hidden={state()?.supported === false}>
+    <div class="sd" id="card-section" aria-label="SD card" hidden={!state()?.supported}>
+      <hr />
       <div class="head" id="card-header">
         <b>SD CARD</b>
         <span id="card-capacity">

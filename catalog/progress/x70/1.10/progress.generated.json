@@ -5,8 +5,8 @@
   "model": "X70",
   "version": "1.10",
   "facts": {
-    "located": 35,
-    "total": 35
+    "located": 36,
+    "total": 36
   },
   "boot_rom": "X70",
   "stages": {
@@ -17,81 +17,95 @@
     "camera-identity": "pass",
     "camera-snapshot": "pass",
     "camera-menu": "pass",
-    "mod-target": "not-run",
-    "mod-build": "not-run",
-    "sd-image": "not-run",
-    "sd-boot": "not-run"
+    "mod-target": "stale",
+    "mod-build": "stale",
+    "sd-image": "stale",
+    "sd-boot": "pass"
   },
   "stock": {
     "record-picture": {
-      "result": "pass",
+      "result": "stale",
       "passed": 1,
       "total": 1
     },
     "record-movie": {
-      "result": "stale"
+      "result": "stale",
+      "passed": 0,
+      "total": 2
     },
     "control-input": {
-      "result": "partial",
-      "passed": 78,
-      "total": 84
+      "result": "stale",
+      "passed": 77,
+      "total": 78
     },
     "focus": {
-      "result": "stale"
+      "result": "stale",
+      "passed": 3,
+      "total": 4
     },
     "lens": {
-      "result": "stale"
+      "result": "stale",
+      "passed": 0,
+      "total": 3
     },
     "film-simulations": {
-      "result": "fail",
+      "result": "stale",
       "passed": 0,
       "total": 11
     },
     "playback-picture": {
-      "result": "partial",
-      "passed": 2,
+      "result": "stale",
+      "passed": 3,
       "total": 3
     },
     "playback-movie": {
-      "result": "stale"
+      "result": "stale",
+      "passed": 0,
+      "total": 4
     },
     "develop-raw": {
-      "result": "stale"
+      "result": "stale",
+      "passed": 0,
+      "total": 3
     },
     "sd": {
-      "result": "pass",
+      "result": "stale",
       "passed": 2,
       "total": 2
     },
     "control-layout": {
-      "result": "pass"
+      "result": "partial",
+      "passed": 20,
+      "total": 21
     }
   },
   "mods": {
-    "af": "not-run",
-    "fujimod": "not-run",
-    "aspect-ratio": "not-run",
-    "surround-view": "not-run",
-    "desqueeze": "not-run",
-    "desqueeze-jpeg": "not-run",
+    "af": "stale",
+    "fujimod": "stale",
+    "aspect-ratio": "stale",
+    "surround-view": "stale",
+    "desqueeze": "stale",
+    "desqueeze-jpeg": "stale",
     "jpeg-max": "not-run",
-    "framing-guideline": "not-run",
+    "framing-guideline": "stale",
     "film-sims": "not-run",
-    "card-films": "not-run",
+    "card-films": "stale",
     "film-editor": "not-run",
     "highlight-meter": "not-run",
-    "raw-view": "not-run",
+    "raw-view": "stale",
+    "f-log": "stale",
     "raw-exposure": "not-run",
-    "hdmi-rec": "not-run",
+    "hdmi-rec": "stale",
     "controls": "not-run",
     "menu-theme": "not-run",
-    "menu-tap": "not-run",
+    "overlay-opacity": "stale",
+    "menu-tap": "stale",
     "recipes": "not-run",
-    "snap-focus": "not-run",
-    "usb-debug": "not-run",
-    "af-scene-capture": "not-run",
-    "bug-report": "not-run",
-    "sd-volume-name": "not-run",
-    "date-folders": "not-run"
+    "snap-focus": "stale",
+    "usb-debug": "stale",
+    "af-scene-capture": "stale",
+    "bug-report": "stale",
+    "sd-volume-name": "stale",
+    "date-folders": "stale"
   }
 }

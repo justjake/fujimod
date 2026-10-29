@@ -20,6 +20,7 @@ pub struct BorrowedQueries {
     output: MemoryRange,
     original: Vec<u8>,
     commands: Vec<SequenceCommand>,
+    calls: Vec<(Address, DiagnosticTag, Vec<(u32, u32)>, Vec<u8>)>,
 }
 impl BorrowedQueries {
     pub fn new(
@@ -49,6 +50,7 @@ impl BorrowedQueries {
             output,
             original,
             commands,
+            calls: vec![],
         })
     }
     fn read(address: Address, length: u32, expected: Option<Vec<u8>>) -> Result<SequenceCommand> {
@@ -88,6 +90,8 @@ impl BorrowedQueries {
                 limit: 512,
             });
         }
+        self.calls
+            .push((callback, tag, statuses.clone(), output.clone()));
         self.write(self.output.address(), output)?;
         self.write(self.callback, callback.0.to_le_bytes().to_vec())?;
         let query = self.commands.len();
@@ -103,6 +107,60 @@ impl BorrowedQueries {
             expected: None,
         });
         Ok((query, result))
+    }
+    /// Run every borrow through the guarded callback primitive under one session
+    /// owner. Return the raw query reply and captured output for each call.
+    pub async fn invoke(
+        &self,
+        session: &mut crate::ff80::Session,
+        limits: crate::ff80::commands::memory::DebugMemoryLimits,
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+        use super::{
+            callback as cb,
+            memory::{read_range, write_range},
+        };
+        use crate::ff80::commands::research;
+        let mut results = Vec::new();
+        for (entry, tag, statuses, output) in &self.calls {
+            let mut body = vec![0; 16];
+            body[..4].copy_from_slice(&tag.value().to_le_bytes());
+            let trigger = research::Request::new(
+                research::CommandCode(0x450006),
+                body,
+                NonZeroU32::new(32).unwrap(),
+            )?;
+            let invocation = cb::Invocation {
+                preconditions: vec![],
+                writes: vec![cb::GuardedWrite {
+                    address: self.output.address(),
+                    accepted: vec![self.original.clone()],
+                    bytes: output.clone(),
+                }],
+                synchronization: vec![],
+                slot: cb::CallbackSlot {
+                    address: self.callback,
+                    required: self.stock.0.to_le_bytes().to_vec(),
+                    value: entry.0.to_le_bytes().to_vec(),
+                },
+                trigger,
+                expected: cb::ExpectedOutcome::Completed {
+                    body_prefix: vec![],
+                    statuses: Some(statuses.clone()),
+                    length: Some(32),
+                },
+                limits,
+            };
+            let reply = cb::invoke(session, &invocation)
+                .await?
+                .ok_or(Error::InvalidLength)?;
+            let captured = read_range(session, self.output, limits).await?;
+            write_range(session, self.output.address(), &self.original, limits).await?;
+            if read_range(session, self.output, limits).await? != self.original {
+                return Err(crate::error::ProtocolError::ExpectationMismatch.into());
+            }
+            results.push((reply, captured));
+        }
+        Ok(results)
     }
     pub fn commands(&self) -> Vec<SequenceCommand> {
         if self.commands.len() == 2 {

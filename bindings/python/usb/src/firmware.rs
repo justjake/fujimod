@@ -13,6 +13,15 @@ fn invert<'py>(py: Python<'py>, data: &[u8]) -> Bound<'py, PyBytes> {
     PyBytes::new(py, &core::invert(data))
 }
 #[pyfunction]
+fn recompress<'py>(
+    py: Python<'py>,
+    source: &[u8],
+    replacement: &[u8],
+) -> PyResult<Bound<'py, PyBytes>> {
+    let bytes = core::recompress(source, replacement).map_err(error)?;
+    Ok(PyBytes::new(py, &bytes))
+}
+#[pyfunction]
 fn inner_header(data: &[u8]) -> Option<(u8, u64, u64)> {
     core::inner_header(data).map(|h| (h.word_bits, h.base, h.initialized_size))
 }
@@ -212,6 +221,7 @@ pub(crate) fn register(py: Python<'_>, parent: &Bound<'_, PyModule>, name: &str)
     module.add_function(wrap_pyfunction!(invert, &module)?)?;
     module.add_function(wrap_pyfunction!(inner_header, &module)?)?;
     module.add_function(wrap_pyfunction!(decompress, &module)?)?;
+    module.add_function(wrap_pyfunction!(recompress, &module)?)?;
     module.add_function(wrap_pyfunction!(scan, &module)?)?;
     module.add_function(wrap_pyfunction!(raw, &module)?)?;
     module.add_function(wrap_pyfunction!(overlays, &module)?)?;

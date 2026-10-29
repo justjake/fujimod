@@ -40,6 +40,7 @@ export type WasmRequest =
   | { action: 'restore_checkpoint'; id: string }
   | { action: 'replay_history'; bytes: Uint8Array }
   | { action: 'profile'; limit?: number }
+  | { action: 'device_states'; kind: string }
   | { action: 'replay'; steps: readonly ReplayStep[] };
 export type WasmWorkerRequest =
   | { type: 'rpc'; serial: number; request: WasmRequest }

@@ -1,5 +1,18 @@
 # FujiMod
 
+This repo contains open source tooling that can help developers access camera
+internals and work on mods. We’re gathering on the
+[FujiHack.org Discord](https://discord.gg/UZXDktvAZP) to collaborate.
+
+The FujiMod firmware modification itself is not yet open source, but we’re
+working on it!
+
+If you want to help by testing FujiMod firmware on your camera,
+[head to fujimod.com](https://fujimod.com/). Due to copyright, we can’t distribute
+ready-made builds of FujiMod since it’s based on the official firmware. Use the
+search box on the site to find the download link from Fujifilm for your camera.
+Then upload it to fujimod.com so we can build the mod for your camera.
+
 Camera tools, emulation and firmware mods. The browser application lives in
 [apps/web](apps/web/README.md), including its body definitions, patch
 interpreter, runtime adapter and browser checks. The shared

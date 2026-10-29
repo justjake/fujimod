@@ -28,3 +28,16 @@ fn firmware_layouts_and_body_inputs_decode_as_closed_records() {
         }
     }
 }
+
+#[test]
+fn xt1_rec_inputs_release_contacts_and_select_idle_positions() {
+    let inputs = HardwareInputs::bundled("xt1-rec").unwrap();
+    let reset = inputs.reset.inputs.unwrap();
+    let gpio = reset.gpio.gpio_inputs;
+    assert_eq!(gpio.get("0"), Some(&3630)); // GPIO0.1 grip absent; GPIO0.9 idle.
+    assert_eq!(gpio.get("2"), Some(&4608)); // GPIO2.8 remains low.
+    assert_eq!(gpio.get("3"), Some(&845)); // PLAY and DELETE released.
+    assert_eq!(gpio.get("8"), Some(&24584)); // AF-LOCK released; strap retained.
+    assert_eq!(gpio.get("12"), Some(&160)); // Idle input GPIO12.5 high.
+    assert_eq!(reset.mcu_packet_hex, "00000000d00700ff008000040000aafc");
+}

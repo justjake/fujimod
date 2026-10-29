@@ -3,7 +3,9 @@
 use sha2::{Digest, Sha256};
 
 mod error;
+mod recompress;
 pub use error::Error;
+pub use recompress::recompress;
 pub type Result<T> = std::result::Result<T, Error>;
 fn require(ok: bool, error: Error) -> Result<()> {
     if ok { Ok(()) } else { Err(error) }

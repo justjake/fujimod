@@ -2,7 +2,7 @@ import { For, Show, createEffect, createSignal } from 'solid-js';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import { formatBytes } from '@fujimod/emulator-ui/ui/file-list';
 import type { Camera, CameraModel } from '../camera-model';
-import { bulkSelection } from '../captures/capture';
+import { executionSelection } from '../captures/capture';
 import type { AddFile } from '../../files/shelf';
 import { ContributeDialog } from '../../files/ContributeDialog';
 import type { DeviceFileEntry } from '../../device-files';
@@ -46,7 +46,7 @@ export function BugReports(props: {
   const [wiggle, setWiggle] = createSignal(false);
   const announced = new Set<string>();
   const scan = () => scans().get(props.camera.id);
-  const firmware = () => bulkSelection(props.camera.identity)?.firmware.id;
+  const firmware = () => executionSelection(props.camera.identity)?.firmware.id;
   const available = () =>
     props.camera.present && !props.camera.uncertain && !props.camera.session && !running();
   function setScan(id: string, value: Scan | undefined) {

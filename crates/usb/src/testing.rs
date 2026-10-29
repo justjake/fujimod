@@ -59,6 +59,9 @@ impl Script {
     pub fn remaining(&self) -> usize {
         self.state.lock().expect("replay lock").steps.len()
     }
+    pub fn connection(&self, max_reply_bytes: u32) -> Result<crate::connection::Connection> {
+        crate::connection::Connection::replay(self.clone(), max_reply_bytes)
+    }
     pub async fn begin_session(
         &self,
         max_reply_bytes: u32,

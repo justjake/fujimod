@@ -6,10 +6,7 @@
   "change": {
     "kind": "preset",
     "preset": {
-      "factory_options": {
-        "storage_profile": "profile",
-        "sd_card_present": true
-      },
+      "factory_options": {},
       "hardware_selection": {
         "soc_profile_id": "exr2-service-transports",
         "body_profile_id": "x100s-rec"

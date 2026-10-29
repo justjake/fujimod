@@ -108,12 +108,115 @@ pub fn fill_counts(
 
 /// `_ui_coverage(_ui_paths(draw), draw)`.
 pub fn coverage(draw: &Draw) -> Result<Coverage> {
-    let paths = geometry::paths(draw)?;
-    coverage_from_paths(draw, paths)
+    let plan = coverage_plan(draw)?;
+    if plan.is_empty() {
+        return coverage_from_counts(plan, Vec::new());
+    }
+    let counts = fill_counts(
+        &plan.edges,
+        plan.nonzero,
+        plan.x0,
+        plan.y0,
+        plan.samples as i64,
+        plan.width,
+        plan.height,
+    )?;
+    coverage_from_counts(plan, counts.into_iter().map(u32::from).collect())
 }
 
-pub(crate) fn coverage_from_paths(draw: &Draw, paths: Vec<(Vec<Point>, bool)>) -> Result<Coverage> {
-    coverage_paths(paths, &CoverageStyle::from(draw))
+/// Geometry and clip data for one coverage raster. The edge coordinates stay
+/// f64 here so CPU rendering retains its reference arithmetic; GPU callers
+/// convert these edges to the shared kernel's f32 input.
+pub struct CoveragePlan {
+    pub edges: Vec<(Point, Point)>,
+    pub nonzero: bool,
+    pub samples: u32,
+    pub x0: i64,
+    pub y0: i64,
+    pub width: usize,
+    pub height: usize,
+    clipped: Vec<bool>,
+}
+
+impl CoveragePlan {
+    pub fn is_empty(&self) -> bool {
+        self.width == 0 || self.height == 0
+    }
+
+    /// Per-pixel clip inclusion in row-major bounds order.
+    pub fn clip_mask(&self) -> &[bool] {
+        &self.clipped
+    }
+
+    /// Pixel bounds as `[left, right, top, bottom)`, with exclusive end values.
+    pub fn bounds(&self) -> [u32; 4] {
+        if self.is_empty() {
+            return [0; 4];
+        }
+        [
+            self.x0 as u32,
+            (self.x0 + self.width as i64) as u32,
+            self.y0 as u32,
+            (self.y0 + self.height as i64) as u32,
+        ]
+    }
+}
+
+fn empty_coverage_plan(samples: u32, nonzero: bool) -> CoveragePlan {
+    CoveragePlan {
+        edges: Vec::new(),
+        nonzero,
+        samples,
+        x0: 0,
+        y0: 0,
+        width: 0,
+        height: 0,
+        clipped: Vec::new(),
+    }
+}
+
+/// Prepare fill edges, sample bounds and clipping for one draw.
+pub fn coverage_plan(draw: &Draw) -> Result<CoveragePlan> {
+    coverage_plan_from_paths(geometry::paths(draw)?, &CoverageStyle::from(draw))
+}
+
+/// Prepare coverage plans in draw order for a single batched raster dispatch.
+pub fn coverage_plans(draws: &[Draw]) -> Result<Vec<CoveragePlan>> {
+    draws.iter().map(coverage_plan).collect()
+}
+
+/// Apply rasterized sample counts to a prepared draw, including its clip mask.
+pub fn coverage_from_counts(plan: CoveragePlan, counts: Vec<u32>) -> Result<Coverage> {
+    if plan.is_empty() {
+        if !counts.is_empty() {
+            return fail("Graphics UI empty coverage plan received rasterized samples");
+        }
+        return Ok(Coverage::empty());
+    }
+    let expected = plan.width * plan.height;
+    if counts.len() != expected || plan.clipped.len() != expected {
+        return fail("Graphics UI coverage raster returned an incomplete sample image");
+    }
+    let maximum = plan.samples * plan.samples;
+    if counts.iter().any(|&count| count > maximum) {
+        return fail("Graphics UI coverage raster returned an invalid sample count");
+    }
+    let divisor = maximum as f64;
+    let values = counts
+        .iter()
+        .zip(&plan.clipped)
+        .map(|(&count, &inside)| {
+            let value = count as f64 / divisor;
+            value * if inside { 1.0 } else { 0.0 }
+        })
+        .collect();
+    Ok(Coverage {
+        x0: plan.x0,
+        y0: plan.y0,
+        width: plan.width,
+        height: plan.height,
+        values,
+    })
 }
 
 /// Only the fields the pure coverage operation reads. Runtimes can provide
@@ -142,15 +245,18 @@ impl From<&Draw> for CoverageStyle {
     }
 }
 
-pub(crate) fn coverage_paths(
+fn coverage_plan_from_paths(
     paths: Vec<(Vec<Point>, bool)>,
     draw: &CoverageStyle,
-) -> Result<Coverage> {
+) -> Result<CoveragePlan> {
     let (width, height) = (draw.width as i64, draw.height as i64);
     let [a, b, _, d, e, _] = draw.matrix;
     if draw.stroke.is_none() && a * e - b * d == 0.0 {
         // A singular fill collapses its geometry to a line or point.
-        return Ok(Coverage::empty());
+        return Ok(empty_coverage_plan(
+            draw.samples,
+            draw.stroke.is_some() || draw.nonzero,
+        ));
     }
     let polylines: Vec<Vec<Point>> = if let Some(style) = &draw.stroke {
         geometry::stroke_with_style(&paths, style)?
@@ -164,7 +270,10 @@ pub(crate) fn coverage_paths(
         .filter(|(a, b)| a != b && a.1 != b.1)
         .collect();
     if edges.is_empty() {
-        return Ok(Coverage::empty());
+        return Ok(empty_coverage_plan(
+            draw.samples,
+            draw.stroke.is_some() || draw.nonzero,
+        ));
     }
     let nonzero = draw.stroke.is_some() || draw.nonzero;
     let mut sweep: Vec<(f64, i64, i64)> = Vec::with_capacity(edges.len() * 2);
@@ -192,7 +301,7 @@ pub(crate) fn coverage_paths(
         }
     }
     if draw.clips.is_empty() {
-        return Ok(Coverage::empty());
+        return Ok(empty_coverage_plan(draw.samples, nonzero));
     }
     let points = edges.iter().flat_map(|(a, b)| [*a, *b]);
     let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::NAN, f64::NAN, f64::NAN, f64::NAN);
@@ -220,12 +329,9 @@ pub(crate) fn coverage_paths(
     let x1 = width.min(max_x.ceil() as i64);
     let y1 = height.min(max_y.ceil() as i64);
     if x0 >= x1 || y0 >= y1 {
-        return Ok(Coverage::empty());
+        return Ok(empty_coverage_plan(draw.samples, nonzero));
     }
-    let scale = draw.samples as i64;
     let (w, h) = ((x1 - x0) as usize, (y1 - y0) as usize);
-    let counts = fill_counts(&edges, nonzero, x0, y0, scale, w, h)?;
-    let divisor = (scale * scale) as f64;
     let mut clipped = vec![false; w * h];
     for &(left, bottom, right, top) in &draw.clips {
         let (left, bottom, right, top) = (left.max(x0), bottom.max(y0), right.min(x1), top.min(y1));
@@ -235,20 +341,15 @@ pub(crate) fn coverage_paths(
             }
         }
     }
-    let values = counts
-        .iter()
-        .zip(&clipped)
-        .map(|(&c, &inside)| {
-            let value = c as f64 / divisor;
-            value * if inside { 1.0 } else { 0.0 }
-        })
-        .collect();
-    Ok(Coverage {
+    Ok(CoveragePlan {
+        edges,
+        nonzero,
+        samples: draw.samples,
         x0,
         y0,
         width: w,
         height: h,
-        values,
+        clipped,
     })
 }
 

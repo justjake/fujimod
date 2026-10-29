@@ -7,6 +7,10 @@
 pub mod construct;
 pub mod recording;
 pub mod replay;
+#[cfg(not(target_os = "emscripten"))]
+mod ui_paint;
+#[cfg(not(target_os = "emscripten"))]
+use fujimod_emulator_gpu::CoverageKernel;
 use fujimod_emulator_graphics::{batch, clear, init, regs::Registers, render, stream};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -37,6 +41,8 @@ use fujimod_emulator_devices::record::Result;
 use fujimod_emulator_devices::{Action, Record, Unsupported, Value, WordMap};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
+#[cfg(not(target_os = "emscripten"))]
+use std::sync::OnceLock;
 
 pub const BASE: u64 = 0xfff78000;
 pub const SIZE: u64 = 0x5000;
@@ -49,9 +55,33 @@ pub const FILL_CONTROL: u32 = 0x0f100201;
 pub const COPY_PROFILE: &str = "vg-32bpp-untile-unrotated";
 pub const CLEAR_PROFILE: &str = "stock-vg-clear-only";
 pub const UI_PROFILE: &str = "declared-vg-ui-primitives-unmeasured";
+#[cfg(target_os = "emscripten")]
+static WEBGPU_BRIDGE_ENABLED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Select asynchronous host WebGPU rendering for vector-device submissions.
+pub fn configure_webgpu_bridge(enabled: bool) {
+    #[cfg(target_os = "emscripten")]
+    WEBGPU_BRIDGE_ENABLED.store(enabled, std::sync::atomic::Ordering::SeqCst);
+    #[cfg(not(target_os = "emscripten"))]
+    let _ = enabled;
+}
+
+pub(crate) fn webgpu_bridge_enabled() -> bool {
+    #[cfg(target_os = "emscripten")]
+    {
+        WEBGPU_BRIDGE_ENABLED.load(std::sync::atomic::Ordering::SeqCst)
+    }
+    #[cfg(not(target_os = "emscripten"))]
+    {
+        false
+    }
+}
 const COMMAND: [u32; 6] = [0x10d4, 0x10dc, 0x10e4, 0x10ec, 0x20e0, 0x20e8];
 const COPY: [u32; 8] = [0xc00, 0xc04, 0xc08, 0xc0c, 0xc10, 0xc20, 0xc24, 0xc28];
-const TRIGGERS: [u32; 3] = [0x10d0, 0x10e0, 0x20f0];
+// Stock GL submits its shader/uniform command list through logical register 0x20f0.
+const GLES_SUBMIT: u32 = 0x20f0;
+const TRIGGERS: [u32; 3] = [0x10d0, 0x10e0, GLES_SUBMIT];
 pub type DmaOutput = Vec<(u64, Arc<Vec<u8>>)>;
 pub type RenderedBatch = (DmaOutput, u64);
 pub type Fields = Vec<(&'static str, Value)>;
@@ -99,6 +129,30 @@ pub struct Job {
 }
 fn record_receipts_default() -> bool {
     true
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+enum PendingWebGpu {
+    Gles {
+        id: u64,
+        cpu: i64,
+        irq_cpu: i64,
+        command_address: u64,
+        command_bytes: u64,
+        job: Job,
+    },
+    Ui {
+        id: u64,
+        cpu: i64,
+        irq_cpu: i64,
+        draw_count: usize,
+        filled_paths: usize,
+        stroked_paths: usize,
+        sampled_images: usize,
+        linear_gradients: usize,
+        radial_gradients: usize,
+        job: Job,
+    },
 }
 fn fail<T>(s: impl Into<String>) -> Result<T> {
     Err(Unsupported(s.into()))
@@ -193,7 +247,22 @@ pub trait Inputs {
     fn routed(&self) -> bool;
     fn read(&mut self, cpu: i64, address: u64, length: u64)
     -> std::result::Result<Vec<u8>, String>;
+    fn submit_webgpu_request(&mut self, _kind: &str, _payload: Vec<u8>) -> Result<Option<u64>> {
+        Ok(None)
+    }
     fn targets(&mut self) -> Result<(usize, i64)>;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WebGpuUiRequest {
+    pub cpu: i64,
+    pub draws: Vec<batch::Draw>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WebGpuUiResult {
+    pub output: Vec<(u64, Vec<u8>)>,
+    pub touched_bytes: u64,
 }
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum CompletionEvent {
@@ -230,6 +299,16 @@ pub struct Completion {
 pub struct CommandProcessor {
     #[serde(default)]
     pub gles: fujimod_emulator_ip_dmp::gles::Engine,
+    #[serde(default)]
+    pending_webgpu: Option<PendingWebGpu>,
+    #[serde(default)]
+    cpu_raster_calls: u64,
+    #[serde(default)]
+    cpu_vector_paint_calls: u64,
+    #[serde(default)]
+    gpu_gles_lists: u64,
+    #[serde(default)]
+    gpu_vector_paint_calls: u64,
     pub regs: WordMap,
     pub path: WordMap,
     pub fill: WordMap,
@@ -259,6 +338,11 @@ impl Default for CommandProcessor {
     fn default() -> Self {
         Self {
             gles: Default::default(),
+            pending_webgpu: None,
+            cpu_raster_calls: 0,
+            cpu_vector_paint_calls: 0,
+            gpu_gles_lists: 0,
+            gpu_vector_paint_calls: 0,
             regs: WordMap::default(),
             path: WordMap::default(),
             fill: WordMap::default(),
@@ -420,7 +504,7 @@ impl CommandProcessor {
         if o == 0x34 || o == 0x105c {
             return fail("Graphics completion status is read-only");
         }
-        if o == 0x20f0 {
+        if o == GLES_SUBMIT {
             return self.start_gles(cpu, value, host, actions, record_receipts);
         }
         if TRIGGERS.contains(&o) {
@@ -565,7 +649,7 @@ impl CommandProcessor {
         record_receipts: bool,
     ) -> Result<()> {
         let o = offset(address, 4)?;
-        if o == 0x20f0 {
+        if o == GLES_SUBMIT {
             return self.start_gles(cpu, value, host, actions, record_receipts);
         }
         if TRIGGERS.contains(&o) {
@@ -604,6 +688,175 @@ impl CommandProcessor {
             .get(&token)
             .ok_or_else(|| Unsupported("Unknown graphics completion token".into()))?;
         Ok((c.cpu, c.output.clone()))
+    }
+    pub fn complete_webgpu_request(
+        &mut self,
+        id: u64,
+        result: &[u8],
+        actions: &mut Vec<Action>,
+    ) -> Result<()> {
+        let pending = self
+            .pending_webgpu
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| Unsupported("Vector WebGPU result has no pending request".into()))?;
+        match pending {
+            PendingWebGpu::Gles {
+                id: expected,
+                cpu,
+                irq_cpu,
+                command_address,
+                command_bytes,
+                mut job,
+            } => {
+                if id != expected {
+                    return fail("Vector WebGPU result does not match the pending GLES list");
+                }
+                let snapshots = self.gles.apply_webgpu_result(result).map_err(Unsupported)?;
+                let output: DmaOutput = self
+                    .gles
+                    .written_ranges()
+                    .iter()
+                    .map(|&(address, length)| {
+                        let (base, snapshot) = snapshots
+                            .iter()
+                            .find(|(base, bytes)| {
+                                *base <= address
+                                    && address + length as u64 <= *base + bytes.len() as u64
+                            })
+                            .ok_or_else(|| Unsupported("DMP write range outside target snapshot".into()))?;
+                        let offset = (address - base) as usize;
+                        Ok((address, Arc::new(snapshot[offset..offset + length].to_vec())))
+                    })
+                    .collect::<Result<_>>()?;
+                let bytes = output.iter().map(|(_, data)| data.len() as u64).sum::<u64>();
+                if job.record_receipts {
+                    update(&mut job, vec![("bytes", num(bytes))]);
+                }
+                self.pending_webgpu = None;
+                self.last_job = if job.record_receipts { Some(job.clone()) } else { None };
+                self.schedule(
+                    Completion {
+                        cpu,
+                        irq_cpu,
+                        status: CLEAR_STATUS,
+                        bytes,
+                        output,
+                        job,
+                        event: CompletionEvent::Gles,
+                        ui: false,
+                    },
+                    self.delay(command_bytes + bytes),
+                    actions,
+                );
+                let _ = command_address;
+            }
+            PendingWebGpu::Ui {
+                id: expected,
+                cpu,
+                irq_cpu,
+                draw_count,
+                filled_paths,
+                stroked_paths,
+                sampled_images,
+                linear_gradients,
+                radial_gradients,
+                mut job,
+            } => {
+                if id != expected {
+                    return fail("Vector WebGPU result does not match the pending UI batch");
+                }
+                let rendered: WebGpuUiResult = ciborium::de::from_reader(std::io::Cursor::new(result))
+                    .map_err(|error| Unsupported(format!("Decode vector WebGPU result: {error}")))?;
+                let output: DmaOutput = rendered
+                    .output
+                    .into_iter()
+                    .map(|(address, bytes)| (address, Arc::new(bytes)))
+                    .collect();
+                let bytes = output.iter().map(|(_, data)| data.len() as u64).sum::<u64>();
+                if bytes > self.max_clear_bytes || rendered.touched_bytes > self.max_clear_bytes {
+                    return fail("Vector WebGPU output exceeds configured bounds");
+                }
+                let delay = self.delay(rendered.touched_bytes);
+                if job.record_receipts {
+                    update(
+                        &mut job,
+                        vec![
+                            ("operation", Value::constant("ui-primitives")),
+                            ("profile", self.clear_profile.unwrap().value()),
+                            ("accepted", Value::Bool(true)),
+                            ("draw_count", num(draw_count as u64)),
+                            ("filled_paths", num(filled_paths as u64)),
+                            ("stroked_paths", num(stroked_paths as u64)),
+                            ("sampled_images", num(sampled_images as u64)),
+                            ("linear_gradients", num(linear_gradients as u64)),
+                            (
+                                "destinations",
+                                Value::List(
+                                    output
+                                        .iter()
+                                        .map(|(address, data)| {
+                                            dict([
+                                                ("address".into(), hex(*address)),
+                                                ("bytes".into(), num(data.len() as u64)),
+                                            ])
+                                        })
+                                        .collect(),
+                                ),
+                            ),
+                            ("changed_bytes", num(bytes)),
+                            ("covered_bytes_in_draw_order", num(rendered.touched_bytes)),
+                            ("irq_cpu", num(irq_cpu)),
+                            ("latency_ticks", num(delay)),
+                            (
+                                "pixel_semantics",
+                                Value::constant(
+                                    "declared software RGBA8 SRC/SRC_OVER, affine paths, regular-grid AA, centerline strokes, nearest Morton images, linear ramp interpolation; hardware pixels unmeasured",
+                                ),
+                            ),
+                            (
+                                "completion_semantics",
+                                Value::constant(
+                                    "atomic validated whole batch before bit31/physicalIRQ3c; throughput timing unmeasured",
+                                ),
+                            ),
+                        ],
+                    );
+                    if radial_gradients != 0 {
+                        update(
+                            &mut job,
+                            vec![
+                                ("radial_gradients", num(radial_gradients as u64)),
+                                (
+                                    "pixel_semantics",
+                                    Value::constant(
+                                        "declared software RGBA8 SRC/SRC_OVER, affine paths, regular-grid AA, centerline strokes, nearest Morton images, linear/radial ramp interpolation; hardware pixels unmeasured",
+                                    ),
+                                ),
+                            ],
+                        );
+                    }
+                    log(actions, "Graphics declared UI batch started", &job);
+                }
+                self.pending_webgpu = None;
+                self.last_job = if job.record_receipts { Some(job.clone()) } else { None };
+                self.schedule(
+                    Completion {
+                        cpu,
+                        irq_cpu,
+                        status: CLEAR_STATUS,
+                        bytes,
+                        output,
+                        job,
+                        event: CompletionEvent::Batch,
+                        ui: true,
+                    },
+                    delay,
+                    actions,
+                );
+            }
+        }
+        Ok(())
     }
     pub fn complete(&mut self, token: u64, _now: u64, actions: &mut Vec<Action>) -> Result<Job> {
         let mut c = self
@@ -672,6 +925,41 @@ impl CommandProcessor {
             .iter()
             .map(|b| u32::from_le_bytes(*b))
             .collect();
+        if webgpu_bridge_enabled() {
+            let webgpu_request = self
+                .gles
+                .encode_webgpu_request(&words)
+                .map_err(Unsupported)?;
+            if let Some(id) =
+                host.submit_webgpu_request("vector-gles-webgpu", webgpu_request)?
+            {
+            let job = self.new_job_with_receipts(receipts, || {
+                vec![
+                    ("operation", Value::constant("3D")),
+                    ("command_address", hex(address)),
+                    ("command_bytes", num(length)),
+                    ("bytes", num(0)),
+                    ("completed", Value::Bool(false)),
+                ]
+            });
+            self.last_job = if receipts { Some(job.clone()) } else { None };
+            self.busy = true;
+            self.jobs_started += 1;
+            self.clear_ack_offsets.clear();
+            self.store(GLES_SUBMIT, trigger);
+            self.gpu_gles_lists += 1;
+            self.pending_webgpu = Some(PendingWebGpu::Gles {
+                id,
+                cpu,
+                irq_cpu,
+                command_address: address,
+                command_bytes: length,
+                job,
+            });
+            return Ok(());
+            }
+        }
+        self.cpu_raster_calls += 1;
         let ram_bytes = self.ram_bytes;
         let output = self
             .gles
@@ -686,6 +974,23 @@ impl CommandProcessor {
                 host.read(cpu, address, length as u64)
             })
             .map_err(Unsupported)?;
+        // Raster snapshots include untouched destination pixels. Commit only
+        // actual color/depth writes so concurrent accesses elsewhere survive.
+        let output: Vec<(u64, Vec<u8>)> = self
+            .gles
+            .written_ranges()
+            .iter()
+            .map(|&(address, length)| {
+                let (base, snapshot) = output
+                    .iter()
+                    .find(|(base, bytes)| {
+                        *base <= address && address + length as u64 <= *base + bytes.len() as u64
+                    })
+                    .ok_or_else(|| Unsupported("DMP write range outside target snapshot".into()))?;
+                let offset = (address - base) as usize;
+                Ok((address, snapshot[offset..offset + length].to_vec()))
+            })
+            .collect::<Result<_>>()?;
         let count = output.iter().map(|(_, b)| b.len() as u64).sum::<u64>();
         let job = self.new_job_with_receipts(receipts, || {
             vec![
@@ -700,7 +1005,7 @@ impl CommandProcessor {
         self.busy = true;
         self.jobs_started += 1;
         self.clear_ack_offsets.clear();
-        self.store(0x20f0, trigger);
+        self.store(GLES_SUBMIT, trigger);
         self.schedule(
             Completion {
                 cpu,
@@ -1450,6 +1755,55 @@ impl CommandProcessor {
         record_receipts: bool,
     ) -> Result<()> {
         let (cpu, irq_cpu) = cpus;
+        if webgpu_bridge_enabled() {
+            let mut payload = Vec::new();
+            ciborium::ser::into_writer(
+                &WebGpuUiRequest {
+                    cpu,
+                    draws: draws.to_vec(),
+                },
+                &mut payload,
+            )
+            .map_err(|error| Unsupported(format!("Serialize vector WebGPU request: {error}")))?;
+            if let Some(id) = host.submit_webgpu_request("vector-ui-webgpu", payload)? {
+                let radial_gradients = draws
+                    .iter()
+                    .filter(|draw| draw.gradient.as_ref().is_some_and(|gradient| gradient.radial.is_some()))
+                    .count();
+                self.command_pending = None;
+                replace(&mut self.path, &banks.path);
+                replace(&mut self.fill, &banks.fill);
+                self.clear_ack_offsets.clear();
+                self.busy = true;
+                self.jobs_started += 1;
+                c.compact();
+                self.last_job = if record_receipts { Some(c.job.clone()) } else { None };
+                self.gpu_vector_paint_calls += 1;
+                self.pending_webgpu = Some(PendingWebGpu::Ui {
+                    id,
+                    cpu,
+                    irq_cpu,
+                    draw_count: draws.len(),
+                    filled_paths: draws
+                        .iter()
+                        .filter(|draw| !draw.stroke && draw.texture.is_none())
+                        .count(),
+                    stroked_paths: draws.iter().filter(|draw| draw.stroke).count(),
+                    sampled_images: draws
+                        .iter()
+                        .filter(|draw| draw.texture.is_some())
+                        .count(),
+                    linear_gradients: draws
+                        .iter()
+                        .filter(|draw| draw.gradient.as_ref().is_some_and(|gradient| gradient.radial.is_none()))
+                        .count(),
+                    radial_gradients,
+                    job: c.job.clone(),
+                });
+                return Ok(());
+            }
+        }
+        self.cpu_vector_paint_calls += 1;
         let (output, touched) = ui_render(draws, cpu, host)?;
         let bytes = output.iter().map(|(_, p)| p.len() as u64).sum();
         // Whole-surface snapshots preserve untouched pixels for the software
@@ -1614,6 +1968,29 @@ impl Capture {
     }
 }
 
+#[cfg(not(target_os = "emscripten"))]
+fn coverage_kernel() -> Result<&'static CoverageKernel> {
+    static KERNEL: OnceLock<std::result::Result<CoverageKernel, String>> = OnceLock::new();
+    match KERNEL.get_or_init(|| fujimod_emulator_gpu::context().map(CoverageKernel::new)) {
+        Ok(kernel) => Ok(kernel),
+        Err(error) => fail(format!("Graphics UI GPU coverage {error}")),
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn ui_coverages(draws: &[batch::Draw]) -> Result<Vec<std::rc::Rc<render::Coverage>>> {
+    draws
+        .iter()
+        .map(|draw| render::coverage(draw).map(std::rc::Rc::new))
+        .collect()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn ui_render(draws: &[batch::Draw], cpu: i64, host: &mut dyn Inputs) -> Result<RenderedBatch> {
+    ui_paint::render(draws, cpu, host)
+}
+
+#[cfg(target_arch = "wasm32")]
 pub fn ui_render(draws: &[batch::Draw], cpu: i64, host: &mut dyn Inputs) -> Result<RenderedBatch> {
     let mut targets = HashMap::new();
     let mut textures = HashMap::new();
@@ -1641,14 +2018,33 @@ pub fn ui_render(draws: &[batch::Draw], cpu: i64, host: &mut dyn Inputs) -> Resu
             }
         }
     }
-    let (output, touched) = render::render(draws, &targets, &textures, &mut |draw| {
-        render::coverage(draw).map(std::rc::Rc::new)
+    let mut coverages = ui_coverages(draws)?.into_iter();
+    let (output, touched) = render::render(draws, &targets, &textures, &mut |_draw| {
+        coverages
+            .next()
+            .ok_or_else(|| Unsupported("Graphics UI coverage batch ended early".into()))
     })?;
+    if coverages.next().is_some() {
+        return fail("Graphics UI coverage batch has unused draws");
+    }
     let output = output
         .into_iter()
         .map(|(address, bytes)| (address, Arc::new(bytes)))
         .collect();
     Ok((output, touched))
+}
+
+/// Render one parsed vector batch with the shared WebGPU device.
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+pub async fn render_ui_host_gpu_async(
+    draws: &[batch::Draw],
+    cpu: i64,
+    host: &mut dyn Inputs,
+) -> Result<RenderedBatch> {
+    fujimod_emulator_gpu::context_async()
+        .await
+        .map_err(|error| Unsupported(format!("Graphics UI GPU context {error}")))?;
+    ui_paint::render_async(draws, cpu, host).await
 }
 
 impl CommandProcessor {
@@ -1682,6 +2078,16 @@ impl CommandProcessor {
             ("jobs_started".into(), num(self.jobs_started)),
             ("jobs_completed".into(), num(self.jobs_completed)),
             ("bytes_completed".into(), num(self.bytes_completed)),
+            ("cpu_raster_calls".into(), num(self.cpu_raster_calls)),
+            (
+                "cpu_vector_paint_calls".into(),
+                num(self.cpu_vector_paint_calls),
+            ),
+            ("gpu_gles_lists".into(), num(self.gpu_gles_lists)),
+            (
+                "gpu_vector_paint_calls".into(),
+                num(self.gpu_vector_paint_calls),
+            ),
             ("irqs_raised".into(), num(self.irqs_raised)),
             ("acknowledgments".into(), num(self.acknowledgments)),
             ("last_job".into(), j),

@@ -17,10 +17,16 @@ const expected = JSON.parse(await readFile(receipt, 'utf8')) as {
 };
 assert(expected.created && !expected.error && !expected.status.failed && expected.frame);
 const url = new URL('/__wasm-camera', base).href;
+const manifestResponse = await fetch(new URL('/__wasm-camera/wasm.json', base));
+assert(manifestResponse.ok);
+const manifest = (await manifestResponse.json()) as { dmpCpuRenderer?: boolean };
 const output = new URL('../build/wasm-camera/', import.meta.url);
 await mkdir(output, { recursive: true });
-for (const type of [chromium, webkit]) {
-  const browser = await type.launch({ headless: true });
+for (const type of manifest.dmpCpuRenderer === false ? [chromium] : [chromium, webkit]) {
+  const browser = await type.launch({
+    headless: true,
+    ...(type === chromium ? { args: ['--enable-unsafe-webgpu'] } : {}),
+  });
   try {
     const context = await browser.newContext({ viewport: { width: 1200, height: 1000 } });
     await context.routeWebSocket('**/*', () => {});
@@ -50,6 +56,11 @@ for (const type of [chromium, webkit]) {
     assert.equal(String(result.execution.profile.ticks), expected.status.ticks);
     assert.deepEqual(result.execution.profile.instructions.map(String), expected.status.cores);
     assert.equal(result.execution.profile.failed, false);
+    const expectedRasterizer = await page.evaluate(async () => {
+      const manifest = await (await fetch('/__wasm-camera/wasm.json')).json();
+      return manifest.dmpCpuRenderer === false ? 'WebGPU' : 'CPU';
+    });
+    assert.equal(result.execution.dmpRasterizer, expectedRasterizer);
     assert.deepEqual(result.execution.fingerprint, expected.fingerprint);
     assert.deepEqual(result.execution.frame, {
       width: expected.frame.width,

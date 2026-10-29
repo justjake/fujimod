@@ -187,27 +187,6 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.dm-check {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  padding: 18px;
-  border: 1px solid var(--edge);
-  background: var(--key);
-  font-size: 18px;
-  line-height: 1.4;
-  cursor: pointer;
-}
-.dm-check input {
-  flex: none;
-  width: 30px;
-  height: 30px;
-  accent-color: var(--phosphor);
-}
-.dm-check:has(input:checked) {
-  border-color: var(--phosphor);
-  background: var(--phosphor-dim);
-}
 .dm-actions {
   display: flex;
   gap: 12px;
@@ -328,22 +307,6 @@
   opacity: 0.55;
   cursor: not-allowed;
 }
-.dm-pointer {
-  position: fixed;
-  top: 6px;
-  left: 50%;
-  transform: translateX(-50%);
-  color: var(--phosphor);
-  font: 800 54px/1 var(--mono);
-  text-shadow: 0 0 18px var(--phosphor);
-  animation: dm-point 1.4s ease-in-out infinite;
-  pointer-events: none;
-}
-@keyframes dm-point {
-  50% {
-    transform: translate(-50%, -10px);
-  }
-}
 .dm-log {
   margin: 0;
   padding: 16px;
@@ -363,8 +326,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .dm-panel,
-  .dm-next,
-  .dm-pointer {
+  .dm-next {
     animation: none;
   }
   .dm-rail li::after,

@@ -1,8 +1,8 @@
 import { Show } from 'solid-js';
 import type { JSX } from '@solidjs/web';
-import type { ResolvedSelection } from 'fujimod';
 import type { Camera } from '../camera-model';
-import type { CaptureSet } from './capture';
+import { bulkSupportError, type BulkSelection, type CaptureSet } from './capture';
+import { BulkSupportError } from '../BulkSupportError';
 
 export const emptySet = (firmwareId: string): CaptureSet => ({
   firmwareId,
@@ -14,15 +14,11 @@ export const emptySet = (firmwareId: string): CaptureSet => ({
 export function CapturePanel(props: {
   title: string;
   camera?: Camera;
-  selection?: ResolvedSelection;
+  selection?: BulkSelection;
   onConnect: () => void;
   onClose: () => void;
   children: JSX.Element;
 }) {
-  const identity = () =>
-    [props.camera?.identity?.product, props.camera?.identity?.internalVersion]
-      .filter(Boolean)
-      .join(' ');
   return (
     <section class="wb-tools-body cap" aria-labelledby="cap-title">
       <div class="cap-head">
@@ -51,11 +47,12 @@ export function CapturePanel(props: {
         <Show
           when={props.selection}
           fallback={
-            <p class="wb-status" role="status">
-              {props.camera?.identity
-                ? `No located bulk reads for ${identity() || props.camera.name}.`
-                : 'Reading camera identity…'}
-            </p>
+            <Show
+              when={props.camera?.identity}
+              fallback={<p class="wb-status">Reading camera identity…</p>}
+            >
+              <BulkSupportError reason={bulkSupportError(props.camera?.identity)} />
+            </Show>
           }
         >
           {props.children}

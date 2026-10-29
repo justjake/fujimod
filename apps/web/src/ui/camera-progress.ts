@@ -32,6 +32,14 @@ export interface FirmwareProgress {
   /** Stock features the body has, by feature. */
   stock: Record<string, StockProgress>;
   mods: Record<string, ModProgress>;
+  /** Hand-authored publishing override from `progress.override.json`; never recorded. */
+  override?: ProgressOverride;
+}
+/** A maintainer's decision to publish a firmware's progress differently from its records. */
+export interface ProgressOverride {
+  firmware_id: string;
+  /** Show every phase and step as complete. */
+  complete: boolean;
 }
 
 export interface Step {
@@ -103,6 +111,23 @@ function phase(
 }
 
 export function phases(progress: FirmwareProgress): Phase[] {
+  const recorded = recordedPhases(progress);
+  if (!progress.override?.complete) return recorded;
+  return recorded.map((phase) => {
+    const steps = phase.steps.map((step) =>
+      step.fraction === 1 ? step : { label: step.label, fraction: 1 },
+    );
+    const mods = phase.steps.length - 2;
+    return {
+      ...phase,
+      fraction: 1,
+      value: phase.id === 'mods' ? `${mods} of ${mods}` : 'Done',
+      steps,
+    };
+  });
+}
+
+function recordedPhases(progress: FirmwareProgress): Phase[] {
   const { stages, facts } = progress,
     research = pass(stages.research),
     mods = Object.entries(progress.mods),
@@ -127,7 +152,11 @@ export function phases(progress: FirmwareProgress): Phase[] {
           }
         : { label: 'Facts located', fraction: 0 },
       progress.boot_rom
-        ? { label: 'Boot ROM', fraction: 1, detail: `${progress.boot_rom} dump` }
+        ? {
+            label: 'Boot ROM',
+            fraction: 1,
+            detail: `${progress.boot_rom} dump`,
+          }
         : { label: 'Boot ROM', fraction: 0 },
     ]),
     phase('emulator', 'Emulator', 40, emulator, true),
@@ -140,7 +169,10 @@ export function phases(progress: FirmwareProgress): Phase[] {
       ...phase('mods', 'Mods', 25, [
         { label: 'Mod target', fraction: pass(stages['mod-target']) },
         { label: 'FujiMod build', fraction: pass(stages['mod-build']) },
-        ...mods.map(([mod, result]) => ({ label: mod, fraction: pass(result) })),
+        ...mods.map(([mod, result]) => ({
+          label: mod,
+          fraction: pass(result),
+        })),
       ]),
       fraction: mods.length ? working / mods.length : 0,
       value: working ? `${working} of ${mods.length}` : 'Not yet',
@@ -155,6 +187,7 @@ export function phases(progress: FirmwareProgress): Phase[] {
 /** Whether any stage, stock feature or mod passes; otherwise the model is listed as not started. */
 export function started(progress: FirmwareProgress): boolean {
   return (
+    !!progress.override?.complete ||
     STAGES.some((stage) => progress.stages[stage] === 'pass') ||
     Object.values(progress.stock).some(
       (stock) => stock.result !== 'not-run' && stock.result !== 'fail' && stock.result !== 'stale',
@@ -172,6 +205,21 @@ function newer(a: string, b: string) {
     if ((x[index] ?? 0) !== (y[index] ?? 0)) return (x[index] ?? 0) > (y[index] ?? 0);
   return false;
 }
+/** Attach each firmware's publishing override to its generated progress document. */
+export function withOverrides(
+  documents: FirmwareProgress[],
+  overrides: ProgressOverride[],
+): FirmwareProgress[] {
+  const byFirmware = new Map(overrides.map((override) => [override.firmware_id, override]));
+  for (const override of overrides)
+    if (!documents.some((document) => document.firmware_id === override.firmware_id))
+      throw new Error(`Progress override for unknown firmware ${override.firmware_id}`);
+  return documents.map((document) => {
+    const override = byFirmware.get(document.firmware_id);
+    return override ? { ...document, override } : document;
+  });
+}
+
 /** One document per model: the newest firmware version with recorded progress. */
 export function byModel(documents: FirmwareProgress[]): Record<string, FirmwareProgress> {
   const result: Record<string, FirmwareProgress> = {};

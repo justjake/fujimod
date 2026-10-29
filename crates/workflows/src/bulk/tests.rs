@@ -1,6 +1,6 @@
 use super::read as read_bulk;
 use super::*;
-use fujimod_catalog_bulk::{BULK_SCHEMA_URI, CaptureScope, CodeCheck, NamedRange};
+use fujimod_catalog_bulk::{BULK_SCHEMA_URI, BulkDma, CaptureScope, CodeCheck, NamedRange};
 use fujimod_usb::{
     ff80::{commands::memory::DebugMemoryLimits, framing::RequestKind},
     operations::checks::sha256_bytes,
@@ -27,6 +27,7 @@ fn facts(source: BulkSource) -> FirmwareBulk {
             address: 0x1000,
             size: 0x1000,
         },
+        dma: None,
         code_checks: vec![CodeCheck {
             name: "e1".into(),
             address: 0x1000,
@@ -285,6 +286,39 @@ fn reads_outside_the_window_or_from_another_camera_send_nothing_further() {
         "{error}"
     );
     assert_eq!(script.remaining(), 0);
+}
+
+#[test]
+fn dma_constraints_refuse_unaligned_ranges_before_any_request() {
+    let mut camera = query_camera();
+    camera.dma = Some(BulkDma {
+        address_alignment: 4,
+        length_granule: 4,
+    });
+    camera.validate().unwrap();
+    for target in [
+        BulkRange {
+            address: 0x1802,
+            size: 0x20,
+        },
+        BulkRange {
+            address: 0x1800,
+            size: 0x22,
+        },
+    ] {
+        let (mut session, script) = opened(vec![]);
+        let error = block_on(read_bulk(&mut session, &camera, limits(), target)).unwrap_err();
+        assert!(error.to_string().contains("not aligned"), "{error}");
+        assert_eq!(script.remaining(), 0);
+    }
+    camera.dma = Some(BulkDma {
+        address_alignment: 4,
+        length_granule: 64,
+    });
+    assert!(
+        camera.validate().is_err(),
+        "4-byte probe is not a whole granule"
+    );
 }
 
 #[test]

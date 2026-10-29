@@ -145,3 +145,80 @@ fn read_hook_flushing_tlb_keeps_load_on_its_page() {
 fn write_hook_flushing_tlb_keeps_store_on_its_page() {
     run_child("write_hook_flushing_tlb_keeps_store_on_its_page", true);
 }
+
+#[test]
+fn aarch64_contextidr_with_scr_rw_preserves_tlb_until_explicit_tlbi() {
+    use crate::{Core, test_support};
+    use fujimod_emulator_cpu::{Cpu, Model, Register, Run, arm};
+    fn system(cpu: &Core, encoding: u16, value: u64) {
+        cpu.write_register(
+            Register::Arm64System(arm::SystemRegister::from_encoding(encoding)),
+            &value.to_le_bytes(),
+        )
+        .unwrap();
+    }
+    fn word(cpu: &Core, address: u64, value: u64) {
+        cpu.write_memory(address, &value.to_le_bytes()).unwrap();
+    }
+    let cpu = test_support::library()
+        .open(Model::ArmV8A, 1 << 20)
+        .unwrap();
+    cpu.map_zeroed(0, 0x40000, 7).unwrap();
+    cpu.write_register(Register::Pstate, &0x3cdu64.to_le_bytes())
+        .unwrap();
+    system(&cpu, 0xf088, 0x400); // SCR_EL3.RW: secure EL1 is AArch64.
+    system(&cpu, 0xc100, 0x4000); // TTBR0_EL1; 4 KiB tables, 32-bit VA.
+    system(&cpu, 0xc102, 0x3520); // TCR_EL1.
+    system(&cpu, 0xc510, 0xff); // MAIR_EL1 Attr0: Normal memory.
+    word(&cpu, 0x4000, 0x5003);
+    word(&cpu, 0x5000, 0x6003);
+    word(&cpu, 0x6008, 0x1703); // Code VA 0x1000 -> PA 0x1000.
+    word(&cpu, 0x6040, 0x10703); // Data VA 0x8000 -> PA 0x10000.
+    word(&cpu, 0x10000, 0x11);
+    word(&cpu, 0x20000, 0x22);
+    let code: [u32; 7] = [
+        0xf9400020,                 // LDR x0,[x1]: fill the data TLB.
+        0xd5000002 | (0xc681 << 5), // MSR CONTEXTIDR_EL1,x2.
+        0xf9400023,                 // LDR x3,[x1]: keep the cached translation.
+        0xd508871f,                 // TLBI VMALLE1.
+        0xd5033b9f,                 // DSB ISH.
+        0xd5033fdf,                 // ISB.
+        0xf9400024,                 // LDR x4,[x1]: use the new descriptor.
+    ];
+    cpu.write_memory(
+        0x1000,
+        &code
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    cpu.write_register(Register::X(1), &0x8000u64.to_le_bytes())
+        .unwrap();
+    cpu.write_register(Register::X(2), &1u64.to_le_bytes())
+        .unwrap();
+    system(&cpu, 0xc080, 0x30d00801); // SCTLR_EL1.M.
+    cpu.write_register(Register::Pstate, &0x3c5u64.to_le_bytes())
+        .unwrap();
+    let run = |begin, until| {
+        cpu.run(Run {
+            begin,
+            until: Some(until),
+            instructions: None,
+            watchdog_us: 1_000_000,
+        })
+        .unwrap()
+    };
+    run(0x1000, 0x1004);
+    word(&cpu, 0x6040, 0x20703); // Descriptor update without a TLBI.
+    run(0x1004, 0x101c);
+    for (register, expected) in [
+        (Register::X(0), 0x11),
+        (Register::X(3), 0x11),
+        (Register::X(4), 0x22),
+    ] {
+        let mut bytes = [0; 8];
+        cpu.read_register(register, &mut bytes).unwrap();
+        assert_eq!(u64::from_le_bytes(bytes), expected, "{register:?}");
+    }
+}

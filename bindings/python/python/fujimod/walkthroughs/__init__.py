@@ -615,7 +615,7 @@ class Guide[C: RecordingCamera]:
             self.recording.still(frame, seconds)
 
     @contextmanager
-    def action(self, *, navigation: bool = False) -> Generator[None]:
+    def action(self, *, navigation: bool = False, capture: bool = True) -> Generator[None]:
         """Adapter boundary: present a completed input without advancing time.
 
         Execution readiness belongs to the adapter. These are recording-only
@@ -623,7 +623,7 @@ class Guide[C: RecordingCamera]:
         Prerequisite replay incurs neither hold nor extra capture.
         """
         yield
-        if not self._preparing:
+        if not self._preparing and capture:
             self.recording.still(
                 self.camera.capture(),
                 self.navigation_hold if navigation else self.action_hold,

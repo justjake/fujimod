@@ -14,7 +14,7 @@ test('controls preserve the X70 startup inputs and service guide', () => {
   ]);
   expect(combos.map((combo) => combo.modes)).toEqual([['sd'], ['firmware_update'], ['service']]);
   expect(serviceModeEntry).toEqual([
-    'Switch the camera OFF.',
+    'Switch the camera OFF, then remove and reinsert the battery.',
     'Release the buttons when the green lamp lights.',
   ]);
 });

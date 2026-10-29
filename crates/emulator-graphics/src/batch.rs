@@ -86,7 +86,7 @@ pub fn affine(
     Ok([a, b, c, d, e, f])
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct RadialGradient {
     pub quadratics: [f64; 2],
     pub zero_x: bool,
@@ -94,7 +94,7 @@ pub struct RadialGradient {
     pub negative_denominator: bool,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Gradient {
     /// (a, c, e, f): t = a x + c + e y + f.
     pub coefficients: (f64, f64, f64, f64),
@@ -185,7 +185,7 @@ pub fn gradient(registers: &Registers) -> Result<Gradient> {
 
 /// The OpenVG color transform on straight paint colors, per RGBA channel:
 /// `c' = clamp(c * scale + bias, 0, 1)`.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ColorTransform {
     pub scale: [f64; 4],
     pub bias: [f64; 4],
@@ -216,7 +216,7 @@ pub fn color_transform(registers: &Registers) -> Result<Option<ColorTransform>> 
     }))
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Texture {
     pub source: u64,
     pub width: u32,
@@ -229,7 +229,7 @@ pub struct Texture {
 /// (physical address, width, height, channel order).
 pub type Target = (u64, u32, u32, u32);
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Draw {
     pub target: Target,
     pub sequence: u64,

@@ -1,6 +1,6 @@
 use super::*;
 use crate::bulk::tests::{exchange, exchange_max, info, limits, opened, read};
-use fujimod_catalog_camera::CameraDefinition;
+use fujimod_catalog_workflows::{ServiceSetup, WorkflowDefinition};
 use fujimod_usb::{
     ff80::commands::configuration::{ConfigurationLocation, ReadConfiguration, WriteConfiguration},
     testing::Exchange,
@@ -8,21 +8,24 @@ use fujimod_usb::{
 use futures_lite::future::block_on;
 use std::num::NonZeroU32;
 
-fn camera() -> CameraDefinition {
+fn camera() -> ServiceSetup {
     let json = r#"{
-        "schema":1,"firmware_id":"sample-1","firmware_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "identity":{"products":["X70"]},"ram_alias":0,
-        "configuration":{"address":4096,"cached_address":4096,"size":256,"max_read":64},
-        "debug":{"flag_offset":247},
+        "$schema":"https://fujimod.com/schemas/service-workflow.generated.schema.json", "schema":1,"firmware_id":"sample-1","firmware_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "identity":{"products":["X70"],"internal_versions":["1.0"],"code_checks":[]},"setup":{"ram_alias":0,
+        "configuration":{"address":4096,"cached_address":4096,"size":256,"page_bytes":64,"memory_read_bytes":256},
+        "debug_offset":247,
         "guard":{"offset":163,"value":1,"aliases":[4259],"code_checks":[],"state_words":[],
-            "callback_table":{"address":8192,"hex":"00000000"},"output_state":{"address":8200,"size":4},"payloads":[]}
+            "callback_table":{"address":8192,"words":[0]},"output_state":{"address":8200,"size":4},"payloads":[]}}, "persistence":null
     }"#;
-    CameraDefinition::from_json(
+    WorkflowDefinition::from_json(
         json,
         &fujimod_catalog_firmware_identity::FirmwareIdentity::new("sample-1", &"a".repeat(64))
             .unwrap(),
     )
     .unwrap()
+    .setup()
+    .unwrap()
+    .clone()
 }
 fn byte(offset: u32, value: u8, write: bool) -> Vec<Exchange> {
     let location = ConfigurationLocation {
@@ -118,4 +121,16 @@ fn failure_restores_debug_and_legacy_guard_still_disables_it() {
     ))
     .unwrap();
     assert_eq!(script.remaining(), 0);
+}
+
+#[test]
+fn setup_transfer_limits_bound_session_limits() {
+    let mut setup = camera();
+    setup.configuration.memory_read_bytes = 248;
+    let mut session_limits = limits();
+    session_limits.memory.read = NonZeroU32::new(256).unwrap();
+    session_limits.configuration = NonZeroU32::new(256).unwrap();
+    let bounds = session_limits.for_setup(&setup).unwrap();
+    assert_eq!(bounds.memory.read.get(), 248);
+    assert_eq!(bounds.configuration.get(), 64);
 }

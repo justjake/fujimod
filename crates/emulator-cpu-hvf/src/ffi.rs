@@ -1,5 +1,5 @@
 //! Private SDK ABI. Values follow Hypervisor.framework's macOS ARM64 headers.
-use std::ffi::c_void;
+use std::ffi::{c_int, c_void};
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Exception {
@@ -13,6 +13,34 @@ pub struct Exit {
     pub reason: u32,
     pub exception: Exception,
 }
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MachTimebaseInfo {
+    pub numer: u32,
+    pub denom: u32,
+}
+#[repr(C, packed(4))]
+#[derive(Clone, Copy)]
+pub struct Kevent {
+    pub ident: u64,
+    pub filter: i16,
+    pub flags: u16,
+    pub fflags: u32,
+    pub data: i64,
+    pub udata: *mut c_void,
+}
+impl Default for Kevent {
+    fn default() -> Self {
+        Self {
+            ident: 0,
+            filter: 0,
+            flags: 0,
+            fflags: 0,
+            data: 0,
+            udata: std::ptr::null_mut(),
+        }
+    }
+}
 pub const PC: u32 = 31;
 pub const FPCR: u32 = 32;
 pub const FPSR: u32 = 33;
@@ -22,6 +50,33 @@ pub const SCTLR: u16 = 0xc080;
 pub const TCR: u16 = 0xc102;
 pub const SP0: u16 = 0xc208;
 pub const SP1: u16 = 0xe208;
+pub const QOS_CLASS_USER_INTERACTIVE: u32 = 0x21;
+pub const EVFILT_TIMER: i16 = -7;
+pub const EVFILT_USER: i16 = -10;
+pub const EV_ADD: u16 = 0x0001;
+pub const EV_DELETE: u16 = 0x0002;
+pub const EV_ENABLE: u16 = 0x0004;
+pub const EV_ONESHOT: u16 = 0x0010;
+pub const EV_CLEAR: u16 = 0x0020;
+pub const NOTE_TRIGGER: u32 = 0x0100_0000;
+pub const NOTE_ABSOLUTE: u32 = 0x0000_0008;
+pub const NOTE_MACHTIME: u32 = 0x0000_0100;
+#[link(name = "System")]
+unsafe extern "C" {
+    pub fn mach_absolute_time() -> u64;
+    pub fn mach_timebase_info(info: *mut MachTimebaseInfo) -> i32;
+    pub fn pthread_set_qos_class_self_np(qos_class: u32, relative_priority: i32) -> i32;
+    pub fn kqueue() -> c_int;
+    pub fn kevent(
+        queue: c_int,
+        changes: *const Kevent,
+        change_count: c_int,
+        events: *mut Kevent,
+        event_count: c_int,
+        timeout: *const c_void,
+    ) -> c_int;
+    pub fn close(fd: c_int) -> c_int;
+}
 #[link(name = "Hypervisor", kind = "framework")]
 unsafe extern "C" {
     pub fn hv_vm_create(config: *const c_void) -> u32;

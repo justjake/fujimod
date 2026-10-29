@@ -98,6 +98,22 @@ impl Card {
     pub fn sectors(&self) -> u32 {
         self.sectors
     }
+    pub fn allocation_limit(&self) -> usize {
+        self.max_dirty
+    }
+    /// Rebind a retained medium to the receiving host's memory budget without
+    /// changing its capacity, contents or revision.
+    pub fn set_allocation_limit(&mut self, sectors: usize) -> Result<(), String> {
+        Self::new(Options {
+            sectors: self.sectors,
+            max_dirty_sectors: sectors,
+        })?;
+        if self.data.len() > sectors {
+            return Err("SD allocation limit is smaller than retained data".into());
+        }
+        self.max_dirty = sectors;
+        Ok(())
+    }
     pub fn revision(&self) -> u64 {
         self.revision
     }
@@ -299,6 +315,28 @@ mod tests {
         assert_eq!(card.sector(0).unwrap(), &[0; 512]);
         assert_eq!(card.sector(1).unwrap(), &[0; 512]);
     }
+    #[test]
+    fn allocation_limit_changes_preserve_data_and_refuse_an_undersized_bound() {
+        let mut card = Card::new(Options {
+            sectors: 0x800000,
+            max_dirty_sectors: 2,
+        })
+        .unwrap();
+        card.write_bytes(0, &[0x46; 1024]).unwrap();
+        let before = card.fingerprint();
+        for limit in [0, 1, (1 << 21) + 1] {
+            assert!(card.set_allocation_limit(limit).is_err());
+            assert_eq!(card.fingerprint(), before);
+        }
+        let revision = card.revision();
+        card.set_allocation_limit(8).unwrap();
+        assert_eq!(card.revision(), revision);
+        assert_eq!(card.sector(0).unwrap(), &[0x46; 512]);
+        assert_eq!(card.sector(1).unwrap(), &[0x46; 512]);
+        card.reserve_write(2, 1).unwrap();
+        card.write_bytes(1024, &[0x47; 512]).unwrap();
+    }
+
     #[test]
     fn sparse_capacity_atomicity_and_partial_sector_writes() {
         let mut card = Card::new(Options {

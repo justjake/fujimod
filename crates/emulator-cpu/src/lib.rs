@@ -394,6 +394,9 @@ pub enum Hint {
 }
 #[derive(Clone, Copy, Debug)]
 pub enum Exit {
+    /// A framework-owned instruction has not entered. PC names its unchanged
+    /// entry and progress excludes it; the owner completes and charges it.
+    BeforeInstruction(u32),
     Stopped,
     Hint(Hint),
     Trap(Trap),
@@ -475,6 +478,23 @@ pub struct Block {
     pub address: u64,
     pub bytes: u32,
     pub thumb: Option<bool>,
+}
+/// The externally selected input phase used by optional guest block profiles.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GuestProfilePhase {
+    /// Guest execution while no physical key or touch input is active.
+    #[default]
+    Idle,
+    /// Guest execution while a physical key or touch input is active.
+    Key,
+}
+/// Exact instruction totals accumulated at executed guest block starts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub struct GuestBlockCount {
+    pub address: u64,
+    pub entries: u64,
+    pub idle_instructions: u64,
+    pub key_instructions: u64,
 }
 #[derive(Clone, Copy)]
 pub enum Hook {
@@ -576,6 +596,19 @@ pub struct BackingObserver {
 
 pub trait Cpu {
     fn identity(&self) -> Identity;
+    /// Start optional per-block guest instruction profiling. Backends without
+    /// block entry observations may leave the profile unavailable.
+    fn start_guest_profile(&self) -> Result<(), String> {
+        Ok(())
+    }
+    /// Mark the phase for subsequent guest block entries.
+    fn guest_profile_phase(&self, _phase: GuestProfilePhase) -> Result<(), String> {
+        Ok(())
+    }
+    /// Finish an active guest profile and return its per-block totals.
+    fn finish_guest_profile(&self) -> Result<Option<Vec<GuestBlockCount>>, String> {
+        Ok(None)
+    }
     /// Configure instruction-proven loops; statistics remain observational.
     fn set_loop_mode(&self, mode: loops::LoopMode) -> Result<(), String> {
         if mode == loops::LoopMode::Disabled {

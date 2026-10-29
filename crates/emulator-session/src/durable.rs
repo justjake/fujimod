@@ -90,12 +90,24 @@ impl Media {
             return Err("durable media requires an unexecuted board".into());
         }
         self.validate(session, spec)?;
+        // External sectors survive a cold reconstruction; the new host's
+        // allocation policy applies to them. Prepare every medium before
+        // installing any storage so a smaller bound cannot partially apply.
+        let cards = self
+            .cards
+            .iter()
+            .map(|(name, saved)| {
+                let mut card = saved.card.clone();
+                card.set_allocation_limit(session.card_medium(name)?.allocation_limit())?;
+                Ok((name, card, saved.present, saved.protected))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
         for (name, changes) in &self.nands {
             let medium = session.nand_medium(name)?.with_changes(changes)?;
             session.retain_nand(name, medium)?;
         }
-        for (name, saved) in &self.cards {
-            session.retain_card(name, saved.card.clone(), saved.present, saved.protected)?;
+        for (name, card, present, protected) in cards {
+            session.retain_card(name, card, present, protected)?;
         }
         Ok(())
     }

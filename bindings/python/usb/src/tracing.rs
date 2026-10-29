@@ -39,11 +39,13 @@ enum RequestKind {
     WriteData,
     ReadData,
     EmptyResponse,
+    Reclaim,
 }
 impl From<ff80::framing::RequestKind> for RequestKind {
     fn from(value: ff80::framing::RequestKind) -> Self {
         use ff80::framing::RequestKind as K;
         match value {
+            K::Reclaim => Self::Reclaim,
             K::Open => Self::Open,
             K::Ping => Self::Ping,
             K::Close => Self::Close,

@@ -1,23 +1,40 @@
 //! Panel pixel-clock registers and frequency selection.
 //! Only the four display PLL banks are owned here. Request/lock latency
 //! is an explicit50us scheduling assumption; frequencies use guest N/D.
-use fujimod_emulator_devices::{Cx, Device};
-use serde_json::Value;
 use fujimod_emulator_devices::xp5::panel_clocks::Clocks;
+use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_xp5_io::clocks::BANKS;
+use serde_json::Value;
+
+const BASES: [u64; 4] = [0xffa11000, 0xffa12000, 0xffa13000, 0xffa14000];
+
 pub struct PanelPll {
     clocks: Clocks,
     index: usize,
+    divider_count: usize,
 }
 impl PanelPll {
     pub fn new(base: u64, clocks: Clocks) -> Result<Self, String> {
-        let index = match base {
-            0xffa11000 => 0,
-            0xffa12000 => 1,
-            0xffa13000 => 2,
-            0xffa14000 => 3,
-            _ => return Err("unsupported panel PLL base".into()),
-        };
-        Ok(Self { clocks, index })
+        let index = BASES
+            .iter()
+            .position(|&candidate| candidate == base)
+            .ok_or("unsupported panel PLL base")?;
+        let divider_count = BANKS
+            .iter()
+            .find_map(|&(bank_base, count)| (bank_base == base).then_some(count))
+            .ok_or("panel PLL base has no XP5 clock bank")?;
+        Ok(Self {
+            clocks,
+            index,
+            divider_count,
+        })
+    }
+    fn divider(&self, offset: u64) -> Option<usize> {
+        if offset >= 0x40 && offset & 3 == 0 && (offset - 0x40) / 4 < self.divider_count as u64 {
+            Some(((offset - 0x40) / 4) as usize)
+        } else {
+            None
+        }
     }
 }
 impl Device for PanelPll {
@@ -25,16 +42,18 @@ impl Device for PanelPll {
         "panel-pll"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, n: u8) -> u64 {
-        let o = address.wrapping_sub([0xffa11000, 0xffa12000, 0xffa13000, 0xffa14000][self.index]);
+        let o = address.wrapping_sub(BASES[self.index]);
         if n != 4 {
             cx.unmodeled();
             return 0;
         }
         let p = self.clocks.0.lock().unwrap().plls[self.index];
+        if let Some(i) = self.divider(o) {
+            return p.dividers[i] as u64;
+        }
         match o {
             0 => p.n as u64,
             8 => p.fraction as u64,
-            0x40 => p.divider as u64,
             0x80 => p.request as u64,
             0xf0 => u64::from(p.request != 0),
             _ => {
@@ -44,23 +63,30 @@ impl Device for PanelPll {
         }
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, n: u8, v: u64) {
-        let o = address.wrapping_sub([0xffa11000, 0xffa12000, 0xffa13000, 0xffa14000][self.index]);
+        let o = address.wrapping_sub(BASES[self.index]);
         if n != 4 {
             cx.unmodeled();
             return;
         }
         let mut s = self.clocks.0.lock().unwrap();
         let p = &mut s.plls[self.index];
+        if let Some(i) = self.divider(o) {
+            if p.request != 0 || v > 0x1ff {
+                cx.fail("invalid/busy panel PLL programming");
+                return;
+            }
+            p.dividers[i] = v as u32;
+            return;
+        }
         match o {
             0 if p.request == 0 => p.n = v as u32,
             8 if p.request == 0 => p.fraction = v as u32,
-            0x40 if p.request == 0 && v <= 0x1ff => p.divider = v as u32,
             0x80 if p.request == 0 && matches!(v, 2 | 3 | 5 | 6) => {
                 p.request = v as u32;
                 p.generation += 1;
                 cx.schedule(cx.now() + 50_000, p.generation);
             }
-            0 | 8 | 0x40 | 0x80 => cx.fail("invalid/busy panel PLL programming"),
+            0 | 8 | 0x80 => cx.fail("invalid/busy panel PLL programming"),
             _ => cx.unmodeled(),
         }
     }
@@ -105,7 +131,11 @@ mod tests {
         let mut cx = Cx::new(&mut host, 0, 0, 2);
         pll.write(&mut cx, 0xffa11000, 4, 100);
         pll.write(&mut cx, 0xffa11040, 4, 1);
+        pll.write(&mut cx, 0xffa11044, 4, 2);
+        pll.write(&mut cx, 0xffa11048, 4, 3);
         pll.write(&mut cx, 0xffa11080, 4, 3);
+        assert_eq!(pll.read(&mut cx, 0xffa11044, 4), 2);
+        assert_eq!(pll.read(&mut cx, 0xffa11048, 4), 3);
         let saved = pll.save();
         for _ in 0..32 {
             assert_eq!(pll.read(&mut cx, 0xffa110f0, 4), 1);
@@ -113,6 +143,15 @@ mod tests {
         assert_eq!(saved, pll.save());
         assert_eq!(cx.refusal(), None);
         assert_eq!(host.events, [(2, 50_700, 1)]);
+
+        let mut bank1 = PanelPll::new(0xffa12000, clocks.clone()).unwrap();
+        let mut unmodeled_cx = Cx::new(&mut host, 0, 0, 2);
+        bank1.write(&mut unmodeled_cx, 0xffa12044, 4, 2);
+        assert!(unmodeled_cx.is_unmodeled());
+        let mut unmodeled_cx = Cx::new(&mut host, 0, 0, 2);
+        assert_eq!(bank1.read(&mut unmodeled_cx, 0xffa12044, 4), 0);
+        assert!(unmodeled_cx.is_unmodeled());
+
         host.now = 50_700;
         let mut restored = PanelPll::new(0xffa11000, clocks.clone()).unwrap();
         restored.restore(&saved).unwrap();

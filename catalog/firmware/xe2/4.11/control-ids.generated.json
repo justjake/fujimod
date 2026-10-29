@@ -4319,7 +4319,8 @@
       "event": 811,
       "debug_key": "S-B",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 32,
@@ -4350,7 +4351,8 @@
       "event": 810,
       "debug_key": "S-T",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 33,
@@ -4381,7 +4383,8 @@
       "event": 807,
       "debug_key": "S-1/4",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 34,
@@ -4412,7 +4415,8 @@
       "event": 806,
       "debug_key": "S-1/8",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 35,
@@ -4443,7 +4447,8 @@
       "event": 805,
       "debug_key": "S-1/15",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 36,
@@ -4474,7 +4479,8 @@
       "event": 804,
       "debug_key": "S-1/30",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 37,
@@ -4505,7 +4511,8 @@
       "event": 803,
       "debug_key": "S-1/60",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 38,
@@ -4536,7 +4543,8 @@
       "event": 802,
       "debug_key": "S-1/125",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 39,
@@ -4567,7 +4575,8 @@
       "event": 801,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 40,
@@ -4598,7 +4607,8 @@
       "event": 800,
       "debug_key": "S-1/250",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 41,
@@ -4629,7 +4639,8 @@
       "event": 799,
       "debug_key": "S-1/500",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 42,
@@ -4660,7 +4671,8 @@
       "event": 798,
       "debug_key": "S-1/1000",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 43,
@@ -4691,7 +4703,8 @@
       "event": 797,
       "debug_key": "S-1/2000",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 44,
@@ -4722,7 +4735,8 @@
       "event": 796,
       "debug_key": "S-1/4000",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 45,
@@ -4753,7 +4767,8 @@
       "event": 795,
       "debug_key": "S-A",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 46,
@@ -5386,20 +5401,30 @@
       "event": 43,
       "debug_key": "CMD_LEFT",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "command_dial"
       },
       "scanner": null,
-      "electrical": null
+      "electrical": {
+        "kind": "gpio_fixed_cycle",
+        "connection_id": "controls-encoder-3-8-3-9",
+        "cycle_sign": 1
+      }
     },
     {
       "id": "encoder-44",
       "event": 44,
       "debug_key": "CMD_RIGHT",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "command_dial"
       },
       "scanner": null,
-      "electrical": null
+      "electrical": {
+        "kind": "gpio_fixed_cycle",
+        "connection_id": "controls-encoder-3-8-3-9",
+        "cycle_sign": -1
+      }
     },
     {
       "id": "debug-23",

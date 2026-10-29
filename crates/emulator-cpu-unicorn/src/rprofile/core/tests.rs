@@ -1,6 +1,82 @@
 use super::*;
 
 #[test]
+fn guest_profile_is_disabled_until_started() {
+    let cpu = processor(&Memory::default());
+    let native_hooks = cpu.execution.cpu.hooks.borrow().len();
+
+    assert!(cpu.finish_guest_profile().unwrap().is_none());
+    assert!(cpu.execution.guest_profile.borrow().is_none());
+    assert_eq!(cpu.execution.cpu.hooks.borrow().len(), native_hooks);
+}
+
+#[test]
+fn guest_profile_weights_each_block_by_retired_instructions_and_phase() {
+    let cpu = processor(&Memory::default());
+    cpu.map_zeroed(0, 0x4000, 7).unwrap();
+    words(
+        &cpu,
+        0x1000,
+        &[0xe3a00001, 0xe2800001, 0xeafffffe], // mov; add; b .
+    );
+    set(&cpu, arm::CPSR, 0xd3);
+    set(&cpu, arm::PC, 0x1000);
+
+    cpu.start_guest_profile().unwrap();
+    assert!(matches!(resume(&cpu, 4).unwrap(), Exit::Stopped));
+    cpu.guest_profile_phase(GuestProfilePhase::Key).unwrap();
+    assert!(matches!(resume(&cpu, 4).unwrap(), Exit::Stopped));
+    let blocks = cpu.finish_guest_profile().unwrap().unwrap();
+
+    assert_eq!(
+        blocks
+            .iter()
+            .map(|block| block.idle_instructions)
+            .sum::<u64>(),
+        4
+    );
+    assert_eq!(
+        blocks
+            .iter()
+            .map(|block| block.key_instructions)
+            .sum::<u64>(),
+        4
+    );
+    assert!(blocks.iter().all(|block| block.entries > 0));
+    assert!(cpu.execution.guest_profile.borrow().is_none());
+}
+
+unsafe fn stop_before_for_counter(_: u64, _: u32, data: *mut c_void) {
+    unsafe { &*data.cast::<Core>() }.stop_before_instruction().unwrap();
+}
+
+#[test]
+fn translated_instruction_counter_tracks_blocks_and_restores_an_unentered_tail() {
+    let cpu = processor(&Memory::default());
+    cpu.map_zeroed(0, 0x4000, 7).unwrap();
+    words(&cpu, 0x1000, &[0xe2800001, 0xe2800001, 0xeafffffe]);
+    set(&cpu, arm::CPSR, 0xd3);
+
+    run(&cpu, 0x1000, 2).unwrap();
+    assert_eq!(cpu.execution.cpu.instruction_counter().unwrap(), 2);
+
+    let hook = unsafe {
+        cpu.install_hook(Hook::Instruction {
+            callback: stop_before_for_counter,
+            data: (&cpu as *const Core).cast_mut().cast(),
+            range: HookRange::Inclusive {
+                begin: 0x1000,
+                end: 0x1000,
+            },
+        })
+        .unwrap()
+    };
+    run(&cpu, 0x1000, 10).unwrap();
+    assert_eq!(cpu.execution.cpu.instruction_counter().unwrap(), 0);
+    cpu.remove_hook(hook).unwrap();
+}
+
+#[test]
 fn finite_store_observers_do_not_accumulate_native_hooks_on_a_parked_core() {
     unsafe fn observed(_: Access, address: u64, _: i32, value: i64, data: *mut c_void) {
         unsafe { &*data.cast::<RefCell<Vec<(u64, i64)>>>() }
@@ -858,6 +934,55 @@ fn exact_block_budgets_ring_wrap_pause_and_thumb_resume() {
 }
 
 #[test]
+fn repeated_thumb_blocks_publish_clock_on_the_common_path() {
+    unsafe fn observe_tick(_: u64, _: u32, data: *mut c_void) {
+        let ticks = unsafe { &*data.cast::<RefCell<Vec<Option<u64>>>>() };
+        ticks
+            .borrow_mut()
+            .push(crate::rprofile::approximate_guest_tick());
+    }
+
+    let cpu = processor(&Memory::default());
+    cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+    cpu.write_memory(0x1800, &[0x01, 0x30, 0x00, 0xe0, 0xc0, 0x46, 0x01, 0x30, 0xfa, 0xe7])
+        .unwrap(); // two Thumb blocks that each add and branch to the other
+    cpu.set_guest_clock(Clock {
+        now: 50,
+        phase: 0,
+        ratio: fujimod_emulator_cpu::timeline::Ratio::new(1, 1).unwrap(),
+    })
+    .unwrap();
+    let ticks = RefCell::new(Vec::new());
+    let hook = unsafe {
+        cpu.install_hook(Hook::Instruction {
+            callback: observe_tick,
+            data: (&ticks as *const RefCell<Vec<Option<u64>>>)
+                .cast_mut()
+                .cast(),
+            range: HookRange::Inclusive {
+                begin: 0x1800,
+                end: 0x1809,
+            },
+        })
+    }
+    .unwrap();
+
+    run(&cpu, 0x1801, 101).unwrap();
+
+    assert_eq!(
+        (cpu.instruction_progress(), get(&cpu, arm::CORE[0])),
+        (Some(101), 51)
+    );
+    assert_eq!(
+        *ticks.borrow(),
+        (0_u64..101).map(|entry| Some(50 + 2 * (entry / 2))).collect::<Vec<_>>()
+    );
+    assert_eq!(cpu.execution.clock.get().unwrap().now, 151);
+    assert!(cpu.execution.block_hook_thumb_common_path.get() > 0);
+    cpu.remove_hook(hook).unwrap();
+}
+
+#[test]
 fn interactive_policy_runs_full_blocks_and_rebases_clock_after_bounded_overshoot() {
     let setup = |memory: &Memory| {
         let cpu = processor(memory);
@@ -1536,4 +1661,49 @@ fn fingerprint_reads_detached_banks_without_changing_live_context() {
     assert_eq!(cpu.fingerprint().unwrap(), before);
     set(&cpu, arm::CORE[0], 43);
     assert_ne!(cpu.fingerprint().unwrap(), before);
+}
+
+#[test]
+fn observer_points_use_backend_hooks_without_installing_native_hooks() {
+    unsafe fn instruction(_: u64, _: u32, _: *mut c_void) {}
+    let hook = |begin, end| Hook::Instruction {
+        callback: instruction,
+        data: std::ptr::null_mut(),
+        range: HookRange::Inclusive { begin, end },
+    };
+    let cpu = processor_with_options(&Memory::default(), Options::default());
+    cpu.map_zeroed(0, 0x4000, 7).unwrap();
+    let native_hooks = cpu.execution.cpu.hooks.borrow().len();
+    assert!(matches!(
+        cpu.execution
+            .classify(0x1000, 0xe3a00001)
+            .unwrap()
+            .instruction,
+        InstructionDisposition::Execute
+    ));
+    let id = unsafe { cpu.install_hook(hook(0x1000, 0x1000)) }.unwrap();
+    assert_eq!(cpu.execution.cpu.hooks.borrow().len(), native_hooks);
+    assert!(matches!(
+        cpu.execution
+            .classify(0x1000, 0xe3a00001)
+            .unwrap()
+            .instruction,
+        InstructionDisposition::ObserveAndEndBlock
+    ));
+    assert!(matches!(
+        cpu.execution
+            .classify(0x1004, 0xe3a00001)
+            .unwrap()
+            .instruction,
+        InstructionDisposition::Execute
+    ));
+    cpu.remove_hook(id).unwrap();
+    assert!(matches!(
+        cpu.execution
+            .classify(0x1000, 0xe3a00001)
+            .unwrap()
+            .instruction,
+        InstructionDisposition::Execute
+    ));
+    assert_eq!(cpu.execution.cpu.hooks.borrow().len(), native_hooks);
 }

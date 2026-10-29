@@ -48,7 +48,7 @@ test('every step is one row with the same bar, waiting rows empty and finished r
   }
 });
 
-test('boot uses instruction counts, holds at 99 percent, and falls back without a baseline', () => {
+test('boot shows guest tick progress as a percentage, holds at 99, and falls back without a total', () => {
   const host = document.createElement('div');
   document.body.append(host);
   const [assets, setAssets] = createSignal<AssetProgress[]>([
@@ -58,14 +58,14 @@ test('boot uses instruction counts, holds at 99 percent, and falls back without 
       loaded: 25000000,
       total: 50000000,
       status: 'loading',
-      unit: 'instructions',
+      unit: 'ticks',
     },
   ]);
   const dispose = render(() => <LoadingAssets assets={assets()} />, host);
   try {
     flush();
     expect(host.querySelector('progress')?.value).toBe(50);
-    expect(host.textContent).toContain('25,000,000 / 50,000,000 instructions');
+    expect(host.textContent).toContain('50%');
     setAssets((previous) => [{ ...previous[0], loaded: 60000000 }]);
     flush();
     expect(host.querySelector('progress')?.value).toBe(99);

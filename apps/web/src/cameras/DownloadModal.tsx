@@ -1,3 +1,4 @@
+import { BatteryCycleIcon } from '../ui/battery-cycle';
 import { Show, createEffect, createSignal, onSettled } from 'solid-js';
 import { catalog, initialize, type PhysicalControls } from 'fujimod';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
@@ -109,9 +110,10 @@ export function DownloadModal(props: {
         </Step>
         <Step title={installable() ? 'Try it from the SD card first' : 'Boot from the SD card'}>
           <p>
-            With the camera off, hold these while switching it on, and keep holding until the screen
-            lights:
+            <BatteryCycleIcon />
+            Switch the camera OFF, then remove and reinsert the battery.
           </p>
+          <p>Hold these while switching it on, and keep holding until the screen lights:</p>
           <Show when={controls()}>
             {(physical) => <PowerComboKeys controls={physical()} modes={['sd']} />}
           </Show>
@@ -124,8 +126,11 @@ export function DownloadModal(props: {
         <Show when={installable()}>
           <Step title="Install it">
             <p>
-              Turn the camera off. Hold this while switching it on, then follow the camera’s
-              firmware update prompts:
+              <BatteryCycleIcon />
+              Switch the camera OFF, then remove and reinsert the battery.
+            </p>
+            <p>
+              Hold this while switching it on, then follow the camera’s firmware update prompts:
             </p>
             <Show when={controls()}>
               {(physical) => <PowerComboKeys controls={physical()} modes={['firmware_update']} />}

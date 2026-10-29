@@ -72,6 +72,8 @@ separate caller policy. No setup command, retry or E8 is sent implicitly.
 well as earlier fragments in that command. `bytes_completed()` counts only
 chunks already returned successfully.
 
+Where the firmware's E1 DMA drops low source-address bits and rounds transfer lengths up, attach a `DataAlignment` with `DataWindow::with_alignment`. Ranges must then start on the address alignment and span whole granules (`Error::MisalignedDataRange`), and each command's length is rounded down to whole granules within capacity and host reply budget. A budget below one granule fails with `LengthLimit` before any request.
+
 `operations::data::upload` owns the complete setup/E0/E8 sequence. Supply the
 setup mode and E0 piece size explicitly. It checks the final receive budget
 before setup, stops on a framed setup error, and sends each piece and E8 once.
@@ -542,3 +544,40 @@ Native callers may instead set `FUJIMOD_USB_PROXY_URL` and
 `FUJIMOD_USB_PROXY_TOKEN` for existing discovery calls. Remote failure never
 falls back to a local device. ff80 commands, trace records and completion
 fencing execute in this core for either transport.
+
+## Session reclaim and callback invocation
+
+`Connection::reclaim_session()` explicitly sends the service reclaim control
+packet and returns `true` for the optional `29 00` status, or `false` when
+its bulk IN wait times out within 500 ms. It never runs as part of
+`begin_session()`. Other failures and cancellation fence the connection.
+Native USB cancels and drains a timed-out read before allowing session open.
+WebUSB cannot cancel a pending transfer; a timeout there or across a proxy
+leaves completion unknown and prevents reuse of that connection.
+
+`operations::callback::invoke(session, &Invocation)` accepts caller-selected
+preconditions, guarded writes, synchronization commands, a callback slot, a
+trigger request and an expected outcome. No body or firmware addresses are
+built in. All initial guards run before writes; each write is checked again,
+applied in order and read back. Synchronization runs before the final slot
+check and publication. Accepted replies are exact raw packets. A returning
+callback restores and verifies the original slot, on success or mismatch.
+Guarded writes remain installed.
+
+`ExpectedOutcome::NoReply` succeeds only on a reply-side transport failure
+after the trigger's command transfer. Any received reply fails and restores
+the slot. A failed transfer fences the session; if a reply was required,
+restoration is attempted and the error retains its failure. Cancellation
+sends no cleanup commands and preserves the normal session fence.
+
+Native Python exposes `Connection.open`, `reclaim_session`, `begin_session`,
+`CallbackInvocation` and `Session.invoke_callback`. Set `replies=[raw_reply,
+...]` for accepted replies or `replies=None` for no reply. Add guards with
+`require(address, length, accepted)`, ordered writes with
+`write(address, accepted, data)` and synchronization with
+`synchronize(CommandSequence)`. The invocation uses the supplied
+`FirmwareLimits`. The returned value is reply bytes or `None`.
+
+These mechanisms are adapted with permission from Tal Shiri's
+[X-Turbo](https://github.com/tals/X-Turbo), `src/fuji/usb.py` and
+`src/fuji/reset.py` at `c0bbde42be9f6396ac60d24e837f37c028cb0f67`.

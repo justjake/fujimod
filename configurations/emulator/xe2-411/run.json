@@ -11,5 +11,13 @@
   "execution": null,
   "inputs": null,
   "scene": null,
-  "overlays": []
+  "overlays": [],
+  "preset": {
+    "factory_options": {},
+    "hardware_selection": {
+      "soc_profile_id": "exr2-service-transports",
+      "body_profile_id": "xe2-rec"
+    },
+    "hardware_inputs_id": "xe2-rec"
+  }
 }

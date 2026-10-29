@@ -1,5 +1,6 @@
+import { BatteryCycleIcon } from '../ui/battery-cycle';
 import { PowerComboKeys } from '@fujimod/emulator-ui/ui/power-combo';
-import { For, Match, Show, Switch, createSignal } from 'solid-js';
+import { For, Match, Show, Switch, createEffect, createSignal } from 'solid-js';
 import { serviceModeControls, serviceModeEntry } from './service-mode-entry';
 import './debug-mode/wizard.css';
 
@@ -27,12 +28,26 @@ export function ServiceModeGuide(props: {
   onClose: () => void;
 }) {
   const [step, setStep] = createSignal(Step.Overview);
-  const [ready, setReady] = createSignal(false);
+  const [showConnectionHelp, setShowConnectionHelp] = createSignal(false);
   const connection = () => props.connection;
-  function allowAccess() {
-    setStep(Step.Connect);
-    props.onConnect();
-  }
+  createEffect(
+    () => connection() === GuideConnection.Choosing,
+    (choosing) => {
+      if (!choosing) return;
+      setShowConnectionHelp(false);
+      const timer = setTimeout(() => setShowConnectionHelp(true), 3000);
+      return () => clearTimeout(timer);
+    },
+  );
+  createEffect(
+    () => ({ step: step(), connection: connection() }),
+    (state) => {
+      if (state.step === Step.ServiceMode && state.connection === GuideConnection.Connected)
+        setStep(Step.Connect);
+      else if (state.step === Step.Connect && state.connection !== GuideConnection.Connected)
+        setStep(Step.ServiceMode);
+    },
+  );
   return (
     <section class="dm" aria-labelledby="dm-title">
       <div class="dm-top">
@@ -77,7 +92,12 @@ export function ServiceModeGuide(props: {
               Restart into service mode
             </h1>
             <ol class="dm-entry">
-              <li>{serviceModeEntry[0]}</li>
+              <li>
+                <span>
+                  <BatteryCycleIcon />
+                  {serviceModeEntry[0]}
+                </span>
+              </li>
               <li>
                 <PowerComboKeys controls={serviceModeControls} modes={['service']} />
               </li>
@@ -85,75 +105,56 @@ export function ServiceModeGuide(props: {
             </ol>
             <div class="dm-warning" role="note">
               <strong>In service mode, do not use the OFF switch.</strong>
-              Switching off in service mode restores factory settings. To restart, remove the
-              battery.
+              <span>
+                Switching off in service mode restores factory settings. <BatteryCycleIcon />
+                To restart, remove and reinsert the battery.
+              </span>
             </div>
-            <label class="dm-check">
-              <input
-                type="checkbox"
-                checked={ready()}
-                onChange={(event) => setReady(event.currentTarget.checked)}
-              />
-              <span>I’m in service mode, the green lamp is on, and USB is connected.</span>
-            </label>
             <div class="dm-actions">
-              <button class="dm-button dm-secondary" onClick={() => setStep(Step.Overview)}>
+              <button
+                class="dm-button dm-secondary"
+                disabled={connection() === GuideConnection.Choosing}
+                onClick={() => setStep(Step.Overview)}
+              >
                 Back
               </button>
               <button
-                class={{ 'dm-button': true, 'dm-next': ready() }}
-                disabled={!ready()}
-                onClick={allowAccess}
+                class="dm-button dm-next"
+                disabled={
+                  connection() === GuideConnection.Choosing ||
+                  connection() === GuideConnection.Unsupported
+                }
+                onClick={() => props.onConnect()}
               >
-                Allow camera access
+                Try to Connect
               </button>
             </div>
+            <Show when={connection() === GuideConnection.Choosing}>
+              <p class="dm-caution" role="status">
+                Choose your camera in the browser’s dialog, then select Connect.
+              </p>
+            </Show>
+            <Show when={showConnectionHelp()}>
+              <p class="dm-caution" role="status">
+                Can’t see your camera? It must not be in service mode. Our instructions might be
+                wrong, or you might need to try a few times.
+              </p>
+            </Show>
+            <Show when={connection() === GuideConnection.Unsupported}>
+              <p class="dm-caution">
+                This browser can’t connect to USB devices. Use Chrome or Edge.
+              </p>
+            </Show>
           </div>
         </Match>
         <Match when={step() === Step.Connect}>
           <div class="dm-panel">
-            <Show when={connection() === GuideConnection.Choosing}>
-              <div class="dm-pointer" aria-hidden="true">
-                ↑
-              </div>
-            </Show>
             <h1 id="dm-title" class="dm-title">
-              Allow camera access
+              Camera connected
             </h1>
-            <Switch>
-              <Match when={connection() === GuideConnection.Connected}>
-                <p class="dm-lead dm-ok">Camera connected.</p>
-                <button class="dm-button dm-next" onClick={() => props.onClose()}>
-                  Open workbench
-                </button>
-              </Match>
-              <Match when={connection() === GuideConnection.Choosing}>
-                <p class="dm-lead">
-                  In the browser’s dialog at the top, choose the unknown FUJIFILM device, then press
-                  Connect.
-                </p>
-                <p class="dm-caution">
-                  No devices listed? The camera isn’t in service mode yet. Cancel, go back and
-                  restart it.
-                </p>
-              </Match>
-              <Match when={connection() === GuideConnection.Unsupported}>
-                <p class="dm-lead">
-                  This browser can’t connect to USB devices. Use Chrome or Edge.
-                </p>
-              </Match>
-              <Match when={true}>
-                <p class="dm-lead">The camera isn’t connected.</p>
-                <div class="dm-actions">
-                  <button class="dm-button dm-secondary" onClick={() => setStep(Step.ServiceMode)}>
-                    Back
-                  </button>
-                  <button class="dm-button dm-next" onClick={allowAccess}>
-                    Try again
-                  </button>
-                </div>
-              </Match>
-            </Switch>
+            <button class="dm-button dm-next" onClick={() => props.onClose()}>
+              Open workbench
+            </button>
           </div>
         </Match>
       </Switch>

@@ -1,9 +1,11 @@
 import type { EngineFault } from '../engine/fault';
+import { faultText, type FaultContext } from './fault-text';
 
 export interface SimulatorIssueContext {
   event: 'feedback' | 'crash';
   camera?: { model: string; id: string };
   fault?: EngineFault;
+  faultContext?: FaultContext;
   modBuild: string;
   simulatorBuild: string;
 }
@@ -26,12 +28,16 @@ export function simulatorIssue(description: string, context: SimulatorIssueConte
   url.searchParams.set('mod-build', context.modBuild);
   url.searchParams.set('simulator-build', context.simulatorBuild);
   if (context.event === 'crash' && context.fault) {
-    const fault = context.fault;
-    // Keep the full diagnostic data in the ZIP; include only a brief summary in the URL.
-    const details = ['type', 'device', 'operation', 'address', 'pc', 'cpu']
-      .filter((key) => fault.details[key] != null)
-      .map((key) => `${key}: ${String(fault.details[key]).slice(0, 160)}`);
-    url.searchParams.set('crash', `${fault.kind}: ${fault.message}\n${details.join('\n')}`);
+    url.searchParams.set(
+      'crash',
+      faultText(
+        context.fault,
+        context.faultContext ?? {
+          firmware: camera?.id,
+          build: context.simulatorBuild,
+        },
+      ),
+    );
   }
   return { description, issue: { url: url.href, fields: Object.fromEntries(url.searchParams) } };
 }

@@ -36,7 +36,7 @@ impl Fixture {
                 SPI,
                 0x1000,
                 "pl022",
-                json!({"source_hz":48000000,"ticks_per_second":1000000000,"receive_request":2,"transmit_request":3,
+                json!({"source_hz":48000000,"ticks_per_second":1000000000,"receive_request":2,"transmit_request":3,"companion_irq_line":99,
                 "wire":{"kind":"gpio-selected","endpoints":[
                     {"select":{"port":11,"pin":5,"active_high":false},"part":{"kind":"bis-configuration-registers","revision":[3,12],"idle_high":false}},
                     {"select":{"port":11,"pin":3,"active_high":false},"part":{"kind":"lsm6ds-configuration-registers"}}

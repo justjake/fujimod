@@ -328,6 +328,48 @@ fn released_resize_can_disable_irq_before_reset_and_lz_start() {
 }
 
 #[test]
+fn idle_configured_resize_accepts_a_new_ordered_configuration_without_completing_work() {
+    let (mut d, mut h, mut c) = setup();
+    reset(&mut d, &mut h);
+    enabled(&mut c, &mut h, 0, true);
+    configure(&mut d, &mut h, PYRAMID[0], 0);
+
+    let configured = d.save();
+    assert!(put(&mut d, &mut h, ORDER[0], u32::MAX).is_err());
+    assert_eq!(d.save(), configured);
+
+    configure(&mut d, &mut h, PYRAMID[1], 0);
+    let stage = PYRAMID[1];
+    assert_eq!(
+        ORDER.map(|offset| d.r(offset)),
+        [
+            0, 0x10000, stage[0], stage[1], 0x100000, stage[2], stage[3], 0x40, 0x2040, 0x4080,
+            stage[4], stage[5],
+        ]
+    );
+    let resize = d.state.resize.as_ref().unwrap();
+    assert_eq!(resize.owner, 0);
+    assert_eq!(resize.step, ORDER.len());
+    assert!(resize.phase == Phase::Configured);
+    assert!(resize.enabled);
+
+    d.options.resize = ResizeMode::AwaitResult;
+    put(&mut d, &mut h, 4, 1).unwrap();
+    assert!(d.state.resize.as_ref().unwrap().phase == Phase::Awaiting);
+    assert_eq!(d.next_deadline(h.now), None);
+    let awaiting_registers = d.state.regs.clone();
+    assert!(put(&mut d, &mut h, ORDER[0], 0).is_err());
+    assert_eq!(d.state.regs, awaiting_registers);
+    assert!(d.state.resize.as_ref().unwrap().phase == Phase::Awaiting);
+    assert_eq!(d.next_deadline(h.now), None);
+    tick(&mut d, &mut h, 1_000_000).unwrap();
+    assert!(d.state.resize.as_ref().unwrap().phase == Phase::Awaiting);
+    assert_eq!(d.r(0x88), 0);
+    assert!(h.irqs.is_empty());
+    assert_eq!(h.writes, 0);
+}
+
+#[test]
 fn scalar_half_fir_samples_pixels_and_replicated_edges_without_writing_pitch_padding() {
     // A declared numerical FIR law with explicitly bounded precision.
     let (mut d, mut h, mut c) = setup();

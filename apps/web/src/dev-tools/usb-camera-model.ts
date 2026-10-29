@@ -19,7 +19,7 @@ import type {
   ToolMemory,
   ToolSession,
 } from './camera-model';
-import { cameraDefinition, flashReader } from './camera-definition';
+import { serviceWorkflow, flashReader } from './service-artifacts';
 import { Direction, Layer, Level, hex as dumpBytes } from './log';
 import { ShareHost, newTicket, shareUrl, signalUrl } from './sharing';
 
@@ -246,7 +246,7 @@ function toolSession(
       leaveDebugMode: (...args) => session.leaveDebugMode(...args),
     },
     prepareServiceSession: async (firmwareId) => {
-      const result = await session.prepareServiceSession(...(await cameraDefinition(firmwareId)));
+      const result = await session.prepareServiceSession(...(await serviceWorkflow(firmwareId)));
       servicePrepared();
       return result;
     },

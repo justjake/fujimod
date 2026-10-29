@@ -9,6 +9,11 @@ The production input table comes from the native `state.inputs` result.
 `wasm.json` selects the module, binary, checked graph, guest tick rate, initial
 run boundary and LCD output. The DAT is supplied separately and verified by the
 module. A failed construction or unsupported native operation is an error.
+`dmpCpuRenderer: true` selects the CPU DMP renderer. When it is `false`, the
+worker loads `dmp_webgpu.js` and `dmp_webgpu_bg.wasm` beside the Emscripten
+module. The Rust GPU renderer receives command lists and synchronous guest RAM
+reads through the worker bridge; guest execution stays paused until its async
+WebGPU readback is returned. When omitted, the worker selects the CPU renderer.
 
 The worker paces bounded runs against the guest clock. It presents borrowed
 RGBA through OffscreenCanvas and transferred ImageBitmap, or leases a shared

@@ -1,14 +1,14 @@
 //! Camera workflows on an open session. Firmware facts arrive as the selected
-//! firmware's camera table; the workflow, not Python, decides each step.
+//! firmware's generated capability contracts; the workflow, not Python, decides each step.
 use super::*;
-use fujimod_catalog_camera::CameraDefinition;
 use fujimod_catalog_firmware_identity::FirmwareIdentity;
+use fujimod_catalog_workflows::WorkflowDefinition;
 use fujimod_workflows::{debug_mode, service_mode};
 
-fn definition(json: &str, id: String, sha256: &str) -> PyResult<CameraDefinition> {
+fn definition(json: &str, id: String, sha256: &str) -> PyResult<WorkflowDefinition> {
     let identity =
         FirmwareIdentity::new(id, sha256).map_err(|e| PyValueError::new_err(e.to_string()))?;
-    CameraDefinition::from_json(json, &identity).map_err(|e| PyValueError::new_err(e.to_string()))
+    WorkflowDefinition::from_json(json, &identity).map_err(|e| PyValueError::new_err(e.to_string()))
 }
 
 #[pymethods]
@@ -18,11 +18,15 @@ impl AsyncSession {
     /// A failed check raises RuntimeError; USB failures raise UsbError.
     async fn arm_reset_guard(
         &self,
-        camera_table: String,
+        workflow_facts: String,
         firmware_id: String,
         firmware_sha256: String,
     ) -> PyResult<(bool, u8, Vec<String>)> {
-        let camera = definition(&camera_table, firmware_id, &firmware_sha256)?;
+        let definition = definition(&workflow_facts, firmware_id, &firmware_sha256)?;
+        let camera = definition
+            .setup()
+            .map_err(|e| PyValueError::new_err(e.to_string()))?
+            .clone();
         let limits = fujimod_workflows::Limits {
             memory: self.limits.memory,
             configuration: self.limits.configuration,
@@ -52,12 +56,20 @@ impl AsyncSession {
 impl AsyncSession {
     async fn persist_debug_mode(
         &self,
-        camera_table: String,
+        workflow_facts: String,
         firmware_id: String,
         firmware_sha256: String,
         enabled: bool,
     ) -> PyResult<(bool, Vec<String>)> {
-        let camera = definition(&camera_table, firmware_id, &firmware_sha256)?;
+        let definition = definition(&workflow_facts, firmware_id, &firmware_sha256)?;
+        let camera = definition
+            .setup()
+            .map_err(|e| PyValueError::new_err(e.to_string()))?
+            .clone();
+        let persistence = definition
+            .persistence()
+            .map_err(|e| PyValueError::new_err(e.to_string()))?
+            .clone();
         let limits = fujimod_workflows::Limits {
             memory: self.limits.memory,
             configuration: self.limits.configuration,
@@ -68,9 +80,11 @@ impl AsyncSession {
                     let mut lines = Vec::new();
                     let mut progress = |line: &str| lines.push(line.to_string());
                     let result = if enabled {
-                        debug_mode::enter(session, &camera, limits, &mut progress).await
+                        debug_mode::enter(session, &camera, &persistence, limits, &mut progress)
+                            .await
                     } else {
-                        debug_mode::leave(session, &camera, limits, &mut progress).await
+                        debug_mode::leave(session, &camera, &persistence, limits, &mut progress)
+                            .await
                     };
                     match result {
                         Ok(persisted) => Ok(Ok((persisted.already_persisted, lines))),
@@ -95,22 +109,22 @@ impl AsyncSession {
     /// its stored value clear. Returns (already_persisted, progress_lines).
     async fn enter_debug_mode(
         &self,
-        camera_table: String,
+        workflow_facts: String,
         firmware_id: String,
         firmware_sha256: String,
     ) -> PyResult<(bool, Vec<String>)> {
-        self.persist_debug_mode(camera_table, firmware_id, firmware_sha256, true)
+        self.persist_debug_mode(workflow_facts, firmware_id, firmware_sha256, true)
             .await
     }
 
     /// Persist debug access disabled. Returns (already_persisted, progress_lines).
     async fn leave_debug_mode(
         &self,
-        camera_table: String,
+        workflow_facts: String,
         firmware_id: String,
         firmware_sha256: String,
     ) -> PyResult<(bool, Vec<String>)> {
-        self.persist_debug_mode(camera_table, firmware_id, firmware_sha256, false)
+        self.persist_debug_mode(workflow_facts, firmware_id, firmware_sha256, false)
             .await
     }
 }

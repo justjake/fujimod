@@ -53,10 +53,12 @@ pub enum TraceRequestKind {
     WriteData,
     ReadData,
     EmptyResponse,
+    Reclaim,
 }
 impl From<RequestKind> for TraceRequestKind {
     fn from(kind: RequestKind) -> Self {
         match kind {
+            RequestKind::Reclaim => Self::Reclaim,
             RequestKind::Open => Self::Open,
             RequestKind::Ping => Self::Ping,
             RequestKind::Close => Self::Close,

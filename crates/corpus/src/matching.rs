@@ -361,6 +361,105 @@ impl Index {
         out.sort_by(|a, b| a.reference.cmp(&b.reference));
         out
     }
+    /// Return exactly the rows from `pairs(reference_firmware, other)` whose
+    /// reference key belongs to `reference_id`, without visiting unrelated
+    /// families.
+    pub fn pairs_for(&self, reference_id: usize, other: &str) -> Vec<Pair> {
+        let Some(reference) = self.functions.get(reference_id) else {
+            return Vec::new();
+        };
+        let reference_firmware = reference.key.firmware.as_str();
+        let mut out = Vec::new();
+
+        if let Some(family) = self
+            .membership
+            .get(reference_id)
+            .and_then(|&id| self.families.get(id))
+        {
+            let left = family
+                .members
+                .iter()
+                .copied()
+                .find(|&id| self.functions[id].key.firmware == reference_firmware);
+            let right = family
+                .members
+                .iter()
+                .copied()
+                .find(|&id| self.functions[id].key.firmware == other);
+            if left == Some(reference_id)
+                && let Some(right) = right
+            {
+                out.push(self.pair(reference_id, right));
+            }
+        }
+
+        // `pairs` deduplicates weak links against every family row, including
+        // rows for other references. Check the two endpoint families directly,
+        // then replay weak-edge deduplication in its original order. This costs
+        // O(weak links) rather than materializing every family pair.
+        let mut weak_references = HashSet::new();
+        let mut weak_others = HashSet::new();
+        for &(first, second) in &self.weak {
+            let (left, right) = if self.functions[first].key.firmware == reference_firmware
+                && self.functions[second].key.firmware == other
+            {
+                (first, second)
+            } else if self.functions[second].key.firmware == reference_firmware
+                && self.functions[first].key.firmware == other
+            {
+                (second, first)
+            } else {
+                continue;
+            };
+
+            let family_covers_reference = self
+                .membership
+                .get(left)
+                .and_then(|&id| self.families.get(id))
+                .is_some_and(|family| {
+                    family
+                        .members
+                        .iter()
+                        .copied()
+                        .find(|&id| self.functions[id].key.firmware == reference_firmware)
+                        == Some(left)
+                        && family
+                            .members
+                            .iter()
+                            .any(|&id| self.functions[id].key.firmware == other)
+                });
+            let family_covers_other = self
+                .membership
+                .get(right)
+                .and_then(|&id| self.families.get(id))
+                .is_some_and(|family| {
+                    family
+                        .members
+                        .iter()
+                        .copied()
+                        .find(|&id| self.functions[id].key.firmware == other)
+                        == Some(right)
+                        && family
+                            .members
+                            .iter()
+                            .any(|&id| self.functions[id].key.firmware == reference_firmware)
+                });
+            if family_covers_reference
+                || family_covers_other
+                || weak_references.contains(&left)
+                || weak_others.contains(&right)
+            {
+                continue;
+            }
+            weak_references.insert(left);
+            weak_others.insert(right);
+            if left == reference_id {
+                out.push(self.weak_pair(left, right));
+            }
+        }
+
+        out
+    }
     pub(crate) fn weak_pair(&self, a: usize, b: usize) -> Pair {
         Pair {
             reference: self.functions[a].key.clone(),

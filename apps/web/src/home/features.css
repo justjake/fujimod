@@ -13,11 +13,8 @@
   text-transform: uppercase;
   margin: 0 0 4px;
 }
-.catalog h3 {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--faint);
-  margin: 22px 0 8px;
+.catalog-group + .catalog-group {
+  margin-top: 22px;
 }
 .catalog-grid {
   display: grid;
@@ -46,6 +43,15 @@
   opacity: 0;
   pointer-events: none;
 }
+/* Hairline above the still and the playing preview. */
+.catalog-tile-preview::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: inherit;
+  pointer-events: none;
+}
 .catalog-tile-video.playing {
   opacity: 1;
 }
@@ -62,7 +68,7 @@
 .catalog-card-video[data-fade] {
   opacity: 0;
 }
-.catalog-tile h4 {
+.catalog-tile h3 {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -139,8 +145,8 @@
   cursor: help;
   outline-offset: 2px;
 }
-.catalog-tile h4 .catalog-ref,
-.catalog-sub h5 .catalog-ref {
+.catalog-tile h3 .catalog-ref,
+.catalog-sub h4 .catalog-ref {
   border-bottom: 1px dotted var(--faint);
 }
 .catalog-ref:hover,
@@ -150,7 +156,7 @@
 .catalog-sub {
   margin-top: 10px;
 }
-.catalog-sub h5 {
+.catalog-sub h4 {
   margin: 0 0 4px;
   font-size: 11px;
   font-weight: 600;
@@ -265,6 +271,7 @@
   aspect-ratio: 3 / 2;
   object-fit: contain;
   background: #000;
+  border-bottom: 1px solid rgb(255 255 255 / 14%);
   border-radius: 13px 13px 0 0;
 }
 .catalog-card-title {

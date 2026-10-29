@@ -1113,14 +1113,14 @@ test('service preparation, flash chunks and state regions use the owned workflow
     bytes: 4,
     download_url: 'https://example.com/update.dat',
     release_date: '',
-    camera_table: 'runtime/sample-1/camera.json',
+    service_workflow: 'runtime/sample-1/service-workflow.generated.json',
     flash_reader: 'runtime/sample-1/flash-reader.json',
   };
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: URL | string) => {
       const path = String(input);
-      if (path.endsWith('camera.json')) return new Response('{}');
+      if (path.endsWith('service-workflow.generated.json')) return new Response('{"setup":{}}');
       if (path.endsWith('flash-reader.json'))
         return Response.json({ payload: { schema: 1 }, image: 'flash-reader.bin' });
       if (path.endsWith('flash-reader.bin')) return new Response(Uint8Array.of(1, 2, 3));
@@ -1145,7 +1145,7 @@ test('service preparation, flash chunks and state regions use the owned workflow
       await session.dumpState('sample-1', region, byteProgress);
     });
     expect(f.model.cameras()[0]).toMatchObject({ serviceMode: true, debugMode: 'on' });
-    expect(prepare).toHaveBeenCalledExactlyOnceWith('{}', 'sample-1', 'a'.repeat(64));
+    expect(prepare).toHaveBeenCalledExactlyOnceWith('{"setup":{}}', 'sample-1', 'a'.repeat(64));
     expect(backup).toHaveBeenCalledWith(
       'sample-1',
       '{"schema":1}',

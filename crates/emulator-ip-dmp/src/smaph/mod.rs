@@ -2,7 +2,7 @@
 //! Register windows and physical IRQs are explicit processor inputs.
 //! Software raster law covers VG fills/strokes, curves, affine transforms,
 //! scissor/alpha and nearest Morton images. DMA latency is unmeasured.
-use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_devices::{Cx, Device, bus::HostRequest};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -15,6 +15,10 @@ const MAX_BYTES: usize = 64 * 1024 * 1024;
 const MAX_STREAM: usize = 1024 * 1024;
 type Bank = BTreeMap<u16, u32>;
 mod geometry;
+#[cfg(not(target_os = "emscripten"))]
+mod gpu_coverage;
+#[cfg(not(target_os = "emscripten"))]
+mod gpu_paint;
 mod scanline;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -51,6 +55,12 @@ struct State {
     status: u32,
     command_ack: u8,
     jobs: u64,
+    #[serde(skip)]
+    next_host_request: u64,
+    #[serde(skip)]
+    gpu_lists: u64,
+    #[serde(skip)]
+    host_request: Option<PendingHostRequest>,
 }
 #[derive(Serialize, Deserialize)]
 struct Job {
@@ -58,10 +68,16 @@ struct Job {
     writes: Vec<(u64, Vec<u8>)>,
     banks: Option<(Stream, Stream)>,
 }
+struct PendingHostRequest {
+    id: u64,
+    payload: Vec<u8>,
+    published: bool,
+}
 pub struct Renderer {
     state: Arc<Mutex<State>>,
     base: u64,
     irq: u32,
+    webgpu_bridge: bool,
 }
 impl Renderer {
     pub fn new(base: u64, irq: u32) -> Result<Self, String> {
@@ -72,6 +88,7 @@ impl Renderer {
             state: Arc::new(Mutex::new(State::default())),
             base,
             irq,
+            webgpu_bridge: crate::webgpu_bridge_enabled(),
         })
     }
 }
@@ -668,6 +685,23 @@ fn blend_pixel(source: [u8; 4], dest: &[u8], order: u32, coverage: f64, mode: u3
     }
 }
 
+struct PreparedPaint<'a> {
+    fill: &'a FillDraw,
+    address: u64,
+    width: u32,
+    height: u32,
+    coverage_index: usize,
+    samples: u32,
+    clips: Vec<[u32; 4]>,
+    order: u32,
+    tiled: bool,
+    flip: bool,
+    blend: u32,
+    texture: Option<Texture>,
+    gradient: Option<Gradient>,
+    solid: [u8; 4],
+}
+
 fn rectangles(
     cx: &mut Cx<'_>,
     paths: &[PathDraw],
@@ -677,6 +711,8 @@ fn rectangles(
         return Err("DMP unmatched/bounded draw lists".into());
     }
     let mut output: BTreeMap<u64, (u32, u32, Vec<u8>)> = BTreeMap::new();
+    let mut coverage_inputs = Vec::with_capacity(paths.len());
+    let mut prepared = Vec::with_capacity(paths.len());
     for (p, f) in paths.iter().zip(fills) {
         if p.sequence != f.sequence {
             return Err("DMP path/fill sequence mismatch".into());
@@ -702,12 +738,12 @@ fn rectangles(
         }
         let image = get(r, 0x115)? & 0x1000000 != 0;
         let paint = get(r, 0x140)?;
-        let gradient = paint & 0x400 != 0;
+        let has_gradient = paint & 0x400 != 0;
         // Register writes update only the low selector lanes. A solid draw
         // can retain the upper210000 image pipeline bank from an earlier draw.
         if !matches!(paint & !0x403, 0x50000 | 0x210000)
             || paint & 3 != if image { 2 } else { 0 }
-            || (gradient && image)
+            || (has_gradient && image)
         {
             return Err(format!(
                 "DMP unsupported paint={:#x} image/scissor={:#x} flags={:#x}",
@@ -774,12 +810,12 @@ fn rectangles(
                 })
                 .collect()
         };
-        // The path matrix is applied unchanged in pixel units.
-        // Supersampling changes the raster bands/grid, not this transform.
+        // Path matrices use pixel units; supersampling changes only the
+        // coverage grid and raster band.
         for points in &mut contours {
-            for p in points {
-                let [x, y] = *p;
-                *p = [
+            for point in points {
+                let [x, y] = *point;
+                *point = [
                     matrix[0] * x + matrix[3] * y + matrix[6],
                     matrix[1] * x + matrix[4] * y + matrix[7],
                 ];
@@ -836,61 +872,299 @@ fn rectangles(
         } else {
             None
         };
-        let gradient = if gradient {
+        let gradient = if has_gradient {
             Some(Gradient::new(&f.stream)?)
         } else {
             None
         };
-        let (ow, oh, bytes) = output.get_mut(&address).unwrap();
-        if (*ow, *oh) != (width, height) {
+        let solid = packed(get(r, 0x185)?.to_le_bytes(), r, &f.stream.gamma, order)?;
+        let coverage_index = coverage_inputs.len();
+        coverage_inputs.push(scanline::CoverageInput::new(
+            &contours,
+            [x0, x1, y0, y1],
+            samples,
+            stroke.then_some(radius),
+            get(r, 0xa5)? & 0x100 != 0,
+        ));
+        let (target_width, target_height, _) = output.get(&address).unwrap();
+        if (*target_width, *target_height) != (width, height) {
             return Err("DMP target resized within batch".into());
         }
-        let solid = packed(get(r, 0x185)?.to_le_bytes(), r, &f.stream.gamma, order)?;
-        for y in y0..y1 {
-            let coverage = scanline::coverage(
-                &contours,
-                x0,
-                x1,
-                y,
-                samples,
-                if stroke { Some(radius) } else { None },
-                get(r, 0xa5)? & 0x100 != 0,
+        prepared.push(PreparedPaint {
+            fill: f,
+            address,
+            width,
+            height,
+            coverage_index,
+            samples,
+            clips,
+            order,
+            tiled,
+            flip: flip == 1,
+            blend,
+            texture,
+            gradient,
+            solid,
+        });
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    let (gpu_requested, verify_gpu) = gpu_mode();
+    #[cfg(not(target_arch = "wasm32"))]
+    let gpu_enabled = if gpu_requested {
+        match fujimod_emulator_gpu::context() {
+            Ok(_) => true,
+            Err(error) if !verify_gpu && error.starts_with("host GPU adapter:") => false,
+            Err(error) => return Err(error),
+        }
+    } else {
+        false
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    if gpu_enabled {
+        let gpu_context = fujimod_emulator_gpu::context()?;
+        let _gpu_guard = gpu_context.acquire()?;
+        let gpu_coverages = gpu_coverage::coverage_batch(&coverage_inputs)?;
+        if verify_gpu {
+            let cpu_coverages: Vec<_> = coverage_inputs
+                .iter()
+                .map(scanline::coverage_image)
+                .collect();
+            for (index, (cpu, gpu)) in cpu_coverages.iter().zip(&gpu_coverages).enumerate() {
+                if cpu != gpu {
+                    let offset = cpu
+                        .iter()
+                        .zip(gpu)
+                        .position(|(cpu, gpu)| cpu != gpu)
+                        .unwrap_or(0);
+                    return Err(format!(
+                        "SMAPH GPU coverage differs from CPU at draw {index}, sample {offset}"
+                    ));
+                }
+            }
+            paint_cpu_draws(&prepared, &coverage_inputs, &cpu_coverages, &mut output)?;
+        }
+
+        let mut surfaces: BTreeMap<u64, Arc<fujimod_emulator_gpu::GpuSurface>> = BTreeMap::new();
+        let mut write_flags: BTreeMap<u64, Vec<bool>> = BTreeMap::new();
+        for draw in &prepared {
+            if surfaces.contains_key(&draw.address) {
+                let key = surfaces.get(&draw.address).unwrap().key();
+                if key.extent.width != draw.width
+                    || key.extent.height != draw.height
+                    || key.layout
+                        != if draw.tiled {
+                            fujimod_emulator_gpu::SurfaceLayout::Morton8x8
+                        } else {
+                            fujimod_emulator_gpu::SurfaceLayout::Linear
+                        }
+                {
+                    return Err("DMP target layout changed within batch".into());
+                }
+                continue;
+            }
+            let layout = if draw.tiled {
+                fujimod_emulator_gpu::SurfaceLayout::Morton8x8
+            } else {
+                fujimod_emulator_gpu::SurfaceLayout::Linear
+            };
+            let key = fujimod_emulator_gpu::SurfaceKey {
+                guest_address: draw.address,
+                format: fujimod_emulator_gpu::SurfaceFormat::Rgba8,
+                extent: fujimod_emulator_gpu::SurfaceExtent {
+                    width: draw.width,
+                    height: draw.height,
+                },
+                layout,
+            };
+            let guest_bytes = &output.get(&draw.address).unwrap().2;
+            let surface = gpu_context.get_or_create_target(key, Some(guest_bytes))?;
+            gpu_context.clear_write_masks(key)?;
+            surfaces.insert(draw.address, surface);
+            write_flags.insert(
+                draw.address,
+                vec![false; draw.width as usize * draw.height as usize],
             );
+        }
+
+        for draw in &prepared {
+            let input = &coverage_inputs[draw.coverage_index];
+            let coverage = &gpu_coverages[draw.coverage_index];
+            let [x0, x1, y0, y1] = input.bounds;
+            let bbox_width = x1.saturating_sub(x0);
+            let target = &output.get(&draw.address).unwrap().2;
+            gpu_paint::paint_resident(
+                surfaces.get(&draw.address).unwrap(),
+                coverage,
+                input.bounds,
+                [draw.width as usize, draw.height as usize],
+                target,
+                draw.samples,
+                &draw.fill.stream.regs,
+                &draw.fill.stream.gamma,
+                draw.order,
+                draw.tiled,
+                draw.flip,
+                &draw.clips,
+                draw.solid,
+                draw.blend,
+                draw.texture.as_ref(),
+                draw.gradient.as_ref(),
+                &draw.fill.stream.gradient_deltas,
+            )?;
+            let flags = write_flags.get_mut(&draw.address).unwrap();
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    let covered = coverage[(y - y0) * bbox_width + x - x0] != 0;
+                    let in_scissor = draw.clips.iter().any(|clip| {
+                        x as u32 >= clip[0]
+                            && (x as u32) < clip[2]
+                            && y as u32 >= clip[1]
+                            && (y as u32) < clip[3]
+                    });
+                    if covered && in_scissor {
+                        let target_y = if draw.flip {
+                            draw.height as usize - 1 - y
+                        } else {
+                            y
+                        };
+                        flags[target_y * draw.width as usize + x] = true;
+                    }
+                }
+            }
+        }
+
+        let limits = gpu_context.device().limits();
+        let mask_batch_limit = (limits.max_storage_buffer_binding_size as usize / 12)
+            .min(limits.max_compute_workgroups_per_dimension as usize * 64)
+            .max(1);
+        for (address, flags) in &write_flags {
+            let surface = surfaces.get(address).unwrap();
+            let width = surface.key().extent.width as usize;
+            let writes: Vec<_> = flags
+                .iter()
+                .enumerate()
+                .filter(|(_, written)| **written)
+                .map(|(index, _)| fujimod_emulator_gpu::PixelWriteMask {
+                    x: (index % width) as u32,
+                    y: (index / width) as u32,
+                    byte_mask: 0xf,
+                })
+                .collect();
+            for batch in writes.chunks(mask_batch_limit) {
+                gpu_context.record_write_masks(surface.key(), batch)?;
+            }
+        }
+
+        let mut gpu_writes = Vec::new();
+        for (address, surface) in &surfaces {
+            let readback = gpu_context.readback(surface.key())?;
+            if verify_gpu {
+                let cpu_bytes = &output.get(address).unwrap().2;
+                if cpu_bytes != &readback.bytes {
+                    let offset = cpu_bytes
+                        .iter()
+                        .zip(&readback.bytes)
+                        .position(|(cpu, gpu)| cpu != gpu)
+                        .unwrap_or(cpu_bytes.len().min(readback.bytes.len()));
+                    return Err(format!(
+                        "SMAPH GPU paint differs from CPU at target {address:#x}, byte {offset}"
+                    ));
+                }
+            }
+            for (range_address, range_len) in readback.written_ranges {
+                let offset = usize::try_from(range_address - surface.key().guest_address)
+                    .map_err(|_| "SMAPH GPU readback range offset overflow")?;
+                let end = offset
+                    .checked_add(range_len)
+                    .filter(|end| *end <= readback.bytes.len())
+                    .ok_or("SMAPH GPU readback range exceeds target")?;
+                gpu_writes.push((range_address, readback.bytes[offset..end].to_vec()));
+            }
+        }
+        if verify_gpu {
+            return Ok(output
+                .into_iter()
+                .map(|(address, (_, _, bytes))| (address, bytes))
+                .collect());
+        }
+        return Ok(gpu_writes);
+    }
+
+    let coverages: Vec<_> = coverage_inputs
+        .iter()
+        .map(scanline::coverage_image)
+        .collect();
+    paint_cpu_draws(&prepared, &coverage_inputs, &coverages, &mut output)?;
+    Ok(output
+        .into_iter()
+        .map(|(address, (_, _, bytes))| (address, bytes))
+        .collect())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn gpu_mode() -> (bool, bool) {
+    let enabled = |name| std::env::var(name).is_ok_and(|value| value == "1");
+    let verify = enabled("FUJIMOD_SMAPH_VERIFY_GPU");
+    (verify || !enabled("FUJIMOD_SMAPH_CPU"), verify)
+}
+
+fn paint_cpu_draws(
+    prepared: &[PreparedPaint<'_>],
+    coverage_inputs: &[scanline::CoverageInput],
+    coverages: &[Vec<u32>],
+    output: &mut BTreeMap<u64, (u32, u32, Vec<u8>)>,
+) -> Result<(), String> {
+    if prepared.len() != coverage_inputs.len() || prepared.len() != coverages.len() {
+        return Err("DMP paint coverage batch length mismatch".into());
+    }
+    for draw in prepared {
+        let input = &coverage_inputs[draw.coverage_index];
+        let coverage = &coverages[draw.coverage_index];
+        let [x0, x1, y0, y1] = input.bounds;
+        let bbox_width = x1.saturating_sub(x0);
+        let regs = &draw.fill.stream.regs;
+        let gamma = &draw.fill.stream.gamma;
+        let bytes = &mut output.get_mut(&draw.address).unwrap().2;
+        for y in y0..y1 {
             for x in x0..x1 {
-                if !clips.iter().any(|c| {
-                    x as u32 >= c[0] && (x as u32) < c[2] && y as u32 >= c[1] && (y as u32) < c[3]
+                if !draw.clips.iter().any(|clip| {
+                    x as u32 >= clip[0]
+                        && (x as u32) < clip[2]
+                        && y as u32 >= clip[1]
+                        && (y as u32) < clip[3]
                 }) {
                     continue;
                 }
-                let covered = coverage[x - x0];
+                let covered = coverage[(y - y0) * bbox_width + x - x0];
                 if covered == 0 {
                     continue;
                 }
-                let source = if let Some(t) = &texture {
-                    packed(t.sample(x, y)?, r, &f.stream.gamma, order)?
-                } else if let Some(g) = &gradient {
-                    packed(g.sample(x, y), r, &f.stream.gamma, order)?
+                let source = if let Some(texture) = &draw.texture {
+                    packed(texture.sample(x, y)?, regs, gamma, draw.order)?
+                } else if let Some(gradient) = &draw.gradient {
+                    packed(gradient.sample(x, y), regs, gamma, draw.order)?
                 } else {
-                    solid
+                    draw.solid
                 };
-                let row = if flip == 1 {
-                    height as usize - 1 - y
+                let row = if draw.flip {
+                    draw.height as usize - 1 - y
                 } else {
                     y
                 };
-                let i = pixel_index(x, row, width as usize, tiled) * 4;
+                let index = pixel_index(x, row, draw.width as usize, draw.tiled) * 4;
                 let pixel = blend_pixel(
                     source,
-                    &bytes[i..i + 4],
-                    order,
-                    covered as f64 / (samples * samples) as f64,
-                    blend,
+                    &bytes[index..index + 4],
+                    draw.order,
+                    covered as f64 / (input.samples * input.samples) as f64,
+                    draw.blend,
                 );
-                bytes[i..i + 4].copy_from_slice(&pixel);
+                bytes[index..index + 4].copy_from_slice(&pixel);
             }
         }
     }
-    Ok(output.into_iter().map(|(a, (_, _, b))| (a, b)).collect())
+    Ok(())
 }
 
 #[cfg(test)]
@@ -898,6 +1172,7 @@ mod tests {
     use super::*;
     use fujimod_emulator_devices::Host;
     use fujimod_emulator_devices::test_host::{bus::TestBus, recording::RecordingHost};
+
     /// The pixmap high-address register beside the renderer reads zero and
     /// refuses nonzero writes, like the XP5 register at the same address.
     struct AddressHigh;
@@ -1235,7 +1510,7 @@ impl State {
         self.regs.get(&o).copied().unwrap_or(0)
     }
     fn idle(&self) -> Result<(), String> {
-        if self.pending.is_some() || self.status != 0 {
+        if self.pending.is_some() || self.host_request.is_some() || self.status != 0 {
             Err("DMP submission before idle/ISR acknowledgment".into())
         } else {
             Ok(())
@@ -1392,6 +1667,10 @@ fn known(o: u64) -> bool {
             | 0x1c
             | 0x34
             | 0x58
+            | 0xe0
+            | 0xe4
+            | 0xe8
+            | 0xec
             | 0xc00
             | 0xc04
             | 0xc08
@@ -1456,7 +1735,7 @@ impl Device for Renderer {
             if matches!(o, 0x58 | 0x1200) || (o == 0x34 && v != 0) {
                 return Err("DMP write to read-only status".into());
             }
-            if s.pending.is_some() {
+            if s.pending.is_some() || s.host_request.is_some() {
                 return Err("DMP register mutation during DMA".into());
             }
             match o {
@@ -1474,6 +1753,9 @@ impl Device for Renderer {
                     let job = s.copy_job(cx, v)?;
                     s.regs.insert(o, v);
                     s.begin(cx, job);
+                }
+                0xc1c if v != 0x8000 => {
+                    return Err("DMP unsupported reset control".into());
                 }
                 0x10d0 if v == 1 => {
                     s.idle()?;
@@ -1507,17 +1789,34 @@ impl Device for Renderer {
                 0x20f0 if v == 1 => {
                     s.idle()?;
                     let data = words(cx, s.r(0x20e8) as u64 * 8, s.r(0x20e0) as usize * 2)?;
-                    let writes = s.gles.execute(&data, &mut |a, n| cx.ram_bytes(a, n))?;
-                    s.command_ack = 0;
-                    s.regs.insert(o, v);
-                    s.begin(
-                        cx,
-                        Job {
-                            status: COMMAND,
-                            writes,
-                            banks: None,
-                        },
-                    );
+                    if self.webgpu_bridge {
+                        let payload = s.gles.encode_webgpu_request(&data)?;
+                        let id = s.next_host_request;
+                        let next_id = id
+                            .checked_add(1)
+                            .ok_or("DMP WebGPU request ID exhausted")?;
+                        cx.request_pause()?;
+                        s.next_host_request = next_id;
+                        s.host_request = Some(PendingHostRequest {
+                            id,
+                            payload,
+                            published: false,
+                        });
+                        s.command_ack = 0;
+                        s.regs.insert(o, v);
+                    } else {
+                        let writes = s.gles.execute(&data, &mut |a, n| cx.ram_bytes(a, n))?;
+                        s.command_ack = 0;
+                        s.regs.insert(o, v);
+                        s.begin(
+                            cx,
+                            Job {
+                                status: COMMAND,
+                                writes,
+                                banks: None,
+                            },
+                        );
+                    }
                 }
                 0x10d0 | 0x10e0 | 0x20f0 => {
                     return Err(format!("DMP unsupported command trigger{o:#x}={v:#x}"));
@@ -1594,6 +1893,64 @@ impl Device for Renderer {
             ));
             cx.set_irq(self.irq, true);
         }
+    }
+    fn take_host_request(&mut self) -> Option<HostRequest> {
+        let mut state = self.state.lock().unwrap();
+        let request = state.host_request.as_mut()?;
+        if request.published {
+            return None;
+        }
+        request.published = true;
+        Some(HostRequest {
+            id: request.id,
+            kind: "dmp-webgpu".into(),
+            payload: request.payload.clone(),
+        })
+    }
+    fn has_host_request(&self) -> bool {
+        self.state.lock().unwrap().host_request.is_some()
+    }
+    fn complete_host_request(
+        &mut self,
+        cx: &mut Cx<'_>,
+        id: u64,
+        result: &[u8],
+    ) -> Result<(), String> {
+        let mut state = self.state.lock().unwrap();
+        if state
+            .host_request
+            .as_ref()
+            .is_none_or(|request| request.id != id || !request.published)
+        {
+            return Err("DMP WebGPU result has no matching published request".into());
+        }
+        let writes = state.gles.apply_webgpu_result(result)?;
+        state.host_request = None;
+        state.gpu_lists = state
+            .gpu_lists
+            .checked_add(1)
+            .ok_or("DMP WebGPU list count exhausted")?;
+        state.begin(
+            cx,
+            Job {
+                status: COMMAND,
+                writes,
+                banks: None,
+            },
+        );
+        Ok(())
+    }
+    fn diagnostic_state(&self) -> Value {
+        let state = self.state.lock().unwrap();
+        let mut value = serde_json::to_value(&*state).unwrap();
+        if let Some(gles) = value.get_mut("gles").and_then(Value::as_object_mut) {
+            gles.insert(
+                "host_rasterizer".into(),
+                Value::String(if self.webgpu_bridge { "WebGPU" } else { "CPU" }.into()),
+            );
+            gles.insert("gpu_lists".into(), Value::from(state.gpu_lists));
+        }
+        value
     }
     fn save(&self) -> Value {
         serde_json::to_value(&*self.state.lock().unwrap()).unwrap()

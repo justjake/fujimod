@@ -1,97 +1,10 @@
 {
   "schema": 1,
-  "groups": ["pictures", "movies", "handling", "problems"],
+  "groups": ["photography", "videography", "recipes", "system"],
   "features": [
     {
-      "id": "film_simulation",
-      "group": "pictures",
-      "icon": "film",
-      "title": "FILM SIMULATION",
-      "path": ["SHOOTING MENU"],
-      "summary": "Simulate the effects of additional types of film. Create your own film simulations in FILM EDITOR.",
-      "card": "film_simulation",
-      "media_cards": ["film_simulation"],
-      "controls": [
-        {
-          "title": "FILM SIMULATION",
-          "primary": true,
-          "card": "film_simulation",
-          "choices": [
-            {
-              "label": "ETERNA",
-              "stock": false,
-              "icon": "eterna"
-            },
-            {
-              "label": "Classic Neg. (approx.)",
-              "stock": false,
-              "icon": "classic-neg"
-            },
-            {
-              "label": "Bleach Bypass (approx.)",
-              "stock": false,
-              "icon": "bleach-bypass"
-            },
-            {
-              "label": "Nostalgic Neg. (approx.)",
-              "stock": false,
-              "icon": "nostalgic-neg"
-            },
-            {
-              "label": "REALA ACE (approx.)",
-              "stock": false,
-              "icon": "reala-ace"
-            },
-            {
-              "label": "Neutral",
-              "stock": false,
-              "icon": null
-            }
-          ],
-          "actions": []
-        }
-      ],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
-      "id": "card_films",
-      "group": "pictures",
-      "icon": "film",
-      "title": "Card Films",
-      "path": [],
-      "summary": "Load custom film simulations from the memory card.",
-      "card": null,
-      "media_cards": [],
-      "controls": [],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
-      "id": "film_editor",
-      "group": "pictures",
-      "icon": "film",
-      "title": "FILM EDITOR",
-      "path": ["SHOOTING MENU"],
-      "summary": "Create and edit your own film simulations, saved as files on the memory card.",
-      "card": "film_editor_item",
-      "media_cards": ["film_editor_item"],
-      "controls": [],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
       "id": "highlight_metering",
-      "group": "pictures",
+      "group": "photography",
       "icon": "highlight",
       "title": "PHOTOMETRY",
       "path": ["SHOOTING MENU"],
@@ -140,48 +53,24 @@
       }
     },
     {
-      "id": "raw_view",
-      "group": "pictures",
-      "icon": "highlight",
-      "title": "RAW VIEW",
-      "path": [],
-      "summary": "Assign RAW VIEW to a function button to see how close the brightest areas are to losing detail in the RAW file.",
-      "card": "raw_view",
-      "media_cards": ["raw_view"],
+      "id": "snap_focus",
+      "group": "photography",
+      "icon": "snap",
+      "title": "MF SNAP FOCUS",
+      "path": ["SHOOTING MENU"],
+      "summary": "In manual focus mode, press a button assigned to SNAP FOCUS to focus at a preset distance.",
+      "card": "snap_menu_item",
+      "media_cards": ["snap_menu_item"],
       "controls": [],
       "credits": {
         "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
-      "id": "recipes",
-      "group": "pictures",
-      "icon": "recipes",
-      "title": "Unlimited Recipes",
-      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
-      "summary": "Store custom settings as named files on the memory card and load them into C1–C7.",
-      "card": null,
-      "media_cards": ["edit_save_custom_setting"],
-      "controls": [
-        {
-          "title": "RECIPE",
-          "primary": true,
-          "card": null,
-          "choices": [],
-          "actions": ["SAVE CURRENT SETTINGS", "SAVE AS NEW RECIPE", "CHOOSE FROM SD CARD"]
-        }
-      ],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
+        "inspired": [["Ricoh GRIII"]],
         "thanks": []
       }
     },
     {
       "id": "aspect_ratio",
-      "group": "pictures",
+      "group": "photography",
       "icon": "aspect",
       "title": "ASPECT RATIO",
       "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
@@ -251,7 +140,7 @@
     },
     {
       "id": "surround_view",
-      "group": "pictures",
+      "group": "photography",
       "icon": "aspect",
       "title": "SURROUND VIEW",
       "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
@@ -302,8 +191,79 @@
       }
     },
     {
+      "id": "jpeg_max",
+      "group": "photography",
+      "icon": "aspect",
+      "title": "IMAGE QUALITY",
+      "path": ["SHOOTING MENU"],
+      "summary": "Choose ULTRA FINE to save JPEGs with finer compression.",
+      "card": "image_quality",
+      "media_cards": ["image_quality"],
+      "controls": [
+        {
+          "title": "IMAGE QUALITY",
+          "primary": true,
+          "card": "image_quality",
+          "choices": [
+            {
+              "label": "FINE",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "NORMAL",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "FINE+RAW",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "NORMAL+RAW",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "RAW",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "ULTRA FINE",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "raw_view",
+      "group": "photography",
+      "icon": "highlight",
+      "title": "RAW VIEW",
+      "path": [],
+      "summary": "Assign RAW VIEW to a function button to see how close the brightest areas are to losing detail in the RAW file.",
+      "card": "raw_view",
+      "media_cards": ["raw_view"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
       "id": "framing_guideline",
-      "group": "pictures",
+      "group": "photography",
       "icon": "golden-ratio",
       "title": "FRAMING GUIDELINE",
       "path": ["SET-UP", "SCREEN SET-UP"],
@@ -367,8 +327,71 @@
       }
     },
     {
+      "id": "desqueeze_jpeg",
+      "group": "photography",
+      "icon": "anamorphic",
+      "title": "Desqueeze JPEG",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "summary": "Display and record pictures taken through an anamorphic adapter at their corrected width.",
+      "card": null,
+      "media_cards": ["shape_jpeg_item"],
+      "controls": [
+        {
+          "title": "DESQUEEZE JPEG",
+          "primary": false,
+          "card": "shape_jpeg_item",
+          "choices": [
+            {
+              "label": "ON",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "OFF",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "f_log",
+      "group": "videography",
+      "icon": "movie",
+      "title": "F-Log RECORDING",
+      "path": ["SHOOTING MENU", "MOVIE SET-UP"],
+      "summary": "Record movies with the F-Log transfer and F-Gamut color matrix.",
+      "card": "f_log_recording_item",
+      "media_cards": ["f_log_recording_item"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgsf59j/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/Visible-Marzipan5763/",
+              "text": ["u/Visible-Marzipan5763"]
+            }
+          ]
+        ]
+      }
+    },
+    {
       "id": "desqueeze",
-      "group": "pictures",
+      "group": "videography",
       "icon": "anamorphic",
       "title": "Anamorphic Lenses",
       "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
@@ -430,27 +453,94 @@
       }
     },
     {
-      "id": "desqueeze_jpeg",
-      "group": "pictures",
-      "icon": "anamorphic",
-      "title": "Desqueeze JPEG",
-      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
-      "summary": "Display and record pictures taken through an anamorphic adapter at their corrected width.",
+      "id": "hdmi_output",
+      "group": "videography",
+      "icon": "hdmi",
+      "title": "HDMI OUTPUT",
+      "path": ["SET-UP"],
+      "summary": "Display the shooting view on an HDMI device.",
+      "card": "hdmi_rec_behavior_item",
+      "media_cards": ["hdmi_rec_behavior_item"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "recipes",
+      "group": "recipes",
+      "icon": "recipes",
+      "title": "Recipes",
+      "path": ["SHOOTING MENU", "RECIPES"],
+      "summary": "Load named shooting recipes from one list and pin favorites to C1–C7.",
       "card": null,
-      "media_cards": ["shape_jpeg_item"],
+      "media_cards": ["recipes"],
       "controls": [
         {
-          "title": "DESQUEEZE JPEG",
+          "title": "RECIPES",
+          "primary": true,
+          "card": "recipes",
+          "choices": [],
+          "actions": ["NEW RECIPE"]
+        },
+        {
+          "title": "RECIPE",
           "primary": false,
-          "card": "shape_jpeg_item",
+          "card": null,
+          "choices": [],
+          "actions": ["UPDATE", "REVERT", "PIN TO", "UNPIN", "RENAME", "DELETE"]
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "film_simulation",
+      "group": "recipes",
+      "icon": "film",
+      "title": "FILM SIMULATION",
+      "path": ["SHOOTING MENU"],
+      "summary": "Simulate the effects of additional types of film. Create your own film simulations in FILM EDITOR.",
+      "card": "film_simulation",
+      "media_cards": ["film_simulation"],
+      "controls": [
+        {
+          "title": "FILM SIMULATION",
+          "primary": true,
+          "card": "film_simulation",
           "choices": [
             {
-              "label": "ON",
+              "label": "ETERNA",
               "stock": false,
-              "icon": null
+              "icon": "eterna"
             },
             {
-              "label": "OFF",
+              "label": "Classic Neg. (approx.)",
+              "stock": false,
+              "icon": "classic-neg"
+            },
+            {
+              "label": "Bleach Bypass (approx.)",
+              "stock": false,
+              "icon": "bleach-bypass"
+            },
+            {
+              "label": "Nostalgic Neg. (approx.)",
+              "stock": false,
+              "icon": "nostalgic-neg"
+            },
+            {
+              "label": "REALA ACE (approx.)",
+              "stock": false,
+              "icon": "reala-ace"
+            },
+            {
+              "label": "Neutral",
               "stock": false,
               "icon": null
             }
@@ -465,52 +555,24 @@
       }
     },
     {
-      "id": "snap_focus",
-      "group": "pictures",
-      "icon": "snap",
-      "title": "MF SNAP FOCUS",
+      "id": "film_editor",
+      "group": "recipes",
+      "icon": "film",
+      "title": "FILM EDITOR",
       "path": ["SHOOTING MENU"],
-      "summary": "In manual focus mode, press a button assigned to SNAP FOCUS to focus at a preset distance.",
-      "card": "snap_menu_item",
-      "media_cards": ["snap_menu_item"],
-      "controls": [],
-      "credits": {
-        "premiere": false,
-        "inspired": [["Ricoh GRIII"]],
-        "thanks": []
-      }
-    },
-    {
-      "id": "f_log",
-      "group": "movies",
-      "icon": "movie",
-      "title": "F-Log RECORDING",
-      "path": ["SHOOTING MENU", "MOVIE SET-UP"],
-      "summary": "Record movies with the F-Log transfer and F-Gamut color matrix.",
-      "card": "f_log_recording_item",
-      "media_cards": ["f_log_recording_item"],
+      "summary": "Create and edit your own film simulations, saved as files on the memory card.",
+      "card": "film_editor_item",
+      "media_cards": ["film_editor_item"],
       "controls": [],
       "credits": {
         "premiere": false,
         "inspired": [],
-        "thanks": [
-          [
-            {
-              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgsf59j/",
-              "text": ["suggested"]
-            },
-            " by ",
-            {
-              "href": "https://www.reddit.com/user/Visible-Marzipan5763/",
-              "text": ["u/Visible-Marzipan5763"]
-            }
-          ]
-        ]
+        "thanks": []
       }
     },
     {
       "id": "unlocked_controls",
-      "group": "handling",
+      "group": "system",
       "icon": "controls",
       "title": "Unlocked Controls",
       "path": [],
@@ -549,24 +611,8 @@
       }
     },
     {
-      "id": "hdmi_output",
-      "group": "handling",
-      "icon": "hdmi",
-      "title": "HDMI OUTPUT",
-      "path": ["SET-UP"],
-      "summary": "Display the shooting view on an HDMI device.",
-      "card": "hdmi_rec_behavior_item",
-      "media_cards": ["hdmi_rec_behavior_item"],
-      "controls": [],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
       "id": "menu_theme",
-      "group": "handling",
+      "group": "system",
       "icon": "theme",
       "title": "MENU THEME",
       "path": ["SET-UP"],
@@ -581,8 +627,86 @@
       }
     },
     {
+      "id": "overlay_opacity",
+      "group": "system",
+      "icon": "theme",
+      "title": "Overlay Opacity",
+      "path": ["SET-UP", "SCREEN SET-UP"],
+      "summary": "Set menu and shooting indicator opacity independently.",
+      "card": null,
+      "media_cards": ["opacity_menu_item", "opacity_indicators_item"],
+      "controls": [
+        {
+          "title": "MENU OPACITY",
+          "primary": false,
+          "card": "opacity_menu_item",
+          "choices": [
+            {
+              "label": "25%",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "50%",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "75%",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "100%",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        },
+        {
+          "title": "INDICATOR OPACITY",
+          "primary": false,
+          "card": "opacity_indicators_item",
+          "choices": [
+            {
+              "label": "0%",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "25%",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "50%",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "75%",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "100%",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
       "id": "menu_tap",
-      "group": "handling",
+      "group": "system",
       "icon": "touch",
       "title": "Menu Tap",
       "path": ["SET-UP", "TOUCH SCREEN SETTING"],
@@ -598,7 +722,7 @@
     },
     {
       "id": "autofocus",
-      "group": "handling",
+      "group": "system",
       "icon": "autofocus",
       "title": "Autofocus",
       "path": [],
@@ -614,7 +738,7 @@
     },
     {
       "id": "date_card_name",
-      "group": "handling",
+      "group": "system",
       "icon": "card",
       "title": "FORMAT CARD NAME",
       "path": ["SET-UP", "SAVE DATA SET-UP"],
@@ -630,7 +754,7 @@
     },
     {
       "id": "date_folders",
-      "group": "handling",
+      "group": "system",
       "icon": "folder",
       "title": "DATE FOLDERS",
       "path": ["SET-UP", "SAVE DATA SET-UP"],
@@ -658,7 +782,7 @@
     },
     {
       "id": "bug_reports",
-      "group": "problems",
+      "group": "system",
       "icon": "bug",
       "title": "Bug Reports",
       "path": ["SET-UP", "FUJIMOD DEVTOOLS", "BUG REPORT SHORTCUT"],
@@ -803,6 +927,22 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "image_quality": {
+      "title": "IMAGE QUALITY",
+      "path": ["SHOOTING MENU"],
+      "summary": null,
+      "choices": {
+        "ULTRA FINE": "Save a JPEG with finer compression than FINE."
+      },
+      "related": [],
+      "changes": "Adds ULTRA FINE JPEG quality.",
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -1202,7 +1342,7 @@
       "summary": null,
       "choices": {},
       "related": [],
-      "changes": "Adds EXPOSURE COMP., STILLS/MOVIE and the FujiMod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.",
+      "changes": "Adds EXPOSURE COMP. and the FujiMod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.",
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -1214,6 +1354,34 @@
       "title": "MENU THEME",
       "path": ["SET-UP"],
       "summary": "Choose the appearance of the menus.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "opacity_menu_item": {
+      "title": "MENU OPACITY",
+      "path": ["SET-UP", "SCREEN SET-UP"],
+      "summary": "Applies to Q and shooting menus. SET-UP and playback menus stay opaque.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "opacity_indicators_item": {
+      "title": "INDICATOR OPACITY",
+      "path": ["SET-UP", "SCREEN SET-UP"],
+      "summary": "Applies to the shooting overlay, including text, frames and guides.",
       "choices": {},
       "related": [],
       "changes": null,
@@ -1241,13 +1409,13 @@
       },
       "choice_credits": {}
     },
-    "edit_save_custom_setting": {
-      "title": "EDIT/SAVE CUSTOM SETTING",
+    "recipes": {
+      "title": "RECIPES",
       "path": ["SHOOTING MENU"],
-      "summary": null,
+      "summary": "RECIPES replaces SELECT CUSTOM SETTING and lists the recipes on the card. MENU/OK loads a recipe; RIGHT opens its actions and saved values. NEW RECIPE captures current settings. An asterisk marks edits to the loaded recipe. Loading a different recipe with edits opens Save Changes To <name>?: Save updates it before loading and Discard loads without saving. Save is initially selected; LEFT/RIGHT selects, OK confirms, UP/DOWN scrolls, and hardware BACK cancels. Dial previews never prompt. Pin favorites to C1–C7 for Q and Fn. Pins and pinned updates also refresh stock camera storage; C1–C7 load that copy with another card or no card.",
       "choices": {},
       "related": [],
-      "changes": "Each slot C1–C7 holds a recipe saved as a named file on the memory card. Choose SAVE CURRENT SETTINGS, SAVE AS NEW RECIPE, CHOOSE FROM SD CARD or CLEAR SLOT.",
+      "changes": null,
       "credits": {
         "premiere": false,
         "inspired": [],

@@ -110,7 +110,7 @@ def rprofile_boundary(board: Board) -> tuple[object, ...]:
     import copy
 
     native = board.native
-    state = json.loads(native.observation())
+    state = json.loads(native.inspection_observation())
     registers = tuple(
         tuple(
             native.reg_read(core, register)

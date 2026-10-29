@@ -767,9 +767,27 @@
             "null"
           ]
         },
+        "commit_ticks": {
+          "description": "Declared memory-configuration commit latency in guest ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "companion_irq_base": {
           "description": "Declared companion irq base.",
           "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "configuration_word": {
+          "description": "Declared read-only clock configuration input.",
+          "format": "uint32",
           "minimum": 0,
           "type": [
             "integer",
@@ -805,6 +823,15 @@
         },
         "transmit_request": {
           "description": "Declared transmit request.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "trigger_offset": {
+          "description": "Declared self-clearing reset-request offset.",
           "format": "uint64",
           "minimum": 0,
           "type": [

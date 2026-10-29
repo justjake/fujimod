@@ -98,19 +98,38 @@ impl CommandSequence {
         limits: FirmwareLimits,
         packet_bytes: u32,
     ) -> PyResult<Vec<Self>> {
-        usb::operations::verified::verified_writes(Address(address), &data, limits.memory, nz(packet_bytes)?)
-            .map(|batches| {
-                batches
-                    .into_iter()
-                    .map(|commands| Self { commands })
-                    .collect()
-            })
-            .map_err(error)
+        usb::operations::verified::verified_writes(
+            Address(address),
+            &data,
+            limits.memory,
+            nz(packet_bytes)?,
+        )
+        .map(|batches| {
+            batches
+                .into_iter()
+                .map(|commands| Self { commands })
+                .collect()
+        })
+        .map_err(error)
     }
 }
 
 #[pymethods]
 impl AsyncSession {
+    async fn invoke_queries(
+        &self,
+        plan: InstallQueries,
+    ) -> PyResult<Vec<(Py<PyBytes>, Py<PyBytes>)>> {
+        let limits = self.limits.memory;
+        self.with(move |s| Box::pin(async move { plan.inner.invoke(s, limits).await }))
+            .await
+            .map(|replies| {
+                replies
+                    .into_iter()
+                    .map(|(reply, output)| (bytes(reply), bytes(output)))
+                    .collect()
+            })
+    }
     async fn upload_owned(
         &self,
         image: OwnedUpload,
@@ -132,6 +151,27 @@ impl AsyncSession {
         })
         .await
         .map(|inner| data::UploadReply { inner })
+    }
+    async fn upload_owned_chunks(
+        &self,
+        image: OwnedUpload,
+        pointer: u32,
+        original: u32,
+        capacity_address: u32,
+        capacity: u32,
+    ) -> PyResult<()> {
+        let destination = install::UploadDestination::new(
+            Address(pointer),
+            Address(original),
+            Address(capacity_address),
+            nz(capacity)?,
+        )
+        .map_err(error)?;
+        let limits = self.limits.memory;
+        self.with(move |s| {
+            Box::pin(async move { image.inner.upload_chunks(s, destination, limits).await })
+        })
+        .await
     }
     async fn verify_owned(&self, image: OwnedUpload, window: data::DataWindow) -> PyResult<()> {
         self.with(move |s| Box::pin(async move { image.inner.verify(s, window.inner).await }))

@@ -55,7 +55,7 @@ impl Device for Flag {
 fn board(mmio: bool, declared: bool, peer: bool, irq: bool, mode: LoopMode) -> Board {
     let library = Library::linked().unwrap();
     let backing = Backing::aligned_zeros(0x4000, 4096).unwrap();
-    let memory = rprofile::memory::Memory::default();
+    let memory = fujimod_emulator_cpu_unicorn::memory::Memory::default();
     let cpus = (0..if peer { 2 } else { 1 })
         .map(|core| {
             let cpu = rprofile::core::Core::new(
@@ -357,7 +357,7 @@ fn interactive_fifo_mapping_bypasses_only_the_published_prefix() {
     }
     let library = Library::linked().unwrap();
     let backing = Backing::aligned_zeros(0x4000, 4096).unwrap();
-    let shared = rprofile::memory::Memory::default();
+    let shared = fujimod_emulator_cpu_unicorn::memory::Memory::default();
     let cpu = rprofile::core::Core::new(
         library.open(Model::CortexR5F, 1024 * 1024).unwrap(),
         Default::default(),

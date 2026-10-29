@@ -214,10 +214,14 @@ impl Decompressor {
             return Err("MOVRSZ requires ready hardware and a real owner".into());
         }
         let step = if let Some(r) = &self.state.resize {
-            if r.owner != cpu || r.phase != Phase::Configuring {
+            if r.owner != cpu {
                 return Err("MOVRSZ configuration is closed or owner changed".into());
             }
-            r.step
+            match r.phase {
+                Phase::Configuring => r.step,
+                Phase::Configured if o == ORDER[0] => 0,
+                _ => return Err("MOVRSZ configuration is closed or owner changed".into()),
+            }
         } else {
             0
         };

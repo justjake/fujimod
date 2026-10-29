@@ -9,6 +9,13 @@ pub trait SensorImage: Any + Send + Sync {
     fn render(&self, layout: ImageLayout, workers: usize) -> Result<Arc<[u8]>, String>;
     fn checkpoint(&self) -> Result<Checkpoint, String>;
     fn fingerprint(&self) -> serde_json::Value;
+    /// Inspect the pre-ISP ADC values at pixel centers on this uniform grid,
+    /// through the immutable sensor view and optical projection. Axis center
+    /// `(i + 0.5) / grid` spans the full readout rectangle (the full field when
+    /// no view is declared), then maps by floor to the prepared raster. The
+    /// prepared raster bins the scene to min(grid, source extent) on each axis.
+    /// Returns row-major RGB little-endian U16 values, bounded to 14-bit ADC.
+    fn sensor_sample_rgb(&self, width: usize, height: usize) -> Result<Vec<u8>, String>;
 }
 /// The radiance sampled at an image's exposure edge, kept for its metering.
 pub trait SensorExposure: Any + Send + Sync {
@@ -71,10 +78,11 @@ impl Pixels {
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         match self {
-            Self::Packed(p) => Ok(
-                fujimod_emulator_devices::checkpoint::Checkpoint::encode("image-pixels", &false)?
-                    .with_blobs(vec![p.clone()]),
-            ),
+            Self::Packed(p) => Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+                "image-pixels",
+                &false,
+            )?
+            .with_blobs(vec![p.clone()])),
             Self::Sensor(image) => Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
                 "image-pixels",
                 &true,
@@ -92,7 +100,9 @@ impl Pixels {
             if saved.children().len() != 1 || !saved.blobs().is_empty() {
                 return Err("invalid physical image pixels checkpoint".into());
             }
-            Ok(Self::Sensor((decoders(sensor)?.image)(&saved.children()[0])?))
+            Ok(Self::Sensor((decoders(sensor)?.image)(
+                &saved.children()[0],
+            )?))
         } else {
             if !saved.children().is_empty()
                 || saved.blobs().len() != 1
@@ -105,7 +115,9 @@ impl Pixels {
     }
     fn fingerprint(&self) -> serde_json::Value {
         match self {
-            Self::Packed(p) => serde_json::json!({"packed":fujimod_emulator_devices::fingerprint::bytes(p)}),
+            Self::Packed(p) => {
+                serde_json::json!({"packed":fujimod_emulator_devices::fingerprint::bytes(p)})
+            }
             Self::Sensor(image) => serde_json::json!({"sensor":image.fingerprint()}),
         }
     }
@@ -319,11 +331,17 @@ impl StatisticsFrames {
             &*self.0.lock().map_err(|_| "statistics-frame poisoned")?,
         )
     }
-    pub fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    pub fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let _: StatisticsFrame = saved.decode("statistics-frame")?;
         Ok(())
     }
-    pub fn restore_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    pub fn restore_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         *self.0.lock().map_err(|_| "statistics-frame poisoned")? =
             saved.decode::<StatisticsFrame>("statistics-frame")?;
         Ok(())

@@ -4,10 +4,12 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { localReleaseMiddleware } from '../scripts/local-releases.ts';
+import { loadRelease } from '../src/patch/release.ts';
 
 test('development routes serve the configured release, observe edits, and refuse other files/tags', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'local-release-'));
-  const middleware = localReleaseMiddleware(directory);
+  const options = { artifacts: directory, notes: undefined as string | undefined };
+  const middleware = localReleaseMiddleware(options);
   const server = createServer((request, response) =>
     middleware(request, response, () => {
       response.statusCode = 404;
@@ -21,7 +23,7 @@ test('development routes serve the configured release, observe edits, and refuse
         release: 'v2',
         built_utc: '2026-10-26T00:00:00Z',
         patches: { [digest]: 'test.fmpatch' },
-        notes: { name: 'notes.md', bytes: 4, sha256: digest },
+        notes: { name: 'notes.md' },
         firmwares: [
           {
             id: 'test-100',
@@ -69,6 +71,24 @@ test('development routes serve the configured release, observe edits, and refuse
     ])
       expect((await fetch(base + path)).status).toBe(404);
     expect((await fetch(`${base}/releases/current`, { method: 'POST' })).status).toBe(405);
+
+    // Keep the artifact copy stale: editing the source must still reach the real loader.
+    options.notes = join(directory, 'editable-notes');
+    await mkdir(options.notes);
+    const source = join(options.notes, 'v2.md');
+    await writeFile(source, '- **Feature:** Regular description.');
+    expect((await loadRelease(base))?.notesText).toBe('- **Feature:** Regular description.');
+    await writeFile(source, '- **Feature:** Revised description.');
+    expect((await loadRelease(base))?.notesText).toBe('- **Feature:** Revised description.');
+    expect(await (await fetch(`${base}/releases/v2/patches.json`)).json()).toEqual(index);
+    expect(await (await fetch(`${base}/releases/v2/test.fmpatch`)).text()).toBe('data');
+    const sourceHead = await fetch(`${base}/releases/v2/notes.md`, { method: 'HEAD' });
+    expect(sourceHead.headers.get('content-length')).toBe('35');
+    expect(await sourceHead.text()).toBe('');
+
+    // A missing configured source refuses the request instead of showing the old copy.
+    await rm(source);
+    expect((await fetch(`${base}/releases/v2/notes.md`)).status).toBe(404);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await rm(directory, { recursive: true, force: true });

@@ -81,6 +81,7 @@ export async function wasmSessionFixture() {
             {
               kind: 'sd-host',
               options: {
+                base: 0xfff70000,
                 protocol: 'sdhc',
                 transfer_ticks: 2,
                 clock_ticks: 2,

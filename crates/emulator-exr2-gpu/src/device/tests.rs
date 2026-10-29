@@ -88,10 +88,136 @@ fn setup_with_options(options: Options) -> (VectorGpu, Ram, [irq::InterruptContr
         controllers,
     )
 }
+fn dmp_pair(words: &mut Vec<u32>, index: u16, value: u32) {
+    words.extend([value, 0xf0000 | u32::from(index)]);
+}
+fn dmp_upload(words: &mut Vec<u32>, index: u16, data: &[u32], increment: bool) {
+    words.push(data[0]);
+    words.push(
+        (if increment { 1 << 31 } else { 0 })
+            | ((data.len() as u32 - 1) << 20)
+            | 0xf0000
+            | u32::from(index),
+    );
+    words.extend_from_slice(&data[1..]);
+    if data.len() % 2 == 0 {
+        words.push(0xa5a5a5a5);
+    }
+}
+fn dmp_packed(value: [f32; 4]) -> [u32; 3] {
+    let f = value.map(|value| {
+        let bits = value.to_bits();
+        if bits & 0x7fffffff == 0 {
+            0
+        } else {
+            ((bits >> 31) << 23) | (((bits >> 23 & 255) - 64) << 16) | (bits >> 7 & 65535)
+        }
+    });
+    [
+        (f[2] >> 16) | (f[3] << 8),
+        (f[1] >> 8 & 65535) | (f[2] << 16),
+        f[0] | (f[1] << 24),
+    ]
+}
+fn dmp_uniform_triangle() -> Vec<u32> {
+    let mut words = Vec::new();
+    for (index, value) in [
+        (0x250, 0x03020100),
+        (0x251, 0x0b0a0908),
+        (0x252, 0x0f0e0d0c),
+        (0x253, 0x1f1f1f1f),
+        (0x254, 0x1f1f1f1f),
+        (0x255, 0x1f1f1f1f),
+        (0x256, 0x1f1f1f1f),
+        (0x241, 0x430000),
+        (0x243, 0x430000),
+        (0x24d, 0x3f0000),
+        (0x24e, 0x3f0000),
+        (0x267, 0x001f001f),
+        (0x31e, 0x00200020),
+        (0x31d, 0x10000),
+        (0x307, 0xf00),
+        (0x300, 0x100),
+        (0x301, 0x01010000),
+        (0x402, 1 << 28),
+        (0x48b, 0x10),
+        (0x432, 15),
+        (0x49b, 0),
+        (0x4a5, 0),
+        (0x490, 0x80000000),
+    ] {
+        dmp_pair(&mut words, index, value);
+    }
+    dmp_upload(
+        &mut words,
+        0x49c,
+        &[0x4c000000, 0x4c220000, 0x88000000],
+        false,
+    );
+    dmp_upload(&mut words, 0x4a6, &[0x8d86c36f], false);
+    // The second shader instruction reads uniform slot zero for the color.
+    dmp_upload(&mut words, 0x491, &[0x3f800000, 0, 0, 0x3f800000], false);
+    for position in [
+        [-0.75, -0.75, 0., 1.],
+        [0.75, -0.75, 0., 1.],
+        [0., 0.75, 0., 1.],
+    ] {
+        dmp_upload(&mut words, 0x433, &dmp_packed(position), true);
+        dmp_upload(&mut words, 0x433, &dmp_packed([1., 0., 0., 1.]), true);
+    }
+    words
+}
 fn enable(controllers: &mut [irq::InterruptController; 2], host: &mut Ram, c: usize) {
     let mut cx = Cx::new(host, c, 0, 0);
     controllers[c].write(&mut cx, 0xfffb3084 + c as u64 * 4096, 4, 1 << (IRQ - 32));
     assert_eq!(cx.take_refusal(), None);
+}
+#[test]
+fn stock_gles_submit_register_executes_uniform_shader_draw() {
+    let address = 0xfff7c1e0;
+    assert_eq!(super::super::offset(address, 4).unwrap(), 0x20f0);
+    let mut options = options();
+    options.ram_bytes = 0x20000;
+    let (mut gpu, mut host, mut controllers) = setup_with_options(options);
+    enable(&mut controllers, &mut host, 1);
+
+    let command_address = 0x800usize;
+    let commands = dmp_uniform_triangle();
+    assert_eq!(commands.len() % 2, 0);
+    for (index, word) in commands.iter().enumerate() {
+        let start = command_address + index * 4;
+        host.bytes[start..start + 4].copy_from_slice(&word.to_le_bytes());
+    }
+
+    assert_eq!(
+        put(&mut gpu, &mut host, 0x20e0, (commands.len() * 4 / 8) as u64),
+        None
+    );
+    assert_eq!(
+        put(&mut gpu, &mut host, 0x20e8, (command_address / 8) as u64),
+        None
+    );
+    // Stock graphics_set_command_bases writes 1 to logical 0x20f0, which
+    // reaches this exact doubled-offset address and starts the GLES command list.
+    let mut cx = Cx::new(&mut host, 0, 0x12345678, 2);
+    gpu.write(&mut cx, address, 4, 1);
+    assert_eq!(cx.take_refusal(), None);
+
+    let deadline = gpu.next_deadline(host.now).unwrap();
+    assert_eq!(host.writes, 0);
+    host.now = deadline;
+    gpu.advance(&mut Cx::new(&mut host, 0, 0, 2));
+    assert_eq!(host.effects, [(1, IRQ.into())]);
+    assert!(host.writes > 0);
+    assert_eq!(
+        host.bytes[0x10000..0x10000 + 32 * 32 * 4]
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .filter(|pixel| **pixel == [255, 0, 0, 255])
+            .count(),
+        288
+    );
 }
 fn put(gpu: &mut VectorGpu, host: &mut Ram, logical: u64, value: u64) -> Option<String> {
     let mut cx = Cx::new(host, 0, 0x12345678, 2);

@@ -10,16 +10,37 @@ import {
 test('module factory receives independent binary and asset resolution, then configures', async () => {
   let received: { wasmBinary: ArrayBuffer; locateFile(path: string): string } | undefined;
   const configured: ModuleOptions[] = [];
+  let releaseConfiguration!: () => void;
+  const configuration = new Promise<void>((resolve) => {
+    releaseConfiguration = resolve;
+  });
+  let configurationStarted = false,
+    moduleLoaded = false;
   const binary = new Uint8Array([0, 97, 115, 109]).buffer;
-  await instantiateEmulatorModule(
+  const pending = instantiateEmulatorModule(
     async (options) => {
       received = options;
-      return { configure: (value: ModuleOptions) => configured.push(value), Camera: class {} };
+      return {
+        configure: async (value: ModuleOptions) => {
+          configurationStarted = true;
+          await configuration;
+          configured.push(value);
+        },
+        Camera: class {},
+      };
     },
     binary,
     (path) => new URL(path, 'https://assets.example/runtime/camera.wasm').href,
     { executionPolicy: 'exact', tcgJit: false },
   );
+  void pending.then(() => {
+    moduleLoaded = true;
+  });
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  assert.equal(configurationStarted, true);
+  assert.equal(moduleLoaded, false);
+  releaseConfiguration();
+  await pending;
   assert.equal(received?.wasmBinary, binary);
   assert.equal(received?.locateFile('camera.wasm'), 'https://assets.example/runtime/camera.wasm');
   assert.deepEqual(configured, [{ executionPolicy: 'exact', tcgJit: false }]);
@@ -51,21 +72,21 @@ test('manifest parsing validates the versioned runtime and observation shape', (
     wasm: 'camera.wasm',
     construction: 'session',
     executionPolicy: 'exact',
+    dmpCpuRenderer: true,
     session: {},
     ticksPerSecond: 12_000_000,
     bootTicks: 0,
     output: 1,
     observations: [{ name: 'frame_count', address: '1234', size: 4 }],
   });
-  assert.equal(parseEmulatorManifest({ ...manifest, bootInstructions: 42 }).bootInstructions, 42);
-  assert.equal(manifest.bootInstructions, undefined);
-  for (const bootInstructions of [0, -1, 1.5, NaN, Infinity, '42', Number.MAX_SAFE_INTEGER + 1])
-    assert.throws(
-      () => parseEmulatorManifest({ ...manifest, bootInstructions }),
-      /Unsupported emulator manifest/,
-    );
   assert.equal(manifest.output, 1);
   assert.equal(manifest.executionPolicy, 'exact');
+  assert.equal(manifest.dmpCpuRenderer, true);
+  assert.equal(parseEmulatorManifest({ ...manifest, dmpCpuRenderer: false }).dmpCpuRenderer, false);
+  assert.throws(
+    () => parseEmulatorManifest({ ...manifest, dmpCpuRenderer: 'true' }),
+    /Unsupported emulator manifest/,
+  );
   assert.equal(
     parseEmulatorManifest({ ...manifest, executionPolicy: undefined }).executionPolicy,
     undefined,

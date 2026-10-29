@@ -1,6 +1,7 @@
 //! Concurrent CPU windows with owner-only device and memory barriers.
 use super::*;
 use fujimod_emulator_cpu::{Clock, RunStatus, RunToken};
+use std::time::Instant;
 
 #[cfg(test)]
 mod tests;
@@ -73,6 +74,7 @@ impl Board {
         budget: usize,
         quantum: usize,
     ) -> Result<(), String> {
+        let started = Instant::now();
         {
             let mut state = self.state.borrow_mut();
             state.parallel = Some(Epoch::new(
@@ -92,6 +94,14 @@ impl Board {
         state.parallel = None;
         self.next_core.set((cores[0] + 1) % self.cpus.len());
         self.slice_left.set(0);
+        drop(state);
+        self.interactive_windows
+            .set(self.interactive_windows.get().saturating_add(1));
+        self.interactive_host_duration_ns.set(
+            self.interactive_host_duration_ns
+                .get()
+                .saturating_add(started.elapsed().as_nanos()),
+        );
         result
     }
 

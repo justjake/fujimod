@@ -12,7 +12,9 @@ to Rust.
 
 Dev Tools opens on a service-mode entry guide, Connect camera, and a simulated
 camera choice among the emulator's saved cameras (see DESIGN.md). The guide
-covers the power-on chord, the OFF-switch warning and the battery-removal exit.
+starts with switching the camera OFF and removing and reinserting the battery,
+then covers the power-on chord, the OFF-switch warning and the battery-removal exit.
+Battery instructions use the shared hand-drawn battery-cycle SVG.
 In service mode, do not use the OFF switch: shutdown factory-resets the camera.
 Restart by removing the battery. After connecting, Dev Tools confirms service
 mode, arms the RAM reset guard and enables debug access in RAM, which the

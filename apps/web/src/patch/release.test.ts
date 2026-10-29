@@ -1,10 +1,10 @@
 import { expect, test, vi } from 'vite-plus/test';
 import { loadRelease } from './release.ts';
-import { validateIndex, verifyNotes, verifyPatch } from './catalog.ts';
+import { validateIndex, verifyPatch } from './catalog.ts';
 import { sha256 } from './patcher.ts';
 const source = 'a'.repeat(64);
 async function fixture(installable = false, fpupdate = false) {
-  const notes = new TextEncoder().encode('# Release\n\nVerified notes.');
+  const notes = '# Release\n\nRelease notes.';
   const program = new Uint8Array(20);
   const identity = { bytes: 1, sha256: source };
   const metadata = new TextEncoder().encode(
@@ -32,7 +32,7 @@ async function fixture(installable = false, fpupdate = false) {
     schema: 2 as const,
     release: 'v2',
     patches: { [source]: 'test.fmpatch' },
-    notes: { name: 'notes.md', bytes: notes.length, sha256: await sha256(notes) },
+    notes: { name: 'notes.md' },
     firmwares: [
       {
         id: 'test-100',
@@ -70,7 +70,7 @@ async function fixture(installable = false, fpupdate = false) {
   );
   return { notes, index, patch, fetcher, files };
 }
-test('runtime release exposes metadata, normalized switches and verified Markdown at same-origin URLs', async () => {
+test('runtime release fetches metadata and Markdown at same-origin URLs', async () => {
   const f = await fixture();
   const release = await loadRelease('https://fujimod.com/recovery/', f.fetcher);
   expect(release).toMatchObject({
@@ -78,7 +78,7 @@ test('runtime release exposes metadata, normalized switches and verified Markdow
     name: 'Release 2',
     prerelease: true,
     assetBase: 'https://fujimod.com/releases/v2/',
-    notesText: '# Release\n\nVerified notes.',
+    notesText: '# Release\n\nRelease notes.',
     firmwares: [{ downloads: { sd_card: true, installable: false } }],
   });
   expect(
@@ -100,15 +100,12 @@ test('missing notes produces no text, and omitted download switches default to f
   f.files.set('/releases/v2/patches.json', Response.json(raw));
   expect((await loadRelease('https://fujimod.com/', f.fetcher))?.notesText).toBeUndefined();
 });
-test('rejects old schemas, unsafe notes names, sizes, hashes and malformed download switches', async () => {
+test('rejects old schemas, unsafe notes filenames and malformed download switches', async () => {
   const { index } = await fixture();
   for (const notes of [
     null,
     { ...index.notes, name: '../notes.md' },
     { ...index.notes, name: 'patches.json' },
-    { ...index.notes, bytes: -1 },
-    { ...index.notes, bytes: 1024 ** 2 + 1 },
-    { ...index.notes, sha256: 'bad' },
   ])
     expect(() => validateIndex({ ...index, notes })).toThrow();
   expect(() => validateIndex({ ...index, schema: 1 })).toThrow();
@@ -117,29 +114,31 @@ test('rejects old schemas, unsafe notes names, sizes, hashes and malformed downl
       validateIndex({ ...index, firmwares: [{ ...index.firmwares[0], downloads }] }),
     ).toThrow();
 });
-test('notes reject changed content, length and invalid UTF-8', async () => {
-  const { index, notes, files, fetcher } = await fixture();
-  const changed = notes.slice();
-  changed[0] ^= 1;
-  await expect(verifyNotes(index.notes, changed)).rejects.toThrow(/integrity/);
-  await expect(verifyNotes(index.notes, notes.slice(1))).rejects.toThrow(/integrity/);
-  const invalid = new Uint8Array([255]);
-  await expect(
-    verifyNotes({ name: 'notes.md', bytes: 1, sha256: await sha256(invalid) }, invalid),
-  ).rejects.toThrow();
-  files.set('/releases/v2/notes.md', new Response(changed));
-  await expect(loadRelease('https://fujimod.com/', fetcher)).rejects.toThrow(/integrity/);
+test('edited Markdown is fetched as text without a checksum or byte count', async () => {
+  const { files, fetcher } = await fixture();
+  files.set('/releases/v2/notes.md', new Response('Updated notes, with a different length.'));
+  expect((await loadRelease('https://fujimod.com/', fetcher))?.notesText).toBe(
+    'Updated notes, with a different length.',
+  );
 });
-test('installable requires a verified FPUPDATE output in both release loading and standalone verification', async () => {
+test('displaying a release never downloads firmware patches; patch use verifies its outputs', async () => {
   const bad = await fixture(true);
   await expect(
     verifyPatch(validateIndex(bad.index), bad.index.firmwares[0], bad.patch),
   ).rejects.toThrow(/index/);
-  await expect(loadRelease('https://fujimod.com/', bad.fetcher)).rejects.toThrow(/index/);
-  const good = await fixture(true, true);
   expect(
-    (await loadRelease('https://fujimod.com/', good.fetcher))?.firmwares[0].downloads.installable,
+    (await loadRelease('https://fujimod.com/', bad.fetcher))?.firmwares[0].downloads.installable,
   ).toBe(true);
+  expect(bad.fetcher.mock.calls).toHaveLength(3);
+  expect(
+    bad.fetcher.mock.calls.some(([url]) =>
+      (url instanceof Request ? url.url : url.toString()).endsWith('.fmpatch'),
+    ),
+  ).toBe(false);
+  const good = await fixture(true, true);
+  await expect(
+    verifyPatch(validateIndex(good.index), good.index.firmwares[0], good.patch),
+  ).resolves.toMatchObject({ outputs: { fpupdate: { bytes: 1 } } });
 });
 test('no current release is allowed, but upstream errors and tag mismatches fail', async () => {
   const f = await fixture();

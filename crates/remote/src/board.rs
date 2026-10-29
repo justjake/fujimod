@@ -5,6 +5,7 @@ use fujimod_emulator_session::{
     checkpoint::Snapshot as Checkpoint,
     contact_driver::{Actuator, Pose},
 };
+use std::collections::BTreeSet;
 
 /// Access is scoped to stopped-board calls, so language owners can retain a board.
 pub trait SessionOwner {
@@ -36,6 +37,9 @@ pub struct BoardBackend<S> {
     now: u64,
     /// Last position of each finger down, which its release reports.
     touches: std::collections::BTreeMap<String, (u16, u16)>,
+    /// Physical inputs currently held or awaiting a checked position result.
+    active_inputs: BTreeSet<String>,
+    pending_inputs: BTreeSet<String>,
 }
 pub type BoardRemote<S> = Connection<BoardBackend<S>>;
 impl<S: SessionOwner> Connection<BoardBackend<S>> {
@@ -50,6 +54,8 @@ impl<S: SessionOwner> Connection<BoardBackend<S>> {
                 options,
                 now,
                 touches: Default::default(),
+                active_inputs: Default::default(),
+                pending_inputs: Default::default(),
             },
             facts,
         )
@@ -66,6 +72,9 @@ impl<S: SessionOwner> Connection<BoardBackend<S>> {
         // A restored panel holds no remote finger.
         self.backend.touches.clear();
         self.touching.clear();
+        self.backend.active_inputs.clear();
+        self.backend.pending_inputs.clear();
+        self.backend.update_guest_profile_phase()?;
         Ok(())
     }
     pub fn set_scene(&mut self, scene: &serde_json::Value) -> Result<()> {
@@ -77,6 +86,18 @@ impl<S: SessionOwner> Connection<BoardBackend<S>> {
         while self.now() < deadline {
             self.wait(&ReadSet::default(), deadline).await?;
         }
+        Ok(())
+    }
+}
+impl<S: SessionOwner> BoardBackend<S> {
+    fn update_guest_profile_phase(&mut self) -> Result<()> {
+        let phase = if self.active_inputs.is_empty() && self.pending_inputs.is_empty() {
+            fujimod_emulator::board::GuestProfilePhase::Idle
+        } else {
+            fujimod_emulator::board::GuestProfilePhase::Key
+        };
+        self.owner
+            .with_session(|s| s.board.set_guest_profile_phase(phase))?;
         Ok(())
     }
 }
@@ -210,28 +231,63 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                     u16::try_from(x).map_err(|_| "Touch x exceeds 16 bits")?,
                     u16::try_from(y).map_err(|_| "Touch y exceeds 16 bits")?,
                 );
-                self.owner.with_session(|s| {
+                let ending = input.state == InputState::TouchEnd;
+                if !ending {
+                    self.active_inputs.insert(id.into());
+                    self.update_guest_profile_phase()?;
+                }
+                let result = self.owner.with_session(|s| {
                     let (node, script) = s.touch_input(id, phase, point.0, point.1)?;
                     s.touch(&node, &script)
-                })?;
-                if input.state == InputState::TouchEnd {
+                });
+                if result.is_err() && !ending {
+                    self.active_inputs.remove(id);
+                    let _ = self.update_guest_profile_phase();
+                }
+                result?;
+                if ending {
                     self.touches.remove(id);
+                    self.active_inputs.remove(id);
+                    self.update_guest_profile_phase()?;
                 } else {
                     self.touches.insert(id.into(), point);
                 }
                 return Ok(());
             }
-            self.owner.with_session(|s| match &input.state {
+            let ending = input.state == InputState::Released;
+            let transient = matches!(input.state, InputState::Turn(_) | InputState::Position(_));
+            if !ending {
+                if transient {
+                    self.pending_inputs.insert(id.into());
+                } else {
+                    self.active_inputs.insert(id.into());
+                }
+                self.update_guest_profile_phase()?;
+            }
+            let result = self.owner.with_session(|s| match &input.state {
                 InputState::Turn(steps) => {
                     let (node, cycles) = s.rotation(id, *steps)?;
                     s.rotate(&node, cycles)
                 }
                 _ => drive(s, id, &input.state),
-            })
+            });
+            if result.is_err() && !ending {
+                self.active_inputs.remove(id);
+                self.pending_inputs.remove(id);
+                let _ = self.update_guest_profile_phase();
+            }
+            result?;
+            if ending {
+                self.active_inputs.remove(id);
+                self.update_guest_profile_phase()?;
+            }
+            Ok(())
         })
     }
     fn accepted(&mut self, input: &Input, facts: &Facts, reads: &mut ReadSet) -> Result<bool> {
         if matches!(input.state, InputState::Turn(_)) {
+            self.pending_inputs.remove(input.control.id());
+            self.update_guest_profile_phase()?;
             return Ok(true);
         }
         if input.state.is_touch() {
@@ -248,11 +304,16 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                 })
             });
         }
-        self.owner.with_session(|s| {
+        let accepted = self.owner.with_session(|s| {
             tracked(s, reads, |s| {
                 pose_accepted(s, input.control.id(), &input.state)
             })
-        })
+        })?;
+        if accepted && matches!(input.state, InputState::Position(_)) {
+            self.pending_inputs.remove(input.control.id());
+            self.update_guest_profile_phase()?;
+        }
+        Ok(accepted)
     }
     fn frame<'a>(
         &'a mut self,

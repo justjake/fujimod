@@ -3,30 +3,29 @@ export function PersonalNote() {
     <aside class="personal-note" aria-label="A note from Jake">
       <p>Hey,</p>
       <p>
-        I did some shooting around the house with FujiMod on my X70. I haven't tested every feature
-        on camera yet (there’s so many!), but most tests pass in the emulator So I feel it's safe for
-        folks to start testing FujiMod for X70 dual booting from the SD card.
+        I’m making FujiMod to unlock your camera’s full potential. We’re starting with the X70, with
+        23 new features and more freedom to make the camera work your way. I’d love to bring it to
+        more Fujifilm cameras over time.
       </p>
       <p>
-        We're working on concepts of a master plan to bring Fujimod to the rest of the EXR2 bodies
-        (X-T1, X-E2(S), …) and beyond. If you're a developer with a camera, you’re feeling brave, and
-        you’ve got tokens to burn, you can help out by joining{' '}
-        <a href="https://discord.gg/YN4Qqq365">#fujimod on the FujiHack discord</a>
+        You can try the first release by dual-booting from an SD card without flashing your camera.
+        I haven’t tested every feature on camera yet (there are a lot!) so I’m sharing it for other
+        X70 owners to test and help improve.
       </p>
       <p>
-        Head to <a href="#software">SOFTWARE</a> below to try it out. Even if you don't have an X70,
-        you can run FujiMod in the emulator on this website, although it's a bit slow ( Enable
-        webcam access and use your imagination 😂).
+        Even without an X70, you can try FujiMod in your browser. The emulator is a bit slow, but
+        you can enable webcam input and give it a go.
+      </p>
+      <p>
+        Due to copyright, we can’t distribute ready-made builds of FujiMod since it’s based on the
+        official firmware. Use the search box near the release notes to find the download link from
+        Fujifilm for your firmware. Then upload it to this page so we can build FujiMod for your
+        camera. <a href="#software">Get started below</a>
       </p>
       <p class="signature">
-        Love,
+        Yours truly,
         <br />
         <span class="signature-name">Jake</span>
-      </p>
-      <p>
-        PS: All of this is unreviewed vibe-coded slop that could be hazardous to your camera’s
-        mental, emotional, or digital health. If you're uncomfortable with risk to your camera,
-        please don't use it.
       </p>
     </aside>
   );

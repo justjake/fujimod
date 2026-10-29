@@ -8,7 +8,9 @@ import { toolAt, type Wizard } from './routes';
 import { remoteControlUrl } from './sharing';
 import { pageCameraModel } from './usb-camera-model';
 import { Workbench } from './Workbench';
+import { SiteHeader } from '../ui/site-header';
 import '../home/site.css';
+import '../navigation.css';
 import './style.css';
 
 declare const __FUJIMOD_SIMULATOR_BUILD__: string;
@@ -86,18 +88,7 @@ export default function DevTools(props: { model?: CameraModel; supported?: boole
   });
   return (
     <div class="shell dev-tools">
-      <header>
-        <a href="../" aria-label="Fujimod">
-          <img src="../brand.png" alt="Fujimod" width="110" height="28" />
-        </a>
-        <nav aria-label="Pages">
-          <a href="../">Emulator</a>
-          <a href="./" aria-current="page">
-            Dev Tools
-          </a>
-          <a href="../recovery/">Recovery</a>
-        </nav>
-      </header>
+      <SiteHeader root="../" current="dev-tools" />
       <Workbench model={model} usbSupported={usbSupported()} initialWizard={initialWizard()} />
     </div>
   );

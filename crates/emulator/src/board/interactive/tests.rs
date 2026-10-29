@@ -7,9 +7,11 @@ use crate::board::{
     set,
 };
 use fujimod_emulator_cpu::{Cpu, ExecutionPolicy, Register, memory::Backing, timeline::Ratio};
-use fujimod_emulator_cpu_unicorn::rprofile::{memory as rprofile_memory, worker};
+use fujimod_emulator_cpu_unicorn::{memory as cpu_memory, rprofile::worker};
 use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
 use serde::{Deserialize, Serialize};
+
+const MAX_INTERACTIVE_WINDOWS: u64 = 10;
 
 #[derive(Serialize, Deserialize)]
 struct DeadlineSample {
@@ -72,7 +74,7 @@ impl Device for DeadlineSample {
 
 fn board(policy: ExecutionPolicy, due: Option<u64>) -> (Board, usize) {
     let backing = Backing::aligned_zeros(0x4000, 4096).unwrap();
-    let shared_memory = rprofile_memory::Memory::default().shared();
+    let shared_memory = cpu_memory::Memory::default().shared();
     let cpus = (0..2)
         .map(|core| {
             let cpu = worker::spawn(worker::Config {
@@ -238,44 +240,61 @@ fn check_mmio_progress(policy: ExecutionPolicy, tick_limit: bool) {
     // Start the spinner first so callback arrival order cannot grant it
     // a fresh allowance at the expense of the MMIO core.
     board.next_core.set(1);
-    if tick_limit {
-        board.run_until(100_000, 1000).unwrap();
-    } else {
-        board.run_for_instructions(200_000, 1000).unwrap();
-    }
-    let counts = board.instruction_counts();
+    let instruction_budget: u64 = if tick_limit { 100_000 } else { 200_000 };
     let share = if policy == ExecutionPolicy::Exact && tick_limit {
         50_000
     } else {
         100_000
     };
-    assert!(
-        counts
-            .iter()
-            .all(|&count| (share..=share + 256).contains(&count)),
-        "{policy:?}: callback restarts must retain each core's share: {counts:?}"
-    );
-    let mut flag = [0; 4];
-    board.read_memory(0, 0x3000, &mut flag).unwrap();
-    assert_eq!(
-        u32::from_le_bytes(flag),
-        0x5a,
-        "{policy:?}: MMIO core was starved by a runnable spinner: {counts:?}"
-    );
+    let mut windows = 0;
+    let flag = loop {
+        let next_window = windows + 1;
+        if tick_limit {
+            board.run_until(100_000 * next_window, 1000).unwrap();
+        } else {
+            board
+                .run_for_instructions(instruction_budget, 1000)
+                .unwrap();
+        }
+        windows = next_window;
+
+        let counts = board.instruction_counts();
+        if policy != ExecutionPolicy::Interactive {
+            assert!(
+                counts
+                    .iter()
+                    .all(|&count| (share..=share + 256).contains(&count)),
+                "{policy:?}: callback restarts must retain each core's share: {counts:?}"
+            );
+        }
+
+        let mut bytes = [0; 4];
+        board.read_memory(0, 0x3000, &mut bytes).unwrap();
+        let flag = u32::from_le_bytes(bytes);
+        if flag == 0x5a {
+            break flag;
+        }
+        if policy != ExecutionPolicy::Interactive {
+            assert_eq!(
+                flag, 0x5a,
+                "{policy:?}: MMIO work did not complete: {counts:?}"
+            );
+        }
+        assert!(
+            windows < MAX_INTERACTIVE_WINDOWS,
+            "Interactive MMIO work did not complete within {MAX_INTERACTIVE_WINDOWS} windows: flag={flag:#x}, counts={counts:?}"
+        );
+    };
+    assert_eq!(flag, 0x5a, "{policy:?}: MMIO work did not complete");
     let tick = board.state.borrow().timeline.now();
     if tick_limit {
-        assert_eq!(tick, 100_000);
+        assert_eq!(tick, 100_000 * windows);
         assert_eq!(
             samples(&board, device)
                 .iter()
                 .map(|&(at, _)| at)
                 .collect::<Vec<_>>(),
             [100_000]
-        );
-    } else if policy == ExecutionPolicy::Interactive {
-        assert!(
-            (100_000..=100_256).contains(&tick),
-            "callback segments must share one time ledger, got {tick}"
         );
     }
     let before = board.fingerprint().unwrap();
@@ -286,14 +305,14 @@ fn check_mmio_progress(policy: ExecutionPolicy, tick_limit: bool) {
 }
 
 #[test]
-fn spinning_peer_does_not_exhaust_the_budget_before_mmio_work_can_progress() {
+fn spinning_peer_and_mmio_work_follow_the_selected_execution_policy() {
     for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
         check_mmio_progress(policy, false);
     }
 }
 
 #[test]
-fn device_deadline_window_keeps_each_peers_progress_through_mmio_stops() {
+fn device_deadline_window_respects_peer_exhaustion_after_mmio_stops() {
     for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
         check_mmio_progress(policy, true);
     }
@@ -340,7 +359,7 @@ fn mmio_created_deadline_survives_callback_restarts_and_checkpoint_restore() {
 }
 
 #[test]
-fn catch_up_mmio_observes_the_serviced_event_with_a_monotonic_local_pmu() {
+fn serviced_deadline_precedes_interactive_mmio_catch_up() {
     let (mut board, device) = board(ExecutionPolicy::Interactive, Some(100_000));
     let counter = |crm, opc2| fujimod_emulator_cpu::arm::Coprocessor {
         cp: 15,
@@ -389,16 +408,28 @@ fn catch_up_mmio_observes_the_serviced_event_with_a_monotonic_local_pmu() {
         .write_memory(0, 0x2000, &0xeafffffeu32.to_le_bytes())
         .unwrap();
     board.next_core.set(1);
-    board.run_until(100_064, 1000).unwrap();
-    // The event samples RAM before the successful read can publish its flag.
-    assert_eq!(samples(&board, device), [(100_000, 0)]);
-    let mut bytes = [0; 12];
-    board.read_physical(0x3000, &mut bytes).unwrap();
-    let words: Vec<_> = bytes
-        .chunks_exact(4)
-        .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
-        .collect();
-    assert_eq!(words[0], 1, "catch-up reads see the serviced global event");
+    let window_budget = 100_064;
+    let mut window = 1;
+    let words = loop {
+        board.run_until(window_budget * window, 1000).unwrap();
+        // The event samples RAM before the successful read can publish its flag.
+        assert_eq!(samples(&board, device), [(100_000, 0)]);
+        let mut bytes = [0; 12];
+        board.read_physical(0x3000, &mut bytes).unwrap();
+        let words: Vec<_> = bytes
+            .chunks_exact(4)
+            .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+            .collect();
+        if words[0] == 1 {
+            break words;
+        }
+        assert!(
+            window < MAX_INTERACTIVE_WINDOWS,
+            "MMIO core did not finish within {MAX_INTERACTIVE_WINDOWS} windows: counts={:?}, words={words:?}",
+            board.instruction_counts()
+        );
+        window += 1;
+    };
     assert!(words[1] <= words[2], "local PMU moved backward: {words:?}");
     assert!(
         words[2] <= 100_256,

@@ -5,6 +5,17 @@ by the caller. It checks the complete DAT identity, decoded source hashes,
 initialized mappings, BSS, expected old words, header policy, and file names.
 The official DAT is included unchanged at its required card-root name.
 
+## Starting from an SD card
+
+Switch the camera OFF, then remove and reinsert the battery before switching it
+on with the model's SD boot buttons held. Follow the body's USB connection
+instructions too.
+
+High-performance modes can leave a camera asleep after the OFF
+switch is used. Resuming from that state can skip SD card boot. This has been
+observed on the X70 with HIGH PERFORMANCE enabled; removing and reinserting
+the battery forces a full startup.
+
 ## Scope and card contract
 
 SD boot has two purposes: recover a camera after a bad firmware flash by

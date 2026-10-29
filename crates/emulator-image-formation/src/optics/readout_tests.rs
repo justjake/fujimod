@@ -96,7 +96,9 @@ fn scalar(p: &Projection, frame: &ExposedFrame, shift: f64) -> Arc<[u8]> {
     let illumination = match p.spec.relative_illumination {
         Illumination::Uniform => None,
         Illumination::CosineFourth => Some(Field::cosine_fourth(p.spec.focal_length_mm + shift)),
-        Illumination::RadialPolynomial { .. } => unreachable!("reference covers the thin-lens laws"),
+        Illumination::RadialPolynomial { .. } => {
+            unreachable!("reference covers the thin-lens laws")
+        }
     };
     encode_response(
         &result,
@@ -104,6 +106,7 @@ fn scalar(p: &Projection, frame: &ExposedFrame, shift: f64) -> Arc<[u8]> {
         [w, h],
         p.spec.sensor_width_mm,
         illumination,
+        frame.noise_response(),
     )
 }
 #[test]
@@ -277,6 +280,34 @@ fn large_scene_sparse_cache_matches_fresh_projection_and_invalidates() {
     }
 }
 #[test]
+fn sparse_noisy_projection_uses_the_same_sites_as_full_readout() {
+    use fujimod_emulator_imaging::scene::noise::SensorNoise;
+    let mut frame = Frame::new(17, 13, FramePixels::Rgb24(vec![128; 17 * 13 * 3].into())).unwrap();
+    frame.noise = Some(SensorNoise {
+        seed: 15,
+        realization: 2,
+        full_well_electrons: 20000.,
+        read_noise_electrons: 3.,
+    });
+    let p = projection(Illumination::CosineFourth);
+    let mut sparse = exposure(Arc::new(frame), 0.0003);
+    let mut full = sparse.clone();
+    p.prepare_readout(&mut sparse, 0.5, [31, 19], [3, 5, 7, 4])
+        .unwrap();
+    p.prepare(&mut full, 0.5).unwrap();
+    for y in 0..13 {
+        for x in 0..17 {
+            assert_eq!(sparse.sample_source(x, y), full.sample_source(x, y));
+        }
+    }
+    let restored = ExposedFrame::from_checkpoint(&sparse.checkpoint().unwrap()).unwrap();
+    for y in 0..13 {
+        for x in 0..17 {
+            assert_eq!(sparse.sample_source(x, y), restored.sample_source(x, y));
+        }
+    }
+}
+#[test]
 fn sparse_projection_checkpoint_is_canonical_and_observational() {
     let frame = Arc::new(
         Frame::new(
@@ -350,10 +381,11 @@ fn vectorizable_response_rounding_matches_canonical_full_precision() {
                 scale,
                 23.6,
                 illumination,
+                None,
             );
             assert_eq!(
                 projected.materialize(),
-                encode_response(&linear, scale, dimensions, 23.6, illumination)
+                encode_response(&linear, scale, dimensions, 23.6, illumination, None)
             );
         }
     }

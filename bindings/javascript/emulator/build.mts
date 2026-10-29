@@ -31,6 +31,7 @@ const unicornLicenses = [
 export interface BuildOptions {
   out: string;
   stagePackage: boolean;
+  incremental: boolean;
   profiling: boolean;
   rustSimd128: boolean;
   cSimd128: boolean;
@@ -97,6 +98,7 @@ export function options(args: string[], base = root): BuildOptions {
     options: {
       out: { type: 'string', default: defaultOutput },
       'stage-package': { type: 'boolean', default: false },
+      incremental: { type: 'boolean', default: false },
       profiling: { type: 'boolean', default: false },
       'rust-simd128': { type: 'boolean', default: false },
       'c-simd128': { type: 'boolean', default: false },
@@ -114,8 +116,10 @@ export function options(args: string[], base = root): BuildOptions {
     !['0', '1', '2', '3', 's', 'z'].includes(values['opt-level'])
   )
     throw new Error('Invalid --opt-level value.');
-  const codegenUnits =
-    values['codegen-units'] === undefined ? undefined : Number(values['codegen-units']);
+  const incremental = values.incremental;
+  const codegenUnits = values['codegen-units'] === undefined
+    ? incremental ? 256 : undefined
+    : Number(values['codegen-units']);
   if (codegenUnits !== undefined && (!Number.isSafeInteger(codegenUnits) || codegenUnits < 1))
     throw new Error('--codegen-units must be a positive integer.');
   if (values.allocator !== 'dlmalloc' && values.allocator !== 'emmalloc')
@@ -123,11 +127,12 @@ export function options(args: string[], base = root): BuildOptions {
   return {
     out: resolve(base, values.out),
     stagePackage: values['stage-package'],
+    incremental,
     profiling: values.profiling,
     rustSimd128: values['rust-simd128'],
     cSimd128: values['c-simd128'],
-    lto: values.lto,
-    optLevel: values['opt-level'],
+    lto: values.lto ?? (incremental ? 'off' : undefined),
+    optLevel: values['opt-level'] ?? (incremental ? '2' : undefined),
     codegenUnits,
     allocator: values.allocator,
   };
@@ -234,10 +239,11 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
     CAMERA_UNICORN_STATIC_DIR: unicorn,
     PATH: [dirname(wasmBindgen(source)), source.PATH].filter(Boolean).join(delimiter),
   };
-  if (selected.lto !== undefined) env.CARGO_PROFILE_RELEASE_LTO = selected.lto;
-  if (selected.optLevel !== undefined) env.CARGO_PROFILE_RELEASE_OPT_LEVEL = selected.optLevel;
+  if (selected.lto !== undefined) env.CARGO_PROFILE_DIST_LTO = selected.lto;
+  if (selected.optLevel !== undefined) env.CARGO_PROFILE_DIST_OPT_LEVEL = selected.optLevel;
   if (selected.codegenUnits !== undefined)
-    env.CARGO_PROFILE_RELEASE_CODEGEN_UNITS = String(selected.codegenUnits);
+    env.CARGO_PROFILE_DIST_CODEGEN_UNITS = String(selected.codegenUnits);
+  if (selected.incremental) env.CARGO_PROFILE_DIST_INCREMENTAL = 'true';
 
   const rustFlags =
     env.CARGO_ENCODED_RUSTFLAGS !== undefined
@@ -275,7 +281,6 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
   const cmakeConfigure = [
     'emcmake',
     'cmake',
-    '--fresh',
     '-S',
     join(root, '../../crates/emulator-cpu-unicorn/vendor/unicorn'),
     '-B',
@@ -298,7 +303,7 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
     '-o',
     join(out, 'camera.mjs'),
     // Keep the standalone module within static hosting's per-file size budget.
-    '-Oz',
+    selected.incremental ? '-O1' : '-Oz',
     '--no-entry',
     '-pthread',
     '-sPTHREAD_POOL_SIZE=2',
@@ -384,6 +389,36 @@ export function validateToolchain(pinned = pinnedToolchain()): void {
     throw new Error(`Could not run Rust toolchain ${pinned.nightly}: ${rustcVersion.trim()}.`);
 }
 
+export function unicornCacheMatches(cachePath: string, plan: BuildPlan): boolean {
+  if (!existsSync(cachePath)) return false;
+  const entries = new Map<string, string>();
+  for (const line of readFileSync(cachePath, 'utf8').split('\n')) {
+    const match = /^([^/#][^:]*):[^=]*=(.*)$/.exec(line);
+    if (match) entries.set(match[1]!, match[2]!);
+  }
+  const sourceIndex = plan.cmakeConfigure.indexOf('-S');
+  const source = plan.cmakeConfigure[sourceIndex + 1];
+  const emsdk = plan.env.EMSDK;
+  if (!source || !emsdk) return false;
+  const expected = {
+    BUILD_SHARED_LIBS: 'OFF',
+    CMAKE_BUILD_TYPE: 'Release',
+    CMAKE_C_FLAGS: plan.cFlags.join(' '),
+    CMAKE_GENERATOR: 'Ninja',
+    CMAKE_HOME_DIRECTORY: resolve(source),
+    CMAKE_TOOLCHAIN_FILE: join(
+      emsdk,
+      'upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake',
+    ),
+    UNICORN_ARCH: 'arm',
+    UNICORN_BUILD_TESTS: 'OFF',
+    UNICORN_INSTALL: 'OFF',
+    UNICORN_LEGACY_STATIC_ARCHIVE: 'OFF',
+    UNICORN_TCG_INTERPRETER: 'ON',
+  };
+  return Object.entries(expected).every(([name, value]) => entries.get(name) === value);
+}
+
 function validateSources(): void {
   const vendor = join(root, '../../crates/emulator-cpu-unicorn/vendor/unicorn');
   for (const path of [
@@ -409,7 +444,15 @@ function stageRuntimeNotices(out: string): void {
 function stagePackage(out: string): void {
   const destination = join(root, 'dist/emulator');
   mkdirSync(destination, { recursive: true });
-  for (const name of ['camera.mjs', 'camera.wasm', 'camera.d.ts', 'build.json', 'NOTICE']) {
+  for (const name of [
+    'camera.mjs',
+    'camera.wasm',
+    'camera.d.ts',
+    'dmp_webgpu.js',
+    'dmp_webgpu_bg.wasm',
+    'build.json',
+    'NOTICE',
+  ]) {
     copyFileSync(join(out, name), join(destination, name));
   }
   const licenseDirectory = join(destination, 'licenses');
@@ -445,14 +488,12 @@ export function build(selected: BuildOptions) {
   const plan = buildPlan(selected, process.env);
   const out = resolve(selected.out);
   mkdirSync(out, { recursive: true });
-  const unicornSource = join(root, '../../crates/emulator-cpu-unicorn/vendor/unicorn');
   const cache = join(out, 'unicorn/CMakeCache.txt');
-  if (existsSync(cache)) {
-    const configured = readFileSync(cache, 'utf8').match(
-      /^CMAKE_HOME_DIRECTORY:INTERNAL=(.*)$/m,
-    )?.[1];
-    if (configured && resolve(configured) !== resolve(unicornSource))
-      rmSync(join(out, 'unicorn'), { recursive: true, force: true });
+  if (!unicornCacheMatches(cache, plan)) {
+    rmSync(join(out, 'unicorn'), { recursive: true, force: true });
+    run(plan.cmakeConfigure, plan.env);
+  } else {
+    console.log('Reusing configured Unicorn CMake objects.');
   }
 
   run(
@@ -460,11 +501,60 @@ export function build(selected: BuildOptions) {
     process.env,
   );
   const start = performance.now();
-  run(plan.cmakeConfigure, plan.env);
   run(plan.cmakeBuild, plan.env);
   const unicornSeconds = (performance.now() - start) / 1000;
   run(['cargo', `+${pinned.nightly}`, ...plan.rust.slice(1)], plan.env);
   const rustSeconds = (performance.now() - start) / 1000 - unicornSeconds;
+  const webgpuEnv: NodeJS.ProcessEnv = {
+    ...plan.env,
+    // This wasm-bindgen module shares a worker with Emscripten, but uses its
+    // own non-shared memory and does not need atomics.
+    CARGO_ENCODED_RUSTFLAGS: ['-C', 'panic=abort'].join('\x1f'),
+  };
+  if (selected.incremental) {
+    delete webgpuEnv.CARGO_PROFILE_DIST_LTO;
+    delete webgpuEnv.CARGO_PROFILE_DIST_OPT_LEVEL;
+    delete webgpuEnv.CARGO_PROFILE_DIST_CODEGEN_UNITS;
+    delete webgpuEnv.CARGO_PROFILE_DIST_INCREMENTAL;
+  }
+  const webgpuStart = performance.now();
+  run(
+    [
+      'cargo',
+      `+${pinned.nightly}`,
+      '-Zbuild-std=std,panic_abort',
+      'build',
+      '--locked',
+      '-j2',
+      '--profile',
+      'dist',
+      '--lib',
+      '--target',
+      'wasm32-unknown-unknown',
+      '--manifest-path',
+      join(root, '../../Cargo.toml'),
+      '-p',
+      'fujimod-emulator-ip-dmp-webgpu',
+    ],
+    webgpuEnv,
+  );
+  run(
+    [
+      wasmBindgen(process.env),
+      join(
+        webgpuEnv.CARGO_TARGET_DIR!,
+        'wasm32-unknown-unknown/dist/fujimod_emulator_ip_dmp_webgpu.wasm',
+      ),
+      '--target',
+      'web',
+      '--out-dir',
+      out,
+      '--out-name',
+      'dmp_webgpu',
+    ],
+    webgpuEnv,
+  );
+  const webgpuSeconds = (performance.now() - webgpuStart) / 1000;
   const archive = join(out, 'rust/wasm32-unknown-emscripten/dist/libfujimod_emulator_javascript.a');
   const symbols = capture([
     'emnm',
@@ -477,11 +567,13 @@ export function build(selected: BuildOptions) {
   ]);
   writeFileSync(join(out, 'exports.json'), JSON.stringify(rustExports(symbols)));
   run(plan.link, plan.env);
-  const optimization = optimizeWasm(join(out, 'camera.wasm'), {
-    emsdk: plan.env.EMSDK,
-    profiling: selected.profiling,
-    simd128: selected.rustSimd128 || selected.cSimd128,
-  });
+  const optimization = selected.incremental
+    ? null
+    : optimizeWasm(join(out, 'camera.wasm'), {
+        emsdk: plan.env.EMSDK,
+        profiling: selected.profiling,
+        simd128: selected.rustSimd128 || selected.cSimd128,
+      });
   const loaderPath = join(out, 'camera.mjs');
   writeFileSync(loaderPath, sharedStringEncoding(readFileSync(loaderPath, 'utf8')));
   const declarations = join(out, 'camera.d.ts');
@@ -504,7 +596,8 @@ export function build(selected: BuildOptions) {
   const receipt = {
     unicorn_seconds: unicornSeconds,
     rust_seconds: rustSeconds,
-    link_seconds: totalSeconds - unicornSeconds - rustSeconds,
+    webgpu_seconds: webgpuSeconds,
+    link_seconds: totalSeconds - unicornSeconds - rustSeconds - webgpuSeconds,
     total_seconds: totalSeconds,
     wasm_bytes: wasm.length,
     wasm_sha256: hash(wasm),
@@ -516,10 +609,12 @@ export function build(selected: BuildOptions) {
     emscripten: pinned.emsdk,
     profiling: selected.profiling,
     rust_profile: {
-      lto: plan.env.CARGO_PROFILE_RELEASE_LTO ?? 'thin',
-      codegen_units: Number(plan.env.CARGO_PROFILE_RELEASE_CODEGEN_UNITS ?? '1'),
-      opt_level: plan.env.CARGO_PROFILE_RELEASE_OPT_LEVEL ?? '3',
+      lto: plan.env.CARGO_PROFILE_DIST_LTO ?? 'thin',
+      codegen_units: Number(plan.env.CARGO_PROFILE_DIST_CODEGEN_UNITS ?? '16'),
+      opt_level: plan.env.CARGO_PROFILE_DIST_OPT_LEVEL ?? '3',
+      incremental: plan.env.CARGO_PROFILE_DIST_INCREMENTAL === 'true',
     },
+    incremental: selected.incremental,
     rust_flags: plan.rustFlags,
     c_flags: plan.cFlags,
     allocator: selected.allocator,
@@ -540,7 +635,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const args = process.argv.slice(2);
   if (args.includes('--help') || args.includes('-h')) {
     console.log(
-      'Usage: node emulator/build.mts [--out DIR] [--stage-package] [--profiling] [--rust-simd128] [--c-simd128] [--lto thin|fat|off] [--opt-level 0|1|2|3|s|z] [--codegen-units N] [--allocator dlmalloc|emmalloc]',
+      'Usage: node emulator/build.mts [--out DIR] [--stage-package] [--incremental] [--profiling] [--rust-simd128] [--c-simd128] [--lto thin|fat|off] [--opt-level 0|1|2|3|s|z] [--codegen-units N] [--allocator dlmalloc|emmalloc]',
     );
   } else {
     build(options(args));

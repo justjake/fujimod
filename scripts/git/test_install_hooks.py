@@ -63,3 +63,11 @@ def test_ordinary_checkouts_are_unaffected(repo: Path) -> None:
     git("checkout", "-q", "-b", "other", cwd=repo)
     git("checkout", "-q", "main", cwd=repo)
     assert worktree_count(repo) == 1
+
+
+def test_pre_push_hook_is_installed(repo: Path) -> None:
+    common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir", cwd=repo).strip())
+    hook = common / "hooks" / "pre-push"
+    source = Path(__file__).resolve().parent / "hooks" / "pre-push"
+    assert hook.read_text(encoding="utf-8") == source.read_text(encoding="utf-8")
+    assert hook.stat().st_mode & 0o111

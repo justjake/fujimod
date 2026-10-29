@@ -1,14 +1,23 @@
 /** RAM captures through a firmware's catalog bulk path. */
-import { catalog, type CaptureScope, type ResolvedSelection } from 'fujimod';
+import {
+  catalog,
+  type CaptureScope,
+  type FirmwareBulk,
+  type FirmwareVersion,
+  type ResolvedSelection,
+} from 'fujimod';
 import type { CameraIdentity, ToolSession } from '../camera-model';
 import type { ControlDiff } from './mapping';
+import { generationFailure } from '../generation';
 
 /** Bytes requested per qualified bulk read. */
 export const PIECE_BYTES = 16 << 20;
 export const MIB = 1 << 20;
 
-/** The catalog firmware whose located bulk path matches the camera's reported identity. */
-export function bulkSelection(identity: CameraIdentity | undefined): ResolvedSelection | undefined {
+/** The execution profile whose bulk path matches the camera's reported identity. */
+export function executionSelection(
+  identity: CameraIdentity | undefined,
+): ResolvedSelection | undefined {
   const product = identity?.product?.trim();
   const version = identity?.internalVersion?.trim();
   if (!product || !version) return undefined;
@@ -18,6 +27,56 @@ export function bulkSelection(identity: CameraIdentity | undefined): ResolvedSel
       (selection) =>
         selection.bulk?.product === product && selection.bulk.internal_version === version,
     );
+}
+
+/** Bulk facts and release identity, with physical controls when an execution profile has them. */
+export interface BulkSelection {
+  bulk: FirmwareBulk;
+  firmware: FirmwareVersion;
+  physical_controls: ResolvedSelection['physical_controls'];
+}
+
+export function bulkSelection(identity: CameraIdentity | undefined): BulkSelection | undefined {
+  const product = identity?.product?.trim();
+  const version = identity?.internalVersion?.trim();
+  if (!product || !version) return undefined;
+  const bulk = catalog
+    .bulkProfiles()
+    .find((item) => item.product === product && item.internal_version === version);
+  if (!bulk) return undefined;
+  const firmware = catalog.firmwareVersions().find((item) => item.firmware_id === bulk.firmware_id);
+  if (!firmware) return undefined;
+  const physical_controls = catalog
+    .selections()
+    .find((item) => item.firmware.id === bulk.firmware_id)?.physical_controls;
+  return { bulk, firmware, physical_controls };
+}
+
+/** Preserve the published generation failure for a camera without bulk support. */
+export function bulkSupportError(identity: CameraIdentity | undefined): string {
+  const product = identity?.product?.trim();
+  const version = identity?.internalVersion?.trim();
+  const reports = catalog.generationResults();
+  const report = reports.find(
+    (entry) => entry.product === product && entry.internal_version === version,
+  );
+  if (report) return generationFailure(report.firmware_id, 'bulk');
+  const identityErrors = reports
+    .filter((entry) => entry.product === product && !entry.internal_version)
+    .flatMap((entry) => {
+      const errors =
+        entry.tables.versions?.errors ??
+        entry.tables.facts?.errors.filter(
+          (error) => error.locator === 'internal_version' || error.locator === 'inputs',
+        ) ??
+        [];
+      return errors.map(
+        (error) => `${entry.product} ${entry.version}: ${error.locator}: ${error.reason}`,
+      );
+    });
+  return identityErrors.length
+    ? `Firmware identity generation failed. ${identityErrors.join('; ')}`
+    : 'No bulk generation result was published for this camera and firmware.';
 }
 
 export function scopeBytes(scope: CaptureScope) {

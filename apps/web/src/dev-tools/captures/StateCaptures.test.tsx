@@ -22,7 +22,19 @@ const selection = {
     ],
   },
 } as unknown as ResolvedSelection;
-vi.mock('fujimod', () => ({ catalog: { selections: () => [selection] } }));
+vi.mock('fujimod', () => ({
+  catalog: {
+    selections: () => [selection],
+    bulkProfiles: () => [
+      { ...selection.bulk, firmware_id: 'xm5-130' },
+      { ...selection.bulk, firmware_id: 'xe4-201', product: 'X-E4', internal_version: '1.43' },
+    ],
+    firmwareVersions: () => [
+      { firmware_id: 'xm5-130', version: '1.30' },
+      { firmware_id: 'xe4-201', version: '2.01' },
+    ],
+  },
+}));
 const { StateCaptures } = await import('./StateCaptures');
 const { MapControls } = await import('./MapControls');
 
@@ -33,6 +45,47 @@ afterEach(() => {
 });
 const button = (host: HTMLElement, name: string) =>
   [...host.querySelectorAll('button')].find((node) => node.textContent?.trim() === name)!;
+
+test('captures a camera with bulk facts but no execution profile', async () => {
+  const reads: string[] = [];
+  const testModel = createTestCameraModel({
+    session: () => ({
+      async memory(firmware) {
+        reads.push(firmware);
+        return {
+          async read(_address, size) {
+            return new Uint8Array(size);
+          },
+          async write() {
+            throw Error('Captures only read.');
+          },
+          overwritten: null,
+          async close() {},
+        };
+      },
+    }),
+  });
+  testModel.add(testCamera('e4', { identity: { product: 'X-E4', internalVersion: '1.43' } }));
+  const host = document.createElement('div');
+  document.body.append(host);
+  cleanup = render(
+    () => (
+      <StateCaptures
+        camera={testModel.model.cameras()[0]}
+        model={testModel.model}
+        onSet={() => {}}
+        onFile={() => {}}
+        onConnect={() => {}}
+        onClose={() => {}}
+      />
+    ),
+    host,
+  );
+  flush();
+  expect(host.textContent).toContain('X-E4 2.01');
+  button(host, 'Capture').click();
+  await vi.waitFor(() => expect(reads).toEqual(['xe4-201']));
+});
 
 function mount(
   component: typeof StateCaptures,

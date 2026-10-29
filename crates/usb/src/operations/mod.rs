@@ -5,3 +5,5 @@ pub mod configuration;
 pub mod data;
 pub mod memory;
 pub mod verified;
+
+pub mod callback;

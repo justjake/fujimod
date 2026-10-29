@@ -93,11 +93,28 @@ test('local preparation gates qualification and stages complete runtime bundles'
     await assert.rejects(stageSite(inputs, destination), /licenses/);
     await mkdir(join(runtime, 'test-100/licenses'));
     await writeFile(join(runtime, 'test-100/licenses/COPYING.txt'), 'license');
-    catalog.firmwares[0].camera_table = 'runtime/test-100/camera.json';
+    catalog.firmwares[0].service_workflow = 'runtime/test-100/service-workflow.generated.json';
     await writeFile(join(runtime, 'catalog.json'), JSON.stringify(catalog));
-    await assert.rejects(stageSite(inputs, destination), /camera.json/);
-    await writeFile(join(runtime, 'test-100/camera.json'), '{"schema":1}');
+    await assert.rejects(stageSite(inputs, destination), /service-workflow.generated.json/);
+    await writeFile(join(runtime, 'test-100/service-workflow.generated.json'), '{"schema":1}');
     await assert.rejects(stageSite(inputs, destination), /media.json/);
+    catalog.firmwares.push({
+      id: 'physical-100',
+      body: 'physical',
+      model: 'Physical',
+      version: '1.00',
+      sha256: '3'.repeat(64),
+      bytes: 42,
+      release_date: '',
+      download_url: 'https://example.org/physical',
+      service_workflow: 'runtime/physical-100/service-workflow.generated.json',
+    });
+    await mkdir(join(runtime, 'physical-100'));
+    await writeFile(
+      join(runtime, 'physical-100/service-workflow.generated.json'),
+      '{"schema":1,"physical":true}',
+    );
+    await writeFile(join(runtime, 'catalog.json'), JSON.stringify(catalog));
     const prepared = {
       document: 'document.json',
       bootRom: 'boot-rom.bin',
@@ -134,7 +151,8 @@ test('local preparation gates qualification and stages complete runtime bundles'
     await writeFile(join(runtime, 'test-100-usb/wasm.json'), '{"construction":"session"}');
     await stageSite(inputs, destination);
     for (const [name, expected] of [
-      ['runtime/test-100/camera.json', '{"schema":1}'],
+      ['runtime/test-100/service-workflow.generated.json', '{"schema":1}'],
+      ['runtime/physical-100/service-workflow.generated.json', '{"schema":1,"physical":true}'],
       ['runtime/test-100/licenses/COPYING.txt', 'license'],
       ['runtime/test-100-usb/licenses/COPYING.txt', 'usb licenses/COPYING.txt'],
     ])
@@ -143,7 +161,11 @@ test('local preparation gates qualification and stages complete runtime bundles'
     const manifest = JSON.parse(await readFile(join(destination, 'site-assets.json'), 'utf8')) as {
       files: { path: string }[];
     };
-    assert.ok(manifest.files.some((file) => file.path === 'runtime/test-100/camera.json'));
+    assert.ok(
+      manifest.files.some(
+        (file) => file.path === 'runtime/test-100/service-workflow.generated.json',
+      ),
+    );
     assert.ok(
       manifest.files.some((file) => file.path === 'runtime/test-100-usb/licenses/COPYING.txt'),
     );
@@ -153,6 +175,21 @@ test('local preparation gates qualification and stages complete runtime bundles'
 });
 
 test('prepared runtime staging follows declared cold input filenames and refuses traversal', () => {
+  assert.deepEqual(
+    runtimeBundleFiles({ construction: 'resolved', dmpCpuRenderer: false }),
+    [
+      'camera.wasm',
+      'camera.mjs',
+      'wasm.json',
+      'runtime-NOTICES.txt',
+      'dmp_webgpu.js',
+      'dmp_webgpu_bg.wasm',
+    ],
+  );
+  assert.throws(
+    () => runtimeBundleFiles({ construction: 'resolved', dmpCpuRenderer: 'webgpu' }),
+    /invalid DMP renderer selection/,
+  );
   const prepared = {
     document: 'document.json',
     bootRom: 'boot-rom.bin',

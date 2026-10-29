@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 pub struct Pll {
     pub n: u32,
     pub fraction: u32,
-    pub divider: u32,
+    pub dividers: [u32; 4],
     pub request: u32,
     pub generation: u64,
 }
@@ -29,7 +29,7 @@ impl Clocks {
     /// frequency query does not incorporate them.
     pub fn pixel_hz(&self, bank: usize) -> Result<f64, String> {
         let s = self.0.lock().unwrap();
-        let ratio = |p: Pll| p.n as f32 / ((p.divider & 255) + 1) as f32;
+        let ratio = |p: Pll| p.n as f32 / ((p.dividers[0] & 255) + 1) as f32;
         let mhz = if bank == 1 {
             ratio(s.plls[0]) * 12.0
         } else {

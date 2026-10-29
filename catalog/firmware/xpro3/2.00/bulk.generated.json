@@ -1,0 +1,116 @@
+{
+  "$schema": "https://fujimod.com/schemas/bulk.generated.schema.json",
+  "schema": 1,
+  "id": "xpro3-200-bulk",
+  "firmware_id": "xpro3-200",
+  "product": "X-Pro3",
+  "internal_version": "1.72",
+  "code_alias": 0,
+  "source": {
+    "mechanism": "pattern",
+    "registered_buffer": 39445248,
+    "source_state": 50366084,
+    "capacity": 65536
+  },
+  "window": {
+    "address": 15728640,
+    "size": 35651584
+  },
+  "code_checks": [
+    {
+      "name": "code_1051ca4",
+      "address": 17112228,
+      "size": 100,
+      "sha256": "333f175694015e711a6f2c22696541d7366f8af6b7d6dd1890a72b97ab592fba"
+    },
+    {
+      "name": "code_1f9e428",
+      "address": 33154088,
+      "size": 192,
+      "sha256": "aa6dc9050118fd9d7b971e02d83d921243284b363b9822b26429bb24694db465"
+    },
+    {
+      "name": "bulk_poll",
+      "address": 32760704,
+      "size": 252,
+      "sha256": "60c192dcf778f4561cbc2db7a9efa218f9a21967f2cc54809e8958534613b7b8"
+    },
+    {
+      "name": "bulk_e1",
+      "address": 32763620,
+      "size": 196,
+      "sha256": "e255bfb6256ca8621bb203ffe126313daf021da497c5f6a253fcea3c338b2214"
+    },
+    {
+      "name": "bulk_be32",
+      "address": 32761684,
+      "size": 52,
+      "sha256": "82d680da35e199be8abad7f4180a111dd128fc64e91c6153a3b040da5bff664d"
+    },
+    {
+      "name": "bulk_pattern",
+      "address": 32767336,
+      "size": 220,
+      "sha256": "96da53ada5361c5d38d32003e4b64d02c6039eb1e68da693df8fd709b58ff076"
+    },
+    {
+      "name": "bulk_register_buffer",
+      "address": 32764356,
+      "size": 132,
+      "sha256": "391a44214b1db77bd67de1164020c4d0edc79e8124f72aa76f3a47f6df9241e9"
+    },
+    {
+      "name": "bulk_le32",
+      "address": 32761736,
+      "size": 52,
+      "sha256": "fd8d195a69e3ab7f1ea4fb72ba93c30a87131e866fa973f2fd509d0b05c87a1c"
+    },
+    {
+      "name": "bulk_store_le32",
+      "address": 32761636,
+      "size": 48,
+      "sha256": "a79a6f803e486fa12fea9be63b0ab18cc89d0c3efee1321d8b165d3944d13688"
+    },
+    {
+      "name": "pattern_opcode_compare",
+      "address": 32768272,
+      "size": 16,
+      "sha256": "4834466e7fb1001c65a7bce9b659537d136c1f80879bf3ed2ba932e28ff2714c"
+    },
+    {
+      "name": "pattern_opcode_case",
+      "address": 32768288,
+      "size": 20,
+      "sha256": "2e694383aafdbd85a80e40916b5f58c6a00c2b8282224eb6c1f0c3c8a389bc9a"
+    }
+  ],
+  "probes": [
+    {
+      "address": 17112228,
+      "size": 100
+    },
+    {
+      "address": 33154088,
+      "size": 128
+    }
+  ],
+  "mapped_probe": {
+    "name": "bulk_mapped_probe",
+    "address": 32702464,
+    "size": 65536,
+    "sha256": "f94c86ebdb9dbdc9a27cc35addba44501e841b3ba0746d3ae075e7b64bebfcb8"
+  },
+  "scopes": [
+    {
+      "name": "quick",
+      "basis": "Mapped update ranges in the RAM window through the highest located transfer-state address, rounded to 1 MiB. Static BSS and heap extents beyond it are not established.",
+      "ranges": [
+        {
+          "name": "firmware",
+          "address": 15728640,
+          "size": 35651584
+        }
+      ]
+    }
+  ]
+}

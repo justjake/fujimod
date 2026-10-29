@@ -55,8 +55,10 @@ test('card observations follow engine replacement, busy/insertion state and fres
     document.body,
   );
   flush();
+  expect((document.querySelector('#card-section') as HTMLElement).hidden).toBe(true);
   setActive(engine);
   flush();
+  expect((document.querySelector('#card-section') as HTMLElement).hidden).toBe(true);
   publish(state);
   await Promise.resolve();
   flush();
@@ -88,6 +90,7 @@ test('card observations follow engine replacement, busy/insertion state and fres
   setActive(undefined);
   flush();
   expect(stop).toHaveBeenCalledOnce();
+  expect((document.querySelector('#card-section') as HTMLElement).hidden).toBe(true);
   expect(document.querySelector('#card-files')?.textContent).toBe('');
   expect((document.querySelector('#card-format') as HTMLButtonElement).disabled).toBe(true);
 });

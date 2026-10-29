@@ -102,6 +102,20 @@ impl Session {
                 |frames| Ok(frames.frame_state()),
             )
     }
+    /// Pure diagnostic sampling of the immutable physical frame before ISP
+    /// digital gain, color processing or display encoding. `name` is a frame source.
+    pub fn sensor_sample_rgb(
+        &self,
+        name: &str,
+        width: usize,
+        height: usize,
+    ) -> Result<Vec<u8>, String> {
+        self.board
+            .inspect_capability::<dyn fujimod_emulator_devices::capability::FrameSource, _>(
+                self.node(name)?,
+                |frames| frames.sensor_sample_rgb(width, height),
+            )
+    }
     pub fn serial_state(&self, name: &str) -> Result<serde_json::Value, String> {
         self.board.device_save(self.node(name)?)
     }
@@ -192,6 +206,26 @@ impl Session {
         self.resources
             .images()?
             .sensor_rgb(name, width, height, bytes, white_luminance)
+    }
+    /// Replace sensor radiance with declared charge/read noise at each modeled
+    /// sampling site. The external realization is frozen with these RGB pixels.
+    pub fn sensor_rgb_noise(
+        &self,
+        name: &str,
+        width: usize,
+        height: usize,
+        bytes: &[u8],
+        white_luminance: f64,
+        noise: serde_json::Value,
+    ) -> Result<(), String> {
+        self.resources.images()?.sensor_rgb_noise(
+            name,
+            width,
+            height,
+            bytes,
+            white_luminance,
+            noise,
+        )
     }
     /// Replace a sensor input with an external little-endian U16 RAW raster.
     /// The sensor's programmed window and transfer format still control DMA.

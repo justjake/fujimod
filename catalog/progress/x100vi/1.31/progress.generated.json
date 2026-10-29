@@ -6,7 +6,7 @@
   "version": "1.31",
   "facts": {
     "located": 19,
-    "total": 23
+    "total": 25
   },
   "boot_rom": null,
   "stages": {

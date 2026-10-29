@@ -61,6 +61,7 @@ impl Board {
             objects: BTreeMap::new(),
             failures: Failures::default(),
             read_limit,
+            last_continuation_stop: None,
         })
     }
 }

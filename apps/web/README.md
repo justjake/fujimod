@@ -206,14 +206,32 @@ absolute paths in ignored `.env.local`:
 ```text
 FUJIMOD_RUNTIME=/path/to/staged/runtime
 FUJIMOD_PATCHES=/path/to/patch-release/artifacts
+FUJIMOD_RELEASE_NOTES=/path/to/editable/release-notes
 FUJIMOD_DAT=/path/to/local/FPUPDATE.DAT
 FUJIMOD_REVIEW_DIR=/absolute/path/outside/this/repository/reviews
+FUJIMOD_MEDIA_ROOT=/absolute/path/to/recording-workspace
 ```
+
+`FUJIMOD_RELEASE_NOTES` serves `<release-tag>.md` directly from that directory
+on every request. Release notes are fetched as text;
+editing notes does not require rebuilding patches.
+A missing configured notes file returns an error instead of serving the artifact copy.
 
 `FUJIMOD_REVIEW_DIR` serves standalone files at `/review/` in the development
 server only. Keep review files outside the repository; the build rejects
 `public/review/`. `node --test scripts/local-review-files.test.ts` checks the
 mount and production build guard.
+
+`FUJIMOD_MEDIA_ROOT` enables development media from a recording workspace.
+The homepage previews `media/frontier/site` when available, otherwise
+`media/current`, and reloads when the manifest changes. The server exposes
+`/media/frontier/`, `/media/current/`, `/media/builds/<id>/` and recording output
+files at their workspace-relative paths. Recording directories are identified
+by `guide.json` or a retained `.inputs/receipt.json`; captured input trees stay
+unserved. Media is read directly and video requests support byte ranges.
+`FUJIMOD_MEDIA` remains an explicit standalone media directory for staging and
+builds. `node --test scripts/local-media.test.ts` checks the development routes
+and manifest refresh.
 
 The staged runtime directory contains `catalog.json` and firmware-ID folders
 with `camera.wasm`, `camera.mjs`, `wasm.json` and
@@ -340,7 +358,7 @@ local filenames. The Worker serves the index and patches from the same origin
 through `/releases/`; they are fetched at runtime and are never website build
 inputs. Each firmware has `downloads: {sd_card, installable}`, both false by
 default; installable requires a verified `fpupdate` patch output. Optional
-`notes: {name, bytes, sha256}` identifies UTF-8 Markdown checked before display.
+`notes: {name}` identifies Markdown fetched as text for display.
 See [the release contract](RELEASE-DOWNLOADS.md).
 
 `report.json` includes the user's comment and the complete issue URL and prefilled

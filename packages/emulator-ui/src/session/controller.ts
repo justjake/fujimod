@@ -91,6 +91,7 @@ export function startSession(
   function context(event: 'feedback' | 'crash'): SimulatorIssueContext {
     return {
       event,
+      faultContext: { ...state.faultContext },
       simulatorBuild: options.simulatorBuild,
       modBuild: options.identity().modBuild,
       camera: options.identity().camera,

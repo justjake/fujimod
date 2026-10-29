@@ -6,7 +6,6 @@ import { isDevToolsPath } from './dev-tools/routes';
 const Home = lazy(() => import('./home/Page'));
 const DevTools = lazy(() => import('./dev-tools/Page'));
 const BugReport = lazy(() => import('./bug/Page'));
-const Setup = lazy(() => import('./setup/Page'));
 const Recovery = lazy(() => import('./recovery/Page'));
 export default function App() {
   const path = new URL(getRequestEvent()?.request.url ?? window.location.href).pathname;
@@ -14,11 +13,9 @@ export default function App() {
     ? DevTools
     : path === '/bug/' || path === '/bug'
       ? BugReport
-      : path === '/setup/' || path === '/setup'
-        ? Setup
-        : path === '/recovery/' || path === '/recovery'
-          ? Recovery
-          : Home;
+      : path === '/recovery/' || path === '/recovery'
+        ? Recovery
+        : Home;
   return (
     <Loading>
       <Page />

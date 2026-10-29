@@ -142,7 +142,8 @@
       "face": null,
       "icon": null,
       "connection_ids": [
-        "controls-gpio-0-10"
+        "controls-gpio-0-10",
+        "controls-encoder-3-8-3-9"
       ],
       "assignable": true,
       "default_function": "Rotate to select quick-menu options, review pictures, adjust focus-area size, or choose shutter speed or program shift. Press the center to zoom in on the active focus area; press and hold it to choose a manual-focus assist option. With a lens without an aperture ring, COMMAND DIAL SETTING chooses shutter speed (default) or aperture.",
@@ -152,8 +153,14 @@
         "kind": "dial",
         "motion": {
           "kind": "steps",
-          "decrease": null,
-          "increase": null
+          "decrease": {
+            "kind": "debug_key",
+            "name": "CMD_LEFT"
+          },
+          "increase": {
+            "kind": "debug_key",
+            "name": "CMD_RIGHT"
+          }
         },
         "press": {
           "kind": "debug_key",
@@ -750,14 +757,221 @@
       "manual_page": 46,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "default_function": "Select shutter speed; A selects automatic shutter speed, T selects time exposure, and B selects bulb exposure.",
       "role": null,
       "mechanical": false,
-      "behavior": null,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "A",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-A"
+              },
+              "asserted": true
+            },
+            {
+              "id": "4000",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/4000"
+              },
+              "asserted": true
+            },
+            {
+              "id": "2000",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/2000"
+              },
+              "asserted": true
+            },
+            {
+              "id": "1000",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/1000"
+              },
+              "asserted": true
+            },
+            {
+              "id": "500",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/500"
+              },
+              "asserted": true
+            },
+            {
+              "id": "250",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/250"
+              },
+              "asserted": true
+            },
+            {
+              "id": "180",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_SHUTTER_DIAL_1_180"
+              },
+              "asserted": true
+            },
+            {
+              "id": "125",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/125"
+              },
+              "asserted": true
+            },
+            {
+              "id": "60",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/60"
+              },
+              "asserted": true
+            },
+            {
+              "id": "30",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/30"
+              },
+              "asserted": true
+            },
+            {
+              "id": "15",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/15"
+              },
+              "asserted": true
+            },
+            {
+              "id": "8",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/8"
+              },
+              "asserted": true
+            },
+            {
+              "id": "4",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/4"
+              },
+              "asserted": true
+            },
+            {
+              "id": "T",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-T"
+              },
+              "asserted": true
+            },
+            {
+              "id": "B",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-B"
+              },
+              "asserted": true
+            }
+          ]
+        },
+        "press": null,
+        "endless": false
+      },
       "pushable": false,
-      "positions": [],
+      "positions": [
+        {
+          "id": "A",
+          "label": "A",
+          "description": null
+        },
+        {
+          "id": "4000",
+          "label": "4000",
+          "description": null
+        },
+        {
+          "id": "2000",
+          "label": "2000",
+          "description": null
+        },
+        {
+          "id": "1000",
+          "label": "1000",
+          "description": null
+        },
+        {
+          "id": "500",
+          "label": "500",
+          "description": null
+        },
+        {
+          "id": "250",
+          "label": "250",
+          "description": null
+        },
+        {
+          "id": "180",
+          "label": "180",
+          "description": null
+        },
+        {
+          "id": "125",
+          "label": "125",
+          "description": null
+        },
+        {
+          "id": "60",
+          "label": "60",
+          "description": null
+        },
+        {
+          "id": "30",
+          "label": "30",
+          "description": null
+        },
+        {
+          "id": "15",
+          "label": "15",
+          "description": null
+        },
+        {
+          "id": "8",
+          "label": "8",
+          "description": null
+        },
+        {
+          "id": "4",
+          "label": "4",
+          "description": null
+        },
+        {
+          "id": "T",
+          "label": "T",
+          "description": null
+        },
+        {
+          "id": "B",
+          "label": "B",
+          "description": null
+        }
+      ],
       "short_name": "SPEED"
     }
   }

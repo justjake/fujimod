@@ -1,3 +1,5 @@
+//! Service sessions. Stale-session detection adapted with permission from
+//! Tal Shiri's X-Turbo (src/fuji/usb.py).
 use super::{
     commands::{
         info::{DeviceInfo, InfoSelector},
@@ -70,6 +72,16 @@ impl Session {
             )
             .await?,
         })
+    }
+    /// Callback operation boundary: retain a completed raw reply so the caller
+    /// can restore its slot even when the callback returned unexpected bytes.
+    pub(crate) async fn callback_trigger(
+        &mut self,
+        request: &super::commands::research::Request,
+    ) -> Result<Vec<u8>> {
+        self.core
+            .command(request.encode(), request.reply_capacity().get(), Ok)
+            .await
     }
     pub fn trace(&self) -> Option<crate::trace::Trace> {
         self.core.io.trace()
@@ -403,6 +415,13 @@ impl<I: Io> Core<I> {
         let bytes: [u8; 8] = exact(Self::lifecycle_io(&mut io, RequestKind::Open, 8, 0).await?)?;
         let packet = NonZeroU32::new(u32::from_be_bytes(bytes[4..8].try_into().unwrap()))
             .ok_or(ProtocolError::ZeroPacketLimit)?;
+        if bytes[..2] == [0, 0] {
+            return Err(if packet.get() == 256 {
+                Error::SessionAlreadyOpen
+            } else {
+                ProtocolError::ExpectationMismatch.into()
+            });
+        }
         Ok(Self {
             io,
             info: SessionInfo {

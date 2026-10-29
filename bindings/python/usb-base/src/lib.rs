@@ -50,6 +50,7 @@ pub fn convert_error(py: Python<'_>, error: usb::Error) -> PyErr {
         usb::Error::LengthLimit { .. }
         | usb::Error::AddressOverflow
         | usb::Error::OutsideDataWindow
+        | usb::Error::MisalignedDataRange { .. }
         | usb::Error::InvalidLength
         | usb::Error::InvalidToken
         | usb::Error::InvalidTimeout => PyValueError::new_err(message),
@@ -69,6 +70,19 @@ pub fn convert_error(py: Python<'_>, error: usb::Error) -> PyErr {
         let _ = object.setattr("transferred", py.None());
     }
     match error {
+        usb::Error::CallbackInvocation {
+            source,
+            restoration,
+        } => {
+            let _ = object.setattr("invocation_error", convert_error(py, *source));
+            let _ = object.setattr(
+                "restoration_error",
+                restoration.map(|e| convert_error(py, *e)),
+            );
+        }
+        usb::Error::CallbackRestoration(source) => {
+            let _ = object.setattr("restoration_error", convert_error(py, *source));
+        }
         usb::Error::DeviceStatus {
             command,
             primary,

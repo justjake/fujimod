@@ -91,7 +91,6 @@ export function EmulatorWorkspace(props: {
         <div id="controls">
           <Controls session={props.runtime?.panel} editor={editor} />
         </div>
-        <hr />
         <CardBrowser
           engine={props.runtime?.cardEngine()}
           canDownload={props.canDownloadCardFile}

@@ -4,6 +4,7 @@ mod cadence;
 pub mod clocked;
 pub mod frames;
 pub mod mosaic;
+pub mod noise;
 pub mod optics;
 mod recorded;
 pub mod view;

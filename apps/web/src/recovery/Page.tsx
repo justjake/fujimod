@@ -1,3 +1,4 @@
+import { BatteryCycleIcon } from '../ui/battery-cycle';
 import { PowerComboKeys } from '@fujimod/emulator-ui/ui/power-combo';
 import { For, Show, createEffect, createMemo, createSignal, onSettled } from 'solid-js';
 import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
@@ -182,7 +183,11 @@ export default function Recovery() {
               {(result) => (
                 <>
                   <p>
-                    With the camera off, hold these while switching it on, and keep holding until
+                    <BatteryCycleIcon />
+                    Switch the camera OFF, then remove and reinsert the battery.
+                  </p>
+                  <p>
+                    Hold these while switching it on, and keep holding until{' '}
                     {downloadType() === 'green-led'
                       ? 'the green LED lights:'
                       : 'the screen lights:'}
@@ -206,7 +211,8 @@ export default function Recovery() {
                     <p>
                       If the system image won’t boot, use this image to check your SD card boot
                       instructions. It only turns on the rear green LED. If the light comes on, your
-                      camera is booting from the SD card. Remove the battery to turn the camera off.
+                      camera is booting from the SD card. <BatteryCycleIcon />
+                      Switch the camera OFF, then remove the battery.
                     </p>
                     <button
                       class="launcher-button recovery-download recovery-led-download"

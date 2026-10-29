@@ -1,7 +1,7 @@
 from collections.abc import Buffer, Sequence
 from typing import Protocol
 
-from . import FirmwareLimits, Session, tracing
+from . import Connection, FirmwareLimits, Session, tracing
 
 class Exchange:
     @staticmethod
@@ -44,3 +44,8 @@ async def peer_session(
     ep_in: int = ...,
     ep_out: int = ...,
 ) -> Session: ...
+
+
+def connection(
+    exchanges: Sequence[Exchange], *, max_reply_bytes: int = ...,
+) -> tuple[Connection, Script]: ...

@@ -71,13 +71,31 @@ pub struct ModuleOptions {
     #[serde(default)]
     #[tsify(optional)]
     pub tcg_jit: Option<JitSelection>,
+    #[serde(default)]
+    #[tsify(optional)]
+    pub dmp_cpu_renderer: Option<bool>,
 }
-/// Select the board/CPU execution policy and browser JIT tier, once, before any camera.
+/// Select execution policy and browser renderers, initializing WebGPU before any camera.
 #[wasm_bindgen]
-pub fn configure(options: Ts<ModuleOptions>) -> Result<(), Failure> {
+pub async fn configure(options: Ts<ModuleOptions>) -> Result<(), Failure> {
     let options = options.to_rust().map_err(Failure::host)?;
     if POLICY.get().is_some() {
         return Err(Failure::host("the emulator module is already configured"));
+    }
+    if options.dmp_cpu_renderer == Some(false) {
+        #[cfg(target_os = "emscripten")]
+        fujimod_emulator_ip_dmp::configure_webgpu_bridge(true);
+        #[cfg(target_os = "emscripten")]
+        fujimod_emulator_exr2_gpu::configure_webgpu_bridge(true);
+        #[cfg(not(target_os = "emscripten"))]
+        fujimod_emulator_gpu::context_async()
+            .await
+            .map_err(Failure::host)?;
+    }
+    #[cfg(target_os = "emscripten")]
+    if options.dmp_cpu_renderer != Some(false) {
+        fujimod_emulator_ip_dmp::configure_webgpu_bridge(false);
+        fujimod_emulator_exr2_gpu::configure_webgpu_bridge(false);
     }
     jit::setup(jit::selection(options.tcg_jit).map_err(Failure::host)?).map_err(Failure::host)?;
     POLICY.set(Some(
@@ -129,6 +147,32 @@ pub struct Status {
 pub struct Frame {
     frame: Arc<fujimod_emulator_devices::graphics::scanout::Frame>,
 }
+
+#[wasm_bindgen]
+pub struct HostRequest {
+    device: usize,
+    request: fujimod_emulator_devices::bus::HostRequest,
+}
+#[wasm_bindgen]
+impl HostRequest {
+    #[wasm_bindgen(getter)]
+    pub fn device(&self) -> usize {
+        self.device
+    }
+    #[wasm_bindgen(getter)]
+    pub fn id(&self) -> u64 {
+        self.request.id
+    }
+    #[wasm_bindgen(getter)]
+    pub fn kind(&self) -> String {
+        self.request.kind.clone()
+    }
+    #[wasm_bindgen(getter)]
+    pub fn payload(&self) -> Vec<u8> {
+        self.request.payload.clone()
+    }
+}
+
 #[wasm_bindgen]
 impl Frame {
     #[wasm_bindgen(getter)]
@@ -200,9 +244,9 @@ impl Camera {
             .core
             .board
             .set_progress_observer(progress.map(|progress| {
-                Box::new(move |instructions: u64| {
+                Box::new(move |ticks: u64| {
                     // Advisory host display only; a detached listener cannot change guest execution.
-                    let _ = progress.call1(&JsValue::NULL, &JsValue::from_f64(instructions as f64));
+                    let _ = progress.call1(&JsValue::NULL, &JsValue::from_f64(ticks as f64));
                 }) as Box<dyn FnMut(u64)>
             }));
         let result = self.with(run);
@@ -269,7 +313,7 @@ impl Camera {
     pub fn run_until(
         &mut self,
         tick: u64,
-        #[wasm_bindgen(unchecked_optional_param_type = "(instructions: number) => void")] progress: Option<
+        #[wasm_bindgen(unchecked_optional_param_type = "(ticks: number) => void")] progress: Option<
             js_sys::Function,
         >,
     ) -> Result<(), Failure> {
@@ -472,6 +516,26 @@ impl Camera {
     pub fn memory_read(&mut self, address: u64, size: usize) -> Result<Vec<u8>, Failure> {
         self.with(|s| s.memory_read(address, size))
     }
+    #[wasm_bindgen(js_name = takeHostRequests)]
+    pub fn take_host_requests(&mut self) -> Result<Vec<HostRequest>, Failure> {
+        self.with(|session| {
+            session.take_host_requests().map(|requests| {
+                requests
+                    .into_iter()
+                    .map(|(device, request)| HostRequest { device, request })
+                    .collect()
+            })
+        })
+    }
+    #[wasm_bindgen(js_name = completeHostRequest)]
+    pub fn complete_host_request(
+        &mut self,
+        device: usize,
+        id: u64,
+        result: &[u8],
+    ) -> Result<(), Failure> {
+        self.with(|session| session.complete_host_request(device, id, result))
+    }
     #[wasm_bindgen(js_name = watchPcs)]
     pub fn watch_pcs(&mut self, addresses: Vec<u32>) -> Result<(), Failure> {
         let addresses: Vec<u64> = addresses.into_iter().map(u64::from).collect();
@@ -493,7 +557,7 @@ impl Camera {
     pub fn boot_to_rec(
         &mut self,
         limit: u64,
-        #[wasm_bindgen(unchecked_optional_param_type = "(instructions: number) => void")] progress: Option<
+        #[wasm_bindgen(unchecked_optional_param_type = "(ticks: number) => void")] progress: Option<
             js_sys::Function,
         >,
     ) -> Result<Ts<RecReport>, Failure> {

@@ -618,7 +618,7 @@ fn browser_camera_overlay_declares_a_virtual_card_host_on_the_native_plan() {
     assert_eq!(sd["card"]["options"]["label"], "CAMERA");
     assert_eq!(sd["card"]["options"]["partition_start"], 8192);
     assert_eq!(sd["card"]["options"]["sectors_per_cluster"], 64);
-    assert_eq!(sd["card"]["options"]["max_dirty_sectors"], 81920);
+    assert_eq!(sd["card"]["options"]["max_dirty_sectors"], 1 << 20);
     assert_eq!(sd["card"]["files"], "virtual_card_files");
     assert_eq!(sd["pins"]["detect"], json!({"port": 12, "pin": 7}));
     assert_eq!(sd["pins"]["protect"], json!({"port": 12, "pin": 6}));
@@ -626,6 +626,37 @@ fn browser_camera_overlay_declares_a_virtual_card_host_on_the_native_plan() {
     assert_eq!(sd["protected"], false);
     assert_eq!(sd["irq"]["Core"]["line"], 78);
     assert_eq!(prepared.scene["files"], json!({"virtual_card_files": {}}));
+}
+
+#[test]
+fn browser_card_can_store_boot_files_and_a_raw_jpeg_pair() {
+    use fujimod_emulator_devices::parts::sd_card::{Card, Options, SECTOR};
+
+    let prepared = prepare("x70-110-rec", &["x70-110-browser-camera".into()]).unwrap();
+    let options = &model(&prepared, "sd")["card"]["options"];
+    let mut card = Card::new(Options {
+        sectors: options["sectors"].as_u64().unwrap() as u32,
+        max_dirty_sectors: options["max_dirty_sectors"].as_u64().unwrap() as usize,
+    })
+    .unwrap();
+    // Boot media and captured photos occupy the same sparse sector budget.
+    // Exercise real reservations and writes, including a full sensor RAW and
+    // a 16 MiB JPEG, rather than only checking the configured numeric limit.
+    let block = vec![0x46; 2048 * SECTOR];
+    let mut sector = 8192;
+    for bytes in [32 * 1024 * 1024usize, 33 * 1024 * 1024, 16 * 1024 * 1024] {
+        let mut remaining = bytes.div_ceil(SECTOR);
+        while remaining > 0 {
+            let count = remaining.min(block.len() / SECTOR);
+            card.reserve_write(sector, count as u32).unwrap();
+            card.write_bytes(sector as u64 * SECTOR as u64, &block[..count * SECTOR])
+                .unwrap();
+            remaining -= count;
+            sector += count as u32;
+        }
+    }
+    assert_eq!(card.dirty_sectors(), sector as usize - 8192);
+    assert_eq!(card.sector(sector - 1).unwrap(), &block[..SECTOR]);
 }
 
 #[test]

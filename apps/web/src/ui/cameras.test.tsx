@@ -6,6 +6,7 @@ import {
   byModel,
   phases,
   started,
+  withOverrides,
   type FirmwareProgress,
   type Stage,
   type StageProgress,
@@ -149,7 +150,15 @@ test('the newest firmware version with progress represents its model', () => {
 
 test('started models draw a bar; the others are listed as not started', () => {
   const host = table(
-    [[{ name: 'EXR Processor II', years: '2013–2016', models: ['X70', 'X30', 'X20'] }]],
+    [
+      [
+        {
+          name: 'EXR Processor II',
+          years: '2013–2016',
+          models: ['X70', 'X30', 'X20'],
+        },
+      ],
+    ],
     [progress('X70', ['research', 'rec']), progress('X30', [], { a: 'fail' })],
   );
   expect([...host.querySelectorAll('.progress-row .name')].map((row) => row.textContent)).toEqual([
@@ -192,7 +201,15 @@ test('one tip is open at a time, whether tapped, hovered or focused', () => {
 
 test('the camera popover asks an owner for help until every camera step passes', () => {
   const host = table(
-    [[{ name: 'EXR Processor II', years: '', models: ['X-E2', 'X-E2S', 'X70'] }]],
+    [
+      [
+        {
+          name: 'EXR Processor II',
+          years: '',
+          models: ['X-E2', 'X-E2S', 'X70'],
+        },
+      ],
+    ],
     [
       progress('X-E2', ['research', 'rec']),
       progress('X-E2S', ['research', 'rec', 'camera-identity']),
@@ -218,7 +235,15 @@ test('a started model missing from the generation list appears under Other camer
 
 test('bodies a contributor owns are outlined and the camera popover names the owners', () => {
   const host = table(
-    [[{ name: 'EXR Processor II', years: '', models: ['X70', 'X30', 'X100V', 'X20'] }]],
+    [
+      [
+        {
+          name: 'EXR Processor II',
+          years: '',
+          models: ['X70', 'X30', 'X100V', 'X20'],
+        },
+      ],
+    ],
     [progress('X70', ['research']), progress('X30', ['research'])],
     [
       { name: 'One', github: 'one', bodies: ['X70', 'X100V'] },
@@ -252,4 +277,19 @@ test('bodies a contributor owns are outlined and the camera popover names the ow
   expect(owned?.querySelector('.help')?.textContent).toBe('Have an X70? Help test it');
   expect(unowned?.querySelector('.tip-value')?.textContent).toBe('Needs an owner');
   expect(unowned?.querySelector('.owners')).toBeNull();
+});
+
+test('a complete override publishes every phase and step as done', () => {
+  const [document] = withOverrides(
+    [progress('X70', ['research'], { a: 'pass', b: 'fail' })],
+    [{ firmware_id: 'x70-100', complete: true }],
+  );
+  const list = phases(document!);
+  expect(list.every((phase) => phase.fraction === 1)).toBe(true);
+  expect(list.every((phase) => phase.steps.every((step) => step.fraction === 1))).toBe(true);
+  expect(list.map((phase) => phase.value)).toEqual(['Done', 'Done', 'Done', '2 of 2', 'Done']);
+  expect(started(document!)).toBe(true);
+  expect(() => withOverrides([], [{ firmware_id: 'x70-100', complete: true }])).toThrow(
+    'unknown firmware',
+  );
 });

@@ -1,3 +1,4 @@
+import { BatteryCycleIcon } from '../ui/battery-cycle';
 import { For, Show } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import './tool-deck.css';
@@ -92,7 +93,8 @@ export function ToolDeck(props: {
           <h2>Enter service mode</h2>
           <p>
             Service mode exposes the camera’s ff80 USB connection. Switching the camera off in
-            service mode restores factory settings. Remove the battery to leave service mode.
+            service mode restores factory settings. <BatteryCycleIcon />
+            Remove the battery to leave service mode.
           </p>
           <button class="td-cta" onClick={() => props.onServiceMode()}>
             Show instructions

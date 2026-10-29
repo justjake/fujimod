@@ -1,10 +1,58 @@
 use super::*;
 use fujimod_emulator_devices::parts::{optics::Position, sd_card, sd_card::Card};
 use fujimod_emulator_exr2_resources::Wire;
-use fujimod_emulator_imaging::{
-    analysis::ImageLayout,
-    exposure::Exposure,
-};
+use fujimod_emulator_imaging::{analysis::ImageLayout, exposure::Exposure};
+
+#[test]
+fn noisy_rgb_input_is_atomic_and_checkpointed_without_changing_the_latched_frame() {
+    let mut resources = resources();
+    let input = images(&resources).unwrap().sensors["sensor"].clone();
+    input.lock().unwrap().latch(5).unwrap();
+    let latched = input.lock().unwrap().latched.clone();
+    let noise = serde_json::json!({"seed":4,"realization":9,"full_well_electrons":20000.,"read_noise_electrons":3.});
+    resources
+        .images()
+        .unwrap()
+        .sensor_rgb_noise("sensor", 2, 1, &[128; 6], 1000., noise.clone())
+        .unwrap();
+    assert!(Arc::ptr_eq(&latched, &input.lock().unwrap().latched));
+    let frame = input.lock().unwrap().current.clone();
+    assert_eq!(frame.noise.unwrap().realization, 9);
+    let before = resources.fingerprint().unwrap();
+    let archive = resources
+        .checkpoint()
+        .unwrap()
+        .export()
+        .unwrap()
+        .to_bytes()
+        .unwrap();
+    let mut invalid = noise.clone();
+    invalid["full_well_electrons"] = serde_json::json!(-1.);
+    for invalid in [serde_json::json!({}), invalid] {
+        assert!(
+            resources
+                .images()
+                .unwrap()
+                .sensor_rgb_noise("sensor", 2, 1, &[128; 6], 1000., invalid)
+                .is_err()
+        );
+        assert_eq!(resources.fingerprint().unwrap(), before);
+    }
+    resources
+        .images()
+        .unwrap()
+        .sensor_rgb("sensor", 2, 1, &[1; 6], 1000.)
+        .unwrap();
+    assert!(input.lock().unwrap().current.noise.is_none());
+    let archive = Checkpoint::from_bytes(&archive).unwrap();
+    let restored = resources.import_checkpoint(&archive).unwrap();
+    resources.restore_checkpoint(&restored).unwrap();
+    assert_eq!(resources.fingerprint().unwrap(), before);
+    assert_eq!(
+        latched.fingerprint(),
+        input.lock().unwrap().latched.fingerprint()
+    );
+}
 
 #[test]
 fn checkpoint_graph_resources_restore_existing_stream_scene_and_signal_handles() {
@@ -48,8 +96,14 @@ fn checkpoint_graph_resources_restore_existing_stream_scene_and_signal_handles()
     let saved = resources.checkpoint().unwrap();
     let captured = images(&resources).unwrap().checkpoint().unwrap();
     let captured = checkpoint::saved_sensor(&captured.sensors["sensor"]).unwrap();
-    assert!(Arc::ptr_eq(&captured.current, &sensor.lock().unwrap().current));
-    assert!(Arc::ptr_eq(&captured.latched, &sensor.lock().unwrap().latched));
+    assert!(Arc::ptr_eq(
+        &captured.current,
+        &sensor.lock().unwrap().current
+    ));
+    assert!(Arc::ptr_eq(
+        &captured.latched,
+        &sensor.lock().unwrap().latched
+    ));
     logic.drive(true);
     position.publish(-42);
     image.use_analytic();
@@ -152,7 +206,10 @@ fn resource_archive_restores_into_fresh_wires_media_and_sensor_handles() {
     assert_eq!(target.fingerprint().unwrap(), before);
     target.restore_checkpoint(&saved).unwrap();
     assert_eq!(target.fingerprint().unwrap(), expected);
-    assert!(Arc::ptr_eq(&images(&target).unwrap().sensors["sensor"], &handle));
+    assert!(Arc::ptr_eq(
+        &images(&target).unwrap().sensors["sensor"],
+        &handle
+    ));
     let sensor = handle.lock().unwrap();
     assert!(!Arc::ptr_eq(&sensor.current, &sensor.latched));
     assert_eq!(sensor.edge, Some(FrameEdge { tick: 42, index: 1 }));

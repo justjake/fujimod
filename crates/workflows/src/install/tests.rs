@@ -276,3 +276,50 @@ fn verification_mismatch_fences_the_session() {
     assert_eq!(session.state(), SessionState::CompletionUnknown);
     assert_eq!(script.remaining(), 0);
 }
+
+fn upload_chunk_steps(address: u32, bytes: &[u8]) -> Vec<E> {
+    let mut steps = read(0x1000, &0x8000u32.to_le_bytes());
+    steps.extend(read(0x1004, &8u32.to_le_bytes()));
+    steps.extend(write(0x1000, &address.to_le_bytes()));
+    steps.extend(read(0x1000, &address.to_le_bytes()));
+    let mut setup = vec![0; 32];
+    setup[..4].copy_from_slice(&0x760001u32.to_le_bytes());
+    setup[20..24].copy_from_slice(&8u32.to_le_bytes());
+    steps.extend(exchange(setup.clone(), setup.clone()));
+    let mut padded = bytes.to_vec();
+    padded.resize(8, 0);
+    steps.extend([
+        E::Control(envelope(RequestKind::WriteData, 8, 0x1234)),
+        E::Write(padded),
+        E::Control(envelope(RequestKind::EmptyResponse, 32, 0x1234)),
+        E::Read {
+            maximum: 32,
+            data: setup,
+        },
+    ]);
+    steps.extend(read(0x1000, &address.to_le_bytes()));
+    steps.extend(write(0x1000, &0x8000u32.to_le_bytes()));
+    steps.extend(read(0x1000, &0x8000u32.to_le_bytes()));
+    steps
+}
+#[test]
+fn large_upload_restores_each_capacity_bounded_chunk() {
+    let mut steps = upload_chunk_steps(0x4000, b"hello wo");
+    steps.extend(upload_chunk_steps(0x4008, b"rld"));
+    let (mut session, script) = opened(steps);
+    let destination =
+        UploadDestination::new(Address(0x1000), Address(0x8000), Address(0x1004), nz(8)).unwrap();
+    block_on(image().upload_chunks(&mut session, destination, limits())).unwrap();
+    assert_eq!(script.remaining(), 0);
+}
+#[test]
+fn chunk_guard_failure_preserves_foreign_destination() {
+    let mut steps = upload_chunk_steps(0x4000, b"hello wo");
+    steps.extend(read(0x1000, &0x9999u32.to_le_bytes()));
+    let (mut session, script) = opened(steps);
+    let destination =
+        UploadDestination::new(Address(0x1000), Address(0x8000), Address(0x1004), nz(8)).unwrap();
+    assert!(block_on(image().upload_chunks(&mut session, destination, limits())).is_err());
+    assert_eq!(script.remaining(), 0);
+    assert_eq!(session.state(), SessionState::CompletionUnknown);
+}

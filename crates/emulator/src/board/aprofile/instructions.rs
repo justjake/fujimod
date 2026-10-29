@@ -2,6 +2,7 @@
 use crate::board::{State, scalar, set};
 use fujimod_emulator_cpu::{Access, Cpu, Hint, Register, arm};
 
+#[cfg(test)]
 fn system(encoding: u16) -> Register {
     Register::Arm64System(arm::SystemRegister::from_encoding(encoding))
 }
@@ -279,7 +280,7 @@ mod tests {
         set(cpu, system(0xc600), 0x2000).unwrap();
         let mut state = board.state.borrow_mut();
         state.pins[0] = (true, false);
-        assert!(state.aarch64_before(cpu, 0, 0x1000).unwrap());
+        assert!(fujimod_emulator_cpu::arm64::enter_interrupt(cpu, true, false).unwrap());
         assert_eq!(scalar(cpu, Register::Pc).unwrap(), 0x2280);
         assert_eq!(scalar(cpu, system(0xc201)).unwrap(), 0x1000);
         assert_eq!(scalar(cpu, system(0xc200)).unwrap(), 5);
@@ -298,43 +299,28 @@ impl State {
         if self.aprofile[core].is_none() || cpu.features().architectural_exits {
             return Ok(false);
         }
-        let pstate = scalar(cpu, Register::Pstate)?;
-        let (irq, fiq) = self.pins[core];
-        if (irq && pstate & 0x80 == 0) || (fiq && pstate & 0x40 == 0) {
-            let fiq = fiq && pstate & 0x40 == 0;
-            let el = (pstate >> 2) & 3;
-            if el > 1
-                || scalar(cpu, system(0xf088))? & if fiq { 4 } else { 2 } != 0
-                || scalar(cpu, system(0xe088))? & if fiq { 8 } else { 0x10 } != 0
-            {
-                return Err("AArch64 interrupt routing above EL1 is unsupported".into());
-            }
-            let offset = match pstate & 15 {
-                0 => 0x400,
-                4 => 0,
-                5 => 0x200,
-                _ => return Err("AArch64 interrupt entry mode is unsupported".into()),
-            } + if fiq { 0x100 } else { 0x80 };
-            let vector = scalar(cpu, system(0xc600))? + offset;
-            set(cpu, system(0xc201), pc)?;
-            set(cpu, system(0xc200), pstate)?;
-            set(cpu, Register::Pstate, (pstate & 0xf0000000) | 0x3c5)?;
-            set(cpu, Register::Pc, vector)?;
+        if fujimod_emulator_cpu::arm64::enter_interrupt(cpu, self.pins[core].0, self.pins[core].1)?
+        {
             cpu.stop()?;
             return Ok(true);
         }
         let mut bytes = [0; 4];
         cpu.read_virtual(pc, Access::Fetch, &mut bytes)?;
         let word = u32::from_le_bytes(bytes);
+        self.aarch64_instruction(cpu, core, pc, word)
+    }
+    pub(in crate::board) fn aarch64_instruction(
+        &mut self,
+        cpu: &dyn Cpu,
+        core: usize,
+        pc: u64,
+        word: u32,
+    ) -> Result<bool, String> {
+        let pstate = scalar(cpu, Register::Pstate)?;
         if word & 0xffd00000 == 0xd5100000 {
             let encoding = ((word >> 5) & 0xffff) as u16;
             let r = arm::SystemRegister::from_encoding(encoding);
-            let framework = r.crn == 9
-                || r.crn == 14
-                || r.crn == 15
-                || encoding == 0xc230
-                || encoding == 0xf665
-                || (r.op0 == 3 && r.op1 == 0 && r.crn == 12 && (8..=15).contains(&r.crm));
+            let framework = fujimod_emulator_cpu::arm64::framework_instruction(word);
             if framework {
                 if encoding == 0xf665 && pstate & 12 != 12 {
                     return Err("ICC_SRE_EL3 requires EL3".into());

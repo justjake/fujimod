@@ -4,6 +4,10 @@
 use fujimod_unicorn_sys as _;
 #[cfg(target_os = "emscripten")]
 mod available_memory;
+pub mod accounting;
+pub mod aprofile;
+pub mod memory;
+mod observers;
 pub mod rprofile;
 #[cfg(test)]
 mod test_support;
@@ -93,8 +97,8 @@ impl Library {
         check(&core.api, unsafe {
             (core.api.uc_ctl)(raw, ffi::ctl(13, 1, 1), translation_cache_size_bytes)
         })?;
-        // Page-hook code invalidation assumes every translated page is
-        // watched. A64 has no translation filter to maintain that set yet.
+        // Page-hook code invalidation requires translation-installed watches.
+        // The AArch64 board still uses ordinary instruction observers.
         if let Some(enable) = core.api.extensions.page_hooks {
             check(&core.api, unsafe { enable(raw, model != Model::ArmV8A) })?;
         }
@@ -150,6 +154,30 @@ impl Core {
             .set_block_exits
             .ok_or("CPU backend has no block-entry exit control")?;
         check(&self.api, unsafe { set(self.raw, enabled) })
+    }
+    pub(crate) fn set_instruction_counter(&self, enabled: bool) -> Result<(), String> {
+        let set = self
+            .api
+            .extensions
+            .set_instruction_counter
+            .ok_or("CPU backend has no translated instruction counter")?;
+        check(&self.api, unsafe { set(self.raw, enabled) })
+    }
+    pub(crate) fn reset_instruction_counter(&self) -> Result<(), String> {
+        let reset = self
+            .api
+            .extensions
+            .reset_instruction_counter
+            .ok_or("CPU backend has no translated instruction counter")?;
+        check(&self.api, unsafe { reset(self.raw) })
+    }
+    pub(crate) fn instruction_counter(&self) -> Result<u64, String> {
+        let read = self
+            .api
+            .extensions
+            .instruction_counter
+            .ok_or("CPU backend has no translated instruction counter")?;
+        Ok(unsafe { read(self.raw) })
     }
 }
 #[derive(Default)]
@@ -470,6 +498,8 @@ impl Cpu for Core {
     }
     fn features(&self) -> Features {
         let e = &self.api.extensions;
+        let frontend = self.model != Model::ArmV8A
+            || e.features & ffi::FEATURE_AARCH64_ACCOUNTING != 0;
         Features {
             asynchronous_runs: false,
             guest_clock: false,
@@ -478,12 +508,12 @@ impl Cpu for Core {
             instruction_limit: true,
             shared_physical_maps: false,
             instruction_progress: false,
-            translation_filter: self.model != Model::ArmV8A && e.insn_filter.is_some()
+            translation_filter: frontend && e.insn_filter.is_some()
                 && e.retry_block.is_some()
                 && e.request_restart.is_some(),
             // The R-profile backend writes the appended pause pointer. Require
             // its ABI bit before exposing the accounting record to that backend.
-            block_accounting: self.model != Model::ArmV8A && e.features & 2 != 0
+            block_accounting: frontend && e.features & 2 != 0
                 && e.features & ffi::FEATURE_PAUSE_ACCOUNTING_LAYOUT != 0
                 && e.features & ffi::FEATURE_PARALLEL_TCG != 0
                 && e.set_parallel_cpus.is_some()
@@ -492,6 +522,11 @@ impl Cpu for Core {
             backing_observation: e.observe_backings.is_some(),
             store_pc_control: e.write_hook_pc_sync.is_some(),
         }
+    }
+    fn set_execution_policy(&self, _policy: ExecutionPolicy) -> Result<(), String> {
+        // Unicorn keeps exact instruction limits for both policies. The board
+        // decides whether to serialize this synchronous backend with peers.
+        Ok(())
     }
     fn read_register(&self, register: Register, out: &mut [u8]) -> Result<usize, String> {
         let mut size = out.len();
@@ -1352,6 +1387,22 @@ mod tests {
         assert_eq!(reg(&cpu, Register::Sp), 0x2ff0);
         assert_eq!(reg(&cpu, Register::Pstate), reg(&cpu, arm::CPSR));
         assert_eq!(reg(&cpu, psp), 0x2f00);
+    }
+    #[test]
+    fn m4_accepts_interactive_policy_while_preserving_exact_instruction_limits() {
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        cpu.write_memory(0x1000, &[0x07, 0x20, 0x08, 0x22]).unwrap();
+        cpu.run(Run {
+            begin: 0x1001,
+            until: None,
+            watchdog_us: 0,
+            instructions: Some(1),
+        })
+        .unwrap();
+        assert_eq!(reg(&cpu, arm::PC), 0x1002);
+        assert_eq!(reg(&cpu, arm::CORE[0]), 7);
     }
     #[test]
     fn a7_page_tables_translate_and_read_across_virtual_sections() {

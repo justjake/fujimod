@@ -3,6 +3,7 @@
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum RequestKind {
+    Reclaim = 0x1d,
     Open = 0xc0,
     Ping = 0xc2,
     Close = 0xc4,

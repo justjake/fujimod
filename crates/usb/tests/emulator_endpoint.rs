@@ -48,6 +48,9 @@ struct Model {
     release_behavior: ResourceBehavior,
     short_control: bool,
     short_write: bool,
+    memory: std::collections::BTreeMap<u32, u8>,
+    callback_disconnect: bool,
+    triggered: bool,
 }
 struct Provider {
     descriptors: Vec<InterfaceDescriptor>,
@@ -132,10 +135,18 @@ impl Endpoints for ModelEndpoints {
                 return completed(1);
             }
             match data[0] {
+                0x1d => {
+                    assert_eq!(data, &[0x1d, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+                    model.session_open = false;
+                    model.reply = vec![0x29, 0];
+                }
                 0xc0 => {
-                    assert!(!model.session_open);
+                    model.reply = if model.session_open {
+                        vec![0, 0, 0, 0, 0, 0, 1, 0]
+                    } else {
+                        vec![42, 0, 0, 0, 0, 0, 0, 64]
+                    };
                     model.session_open = true;
-                    model.reply = vec![42, 0, 0, 0, 0, 0, 0, 64];
                 }
                 0xc2 => {
                     assert!(model.session_open);
@@ -168,6 +179,34 @@ impl Endpoints for ModelEndpoints {
             let mut model = self.0.try_lock().expect("serialized endpoint state");
             if model.short_write {
                 return completed(1);
+            }
+            if data.len() >= 36 && data[..4] == 0x200001u32.to_le_bytes() {
+                let function = u32::from_le_bytes(data[16..20].try_into().unwrap());
+                let address = u32::from_le_bytes(data[28..32].try_into().unwrap());
+                let length = u32::from_le_bytes(data[32..36].try_into().unwrap());
+                let mut reply = data[..36].to_vec();
+                match function {
+                    2 => reply.extend(
+                        (0..length).map(|i| *model.memory.get(&(address + i)).unwrap_or(&0)),
+                    ),
+                    3 => {
+                        assert_eq!(data.len(), 36 + length as usize);
+                        for (i, byte) in data[36..].iter().enumerate() {
+                            model.memory.insert(address + i as u32, *byte);
+                        }
+                    }
+                    _ => panic!("unsupported synthetic memory command"),
+                }
+                model.reply = reply;
+                return completed(data.len());
+            }
+            if data.len() == 32 && data[..4] == 0x450006u32.to_le_bytes() {
+                model.triggered = true;
+                if model.callback_disconnect {
+                    model.read_behavior = ReadBehavior::Disconnected;
+                }
+                model.reply = data.to_vec();
+                return completed(data.len());
             }
             if data.len() != 32 || data[..4] != 0x150000u32.to_le_bytes() {
                 return Completion {
@@ -660,4 +699,108 @@ fn an_owned_claim_prevents_a_second_connection() {
     assert!(provider.model.try_lock().unwrap().claimed);
     drop(connection);
     assert!(!provider.model.try_lock().unwrap().claimed);
+}
+
+#[test]
+fn stale_emulated_session_can_be_explicitly_reclaimed_and_reopened() {
+    let mut provider = Provider::new();
+    drop(open(&mut provider, 256));
+    let stale = block_on(Connection::open_emulated(
+        &mut provider,
+        SELECTION,
+        options(256),
+    ))
+    .unwrap();
+    assert!(matches!(
+        block_on(stale.begin_session(None)),
+        Err(Error::SessionAlreadyOpen)
+    ));
+    let mut connection = block_on(Connection::open_emulated(
+        &mut provider,
+        SELECTION,
+        options(256),
+    ))
+    .unwrap();
+    assert!(block_on(connection.reclaim_session()).unwrap());
+    let session = block_on(connection.begin_session(None)).unwrap();
+    block_on(session.close()).unwrap();
+}
+
+#[test]
+fn callback_invocation_uses_emulated_endpoint_memory_and_disconnect() {
+    use fujimod_usb::{
+        ff80::commands::{
+            memory::{Address, DebugMemoryLimits},
+            research,
+        },
+        operations::callback::*,
+    };
+    for disconnect in [false, true] {
+        let mut provider = Provider::new();
+        let mut session = open(&mut provider, 256);
+        provider.model.try_lock().unwrap().callback_disconnect = disconnect;
+        let trigger = research::Request::new(
+            research::CommandCode(0x450006),
+            vec![0; 16],
+            NonZeroU32::new(32).unwrap(),
+        )
+        .unwrap();
+        let mut reply = vec![0; 32];
+        reply[..4].copy_from_slice(&0x450006u32.to_le_bytes());
+        let plan = Invocation {
+            preconditions: vec![],
+            writes: vec![GuardedWrite {
+                address: Address(0x200),
+                accepted: vec![vec![0; 4]],
+                bytes: vec![1, 2, 3, 4],
+            }],
+            synchronization: vec![],
+            slot: CallbackSlot {
+                address: Address(0x100),
+                required: vec![0; 8],
+                value: vec![9; 8],
+            },
+            trigger,
+            expected: if disconnect {
+                ExpectedOutcome::NoReply
+            } else {
+                ExpectedOutcome::Reply(vec![reply])
+            },
+            limits: DebugMemoryLimits {
+                read: NonZeroU32::new(64).unwrap(),
+                write: NonZeroU32::new(64).unwrap(),
+            },
+        };
+        let result = block_on(invoke(&mut session, &plan)).unwrap();
+        assert_eq!(result.is_none(), disconnect);
+        let model = provider.model.try_lock().unwrap();
+        assert!(model.triggered);
+        assert_eq!(model.memory[&0x200], 1);
+        assert_eq!(model.memory[&0x100], if disconnect { 9 } else { 0 });
+        assert_eq!(
+            session.state(),
+            if disconnect {
+                SessionState::CompletionUnknown
+            } else {
+                SessionState::Ready
+            }
+        );
+    }
+}
+
+#[test]
+fn emulated_optional_reclaim_timeout_still_allows_fresh_open() {
+    let mut provider = Provider::new();
+    provider.model.try_lock().unwrap().session_open = true;
+    let mut connection = block_on(Connection::open_emulated(
+        &mut provider,
+        SELECTION,
+        options(256),
+    ))
+    .unwrap();
+    provider.model.try_lock().unwrap().read_behavior = ReadBehavior::Pending;
+    assert!(!block_on(connection.reclaim_session()).unwrap());
+    provider.model.try_lock().unwrap().read_behavior = ReadBehavior::Normal;
+    let session = block_on(connection.begin_session(None)).unwrap();
+    block_on(session.close()).unwrap();
 }

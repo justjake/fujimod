@@ -85,6 +85,21 @@ impl Script {
     }
 }
 #[pyfunction]
+#[pyo3(signature=(exchanges,*,max_reply_bytes=8388608))]
+fn connection(
+    exchanges: Vec<Exchange>,
+    max_reply_bytes: u32,
+) -> PyResult<(asynchronous::connection::AsyncConnection, Script)> {
+    let script = usb::testing::Script::new(exchanges.into_iter().map(|e| e.inner));
+    let native = script
+        .connection(max_reply_bytes)
+        .map_err(asynchronous::error)?;
+    Ok((
+        asynchronous::connection::AsyncConnection::new(native),
+        Script { inner: script },
+    ))
+}
+#[pyfunction]
 #[pyo3(signature=(exchanges,limits,*,max_reply_bytes=8388608,trace=None))]
 async fn session(
     exchanges: Vec<Exchange>,
@@ -199,6 +214,7 @@ pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     module.add_class::<Exchange>()?;
     module.add_class::<Script>()?;
     module.add_function(wrap_pyfunction!(session, &module)?)?;
+    module.add_function(wrap_pyfunction!(connection, &module)?)?;
     module.add_function(wrap_pyfunction!(peer_session, &module)?)?;
     Ok(module)
 }

@@ -1,10 +1,17 @@
 //! Ordered single-sample rasterization over Morton color/depth surfaces.
-use super::{Engine, MAX_BYTES, Reader, Writes, float24, shader::Vector};
+#[cfg(test)]
+use super::Engine;
+use super::{
+    MAX_BYTES, Reader, Snapshots,
+    draw_state::{ColorTargetFormat, CullMode, DrawState, TextureUnit},
+    shader::Vector,
+};
 use std::collections::BTreeMap;
 #[derive(Default)]
 pub(super) struct Targets {
     buffers: BTreeMap<u64, Vec<u8>>,
     textures: BTreeMap<(u64, usize), Vec<u8>>,
+    written: BTreeMap<u64, Vec<bool>>,
 }
 impl Targets {
     fn buffer(
@@ -32,7 +39,32 @@ impl Targets {
         }
         Ok(bytes)
     }
-    pub fn into_writes(self) -> Writes {
+    fn mark_written(&mut self, address: u64, offset: usize, count: usize) {
+        let extent = self.buffers[&address].len();
+        self.written
+            .entry(address)
+            .or_insert_with(|| vec![false; extent])[offset..offset + count]
+            .fill(true);
+    }
+    pub fn written_ranges(&self) -> Vec<(u64, usize)> {
+        let mut ranges = Vec::new();
+        for (&address, flags) in &self.written {
+            let mut offset = 0;
+            while offset < flags.len() {
+                if !flags[offset] {
+                    offset += 1;
+                    continue;
+                }
+                let begin = offset;
+                while offset < flags.len() && flags[offset] {
+                    offset += 1;
+                }
+                ranges.push((address + begin as u64, offset - begin));
+            }
+        }
+        ranges
+    }
+    pub fn into_snapshots(self) -> Snapshots {
         self.buffers.into_iter().collect()
     }
 }
@@ -47,30 +79,29 @@ fn morton(x: usize, y: usize, width: usize) -> usize {
         + ((y & 4) << 3)
 }
 #[derive(Clone, Copy)]
-struct Vertex {
-    position: Vector,
-    color: Vector,
-    uv: [[f32; 2]; 2],
+pub(super) struct RasterVertex {
+    pub(super) position: Vector,
+    pub(super) color: Vector,
+    pub(super) uv: [[f32; 2]; 2],
 }
-fn vertex(e: &Engine, v: &[Vector; 16]) -> Vertex {
+fn vertex(state: &DrawState, v: &[Vector; 16]) -> RasterVertex {
     let mut values = [0.; 32];
-    for (slot, vector) in v.iter().enumerate().take(7) {
-        let map = e.reg(0x250 + slot as u16);
+    for (slot, vector) in v.iter().enumerate().take(state.vertex.output_map.0.len()) {
         for (i, value) in vector.iter().enumerate() {
-            let semantic = map >> (8 * i) & 31;
+            let semantic = state.vertex.output_map.0[slot][i] as u32;
             if semantic != 31 {
                 values[semantic as usize] = *value;
             }
         }
     }
-    Vertex {
+    RasterVertex {
         position: values[..4].try_into().unwrap(),
         color: values[8..12].try_into().unwrap(),
         uv: [[values[12], values[13]], [values[14], values[15]]],
     }
 }
-fn mix(a: Vertex, b: Vertex, t: f32) -> Vertex {
-    Vertex {
+fn mix(a: RasterVertex, b: RasterVertex, t: f32) -> RasterVertex {
+    RasterVertex {
         position: std::array::from_fn(|i| a.position[i] + (b.position[i] - a.position[i]) * t),
         color: std::array::from_fn(|i| a.color[i] + (b.color[i] - a.color[i]) * t),
         uv: std::array::from_fn(|u| {
@@ -78,7 +109,7 @@ fn mix(a: Vertex, b: Vertex, t: f32) -> Vertex {
         }),
     }
 }
-fn plane(v: Vertex, i: usize) -> f32 {
+fn plane(v: RasterVertex, i: usize) -> f32 {
     let [x, y, z, w] = v.position;
     match i {
         0 => x + w,
@@ -89,26 +120,32 @@ fn plane(v: Vertex, i: usize) -> f32 {
         _ => -z,
     }
 }
-fn project(e: &Engine, v: Vertex, point: bool) -> Vertex {
+fn project(state: &DrawState, v: RasterVertex, point: bool) -> RasterVertex {
     let mut v = v;
-    let w = if point { 1. } else { v.position[3] };
-    let origin = e.reg(0x268);
-    v.position = [
-        (v.position[0] / w + 1.) * float24(e.reg(0x241)) + (origin & 65535) as f32,
-        (v.position[1] / w + 1.) * float24(e.reg(0x243)) + (origin >> 16) as f32,
-        v.position[2] / w * float24(e.reg(0x24d)) + float24(e.reg(0x24e)),
-        1. / w,
-    ];
+    v.position = state.viewport.project(v.position, point);
     v
 }
 pub(super) fn triangle(
-    e: &Engine,
+    state: &DrawState,
     vertices: [[Vector; 16]; 3],
     read: &mut Reader<'_>,
     out: &mut Targets,
 ) -> Result<(), String> {
-    let mut polygon: Vec<_> = vertices.iter().map(|v| vertex(e, v)).collect();
-    if e.reg(0x258) & 1 != 0 {
+    for v in clipped_triangles(state, vertices)? {
+        raster_triangle(state, v, read, out)?;
+    }
+    Ok(())
+}
+
+/// Clip one DMP triangle and return the screen-space triangles that survive.
+/// Positions are snapped to the DMP 1/16-pixel grid before either renderer
+/// consumes them, so host rasterization sees the same primitive edges.
+pub(super) fn clipped_triangles(
+    state: &DrawState,
+    vertices: [[Vector; 16]; 3],
+) -> Result<Vec<[RasterVertex; 3]>, String> {
+    let mut polygon: Vec<_> = vertices.iter().map(|v| vertex(state, v)).collect();
+    if state.raster.flat_shading {
         let provoking = polygon[2].color;
         for v in &mut polygon {
             v.color = provoking;
@@ -118,7 +155,7 @@ pub(super) fn triangle(
         .iter()
         .any(|v| v.position.iter().any(|x| !x.is_finite()))
     {
-        return Ok(());
+        return Ok(Vec::new());
     }
     for p in 0..6 {
         let mut clipped = Vec::new();
@@ -136,43 +173,55 @@ pub(super) fn triangle(
         }
         polygon = clipped;
         if polygon.len() < 3 {
-            return Ok(());
+            return Ok(Vec::new());
         }
     }
+    let (width, height) = extent(state)?;
+    let mut result = Vec::new();
     for i in 1..polygon.len() - 1 {
-        let v = [
-            project(e, polygon[0], false),
-            project(e, polygon[i], false),
-            project(e, polygon[i + 1], false),
+        let mut v = [
+            project(state, polygon[0], false),
+            project(state, polygon[i], false),
+            project(state, polygon[i + 1], false),
         ];
-        raster_triangle(e, v, read, out)?;
+        let q = v.map(|vertex| {
+            [
+                (vertex.position[0] * 16.).round() as i64,
+                (vertex.position[1] * 16.).round() as i64,
+            ]
+        });
+        let area = edge(q[0], q[1], q[2]);
+        if area == 0
+            || state.raster.cull_mode == CullMode::Front && area > 0
+            || state.raster.cull_mode == CullMode::Back && area < 0
+        {
+            continue;
+        }
+        for index in 0..3 {
+            v[index].position[0] = q[index][0] as f32 / 16.;
+            v[index].position[1] = q[index][1] as f32 / 16.;
+        }
+        // Preserve the CPU bounds check before handing geometry to the host.
+        if width == 0 || height == 0 {
+            continue;
+        }
+        result.push(v);
     }
-    Ok(())
+    Ok(result)
 }
-fn extent(e: &Engine) -> Result<(usize, usize), String> {
-    let dimensions = e.reg(0x31e);
-    let width = (dimensions & 8191) as usize;
-    let height = (dimensions >> 16 & 8191) as usize;
-    if width == 0
-        || height == 0
-        || !width.is_multiple_of(8)
-        || !height.is_multiple_of(8)
-        || width * height * 4 > MAX_BYTES
-    {
-        return Err(format!("DMP unsupported 3D target extent {dimensions:#x}"));
-    }
-    Ok((width, height))
+fn extent(state: &DrawState) -> Result<(usize, usize), String> {
+    state.targets.extent.dimensions()
 }
 fn edge(a: [i64; 2], b: [i64; 2], p: [i64; 2]) -> i64 {
     (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
 }
 fn raster_triangle(
-    e: &Engine,
-    mut v: [Vertex; 3],
+    state: &DrawState,
+    mut v: [RasterVertex; 3],
     read: &mut Reader<'_>,
     out: &mut Targets,
 ) -> Result<(), String> {
-    let (width, height) = extent(e)?;
+    let (width, height) = extent(state)?;
     let mut q = v.map(|v| {
         [
             (v.position[0] * 16.).round() as i64,
@@ -183,8 +232,8 @@ fn raster_triangle(
     if area == 0 {
         return Ok(());
     }
-    let cull = e.reg(0x240) & 3;
-    if (cull == 1 && area > 0) || (cull == 2 && area < 0) {
+    let cull = state.raster.cull_mode;
+    if (cull == CullMode::Front && area > 0) || (cull == CullMode::Back && area < 0) {
         return Ok(());
     }
     if area < 0 {
@@ -201,22 +250,8 @@ fn raster_triangle(
         as usize;
     let edges = [(q[1], q[2]), (q[2], q[0]), (q[0], q[1])];
     let inclusive = edges.map(|(a, b)| b[1] < a[1] || (b[1] == a[1] && b[0] > a[0]));
-    #[cfg(not(target_arch = "wasm32"))]
-    let accelerated = if !e.host_acceleration_enabled() {
-        None
-    } else {
-        super::gpu::coverage(q, [x0, y0, x1, y1], inclusive)?
-    };
-    #[cfg(target_arch = "wasm32")]
-    let accelerated: Option<Vec<u32>> = None;
     for y in y0..y1 {
         for x in x0..x1 {
-            if accelerated
-                .as_ref()
-                .is_some_and(|mask| mask[(y - y0) * (x1 - x0) + x - x0] == 0)
-            {
-                continue;
-            }
             let p = [x as i64 * 16 + 8, y as i64 * 16 + 8];
             let weights = edges.map(|(a, b)| edge(a, b, p));
             if weights
@@ -251,8 +286,8 @@ fn raster_triangle(
                 })
             });
             let lod = std::array::from_fn(|unit| {
-                let dimensions = e.reg(if unit == 0 { 0x282 } else { 0x292 });
-                let scales = [(dimensions >> 16) as f32, (dimensions & 65535) as f32];
+                let texture = &state.textures[unit];
+                let scales = [texture.width as f32, texture.height as f32];
                 let derivative = |axis| {
                     let db = edges.map(|(a, b)| {
                         if axis == 0 {
@@ -279,23 +314,23 @@ fn raster_triangle(
                     -128.
                 }
             });
-            fragment(e, (x, y, depth), color, uv, lod, read, out)?;
+            fragment(state, (x, y, depth), color, uv, lod, read, out)?;
         }
     }
     Ok(())
 }
 /// The smooth-line distance filter is quantized to eight coverage steps.
 pub(super) fn line(
-    e: &Engine,
+    state: &DrawState,
     outputs: [[Vector; 16]; 2],
     read: &mut Reader<'_>,
     out: &mut Targets,
 ) -> Result<(), String> {
-    if e.reg(0x271) & 1 != 0 {
+    if state.raster.line_stipple {
         return Err("DMP line stipple is unsupported".into());
     }
-    let mut a = vertex(e, &outputs[0]);
-    let mut b = vertex(e, &outputs[1]);
+    let mut a = vertex(state, &outputs[0]);
+    let mut b = vertex(state, &outputs[1]);
     for p in 0..6 {
         let da = plane(a, p);
         let db = plane(b, p);
@@ -308,18 +343,18 @@ pub(super) fn line(
             b = mix(a, b, da / (da - db));
         }
     }
-    let a = project(e, a, false);
-    let b = project(e, b, false);
+    let a = project(state, a, false);
+    let b = project(state, b, false);
     let dx = b.position[0] - a.position[0];
     let dy = b.position[1] - a.position[1];
     let length = libm::sqrtf(dx * dx + dy * dy);
     if length == 0. {
         return Ok(());
     }
-    let half = (e.reg(0x278) & 65535) as f32 / 32.;
-    let smooth = e.reg(0x270) & 0x20000 != 0;
+    let half = state.raster.line_half_width_32nds as f32 / 32.;
+    let smooth = state.raster.line_smooth;
     let radius = half + if smooth { 0.625 } else { 0. };
-    let (width, height) = extent(e)?;
+    let (width, height) = extent(state)?;
     for y in (a.position[1].min(b.position[1]) - radius).floor().max(0.) as usize
         ..(a.position[1].max(b.position[1]) + radius)
             .ceil()
@@ -351,11 +386,11 @@ pub(super) fn line(
             }
             let t = (along / length).clamp(0., 1.);
             let mut v = mix(a, b, t);
-            if e.reg(0x258) & 1 != 0 {
+            if state.raster.flat_shading {
                 v.color = b.color;
             }
-            fragment_coverage(
-                e,
+            fragment_coverage_state(
+                state,
                 (x, y, v.position[2], coverage),
                 v.color,
                 v.uv,
@@ -368,12 +403,12 @@ pub(super) fn line(
     Ok(())
 }
 pub(super) fn point(
-    e: &Engine,
+    state: &DrawState,
     output: &[Vector; 16],
     read: &mut Reader<'_>,
     out: &mut Targets,
 ) -> Result<(), String> {
-    let source = vertex(e, output);
+    let source = vertex(state, output);
     if source.position.iter().any(|v| !v.is_finite()) {
         return Ok(());
     }
@@ -385,8 +420,8 @@ pub(super) fn point(
         return Ok(());
     }
     let size = source.position[3].clamp(1., 2048.);
-    let v = project(e, source, true);
-    let (width, height) = extent(e)?;
+    let v = project(state, source, true);
+    let (width, height) = extent(state)?;
     let x0 = (v.position[0] - size * 0.5).ceil().clamp(0., width as f32) as usize;
     let y0 = (v.position[1] - size * 0.5).ceil().clamp(0., height as f32) as usize;
     let x1 = (v.position[0] + size * 0.5).ceil().clamp(0., width as f32) as usize;
@@ -395,7 +430,7 @@ pub(super) fn point(
         for x in x0..x1 {
             let mut uv = v.uv;
             for (unit, coords) in uv.iter_mut().enumerate() {
-                if e.reg(0x270) & (1 << (24 + unit)) != 0 {
+                if state.raster.point_coord_replace[unit] {
                     *coords = [
                         (x as f32 + 0.5 - v.position[0]) / size + 0.5,
                         (y as f32 + 0.5 - v.position[1]) / size + 0.5,
@@ -403,37 +438,14 @@ pub(super) fn point(
                 }
             }
             let lod = std::array::from_fn(|unit| {
-                let d = e.reg(if unit == 0 { 0x282 } else { 0x292 });
-                ((d >> 16).max(d & 65535) as f32 / size).max(0.0001).log2()
+                (state.textures[unit].width.max(state.textures[unit].height) as f32 / size)
+                    .max(0.0001)
+                    .log2()
             });
-            fragment(e, (x, y, v.position[2]), v.color, uv, lod, read, out)?;
+            fragment(state, (x, y, v.position[2]), v.color, uv, lod, read, out)?;
         }
     }
     Ok(())
-}
-fn test(op: u32, a: u32, b: u32) -> bool {
-    match op & 7 {
-        0 => false,
-        1 => true,
-        2 => a == b,
-        3 => a != b,
-        4 => a < b,
-        5 => a <= b,
-        6 => a > b,
-        _ => a >= b,
-    }
-}
-fn stencil(op: u32, old: u8, reference: u8) -> u8 {
-    match op & 7 {
-        0 => old,
-        1 => 0,
-        2 => reference,
-        3 => old.saturating_add(1),
-        4 => old.saturating_sub(1),
-        5 => !old,
-        6 => old.wrapping_add(1),
-        _ => old.wrapping_sub(1),
-    }
 }
 fn unpack_color(p: &[u8], format: u32) -> Result<Vector, String> {
     let expand = |v: u32, n: u32| v as f32 / ((1 << n) - 1) as f32;
@@ -489,59 +501,30 @@ fn unpack_color(p: &[u8], format: u32) -> Result<Vector, String> {
         _ => return Err(format!("DMP unsupported texture format {format}")),
     })
 }
-fn wrap(v: i32, n: usize, mode: u32) -> Option<usize> {
-    match mode {
-        0 => Some(v.clamp(0, n as i32 - 1) as usize),
-        1 => {
-            if v < 0 || v >= n as i32 {
-                None
-            } else {
-                Some(v as usize)
-            }
-        }
-        2 => Some(v.rem_euclid(n as i32) as usize),
-        3 => {
-            let p = v.rem_euclid(2 * n as i32) as usize;
-            Some(if p < n { p } else { 2 * n - 1 - p })
-        }
-        _ => None,
-    }
-}
 fn sample_level(
-    e: &Engine,
-    unit: usize,
+    sampler: &TextureUnit,
     uv: [f32; 2],
     level: u32,
     minifying: bool,
     read: &mut Reader<'_>,
     out: &mut Targets,
 ) -> Result<Vector, String> {
-    let base = if unit == 0 { 0x281 } else { 0x291 };
-    let dimensions = e.reg(base + 1);
-    let base_width = (dimensions >> 16) as usize;
-    let base_height = (dimensions & 65535) as usize;
-    let width = base_width >> level;
-    let height = base_height >> level;
-    let control = e.reg(base + 2);
-    if control >> 12 & 7 > 3 || control >> 8 & 7 > 3 {
+    if !sampler.wrap_x.is_supported() || !sampler.wrap_y.is_supported() {
         return Err("DMP unsupported texture wrap mode".into());
     }
-    let format = e.reg(base + if unit == 0 { 13 } else { 5 }) & 15;
-    let bpp = match format {
-        0 => 4,
-        1 => 3,
-        2..=5 => 2,
-        7 | 8 => 1,
-        _ => return Err(format!("DMP unsupported sampler format {format}")),
-    };
+    let base_width = sampler.width;
+    let base_height = sampler.height;
+    let width = base_width >> level;
+    let height = base_height >> level;
+    let bpp = sampler.format.bytes_per_pixel()?;
     let address = if level == 0 {
-        e.reg(base + 4) as u64
+        sampler.base_address
     } else {
         let mut offset = 0;
         for i in 1..level {
             offset += (base_width >> i) * (base_height >> i) * bpp;
         }
-        e.reg(base + 8) as u64 + offset as u64
+        sampler.mip_address + offset as u64
     };
     if width == 0
         || height == 0
@@ -567,21 +550,27 @@ fn sample_level(
         out.textures.insert((address, size), bytes);
     }
     let bytes = &out.textures[&(address, size)];
-    let border = e.reg(base).to_le_bytes().map(|v| v as f32 / 255.);
+    let border = sampler.border_color.map(|v| v as f32 / 255.);
+    let unpack_format = sampler.format.unpack_code()?;
     let texel = |x: i32, y: i32| -> Result<Vector, String> {
         if let (Some(x), Some(y)) = (
-            wrap(x, width, control >> 12 & 7),
-            wrap(y, height, control >> 8 & 7),
+            sampler.wrap_x.coordinate(x, width),
+            sampler.wrap_y.coordinate(y, height),
         ) {
             let i = morton(x, y, width) * bpp;
-            unpack_color(&bytes[i..i + bpp], format)
+            unpack_color(&bytes[i..i + bpp], unpack_format)
         } else {
             Ok(border)
         }
     };
     let x = uv[0] * width as f32;
     let y = uv[1] * height as f32;
-    if control & if minifying { 4 } else { 2 } == 0 {
+    let linear = if minifying {
+        sampler.minification_linear
+    } else {
+        sampler.magnification_linear
+    };
+    if !linear {
         return texel(x.floor() as i32, y.floor() as i32);
     }
     let x = x - 0.5;
@@ -599,45 +588,41 @@ fn sample_level(
     }))
 }
 fn sample(
-    e: &Engine,
-    unit: usize,
+    sampler: &TextureUnit,
     uv: [f32; 2],
     lod: f32,
     read: &mut Reader<'_>,
     out: &mut Targets,
 ) -> Result<Vector, String> {
-    let base = if unit == 0 { 0x281 } else { 0x291 };
-    let levels = e.reg(base + 3);
-    let bias = (((levels & 8191) as i32) << 19 >> 19) as f32 / 256.;
-    let limit = levels >> 16 & 15;
+    let bias = sampler.lod_bias as f32 / 256.;
+    let limit = sampler.max_level as u32;
     let l = (lod + bias).clamp(0., limit as f32);
     let minifying = lod + bias > 0.;
-    if e.reg(base + 2) & (1 << 24) == 0 {
-        return sample_level(e, unit, uv, l.round() as u32, minifying, read, out);
+    if !sampler.mip_linear {
+        return sample_level(sampler, uv, l.round() as u32, minifying, read, out);
     }
     let low = l.floor() as u32;
-    let a = sample_level(e, unit, uv, low, minifying, read, out)?;
+    let a = sample_level(sampler, uv, low, minifying, read, out)?;
     let high = (low + 1).min(limit);
     if low == high {
         return Ok(a);
     }
-    let b = sample_level(e, unit, uv, high, minifying, read, out)?;
+    let b = sample_level(sampler, uv, high, minifying, read, out)?;
     Ok(std::array::from_fn(|i| a[i] + (b[i] - a[i]) * l.fract()))
 }
-fn combine(e: &Engine, color: Vector, textures: [Vector; 2]) -> Result<Vector, String> {
+fn combine_state(
+    state: &DrawState,
+    color: Vector,
+    textures: [Vector; 2],
+) -> Result<Vector, String> {
     // Each stage consumes and produces unsigned eight-bit components.
     let quantize = |v: Vector| v.map(|c| (c.clamp(0., 1.) * 255.).round() as i64);
     let color = color.map(|c| (c.clamp(0., 1.) * 255.) as i64);
     let textures = textures.map(quantize);
     let mut previous = color;
-    for unit in 0..2 {
-        let base = 0x2c0 + unit * 8;
-        let sources = e.reg(base);
-        let operands = e.reg(base + 1);
-        let ops = e.reg(base + 2);
-        let constant = e.reg(base + 3).to_le_bytes().map(i64::from);
-        let scale = e.reg(base + 4);
-        let source = |code: u32| -> Result<[i64; 4], String> {
+    for stage in state.combiners {
+        let constant = stage.constant_color.map(i64::from);
+        let source = |code: u8| -> Result<[i64; 4], String> {
             Ok(match code {
                 0 => color,
                 3 => textures[0],
@@ -650,8 +635,8 @@ fn combine(e: &Engine, color: Vector, textures: [Vector; 2]) -> Result<Vector, S
         let mut rgb = [[0; 4]; 3];
         let mut alpha = [0; 3];
         for i in 0..3 {
-            let a = source(sources >> (4 * i) & 15)?;
-            let op = operands >> (4 * i) & 15;
+            let a = source(stage.rgb_sources[i])?;
+            let op = stage.rgb_operands[i];
             if op > 3 {
                 return Err("DMP unsupported RGB combiner operand".into());
             }
@@ -661,15 +646,15 @@ fn combine(e: &Engine, color: Vector, textures: [Vector; 2]) -> Result<Vector, S
                 2 => a[3],
                 _ => 255 - a[3],
             });
-            let a = source(sources >> (16 + 4 * i) & 15)?;
-            let op = operands >> (12 + 4 * i) & 15;
+            let a = source(stage.alpha_sources[i])?;
+            let op = stage.alpha_operands[i];
             if op > 1 {
                 return Err("DMP unsupported alpha combiner operand".into());
             }
             alpha[i] = if op == 0 { a[3] } else { 255 - a[3] };
         }
         // Numerators keep a common denominator until scale and saturation.
-        let operation = |op: u32, a: i64, b: i64, c: i64| -> Result<i64, String> {
+        let operation = |op: u8, a: i64, b: i64, c: i64| -> Result<i64, String> {
             Ok(match op {
                 0 => a * 255,
                 1 => a * b,
@@ -685,17 +670,21 @@ fn combine(e: &Engine, color: Vector, textures: [Vector; 2]) -> Result<Vector, S
         };
         let mut result = [0; 4];
         for c in 0..4 {
-            let op = if c == 3 && ops & 15 != 7 {
-                ops >> 16 & 15
+            let op = if c == 3 {
+                stage.alpha_operation
             } else {
-                ops & 15
+                stage.rgb_operation
             };
             let value = if c == 3 {
                 operation(op, alpha[0], alpha[1], alpha[2])?
             } else {
                 operation(op, rgb[0][c], rgb[1][c], rgb[2][c])?
             };
-            let shift = if c == 3 { scale >> 16 & 3 } else { scale & 3 };
+            let shift = if c == 3 {
+                stage.alpha_scale
+            } else {
+                stage.rgb_scale
+            };
             result[c] = ((value * (1 << shift) + 127).div_euclid(255)).clamp(0, 255);
         }
         previous = result;
@@ -703,40 +692,8 @@ fn combine(e: &Engine, color: Vector, textures: [Vector; 2]) -> Result<Vector, S
     Ok(previous.map(|c| c as f32 / 255.))
 }
 
-fn blend_factor(
-    code: u32,
-    c: usize,
-    source: Vector,
-    dest: Vector,
-    constant: Vector,
-) -> Result<f32, String> {
-    Ok(match code {
-        0 => 0.,
-        1 => 1.,
-        2 => source[c],
-        3 => 1. - source[c],
-        4 => dest[c],
-        5 => 1. - dest[c],
-        6 => source[3],
-        7 => 1. - source[3],
-        8 => dest[3],
-        9 => 1. - dest[3],
-        10 => constant[c],
-        11 => 1. - constant[c],
-        12 => constant[3],
-        13 => 1. - constant[3],
-        14 => {
-            if c == 3 {
-                1.
-            } else {
-                source[3].min(1. - dest[3])
-            }
-        }
-        _ => return Err("DMP unsupported blend factor".into()),
-    })
-}
 fn fragment(
-    e: &Engine,
+    state: &DrawState,
     (x, y, z): (usize, usize, f32),
     primary: Vector,
     uv: [[f32; 2]; 2],
@@ -744,10 +701,24 @@ fn fragment(
     read: &mut Reader<'_>,
     out: &mut Targets,
 ) -> Result<(), String> {
-    fragment_coverage(e, (x, y, z, 1.), primary, uv, lod, read, out)
+    fragment_coverage_state(state, (x, y, z, 1.), primary, uv, lod, read, out)
 }
-fn fragment_coverage(
-    e: &Engine,
+#[cfg(test)]
+pub(super) fn fragment_coverage(
+    engine: &Engine,
+    position: (usize, usize, f32, f32),
+    primary: Vector,
+    uv: [[f32; 2]; 2],
+    lod: [f32; 2],
+    read: &mut Reader<'_>,
+    out: &mut Targets,
+) -> Result<(), String> {
+    let state = engine.draw_state();
+    fragment_coverage_state(&state, position, primary, uv, lod, read, out)
+}
+
+fn fragment_coverage_state(
+    state: &DrawState,
     (x, y, z, coverage): (usize, usize, f32, f32),
     primary: Vector,
     uv: [[f32; 2]; 2],
@@ -755,74 +726,61 @@ fn fragment_coverage(
     read: &mut Reader<'_>,
     out: &mut Targets,
 ) -> Result<(), String> {
-    let (width, height) = extent(e)?;
-    let origin = e.reg(0x266);
-    let end = e.reg(0x267);
-    if x < (origin & 65535) as usize
-        || y < (origin >> 16) as usize
-        || x > (end & 65535) as usize
-        || y > (end >> 16) as usize
+    let (width, height) = extent(state)?;
+    let scissor = state.scissor;
+    if x < scissor.left as usize
+        || y < scissor.top as usize
+        || x > scissor.right as usize
+        || y > scissor.bottom as usize
     {
         return Ok(());
     }
     let textures = [
-        if e.reg(0x280) & 1 != 0 {
-            sample(e, 0, uv[0], lod[0], read, out)?
+        if state.textures[0].enabled {
+            sample(&state.textures[0], uv[0], lod[0], read, out)?
         } else {
             [0.; 4]
         },
-        if e.reg(0x280) & 2 != 0 {
-            sample(e, 1, uv[1], lod[1], read, out)?
+        if state.textures[1].enabled {
+            sample(&state.textures[1], uv[1], lod[1], read, out)?
         } else {
             [0.; 4]
         },
     ];
-    let mut color = combine(e, primary, textures)?;
+    let mut color = combine_state(state, primary, textures)?;
     color[3] *= (coverage * 255.).floor() / 255.;
-    let alpha = e.reg(0x304);
-    if alpha & 1 != 0
-        && !test(
-            alpha >> 4,
+    let alpha = state.alpha_test;
+    if alpha.enabled
+        && !alpha.function.passes(
             (color[3].clamp(0., 1.) * 255.) as u32,
-            alpha >> 8 & 255,
+            alpha.reference as u32,
         )
     {
         return Ok(());
     }
-    let fog = e.reg(0x2e0);
-    if fog & 1 != 0 {
-        let factor = if fog & 4 != 0 {
+    let fog = &state.fog;
+    if fog.enabled {
+        let factor = if fog.table_enabled {
             let position = (z.clamp(0., 1.) * 128.).min(127.9999);
-            let word = e.fog[position as usize];
+            let word = fog.table[position as usize];
             let slope = (((word & 8191) as i32) << 19) >> 19;
             ((word >> 13 & 2047) as f32 / 2048. + slope as f32 / 2048. * position.fract())
                 .clamp(0., 1.)
         } else {
-            let scale = (e.reg(0x2e2) as u16 as i16) as f32 / 2048.;
-            let bias = (e.reg(0x2e3) as u16 as i16) as f32 / 2048.;
-            (z * scale + bias).clamp(0., 1.)
+            (z * fog.scale as f32 / 2048. + fog.bias as f32 / 2048.).clamp(0., 1.)
         };
-        let fc = e.reg(0x2e1).to_le_bytes();
+        let fc = fog.color;
         for i in 0..3 {
             color[i] = color[i] * factor + fc[i] as f32 / 255. * (1. - factor);
         }
     }
     let pixel = morton(x, y, width);
-    let depth_control = e.reg(0x307);
-    let st = e.reg(0x305);
-    let operations = e.reg(0x306);
-    if st & 1 != 0 || depth_control & 1 != 0 {
-        let format = e.reg(0x316);
-        let bpp = if format == 0 {
-            2
-        } else if format == 3 {
-            4
-        } else if format == 2 {
-            3
-        } else {
-            return Err(format!("DMP unsupported depth format {format:#x}"));
-        };
-        let bytes = out.buffer(e.reg(0x31c) as u64, width * height * bpp, read)?;
+    let depth = state.depth_test;
+    let stencil = state.stencil_test;
+    if stencil.enabled || depth.enabled {
+        let bpp = state.targets.depth_format.bytes_per_pixel()?;
+        let address = state.targets.depth_address;
+        let bytes = out.buffer(address, width * height * bpp, read)?;
         let i = pixel * bpp;
         let old = if bpp == 2 {
             u16::from_le_bytes(bytes[i..i + 2].try_into().unwrap()) as u32
@@ -832,115 +790,127 @@ fn fragment_coverage(
             u32::from_le_bytes(bytes[i..i + 4].try_into().unwrap())
         };
         let old_stencil = (old >> 24) as u8;
-        let reference = (st >> 16) as u8;
-        let value_mask = (st >> 24) as u8;
-        let stencil_pass = st & 1 == 0
-            || test(
-                st >> 4,
+        let reference = stencil.reference;
+        let value_mask = stencil.value_mask;
+        let stencil_pass = !stencil.enabled
+            || stencil.function.passes(
                 (reference & value_mask) as u32,
                 (old_stencil & value_mask) as u32,
             );
-        let maximum = if bpp == 2 { 65535 } else { 0xffffff };
-        let depth = (z.clamp(0., 1.) * maximum as f32) as u32;
-        let depth_pass = depth_control & 1 == 0 || test(depth_control >> 4, depth, old & maximum);
-        if st & 1 != 0 && bpp == 4 {
+        let maximum = state.targets.depth_format.depth_maximum()?;
+        let new_depth = (z.clamp(0., 1.) * maximum as f32) as u32;
+        let depth_pass = !depth.enabled || depth.function.passes(new_depth, old & maximum);
+        if stencil.enabled && state.targets.depth_format.has_stencil() {
             let op = if !stencil_pass {
-                operations & 7
+                stencil.operations[0]
             } else if !depth_pass {
-                operations >> 4 & 7
+                stencil.operations[1]
             } else {
-                operations >> 8 & 7
+                stencil.operations[2]
             };
-            let mask = (st >> 8) as u8;
-            bytes[i + 3] = old_stencil & !mask | stencil(op, old_stencil, reference) & mask;
+            let mask = stencil.write_mask;
+            bytes[i + 3] = old_stencil & !mask | op.apply(old_stencil, reference) & mask;
         }
+        let stencil_written =
+            stencil.enabled && state.targets.depth_format.has_stencil() && stencil.write_mask != 0;
         if !stencil_pass || !depth_pass {
+            if stencil_written {
+                out.mark_written(address, i + 3, 1);
+            }
             return Ok(());
         }
-        if depth_control & 0x1001 == 0x1001 {
+        if depth.write_enabled {
             if bpp == 2 {
-                bytes[i..i + 2].copy_from_slice(&(depth as u16).to_le_bytes());
+                bytes[i..i + 2].copy_from_slice(&(new_depth as u16).to_le_bytes());
             } else {
-                bytes[i..i + 3].copy_from_slice(&depth.to_le_bytes()[..3]);
+                bytes[i..i + 3].copy_from_slice(&new_depth.to_le_bytes()[..3]);
             }
         }
+        if stencil_written {
+            out.mark_written(address, i + 3, 1);
+        }
+        if depth.write_enabled {
+            out.mark_written(address, i, if bpp == 2 { 2 } else { 3 });
+        }
     }
-    if depth_control >> 8 & 15 == 0 {
+    if state.color_mask.0.iter().all(|enabled| !enabled) {
         return Ok(());
     }
-    let format = e.reg(0x317) >> 16 & 15;
-    let sample_format = match format {
-        0 => 0,
-        1 => 3,
-        2 => 2,
-        3 => 4,
-        _ => return Err(format!("DMP unsupported color target format {format}")),
-    };
-    let bpp = if format == 0 { 4 } else { 2 };
-    let bytes = out.buffer(e.reg(0x31d) as u64, width * height * bpp, read)?;
+    let format = state.targets.color_format;
+    let format_code = format.code();
+    let sample_format = format.unpack_code()?;
+    let bpp = format.bytes_per_pixel()?;
+    let address = state.targets.color_address;
+    let bytes = out.buffer(address, width * height * bpp, read)?;
     let i = pixel * bpp;
     let destination = unpack_color(&bytes[i..i + bpp], sample_format)?;
-    let control = e.reg(0x301);
-    let constant = e.reg(0x303).to_le_bytes().map(|v| v as f32 / 255.);
-    if e.reg(0x300) & 0x100 == 0 {
-        if e.reg(0x302) != 3 {
+    let blend = state.blend;
+    let constant = blend.constant_color.map(|v| v as f32 / 255.);
+    if !blend.enabled {
+        if blend.logic_operation != 3 {
             return Err("DMP unsupported logic operation".into());
         }
     } else {
         let source = color;
         for c in 0..4 {
-            let shift = if c == 3 { 24 } else { 16 };
-            let a =
-                source[c] * blend_factor(control >> shift & 15, c, source, destination, constant)?;
-            let b = destination[c]
-                * blend_factor(
-                    control >> (shift + 4) & 15,
-                    c,
-                    source,
-                    destination,
-                    constant,
-                )?;
-            color[c] = match control >> (if c == 3 { 8 } else { 0 }) & 255 {
-                0 => a + b,
-                1 => a - b,
-                2 => b - a,
-                3 => color[c].min(destination[c]),
-                4 => color[c].max(destination[c]),
-                _ => return Err("DMP unsupported blend equation".into()),
+            let (source_factor, destination_factor, equation) = if c == 3 {
+                (
+                    blend.source_alpha,
+                    blend.destination_alpha,
+                    blend.alpha_equation,
+                )
+            } else {
+                (blend.source_rgb, blend.destination_rgb, blend.rgb_equation)
             };
+            let a = source[c] * source_factor.factor(c, source, destination, constant)?;
+            let b = destination[c] * destination_factor.factor(c, source, destination, constant)?;
+            color[c] = equation.apply(a, b, color[c])?;
         }
     }
-    let mask = depth_control >> 8 & 15;
     for c in 0..4 {
-        if mask & (1 << c) == 0 {
+        if !state.color_mask.0[c] {
             color[c] = destination[c];
         }
     }
-    if format == 0 {
+    if matches!(format, ColorTargetFormat::Rgba8) {
         for c in 0..4 {
-            if mask & (1 << c) != 0 {
+            if state.color_mask.0[c] {
                 bytes[i + 3 - c] = (color[c].clamp(0., 1.) * 255.).round() as u8;
             }
         }
     } else {
         let quantize = |c: usize, n: u32| (color[c].clamp(0., 1.) * ((1 << n) - 1) as f32) as u16;
-        let word = match format {
+        let word = match format_code {
             1 => quantize(0, 5) << 11 | quantize(1, 6) << 5 | quantize(2, 5),
             2 => quantize(0, 5) << 11 | quantize(1, 5) << 6 | quantize(2, 5) << 1 | quantize(3, 1),
             _ => quantize(0, 4) << 12 | quantize(1, 4) << 8 | quantize(2, 4) << 4 | quantize(3, 4),
         };
-        let channel_masks: [u16; 4] = match format {
+        let channel_masks: [u16; 4] = match format_code {
             1 => [0xf800, 0x07e0, 0x001f, 0],
             2 => [0xf800, 0x07c0, 0x003e, 1],
             _ => [0xf000, 0x0f00, 0x00f0, 0x000f],
         };
         let bits = (0..4)
-            .filter(|c| mask & (1 << c) != 0)
+            .filter(|c| state.color_mask.0[*c])
             .fold(0, |bits, c| bits | channel_masks[c]);
         let previous = u16::from_le_bytes(bytes[i..i + 2].try_into().unwrap());
         bytes[i..i + 2].copy_from_slice(&((previous & !bits) | (word & bits)).to_le_bytes());
     }
+    if matches!(format, ColorTargetFormat::Rgba8) {
+        for c in 0..4 {
+            if state.color_mask.0[c] {
+                out.mark_written(address, i + 3 - c, 1);
+            }
+        }
+    } else {
+        out.mark_written(address, i, bpp);
+    }
     Ok(())
+}
+
+#[cfg(test)]
+fn combine(engine: &Engine, color: Vector, textures: [Vector; 2]) -> Result<Vector, String> {
+    combine_state(&engine.draw_state(), color, textures)
 }
 
 #[cfg(test)]

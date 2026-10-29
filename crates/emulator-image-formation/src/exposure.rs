@@ -3,8 +3,20 @@
 //! irradiance * integration time * analog gain, clipped at the ADC full well.
 use fujimod_emulator_devices::parts::optics::ApertureHandle;
 use fujimod_emulator_imaging::exposure::{Calibration, Exposure, ExposureHandle};
-use fujimod_emulator_imaging::scene::{Frame, FramePixels, SensorFramesHandle, frames::SensorExposure};
+use fujimod_emulator_imaging::scene::noise::SensorNoise;
+use fujimod_emulator_imaging::scene::{
+    Frame, FramePixels, SensorFramesHandle, frames::SensorExposure,
+};
 use std::sync::Arc;
+
+pub(super) type NoiseResponse = Option<(SensorNoise, f64)>;
+#[inline(always)]
+pub(super) fn adc(signal: f64, noise: NoiseResponse, x: usize, y: usize, color: usize) -> u16 {
+    match noise {
+        Some((profile, gain)) => profile.quantize(signal, gain, x, y, color),
+        None => signal.round_ties_even().clamp(0., 16383.) as u16,
+    }
+}
 
 /// Derived optical pixels retain their full-scene law even when a readout
 /// computes only a subset. Checkpoints store materialized canonical pixels.
@@ -83,12 +95,19 @@ pub struct ExposedFrame {
     pub(super) filtered: Option<Filtered>,
 }
 impl ExposedFrame {
+    pub(super) fn noise_response(&self) -> NoiseResponse {
+        self.frame
+            .noise
+            .map(|profile| (profile, self.exposure.analog_gain))
+    }
     /// Equality of the immutable inputs consumed by `sample`, independent of
     /// frame-edge numbering and physical metadata that do not change pixels.
     pub fn same_samples(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.frame, &other.frame)
             && self.view == other.view
             && self.response == other.response
+            && self.noise_response() == other.noise_response()
+            && (self.frame.noise.is_none() || self.response_scale == other.response_scale)
             && self.focus_shift_mm == other.focus_shift_mm
             && self.aperture_squared == other.aperture_squared
             && match (&self.filtered, &other.filtered) {
@@ -131,6 +150,19 @@ impl ExposedFrame {
             return Err("invalid physical exposure".into());
         }
         let calibration = calibration.validate()?;
+        if let Some(noise) = frame.noise {
+            noise.validate()?;
+            if !matches!(frame.pixels, FramePixels::Rgb24(_)) {
+                return Err("declared charge noise requires RGB radiance input".into());
+            }
+            let charge_scale = exposure.analog_gain * 16383. / noise.full_well_electrons;
+            if !charge_scale.is_finite()
+                || charge_scale <= 0.
+                || !(noise.read_noise_electrons * charge_scale).is_finite()
+            {
+                return Err("sensor noise exceeds finite charge response".into());
+            }
+        }
         if !frame.white_luminance.is_finite() || frame.white_luminance <= 0. {
             return Err("sensor input needs positive finite white radiance".into());
         }
@@ -206,7 +238,9 @@ impl ExposedFrame {
         .with_children(vec![self.frame.checkpoint()?])
         .with_blobs(self.filtered.iter().map(Filtered::materialize).collect()))
     }
-    pub fn from_checkpoint(saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<Self, String> {
+    pub fn from_checkpoint(
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<Self, String> {
         let (
             exposure,
             aperture_squared,
@@ -318,7 +352,21 @@ impl ExposedFrame {
         }
         match &f.pixels {
             FramePixels::Rgb24(p) => {
-                std::array::from_fn(|c| self.response[c][p[(sy * f.width + sx) * 3 + c] as usize])
+                if let Some(noise) = self.noise_response() {
+                    std::array::from_fn(|c| {
+                        let s = f64::from(p[(sy * f.width + sx) * 3 + c]) / 255.;
+                        let linear = if s <= 0.04045 {
+                            s / 12.92
+                        } else {
+                            libm::pow((s + 0.055) / 1.055, 2.4)
+                        };
+                        adc(linear * self.response_scale[c], Some(noise), sx, sy, c)
+                    })
+                } else {
+                    std::array::from_fn(|c| {
+                        self.response[c][p[(sy * f.width + sx) * 3 + c] as usize]
+                    })
+                }
             }
             FramePixels::Raw16(p) => [p[sy * f.width + sx]; 3],
             // Mosaic frames always carry their cell means; see `Frame::mosaic`.
@@ -393,8 +441,12 @@ impl ExposedFrame {
         }
     }
     pub fn physical_state(&self) -> serde_json::Value {
-        serde_json::json!({"exposure":self.exposure,"aperture_squared":self.aperture_squared,
-            "white_luminance":self.frame.white_luminance,"focus_shift_mm":self.focus_shift_mm})
+        let mut state = serde_json::json!({"exposure":self.exposure,"aperture_squared":self.aperture_squared,
+            "white_luminance":self.frame.white_luminance,"focus_shift_mm":self.focus_shift_mm});
+        if let Some(noise) = self.frame.noise {
+            state["noise"] = serde_json::json!(noise);
+        }
+        state
     }
     pub fn fingerprint(&self) -> serde_json::Value {
         let response: Vec<u16> = self.response.iter().flatten().copied().collect();
@@ -427,7 +479,9 @@ impl ExposedFrame {
             .ok_or_else(|| "sampled radiance is not an exposed frame".into())
     }
     /// Decode a checkpointed exposure.
-    pub fn decode(saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<Arc<dyn SensorExposure>, String> {
+    pub fn decode(
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<Arc<dyn SensorExposure>, String> {
         Ok(Arc::new(Self::from_checkpoint(saved)?))
     }
 }
@@ -437,6 +491,42 @@ mod tests {
     use super::*;
     use fujimod_emulator_imaging::scene::SensorFrames;
     use std::sync::Mutex;
+    #[test]
+    fn noisy_sample_identity_includes_unclipped_response_and_charge_gain() {
+        let mut frame = Frame::new(1, 1, FramePixels::Rgb24(vec![128; 3].into())).unwrap();
+        frame.noise = Some(SensorNoise {
+            seed: 7,
+            realization: 1,
+            full_well_electrons: 20000.,
+            read_noise_electrons: 3.,
+        });
+        let frame = Arc::new(frame);
+        let capture = |seconds, analog_gain| {
+            ExposedFrame::from_frame(
+                frame.clone(),
+                Exposure {
+                    seconds,
+                    analog_gain,
+                },
+                4.,
+                Calibration {
+                    full_scale: 16383,
+                    reference_white: [256; 3],
+                    saturation_lux_seconds: 1.,
+                    color_sample_weights: [2, 5, 2],
+                },
+            )
+            .unwrap()
+        };
+        let a = capture(100., 1.);
+        let b = capture(200., 1.);
+        assert_eq!(a.response, b.response);
+        assert!(!a.same_samples(&b));
+        let c = capture(50., 2.);
+        assert_eq!(a.response_scale, c.response_scale);
+        assert!(!a.same_samples(&c));
+        assert!(a.same_samples(&capture(100., 1.)));
+    }
     #[test]
     fn time_iris_gain_and_absolute_radiance_share_one_signal_law() {
         let frames = Arc::new(Mutex::new(SensorFrames::new(
@@ -496,7 +586,10 @@ mod mosaic_tests {
     /// using the RAF normalization: radiance = counts / (seconds × gain / f²).
     fn recorded_frame(width: usize, height: usize, raw: &[u16], recorded: Exposure) -> Arc<Frame> {
         let norm = recorded.seconds * recorded.analog_gain / 81.;
-        let radiance = fujimod_emulator_imaging::scene::mosaic::Radiance::from_counts(raw.iter().copied(), norm);
+        let radiance = fujimod_emulator_imaging::scene::mosaic::Radiance::from_counts(
+            raw.iter().copied(),
+            norm,
+        );
         Arc::new(
             Frame::new(
                 width,
@@ -575,5 +668,4 @@ mod mosaic_tests {
             }
         }
     }
-
 }

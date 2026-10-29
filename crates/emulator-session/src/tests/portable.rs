@@ -5,6 +5,38 @@ use fujimod_emulator_devices::parts::switch_panel::{Case, Circuit, Control, Sign
 use fujimod_emulator_imaging::scene::{Frame, FramePixels, SensorFrames};
 use std::sync::{Arc, Mutex};
 
+#[test]
+fn durable_card_uses_the_new_hosts_allocation_limit_without_changing_saved_files() {
+    let mut source = card_session();
+    let mut card = source.card_medium("sd").unwrap();
+    let old_limit = card.dirty_sectors();
+    card.set_allocation_limit(old_limit).unwrap();
+    let revision = card.revision();
+    let capacity = card.sectors();
+    source.retain_card("sd", card, true, false).unwrap();
+    let spec = crate::durable::Spec {
+        cards: vec!["sd".into()],
+        nands: vec![],
+    };
+    let saved = crate::durable::Media::capture(&source, &spec).unwrap();
+    let mut cold = card_session();
+    let limit = cold.card_medium("sd").unwrap().allocation_limit();
+    assert!(limit > old_limit);
+    saved.apply(&mut cold, &spec).unwrap();
+    let retained = cold.card_medium("sd").unwrap();
+    assert_eq!(retained.allocation_limit(), limit);
+    assert_eq!(retained.sectors(), capacity);
+    assert_eq!(retained.revision(), revision);
+    assert_eq!(
+        cold.card_read("sd", "/DCIM/100_FUJI/A.JPG", Some(revision), 100)
+            .unwrap(),
+        b"card bytes"
+    );
+    retained
+        .reserve_write(0x100000, old_limit as u32 + 1)
+        .unwrap();
+}
+
 fn session() -> Session {
     let mut session = card_session();
     session
@@ -170,4 +202,48 @@ fn incompatible_session_or_corrupt_archive_is_refused_without_changing_live_stat
     let before = target.fingerprint().unwrap();
     assert!(target.import_snapshot(&bytes).is_err());
     assert_eq!(target.fingerprint().unwrap(), before);
+}
+
+#[test]
+fn serialized_checkpoint_resumes_a_fresh_session_and_checks_image_and_graph_identity() {
+    let definition = serde_json::json!({
+        "inputs": {
+            "update": {"size": 8, "sha256": "1111111111111111111111111111111111111111111111111111111111111111"},
+            "boot_rom": {"content": {"size": 4, "sha256": "2222222222222222222222222222222222222222222222222222222222222222"}}
+        },
+        "execution": {"processors": [{"model": "test-core"}]},
+        "devices": {"nodes": [{"id": "timer", "kind": "timer"}]},
+        "scene": {"images": []}
+    });
+    let (bytes, before, after) = {
+        let mut source = session();
+        source.definition = definition.clone();
+        source.board.run_for_instructions(13, 17).unwrap();
+        let checkpoint = source.checkpoint(None).unwrap();
+        let bytes = checkpoint.export().unwrap();
+        let (ticks, counts) = crate::checkpoint::Snapshot::inspect(&bytes).unwrap();
+        assert_eq!((ticks, counts), (checkpoint.now(), checkpoint.instruction_counts().to_vec()));
+        let before = source.fingerprint().unwrap();
+        source.board.run_for_instructions(200, 17).unwrap();
+        (bytes, before, source.fingerprint().unwrap())
+    };
+
+    let mut target = session();
+    target.definition = definition.clone();
+    let checkpoint = target.import_snapshot(&bytes).unwrap();
+    target.restore(&checkpoint).unwrap();
+    assert_eq!(target.fingerprint().unwrap(), before);
+    target.board.run_for_instructions(200, 17).unwrap();
+    assert_eq!(target.fingerprint().unwrap(), after);
+
+    let mut different_image = session();
+    different_image.definition = definition.clone();
+    different_image.definition["inputs"]["update"]["sha256"] =
+        serde_json::json!("3333333333333333333333333333333333333333333333333333333333333333");
+    assert!(different_image.import_snapshot(&bytes).is_err());
+
+    let mut different_graph = session();
+    different_graph.definition = definition;
+    different_graph.definition["devices"]["nodes"][0]["kind"] = serde_json::json!("other");
+    assert!(different_graph.import_snapshot(&bytes).is_err());
 }

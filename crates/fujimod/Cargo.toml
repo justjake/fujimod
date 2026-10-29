@@ -15,12 +15,12 @@ remote = ["dep:fujimod-remote"]
 default = []
 catalog = ["dep:fujimod-catalog"]
 catalog-firmware-identity = ["dep:fujimod-catalog-firmware-identity"]
-catalog-camera = ["catalog-firmware-identity", "dep:fujimod-catalog-camera"]
+catalog-workflows = ["catalog-firmware-identity", "dep:fujimod-catalog-workflows"]
 catalog-service = ["catalog-firmware-identity", "dep:fujimod-catalog-service"]
 catalog-configuration = ["dep:fujimod-catalog-configuration"]
 catalog-resolution = ["catalog", "catalog-configuration", "dep:fujimod-catalog-resolution"]
 usb = ["dep:fujimod-usb"]
-workflows = ["usb", "catalog-camera", "dep:fujimod-workflows"]
+workflows = ["usb", "catalog-workflows", "dep:fujimod-workflows"]
 emulator = [
   "dep:fujimod-emulator",
   "emulator-devices",
@@ -36,7 +36,7 @@ emulator-cpu-hvf = ["emulator-cpu", "dep:fujimod-emulator-cpu-hvf"]
 [dependencies]
 fujimod-remote = { workspace = true, optional = true }
 fujimod-catalog = { workspace = true, optional = true }
-fujimod-catalog-camera = { workspace = true, optional = true }
+fujimod-catalog-workflows = { workspace = true, optional = true }
 fujimod-catalog-firmware-identity = { workspace = true, optional = true }
 fujimod-catalog-service = { workspace = true, optional = true }
 fujimod-catalog-configuration = { workspace = true, optional = true }

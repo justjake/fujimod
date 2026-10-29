@@ -8,7 +8,7 @@ use crate::{
     access::{Access, range},
     service_mode::{self, ServiceModeError},
 };
-use fujimod_catalog_camera::{CameraDefinition, CameraError, DebugMode};
+use fujimod_catalog_workflows::{DebugPersistence, ServiceSetup, WorkflowError};
 use fujimod_usb::{
     ff80::{
         Session, SessionState,
@@ -27,7 +27,7 @@ pub enum DebugModeError {
     #[error(transparent)]
     Usb(#[from] fujimod_usb::Error),
     #[error(transparent)]
-    Definition(#[from] CameraError),
+    Definition(#[from] WorkflowError),
     #[error(transparent)]
     Guard(#[from] ServiceModeError),
     #[error("{0}")]
@@ -50,21 +50,23 @@ pub struct Persisted {
 /// Store debug access enabled, keeping the stored reset guard clear.
 pub async fn enter(
     session: &mut Session,
-    camera: &CameraDefinition,
+    camera: &ServiceSetup,
+    mode: &DebugPersistence,
     limits: Limits,
     progress: &mut (dyn FnMut(&str) + Send),
 ) -> Result<Persisted> {
-    persist(session, camera, limits, progress, 1).await
+    persist(session, camera, mode, limits, progress, 1).await
 }
 
 /// Store debug access disabled, keeping the stored reset guard clear.
 pub async fn leave(
     session: &mut Session,
-    camera: &CameraDefinition,
+    camera: &ServiceSetup,
+    mode: &DebugPersistence,
     limits: Limits,
     progress: &mut (dyn FnMut(&str) + Send),
 ) -> Result<Persisted> {
-    persist(session, camera, limits, progress, 0).await
+    persist(session, camera, mode, limits, progress, 0).await
 }
 
 fn require(condition: bool, message: &str) -> Result<()> {
@@ -77,7 +79,7 @@ fn require(condition: bool, message: &str) -> Result<()> {
 
 struct Transaction<'a> {
     access: Access<'a>,
-    mode: DebugMode,
+    mode: DebugPersistence,
     old_scratch: Option<Vec<u8>>,
     old_outputs: Option<Vec<u8>>,
     old_flag: Option<u8>,
@@ -88,13 +90,15 @@ struct Transaction<'a> {
 
 async fn persist(
     session: &mut Session,
-    camera: &CameraDefinition,
+    camera: &ServiceSetup,
+    mode: &DebugPersistence,
     limits: Limits,
     progress: &mut (dyn FnMut(&str) + Send),
     target: u8,
 ) -> Result<Persisted> {
+    let limits = limits.for_setup(camera)?;
     let mut transaction = Transaction {
-        mode: camera.debug_mode()?.clone(),
+        mode: mode.clone(),
         access: Access {
             session,
             camera,
@@ -140,7 +144,7 @@ impl Transaction<'_> {
 
     async fn set_flag(&mut self, value: u8) -> Result<()> {
         require(value <= 1, "Write outside the debug byte allowlist")?;
-        let offset = self.access.camera.debug()?.flag_offset;
+        let offset = self.access.camera.debug_offset;
         Ok(self.access.set(offset, value).await?)
     }
 
@@ -235,7 +239,7 @@ impl Transaction<'_> {
         if writer {
             // Even target zero leaves the configuration interface available.
             self.set_flag(1).await?;
-            let offset = self.access.camera.debug()?.flag_offset;
+            let offset = self.access.camera.debug_offset;
             require(
                 self.access.byte(offset).await? == 1,
                 "Cannot re-enable RAM access after the writer",
@@ -281,7 +285,7 @@ impl Transaction<'_> {
     }
 
     async fn capture_storage(&mut self) -> Result<Vec<u8>> {
-        let offset = self.access.camera.debug()?.flag_offset;
+        let offset = self.access.camera.debug_offset;
         // One stock loader call per capture, then read the loaded buffers.
         let flag = configuration::read_byte(
             self.access.session,
@@ -319,8 +323,8 @@ impl Transaction<'_> {
             progress,
         )
         .await?;
-        let guard = self.access.camera.guard()?;
-        let flag = self.access.camera.debug()?.flag_offset;
+        let guard = &self.access.camera.guard;
+        let flag = self.access.camera.debug_offset;
         require(
             self.access.byte(guard.offset).await? == 1 && self.access.byte(flag).await? == 0,
             "Guard preparation or cleanup did not verify",
@@ -342,13 +346,14 @@ impl Transaction<'_> {
         require(
             self.access
                 .camera
+                .identity
                 .products
                 .iter()
                 .any(|name| normalized == name.to_uppercase().replace('-', "")),
             "Device did not identify as the selected camera",
         )?;
-        let flag = self.access.camera.debug()?.flag_offset;
-        let guard = self.access.camera.guard()?.clone();
+        let flag = self.access.camera.debug_offset;
+        let guard = self.access.camera.guard.clone();
         self.old_flag = Some(self.access.byte(flag).await?);
         self.guard(progress).await?;
         self.set_flag(1).await?;
@@ -513,10 +518,10 @@ impl Transaction<'_> {
         }
         if let Some(flag) = self.old_flag {
             self.set_flag(if success { 0 } else { flag }).await?;
-            let offset = self.access.camera.debug()?.flag_offset;
+            let offset = self.access.camera.debug_offset;
             self.access.byte(offset).await?;
         }
-        let offset = self.access.camera.guard()?.offset;
+        let offset = self.access.camera.guard.offset;
         self.access.byte(offset).await?;
         Ok(())
     }

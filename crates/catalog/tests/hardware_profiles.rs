@@ -51,3 +51,30 @@ fn hardware_graph_requires_closed_nodes_and_complete_ordering() {
     let body: Body = serde_json::from_value(value).unwrap();
     assert!(body.validate(&body.id).unwrap_err().contains("order"));
 }
+
+#[test]
+fn x70_loader_profiles_connect_window_analysis_completion() {
+    let value: serde_json::Value =
+        serde_json::from_str(include_str!("../../../catalog/bodies/x70/body.json")).unwrap();
+    for name in ["x70", "x70-rec-usb", "x70-110-browser-usb"] {
+        let profile = &value["hardware"]["profiles"][name];
+        let devices = profile["graph"]["devices"].as_array().unwrap();
+        assert_eq!(
+            devices
+                .iter()
+                .filter(|d| d["kind"] == "WindowAnalysisControl")
+                .count(),
+            1,
+            "{name} must complete window-analysis requests"
+        );
+        assert!(
+            !devices
+                .iter()
+                .any(|d| d["kind"] == "RawConversionRegisters")
+        );
+        assert_eq!(
+            profile["controllers"]["window_analysis"]["ticks_per_window"],
+            1000
+        );
+    }
+}

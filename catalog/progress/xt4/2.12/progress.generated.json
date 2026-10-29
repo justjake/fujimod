@@ -4,7 +4,10 @@
   "firmware_id": "xt4-212",
   "model": "X-T4",
   "version": "2.12",
-  "facts": null,
+  "facts": {
+    "located": 14,
+    "total": 22
+  },
   "boot_rom": null,
   "stages": {
     "research": "pass",

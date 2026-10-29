@@ -25,6 +25,7 @@ struct Saved {
     deadlines: Vec<Option<u64>>,
     generations: Vec<u64>,
     error: Option<String>,
+    #[serde(with = "portable::records")]
     records: Vec<Record>,
     console: Vec<String>,
     #[serde(with = "portable::frames")]
@@ -94,6 +95,7 @@ impl State {
         let Self {
             execution_policy,
             device_workers: _,
+            host_pause: _,
             clock_limit: _,
             memory: _,
             bus: _,

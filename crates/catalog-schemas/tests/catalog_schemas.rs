@@ -38,7 +38,10 @@ fn reference_and_run_configuration_documents_validate_generated_schemas() {
         );
     }
 
-    let mut files = vec![catalog.join("firmware-versions.generated.json")];
+    let mut files = vec![
+        catalog.join("firmware-versions.generated.json"),
+        catalog.join("generation.generated.json"),
+    ];
     for layer in ["soc", "parts", "bodies", "firmware", "progress"] {
         files.extend(json_files(&catalog.join(layer)));
     }

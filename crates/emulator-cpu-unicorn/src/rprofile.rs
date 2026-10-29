@@ -5,9 +5,7 @@ use fujimod_emulator_cpu::{Cpu, Model, Register, arm};
 use std::cell::Cell;
 
 pub mod abort;
-pub mod accounting;
 pub mod core;
-pub mod memory;
 pub mod tcm;
 #[cfg(not(target_os = "emscripten"))]
 pub mod worker;

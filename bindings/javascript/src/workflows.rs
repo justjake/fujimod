@@ -1,7 +1,7 @@
 //! Firmware-selected camera workflows share the session's ordinary lease.
 use crate::{error::property, session::Operation, session::Session, *};
-use fujimod_catalog_camera::CameraDefinition;
 use fujimod_catalog_firmware_identity::FirmwareIdentity;
+use fujimod_catalog_workflows::{DebugPersistence, ServiceSetup, WorkflowDefinition};
 use fujimod_workflows::{Limits, bulk, debug_mode, service_mode};
 
 pub(crate) enum Action {
@@ -11,7 +11,8 @@ pub(crate) enum Action {
     Leave,
 }
 pub(crate) struct Workflow {
-    camera: CameraDefinition,
+    camera: ServiceSetup,
+    persistence: Option<DebugPersistence>,
     limits: Limits,
     action: Action,
 }
@@ -21,17 +22,24 @@ pub(crate) fn workflow_error(message: impl std::fmt::Display) -> JsValue {
 impl Session {
     fn workflow(
         &self,
-        camera_table: &str,
+        workflow_facts: &str,
         firmware_id: String,
         firmware_sha256: &str,
         action: Action,
     ) -> Result<js_sys::Promise, JsValue> {
         let identity =
             FirmwareIdentity::new(firmware_id, firmware_sha256).map_err(workflow_error)?;
-        let camera =
-            CameraDefinition::from_json(camera_table, &identity).map_err(workflow_error)?;
+        let definition =
+            WorkflowDefinition::from_json(workflow_facts, &identity).map_err(workflow_error)?;
+        let camera = definition.setup().map_err(workflow_error)?.clone();
+        let persistence = if matches!(action, Action::Enter | Action::Leave) {
+            Some(definition.persistence().map_err(workflow_error)?.clone())
+        } else {
+            None
+        };
         self.call(Operation::Workflow(Workflow {
             camera,
+            persistence,
             limits: Limits {
                 memory: self.limits.memory,
                 configuration: self.limits.configuration,
@@ -45,12 +53,12 @@ impl Session {
     #[wasm_bindgen(js_name=armResetGuard, unchecked_return_type="Promise<ResetGuardResult>")]
     pub fn arm_reset_guard(
         &self,
-        camera_table: &str,
+        workflow_facts: &str,
         firmware_id: String,
         firmware_sha256: &str,
     ) -> Result<js_sys::Promise, JsValue> {
         self.workflow(
-            camera_table,
+            workflow_facts,
             firmware_id,
             firmware_sha256,
             Action::ArmResetGuard,
@@ -59,12 +67,12 @@ impl Session {
     #[wasm_bindgen(js_name=prepareServiceSession, unchecked_return_type="Promise<ServicePreparation>")]
     pub fn prepare_service_session(
         &self,
-        camera_table: &str,
+        workflow_facts: &str,
         firmware_id: String,
         firmware_sha256: &str,
     ) -> Result<js_sys::Promise, JsValue> {
         self.workflow(
-            camera_table,
+            workflow_facts,
             firmware_id,
             firmware_sha256,
             Action::PrepareServiceSession,
@@ -73,20 +81,20 @@ impl Session {
     #[wasm_bindgen(js_name=enterDebugMode, unchecked_return_type="Promise<DebugModeResult>")]
     pub fn enter_debug_mode(
         &self,
-        camera_table: &str,
+        workflow_facts: &str,
         firmware_id: String,
         firmware_sha256: &str,
     ) -> Result<js_sys::Promise, JsValue> {
-        self.workflow(camera_table, firmware_id, firmware_sha256, Action::Enter)
+        self.workflow(workflow_facts, firmware_id, firmware_sha256, Action::Enter)
     }
     #[wasm_bindgen(js_name=leaveDebugMode, unchecked_return_type="Promise<DebugModeResult>")]
     pub fn leave_debug_mode(
         &self,
-        camera_table: &str,
+        workflow_facts: &str,
         firmware_id: String,
         firmware_sha256: &str,
     ) -> Result<js_sys::Promise, JsValue> {
-        self.workflow(camera_table, firmware_id, firmware_sha256, Action::Leave)
+        self.workflow(workflow_facts, firmware_id, firmware_sha256, Action::Leave)
     }
 }
 impl Workflow {
@@ -128,10 +136,24 @@ impl Workflow {
             Action::Enter | Action::Leave => {
                 let outcome = match self.action {
                     Action::Enter => {
-                        debug_mode::enter(session, &self.camera, self.limits, &mut progress).await
+                        debug_mode::enter(
+                            session,
+                            &self.camera,
+                            self.persistence.as_ref().expect("qualified persistence"),
+                            self.limits,
+                            &mut progress,
+                        )
+                        .await
                     }
                     Action::Leave => {
-                        debug_mode::leave(session, &self.camera, self.limits, &mut progress).await
+                        debug_mode::leave(
+                            session,
+                            &self.camera,
+                            self.persistence.as_ref().expect("qualified persistence"),
+                            self.limits,
+                            &mut progress,
+                        )
+                        .await
                     }
                     Action::ArmResetGuard | Action::PrepareServiceSession => unreachable!(),
                 }
@@ -217,12 +239,18 @@ impl Session {
         progress: Option<ByteProgressCallback>,
     ) -> Result<js_sys::Promise, JsValue> {
         let selection = crate::reference::resolve(firmware_id)?;
-        let bulk = selection
-            .bulk
-            .ok_or_else(|| workflow_error("Firmware has no located bulk reader"))?;
-        let state = selection
-            .state
-            .ok_or_else(|| workflow_error("Firmware has no located state regions"))?;
+        let bulk = selection.bulk.ok_or_else(|| {
+            workflow_error(fujimod_catalog::generation::missing_table_reason(
+                firmware_id,
+                "bulk",
+            ))
+        })?;
+        let state = selection.state.ok_or_else(|| {
+            workflow_error(fujimod_catalog::generation::missing_table_reason(
+                firmware_id,
+                "state",
+            ))
+        })?;
         self.call(Operation::StateDump(StateDump {
             bulk,
             state,
@@ -247,12 +275,18 @@ impl Session {
         progress: Option<ByteProgressCallback>,
     ) -> Result<js_sys::Promise, JsValue> {
         let selection = crate::reference::resolve(firmware_id)?;
-        let bulk = selection
-            .bulk
-            .ok_or_else(|| workflow_error("Firmware has no located bulk reader"))?;
-        let flash = selection
-            .flash
-            .ok_or_else(|| workflow_error("Firmware has no located flash reader"))?;
+        let bulk = selection.bulk.ok_or_else(|| {
+            workflow_error(fujimod_catalog::generation::missing_table_reason(
+                firmware_id,
+                "bulk",
+            ))
+        })?;
+        let flash = selection.flash.ok_or_else(|| {
+            workflow_error(fujimod_catalog::generation::missing_table_reason(
+                firmware_id,
+                "flash",
+            ))
+        })?;
         let payload: fujimod_workflows::flash::Payload =
             serde_json::from_str(payload_table).map_err(workflow_error)?;
         if selection

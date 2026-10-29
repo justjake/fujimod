@@ -1,7 +1,7 @@
 //! Counted R-profile execution over the pinned Unicorn accelerator.
 //! The owner supplies physical backing and interrupt pins; devices never see
 //! translation metadata or the processor's architectural state.
-use super::{
+use crate::{
     accounting::{Accounting, Span},
     memory::{Memory, OwnerBarrierLease},
 };
@@ -21,7 +21,7 @@ mod clock_poll;
 mod exclusive;
 mod loops;
 mod mapping;
-mod observers;
+use crate::observers;
 mod pmu;
 mod run;
 mod snapshot;
@@ -43,6 +43,52 @@ pub struct Options {
 }
 pub struct Wiring {
     pub memory: Memory,
+}
+
+#[derive(Clone, Copy)]
+struct PendingGuestBlock {
+    address: u64,
+    phase: GuestProfilePhase,
+    instruction_count: u64,
+}
+
+#[derive(Default)]
+struct GuestProfile {
+    blocks: BTreeMap<u64, GuestBlockCount>,
+    pending: Option<PendingGuestBlock>,
+}
+
+impl GuestProfile {
+    fn block_entry(&mut self, address: u64, phase: GuestProfilePhase, instruction_count: u64) {
+        self.finish_pending(instruction_count);
+        self.pending = Some(PendingGuestBlock {
+            address,
+            phase,
+            instruction_count,
+        });
+    }
+
+    fn finish_run(&mut self, instruction_count: u64) {
+        self.finish_pending(instruction_count);
+    }
+
+    fn finish_pending(&mut self, instruction_count: u64) {
+        let Some(pending) = self.pending.take() else {
+            return;
+        };
+        let count = self.blocks.entry(pending.address).or_default();
+        count.address = pending.address;
+        count.entries = count.entries.saturating_add(1);
+        let executed = instruction_count.saturating_sub(pending.instruction_count);
+        match pending.phase {
+            GuestProfilePhase::Idle => {
+                count.idle_instructions = count.idle_instructions.saturating_add(executed);
+            }
+            GuestProfilePhase::Key => {
+                count.key_instructions = count.key_instructions.saturating_add(executed);
+            }
+        }
+    }
 }
 
 struct Observer {
@@ -85,6 +131,7 @@ pub(super) struct Execution {
     pause_requested: Arc<AtomicU32>,
     settled_head: Cell<u64>,
     thumb: Cell<bool>,
+    thumb_entry_ready: Cell<bool>,
     restarted: Cell<Option<u64>>,
     active: Cell<bool>,
     owner_barrier_complete: Cell<bool>,
@@ -101,6 +148,8 @@ pub(super) struct Execution {
     block_hook_budget_fallback_guest_clock: Cell<u64>,
     block_hook_budget_fallback_other: Cell<u64>,
     block_hook_other: Cell<u64>,
+    #[cfg(test)]
+    block_hook_thumb_common_path: Cell<u64>,
     user_stop: Cell<bool>,
     irq: Cell<bool>,
     hint: Cell<Option<Hint>>,
@@ -108,6 +157,8 @@ pub(super) struct Execution {
     failure: RefCell<Option<String>>,
     observers: RefCell<BTreeMap<usize, Observer>>,
     pending_stores: RefCell<Vec<StorePublication>>,
+    guest_profile: RefCell<Option<GuestProfile>>,
+    guest_profile_phase: Cell<GuestProfilePhase>,
     next_observer: Cell<usize>,
     observer_index: RefCell<observers::Index>,
     at_block: Cell<bool>,
@@ -157,6 +208,7 @@ impl Core {
         if !cpu.memory_regions()?.is_empty() {
             return Err("R-profile backing must be mapped through its execution owner".into());
         }
+        cpu.set_instruction_counter(true)?;
         let record = cpu
             .accounting()
             .ok_or("missing R-profile accounting record")?;
@@ -196,6 +248,7 @@ impl Core {
             pause_requested: Arc::new(AtomicU32::new(0)),
             settled_head: Cell::new(0),
             thumb: Cell::new(false),
+            thumb_entry_ready: Cell::new(false),
             restarted: Cell::new(None),
             active: Cell::new(false),
             owner_barrier_complete: Cell::new(false),
@@ -212,6 +265,8 @@ impl Core {
             block_hook_budget_fallback_guest_clock: Cell::new(0),
             block_hook_budget_fallback_other: Cell::new(0),
             block_hook_other: Cell::new(0),
+            #[cfg(test)]
+            block_hook_thumb_common_path: Cell::new(0),
             user_stop: Cell::new(false),
             irq: Cell::new(false),
             hint: Cell::new(None),
@@ -219,12 +274,15 @@ impl Core {
             failure: RefCell::new(None),
             observers: RefCell::new(BTreeMap::new()),
             pending_stores: RefCell::new(Vec::new()),
+            guest_profile: RefCell::new(None),
+            guest_profile_phase: Cell::new(GuestProfilePhase::Idle),
             next_observer: Cell::new(0),
             observer_index: RefCell::new(observers::Index::default()),
             at_block: Cell::new(false),
             at_instruction: Cell::new(false),
         });
-        e.id.set(e.memory.register(Rc::downgrade(&e)));
+        let owner: Rc<dyn crate::memory::CodeOwner> = e.clone();
+        e.id.set(e.memory.register(Rc::downgrade(&owner)));
         unsafe {
             let r = &mut *record.as_ptr();
             r.ring = (*e.ring.get()).as_mut_ptr();
@@ -505,21 +563,55 @@ impl Execution {
             } else {
                 InstructionDisposition::Execute
             },
-            observe_block: !self.observer_index.borrow().blocks.at(address).is_empty(),
+            observe_block: self.guest_profile.borrow().is_some()
+                || !self.observer_index.borrow().blocks.at(address).is_empty(),
         })
     }
+    fn guest_profile_block(&self, address: u64) {
+        if let Some(profile) = self.guest_profile.borrow_mut().as_mut() {
+            let instructions = self
+                .cpu
+                .instruction_counter()
+                .unwrap_or_else(|_| self.count.get());
+            profile.block_entry(address, self.guest_profile_phase.get(), instructions);
+        }
+    }
+    pub(super) fn finish_guest_profile_run(&self) {
+        if let Some(profile) = self.guest_profile.borrow_mut().as_mut() {
+            let instructions = self
+                .cpu
+                .instruction_counter()
+                .unwrap_or_else(|_| self.count.get());
+            profile.finish_run(instructions);
+        }
+    }
     fn block(&self, block: Block) -> Result<(), String> {
+        self.settle(0, true)?;
+        let tick = self
+            .clock
+            .get()
+            .map(|clock| clock.after(self.count.get()).map(|current| current.now))
+            .transpose()?;
+        crate::rprofile::publish_guest_tick(tick);
+        self.guest_profile_block(block.address);
+        if self.thumb_common_block_path(block) {
+            #[cfg(test)]
+            self.block_hook_thumb_common_path
+                .set(self.block_hook_thumb_common_path.get().saturating_add(1));
+            return Ok(());
+        }
+
         #[cfg(debug_assertions)]
         self.loops.record_unsupported_model_block(block);
         self.block_hook_executions
             .set(self.block_hook_executions.get().saturating_add(1));
-        if !self
+        let block_observed = !self
             .observer_index
             .borrow()
             .blocks
             .at(block.address)
-            .is_empty()
-        {
+            .is_empty();
+        if block_observed {
             self.block_hook_block_observer
                 .set(self.block_hook_block_observer.get().saturating_add(1));
         } else if block.thumb == Some(true) {
@@ -564,17 +656,34 @@ impl Execution {
             self.block_hook_other
                 .set(self.block_hook_other.get().saturating_add(1));
         }
-        self.settle(0, true)?;
-        let tick = self
-            .clock
-            .get()
-            .map(|clock| clock.after(self.count.get()).map(|current| current.now))
-            .transpose()?;
-        crate::rprofile::publish_guest_tick(tick);
         self.at_block.set(true);
         let result = self.publish_stores().and_then(|_| self.enter_block(block));
         self.at_block.set(false);
         result
+    }
+    // Thumb entry counts each instruction, and classify installs code watches
+    // while translating it. After entry setup, block changes need only count
+    // and tick updates until store, invalidation, pause, or cap work is due.
+    fn thumb_common_block_path(&self, block: Block) -> bool {
+        if block.thumb != Some(true)
+            || !self.thumb.get()
+            || !self.thumb_entry_ready.get()
+            || self.restarted.get().is_some()
+            || self.user_stop.get()
+            || self.pause_requested.load(Ordering::Acquire) != 0
+            || self.count.get() >= self.cap.get()
+        {
+            return false;
+        }
+        if !self.pending_stores.borrow().is_empty() || self.memory.flush_pending() {
+            self.thumb_entry_ready.set(false);
+            return false;
+        }
+        self.observer_index
+            .borrow()
+            .blocks
+            .at(block.address)
+            .is_empty()
     }
     fn publish_stores(&self) -> Result<(), String> {
         let stores = std::mem::take(&mut *self.pending_stores.borrow_mut());
@@ -652,6 +761,7 @@ impl Execution {
             self.restarted.set(None);
         }
         self.memory.apply_watches()?;
+        self.thumb_entry_ready.set(thumb);
         Ok(())
     }
     fn instruction(&self, address: u64, size: u32) -> Result<(), String> {
@@ -1012,3 +1122,15 @@ unsafe fn exception(exception: arm::Exception, data: *mut c_void) {
     });
 }
 unsafe fn device_boundary(_: Access, _: u64, _: i32, _: i64, _: *mut c_void) {}
+
+impl crate::memory::CodeOwner for Execution {
+    fn watch_code(&self, address: u64, bytes: u64) -> Result<(), String> {
+        self.cpu.watch_stores(address, bytes)
+    }
+    fn invalidate_code_page(&self, address: u64) -> Result<(), String> {
+        self.cpu.invalidate_code(Some((address, address + 4096)))
+    }
+    fn prepare_code_write(&self) -> Result<(), String> {
+        self.prepare_flush()
+    }
+}

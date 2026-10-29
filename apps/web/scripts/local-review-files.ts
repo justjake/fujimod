@@ -39,9 +39,19 @@ export function reviewFiles(directory: string, repository: string): Connect.Next
   const root = realpathSync(directory);
   if (inside(realpathSync(repository), root))
     throw Error('FUJIMOD_REVIEW_DIR must be outside the repository.');
+  return staticFiles(root, '/review/');
+}
+
+/** Filesystem mount shared by opt-in development artifact routes. */
+export function staticFiles(
+  directory: string,
+  prefix: string,
+  allowed: (path: string) => boolean = () => true,
+): Connect.NextHandleFunction {
+  const root = realpathSync(directory);
   return (req, res, next) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
-    if (!url.pathname.startsWith('/review/')) return next();
+    if (!url.pathname.startsWith(prefix)) return next();
     const finish = (status: number) => {
       res.statusCode = status;
       res.end();
@@ -53,7 +63,7 @@ export function reviewFiles(directory: string, repository: string): Connect.Next
     const serve = async () => {
       let relative: string;
       try {
-        relative = decodeURIComponent(url.pathname.slice('/review/'.length));
+        relative = decodeURIComponent(url.pathname.slice(prefix.length));
       } catch {
         return finish(400);
       }
@@ -61,9 +71,10 @@ export function reviewFiles(directory: string, repository: string): Connect.Next
         return finish(403);
       let path = resolve(root, relative);
       if (!inside(root, path)) return finish(403);
+      if (!allowed(path)) return next();
       try {
         path = await realpath(path);
-        if (!inside(root, path)) return finish(403);
+        if (!inside(root, path) || !allowed(path)) return finish(403);
         let info = await stat(path);
         if (info.isDirectory()) {
           if (!url.pathname.endsWith('/')) {

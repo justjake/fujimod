@@ -70,11 +70,11 @@ impl Machine<'_> {
                 self.address[relative as usize - 1]
             };
             let slot = index as i32 - 32 + offset;
-            *self
-                .engine
+            self.engine
                 .uniforms
                 .get(slot as usize)
                 .ok_or_else(|| format!("DMP shader uniform {slot} outside bank"))?
+                .map(f32::from_bits)
         };
         Ok(std::array::from_fn(|i| {
             let v = value[(selector >> (6 - 2 * i)) as usize & 3];

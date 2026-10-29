@@ -251,7 +251,7 @@ impl Engine {
                 }
                 self.state.divider = value as u8 & !1;
             }
-            0x14 if value & !15 == 0 => self.state.mask = value as u8,
+            0x14 => self.state.mask = (value & 15) as u8,
             0x20 if value & !3 == 0 => {
                 if value & 1 != 0 {
                     self.state.overrun = false;

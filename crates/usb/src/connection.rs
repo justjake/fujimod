@@ -1,4 +1,5 @@
 //! nusb device discovery and explicit USB interface selection.
+//! Session reclaim adapted with permission from Tal Shiri's X-Turbo, src/fuji/usb.py.
 use crate::{
     Error, Result,
     error::{TransferStage, check_limit},
@@ -208,6 +209,7 @@ pub struct TransferOptions {
 pub struct Connection {
     io: Backend,
     max_reply_bytes: u32,
+    uncertain: bool,
 }
 impl Connection {
     /// Opens the caller-selected device/configuration/interface. No ff80 commands
@@ -259,6 +261,7 @@ impl Connection {
                     lease: Some(lease),
                 }),
                 max_reply_bytes: options.max_reply_bytes.get(),
+                uncertain: false,
             });
         }
         let Device::Local(info) = info else {
@@ -320,6 +323,7 @@ impl Connection {
                     observed: std::collections::BTreeMap::new(),
                 }),
                 max_reply_bytes: options.max_reply_bytes.get(),
+                uncertain: false,
             });
         };
         let device = info.open().await?;
@@ -366,6 +370,7 @@ impl Connection {
                 lease: None,
             }),
             max_reply_bytes: options.max_reply_bytes.get(),
+            uncertain: false,
         })
     }
 
@@ -384,6 +389,7 @@ impl Connection {
                 crate::emulator::EmulatorIo::open(provider, selection, options).await?,
             ),
             max_reply_bytes: options.max_reply_bytes.get(),
+            uncertain: false,
         })
     }
 
@@ -401,9 +407,85 @@ impl Connection {
             io.observation = Some(lease);
         }
     }
+    /// Explicitly clear a stale service session before opening a new one.
+    /// Ported from Tal Shiri's X-Turbo (src/fuji/usb.py), with permission.
+    /// Returns whether the optional 0x29 status arrived within 500 ms.
+    /// Cancellation or any other failure makes this connection unusable.
+    pub async fn reclaim_session(&mut self) -> Result<bool> {
+        if self.uncertain {
+            return Err(Error::CompletionUnknown);
+        }
+        self.uncertain = true;
+        self.io
+            .control(
+                RequestKind::Reclaim,
+                [0x1d, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            )
+            .await?;
+        let reply = deadline(
+            Duration::from_millis(500),
+            TransferStage::BulkIn,
+            self.io.read(2),
+        )
+        .await;
+        let arrived = match reply {
+            Ok(Ok(bytes)) if bytes == [0x29, 0] => true,
+            Err(Error::Timeout(TransferStage::BulkIn))
+            | Ok(Err(Error::Timeout(TransferStage::BulkIn))) => false,
+            Ok(Ok(_)) => return Err(crate::error::ProtocolError::ExpectationMismatch.into()),
+            Ok(Err(error)) | Err(error) => return Err(error),
+        };
+        if !arrived {
+            // A timed-out native IN transfer remains queued until canceled and
+            // drained. It must never consume the following session-open reply.
+            match &mut self.io {
+                #[cfg(not(target_arch = "wasm32"))]
+                Backend::Usb(io) => {
+                    io.input.cancel_all();
+                    while io.input.pending() != 0 {
+                        let done =
+                            deadline(io.timeout, TransferStage::BulkIn, io.input.next_complete())
+                                .await?;
+                        if done.actual_len != 0 {
+                            return Err(crate::error::ProtocolError::ExpectationMismatch.into());
+                        }
+                        if let Err(source) = done.status
+                            && source != nusb::transfer::TransferError::Cancelled
+                        {
+                            return Err(Error::Transfer {
+                                stage: TransferStage::BulkIn,
+                                source,
+                                transferred: Some(0),
+                                partial: vec![],
+                            });
+                        }
+                    }
+                }
+                Backend::Replay(_) | Backend::Model(_) | Backend::Emulator(_) => (),
+                // WebUSB cannot cancel transfers. A proxy timeout also leaves
+                // the exporter completion unknown, so do not reuse either.
+                _ => return Err(Error::Timeout(TransferStage::BulkIn)),
+            }
+        }
+        self.uncertain = false;
+        Ok(arrived)
+    }
+
+    pub(crate) fn replay(script: crate::testing::Script, max_reply_bytes: u32) -> Result<Self> {
+        check_limit(8, max_reply_bytes)?;
+        Ok(Self {
+            io: Backend::Replay(script),
+            max_reply_bytes,
+            uncertain: false,
+        })
+    }
+
     /// Begins FF80; explicitly close the session after normal completion.
     /// Drop never sends a camera close command.
     pub async fn begin_session(self, trace: Option<crate::trace::Trace>) -> Result<Session> {
+        if self.uncertain {
+            return Err(Error::CompletionUnknown);
+        }
         Session::open(self.io, self.max_reply_bytes, trace).await
     }
 }
@@ -418,7 +500,11 @@ pub(crate) fn bulk_pair<A: std::borrow::Borrow<u8>>(
         if address & 0x0f == 0 {
             continue;
         }
-        let endpoint = if address & 0x80 != 0 { &mut input } else { &mut output };
+        let endpoint = if address & 0x80 != 0 {
+            &mut input
+        } else {
+            &mut output
+        };
         if endpoint.replace(address).is_some() {
             return Err(Error::AmbiguousEndpoints);
         }
@@ -708,5 +794,70 @@ mod wasm_tests {
         )
         .await;
         assert!(matches!(result, Err(Error::Timeout(actual)) if actual == stage));
+    }
+}
+
+#[cfg(test)]
+mod reclaim_tests {
+    use super::*;
+    use crate::testing::{Exchange as E, Script};
+    use futures_lite::future::{block_on, poll_once};
+    fn control() -> E {
+        E::Control([0x1d, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    }
+    #[test]
+    fn reclaim_status_timeout_malformed_and_disconnected() {
+        for step in [
+            E::Read {
+                maximum: 2,
+                data: vec![0x29, 0],
+            },
+            E::PendingRead { maximum: 2 },
+            E::Read {
+                maximum: 2,
+                data: vec![0],
+            },
+            E::ReadFailure {
+                maximum: 2,
+                error: nusb::transfer::TransferError::Disconnected,
+                partial: vec![],
+            },
+        ] {
+            let optional = matches!(step, E::PendingRead { .. });
+            let good = matches!(&step,E::Read { data,.. } if data == &[0x29,0]);
+            let script = Script::new([control(), step]);
+            let mut connection = script.connection(256).unwrap();
+            let result = block_on(connection.reclaim_session());
+            if good || optional {
+                assert_eq!(result.unwrap(), good);
+                assert!(!connection.uncertain);
+            } else {
+                assert!(result.is_err());
+                assert!(connection.uncertain);
+            }
+            assert_eq!(script.remaining(), 0);
+        }
+    }
+    #[test]
+    fn reclaim_cancel_and_control_failure_fence_connection() {
+        let script = Script::new([control(), E::PendingRead { maximum: 2 }]);
+        let mut connection = script.connection(256).unwrap();
+        let mut pending = Box::pin(connection.reclaim_session());
+        assert!(block_on(poll_once(pending.as_mut())).is_none());
+        drop(pending);
+        assert!(matches!(
+            block_on(connection.begin_session(None)),
+            Err(Error::CompletionUnknown)
+        ));
+        let script = Script::new([E::ControlFailure {
+            bytes: [0x1d, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            error: nusb::transfer::TransferError::Stall,
+        }]);
+        let mut connection = script.connection(256).unwrap();
+        assert!(block_on(connection.reclaim_session()).is_err());
+        assert!(matches!(
+            block_on(connection.reclaim_session()),
+            Err(Error::CompletionUnknown)
+        ));
     }
 }

@@ -5,7 +5,8 @@
 //! board thread and services guest callbacks there through synchronous RPC.
 #![cfg(not(target_os = "emscripten"))]
 
-use super::{core, memory::SharedMemory};
+use super::core;
+use crate::memory::SharedMemory;
 use crate::Library;
 use fujimod_emulator_cpu::*;
 use std::any::Any;

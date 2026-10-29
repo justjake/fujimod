@@ -117,8 +117,13 @@ pub trait ImageResources: Send + Sync {
     fn sensor_fingerprints(&self) -> Result<BTreeMap<String, serde_json::Value>, String>;
 
     /// Present caller RGB pixels on an image input.
-    fn prepare_rgb(&self, name: &str, width: usize, height: usize, bytes: &[u8])
-    -> Result<(), String>;
+    fn prepare_rgb(
+        &self,
+        name: &str,
+        width: usize,
+        height: usize,
+        bytes: &[u8],
+    ) -> Result<(), String>;
     /// Select an image input's analytic scene.
     fn use_analytic(&self, name: &str) -> Result<(), String>;
     /// Select an image input's sensor scene.
@@ -132,9 +137,24 @@ pub trait ImageResources: Send + Sync {
         bytes: &[u8],
         white_luminance: f64,
     ) -> Result<(), String>;
+    /// Replace RGB radiance with an explicit immutable sensor-noise realization.
+    fn sensor_rgb_noise(
+        &self,
+        name: &str,
+        width: usize,
+        height: usize,
+        bytes: &[u8],
+        white_luminance: f64,
+        noise: serde_json::Value,
+    ) -> Result<(), String>;
     /// Replace a sensor input with a little-endian U16 RAW raster.
-    fn sensor_raw16(&self, name: &str, width: usize, height: usize, bytes: &[u8])
-    -> Result<(), String>;
+    fn sensor_raw16(
+        &self,
+        name: &str,
+        width: usize,
+        height: usize,
+        bytes: &[u8],
+    ) -> Result<(), String>;
     /// Decode a RAF's visible crop as a sensor frame.
     fn decode_raf(&self, bytes: &[u8]) -> Result<SensorFrame, String>;
     /// Install a decoded frame on a sensor input.

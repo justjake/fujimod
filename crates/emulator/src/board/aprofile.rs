@@ -388,3 +388,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod accounting_tests;

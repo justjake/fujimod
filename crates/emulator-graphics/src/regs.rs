@@ -4,7 +4,7 @@ use std::collections::{HashMap, hash_map::Entry};
 
 /// Register index -> value, iterating in first-insertion order.
 /// Device state and fingerprints preserve that order.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Registers {
     order: Vec<u32>,
     values: HashMap<u32, u64>,

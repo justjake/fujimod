@@ -585,3 +585,57 @@ mod translation_tests {
         assert!(walk(s, 0x1234, Access::Read, &t).is_err());
     }
 }
+
+/// A-profile framework boundaries, independent of firmware or device maps.
+pub fn framework_instruction(word: u32) -> bool {
+    if word & 0xffd00000 == 0xd5100000 {
+        let encoding = ((word >> 5) & 0xffff) as u16;
+        let r = super::arm::SystemRegister::from_encoding(encoding);
+        r.crn == 9
+            || r.crn == 14
+            || r.crn == 15
+            || encoding == 0xc230
+            || encoding == 0xf665
+            || (r.op0 == 3 && r.op1 == 0 && r.crn == 12 && (8..=15).contains(&r.crm))
+    } else {
+        matches!(word, 0xd503205f | 0xd503207f | 0xd503209f | 0xd50320bf)
+    }
+}
+/// Route an asserted EL1 IRQ/FIQ at an instruction boundary. Entry consumes no
+/// instruction or virtual tick. Unsupported routing above EL1 refuses.
+pub fn enter_interrupt(cpu: &dyn super::Cpu, irq: bool, fiq: bool) -> Result<bool, String> {
+    use super::{Register, arm::SystemRegister};
+    let read = |r| {
+        let mut b = [0; 8];
+        cpu.read_register(r, &mut b)?;
+        Ok::<u64, String>(u64::from_le_bytes(b))
+    };
+    let sys = |r| Register::Arm64System(SystemRegister::from_encoding(r));
+    let pstate = read(Register::Pstate)?;
+    if !(irq && pstate & 0x80 == 0 || fiq && pstate & 0x40 == 0) {
+        return Ok(false);
+    }
+    let fiq = fiq && pstate & 0x40 == 0;
+    if (pstate >> 2) & 3 > 1
+        || read(sys(0xf088))? & if fiq { 4 } else { 2 } != 0
+        || read(sys(0xe088))? & if fiq { 8 } else { 0x10 } != 0
+    {
+        return Err("AArch64 interrupt routing above EL1 is unsupported".into());
+    }
+    let offset = match pstate & 15 {
+        0 => 0x400,
+        4 => 0,
+        5 => 0x200,
+        _ => return Err("AArch64 interrupt entry mode is unsupported".into()),
+    } + if fiq { 0x100 } else { 0x80 };
+    let vector = read(sys(0xc600))? + offset;
+    let pc = read(Register::Pc)?;
+    cpu.write_register(sys(0xc201), &pc.to_le_bytes())?;
+    cpu.write_register(sys(0xc200), &pstate.to_le_bytes())?;
+    cpu.write_register(
+        Register::Pstate,
+        &((pstate & 0xf0000000) | 0x3c5).to_le_bytes(),
+    )?;
+    cpu.write_register(Register::Pc, &vector.to_le_bytes())?;
+    Ok(true)
+}

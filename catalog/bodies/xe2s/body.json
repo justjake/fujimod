@@ -1020,6 +1020,19 @@
               "refs": {}
             },
             {
+              "name": "imagescaler",
+              "kind": "ImageScaler",
+              "boot_entries": [
+                "loader"
+              ],
+              "refs": {}
+            },
+            {
+              "name": "imagecombination",
+              "kind": "ImageCombination",
+              "refs": {}
+            },
+            {
               "name": "loadermemorydma",
               "kind": "LoaderMemoryDMA",
               "refs": {}
@@ -1038,7 +1051,7 @@
             },
             {
               "name": "audio",
-              "kind": "SerialAudioControlRegisters",
+              "kind": "SerialAudioTransmitSink",
               "refs": {}
             },
             {
@@ -1148,6 +1161,8 @@
             "kernelinterrupts",
             "nandcontroller",
             "fujidecompressor",
+            "imagescaler",
+            "imagecombination",
             "loadermemorydma",
             "powerdevices",
             "usbcontrol",
@@ -1177,6 +1192,8 @@
             "kernelinterrupts",
             "nandcontroller",
             "fujidecompressor",
+            "imagescaler",
+            "imagecombination",
             "loadermemorydma",
             "usbcontrol",
             "powerdevices",
@@ -1511,6 +1528,23 @@
                 "basis": "Declared catalog input."
               }
             ]
+          },
+          "display_timing": {
+            "phase_profile": "declared-external-phase-clock-unmeasured",
+            "frame_period_ticks": 400000,
+            "stop_delay_ticks": 2,
+            "basis": "Declared catalog input."
+          },
+          "fe80": {
+            "basis": "Declared catalog input.",
+            "upload_setup_phases": [
+              "routed"
+            ],
+            "periods": [
+              12,
+              13,
+              16
+            ]
           }
         },
         "control_bus_order": [
@@ -1523,6 +1557,71 @@
           "device-6",
           "device-7",
           "device-8"
+        ],
+        "card_contacts": {
+          "detect": [
+            12,
+            7,
+            0
+          ],
+          "write_protect": [
+            12,
+            6,
+            1
+          ],
+          "basis": "Declared catalog input."
+        },
+        "encoders": [
+          {
+            "name": "command_dial",
+            "options": {
+              "pins": [
+                {
+                  "port": 3,
+                  "pin": 8
+                },
+                {
+                  "port": 3,
+                  "pin": 9
+                }
+              ],
+              "phase_ticks": 120000,
+              "rest_phase": 3
+            },
+            "counter": null
+          }
+        ],
+        "pin_interrupts": [
+          {
+            "pin": {
+              "port": 0,
+              "pin": 2
+            },
+            "edge": "falling",
+            "outputs": [
+              {
+                "Core": {
+                  "core": 0,
+                  "line": 10
+                }
+              }
+            ]
+          },
+          {
+            "pin": {
+              "port": 0,
+              "pin": 3
+            },
+            "edge": "falling",
+            "outputs": [
+              {
+                "Core": {
+                  "core": 0,
+                  "line": 11
+                }
+              }
+            ]
+          }
         ]
       }
     }

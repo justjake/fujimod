@@ -168,6 +168,9 @@ fn graph(index: &core::Index, operation: &str, a: &Value) -> PyResult<Value> {
             required(s("reference"), "reference")?,
             required(s("other"), "other")?,
         )),
+        "pairs_for" => {
+            serde_json::to_value(index.pairs_for(id(a)?, required(s("other"), "other")?))
+        }
         _ => return Err(invalid("unknown corpus query")),
     };
     value.map_err(invalid)

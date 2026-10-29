@@ -1,9 +1,17 @@
 """Read-set waits follow dependencies and preserve hard execution ceilings."""
+from dataclasses import asdict
 import json
 
 import pytest
 
-from fujimod.emulator.waits import WaitMetrics, wait_steps, wait_until
+from fujimod.emulator.waits import (
+    MAX_CONTINUATION_STOP_CAUSES,
+    ContinuationStopCause,
+    ContinuationStopCount,
+    WaitMetrics,
+    wait_steps,
+    wait_until,
+)
 
 
 class Reads:
@@ -11,6 +19,8 @@ class Reads:
         self.active = False
         self.stores = []
         self.devices = []
+        self.stop = None
+        self.stop_calls = 0
 
     def read_set_begin(self):
         assert not self.active
@@ -22,12 +32,17 @@ class Reads:
         self.active = False
         return json.dumps(dict(stores=self.stores, devices=self.devices))
 
+    def continuation_stop(self):
+        self.stop_calls += 1
+        return self.stop
+
 
 class Board:
     def __init__(self):
         self.native = Reads()
         self.instructions = self.virtual_ticks = 0
         self.calls = []
+        self.stop_events = []
 
     def read(self, address):
         if self.native.active:
@@ -46,6 +61,8 @@ class Board:
             count = min(count, pause_at_tick-self.virtual_ticks)
         self.instructions += count
         self.virtual_ticks += count
+        self.native.stop = self.stop_events.pop(0) if self.stop_events else None
+        return self.native.stop is not None
 
 
 def test_read_set_changes_after_short_circuit_and_tracks_device_reads():
@@ -55,6 +72,7 @@ def test_read_set_changes_after_short_circuit_and_tracks_device_reads():
                       'dependent', instruction_limit=20, metrics=report)
     assert board.calls == [(20, None, [(8,12)], []), (17, None, [(8,12)], ['timer'])]
     assert (report.polls, report.continuations, report.instructions, report.ticks) == (3,2,6,6)
+    assert board.native.stop_calls == 0
 
 
 def test_already_ready_never_runs_and_unwatchable_false_predicate_refuses():
@@ -145,3 +163,86 @@ def test_ignored_device_wakes_require_and_use_bounded_continuations():
     assert board.calls == [(3, None, [], []), (3, None, [], []), (3, None, [], [])]
     with pytest.raises(ValueError, match='nothing watchable'):
         wait_until(Board(), lambda: False, 'unbounded', ignored_devices=('sd-host',))
+
+
+def test_stop_profile_aggregates_causes_per_wait():
+    board = Board()
+    store_stop = {
+        'kind': 'store',
+        'range_index': 0,
+        'range': [8, 12],
+        'address': 8,
+        'change_confirmed': True,
+    }
+    board.stop_events = [store_stop, {'kind': 'device', 'id': 2}, store_stop]
+    report = WaitMetrics('profiled')
+
+    assert wait_until(board, lambda: board.read(8) >= 9, 'profiled',
+                      instruction_limit=20, metrics=report, profile_stops=True)
+
+    assert report.continuation_stops == [
+        ContinuationStopCount(
+            ContinuationStopCause(
+                'store', range_index=0, physical_range=(8, 12), address=8,
+                change_confirmed=True,
+            ),
+            2,
+        ),
+        ContinuationStopCount(ContinuationStopCause('device', device_id=2), 1),
+    ]
+    assert report.continuation_stop_overflow == 0
+    assert board.native.stop_calls == 3
+
+
+def test_stop_profile_bounds_distinct_causes_and_counts_overflow():
+    board = Board()
+    event_count = MAX_CONTINUATION_STOP_CAUSES + 3
+    board.stop_events = [{'kind': 'device', 'id': index} for index in range(event_count)]
+    board.stop_events[-1] = {'kind': 'device', 'id': 0}
+    report = WaitMetrics('bounded profile')
+
+    assert wait_until(board, lambda: board.device('timer') >= event_count * 3,
+                      'bounded profile', instruction_limit=event_count * 3 + 1,
+                      metrics=report, profile_stops=True)
+
+    assert len(report.continuation_stops) == MAX_CONTINUATION_STOP_CAUSES
+    assert report.continuation_stops[0] == ContinuationStopCount(
+        ContinuationStopCause('device', device_id=0), 2)
+    assert report.continuation_stop_overflow == 2
+    assert sum(item.count for item in report.continuation_stops) + report.continuation_stop_overflow == event_count
+
+
+def test_profiled_wait_metrics_are_json_serializable():
+    board = Board()
+    board.stop_events = [{'kind': 'device', 'id': 4}]
+    report = WaitMetrics('serializable')
+
+    assert wait_until(board, lambda: board.device('timer') >= 3, 'serializable',
+                      instruction_limit=10, metrics=report, profile_stops=True)
+
+    serialized = json.dumps(asdict(report))
+    decoded = json.loads(serialized)
+    assert decoded['continuation_stops'] == [
+        {'cause': {'kind': 'device', 'device_id': 4, 'range_index': None,
+                   'physical_range': None, 'address': None, 'change_confirmed': None},
+         'count': 1}
+    ]
+    assert decoded['continuation_stop_overflow'] == 0
+
+
+def test_stop_profile_requires_a_report_and_native_observation_api():
+    board = Board()
+    with pytest.raises(ValueError, match='requires metrics'):
+        wait_until(board, lambda: 'ready', 'missing report', profile_stops=True)
+    board.native.continuation_stop = None
+    with pytest.raises(ValueError, match='does not expose'):
+        wait_until(board, lambda: 'ready', 'missing API', metrics=WaitMetrics('missing API'),
+                   profile_stops=True)
+
+
+def test_stop_profile_rejects_a_missing_cause_for_a_published_continuation():
+    board = Board()
+    board.run = lambda *args, **kwargs: True
+    with pytest.raises(RuntimeError, match='without a cause'):
+        wait_until(board, lambda: board.read(8) >= 100, 'missing cause',
+                   metrics=WaitMetrics('missing cause'), profile_stops=True)

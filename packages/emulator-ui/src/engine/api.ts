@@ -82,6 +82,7 @@ export interface Engine {
   replay(steps: readonly ReplayStep[]): Promise<void>;
   metrics(listener: (metrics: CameraPerformance) => void): () => void;
   profile(limit?: number): Promise<Record<string, unknown>>;
+  deviceStates(kind: string): Promise<{ states: unknown[] }>;
   errors(listener: (fault: EngineFault) => void): () => void;
   rollback(seconds: number): Promise<Record<string, string>>;
   errorReport(submission?: Promise<ReportSubmission>): Promise<Blob>;

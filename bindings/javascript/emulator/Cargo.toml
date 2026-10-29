@@ -29,6 +29,9 @@ fujimod-emulator-boot.workspace = true
 fujimod-emulator-cpu.workspace = true
 fujimod-emulator-cpu-unicorn.workspace = true
 fujimod-emulator-devices.workspace = true
+fujimod-emulator-ip-dmp.workspace = true
+fujimod-emulator-exr2-gpu.workspace = true
+fujimod-emulator-gpu.workspace = true
 fujimod-emulator-exr2-board.workspace = true
 fujimod-emulator-exr2-plan.workspace = true
 fujimod-firmware.workspace = true
@@ -38,6 +41,7 @@ serde_bytes = "0.11"
 js-sys.workspace = true
 tsify.workspace = true
 serde-wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
 wasm-bindgen.workspace = true
 sha2 = { workspace = true, default-features = false }
 fujimod-workspace-hack.workspace = true

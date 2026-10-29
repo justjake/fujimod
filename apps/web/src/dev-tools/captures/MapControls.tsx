@@ -38,7 +38,7 @@ export function MapControls(props: {
   const [failure, setFailure] = createSignal('');
   let abort: AbortController | undefined;
   const [result, setResult] = createSignal<{ name: string; base: number; diff: ControlDiff }>();
-  const set = () => props.set ?? emptySet(selection()!.firmware.id);
+  const set = () => props.set ?? emptySet(selection()!.firmware.firmware_id);
   const name = () => {
     const id = control();
     const chosen = controls().find(([key]) => key === id)?.[1].name;
@@ -54,7 +54,7 @@ export function MapControls(props: {
   async function capture() {
     const camera = props.camera;
     const current = scope();
-    const firmwareId = selection()?.firmware.id;
+    const firmwareId = selection()?.firmware.firmware_id;
     if (!camera || !current || !firmwareId || !name() || !available()) return;
     setRunning(true);
     setFailure('');

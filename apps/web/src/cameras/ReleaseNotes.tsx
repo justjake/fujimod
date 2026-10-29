@@ -56,7 +56,14 @@ export function noteBlocks(text: string): Block[] {
       if (item) {
         if (previous?.kind === 'list' && previous.ordered === ordered) previous.items.push(item[1]);
         else blocks.push({ kind: 'list', ordered, items: [item[1]] });
-      } else if (previous?.kind === 'paragraph' && i > 0 && lines[i - 1].trim())
+      } else if (
+        previous?.kind === 'list' &&
+        /^\s{2,}\S/.test(lines[i]) &&
+        i > 0 &&
+        lines[i - 1].trim()
+      )
+        previous.items[previous.items.length - 1] += ' ' + line;
+      else if (previous?.kind === 'paragraph' && i > 0 && lines[i - 1].trim())
         previous.text += ' ' + line;
       else blocks.push({ kind: 'paragraph', text: line });
     }

@@ -541,9 +541,8 @@ impl Session {
         }
         Ok(())
     }
-    /// Reuse the runtime scheduler, sampling host acknowledgment conditions at
-    /// explicit guest-time boundaries. An explicit pause_after retains its
-    /// existing single-call scheduling contract.
+    /// Reuse the runtime scheduler, sampling contact acknowledgments at their
+    /// declared guest-time boundaries without replenishing the caller's budget.
     pub fn run_with_limits(
         &mut self,
         count: u64,
@@ -551,27 +550,46 @@ impl Session {
         pause_after: Option<u64>,
         until: Option<u64>,
     ) -> Result<(), String> {
-        self.pump_contacts()?;
-        if count == 0
-            || pause_after.is_some()
-            || !self.contact_driver.as_ref().is_some_and(Driver::busy)
-        {
-            self.board
-                .run_with_limits(count, quantum, pause_after, until)?;
+        if count == 0 {
             return self.pump_contacts();
         }
-        let total = |s: &Session| {
-            s.board
-                .instruction_counts()
-                .into_iter()
-                .try_fold(0u64, |a, b| a.checked_add(b))
-                .ok_or("instruction count overflow")
-        };
-        let end = total(self)?
+        let start = self.total_instructions()?;
+        let end = start
             .checked_add(count)
             .ok_or("instruction budget overflow")?;
+        let pause_after = pause_after.map(|pause| {
+            if pause <= start {
+                start.saturating_add((quantum as u64).min(count))
+            } else {
+                pause
+            }
+        });
+        self.run_window(end, quantum, pause_after, until)
+    }
+
+    fn total_instructions(&self) -> Result<u64, String> {
+        self.board
+            .instruction_counts()
+            .into_iter()
+            .try_fold(0u64, |a, b| a.checked_add(b))
+            .ok_or_else(|| "instruction count overflow".into())
+    }
+
+    /// Continue an existing host window across contact acknowledgments and
+    /// passive observer stops, retaining its absolute instruction ceiling.
+    pub fn run_window(
+        &mut self,
+        end: u64,
+        quantum: usize,
+        pause_after: Option<u64>,
+        until: Option<u64>,
+    ) -> Result<(), String> {
+        self.pump_contacts()?;
+        if end <= self.total_instructions()? {
+            return self.board.run_window(end, quantum, pause_after, until);
+        }
         loop {
-            let current = total(self)?;
+            let current = self.total_instructions()?;
             if current >= end || until.is_some_and(|t| self.board.now() >= t) {
                 return Ok(());
             }
@@ -586,11 +604,12 @@ impl Session {
                 None => until,
             };
             let before = (self.board.now(), current);
-            self.board
-                .run_with_limits(end - current, quantum, None, horizon)?;
+            self.board.run_window(end, quantum, pause_after, horizon)?;
             self.pump_contacts()?;
-            if (self.board.now(), total(self)?) == before
+            let after = (self.board.now(), self.total_instructions()?);
+            if after == before
                 || horizon.is_none_or(|h| self.board.now() < h)
+                || pause_after.is_some_and(|pause| after.1 >= pause)
             {
                 return Ok(());
             }

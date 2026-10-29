@@ -10,7 +10,8 @@ const selection = {
   firmware: { id: 'xm5-130', version: '1.30' },
   bulk: { product: 'X-M5', internal_version: '2.06', scopes: [] },
 } as unknown as ResolvedSelection;
-vi.mock('fujimod', () => ({ catalog: { selections: () => [selection] } }));
+const generationResults = vi.fn(() => [] as import('fujimod').FirmwareGeneration[]);
+vi.mock('fujimod', () => ({ catalog: { selections: () => [selection], generationResults } }));
 const { GettingStarted } = await import('./GettingStarted');
 
 let cleanup: (() => void) | undefined;
@@ -18,6 +19,8 @@ afterEach(() => {
   cleanup?.();
   document.body.innerHTML = '';
   localStorage.clear();
+  generationResults.mockReset();
+  generationResults.mockReturnValue([]);
 });
 const button = (host: HTMLElement, name: string) =>
   [...host.querySelectorAll('button')].find((node) => node.textContent?.trim() === name);
@@ -166,4 +169,75 @@ test('a failed step shows the camera’s refusal', async () => {
     flush();
     expect(p.host.textContent).toContain('Service mode did not verify');
   });
+});
+
+test('every button blocked by missing bulk support shows the published failure immediately below it', () => {
+  generationResults.mockReturnValue([
+    {
+      firmware_id: 'xe4-201',
+      product: 'X-E4',
+      version: '2.01',
+      internal_version: '1.43',
+      tables: {
+        bulk: {
+          status: 'unavailable',
+          errors: [
+            {
+              locator: 'bulk',
+              reason: 'Bulk reader located, but no catalog firmware and body record is published',
+            },
+          ],
+        },
+      },
+    },
+  ]);
+  const p = mount({});
+  p.test.update('m5', (camera) => ({
+    ...camera,
+    identity: { product: 'X-E4', internalVersion: '1.43' },
+  }));
+  flush();
+  for (const name of ['Back up flash', 'Dump memory', 'Enable debug mode']) {
+    const control = button(p.host, name)!;
+    expect(control.disabled).toBe(true);
+    const warning = control.closest('.gs-stack')!.querySelector('.wb-bulk-error')!;
+    expect(warning.textContent).toContain(
+      'Bulk reader located, but no catalog firmware and body record is published',
+    );
+    expect(
+      control.compareDocumentPosition(warning) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  }
+  expect(p.host.querySelectorAll('.wb-bulk-error')).toHaveLength(3);
+  expect(p.host.textContent).not.toContain('no located bulk reader yet');
+  p.test.update('m5', (camera) => ({ ...camera, present: false }));
+  flush();
+  expect(p.host.querySelectorAll('.wb-bulk-error')).toHaveLength(0);
+});
+
+test('an identity generation failure stays visible when its internal version could not be matched', () => {
+  generationResults.mockReturnValue([
+    {
+      firmware_id: 'xe4-201',
+      product: 'X-E4',
+      version: '2.01',
+      internal_version: null,
+      tables: {
+        versions: {
+          status: 'unavailable',
+          errors: [{ locator: 'identity', reason: 'Version initializer could not be decoded' }],
+        },
+      },
+    },
+  ]);
+  const p = mount({});
+  p.test.update('m5', (camera) => ({
+    ...camera,
+    identity: { product: 'X-E4', internalVersion: '1.43' },
+  }));
+  flush();
+  expect(p.host.querySelector('.wb-bulk-error')?.textContent).toContain(
+    'Version initializer could not be decoded',
+  );
+  expect(p.host.textContent).not.toContain('No bulk generation result');
 });

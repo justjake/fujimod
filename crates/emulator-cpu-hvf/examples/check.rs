@@ -71,6 +71,45 @@ fn main() -> Result<(), String> {
         let options = || {
             Options::new(Engine::Hypervisor).with_translation_cache_size_bytes(1024 * 1024)
         };
+        let mut concurrent = graph(
+            (0..2)
+                .map(|core| Processor {
+                    model: Model::ArmV8A,
+                    released: true,
+                    rprofile: None,
+                    mprofile: None,
+                    registers: vec![
+                        (Register::Pstate, 0x3c5),
+                        (Register::Pc, 0x10000 + core * 0x1000),
+                    ],
+                })
+                .collect(),
+        )
+        .build(options(), Bus::new(Mode::Strict), None)?;
+        concurrent.set_execution_policy(ExecutionPolicy::Interactive)?;
+        for core in 0..2 {
+            if !concurrent.cpu(core)?.features().asynchronous_runs {
+                return Err(format!("HVF core {core} lacks asynchronous runs"));
+            }
+            code(
+                concurrent.cpu(core)?,
+                0x10000 + (core as u64) * 0x1000,
+                &[0xd2800000, 0x91000400, 0x17ffffff],
+            );
+        }
+        concurrent.run_for_instructions(20_000_000, 128)?;
+        let concurrent_counts = concurrent.instruction_counts();
+        if concurrent_counts.len() != 2 || concurrent_counts.iter().any(|count| *count == 0) {
+            return Err(format!(
+                "two-vCPU interactive run did not advance both cores: {concurrent_counts:?}"
+            ));
+        }
+        for core in 0..2 {
+            if get(concurrent.cpu(core)?, Register::X(0)) == 0 {
+                return Err(format!("two-vCPU interactive core {core} did not execute"));
+            }
+        }
+        drop(concurrent);
         // Both architectural compare channels must assert their declared PPI at
         // guest tick100, including when the host pauses while WFI is waiting.
         for virtual_timer in [false, true] {
@@ -450,6 +489,44 @@ fn main() -> Result<(), String> {
     run(&cpu, 0x10300, 2).unwrap();
     assert_eq!(io.reads, vec![(0, 8)]);
     assert_eq!(io.writes, vec![(8, 8, 0x1234567800000080)]);
+    // A pause raised inside the parked asynchronous MMIO callback must still
+    // commit the load once before the run stops.
+    code(&cpu, 0x10300, &[0xf9400020, 0x14000000]);
+    cpu.invalidate_code(Some((0x10300, 0x10308)))?;
+    set(&cpu, Register::X(1), 0x8000000);
+    cpu.set_execution_policy(ExecutionPolicy::Interactive)?;
+    io.stop_reads = true;
+    let async_reads = io.reads.len();
+    let async_run = cpu
+        .start_run(Run {
+            begin: 0x10300,
+            until: None,
+            watchdog_us: 2_000_000,
+            instructions: Some(100_000_000),
+        })
+        .map_err(|e| e.to_string())?;
+    loop {
+        match cpu.poll_run(async_run).map_err(|e| e.to_string())? {
+            RunStatus::Running => thread::yield_now(),
+            RunStatus::CallbackPending => {
+                cpu.request_pause(async_run).map_err(|e| e.to_string())?;
+                cpu.service_pending_callback(async_run)
+                    .map_err(|e| e.to_string())?;
+            }
+            RunStatus::Complete(result) => {
+                result.map_err(|e| e.to_string())?;
+                break;
+            }
+        }
+    }
+    assert_eq!(io.reads.split_off(async_reads), vec![(0, 8)]);
+    assert_eq!(get(&cpu, Register::X(0)), 0x1234567800000080);
+    assert_eq!(get(&cpu, Register::Pc), 0x10304);
+    io.stop_reads = false;
+    code(&cpu, 0x10300, &[0xf9400020, 0xf9000420]);
+    cpu.invalidate_code(Some((0x10300, 0x10308)))?;
+    cpu.set_execution_policy(ExecutionPolicy::Exact)?;
+    println!("PASS: asynchronous MMIO load completed once");
     // Signed loads, post-index writeback and pairs use the shared decoder.
     code(&cpu, 0x10320, &[0x39800020]);
     run(&cpu, 0x10320, 1).unwrap();
@@ -660,6 +737,128 @@ fn main() -> Result<(), String> {
         }
         other => panic!("WFI failed to exit: {other:?}"),
     }
+    unsafe fn ignore_instruction(_: u64, _: u32, _: *mut c_void) {}
+    let observer = unsafe {
+        cpu.install_hook(Hook::Instruction {
+            callback: ignore_instruction,
+            data: std::ptr::null_mut(),
+            range: HookRange::All,
+        })?
+    };
+    assert!(cpu
+        .set_execution_policy(ExecutionPolicy::Interactive)
+        .is_err());
+    cpu.remove_hook(observer)?;
+    cpu.set_execution_policy(ExecutionPolicy::Interactive)?;
+
+    const INTERACTIVE_BUDGET_NS: u64 = 100_000_000;
+    code(&cpu, 0x10900, &[0x91000400, 0x17ffffff]);
+    set(&cpu, Register::X(0), 0);
+    match cpu.run(Run {
+        begin: 0x10900,
+        until: None,
+        watchdog_us: 2_000_000,
+        instructions: Some(INTERACTIVE_BUDGET_NS as usize),
+    })
+    .map_err(|e| e.to_string())?
+    {
+        Exit::Stopped => (),
+        other => panic!("Interactive budget did not stop the native loop: {other:?}"),
+    }
+    let progress = cpu
+        .instruction_progress()
+        .expect("Interactive progress is measured");
+    assert!((INTERACTIVE_BUDGET_NS * 3 / 4..=INTERACTIVE_BUDGET_NS * 5 / 4)
+        .contains(&progress));
+    let estimated_instructions = get(&cpu, Register::X(0)) * 2;
+    let estimated_rate = estimated_instructions as f64 * 1_000_000_000.0 / progress as f64;
+    assert!(
+        estimated_rate > 50_000_000.0,
+        "estimated native rate was {estimated_rate:.0} instructions/s"
+    );
+    println!(
+        "PASS: Interactive native loop estimated {:.1}M instructions/s; {progress}ns for {INTERACTIVE_BUDGET_NS}ns budget",
+        estimated_rate / 1_000_000.0
+    );
+
+    set(&cpu, Register::X(0), 0);
+    let stop_barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let stopper_barrier = stop_barrier.clone();
+    let stop_cpu = &cpu as *const _ as usize;
+    let stopper = thread::spawn(move || {
+        stopper_barrier.wait();
+        thread::sleep(std::time::Duration::from_millis(100));
+        // SAFETY: the thread calls only Core::stop while the owner is running
+        // it. Core::stop uses shared atomics; all other Core access stays on
+        // the owner thread, and the CPU outlives this joined thread.
+        unsafe {
+            (&*(stop_cpu as *const fujimod_emulator_cpu_hvf::Core)).stop()
+        }
+    });
+    stop_barrier.wait();
+    match cpu.run(Run {
+        begin: 0x10900,
+        until: None,
+        watchdog_us: 1_000_000,
+        instructions: None,
+    })
+    .map_err(|e| e.to_string())?
+    {
+        Exit::Stopped => (),
+        other => panic!("Interactive Core::stop did not stop the native loop: {other:?}"),
+    }
+    stopper.join().map_err(|_| "stopper thread panicked")??;
+    let stop_progress = cpu
+        .instruction_progress()
+        .expect("Interactive stop progress is measured");
+    assert!(
+        (20_000_000..500_000_000).contains(&stop_progress),
+        "Interactive stop progress was {stop_progress}ns"
+    );
+    assert!(get(&cpu, Register::X(0)) > 0);
+    println!("PASS: Interactive Core::stop returned Stopped at {stop_progress}ns");
+
+    match cpu.run(Run {
+        begin: 0x10600,
+        until: None,
+        watchdog_us: 2_000_000,
+        instructions: Some(10_000_000),
+    })
+    .map_err(|e| e.to_string())?
+    {
+        Exit::Hint(Hint::WaitForInterrupt) => assert_eq!(get(&cpu, Register::Pc), 0x10604),
+        other => panic!("Interactive WFI did not exit as a hint: {other:?}"),
+    }
+    unsafe {
+        cpu.map_mmio(
+            0x8000000,
+            0xc000,
+            Mmio {
+                read,
+                write,
+                data: (&mut io as *mut Io<'_>).cast(),
+            },
+        )?;
+    }
+    code(&cpu, 0x10300, &[0xf9400020, 0x14000000]);
+    cpu.invalidate_code(Some((0x10300, 0x10308)))?;
+    set(&cpu, Register::X(1), 0x8000000);
+    let reads = io.reads.len();
+    match cpu.run(Run {
+        begin: 0x10300,
+        until: None,
+        watchdog_us: 2_000_000,
+        instructions: Some(100_000_000),
+    })
+    .map_err(|e| e.to_string())?
+    {
+        Exit::Stopped => (),
+        other => panic!("Interactive MMIO load did not resume natively: {other:?}"),
+    }
+    assert_eq!(&io.reads[reads..], &[(0, 8)]);
+    assert_eq!(get(&cpu, Register::X(0)), 0x1234567800000080);
+    cpu.unmap(0x8000000, 0xc000)?;
+    cpu.set_execution_policy(ExecutionPolicy::Exact)?;
     // Host cancellation changes no guest clock. A subsequent bounded run
     // must not inherit a canceled-entry latch from the earlier watchdog.
     code(&cpu, 0x10400, &[0x14000000]);
@@ -1210,7 +1409,7 @@ fn main() -> Result<(), String> {
     architectural_board_checks()?;
     durable::run()?;
     println!(
-        "PASS: bounded execution, two workers, callback reentrancy, snapshots, SVC/ERET, IRQ, shared GIC/ICC, WFI, counter trap, MMIO, native MMU, exclusives/peer stores/CLREX, code replacement, cancellation, map lifetime and shared factory deadline/IRQ scheduling and M-profile firmware mailbox execution and peer-store reservation invalidation"
+        "PASS: bounded execution, two workers, concurrent vCPUs, callback reentrancy, snapshots, SVC/ERET, IRQ, shared GIC/ICC, WFI, counter trap, MMIO, native MMU, exclusives/peer stores/CLREX, code replacement, cancellation, map lifetime and shared factory deadline/IRQ scheduling and M-profile firmware mailbox execution and peer-store reservation invalidation"
     );
     Ok(())
 }

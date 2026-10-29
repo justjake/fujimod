@@ -306,6 +306,9 @@ export class WasmEngine implements Engine {
     const result = await this.rpc<Record<string, unknown>>({ action: 'profile', limit });
     return { ...result, mainTimings: this.timings.snapshot() };
   }
+  deviceStates(kind: string) {
+    return this.rpc<{ states: unknown[] }>({ action: 'device_states', kind });
+  }
   async rollback(seconds: number) {
     const positions = await this.rpc<Record<string, string>>({ action: 'rollback', seconds });
     this.fault = undefined;

@@ -1,0 +1,130 @@
+{
+  "$defs": {
+    "FirmwareGeneration": {
+      "additionalProperties": false,
+      "description": "Independent table outcomes for a firmware release.",
+      "properties": {
+        "firmware_id": {
+          "description": "Firmware identity.",
+          "type": "string"
+        },
+        "internal_version": {
+          "description": "Located internal version, when available.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "product": {
+          "description": "Reported camera product.",
+          "type": "string"
+        },
+        "tables": {
+          "additionalProperties": {
+            "$ref": "#/$defs/TableGeneration"
+          },
+          "description": "Table name to its generation outcome.",
+          "type": "object"
+        },
+        "version": {
+          "description": "Public firmware release.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "firmware_id",
+        "product",
+        "version",
+        "tables"
+      ],
+      "type": "object"
+    },
+    "GenerationError": {
+      "additionalProperties": false,
+      "description": "One retained failure from a locator or table publisher.",
+      "properties": {
+        "locator": {
+          "description": "Failed operation.",
+          "type": "string"
+        },
+        "reason": {
+          "description": "Specific failure, without host file locations.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "locator",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "GenerationStatus": {
+      "description": "Whether a table was generated successfully.",
+      "oneOf": [
+        {
+          "const": "available",
+          "description": "Published successfully.",
+          "type": "string"
+        },
+        {
+          "const": "unavailable",
+          "description": "Generation or publication failed; errors explain why.",
+          "type": "string"
+        }
+      ]
+    },
+    "TableGeneration": {
+      "additionalProperties": false,
+      "description": "Outcome for one generated table.",
+      "properties": {
+        "errors": {
+          "description": "Failures retained by the generator.",
+          "items": {
+            "$ref": "#/$defs/GenerationError"
+          },
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/GenerationStatus",
+          "description": "Publication status."
+        }
+      },
+      "required": [
+        "status",
+        "errors"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/generation.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Generation report for all attempted firmware releases.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/generation.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "firmwares": {
+      "description": "All attempted firmware, including unavailable tables.",
+      "items": {
+        "$ref": "#/$defs/FirmwareGeneration"
+      },
+      "type": "array"
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "firmwares"
+  ],
+  "title": "GenerationResults",
+  "type": "object"
+}

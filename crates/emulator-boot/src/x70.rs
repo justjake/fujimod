@@ -411,8 +411,10 @@ fn card_recipe(selection: &ResolvedSelection, browser: &RunBrowserCamera) -> Res
     let (detect, present_high) = card_contact(selection, &slot.detect_connection_id)?;
     let (protect, protected_high) = card_contact(selection, &slot.write_protect_connection_id)?;
     let card = &browser.virtual_card;
-    // Legacy budget for a card without preloaded files: 65536 + 16384 dirty sectors.
-    let max_dirty_sectors: u32 = 65536 + 16384;
+    // Boot files and captured media share this bounded host allocation. A RAW
+    // file alone nearly fills the former 40 MiB budget; allow 512 MiB so an
+    // SD-boot image and repeated RAW+JPEG captures can coexist.
+    let max_dirty_sectors: u32 = 1 << 20;
     Ok(json!({
         "kind": "sd-host",
         "options": {

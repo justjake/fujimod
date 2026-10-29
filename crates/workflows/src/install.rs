@@ -167,6 +167,31 @@ impl OwnedUpload {
             .await?;
         Ok(reply)
     }
+    /// Transfer a large owned image through a smaller stock staging capacity.
+    /// Every chunk independently guards and restores the borrowed destination.
+    pub async fn upload_chunks(
+        &self,
+        session: &mut Session,
+        destination: UploadDestination,
+        limits: DebugMemoryLimits,
+    ) -> Result<()> {
+        let chunk = destination.capacity.get() / self.piece.get() * self.piece.get();
+        if chunk == 0 {
+            return Err(Error::InvalidLength);
+        }
+        for offset in (0..self.image_bytes() as usize).step_by(chunk as usize) {
+            let end = (offset + chunk as usize).min(self.image_bytes() as usize);
+            let image = Self::new(
+                self.allocation,
+                Address(self.address.0 + offset as u32),
+                self.bytes[offset..end].to_vec(),
+                self.piece,
+                NonZeroU32::new(1).unwrap(),
+            )?;
+            image.upload(session, destination, limits).await?;
+        }
+        Ok(())
+    }
     /// Compare every image byte through the caller's qualified bulk window.
     /// Padding is transport space and is not part of the executable image.
     pub async fn verify(&self, session: &mut Session, window: DataWindow) -> Result<()> {

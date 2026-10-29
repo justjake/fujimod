@@ -17,7 +17,7 @@ use fujimod_usb::{
     },
     operations::{
         checks,
-        data::{DataReader, DataWindow, OffsetMode},
+        data::{DataAlignment, DataReader, DataWindow, OffsetMode},
         memory,
     },
 };
@@ -73,6 +73,10 @@ pub async fn read(
     require(
         bulk.window.contains(target),
         "Range is outside the bulk window",
+    )?;
+    require(
+        bulk.dma.is_none_or(|dma| dma.admits(target)),
+        "Range is not aligned to the bulk DMA",
     )?;
     memory_range(target)?;
     let mut qualified = Qualified::prepare(session, bulk, limits).await?;
@@ -150,6 +154,10 @@ impl<'a> Qualified<'a> {
         bulk: &FirmwareBulk,
         limits: Limits,
     ) -> Result<Self> {
+        let alignment = bulk
+            .dma
+            .map(|dma| DataAlignment::new(dma.address_alignment, dma.length_granule))
+            .transpose()?;
         check_identity(session, bulk).await?;
         let mut access = Access { session, limits };
         for check in &bulk.code_checks {
@@ -161,7 +169,10 @@ impl<'a> Qualified<'a> {
                 &format!("Stock code differs: {}", check.name),
             )?;
         }
-        let source = Source::prepare(&mut access, bulk).await?;
+        let mut source = Source::prepare(&mut access, bulk).await?;
+        if let Some(alignment) = alignment {
+            source.window = source.window.with_alignment(alignment);
+        }
         if let Err(error) = source.qualify(&mut access, bulk).await {
             let restored = source.restore(&mut access).await;
             if restored.is_err() {

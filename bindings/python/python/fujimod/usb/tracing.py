@@ -38,6 +38,7 @@ class RequestKind(Enum):
     WriteData = auto()
     ReadData = auto()
     EmptyResponse = auto()
+    Reclaim = auto()
 
 
 class FailureKind(Enum):

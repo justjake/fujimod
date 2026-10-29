@@ -17,6 +17,8 @@ use std::sync::{Arc, Mutex};
 const ENABLE: u32 = 1 << 28;
 const SOFTWARE: u32 = 1 << 24;
 const SERIAL_ACCESS: u32 = 1 << 15;
+// XP5 companion-core DMA setup sets this from a request-descriptor flag; it does not change modeled data movement (session assumption).
+const REQUEST_OPTION: u32 = 1 << 8;
 const BLOCK: u32 = 1 << 12;
 const ACK_WRITE: u32 = 1 << 4;
 const NORMAL: u8 = 8;
@@ -135,20 +137,42 @@ impl Pair {
         self.connections
             .get(&routing.requests[lane])
             .map(Some)
-            .ok_or_else(|| "XDMAC request has no connected peripheral".into())
+            .ok_or_else(|| {
+                format!(
+                    "XDMAC request has no connected peripheral; request={}",
+                    routing.requests[lane]
+                )
+            })
     }
     fn validate(&self, lane: usize, c: &Channel) -> Result<(), String> {
         // SA serializes each source access before its destination access.
         // Every beat here already performs that ordered data movement.
+        // The request-descriptor option sets bit 0 in both shape registers.
+        let shape_mask = if c.control & REQUEST_OPTION != 0 {
+            0x30005
+        } else {
+            0x30004
+        };
         if c.counter_exhausted
-            || c.control & !(ENABLE | SOFTWARE | 0xf00000 | SERIAL_ACCESS | BLOCK | ACK_WRITE | 3)
+            || c.control
+                & !(ENABLE | SOFTWARE | 0xf00000 | SERIAL_ACCESS | REQUEST_OPTION | BLOCK | ACK_WRITE | 3)
                 != 0
-            || c.source_shape & !0x30004 != 0
-            || c.destination_shape & !0x30004 != 0
+            || c.source_shape & !shape_mask != 0
+            || c.destination_shape & !shape_mask != 0
             || (c.source_shape ^ c.destination_shape) & 0x30000 != 0
             || c.link != 0
         {
-            return Err("XDMAC control, burst, shape or linked mode is unmodeled".into());
+            return Err(format!(
+                "XDMAC control, burst, shape or linked mode is unmodeled; control={:#x} source_shape={:#x} destination_shape={:#x} link={:#x} count={:#x} source={:#x} destination={:#x} exhausted={}",
+                c.control,
+                c.source_shape,
+                c.destination_shape,
+                c.link,
+                c.count,
+                c.source,
+                c.destination,
+                c.counter_exhausted,
+            ));
         }
         let width = c.width() as u64;
         if !(c.count as u64 + 1).is_multiple_of(width)
@@ -361,8 +385,10 @@ impl Device for Pair {
             cx.unmodeled();
             return;
         };
-        if value > u32::MAX as u64 || self.write_register(offset, value as u32).is_err() {
+        if value > u32::MAX as u64 {
             cx.unmodeled();
+        } else if let Err(e) = self.write_register(offset, value as u32) {
+            cx.unsupported(e);
         }
         for lane in 0..2 {
             self.publish(cx, lane);
@@ -374,16 +400,16 @@ impl Device for Pair {
             // another immediate deadline; serial clocks supply future ones.
             match self.ready(lane, &self.state.channels[lane]) {
                 Ok(true) => {
-                    if self.beat(cx, lane).is_err() {
+                    if let Err(e) = self.beat(cx, lane) {
                         // Retire the failed channel without a normal completion.
                         self.state.channels[lane].control &= !(ENABLE | SOFTWARE);
                         self.state.channels[lane].started = false;
                         self.routing.lock().unwrap().enabled[lane] = false;
-                        cx.unmodeled();
+                        cx.unsupported(e);
                     }
                 }
                 Ok(false) => {}
-                Err(_) => cx.unmodeled(),
+                Err(e) => cx.unsupported(e),
             }
             self.publish(cx, lane);
         }

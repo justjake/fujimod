@@ -4,8 +4,13 @@ import type { Plugin, Connect } from 'vite';
 import { validateIndex } from '../src/patch/catalog.ts';
 import { releaseRoute } from '../src/patch/releases.ts';
 
-/** Local releases use the same URLs as production, with fresh bytes on every request. */
-export function localReleaseMiddleware(directory?: string): Connect.NextHandleFunction {
+interface LocalReleaseOptions {
+  artifacts?: string;
+  notes?: string;
+}
+
+/** Editable notes are served directly from source on every request. */
+export function localReleaseMiddleware(options: LocalReleaseOptions): Connect.NextHandleFunction {
   return async (request, response, next) => {
     const path = new URL(request.url || '/', 'http://localhost').pathname;
     if (!path.startsWith('/releases/')) return next();
@@ -17,14 +22,14 @@ export function localReleaseMiddleware(directory?: string): Connect.NextHandleFu
       return;
     }
     const route = releaseRoute(path);
-    if (!directory || !route) {
+    if (!options.artifacts || !route) {
       response.statusCode = 404;
       response.end();
       return;
     }
     try {
       const index = validateIndex(
-        JSON.parse(await readFile(resolve(directory, 'patches.json'), 'utf8')),
+        JSON.parse(await readFile(resolve(options.artifacts, 'patches.json'), 'utf8')),
       );
       let data: Buffer;
       if (route.kind === 'current') {
@@ -50,7 +55,11 @@ export function localReleaseMiddleware(directory?: string): Connect.NextHandleFu
           response.end();
           return;
         }
-        data = await readFile(resolve(directory, route.file));
+        if (options.notes && route.file === index.notes?.name) {
+          data = await readFile(resolve(options.notes, `${index.release}.md`));
+        } else {
+          data = await readFile(resolve(options.artifacts, route.file));
+        }
         response.setHeader(
           'Content-Type',
           route.file.endsWith('.json')
@@ -68,9 +77,9 @@ export function localReleaseMiddleware(directory?: string): Connect.NextHandleFu
     }
   };
 }
-export function localReleases(directory?: string): Plugin {
+export function localReleases(options: LocalReleaseOptions): Plugin {
   const configure = (middlewares: Connect.Server) => {
-    middlewares.use(localReleaseMiddleware(directory));
+    middlewares.use(localReleaseMiddleware(options));
   };
   return {
     name: 'local-releases',

@@ -1,0 +1,116 @@
+{
+  "$schema": "https://fujimod.com/schemas/bulk.generated.schema.json",
+  "schema": 1,
+  "id": "xe4-201-bulk",
+  "firmware_id": "xe4-201",
+  "product": "X-E4",
+  "internal_version": "1.43",
+  "code_alias": 0,
+  "source": {
+    "mechanism": "pattern",
+    "registered_buffer": 40628904,
+    "source_state": 52623140,
+    "capacity": 65536
+  },
+  "window": {
+    "address": 16777216,
+    "size": 36700160
+  },
+  "code_checks": [
+    {
+      "name": "code_1187c4c",
+      "address": 18381900,
+      "size": 100,
+      "sha256": "63646506be5bd2ec73c3605c4e068473ab3459adc44cf22ec017f1f6107b5ac6"
+    },
+    {
+      "name": "code_206c748",
+      "address": 33998664,
+      "size": 192,
+      "sha256": "d4afd136becb8611d0e5a0fc419ff1539d1b5209f2441d27066e9188835b0863"
+    },
+    {
+      "name": "bulk_poll",
+      "address": 33587056,
+      "size": 252,
+      "sha256": "209a50b3ac706539b955e5328ef3cef9dfbb4ff31e65014338e4fb40b25201a7"
+    },
+    {
+      "name": "bulk_e1",
+      "address": 33589972,
+      "size": 196,
+      "sha256": "3da1b9306ce51b071370af86411f5b0dc36c7fd6d091ca5f379ad3f7eff2ff08"
+    },
+    {
+      "name": "bulk_be32",
+      "address": 33588036,
+      "size": 52,
+      "sha256": "82d680da35e199be8abad7f4180a111dd128fc64e91c6153a3b040da5bff664d"
+    },
+    {
+      "name": "bulk_pattern",
+      "address": 33593688,
+      "size": 220,
+      "sha256": "3705130114375a2c39858e6c23053392fe942d363ce1443998716690fa065410"
+    },
+    {
+      "name": "bulk_register_buffer",
+      "address": 33590708,
+      "size": 132,
+      "sha256": "2bd679b77c6d3d89805d5b2c2861432ee53a8b127af40b4dc72fb40118fd03ea"
+    },
+    {
+      "name": "bulk_le32",
+      "address": 33588088,
+      "size": 52,
+      "sha256": "fd8d195a69e3ab7f1ea4fb72ba93c30a87131e866fa973f2fd509d0b05c87a1c"
+    },
+    {
+      "name": "bulk_store_le32",
+      "address": 33587988,
+      "size": 48,
+      "sha256": "a79a6f803e486fa12fea9be63b0ab18cc89d0c3efee1321d8b165d3944d13688"
+    },
+    {
+      "name": "pattern_opcode_compare",
+      "address": 33594624,
+      "size": 16,
+      "sha256": "4834466e7fb1001c65a7bce9b659537d136c1f80879bf3ed2ba932e28ff2714c"
+    },
+    {
+      "name": "pattern_opcode_case",
+      "address": 33594640,
+      "size": 20,
+      "sha256": "5b67ad36edc9a3765f1a6afa8ac7507c0495818d491eda72a4d736518754f6ce"
+    }
+  ],
+  "probes": [
+    {
+      "address": 18381900,
+      "size": 100
+    },
+    {
+      "address": 33998664,
+      "size": 128
+    }
+  ],
+  "mapped_probe": {
+    "name": "bulk_mapped_probe",
+    "address": 33554432,
+    "size": 65536,
+    "sha256": "01ec315fbf06aef5fcf2b1cb4698bbc518fc9cd3985c707837be6661d467135e"
+  },
+  "scopes": [
+    {
+      "name": "quick",
+      "basis": "Mapped update ranges in the RAM window through the highest located transfer-state address, rounded to 1 MiB. Static BSS and heap extents beyond it are not established.",
+      "ranges": [
+        {
+          "name": "firmware",
+          "address": 16777216,
+          "size": 36700160
+        }
+      ]
+    }
+  ]
+}

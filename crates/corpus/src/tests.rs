@@ -425,6 +425,25 @@ fn tiny_code_is_not_a_seed_and_weak_names_do_not_propagate_calls() {
     );
     assert_eq!(i.sample_links(50, 42)["weak"].links.len(), 1);
     assert_eq!(i.pairs("a", "b").last().unwrap().grade, Grade::Weak);
+    let complete = i.pairs("a", "b");
+    for (id, source) in i
+        .functions
+        .iter()
+        .enumerate()
+        .filter(|(_, function)| function.key.firmware == "a")
+    {
+        let expected: Vec<_> = complete
+            .iter()
+            .filter(|pair| pair.reference == source.key)
+            .cloned()
+            .collect();
+        assert_eq!(
+            serde_json::to_value(i.pairs_for(id, "b")).unwrap(),
+            serde_json::to_value(expected).unwrap(),
+            "scoped pairs for {:?}",
+            source.key
+        );
+    }
     assert_store_matches(&i, "weak");
 }
 fn input(fw: &str, arch: Architecture) -> UnitInput {

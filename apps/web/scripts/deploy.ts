@@ -25,5 +25,6 @@ if (!values['prepare-only']) {
   run('npm', ['run', 'check']);
   run('npm', ['test']);
   run('npm', ['run', 'build']);
+  run('npm', ['run', 'test:prerender']);
   run(process.execPath, ['../../scripts/cloudflare/wrangler.ts', 'deploy']);
 }

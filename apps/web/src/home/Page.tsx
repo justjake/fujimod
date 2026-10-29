@@ -6,7 +6,12 @@ import { createHomeState } from './state';
 import { startHome, type HomeController } from './controller';
 import { FaultPanel } from '@fujimod/emulator-ui/ui/fault';
 import { CameraTable } from '../ui/cameras';
-import { byModel, type FirmwareProgress } from '../ui/camera-progress';
+import {
+  byModel,
+  withOverrides,
+  type FirmwareProgress,
+  type ProgressOverride,
+} from '../ui/camera-progress';
 import { PersonalNote } from '../ui/personal-note';
 import { SiteHeader } from '../ui/site-header';
 import { FeatureCatalog } from './Features';
@@ -22,13 +27,27 @@ import owners from '../../devices/owners.json';
 import '../home/site.css';
 import '../navigation.css';
 
-/** Latest recorded bring-up progress, assembled from the catalog at build time. */
+/** Latest recorded bring-up progress with publishing overrides, from the catalog at build time. */
 const cameraProgress = byModel(
-  Object.values(
-    import.meta.glob<FirmwareProgress>('../../../../catalog/progress/*/*/progress.generated.json', {
-      eager: true,
-      import: 'default',
-    }),
+  withOverrides(
+    Object.values(
+      import.meta.glob<FirmwareProgress>(
+        '../../../../catalog/progress/*/*/progress.generated.json',
+        {
+          eager: true,
+          import: 'default',
+        },
+      ),
+    ),
+    Object.values(
+      import.meta.glob<ProgressOverride>(
+        '../../../../catalog/progress/*/*/progress.override.json',
+        {
+          eager: true,
+          import: 'default',
+        },
+      ),
+    ),
   ),
 );
 
@@ -85,7 +104,10 @@ export default function Home() {
             </h2>
             <Show when={state.activeCamera}>
               <span
-                class={{ 'camera-storage-status': true, error: state.storageError }}
+                class={{
+                  'camera-storage-status': true,
+                  error: state.storageError,
+                }}
                 role="status"
                 aria-live="polite"
               >

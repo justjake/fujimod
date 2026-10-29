@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 mod tests;
 
-const KIND: &str = "board-keyframe-v1";
+const KIND: &str = "board-keyframe-v2";
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Header<S, D, E> {
@@ -23,6 +23,19 @@ struct Header<S, D, E> {
     mmio: Vec<(usize, u64, usize)>,
     controllers: Vec<Option<usize>>,
     observations: Vec<(usize, Vec<u64>)>,
+}
+impl Keyframe {
+    /// Read execution counters from a portable archive without attaching it to a board.
+    pub fn portable_metadata(encoded: &Encoded) -> Result<(u64, Vec<u64>), String> {
+        let header: Header<Saved, decoder::Checkpoint, observe::Entries> = encoded.decode(KIND)?;
+        if encoded.blobs().len() != header.processors + 1
+            || encoded.children().len() != 2
+            || header.processors != header.runtime.instructions.len()
+        {
+            return Err("snapshot processor or child count differs".into());
+        }
+        Ok((header.runtime.timeline.now(), header.runtime.instructions))
+    }
 }
 impl Keyframe {
     pub fn export(&self) -> Result<Encoded, String> {
@@ -260,5 +273,140 @@ pub(super) mod frames {
                 ))
             })
             .collect()
+    }
+}
+
+pub(super) mod records {
+    use super::*;
+    use fujimod_emulator_devices::record::Value as RecordValue;
+    use std::borrow::Cow;
+
+    #[derive(Serialize)]
+    #[serde(tag = "kind", content = "value")]
+    enum ValueRef<'a> {
+        None,
+        Int(i128),
+        Float(f64),
+        Bool(bool),
+        Str(&'a str),
+        Static(&'a str),
+        List(Vec<ValueRef<'a>>),
+        Tuple(Vec<ValueRef<'a>>),
+        Bytes(&'a [u8]),
+        Dict(Vec<(ValueRef<'a>, ValueRef<'a>)>),
+        Hex(u128),
+    }
+
+    impl<'a> From<&'a RecordValue> for ValueRef<'a> {
+        fn from(value: &'a RecordValue) -> Self {
+            match value {
+                RecordValue::None => Self::None,
+                RecordValue::Int(value) => Self::Int(*value),
+                RecordValue::Float(value) => Self::Float(*value),
+                RecordValue::Bool(value) => Self::Bool(*value),
+                RecordValue::Str(value) => Self::Str(value),
+                RecordValue::Static(value) => Self::Static(value),
+                RecordValue::List(values) => Self::List(values.iter().map(Into::into).collect()),
+                RecordValue::Tuple(values) => Self::Tuple(values.iter().map(Into::into).collect()),
+                RecordValue::Bytes(value) => Self::Bytes(value),
+                RecordValue::Dict(values) => Self::Dict(
+                    values
+                        .iter()
+                        .map(|(key, value)| (key.into(), value.into()))
+                        .collect(),
+                ),
+                RecordValue::Hex(value) => Self::Hex(*value),
+            }
+        }
+    }
+
+    #[derive(Deserialize)]
+    #[serde(tag = "kind", content = "value", deny_unknown_fields)]
+    enum SavedValue {
+        None,
+        Int(i128),
+        Float(f64),
+        Bool(bool),
+        Str(String),
+        Static(String),
+        List(Vec<SavedValue>),
+        Tuple(Vec<SavedValue>),
+        Bytes(Vec<u8>),
+        Dict(Vec<(SavedValue, SavedValue)>),
+        Hex(u128),
+    }
+
+    impl From<SavedValue> for RecordValue {
+        fn from(value: SavedValue) -> Self {
+            match value {
+                SavedValue::None => Self::None,
+                SavedValue::Int(value) => Self::Int(value),
+                SavedValue::Float(value) => Self::Float(value),
+                SavedValue::Bool(value) => Self::Bool(value),
+                SavedValue::Str(value) => Self::Str(value),
+                SavedValue::Static(value) => Self::Static(Cow::Owned(value)),
+                SavedValue::List(values) => {
+                    Self::List(values.into_iter().map(Into::into).collect())
+                }
+                SavedValue::Tuple(values) => {
+                    Self::Tuple(values.into_iter().map(Into::into).collect())
+                }
+                SavedValue::Bytes(value) => Self::Bytes(value),
+                SavedValue::Dict(values) => Self::Dict(
+                    values
+                        .into_iter()
+                        .map(|(key, value)| (key.into(), value.into()))
+                        .collect(),
+                ),
+                SavedValue::Hex(value) => Self::Hex(value),
+            }
+        }
+    }
+
+    #[derive(Serialize)]
+    struct RecordRef<'a> {
+        name: &'a str,
+        fields: Vec<(&'a str, ValueRef<'a>)>,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct SavedRecord {
+        name: String,
+        fields: Vec<(String, SavedValue)>,
+    }
+
+    pub fn serialize<S: serde::Serializer>(
+        records: &[Record],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        records
+            .iter()
+            .map(|record| RecordRef {
+                name: record.name.as_ref(),
+                fields: record
+                    .fields
+                    .iter()
+                    .map(|(key, value)| (key.as_ref(), value.into()))
+                    .collect(),
+            })
+            .collect::<Vec<_>>()
+            .serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Vec<Record>, D::Error> {
+        Ok(Vec::<SavedRecord>::deserialize(deserializer)?
+            .into_iter()
+            .map(|record| Record {
+                name: Cow::Owned(record.name),
+                fields: record
+                    .fields
+                    .into_iter()
+                    .map(|(key, value)| (Cow::Owned(key), value.into()))
+                    .collect(),
+            })
+            .collect())
     }
 }

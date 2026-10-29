@@ -3,6 +3,7 @@ pub mod assembly;
 pub mod capture;
 pub mod firmware_versions;
 pub mod first_start;
+pub mod generation;
 pub mod progress;
 pub mod reference;
 pub mod soc;

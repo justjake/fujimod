@@ -165,13 +165,7 @@ try {
       ...(values.policy ? { executionPolicy: values.policy } : {}),
       ...(bootTicks === undefined ? {} : { bootTicks }),
     };
-    for (const key of [
-      'construction',
-      'executionPolicy',
-      'ticksPerSecond',
-      'bootTicks',
-      'bootInstructions',
-    ])
+    for (const key of ['construction', 'executionPolicy', 'ticksPerSecond', 'bootTicks'])
       runtime[key] = Reflect.get(selected, key);
     await route.fulfill({ response, json: selected });
   });
@@ -232,11 +226,20 @@ try {
     waitForDebuggerOnStart: true,
     flatten: false,
   });
-  await page.goto(values.url, { waitUntil: 'networkidle' });
-  await page.locator('input[type=file]').first().setInputFiles(values.update);
+  await page.goto(values.url, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(
-    () => performance.getEntriesByName('camera-engine-ready').length > 0
-      || [...document.querySelectorAll<HTMLElement>('#engine-status')].some(
+    () => performance.getEntriesByName('camera-catalog-ready').length > 0,
+    null,
+    { timeout: 240_000 },
+  );
+  await page.locator('input[type=file]').first().setInputFiles(values.update);
+  await page
+    .getByRole('button', { name: 'Run unmodified in your browser', exact: true })
+    .click({ timeout: 240_000 });
+  await page.waitForFunction(
+    () =>
+      performance.getEntriesByName('camera-engine-ready').length > 0 ||
+      [...document.querySelectorAll<HTMLElement>('#engine-status')].some(
         (element) => !element.hidden && element.getClientRects().length > 0,
       ),
     null,

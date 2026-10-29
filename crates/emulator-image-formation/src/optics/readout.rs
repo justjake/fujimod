@@ -1,3 +1,4 @@
+use super::super::exposure::{NoiseResponse, adc};
 use super::{
     encode_response,
     scene::{Scene, Span, blend},
@@ -125,6 +126,7 @@ pub(crate) struct Projected {
     scale: [f64; 3],
     sensor_width: f64,
     illumination: Option<super::Field>,
+    noise: NoiseResponse,
     pixels: Arc<[u8]>,
 }
 impl Projected {
@@ -137,6 +139,7 @@ impl Projected {
         scale: [f64; 3],
         sensor_width: f64,
         illumination: Option<super::Field>,
+        noise: NoiseResponse,
     ) -> Self {
         let mut pixels = vec![0; linear.len() * 6];
         let [width, height] = scene.dimensions;
@@ -158,9 +161,13 @@ impl Projected {
                 let field = illumination.map_or(1., |f| f.at(xx, yy));
                 let i = row * coordinates.xs.len() + column;
                 for c in 0..3 {
-                    let value = (f64::from(linear[i][c]) * scale[c] / 65535. * field)
-                        .round_ties_even()
-                        .clamp(0., 16383.) as u16;
+                    let value = adc(
+                        f64::from(linear[i][c]) * scale[c] / 65535. * field,
+                        noise,
+                        coordinates.xs[column],
+                        coordinates.ys[row],
+                        c,
+                    );
                     pixels[i * 6 + c * 2..i * 6 + c * 2 + 2].copy_from_slice(&value.to_le_bytes());
                 }
             }
@@ -174,6 +181,7 @@ impl Projected {
             scale,
             sensor_width,
             illumination,
+            noise,
             pixels: pixels.into(),
         }
     }
@@ -186,6 +194,7 @@ impl Projected {
         scale: [f64; 3],
         sensor: [f64; 2],
         illumination: Option<super::Field>,
+        noise: NoiseResponse,
     ) -> Self {
         let pixels = super::encode_response_coordinates(
             linear,
@@ -194,6 +203,7 @@ impl Projected {
             sensor,
             illumination,
             &coordinates,
+            noise,
         );
         Self {
             scene,
@@ -204,6 +214,7 @@ impl Projected {
             sensor_width: sensor[0],
             sensor_height: Some(sensor[1]),
             illumination,
+            noise,
             pixels,
         }
     }
@@ -327,8 +338,13 @@ impl Projected {
             )
         });
         std::array::from_fn(|c| {
-            libm::rint(f64::from(linear[c]) * self.scale[c] / 65535. * field).clamp(0., 16383.)
-                as u16
+            adc(
+                f64::from(linear[c]) * self.scale[c] / 65535. * field,
+                self.noise,
+                x,
+                y,
+                c,
+            )
         })
     }
     pub fn materialize(&self) -> Arc<[u8]> {
@@ -345,6 +361,7 @@ impl Projected {
                 [self.sensor_width, height],
                 self.illumination,
                 &all,
+                self.noise,
             );
         }
         let linear = project(&self.scene, &all, self.radius[0], self.fraction[0], None);
@@ -354,6 +371,7 @@ impl Projected {
             self.scene.dimensions,
             self.sensor_width,
             self.illumination,
+            self.noise,
         )
     }
 }

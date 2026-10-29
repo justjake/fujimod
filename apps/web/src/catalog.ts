@@ -21,7 +21,7 @@ export interface Firmware {
     sdBoot?: boolean;
   };
   model_asset?: string;
-  camera_table?: string;
+  service_workflow?: string;
   flash_reader?: string;
 }
 export interface Catalog {
@@ -47,7 +47,7 @@ export function validateCatalog(value: Catalog): Catalog {
     )
       throw Error('Invalid firmware entry.');
     for (const path of [
-      entry.camera_table,
+      entry.service_workflow,
       entry.flash_reader,
       entry.emulate?.bundle,
       entry.emulate?.usb?.bundle,

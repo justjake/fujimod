@@ -379,6 +379,11 @@ class BoundPosition(TypedDict, total=False):
     key: NotRequired[InputBinding | None]
 
 
+class BulkDma(TypedDict, total=False):
+    address_alignment: Required[int]
+    length_granule: Required[int]
+
+
 class BulkRange(TypedDict, total=False):
     address: Required[int]
     size: Required[int]
@@ -1503,6 +1508,7 @@ FirmwareBulk = TypedDict(
         "$schema": Required["str"],
         "code_alias": Required["int"],
         "code_checks": Required["list[CodeCheck]"],
+        "dma": NotRequired["BulkDma | None"],
         "firmware_id": Required["str"],
         "id": Required["str"],
         "internal_version": Required["str"],
@@ -2144,11 +2150,14 @@ class HardwareAtcm(TypedDict, total=False):
 
 class HardwareBlockParameters(TypedDict, total=False):
     command_latency_us: NotRequired[int | None]
+    commit_ticks: NotRequired[int | None]
     companion_irq_base: NotRequired[int | None]
+    configuration_word: NotRequired[int | None]
     receive_request: NotRequired[int | None]
     source_hz: NotRequired[int | None]
     ticks_per_second: NotRequired[int | None]
     transmit_request: NotRequired[int | None]
+    trigger_offset: NotRequired[int | None]
 
 
 class HardwareBootImage(TypedDict, total=False):

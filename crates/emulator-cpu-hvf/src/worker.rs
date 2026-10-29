@@ -3,10 +3,11 @@
 use super::{ffi, machine::Machine};
 use fujimod_emulator_cpu::{arm64::TranslationState, *};
 use std::sync::{
-    Arc,
-    atomic::{AtomicBool, AtomicU64, Ordering},
+    Arc, Mutex,
+    atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering},
     mpsc,
 };
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 mod portable;
 
@@ -17,7 +18,7 @@ pub enum Op {
     Snapshot,
     Restore(Registers),
     Interrupt(Interrupt, bool),
-    Run(Run, bool, mpsc::Sender<Event>),
+    Run(Run, ExecutionPolicy, bool, mpsc::Sender<Event>),
     Resume(bool),
     Shutdown,
 }
@@ -53,19 +54,374 @@ const SYSTEM: &[u16] = &[
 ];
 pub struct Shared {
     pub stop: AtomicBool,
+    pub native_active: AtomicBool,
+    pub deadline: AtomicBool,
     pub progress: AtomicU64,
     pub limit: AtomicU64,
     pub measured: AtomicBool,
+    pub budget_active: AtomicBool,
+    pub budget_start_ticks: AtomicU64,
+    pub budget_generation: AtomicU64,
+    pub budget_shutdown: AtomicBool,
+    pub budget_timer_kqueue: AtomicI32,
+    pub budget_lock: Mutex<()>,
+    run_wakeup: Mutex<Option<RunWakeup>>,
 }
 impl Default for Shared {
     fn default() -> Self {
         Self {
             stop: AtomicBool::new(false),
+            native_active: AtomicBool::new(false),
+            deadline: AtomicBool::new(false),
             progress: AtomicU64::new(0),
             limit: AtomicU64::new(u64::MAX),
             measured: AtomicBool::new(false),
+            budget_active: AtomicBool::new(false),
+            budget_start_ticks: AtomicU64::new(0),
+            budget_generation: AtomicU64::new(0),
+            budget_shutdown: AtomicBool::new(false),
+            budget_timer_kqueue: AtomicI32::new(-1),
+            budget_lock: Mutex::new(()),
+            run_wakeup: Mutex::new(None),
         }
     }
+}
+impl Shared {
+    pub fn notify_budget_change(&self) -> Result<(), String> {
+        let queue = self.budget_timer_kqueue.load(Ordering::Acquire);
+        if queue < 0 {
+            return Err("HVF budget timer kqueue is unavailable".into());
+        }
+        // EV_CLEAR keeps a trigger pending even if the timer thread has not
+        // started waiting in kevent yet.
+        let trigger = ffi::Kevent {
+            ident: BUDGET_USER_IDENT,
+            filter: ffi::EVFILT_USER,
+            flags: 0,
+            fflags: ffi::NOTE_TRIGGER,
+            data: 0,
+            udata: std::ptr::null_mut(),
+        };
+        submit_kqueue_change(queue, &trigger)
+    }
+
+    pub fn set_run_wakeup(&self, wakeup: RunWakeup) {
+        *self
+            .run_wakeup
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(wakeup);
+    }
+
+    fn notify_run_wakeup(&self) {
+        if let Some(wakeup) = self
+            .run_wakeup
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+        {
+            wakeup.notify();
+        }
+    }
+}
+
+/// One high-priority deadline timer for the lifetime of a vCPU core.
+pub struct BudgetTimer {
+    shared: Arc<Shared>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl BudgetTimer {
+    pub fn new(cpu: u64, shared: Arc<Shared>) -> Result<Self, String> {
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let timer_shared = shared.clone();
+        let thread = thread::Builder::new()
+            .name("camera-hvf-budget".into())
+            .spawn(move || budget_timer(cpu, timer_shared, ready_tx))
+            .map_err(|error| error.to_string())?;
+        match ready_rx.recv() {
+            Ok(Ok(())) => Ok(Self {
+                shared,
+                thread: Some(thread),
+            }),
+            Ok(Err(error)) => {
+                let _ = thread.join();
+                Err(error)
+            }
+            Err(error) => {
+                let _ = thread.join();
+                Err(error.to_string())
+            }
+        }
+    }
+}
+
+impl Drop for BudgetTimer {
+    fn drop(&mut self) {
+        self.shared.budget_shutdown.store(true, Ordering::Release);
+        self.shared.budget_generation.fetch_add(1, Ordering::AcqRel);
+        let _ = self.shared.notify_budget_change();
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+/// Marks one active interactive run for the persistent timer thread.
+pub struct BudgetRun(Arc<Shared>);
+
+impl BudgetRun {
+    pub fn start(shared: Arc<Shared>) -> Result<Self, String> {
+        {
+            let _guard = shared
+                .budget_lock
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if shared.budget_shutdown.load(Ordering::Acquire)
+                || shared.budget_timer_kqueue.load(Ordering::Acquire) < 0
+            {
+                return Err("HVF budget timer stopped".into());
+            }
+            shared
+                .budget_start_ticks
+                .store(unsafe { ffi::mach_absolute_time() }, Ordering::Release);
+            shared.budget_active.store(true, Ordering::Release);
+            shared.budget_generation.fetch_add(1, Ordering::AcqRel);
+        }
+        if let Err(error) = shared.notify_budget_change() {
+            let _guard = shared
+                .budget_lock
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            shared.budget_active.store(false, Ordering::Release);
+            shared.budget_generation.fetch_add(1, Ordering::AcqRel);
+            return Err(error);
+        }
+        Ok(Self(shared))
+    }
+}
+
+impl Drop for BudgetRun {
+    fn drop(&mut self) {
+        {
+            let _guard = self
+                .0
+                .budget_lock
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.0.budget_active.store(false, Ordering::Release);
+            self.0.budget_generation.fetch_add(1, Ordering::AcqRel);
+        }
+        let _ = self.0.notify_budget_change();
+    }
+}
+
+fn budget_timer(cpu: u64, shared: Arc<Shared>, ready: mpsc::Sender<Result<(), String>>) {
+    let qos = unsafe { ffi::pthread_set_qos_class_self_np(ffi::QOS_CLASS_USER_INTERACTIVE, 0) };
+    if qos != 0 {
+        let _ = ready.send(Err(format!("set HVF budget timer QoS: {qos}")));
+        return;
+    }
+
+    let mut timebase = ffi::MachTimebaseInfo::default();
+    let result = unsafe { ffi::mach_timebase_info(&mut timebase) };
+    if result != 0 || timebase.numer == 0 || timebase.denom == 0 {
+        let error = format!("read Mach timebase: {result}");
+        let _ = ready.send(Err(error));
+        return;
+    }
+
+    let queue = unsafe { ffi::kqueue() };
+    if queue < 0 {
+        let _ = ready.send(Err(std::io::Error::last_os_error().to_string()));
+        return;
+    }
+    let user_filter = ffi::Kevent {
+        ident: BUDGET_USER_IDENT,
+        filter: ffi::EVFILT_USER,
+        flags: ffi::EV_ADD | ffi::EV_CLEAR,
+        fflags: 0,
+        data: 0,
+        udata: std::ptr::null_mut(),
+    };
+    if let Err(error) = submit_kqueue_change(queue, &user_filter) {
+        unsafe {
+            let _ = ffi::close(queue);
+        }
+        let _ = ready.send(Err(error));
+        return;
+    }
+
+    shared.budget_timer_kqueue.store(queue, Ordering::Release);
+    if ready.send(Ok(())).is_err() {
+        shared.budget_timer_kqueue.store(-1, Ordering::Release);
+        unsafe {
+            let _ = ffi::close(queue);
+        }
+        return;
+    }
+
+    let mut armed_generation = None;
+    let mut fired_generation = None;
+    loop {
+        let (active, generation, limit_ns, start_ticks, deadline_reached, shutting_down) = {
+            let _guard = shared
+                .budget_lock
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            (
+                shared.budget_active.load(Ordering::Acquire),
+                shared.budget_generation.load(Ordering::Acquire),
+                shared.limit.load(Ordering::Acquire),
+                shared.budget_start_ticks.load(Ordering::Acquire),
+                shared.deadline.load(Ordering::Acquire),
+                shared.budget_shutdown.load(Ordering::Acquire),
+            )
+        };
+        if shutting_down {
+            break;
+        }
+
+        if let Some(armed) = armed_generation
+            && (!active || armed != generation)
+        {
+            let delete = ffi::Kevent {
+                ident: armed,
+                filter: ffi::EVFILT_TIMER,
+                flags: ffi::EV_DELETE,
+                fflags: 0,
+                data: 0,
+                udata: std::ptr::null_mut(),
+            };
+            let _ = submit_kqueue_change(queue, &delete);
+            armed_generation = None;
+        }
+
+        if active
+            && !deadline_reached
+            && limit_ns != u64::MAX
+            && armed_generation != Some(generation)
+            && fired_generation != Some(generation)
+        {
+            // The generation in ident makes an already-queued old expiry stale.
+            let timer = ffi::Kevent {
+                ident: generation,
+                filter: ffi::EVFILT_TIMER,
+                flags: ffi::EV_ADD | ffi::EV_ENABLE | ffi::EV_ONESHOT,
+                fflags: ffi::NOTE_MACHTIME | ffi::NOTE_ABSOLUTE,
+                data: mach_deadline(start_ticks, limit_ns, timebase).min(i64::MAX as u64) as i64,
+                udata: std::ptr::null_mut(),
+            };
+            if submit_kqueue_change(queue, &timer).is_err() {
+                shared.budget_shutdown.store(true, Ordering::Release);
+                if active {
+                    shared.deadline.store(true, Ordering::Release);
+                    unsafe {
+                        let _ = ffi::hv_vcpus_exit(&cpu, 1);
+                    }
+                }
+                break;
+            }
+            armed_generation = Some(generation);
+        }
+
+        let mut events = [ffi::Kevent::default(); 2];
+        let count = unsafe {
+            ffi::kevent(
+                queue,
+                std::ptr::null(),
+                0,
+                events.as_mut_ptr(),
+                events.len() as i32,
+                std::ptr::null(),
+            )
+        };
+        if count < 0 {
+            let error = std::io::Error::last_os_error();
+            if error.kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            shared.budget_shutdown.store(true, Ordering::Release);
+            if shared.budget_active.load(Ordering::Acquire) {
+                shared.deadline.store(true, Ordering::Release);
+                unsafe {
+                    let _ = ffi::hv_vcpus_exit(&cpu, 1);
+                }
+            }
+            break;
+        }
+        if shared.budget_shutdown.load(Ordering::Acquire) {
+            break;
+        }
+
+        let ready_events = &events[..count as usize];
+        if let Some(event) = ready_events
+            .iter()
+            .find(|event| event.filter == ffi::EVFILT_TIMER)
+        {
+            let fired = event.ident;
+            if armed_generation == Some(fired) {
+                armed_generation = None;
+                fired_generation = Some(fired);
+            }
+            let _guard = shared
+                .budget_lock
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !shared.budget_shutdown.load(Ordering::Acquire)
+                && shared.budget_active.load(Ordering::Acquire)
+                && shared.budget_generation.load(Ordering::Acquire) == fired
+                && !shared.deadline.load(Ordering::Acquire)
+            {
+                shared.deadline.store(true, Ordering::Release);
+                unsafe {
+                    let _ = ffi::hv_vcpus_exit(&cpu, 1);
+                }
+            }
+        } else if ready_events
+            .iter()
+            .any(|event| event.filter == ffi::EVFILT_USER && event.ident == BUDGET_USER_IDENT)
+        {
+            continue;
+        }
+    }
+
+    if let Some(armed) = armed_generation {
+        let delete = ffi::Kevent {
+            ident: armed,
+            filter: ffi::EVFILT_TIMER,
+            flags: ffi::EV_DELETE,
+            fflags: 0,
+            data: 0,
+            udata: std::ptr::null_mut(),
+        };
+        let _ = submit_kqueue_change(queue, &delete);
+    }
+    shared.budget_timer_kqueue.store(-1, Ordering::Release);
+    unsafe {
+        let _ = ffi::close(queue);
+    }
+}
+
+fn submit_kqueue_change(queue: i32, event: &ffi::Kevent) -> Result<(), String> {
+    loop {
+        let result =
+            unsafe { ffi::kevent(queue, event, 1, std::ptr::null_mut(), 0, std::ptr::null()) };
+        if result >= 0 {
+            return Ok(());
+        }
+        let error = std::io::Error::last_os_error();
+        if error.kind() != std::io::ErrorKind::Interrupted {
+            return Err(error.to_string());
+        }
+    }
+}
+
+const BUDGET_USER_IDENT: u64 = 0;
+
+fn mach_deadline(start: u64, limit_ns: u64, timebase: ffi::MachTimebaseInfo) -> u64 {
+    let numerator = u128::from(limit_ns) * u128::from(timebase.denom);
+    let ticks = numerator.div_ceil(u128::from(timebase.numer));
+    start.saturating_add(ticks.min(u128::from(u64::MAX)) as u64)
 }
 struct Processor {
     cpu: u64,
@@ -471,6 +827,35 @@ impl Processor {
     fn run(
         &mut self,
         request: Run,
+        policy: ExecutionPolicy,
+        observe: bool,
+        events: &mpsc::Sender<Event>,
+        commands: &mpsc::Receiver<Command>,
+    ) -> Result<Exit, ExecutionError> {
+        match policy {
+            ExecutionPolicy::Exact => {
+                let mdscr = self.sys(ffi::MDSCR)?;
+                self.set_sys(ffi::MDSCR, mdscr | 1)?;
+                self.run_exact(request, observe, events, commands)
+            }
+            ExecutionPolicy::Interactive => self.run_interactive(request, events, commands),
+        }
+    }
+    fn send_event(
+        &self,
+        events: &mpsc::Sender<Event>,
+        event: Event,
+        disconnected: &'static str,
+    ) -> Result<(), ExecutionError> {
+        events
+            .send(event)
+            .map_err(|_| ExecutionError::Backend(disconnected.into()))?;
+        self.shared.notify_run_wakeup();
+        Ok(())
+    }
+    fn run_exact(
+        &mut self,
+        request: Run,
         observe: bool,
         events: &mpsc::Sender<Event>,
         commands: &mpsc::Receiver<Command>,
@@ -507,9 +892,7 @@ impl Processor {
                 return Ok(Exit::Stopped);
             }
             if observe {
-                events
-                    .send(Event::Before(pc))
-                    .map_err(|_| "HVF observer disconnected")?;
+                self.send_event(events, Event::Before(pc), "HVF observer disconnected")?;
                 self.paused(commands)?;
                 if self.shared.stop.load(Ordering::Acquire) {
                     return Ok(Exit::Stopped);
@@ -578,9 +961,7 @@ impl Processor {
                         virtual_address: 0,
                         physical_address: 0,
                     };
-                    events
-                        .send(Event::Trap(trap))
-                        .map_err(|_| "HVF trap owner disconnected")?;
+                    self.send_event(events, Event::Trap(trap), "HVF trap owner disconnected")?;
                     if !self.paused(commands)? {
                         return Ok(Exit::Trap(trap));
                     }
@@ -621,9 +1002,7 @@ impl Processor {
                         virtual_address: exit.exception.virtual_address,
                         physical_address: exit.exception.physical_address,
                     };
-                    events
-                        .send(Event::Trap(trap))
-                        .map_err(|_| "HVF trap owner disconnected")?;
+                    self.send_event(events, Event::Trap(trap), "HVF trap owner disconnected")?;
                     if !self.paused(commands)? {
                         return Ok(Exit::Trap(trap));
                     }
@@ -637,6 +1016,113 @@ impl Processor {
             }
         }
         Ok(Exit::Stopped)
+    }
+    fn update_interactive_progress(&self, started: Instant) {
+        let elapsed = started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+        self.shared.progress.fetch_max(elapsed, Ordering::Relaxed);
+    }
+    fn run_interactive(
+        &mut self,
+        request: Run,
+        events: &mpsc::Sender<Event>,
+        commands: &mpsc::Receiver<Command>,
+    ) -> Result<Exit, ExecutionError> {
+        self.shared.progress.store(0, Ordering::Relaxed);
+        self.shared.measured.store(true, Ordering::Relaxed);
+        if request.instructions == Some(0) {
+            return Ok(Exit::Stopped);
+        }
+        if request.begin & 3 != 0 {
+            return Err(ExecutionError::InvalidInstruction(
+                "unaligned AArch64 entry PC".into(),
+            ));
+        }
+        self.set_reg(ffi::PC, request.begin)?;
+        self.deliver_interrupt()?;
+        if request.until == Some(self.reg(ffi::PC)?) {
+            return Ok(Exit::Stopped);
+        }
+        let limit = request.instructions.map(|n| n as u64).unwrap_or(u64::MAX);
+        self.shared.limit.store(limit, Ordering::Release);
+
+        let started = Instant::now();
+        let _budget = BudgetRun::start(self.shared.clone()).map_err(ExecutionError::Backend)?;
+        let mdscr = self.sys(ffi::MDSCR)?;
+        self.set_sys(ffi::MDSCR, mdscr & !1)?;
+        let pstate = self.reg(ffi::PSTATE)?;
+        self.set_reg(ffi::PSTATE, pstate & !(1 << 21))?;
+        loop {
+            self.update_interactive_progress(started);
+            if self.shared.stop.load(Ordering::Acquire) {
+                return Ok(Exit::Stopped);
+            }
+            if self.shared.deadline.load(Ordering::Acquire)
+                || self.shared.progress.load(Ordering::Relaxed)
+                    >= self.shared.limit.load(Ordering::Acquire)
+            {
+                return Ok(Exit::Stopped);
+            }
+
+            self.deliver_interrupt()?;
+            let pstate = self.reg(ffi::PSTATE)?;
+            self.set_reg(ffi::PSTATE, pstate & !(1 << 21))?;
+            let mdscr = self.sys(ffi::MDSCR)?;
+            self.set_sys(ffi::MDSCR, mdscr & !1)?;
+            self.shared.native_active.store(true, Ordering::Release);
+            if self.shared.stop.load(Ordering::Acquire) {
+                self.shared.native_active.store(false, Ordering::Release);
+                self.update_interactive_progress(started);
+                return Ok(Exit::Stopped);
+            }
+            let run_result = unsafe { ffi::check(ffi::hv_vcpu_run(self.cpu), "run") };
+            self.shared.native_active.store(false, Ordering::Release);
+            run_result?;
+            let exit = unsafe { *self.exit };
+            self.update_interactive_progress(started);
+            if self.shared.stop.load(Ordering::Acquire) {
+                return Ok(Exit::Stopped);
+            }
+            match exit.reason {
+                0 if self.shared.deadline.load(Ordering::Acquire)
+                    || self.shared.progress.load(Ordering::Relaxed)
+                        >= self.shared.limit.load(Ordering::Acquire) =>
+                {
+                    return Ok(Exit::Stopped);
+                }
+                0 => continue,
+                1 => {
+                    let ec = exit.exception.syndrome >> 26;
+                    if ec == 0x01 {
+                        let pc = self.reg(ffi::PC)?;
+                        self.set_reg(ffi::PC, pc.wrapping_add(4))?;
+                        if exit.exception.syndrome & 1 != 0 {
+                            continue;
+                        }
+                        return Ok(Exit::Hint(Hint::WaitForInterrupt));
+                    }
+                    if ec == 0x32 {
+                        continue;
+                    }
+                    let trap = Trap {
+                        syndrome: exit.exception.syndrome,
+                        virtual_address: exit.exception.virtual_address,
+                        physical_address: exit.exception.physical_address,
+                    };
+                    self.send_event(events, Event::Trap(trap), "HVF trap owner disconnected")?;
+                    let handled = self.paused(commands)?;
+                    self.update_interactive_progress(started);
+                    if !handled {
+                        return Ok(Exit::Trap(trap));
+                    }
+                }
+                2 => return Err("masked host virtual timer unexpectedly activated".into()),
+                n => {
+                    return Err(ExecutionError::Backend(format!(
+                        "unknown HVF exit reason {n}"
+                    )));
+                }
+            }
+        }
     }
     fn execute(&mut self, op: Op) -> Result<Value, String> {
         match op {
@@ -691,10 +1177,11 @@ pub fn serve(
                 let _ = c.reply.send(Ok(Value::Empty));
                 break;
             }
-            Op::Run(request, observe, events) => {
-                let result = p.run(request, observe, &events, &commands);
-                let _ = events.send(Event::Done);
+            Op::Run(request, policy, observe, events) => {
+                let result = p.run(request, policy, observe, &events, &commands);
                 let _ = c.reply.send(Ok(Value::Exit(result)));
+                let _ = events.send(Event::Done);
+                p.shared.notify_run_wakeup();
             }
             op => {
                 let result = p.execute(op);

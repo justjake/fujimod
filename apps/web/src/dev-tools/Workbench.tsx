@@ -1,3 +1,4 @@
+import { BatteryCycleIcon } from '../ui/battery-cycle';
 import {
   Match,
   Show,
@@ -21,7 +22,7 @@ import { ToolDeck, type SavedCamera } from './ToolDeck';
 import { CameraStore } from '../cameras/store';
 import { GuideConnection, ServiceModeGuide } from './ServiceModeGuide';
 import { GettingStarted, type PathResults } from './GettingStarted';
-import { bulkSelection } from './captures/capture';
+import { executionSelection, bulkSupportError } from './captures/capture';
 import { LeaveDebugMode } from './debug-mode/LeaveDebugMode';
 import { debugModeOperations } from './debug-mode/operations';
 import { createOwnerCountdown, type Countdown } from './owner-countdown';
@@ -72,9 +73,8 @@ export function Workbench(props: {
   const cameras = () => props.model.cameras();
   // Follow the newest camera unless one is chosen; keep a chosen camera even once unplugged.
   createEffect(
-    () => cameras().map((camera) => camera.id),
-    (ids) => {
-      const current = selected();
+    () => ({ ids: cameras().map((camera) => camera.id), current: selected() }),
+    ({ ids, current }) => {
       if (!current || !ids.includes(current)) setSelected(ids.at(-1));
     },
   );
@@ -141,8 +141,8 @@ export function Workbench(props: {
     operations() && {
       leave(progress: (line: string) => void) {
         const debug = operations();
-        const firmwareId = bulkSelection(camera()?.identity)?.firmware.id;
-        if (!debug || !firmwareId) throw Error('This firmware has no located bulk reader yet.');
+        const firmwareId = executionSelection(camera()?.identity)?.firmware.id;
+        if (!debug || !firmwareId) throw Error(bulkSupportError(camera()?.identity));
         return debug.leave(firmwareId, progress);
       },
     };
@@ -198,8 +198,9 @@ export function Workbench(props: {
           <div class="wb-service" role="alert">
             <strong>Service mode</strong>
             <span>
-              Switching the camera off in service mode restores factory settings. Remove the battery
-              to leave service mode.
+              Switching the camera off in service mode restores factory settings.{' '}
+              <BatteryCycleIcon />
+              Remove the battery to leave service mode.
             </span>
           </div>
         </Show>

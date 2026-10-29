@@ -7,13 +7,13 @@
     "inputs": {
       "gpio": {
         "gpio_inputs": {
-          "0": 3116,
+          "0": 3630,
           "2": 4608,
-          "3": 777,
-          "12": 128,
+          "3": 845,
+          "12": 160,
           "11": 0,
           "4": 32,
-          "8": 24576,
+          "8": 24584,
           "15": 2
         },
         "profile_name": "Synthetic X-T1 REC: absent SD at GPIO15.1, released Q at GPIO4.5 and empty mic/remote socket at GPIO3.0, released shutter/keys; remaining wiring borrowed."

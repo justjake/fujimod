@@ -54,6 +54,7 @@ export function PowerComboKeys(props: {
               <path class="usb-line" d="M4.5 4.5 27.5 27.5" />
             </Show>
           </svg>
+          <span>{sequence().usb ? 'Plug into computer' : 'Unplug from computer'}</span>
         </span>
       </Show>
       <For each={sequence().hold}>

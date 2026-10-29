@@ -62,6 +62,7 @@ pub struct Board {
     objects: BTreeMap<String, Arc<Object>>,
     failures: Failures,
     read_limit: usize,
+    last_continuation_stop: Option<fujimod_emulator::board::continuation::ContinuationStop>,
 }
 impl Board {
     fn begin_continuation(
@@ -107,18 +108,30 @@ impl Board {
         if let Some((core, _, _)) = policy {
             self.board()?.harness_interrupt_delivery(core, false);
         }
-        let result = run::budget(
-            py,
-            self.board_mut()?,
-            if policy.is_some_and(|(_, _, step)| step) {
-                count.min(1)
-            } else {
-                count
-            },
-            quantum,
-            pause_after,
-            pause_at_tick,
-        );
+        let count = if policy.is_some_and(|(_, _, step)| step) {
+            count.min(1)
+        } else {
+            count
+        };
+        let result = if self.driver.is_some() {
+            run::budget(
+                py,
+                self.board_mut()?,
+                count,
+                quantum,
+                pause_after,
+                pause_at_tick,
+            )
+        } else {
+            run::session_budget(
+                py,
+                self.session_mut()?,
+                count,
+                quantum,
+                pause_after,
+                pause_at_tick,
+            )
+        };
         if let Some((core, allowed, _)) = policy {
             self.board()?.harness_interrupt_delivery(core, allowed);
         }
@@ -214,6 +227,7 @@ impl Board {
             backend: Some(Backend::Xp4(session)),
             objects: BTreeMap::new(),
             failures: Failures::default(),
+            last_continuation_stop: None,
         })
     }
     #[getter]
@@ -382,9 +396,16 @@ impl Board {
         }
         let saved = self
             .session()?
-            .checkpoint(previous.as_ref().map(|p| &p.saved))
+            .checkpoint(previous.as_ref().and_then(|p| p.saved.as_ref()))
             .map_err(error)?;
-        Ok(Checkpoint { saved })
+        let ticks = saved.now();
+        let instruction_counts = saved.instruction_counts().to_vec();
+        Ok(Checkpoint {
+            saved: Some(saved),
+            bytes: None,
+            ticks,
+            instruction_counts,
+        })
     }
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> PyResult<()> {
         if self.driver.is_some()
@@ -397,7 +418,15 @@ impl Board {
                 "keyframe requires no active host instrumentation or isolated call",
             ));
         }
-        self.session_mut()?.restore(&saved.saved).map_err(error)
+        if let Some(snapshot) = &saved.saved {
+            return self.session_mut()?.restore(snapshot).map_err(error);
+        }
+        let bytes = saved
+            .bytes
+            .as_deref()
+            .ok_or_else(|| PyValueError::new_err("checkpoint has no saved state"))?;
+        let imported = self.session()?.import_snapshot(bytes).map_err(error)?;
+        self.session_mut()?.restore(&imported).map_err(error)
     }
 
     #[new]
@@ -560,6 +589,7 @@ impl Board {
             objects: adapters.objects,
             failures: adapters.failures,
             read_limit,
+            last_continuation_stop: None,
         })
     }
     fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
@@ -907,7 +937,11 @@ impl Board {
         Ok(self.board()?.instruction_counts())
     }
     fn run_until(&mut self, py: Python<'_>, tick: u64, quantum: usize) -> PyResult<()> {
-        let result = run::until(py, self.board_mut()?, tick, quantum);
+        let result = if self.driver.is_some() {
+            run::board_until(py, self.board_mut()?, tick, quantum)
+        } else {
+            run::session_until(py, self.session_mut()?, tick, quantum)
+        };
         self.outcome(result)
     }
     fn run_for_instructions(
@@ -923,8 +957,7 @@ impl Board {
             }
         }
         let mut owner = slf.try_borrow_mut()?;
-        let result = run::instructions(py, owner.board_mut()?, count, quantum);
-        owner.outcome(result)
+        owner.run_graph(py, count, quantum, None, None)
     }
     fn read_set_begin(&self) -> PyResult<()> {
         self.board()?.read_set_begin().map_err(error)
@@ -946,6 +979,32 @@ impl Board {
             .collect::<PyResult<Vec<_>>>()?;
         serde_json::to_string(&serde_json::json!({"stores":reads.stores,"devices":names}))
             .map_err(|e| error(e.to_string()))
+    }
+    /// Return the first stop event from the most recent watched run.
+    fn continuation_stop<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
+        let Some(stop) = &self.last_continuation_stop else {
+            return Ok(None);
+        };
+        let result = PyDict::new(py);
+        match stop {
+            fujimod_emulator::board::continuation::ContinuationStop::Store {
+                range_index,
+                range,
+                address,
+                change_confirmed,
+            } => {
+                result.set_item("kind", "store")?;
+                result.set_item("range_index", range_index)?;
+                result.set_item("range", vec![range.0, range.1])?;
+                result.set_item("address", address)?;
+                result.set_item("change_confirmed", change_confirmed)?;
+            }
+            fujimod_emulator::board::continuation::ContinuationStop::Device { id } => {
+                result.set_item("kind", "device")?;
+                result.set_item("id", id)?;
+            }
+        }
+        Ok(Some(result))
     }
     #[pyo3(signature = (count, quantum, pause_after=None, pause_at_tick=None, store_watches=None, device_watches=None))]
     fn run(
@@ -974,8 +1033,10 @@ impl Board {
             }
         }
         let mut owner = slf.try_borrow_mut()?;
+        owner.last_continuation_stop = None;
         owner.begin_continuation(store_watches, device_watches)?;
         let result = owner.run_graph(py, count, quantum, pause_after, pause_at_tick);
+        owner.last_continuation_stop = owner.board()?.continuation_stop();
         let cleanup = owner.board_mut()?.continuation_end().map_err(error);
         result.and(cleanup)
     }
@@ -995,15 +1056,17 @@ impl Board {
                 "Instruction windows require a whole-board run".into(),
             ));
         }
+        self.last_continuation_stop = None;
         self.begin_continuation(store_watches, device_watches)?;
         let result = run::window(
             py,
-            self.board_mut()?,
+            self.session_mut()?,
             end,
             quantum,
             pause_after,
             pause_at_tick,
         );
+        self.last_continuation_stop = self.board()?.continuation_stop();
         let cleanup = self.board_mut()?.continuation_end().map_err(error);
         self.outcome(result).and(cleanup)
     }
@@ -1147,6 +1210,12 @@ impl Board {
         )
         .map_err(|e| error(e.to_string()))
     }
+    fn start_guest_profile(&self) -> PyResult<()> {
+        self.board()?.start_guest_profile().map_err(error)
+    }
+    fn guest_profile(&self) -> PyResult<String> {
+        serde_json::to_string(&self.board()?.guest_profile()).map_err(|e| error(e.to_string()))
+    }
     fn start_host_profile(&self) -> PyResult<()> {
         self.board()?.start_host_profile().map_err(error)
     }
@@ -1178,6 +1247,39 @@ impl Board {
         self.session()?
             .sensor_rgb(name, width, height, rgb, white_luminance)
             .map_err(error)
+    }
+    fn sensor_rgb_noise(
+        &self,
+        name: &str,
+        width: usize,
+        height: usize,
+        rgb: &[u8],
+        white_luminance: f64,
+        seed: u64,
+        realization: u64,
+        full_well_electrons: f64,
+        read_noise_electrons: f64,
+    ) -> PyResult<()> {
+        self.session()?
+            .sensor_rgb_noise(
+                name, width, height, rgb, white_luminance,
+                serde_json::json!({"seed":seed,"realization":realization,
+                    "full_well_electrons":full_well_electrons,"read_noise_electrons":read_noise_electrons}),
+            )
+            .map_err(error)
+    }
+    fn sensor_sample_rgb<'py>(
+        &self,
+        py: Python<'py>,
+        name: &str,
+        width: usize,
+        height: usize,
+    ) -> PyResult<Bound<'py, PyBytes>> {
+        let samples = self
+            .session()?
+            .sensor_sample_rgb(name, width, height)
+            .map_err(error)?;
+        Ok(PyBytes::new(py, &samples))
     }
     fn sensor_raw16(&self, name: &str, width: usize, height: usize, raw16: &[u8]) -> PyResult<()> {
         self.session()?
@@ -1309,6 +1411,30 @@ impl Board {
                 .extract();
         }
         serde_json::to_string(&self.board()?.observation().map_err(error)?)
+            .map_err(|e| error(e.to_string()))
+    }
+    fn inspection_observation(&self, py: Python<'_>) -> PyResult<String> {
+        if let Some(Backend::Xp4(session)) = &self.backend {
+            return py
+                .import("json")?
+                .call_method1("dumps", (session.state(py, false)?,))?
+                .extract();
+        }
+        serde_json::to_string(&self.board()?.inspection_observation().map_err(error)?)
+            .map_err(|e| error(e.to_string()))
+    }
+    fn failure(&self, py: Python<'_>) -> PyResult<String> {
+        if let Some(Backend::Xp4(session)) = &self.backend {
+            let state = session.state(py, false)?;
+            let failure = state
+                .get_item("failure")?
+                .ok_or_else(|| PyRuntimeError::new_err("XP4 state is missing failure"))?;
+            return py
+                .import("json")?
+                .call_method1("dumps", (failure,))?
+                .extract();
+        }
+        serde_json::to_string(&self.board()?.failure().map_err(error)?)
             .map_err(|e| error(e.to_string()))
     }
     fn device_states(&self, kind: &str) -> PyResult<String> {

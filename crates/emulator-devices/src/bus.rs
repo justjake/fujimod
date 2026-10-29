@@ -15,6 +15,15 @@ pub struct FastReadWord {
     pub offset: u64,
     pub value: FastReadValue,
 }
+
+/// Opaque device work that must be completed by a host runtime before guest
+/// execution resumes. Device-specific request bytes stay outside checkpoints.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HostRequest {
+    pub id: u64,
+    pub kind: String,
+    pub payload: Vec<u8>,
+}
 #[derive(Clone)]
 pub enum FastReadValue {
     AtomicU16(Arc<AtomicU16>),
@@ -99,6 +108,11 @@ pub trait Host {
     /// Guest virtual time in the board's unit (X70: virtual timer ticks, so the
     /// exact runtime and the HVF port agree).
     fn now(&self) -> u64;
+    /// Stop the current guest run after its active instruction retires.
+    /// Runtimes without an instruction boundary refuse asynchronous work.
+    fn request_pause(&mut self) -> Result<(), String> {
+        Err("host cannot pause guest execution for asynchronous work".into())
+    }
     /// Worker count for pure host computation. Zero selects the exact serial
     /// path; workers never receive guest state or publish device effects.
     fn compute_workers(&self) -> usize {
@@ -170,6 +184,9 @@ impl<'a> Cx<'a> {
     }
     pub fn now(&self) -> u64 {
         self.tick_override.unwrap_or_else(|| self.host.now())
+    }
+    pub fn request_pause(&mut self) -> Result<(), String> {
+        self.host.request_pause()
     }
     /// Bounded strategy for pure, deterministic raster work. The owner still
     /// applies every resulting device effect on this context's thread.
@@ -417,6 +434,26 @@ pub trait Device: Send + std::any::Any {
     }
     /// A deadline set with `cx.schedule(at, token)` arrived.
     fn event(&mut self, _cx: &mut Cx<'_>, _token: u64) {}
+    /// Take one opaque host request after the board has stopped its processors.
+    fn take_host_request(&mut self) -> Option<HostRequest> {
+        None
+    }
+    /// Whether this device is waiting for a host result before the guest can
+    /// execute again.
+    fn has_host_request(&self) -> bool {
+        false
+    }
+    /// Apply a host result while the board is stopped. Implementations should
+    /// validate the request ID and make the modeled completion visible only
+    /// after the result has been accepted.
+    fn complete_host_request(
+        &mut self,
+        _cx: &mut Cx<'_>,
+        _id: u64,
+        _result: &[u8],
+    ) -> Result<(), String> {
+        Err(format!("{} has no pending host request", self.name()))
+    }
     /// Bring time bookkeeping up to `cx.now()` on guest-driven access or a
     /// due event. A quantum boundary alone must not advance a device.
     fn advance(&mut self, _cx: &mut Cx<'_>) {}

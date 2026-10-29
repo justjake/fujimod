@@ -55,9 +55,10 @@ class and types. The Rust crate in `emulator/` declares that interface once:
 wasm-bindgen generates the class and its glue from `#[wasm_bindgen]` items, and
 tsify generates the TypeScript types of the serde values they exchange. Emscripten
 links the crate with Unicorn and runs wasm-bindgen on the result
-(`-sWASM_BINDGEN`). A loaded module is configured once with its execution policy
-and JIT tier, then constructs cameras with `Camera.fromGraph`, `fromPrepared`,
-`fromResolved` or `fromSnapshot`. Failures throw `Error`; once the guest has
+(`-sWASM_BINDGEN`). A loaded module is configured once with its execution policy,
+JIT tier, and DMP renderer preference. Configuration resolves after any requested
+WebGPU device is ready, then the module constructs cameras with `Camera.fromGraph`,
+`fromPrepared`, `fromResolved` or `fromSnapshot`. Failures throw `Error`; once the guest has
 failed, their name is `GuestExecutionError`.
 
 The build writes the generated declarations to `emulator/camera.generated.ts`,

@@ -13,6 +13,15 @@ pub enum TransferStage {
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
+    #[error("the camera already has an open service session")]
+    SessionAlreadyOpen,
+    #[error("callback slot restoration failed: {0}")]
+    CallbackRestoration(Box<Error>),
+    #[error("callback invocation failed: {source}; slot restoration failure: {restoration:?}")]
+    CallbackInvocation {
+        source: Box<Error>,
+        restoration: Option<Box<Error>>,
+    },
     #[error(transparent)]
     Proxy(#[from] fujimod_usb_proxy::Error),
     #[error("USB device access failed: {0}")]
@@ -67,6 +76,10 @@ pub enum Error {
     AddressOverflow,
     #[error("requested memory range is outside the selected data window")]
     OutsideDataWindow,
+    #[error(
+        "data range must start on a {address}-byte boundary and span whole {granule}-byte units"
+    )]
+    MisalignedDataRange { address: u32, granule: u32 },
     #[error("length must be nonzero and representable in the protocol")]
     InvalidLength,
     #[error("argument must be a bounded ASCII token")]

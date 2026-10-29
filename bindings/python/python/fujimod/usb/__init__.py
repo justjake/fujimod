@@ -69,6 +69,67 @@ if TYPE_CHECKING:
     from .data import UploadReply
 
 
+# Native-only USB operations; the browser adapter has its own connection owner.
+if TYPE_CHECKING:
+
+    class Connection:
+        @staticmethod
+        async def open(
+            device: Device,
+            interface: InterfaceSelection,
+            *,
+            timeout_ms: int = 5000,
+            max_reply_bytes: int = 8388608,
+        ) -> Connection: ...
+        async def reclaim_session(self) -> bool: ...
+        async def begin_session(
+            self,
+            limits: FirmwareLimits,
+            *,
+            trace: tracing.Trace | None = None,
+        ) -> Session: ...
+
+    class RuntimeImage:
+        def __init__(self, data: Buffer, metadata: str): ...
+        def relocate(self, base: int) -> RuntimeImage: ...
+        @property
+        def metadata(self) -> str: ...
+        @property
+        def data(self) -> bytes: ...
+        @staticmethod
+        def relocate_mov_pair(low: int, high: int, delta: int) -> tuple[int, int]: ...
+
+    class RuntimeTask:
+        def __init__(self, image: RuntimeImage, operation: str, *, lease: str | None = None,
+                     token: int = 1, address: int = 0, size: int = 0, data: Buffer = b'',
+                     relink: Callable[[int], RuntimeImage] | None = None): ...
+        def step(self, response: Buffer | None = None,
+                 failure: str | None = None) -> tuple[str, str, bytes]: ...
+
+    class CallbackInvocation:
+        def __init__(
+            self,
+            slot_address: int,
+            required: Buffer,
+            value: Buffer,
+            trigger: research.Request,
+            limits: FirmwareLimits,
+            *,
+            replies: Sequence[Buffer] | None = None,
+        ) -> None: ...
+        @staticmethod
+        def completed(slot_address: int, required: Buffer, value: Buffer,
+                      trigger: research.Request, limits: FirmwareLimits, body_prefix: Buffer, *,
+                      statuses: Sequence[tuple[int, int]] | None = None) -> CallbackInvocation: ...
+        def require(
+            self, address: int, length: int, accepted: Sequence[Buffer]
+        ) -> None: ...
+        def write(
+            self, address: int, accepted: Sequence[Buffer], data: Buffer
+        ) -> None: ...
+        def synchronize(self, commands: CommandSequence) -> None: ...
+
+
 class CommandSequence(Handle["JsCommandSequence"]):
     def __init__(self) -> None:
         self._js = call(jsusb.CommandSequence.new)
@@ -242,6 +303,15 @@ class Session(Handle["JsSession"]):
         return decode(
             await await_result(call(method, *args, **kwargs), self._js.cancelPending)
         )
+
+    if TYPE_CHECKING:
+
+        async def invoke_queries(self, plan: InstallQueries) -> list[tuple[bytes, bytes]]: ...
+        async def upload_owned_chunks(self, image: OwnedUpload, pointer: int, original: int,
+                                      capacity_address: int, capacity: int) -> None: ...
+        async def invoke_callback(
+            self, invocation: CallbackInvocation
+        ) -> bytes | None: ...
 
     async def ping(self) -> bytes:
         return await self._call(self._js.ping, buffer_out)

@@ -1,5 +1,6 @@
 //! Detach Python while retaining a single owner for thread-affine CPUs.
 use fujimod_emulator::board::Board;
+use fujimod_emulator_session::Session;
 use pyo3::Python;
 use std::{
     marker::PhantomData,
@@ -20,30 +21,35 @@ enum Limit {
         until: Option<u64>,
     },
 }
-struct Owner<'a> {
-    board: NonNull<Board>,
+struct Owner<'a, T> {
+    target: NonNull<T>,
     thread: ThreadId,
-    _loan: PhantomData<&'a mut Board>,
+    _loan: PhantomData<&'a mut T>,
 }
 // Send transfers only an opaque, lifetime-bound capability. The only method
 // that dereferences it checks its thread first; Drop never touches the board.
 // This lets stable PyO3's Send-based Ungil bound express a synchronous detach
 // without declaring the CPUs, their Rc handles, or the runtime itself Send.
-unsafe impl Send for Owner<'_> {}
-impl<'a> Owner<'a> {
-    fn new(board: &'a mut Board) -> Self {
+unsafe impl<T> Send for Owner<'_, T> {}
+impl<'a, T> Owner<'a, T> {
+    fn new(target: &'a mut T) -> Self {
         Self {
-            board: NonNull::from(board),
+            target: NonNull::from(target),
             thread: thread::current().id(),
             _loan: PhantomData,
         }
     }
-    fn run(mut self, limit: Limit, quantum: usize) -> Result<(), String> {
+    fn run(mut self, execute: impl FnOnce(&mut T) -> Result<(), String>) -> Result<(), String> {
         if self.thread != thread::current().id() {
             return Err("runtime execution moved from its owner thread".into());
         }
-        let board = unsafe { self.board.as_mut() };
-        match limit {
+        execute(unsafe { self.target.as_mut() })
+    }
+}
+fn run(py: Python<'_>, board: &mut Board, limit: Limit, quantum: usize) -> Result<(), String> {
+    let owner = Owner::new(board);
+    py.detach(move || {
+        owner.run(|board| match limit {
             Limit::Tick(tick) => board.run_until(tick, quantum),
             Limit::Budget {
                 count,
@@ -55,23 +61,66 @@ impl<'a> Owner<'a> {
                 pause_after,
                 until,
             } => board.run_window(end, quantum, pause_after, until),
-        }
-    }
+        })
+    })
 }
-fn run(py: Python<'_>, board: &mut Board, limit: Limit, quantum: usize) -> Result<(), String> {
-    let owner = Owner::new(board);
-    py.detach(move || owner.run(limit, quantum))
-}
-pub fn until(py: Python<'_>, board: &mut Board, tick: u64, quantum: usize) -> Result<(), String> {
-    run(py, board, Limit::Tick(tick), quantum)
-}
-pub fn instructions(
+fn run_session(
     py: Python<'_>,
-    board: &mut Board,
-    count: u64,
+    session: &mut Session,
+    limit: Limit,
     quantum: usize,
 ) -> Result<(), String> {
-    budget(py, board, count, quantum, None, None)
+    let owner = Owner::new(session);
+    py.detach(move || {
+        owner.run(|session| match limit {
+            Limit::Tick(tick) => session.run_window(u64::MAX, quantum, None, Some(tick)),
+            Limit::Budget {
+                count,
+                pause_after,
+                until,
+            } => session.run_with_limits(count, quantum, pause_after, until),
+            Limit::Window {
+                end,
+                pause_after,
+                until,
+            } => session.run_window(end, quantum, pause_after, until),
+        })
+    })
+}
+pub fn session_until(
+    py: Python<'_>,
+    session: &mut Session,
+    tick: u64,
+    quantum: usize,
+) -> Result<(), String> {
+    run_session(py, session, Limit::Tick(tick), quantum)
+}
+pub fn board_until(
+    py: Python<'_>,
+    board: &mut Board,
+    tick: u64,
+    quantum: usize,
+) -> Result<(), String> {
+    run(py, board, Limit::Tick(tick), quantum)
+}
+pub fn session_budget(
+    py: Python<'_>,
+    session: &mut Session,
+    count: u64,
+    quantum: usize,
+    pause_after: Option<u64>,
+    until: Option<u64>,
+) -> Result<(), String> {
+    run_session(
+        py,
+        session,
+        Limit::Budget {
+            count,
+            pause_after,
+            until,
+        },
+        quantum,
+    )
 }
 
 pub fn budget(
@@ -96,15 +145,15 @@ pub fn budget(
 
 pub fn window(
     py: Python<'_>,
-    board: &mut Board,
+    session: &mut Session,
     end: u64,
     quantum: usize,
     pause_after: Option<u64>,
     until: Option<u64>,
 ) -> Result<(), String> {
-    run(
+    run_session(
         py,
-        board,
+        session,
         Limit::Window {
             end,
             pause_after,

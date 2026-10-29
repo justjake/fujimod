@@ -26,7 +26,7 @@ try {
         progress?.hasAttribute('value') &&
         progress.value > 0 &&
         progress.value <= 99 &&
-        row.textContent?.includes('instructions')
+        /\d+%/.test(row.textContent ?? '')
       );
     },
     undefined,
@@ -34,6 +34,7 @@ try {
   );
   const row = page.locator('[data-asset="step:boot"]');
   const first = await row.innerText();
+  assert(await page.locator('#card-section').isHidden(), 'The SD card must stay hidden until the camera runs.');
   await page.screenshot({ path: new URL('booting.png', output).pathname, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await row.scrollIntoViewIfNeeded();
@@ -48,7 +49,7 @@ try {
       count.getBoundingClientRect().right <= element.getBoundingClientRect().right + 1
     );
   });
-  assert(fits, 'Boot label and instruction counts must fit without overlap on a phone.');
+  assert(fits, 'Boot label and percentage must fit without overlap on a phone.');
   await page.screenshot({ path: new URL('booting-mobile.png', output).pathname, fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.waitForFunction(
@@ -62,10 +63,11 @@ try {
     { timeout: 240000 },
   );
   assert.deepEqual(errors, []);
+  await page.locator('#card-section').waitFor({ state: 'visible', timeout: 30000 });
   await page.screenshot({ path: new URL('rec.png', output).pathname, fullPage: true });
   await writeFile(new URL('result.json', output), JSON.stringify({ url, first, errors }, null, 2));
   console.log(first);
-  console.log('Real boot reached REC with determinate instruction progress.');
+  console.log('Real boot reached REC with determinate tick progress.');
 } finally {
   await browser.close();
 }

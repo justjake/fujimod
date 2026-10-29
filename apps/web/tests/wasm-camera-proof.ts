@@ -23,6 +23,25 @@ const result: Record<string, unknown> = {};
 function check(value: unknown, message: string): asserts value {
   if (!value) throw Error(message);
 }
+function dmpDiagnostics(states: unknown[]): { rasterizer: string; gpuLists?: number } | undefined {
+  for (const state of states) {
+    if (state === null || typeof state !== 'object' || !('gles' in state)) continue;
+    const gles = state.gles;
+    if (
+      gles !== null &&
+      typeof gles === 'object' &&
+      'host_rasterizer' in gles &&
+      typeof gles.host_rasterizer === 'string'
+    )
+      return {
+        rasterizer: gles.host_rasterizer,
+        ...('gpu_lists' in gles && typeof gles.gpu_lists === 'number'
+          ? { gpuLists: gles.gpu_lists }
+          : {}),
+      };
+  }
+  return undefined;
+}
 async function pixels() {
   const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', data))]
@@ -37,7 +56,9 @@ try {
   check(manifestResponse.ok, 'Camera manifest unavailable.');
   const manifest = (await manifestResponse.json()) as {
     session: { firmwareId: string; clockSeconds2000: number };
+    dmpCpuRenderer?: boolean;
   };
+  const expectedRasterizer = manifest.dmpCpuRenderer === false ? 'WebGPU' : 'CPU';
   config.firmwareId = manifest.session.firmwareId;
   config.execution = { mode: 'replay', clockSeconds2000: manifest.session.clockSeconds2000 };
   const response = await fetch('/__wasm-camera/firmware.dat');
@@ -58,9 +79,19 @@ try {
   };
   check(canvas.width === 720 && canvas.height === 480, 'LCD dimensions differ.');
   result.rec = await pixels();
+  const dmp = dmpDiagnostics((await engine.deviceStates('dmp-smaph-h')).states);
+  check(dmp !== undefined, 'DMP renderer state is unavailable.');
+  check(
+    dmp.rasterizer === expectedRasterizer,
+    `Expected the ${expectedRasterizer} DMP renderer, got ${dmp.rasterizer}.`,
+  );
+  if (expectedRasterizer === 'WebGPU')
+    check((dmp.gpuLists ?? 0) > 0, 'WebGPU did not complete a DMP command list.');
   result.execution = {
     profile: await engine.profile(0),
     fingerprint: await engine.fingerprint(),
+    dmpRasterizer: dmp.rasterizer,
+    dmpGpuLists: dmp.gpuLists ?? 0,
     frame: { width: canvas.width, height: canvas.height, sha256: result.rec },
   };
   check(

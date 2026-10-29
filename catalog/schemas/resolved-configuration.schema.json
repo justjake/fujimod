@@ -1764,6 +1764,29 @@
       ],
       "type": "object"
     },
+    "BulkDma": {
+      "additionalProperties": false,
+      "description": "Constraints of the DMA that serves E1 reads.",
+      "properties": {
+        "address_alignment": {
+          "description": "The DMA source ignores address bits below this power of two.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "length_granule": {
+          "description": "The DMA rounds each transfer length up to this power of two.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address_alignment",
+        "length_granule"
+      ],
+      "type": "object"
+    },
     "BulkRange": {
       "additionalProperties": false,
       "description": "An address range.",
@@ -6753,6 +6776,17 @@
           },
           "type": "array"
         },
+        "dma": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BulkDma"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "E1 DMA constraints, absent where they are not located."
+        },
         "firmware_id": {
           "description": "Firmware whose stock code provides this path.",
           "type": "string"
@@ -10027,9 +10061,27 @@
             "null"
           ]
         },
+        "commit_ticks": {
+          "description": "Declared memory-configuration commit latency in guest ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "companion_irq_base": {
           "description": "Declared companion irq base.",
           "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "configuration_word": {
+          "description": "Declared read-only clock configuration input.",
+          "format": "uint32",
           "minimum": 0,
           "type": [
             "integer",
@@ -10065,6 +10117,15 @@
         },
         "transmit_request": {
           "description": "Declared transmit request.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "trigger_offset": {
+          "description": "Declared self-clearing reset-request offset.",
           "format": "uint64",
           "minimum": 0,
           "type": [

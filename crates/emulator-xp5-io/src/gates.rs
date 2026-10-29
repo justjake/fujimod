@@ -5,6 +5,7 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 pub struct Gates {
     power: bool,
+    configuration_word: Option<u32>,
     regs: BTreeMap<u64, u32>,
     panel_clocks: Option<fujimod_emulator_devices::xp5::panel_clocks::Clocks>,
     companion_cpu: Option<usize>,
@@ -19,6 +20,7 @@ impl Gates {
     ) -> Self {
         Self {
             power,
+            configuration_word: None,
             regs: BTreeMap::new(),
             panel_clocks,
             companion_cpu: None,
@@ -27,6 +29,11 @@ impl Gates {
     /// BIS reset bank10: c928 bit21 clear holds reset, set releases it.
     pub fn with_companion(mut self, cpu: Option<usize>) -> Self {
         self.companion_cpu = cpu;
+        self
+    }
+    /// Board-supplied read-only configuration input; no reset value is inferred.
+    pub fn with_configuration_word(mut self, value: Option<u32>) -> Self {
+        self.configuration_word = value;
         self
     }
     fn drive_reset(&self, cx: &mut Cx<'_>) {
@@ -72,6 +79,13 @@ impl Device for Gates {
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, n: u8) -> u64 {
         let o = address.wrapping_sub(if self.power { 0xff90d000 } else { 0xff90c000 });
         if n != 4 || o & 3 != 0 {
+            cx.unmodeled();
+            return 0;
+        }
+        if !self.power && o == 4 {
+            if let Some(value) = self.configuration_word {
+                return u64::from(value);
+            }
             cx.unmodeled();
             return 0;
         }
@@ -133,5 +147,48 @@ mod tests {
         gates.restore(&state).unwrap();
         assert_eq!(state, gates.save());
         assert_eq!(host.resets, [(4, false), (4, true)]);
+    }
+
+    #[test]
+    fn configuration_input_is_read_only_and_independent_of_requester() {
+        for selector in 0..32 {
+            let value = 0x9753_2460 | selector;
+            let mut gates = Gates::new(false).with_configuration_word(Some(value));
+            let mut host = RecordingHost::default();
+            let saved = gates.save();
+            for core in 0..4 {
+                let mut cx = Cx::new(&mut host, core, 0, 0);
+                assert_eq!(gates.read(&mut cx, 0xff90c004, 4), u64::from(value));
+                assert!(!cx.is_unmodeled());
+            }
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            gates.write(&mut cx, 0xff90c004, 4, 0);
+            assert!(cx.is_unmodeled());
+            assert_eq!(
+                gates.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff90c004, 4),
+                u64::from(value)
+            );
+            gates.restore(&saved).unwrap();
+            assert_eq!(saved, gates.save());
+            assert!(host.events.is_empty());
+            assert!(host.irqs.is_empty());
+        }
+    }
+
+    #[test]
+    fn missing_input_and_unestablished_access_widths_refuse() {
+        let mut host = RecordingHost::default();
+        for input in [None, Some(31)] {
+            let mut gates = Gates::new(false).with_configuration_word(input);
+            for width in [1, 2, 4, 8] {
+                let mut cx = Cx::new(&mut host, 0, 0, 0);
+                gates.read(&mut cx, 0xff90c004, width);
+                assert_eq!(cx.is_unmodeled(), input.is_none() || width != 4);
+            }
+        }
+        let mut power = Gates::new(true).with_configuration_word(Some(31));
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        power.read(&mut cx, 0xff90d004, 4);
+        assert!(cx.is_unmodeled());
     }
 }

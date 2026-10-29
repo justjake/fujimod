@@ -6,10 +6,11 @@ members = [
   "crates/remote",
   "crates/firmware",
   "crates/recovery",
+  "crates/runtime-install",
   "crates/usb-proxy",
   "crates/catalog",
   "crates/catalog-bulk",
-  "crates/catalog-camera",
+  "crates/catalog-workflows",
   "crates/catalog-firmware-identity",
   "crates/catalog-configuration",
   "crates/catalog-resolution",
@@ -62,8 +63,10 @@ members = [
   "crates/emulator-preparation",
   "crates/emulator-ip",
   "crates/emulator-ip-dmp",
+  "crates/emulator-ip-dmp-webgpu",
   "crates/emulator-ip-arm",
   "crates/emulator-graphics",
+  "crates/emulator-gpu",
   "crates/emulator-exr2-io",
   "crates/emulator-exr2-system",
   "crates/emulator-exr2-companion",
@@ -121,7 +124,7 @@ fujimod-remote = { path = "crates/remote", version = "0.1.0" }
 fujimod-recording = { path = "crates/recording", version = "0.1.0" }
 fujimod-catalog = { path = "crates/catalog", version = "0.1.0" }
 fujimod-catalog-bulk = { path = "crates/catalog-bulk", version = "0.1.0" }
-fujimod-catalog-camera = { path = "crates/catalog-camera", version = "0.1.0" }
+fujimod-catalog-workflows = { path = "crates/catalog-workflows", version = "0.1.0" }
 fujimod-catalog-firmware-identity = { path = "crates/catalog-firmware-identity", version = "0.1.0" }
 fujimod-catalog-configuration = { path = "crates/catalog-configuration", version = "0.1.0" }
 fujimod-catalog-resolution = { path = "crates/catalog-resolution", version = "0.1.0" }
@@ -171,6 +174,7 @@ fujimod-emulator-ip = { path = "crates/emulator-ip", version = "0.1.0" }
 fujimod-emulator-ip-dmp = { path = "crates/emulator-ip-dmp", version = "0.1.0" }
 fujimod-emulator-ip-arm = { path = "crates/emulator-ip-arm", version = "0.1.0" }
 fujimod-emulator-graphics = { path = "crates/emulator-graphics", version = "0.1.0" }
+fujimod-emulator-gpu = { path = "crates/emulator-gpu", version = "0.1.0" }
 fujimod-emulator-exr2-io = { path = "crates/emulator-exr2-io", version = "0.1.0" }
 fujimod-emulator-exr2-system = { path = "crates/emulator-exr2-system", version = "0.1.0" }
 fujimod-emulator-exr2-companion = { path = "crates/emulator-exr2-companion", version = "0.1.0" }
@@ -187,6 +191,7 @@ fujimod-emulator-exr2-resources = { path = "crates/emulator-exr2-resources", ver
 fujimod-emulator-exr2-images = { path = "crates/emulator-exr2-images", version = "0.1.0" }
 fujimod-emulator-cpu = { path = "crates/emulator-cpu", version = "0.1.0" }
 fujimod-emulator-cpu-unicorn = { path = "crates/emulator-cpu-unicorn", version = "0.1.0" }
+fujimod-runtime-install = { path = "crates/runtime-install", version = "0.1.0" }
 fujimod-recovery = { path = "crates/recovery", version = "0.1.0" }
 fujimod-firmware = { path = "crates/firmware", version = "0.1.0" }
 fujimod-settings = { path = "crates/settings", version = "0.1.0" }

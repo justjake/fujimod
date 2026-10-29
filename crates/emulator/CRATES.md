@@ -260,7 +260,7 @@ records the rebuild costs below before and after.
     boot to REC ran the same 48,023,300 guest instructions with the same host
     instructions retired.
 12. App80, catalog identity and progress: done. App80 is `fujimod-usb-app80`,
-    firmware identities and camera definitions are `fujimod-catalog-camera`,
+    firmware identities and service workflow contracts are `fujimod-catalog-workflows`,
     and the Python App80 bindings are `fujimod-python-app80`, so a service
     definition edit no longer reaches `fujimod-usb` or the USB bindings. The
     identifier checks are `fujimod-catalog-identity` and the content-addressed
