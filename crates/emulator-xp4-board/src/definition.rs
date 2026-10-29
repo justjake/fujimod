@@ -71,9 +71,9 @@ pub struct Definition {
     /// frame period in ticks.
     #[serde(default)]
     pub xpp_statistics: Option<(u64, u32, u64)>,
-    /// X-Processor Pro imaging register blocks with no work in flight.
+    /// X-Processor Pro register blocks with no work in flight.
     #[serde(default)]
-    pub xpp_imaging_blocks: Vec<XppImagingBlock>,
+    pub xpp_register_blocks: Vec<XppRegisterBlock>,
     /// DesignWare HDMI TX base; the board has no sink attached.
     #[serde(default)]
     pub xpp_hdmi: Option<u64>,
@@ -196,11 +196,11 @@ pub struct XppFrameSync {
     pub period_ticks: u64,
 }
 
-/// X-Processor Pro imaging register block: base, window size and the
+/// X-Processor Pro register block: base, window size and the
 /// (offset, mask) status bits that always read set.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct XppImagingBlock {
+pub struct XppRegisterBlock {
     pub base: u64,
     pub size: u64,
     pub idle: Vec<(u64, u32)>,

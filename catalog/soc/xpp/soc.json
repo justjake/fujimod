@@ -110,6 +110,13 @@
       "clock_id": null
     },
     {
+      "id": "window-fff1b000",
+      "base": 4294029312,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
       "id": "imaging-fff3a000",
       "base": 4294156288,
       "size": 4096,
@@ -652,7 +659,13 @@
             "size": 4096,
             "basis": "Imaging control page of X-T20 2.11 section 5: +0x000 bit 0 is a run bit that 0xc33ec8 clears and then waits to read set (stopped); one register-bus channel at +0x200 (0xc345b4..0xc34864) sends a RAM frame 0x81 hi lo value (write) or 0x82 hi lo (read) to a select in configuration bits 8-12 and returns the reply byte in bits 15:8 of eight receive words at +0x21c. The imaging-side chip is a register file: the start-up writes a register and reads it back until it matches (seg6 0x17fa434). Commands and stops complete at once; what the chip does with the values is not modeled. Six transfer channels at +0x240 + 0x40*n (0xc34910..0xc34e94) are configured with mode, address and length words and started and stopped by +0x04 bit 0 (seg6 0x156a754 and 0x156a7b0); those words read back, and no data moves."
           },
-          "imaging_blocks": [
+          "register_blocks": [
+            {
+              "base": 4294029312,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Unidentified block of X-T20 2.11 section 5 with channels at 0xfff1b000 + 0x1000*n (0xc53c9c maps channel 0..2). 0xc538bc reads +0x1f4 and, only when bit 4 is set, writes a mode to +0x10 (0xc54014); its caller 0xccfad8, reached through function tables at 0xf7be60.., first programs clocks and pins (0xc698b8, 0xc6a4b4, 0xc6a508). Other words are written by 0xc53ccc..0xc53fd4. What +0x1f4 bit 4 reports on the camera is not known and no capture records it; the block reads it clear, so 0xc538bc returns -255 without writing the mode, as in the xpro-lab emulator. The words read back their last write."
+            },
             {
               "base": 4294156288,
               "size": 4096,

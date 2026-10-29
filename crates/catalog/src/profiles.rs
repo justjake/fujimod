@@ -1248,30 +1248,30 @@ pub struct ResetGates {
     pub size: u64,
 }
 
-/// Status bits of an imaging block that always read set.
+/// Status bits of a register block that always read set.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "HardwareImagingIdleBits"))]
-pub struct ImagingIdleBits {
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterIdleBits"))]
+pub struct RegisterIdleBits {
     /// Bits that read set.
     pub mask: u32,
     /// Word offset in the block.
     pub offset: u64,
 }
 
-/// X-Processor Pro imaging register block with no work in flight.
+/// X-Processor Pro register block with no work in flight.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "HardwareImagingBlock"))]
-pub struct ImagingBlock {
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterBlock"))]
+pub struct RegisterBlock {
     /// Declared base.
     pub base: u64,
     /// Declared basis.
     pub basis: String,
     /// Status bits that always read set.
-    pub idle_bits: Vec<ImagingIdleBits>,
+    pub idle_bits: Vec<RegisterIdleBits>,
     /// Declared size.
     pub size: u64,
 }
@@ -1686,9 +1686,9 @@ pub struct RegisterLayouts {
     /// Declared X-Processor Pro imaging frame sync.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frame_sync: Option<FrameSync>,
-    /// Declared X-Processor Pro imaging register blocks.
+    /// Declared X-Processor Pro register blocks with no work in flight.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub imaging_blocks: Vec<ImagingBlock>,
+    pub register_blocks: Vec<RegisterBlock>,
     /// Declared X-Processor Pro imaging statistics engine.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imaging_statistics: Option<ImagingStatistics>,

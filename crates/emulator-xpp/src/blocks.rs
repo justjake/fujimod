@@ -1,4 +1,4 @@
-//! X-Processor Pro imaging register blocks with no work in flight.
+//! X-Processor Pro register blocks with no work in flight.
 //!
 //! Several imaging blocks of X-T20 2.11 are configured from section 5 with
 //! plain word writes, often through the table copier 0xc41d30, and read back
@@ -36,7 +36,7 @@ impl Block {
                 .iter()
                 .any(|(o, mask)| o & 3 != 0 || *o >= size || *mask == 0)
         {
-            return Err("Invalid X-Processor Pro imaging block".into());
+            return Err("Invalid X-Processor Pro register block".into());
         }
         Ok(Self {
             base,
@@ -56,7 +56,7 @@ impl Block {
 }
 impl Device for Block {
     fn name(&self) -> &'static str {
-        "xpp-imaging-block"
+        "xpp-register-block"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         let Some(offset) = self.offset(address, size) else {
@@ -91,7 +91,7 @@ impl Device for Block {
             .iter()
             .any(|(o, v)| o & 3 != 0 || *o >= self.size || *v == 0)
         {
-            return Err("Invalid imaging block checkpoint".into());
+            return Err("Invalid register block checkpoint".into());
         }
         self.state = state;
         Ok(())

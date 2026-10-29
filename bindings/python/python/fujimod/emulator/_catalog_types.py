@@ -2449,22 +2449,10 @@ class HardwareImaging(TypedDict, total=False):
     sensor_capture: NotRequired[HardwareSensorCapture | None]
 
 
-class HardwareImagingBlock(TypedDict, total=False):
-    base: Required[int]
-    basis: Required[str]
-    idle_bits: Required[list[HardwareImagingIdleBits]]
-    size: Required[int]
-
-
 class HardwareImagingControl(TypedDict, total=False):
     base: Required[int]
     basis: Required[str]
     size: Required[int]
-
-
-class HardwareImagingIdleBits(TypedDict, total=False):
-    mask: Required[int]
-    offset: Required[int]
 
 
 class HardwareImagingRegisters(TypedDict, total=False):
@@ -2645,6 +2633,18 @@ class HardwareRaster(TypedDict, total=False):
     width: Required[int]
 
 
+class HardwareRegisterBlock(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    idle_bits: Required[list[HardwareRegisterIdleBits]]
+    size: Required[int]
+
+
+class HardwareRegisterIdleBits(TypedDict, total=False):
+    mask: Required[int]
+    offset: Required[int]
+
+
 class HardwareRegisterLayouts(TypedDict, total=False):
     adc: NotRequired[HardwareAdc | None]
     control_bus0: NotRequired[HardwarePrimaryBusRegisters | None]
@@ -2662,7 +2662,6 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     gpio: NotRequired[HardwareGpio | None]
     hdmi_tx: NotRequired[HardwareHdmiTransmitter | None]
     imaging: NotRequired[HardwareImagingRegisters | None]
-    imaging_blocks: NotRequired[list[HardwareImagingBlock]]
     imaging_control: NotRequired[HardwareImagingControl | None]
     imaging_statistics: NotRequired[HardwareImagingStatistics | None]
     interrupts: NotRequired[HardwareInterrupts | None]
@@ -2674,6 +2673,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     nand: NotRequired[HardwareLoaderDma | None]
     pl330: NotRequired[HardwarePl330 | None]
     pll_clocks: NotRequired[HardwarePllClocks | None]
+    register_blocks: NotRequired[list[HardwareRegisterBlock]]
     reset_gates: NotRequired[HardwareResetGates | None]
     sd_host_clocks: NotRequired[HardwareSdHostClocks | None]
     serial_flash: NotRequired[HardwareSerialFlash | None]

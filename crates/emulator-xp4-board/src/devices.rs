@@ -869,9 +869,9 @@ impl Devices {
         self.windows.push((base, base + 0x1000, id));
         Ok(())
     }
-    pub fn xpp_imaging_block(
+    pub fn xpp_register_block(
         &mut self,
-        block: crate::definition::XppImagingBlock,
+        block: crate::definition::XppRegisterBlock,
     ) -> Result<(), String> {
         let model = fujimod_emulator_xpp::blocks::Block::new(block.base, block.size, block.idle)?;
         let end = block.base + model.window();
@@ -880,7 +880,7 @@ impl Devices {
             .iter()
             .any(|&(lo, hi, _)| block.base < hi && lo < end)
         {
-            return Err("Overlapping X-Processor Pro imaging block".into());
+            return Err("Overlapping X-Processor Pro register block".into());
         }
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));

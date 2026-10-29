@@ -942,7 +942,7 @@ impl Session {
             xpp_frame_sync,
             xpp_hdmi,
             xpp_statistics,
-            xpp_imaging_blocks,
+            xpp_register_blocks,
             xpp_clocks,
             cache_sizes,
             io_group_base,
@@ -1121,10 +1121,10 @@ impl Session {
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_sd(sd, reset)?;
         }
-        for block in xpp_imaging_blocks {
+        for block in xpp_register_blocks {
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .xpp_imaging_block(block)?;
+                .xpp_register_block(block)?;
         }
         if let Some((base, irq, period)) = xpp_statistics {
             devices
