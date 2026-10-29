@@ -502,7 +502,7 @@
             "base": 4294475776,
             "size": 12288,
             "irq_route": 92,
-            "basis": "DMP SMAPH vector-graphics renderer with the XP4 register interface. The X-T20 2.11 OpenVG/EGL driver (seg5 0xdda65c onward, kernel tasks smaphk/smaphp) programs command words at +0x1c, the copy unit at +0xc00-+0xc18 and command lists at +0x10d0/+0x10e0. Its interrupt 92 handler 0xdda2fc reads status +0x34, and waiter 0xdda3cc reports bits 31, 30 and 26."
+            "basis": "DMP SMAPH vector-graphics renderer with the XP4 register interface. The X-T20 2.11 OpenVG/EGL driver (seg5 0xdda65c onward, kernel tasks smaphk/smaphp) programs command words at +0x1c, the copy unit at +0xc00-+0xc18 (initialization 0xdda748 sets +0xc1c to 0x8000) and command lists at +0x10d0/+0x10e0. Its interrupt 92 handler 0xdda2fc reads status +0x34, and waiter 0xdda3cc reports bits 31, 30 and 26."
           },
           "adc": {
             "base": 4294021120,
