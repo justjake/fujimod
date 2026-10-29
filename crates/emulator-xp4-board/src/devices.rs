@@ -901,8 +901,11 @@ impl Devices {
         self.windows.push((base, base + WINDOW, id));
         Ok(())
     }
-    pub fn xpp_imaging_control(&mut self, base: u64) -> Result<(), String> {
+    /// The imaging control page, less the frame interrupt words at `hole`
+    /// that the frame sync owns.
+    pub fn xpp_imaging_control(&mut self, base: u64, hole: Option<u64>) -> Result<(), String> {
         use fujimod_emulator_xpp::imaging::{Control, WINDOW};
+        use fujimod_emulator_xpp::sync::INTERRUPT_WINDOW;
         if self
             .windows
             .iter()
@@ -910,10 +913,45 @@ impl Devices {
         {
             return Err("Overlapping X-Processor Pro imaging control".into());
         }
+        let end = base + WINDOW;
+        let ranges = match hole {
+            None => vec![(base, end)],
+            Some(at) if at > base && at & 7 == 0 && at + INTERRUPT_WINDOW < end => {
+                vec![(base, at), (at + INTERRUPT_WINDOW, end)]
+            }
+            Some(_) => return Err("Frame interrupt words outside the imaging control page".into()),
+        };
         let model = Control::new(base)?;
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
-        self.windows.push((base, base + WINDOW, id));
+        self.windows
+            .extend(ranges.into_iter().map(|(lo, hi)| (lo, hi, id)));
+        Ok(())
+    }
+    pub fn xpp_frame_sync(&mut self, sync: crate::definition::XppFrameSync) -> Result<(), String> {
+        use fujimod_emulator_xpp::sync::{Generator, INTERRUPT_WINDOW, WINDOW};
+        let ranges = [
+            (sync.base, sync.base.saturating_add(WINDOW)),
+            (
+                sync.interrupts,
+                sync.interrupts.saturating_add(INTERRUPT_WINDOW),
+            ),
+        ];
+        if ranges
+            .iter()
+            .any(|&(a, b)| self.windows.iter().any(|&(lo, hi, _)| a < hi && lo < b))
+        {
+            return Err("Overlapping X-Processor Pro frame sync".into());
+        }
+        let model = Generator::new(
+            sync.base,
+            sync.interrupts,
+            sync.frame_lines,
+            sync.period_ticks,
+        )?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.extend(ranges.map(|(lo, hi)| (lo, hi, id)));
         Ok(())
     }
     /// X-Processor Pro display frame interrupts; the law has no register window.

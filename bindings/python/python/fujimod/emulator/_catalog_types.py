@@ -2405,6 +2405,20 @@ class HardwareFocusImagingOptics(TypedDict, total=False):
     target_position: Required[int]
 
 
+class HardwareFrameSource(TypedDict, total=False):
+    irq_route: Required[int]
+    status_bit: Required[int]
+
+
+class HardwareFrameSync(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    interrupts: Required[int]
+    period_ticks: Required[int]
+    size: Required[int]
+    sources: Required[list[HardwareFrameSource]]
+
+
 class HardwareGic(TypedDict, total=False):
     basis: Required[str]
     cpu_interface: Required[int]
@@ -2617,6 +2631,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     dmp: NotRequired[HardwareDmp | None]
     dram_controller: NotRequired[HardwareDramController | None]
     flash_controller: NotRequired[HardwareFlashController | None]
+    frame_sync: NotRequired[HardwareFrameSync | None]
     gic: NotRequired[HardwareGic | None]
     gpio: NotRequired[HardwareGpio | None]
     imaging: NotRequired[HardwareImagingRegisters | None]

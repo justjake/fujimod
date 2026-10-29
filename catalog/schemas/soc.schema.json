@@ -1281,6 +1281,79 @@
       ],
       "type": "object"
     },
+    "HardwareFrameSource": {
+      "additionalProperties": false,
+      "description": "One frame interrupt source of the X-Processor Pro frame sync.",
+      "properties": {
+        "irq_route": {
+          "description": "Interrupt line the source drives.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status_bit": {
+          "description": "Status and enable bit of the source: 0, 8 or 16.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "irq_route",
+        "status_bit"
+      ],
+      "type": "object"
+    },
+    "HardwareFrameSync": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro imaging frame sync and its frame interrupt words.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "interrupts": {
+          "description": "Address of the frame interrupt enable word; the status word follows.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "period_ticks": {
+          "description": "Frame period in device ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sources": {
+          "description": "Sources every frame latches.",
+          "items": {
+            "$ref": "#/$defs/HardwareFrameSource"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "interrupts",
+        "period_ticks",
+        "size",
+        "sources"
+      ],
+      "type": "object"
+    },
     "HardwareGic": {
       "additionalProperties": false,
       "description": "Declared gic facts.",
@@ -1991,6 +2064,17 @@
             }
           ],
           "description": "Declared flash controller."
+        },
+        "frame_sync": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareFrameSync"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro imaging frame sync."
         },
         "gic": {
           "anyOf": [

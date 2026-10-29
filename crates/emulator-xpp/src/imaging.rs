@@ -13,7 +13,8 @@
 //!
 //! +0x000 bit 0 is a run bit that reads set: 0xc33ec8 clears it and waits
 //! for it to read set again (stopped). Other words read back their last
-//! write.
+//! write. With a frame sync ([`crate::sync`]) on the board, the frame
+//! interrupt words +0x140/+0x144 belong to it instead.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

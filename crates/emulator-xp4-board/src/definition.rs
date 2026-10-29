@@ -67,6 +67,10 @@ pub struct Definition {
     /// X-Processor Pro DRAM controller base and refresh-rate level.
     #[serde(default)]
     pub xpp_dram: Option<(u64, u8)>,
+    /// X-Processor Pro imaging frame sync; its interrupt words lie inside
+    /// the imaging control page.
+    #[serde(default)]
+    pub xpp_frame_sync: Option<XppFrameSync>,
     #[serde(default)]
     pub cache_sizes: Option<(u32, u32, u32)>,
     #[serde(default)]
@@ -168,6 +172,18 @@ pub struct XppSd {
     /// SD channel of the reset-gate line; requires `xpp_reset_gates`.
     #[serde(default)]
     pub reset_channel: Option<usize>,
+}
+
+/// X-Processor Pro imaging frame sync: register base, the address of the
+/// frame interrupt words, the (source, line) pairs frames latch and the frame
+/// period in ticks.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppFrameSync {
+    pub base: u64,
+    pub interrupts: u64,
+    pub frame_lines: Vec<(usize, u32)>,
+    pub period_ticks: u64,
 }
 
 /// One X-Processor Pro DesignWare I2C bus and the parts that answer on it.

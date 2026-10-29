@@ -1248,6 +1248,38 @@ pub struct ResetGates {
     pub size: u64,
 }
 
+/// One frame interrupt source of the X-Processor Pro frame sync.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareFrameSource"))]
+pub struct FrameSource {
+    /// Interrupt line the source drives.
+    pub irq_route: u32,
+    /// Status and enable bit of the source: 0, 8 or 16.
+    pub status_bit: u32,
+}
+
+/// X-Processor Pro imaging frame sync and its frame interrupt words.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareFrameSync"))]
+pub struct FrameSync {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Address of the frame interrupt enable word; the status word follows.
+    pub interrupts: u64,
+    /// Frame period in device ticks.
+    pub period_ticks: u64,
+    /// Declared size.
+    pub size: u64,
+    /// Sources every frame latches.
+    pub sources: Vec<FrameSource>,
+}
+
 /// X-Processor Pro imaging control page: block stop and register-bus channels.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1591,6 +1623,9 @@ pub struct RegisterLayouts {
     /// Declared X-Processor Pro imaging control page.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imaging_control: Option<ImagingControl>,
+    /// Declared X-Processor Pro imaging frame sync.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame_sync: Option<FrameSync>,
     /// Declared X-Processor Pro SD channel.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub xpp_sd: Option<XppSdHost>,

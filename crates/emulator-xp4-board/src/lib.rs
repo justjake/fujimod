@@ -939,6 +939,7 @@ impl Session {
             xpp_sd,
             xpp_i2c,
             xpp_dram,
+            xpp_frame_sync,
             xpp_clocks,
             cache_sizes,
             io_group_base,
@@ -1082,9 +1083,15 @@ impl Session {
                 .xpp_clocks(base, lock_ticks, running)?;
         }
         if let Some(base) = xpp_imaging_control {
+            let hole = xpp_frame_sync.as_ref().map(|sync| sync.interrupts);
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .xpp_imaging_control(base)?;
+                .xpp_imaging_control(base, hole)?;
+        }
+        if let Some(sync) = xpp_frame_sync {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_frame_sync(sync)?;
         }
         let reset_gates = match xpp_reset_gates {
             Some(base) => Some(
