@@ -137,6 +137,10 @@ export async function loadWasm(
     loadTimings: timing.snapshot(),
   };
 }
+/** The guest ticks a boot runs: the fixed run, or the tick a prepared boot reaches REC. */
+function bootTotal(manifest: EmulatorManifest) {
+  return manifest.bootTicks || manifest.recTicks || undefined;
+}
 function packFiles(files: CardFile[]) {
   let offset = 0;
   const rows = files.map(({ path, bytes }) => {
@@ -636,7 +640,7 @@ export class WasmWorkerRuntime {
     this.send({
       type: 'progress',
       message: 'Booting camera…',
-      assets: [loadingStep('build', 'complete'), bootProgress(0, manifest.bootTicks || undefined)],
+      assets: [loadingStep('build', 'complete'), bootProgress(0, bootTotal(manifest))],
     });
     if (scene && 'raf' in scene) {
       showScene(session, scene);
@@ -687,7 +691,7 @@ export class WasmWorkerRuntime {
         this.send({
           type: 'progress',
           message: 'Booting camera…',
-          assets: [bootProgress(ticks - start, this.manifest!.bootTicks || undefined)],
+          assets: [bootProgress(ticks - start, bootTotal(this.manifest!))],
         });
       };
       if (this.manifest!.bootTicks)

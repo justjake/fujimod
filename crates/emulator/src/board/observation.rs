@@ -90,28 +90,8 @@ impl MemoryContext {
         if !records.overlaps(physical, size) {
             return Ok(());
         }
-        // These ranges describe shared physical backing, not a CPU's private
-        // TCM overlay. Refuse an ambiguous receipt rather than label it DRAM.
-        for opc2 in 0..2 {
-            let tcm = cpu.coprocessor(
-                arm::Coprocessor {
-                    cp: 15,
-                    opc1: 0,
-                    crn: 9,
-                    crm: 1,
-                    opc2,
-                    secure: 0,
-                    wide: false,
-                },
-                None,
-            )?;
-            if tcm & 1 != 0 {
-                let base = tcm & 0xfffff000;
-                let bytes = 512u64 << ((tcm >> 2) & 31);
-                if address < base + bytes && base < address.saturating_add(size) {
-                    return Err("Memory watch intersects a CPU-private TCM overlay".into());
-                }
-            }
+        if tcm_overlap(&*cpu, address, size)? {
+            return Err("Memory watch intersects a CPU-private TCM overlay".into());
         }
         let byte_order = if scalar(&*cpu, Register::Pstate)? & (1 << 9) != 0 {
             "big"
@@ -197,7 +177,32 @@ unsafe fn fetch(address: u64, size: u32, data: *mut c_void) {
         context.fail(error);
     }
 }
-fn union(mut ranges: Vec<Span>) -> Vec<Span> {
+pub(super) fn tcm_overlap(cpu: &dyn Cpu, address: u64, size: u64) -> Result<bool, String> {
+    for opc2 in 0..2 {
+        let tcm = cpu.coprocessor(
+            arm::Coprocessor {
+                cp: 15,
+                opc1: 0,
+                crn: 9,
+                crm: 1,
+                opc2,
+                secure: 0,
+                wide: false,
+            },
+            None,
+        )?;
+        if tcm & 1 != 0 {
+            let base = tcm & 0xfffff000;
+            let bytes = 512u64 << ((tcm >> 2) & 31);
+            if address < base + bytes && base < address.saturating_add(size) {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
+pub(super) fn union(mut ranges: Vec<Span>) -> Vec<Span> {
     ranges.sort_unstable();
     let mut out: Vec<Span> = vec![];
     for (lo, hi) in ranges {
@@ -251,6 +256,9 @@ impl Board {
             || self.cpus.iter().any(|cpu| cpu.model() != Model::CortexR5F)
         {
             return Err("Memory watch requires bounded ranges and R-profile processors".into());
+        }
+        if self.preservation_active() {
+            return Err("A preservation observation conflicts with memory watch".into());
         }
         let ranges = union(ranges);
         for &(lo, hi) in &ranges {

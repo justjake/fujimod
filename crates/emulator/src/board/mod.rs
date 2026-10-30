@@ -19,6 +19,9 @@ pub mod memory;
 mod memory_tests;
 pub mod mprofile;
 pub mod observation;
+pub mod preservation;
+#[cfg(test)]
+mod preservation_tests;
 mod observe;
 mod schedule;
 #[cfg(test)]

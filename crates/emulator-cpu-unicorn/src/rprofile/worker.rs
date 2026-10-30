@@ -1871,6 +1871,12 @@ impl Cpu for CpuWorker {
         if hooks.is_empty() {
             return Ok(vec![]);
         }
+        if hooks
+            .iter()
+            .any(|hook| matches!(hook, Hook::HostWrite { .. }))
+        {
+            return Err("host-write hooks require the R-profile backend boundary".into());
+        }
         let mut pending = Vec::with_capacity(hooks.len());
         for &hook in hooks {
             let callback = self.next_callback()?;
@@ -1883,6 +1889,9 @@ impl Cpu for CpuWorker {
                     read, write, range, ..
                 } => HookKind::Memory { read, write, range },
                 Hook::CompletedStore { range, .. } => HookKind::CompletedStore(range),
+                Hook::HostWrite { .. } => {
+                    return Err("host-write hooks require the R-profile backend boundary".into());
+                }
                 Hook::Fault { .. } => HookKind::Fault,
             };
             pending.push((callback, kind, hook));

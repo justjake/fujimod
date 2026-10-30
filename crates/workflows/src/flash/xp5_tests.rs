@@ -63,6 +63,13 @@ use futures_lite::future::block_on;
 
 fn fixture() -> (FirmwareBulk, FirmwareFlash, Payload, Vec<u8>) {
     let mut bulk = crate::bulk::tests::zero_base_camera();
+    if let BulkSource::PatternZeroBase {
+        ref mut configuration_pointer,
+        ..
+    } = bulk.source
+    {
+        *configuration_pointer = 0x1900;
+    }
     bulk.window = BulkRange {
         address: 0x1000,
         size: 0x200000,
@@ -240,6 +247,7 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
         s.extend(memory_read(0x100000, &original_scratch));
         s.extend(crate::bulk::tests::qualified());
         s.extend(memory_read(0x1300, &words(&[0x100000, 0, 32])));
+        s.extend(memory_read(0x1900, &words(&[0x2000, 0])));
         s.extend(memory_read(0x1400, &original));
         s.extend(diagnostic(0x550001, 0, 32));
         s.extend(memory_read(0x1400, &words(&[0x100000, 0, 32])));

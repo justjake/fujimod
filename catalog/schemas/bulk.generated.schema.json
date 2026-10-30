@@ -1,5 +1,28 @@
 {
   "$defs": {
+    "BulkDma": {
+      "additionalProperties": false,
+      "description": "Constraints of the DMA that serves E1 reads.",
+      "properties": {
+        "address_alignment": {
+          "description": "The DMA source ignores address bits below this power of two.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "length_granule": {
+          "description": "The DMA rounds each transfer length up to this power of two.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address_alignment",
+        "length_granule"
+      ],
+      "type": "object"
+    },
     "BulkRange": {
       "additionalProperties": false,
       "description": "An address range.",
@@ -142,6 +165,18 @@
               "minimum": 0,
               "type": "integer"
             },
+            "configuration_bytes": {
+              "description": "Bytes in active configuration RAM to protect from scratch setup.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "configuration_pointer": {
+              "description": "Address of the pointer to active configuration RAM.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
             "mechanism": {
               "const": "pattern_zero_base",
               "type": "string"
@@ -157,12 +192,21 @@
               "format": "uint64",
               "minimum": 0,
               "type": "integer"
+            },
+            "system_mode_address": {
+              "description": "Located system-mode cell to protect from scratch setup.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
             }
           },
           "required": [
             "mechanism",
             "registered_buffer",
             "source_state",
+            "configuration_pointer",
+            "configuration_bytes",
+            "system_mode_address",
             "capacity"
           ],
           "type": "object"
@@ -280,6 +324,17 @@
         "$ref": "#/$defs/CodeCheck"
       },
       "type": "array"
+    },
+    "dma": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BulkDma"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "E1 DMA constraints, absent where they are not located."
     },
     "firmware_id": {
       "description": "Firmware whose stock code provides this path.",

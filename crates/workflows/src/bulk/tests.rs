@@ -1,6 +1,6 @@
 use super::read as read_bulk;
 use super::*;
-use fujimod_catalog_bulk::{BULK_SCHEMA_URI, CaptureScope, CodeCheck, NamedRange};
+use fujimod_catalog_bulk::{BULK_SCHEMA_URI, BulkDma, CaptureScope, CodeCheck, NamedRange};
 use fujimod_usb::{
     ff80::{commands::memory::DebugMemoryLimits, framing::RequestKind},
     operations::checks::sha256_bytes,
@@ -27,6 +27,7 @@ fn facts(source: BulkSource) -> FirmwareBulk {
             address: 0x1000,
             size: 0x1000,
         },
+        dma: None,
         code_checks: vec![CodeCheck {
             name: "e1".into(),
             address: 0x1000,
@@ -67,6 +68,9 @@ pub(crate) fn zero_base_camera() -> FirmwareBulk {
     facts(BulkSource::PatternZeroBase {
         registered_buffer: 0x1300,
         source_state: 0x1400,
+        configuration_pointer: 0x1500,
+        configuration_bytes: 0x100,
+        system_mode_address: 0x1600,
         capacity: 32,
     })
 }
@@ -217,6 +221,7 @@ fn zero_base_source_is_restored_after_reading_addresses_directly() {
     let mut steps = qualified();
     let scratch = [0x10_0000u32, 0, 64];
     steps.extend(read(0x1300, &words(&scratch)));
+    steps.extend(read(0x1500, &words(&[0x200000, 0])));
     steps.extend(read(0x1400, &original));
     steps.extend(diagnostic(0x550001, 0, 32));
     steps.extend(read(0x1400, &words(&[0x10_0000, 0, 32])));
@@ -245,10 +250,29 @@ fn zero_base_source_is_restored_after_reading_addresses_directly() {
 }
 
 #[test]
+fn zero_base_refuses_scratch_overlapping_active_configuration() {
+    let mut steps = qualified();
+    steps.extend(read(0x1300, &words(&[0x20_0000, 0, 64])));
+    steps.extend(read(0x1500, &words(&[0x20_0000, 0])));
+    let (mut session, script) = opened(steps);
+    let camera = zero_base_camera();
+    let error = block_on(read_bulk(
+        &mut session,
+        &camera,
+        limits(),
+        camera_scope_range(&camera),
+    ))
+    .unwrap_err();
+    assert!(error.to_string().contains("overlaps"), "{error}");
+    assert_eq!(script.remaining(), 0);
+}
+
+#[test]
 fn zero_base_pattern_mismatch_restores_the_source_before_refusing() {
     let original = [7u8; 12];
     let mut steps = qualified();
     steps.extend(read(0x1300, &words(&[0x10_0000, 0, 64])));
+    steps.extend(read(0x1500, &words(&[0x200000, 0])));
     steps.extend(read(0x1400, &original));
     steps.extend(diagnostic(0x550001, 0, 32));
     steps.extend(read(0x1400, &words(&[0x10_0000, 0, 32])));
@@ -285,6 +309,39 @@ fn reads_outside_the_window_or_from_another_camera_send_nothing_further() {
         "{error}"
     );
     assert_eq!(script.remaining(), 0);
+}
+
+#[test]
+fn dma_constraints_refuse_unaligned_ranges_before_any_request() {
+    let mut camera = query_camera();
+    camera.dma = Some(BulkDma {
+        address_alignment: 4,
+        length_granule: 4,
+    });
+    camera.validate().unwrap();
+    for target in [
+        BulkRange {
+            address: 0x1802,
+            size: 0x20,
+        },
+        BulkRange {
+            address: 0x1800,
+            size: 0x22,
+        },
+    ] {
+        let (mut session, script) = opened(vec![]);
+        let error = block_on(read_bulk(&mut session, &camera, limits(), target)).unwrap_err();
+        assert!(error.to_string().contains("not aligned"), "{error}");
+        assert_eq!(script.remaining(), 0);
+    }
+    camera.dma = Some(BulkDma {
+        address_alignment: 4,
+        length_granule: 64,
+    });
+    assert!(
+        camera.validate().is_err(),
+        "4-byte probe is not a whole granule"
+    );
 }
 
 #[test]

@@ -45,7 +45,7 @@
       "usb": false,
       "hold": [
         {
-          "id": "rear_command_dial.press"
+          "id": "front_command_dial.press"
         },
         {
           "id": "delete_button"
@@ -56,6 +56,18 @@
       "hold": [
         {
           "id": "disp_back_button"
+        }
+      ]
+    },
+    "service": {
+      "usb": true,
+      "hold": [
+        {
+          "id": "selector_up_button"
+        },
+        {
+          "id": "shutter_button",
+          "stage": "full"
         }
       ]
     }

@@ -50,6 +50,7 @@ pub fn convert_error(py: Python<'_>, error: usb::Error) -> PyErr {
         usb::Error::LengthLimit { .. }
         | usb::Error::AddressOverflow
         | usb::Error::OutsideDataWindow
+        | usb::Error::MisalignedDataRange { .. }
         | usb::Error::InvalidLength
         | usb::Error::InvalidToken
         | usb::Error::InvalidTimeout => PyValueError::new_err(message),

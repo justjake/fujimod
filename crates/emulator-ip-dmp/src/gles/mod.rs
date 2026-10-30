@@ -179,7 +179,9 @@ impl Engine {
         self.execute_cpu(words, read)
     }
 
-    fn execute_cpu(
+    /// Execute one list with the CPU interpreter and rasterizer, independently
+    /// of host renderer environment settings, retaining diagnostic vertex outputs.
+    pub fn execute_cpu(
         &mut self,
         words: &[u32],
         read: &mut Reader<'_>,

@@ -38,6 +38,31 @@ fn windows_check_aperture_and_require_explicit_wrapping() {
     assert!(end.validate(range(u32::MAX, 1)).is_ok());
 }
 
+#[test]
+fn alignment_refuses_unaligned_starts_and_partial_granules() {
+    assert!(DataAlignment::new(3, 64).is_err());
+    assert!(DataAlignment::new(4, 48).is_err());
+    assert!(DataAlignment::new(64, 4).is_err());
+    let window = DataWindow::new(
+        Address(0x1000),
+        range(0x1000, 0x1000),
+        nz(0x100),
+        OffsetMode::Checked,
+    )
+    .unwrap()
+    .with_alignment(DataAlignment::new(4, 64).unwrap());
+    assert!(window.validate(range(0x1004, 0x40)).is_ok());
+    for misaligned in [range(0x1002, 0x40), range(0x1000, 0x44)] {
+        assert!(matches!(
+            window.validate(misaligned),
+            Err(Error::MisalignedDataRange {
+                address: 4,
+                granule: 64
+            })
+        ));
+    }
+}
+
 mod replay {
     use super::*;
     use crate::{
@@ -165,6 +190,43 @@ mod replay {
         .unwrap();
         let mut reader = DataReader::new(session, window, range(0x1000, 8)).unwrap();
         assert_eq!(block_on(reader.next_chunk()).unwrap().unwrap(), b"abcd");
+        assert_eq!(reader.into_inner().state(), SessionState::Ready);
+        assert_eq!(script.remaining(), 0);
+    }
+    fn aligned_window() -> DataWindow {
+        DataWindow::new(
+            Address(0x1000),
+            range(0x1000, 0x1000),
+            nz(0x100),
+            OffsetMode::Checked,
+        )
+        .unwrap()
+        .with_alignment(DataAlignment::new(4, 16).unwrap())
+    }
+    #[test]
+    fn aligned_chunks_round_the_host_budget_down_to_whole_granules() {
+        let mut steps = read(0, &[1; 32]);
+        steps.extend(read(32, &[2; 32]));
+        let (mut session, script) = opened(steps, 40);
+        let mut reader =
+            DataReader::new(&mut session, aligned_window(), range(0x1000, 64)).unwrap();
+        assert_eq!(block_on(reader.next_chunk()).unwrap().unwrap(), [1; 32]);
+        assert_eq!(block_on(reader.next_chunk()).unwrap().unwrap(), [2; 32]);
+        assert!(block_on(reader.next_chunk()).unwrap().is_none());
+        assert_eq!(script.remaining(), 0);
+    }
+    #[test]
+    fn aligned_reads_refuse_a_budget_below_one_granule_without_a_request() {
+        let (mut session, script) = opened(vec![], 8);
+        let mut reader =
+            DataReader::new(&mut session, aligned_window(), range(0x1000, 32)).unwrap();
+        assert!(matches!(
+            block_on(reader.next_chunk()),
+            Err(Error::LengthLimit {
+                requested: 16,
+                limit: 8
+            })
+        ));
         assert_eq!(reader.into_inner().state(), SessionState::Ready);
         assert_eq!(script.remaining(), 0);
     }

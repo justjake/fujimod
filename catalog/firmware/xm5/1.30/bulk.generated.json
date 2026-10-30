@@ -10,6 +10,9 @@
     "mechanism": "pattern_zero_base",
     "registered_buffer": 71435752,
     "source_state": 77236016,
+    "configuration_pointer": 36406504,
+    "configuration_bytes": 9830400,
+    "system_mode_address": 45197424,
     "capacity": 65536
   },
   "window": {

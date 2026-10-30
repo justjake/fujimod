@@ -76,6 +76,10 @@ pub enum Error {
     AddressOverflow,
     #[error("requested memory range is outside the selected data window")]
     OutsideDataWindow,
+    #[error(
+        "data range must start on a {address}-byte boundary and span whole {granule}-byte units"
+    )]
+    MisalignedDataRange { address: u32, granule: u32 },
     #[error("length must be nonzero and representable in the protocol")]
     InvalidLength,
     #[error("argument must be a bounded ASCII token")]

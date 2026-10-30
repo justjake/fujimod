@@ -287,12 +287,18 @@ pub fn prepare(input: &Selection, selected: &ResolvedSelection) -> Result<(Artif
     if let fujimod_catalog_bulk::BulkSource::PatternZeroBase {
         registered_buffer,
         source_state,
+        configuration_pointer,
+        configuration_bytes,
+        system_mode_address,
         capacity,
     } = bulk.source
     {
         check(
             registered_buffer == num(&state, "registered_buffer")?
                 && source_state == num(&state, "source_state")?
+                && configuration_pointer == num(&state, "configuration_pointer")?
+                && configuration_bytes == num(&state, "configuration_bytes")?
+                && system_mode_address == num(&state["system_mode"], "address")?
                 && u64::from(capacity) == num(&state, "capacity")?,
             "bulk source contract differs",
         )?;

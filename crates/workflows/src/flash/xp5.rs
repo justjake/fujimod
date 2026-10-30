@@ -231,7 +231,10 @@ impl Payload {
             size: 8,
         })?;
         require(
-            matches!(bulk.source,BulkSource::PatternZeroBase{capacity,..} if u64::from(capacity) == self.transport.registered_scratch.size),
+            matches!(bulk.source,BulkSource::PatternZeroBase{capacity,configuration_pointer,configuration_bytes,..}
+                if u64::from(capacity) == self.transport.registered_scratch.size
+                    && configuration_pointer == self.transport.configuration_pointer
+                    && configuration_bytes == self.transport.configuration_bytes),
             "Flash transport requires the catalog zero-base bulk source",
         )?;
         Ok(())
@@ -313,6 +316,7 @@ pub async fn backup(
             registered_buffer,
             source_state,
             capacity,
+            ..
         } = bulk.source
         else {
             unreachable!("validated source")

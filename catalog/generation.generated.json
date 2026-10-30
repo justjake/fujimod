@@ -9,13 +9,8 @@
       "internal_version": "1.57",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "ValueError: not enough values to unpack (expected 1, got 0)"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "unavailable",
@@ -5680,36 +5675,12 @@
           "status": "unavailable",
           "errors": [
             {
-              "locator": "ui_modes",
-              "reason": "ui_hdmi_allowed_in_current_mode: 1 candidates, 0 verified results (0xbf02d8: HDMI predicate lacks one checked playback/SETUP playback pair)"
-            },
-            {
-              "locator": "menu_cursor",
-              "reason": "menu_cursor_set_node: 0 candidates, 0 verified results"
-            },
-            {
               "locator": "remote_menu",
-              "reason": "menu_cursor_set_node: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "ff80_limits",
-              "reason": "usb_service_debug_dispatch: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "usb_normal_ids",
-              "reason": "storage_read_fixed_slice: 1 candidates, 0 verified results (0xcd8814: Fixed factory storage reader lacks one bounded flash base)"
+              "reason": "ui_commit_pending_frame_mode: 0 candidates, 0 verified results"
             },
             {
               "locator": "app80",
               "reason": "App80 writer lacks the mailbox offset check"
-            },
-            {
-              "locator": "service_entry",
-              "reason": "ui_dispatch_events_from_mode_flags: 0 verified results from 0 candidates"
-            },
-            {
-              "locator": "debug_enable",
-              "reason": "usb_service_configuration_write: 0 verified results from 59 candidates (Configuration callback lacks its checked offset-1+count span; Not the service callback with the offset-80 special case)"
             },
             {
               "locator": "service_exit.jig_deinit_link",
@@ -5762,13 +5733,8 @@
           ]
         },
         "settings": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor Pro"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "state": {
           "status": "unavailable",
@@ -6556,13 +6522,8 @@
       "internal_version": "2.14",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "ValueError: xp5_system_mode_getter: 0 candidates, 0 verified results"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "unavailable",

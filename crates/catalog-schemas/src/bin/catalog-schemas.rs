@@ -4,10 +4,12 @@ use std::fs;
 use std::path::PathBuf;
 
 fn main() {
-    let mode = env::args().nth(1).unwrap_or_else(|| "--check".into());
+    let mut args = env::args().skip(1);
+    let mode = args.next().unwrap_or_else(|| "--check".into());
+    let selected: Vec<_> = args.collect();
     if mode != "--check" && mode != "--write" {
         eprintln!(
-            "usage: cargo run -p fujimod-catalog-schemas --features schema --bin catalog-schemas -- [--check|--write]"
+            "usage: cargo run -p fujimod-catalog-schemas --features schema --bin catalog-schemas -- [--check|--write] [schema ...]"
         );
         std::process::exit(2);
     }
@@ -17,8 +19,19 @@ fn main() {
         fs::create_dir_all(&directory).expect("create schema directory");
     }
 
+    let documents = generated_documents();
+    if selected
+        .iter()
+        .any(|name| !documents.contains_key(name.as_str()))
+    {
+        eprintln!("unknown schema name");
+        std::process::exit(2);
+    }
     let mut failed = false;
-    for (name, schema) in generated_documents() {
+    for (name, schema) in documents {
+        if !selected.is_empty() && !selected.iter().any(|item| item == name) {
+            continue;
+        }
         let path = directory.join(name);
         let mut generated = serde_json::to_vec_pretty(&schema).expect("serialize schema");
         generated.push(b'\n');

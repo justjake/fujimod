@@ -142,6 +142,7 @@ pub fn error(source: usb::Error) -> JsValue {
         | usb::Error::LengthLimit { .. }
         | usb::Error::AddressOverflow
         | usb::Error::OutsideDataWindow
+        | usb::Error::MisalignedDataRange { .. }
         | usb::Error::InvalidTimeout
         | usb::Error::InvalidInterface
         | usb::Error::AmbiguousEndpoints => ErrorKind::InvalidArgument,

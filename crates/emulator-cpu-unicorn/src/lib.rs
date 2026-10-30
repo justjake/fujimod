@@ -856,6 +856,9 @@ impl Cpu for Core {
             Hook::Instruction { range, .. } => (4, instruction as *const (), range),
             Hook::Block { range, .. } => (8, block as *const (), range),
             Hook::Exception { .. } => (1, exception as *const (), HookRange::All),
+            Hook::HostWrite { .. } => {
+                return Err("host-write hooks require the R-profile backend".into());
+            }
             Hook::Memory {
                 read, write, range, ..
             } => {

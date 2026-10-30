@@ -12573,7 +12573,7 @@
       "usb": false,
       "hold": [
         {
-          "id": "rear_command_dial.press"
+          "id": "front_command_dial.press"
         },
         {
           "id": "delete_button"

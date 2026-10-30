@@ -34,6 +34,7 @@ pub struct Image {
     pub exposure: ExposedFrame,
     film: Film,
     gain: [u32; 3],
+    digital_gain_q10: u32,
     projection: Option<Arc<super::optics::Projection>>,
     outputs: Mutex<Vec<(ImageLayout, Arc<[u8]>)>>,
     measurements: Mutex<Vec<([usize; 2], Vec<[usize; 4]>, ExposedFrame)>>,
@@ -145,6 +146,7 @@ impl Renderer {
                 && old.exposure.focus_shift_mm == exposure.focus_shift_mm
                 && old.exposure.view == exposure.view
                 && old.gain == gain
+                && old.digital_gain_q10 == digital as u32
                 && old.film.matches(|o| p.words[o / 4])
             {
                 return Ok(Some(old.clone()));
@@ -160,6 +162,7 @@ impl Renderer {
             exposure,
             film,
             gain,
+            digital_gain_q10: digital as u32,
             projection: self.projection.clone(),
             outputs: Mutex::new(Vec::new()),
             measurements: Mutex::new(Vec::new()),
@@ -189,6 +192,7 @@ impl Image {
             &(
                 &self.film,
                 self.gain,
+                self.digital_gain_q10,
                 self.projection.as_ref().map(|p| p.spec()),
             ),
         )?
@@ -197,14 +201,16 @@ impl Image {
     pub fn from_checkpoint(
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<Self, String> {
-        let (film, gain, projection): (
+        let (film, gain, digital_gain_q10, projection): (
             Film,
             [u32; 3],
+            u32,
             Option<fujimod_emulator_imaging::optics::Spec>,
         ) = saved.decode("radiometric-image")?;
         if saved.children().len() != 1
             || !saved.blobs().is_empty()
             || gain.iter().any(|v| *v > 32767)
+            || !(1..=32767).contains(&digital_gain_q10)
         {
             return Err("invalid radiometric image checkpoint".into());
         }
@@ -222,22 +228,24 @@ impl Image {
             exposure,
             film,
             gain,
+            digital_gain_q10,
             projection,
             outputs: Mutex::new(Vec::new()),
             measurements: Mutex::new(Vec::new()),
             histograms: Mutex::new(Vec::new()),
         })
     }
-    /// Observational cache inventory; inspection never prepares a readout.
+    /// Latched gain and cache inventory; inspection never prepares a readout.
     pub fn readouts(&self) -> serde_json::Value {
         let outputs = self.outputs.lock().unwrap();
         let measurements = self.measurements.lock().unwrap();
         serde_json::json!({"source":[self.exposure.frame.width,self.exposure.frame.height],
+            "digital_gain_q10":self.digital_gain_q10,
             "packed_outputs":outputs.iter().map(|(l,p)|serde_json::json!({"dimensions":[l.width,l.height],"bytes":p.len()})).collect::<Vec<_>>(),
             "raw_readouts":measurements.iter().map(|(g,w,f)|serde_json::json!({"grid":g,"dimensions":f.sample_dimensions(),"window_count":w.len(),"window_samples":w.iter().map(|w|w[2]*w[3]).sum::<usize>(),"projected_pixels":f.prepared_pixels()})).collect::<Vec<_>>()})
     }
     pub fn fingerprint(&self) -> serde_json::Value {
-        serde_json::json!({"exposure":self.exposure.fingerprint(),"film":self.film.words(),"gain":self.gain,"projection":self.projection.as_ref().map(|p|p.spec())})
+        serde_json::json!({"exposure":self.exposure.fingerprint(),"film":self.film.words(),"gain":self.gain,"digital_gain_q10":self.digital_gain_q10,"projection":self.projection.as_ref().map(|p|p.spec())})
     }
     pub(crate) fn measurement(&self, grid: [usize; 2]) -> Result<ExposedFrame, String> {
         self.measurement_windows(grid, &[[0, 0, grid[0], grid[1]]])
@@ -744,6 +752,19 @@ mod tests {
         assert_eq!(renderer.capture().unwrap().unwrap().gain, expect(1024));
         parameters.lock().unwrap().words[0x12c / 4] = 348;
         assert_eq!(renderer.capture().unwrap().unwrap().gain, expect(348));
+    }
+    #[test]
+    fn digital_gain_metadata_stays_with_its_frame_and_checkpoint() {
+        let (mut renderer, parameters, _) = renderer();
+        let first = renderer.capture().unwrap().unwrap();
+        assert_eq!(first.readouts()["digital_gain_q10"], 1024);
+        parameters.lock().unwrap().words[0x12c / 4] = 256;
+        assert_eq!(first.readouts()["digital_gain_q10"], 1024);
+        let second = renderer.capture().unwrap().unwrap();
+        assert_eq!(second.readouts()["digital_gain_q10"], 256);
+        let restored = Image::from_checkpoint(&first.checkpoint().unwrap()).unwrap();
+        assert_eq!(restored.readouts()["digital_gain_q10"], 1024);
+        assert_eq!(first.readouts()["digital_gain_q10"], 1024);
     }
     #[test]
     fn exposure_publication_is_lazy_and_reuses_only_consumed_parameters() {

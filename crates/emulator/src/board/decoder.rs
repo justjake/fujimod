@@ -37,6 +37,16 @@ pub(super) struct Checkpoint {
     failure: Option<String>,
 }
 impl Decoders {
+    pub(super) fn observed_mapping(&self, core: usize, address: u64) -> Option<&MemoryMap> {
+        self.slots
+            .iter()
+            .flat_map(|slot| &slot.choices[slot.selected].processors)
+            .find(|map| {
+                map.core == core
+                    && map.address <= address
+                    && address < map.address + map.size as u64
+            })
+    }
     pub(super) fn observed_physical(&self, core: usize, address: u64, size: u64) -> Option<u64> {
         self.slots
             .iter()
@@ -209,8 +219,10 @@ impl super::factory::Graph {
                 {
                     return Err("initial processor decode must own a unique mapped window".into());
                 }
-                if !matches!(self.processors[map.core].model,
-                    fujimod_emulator_cpu::Model::CortexR5F | fujimod_emulator_cpu::Model::CortexA7) {
+                if !matches!(
+                    self.processors[map.core].model,
+                    fujimod_emulator_cpu::Model::CortexR5F | fujimod_emulator_cpu::Model::CortexA7
+                ) {
                     return Err("processor backend cannot replace memory decoding".into());
                 }
             }

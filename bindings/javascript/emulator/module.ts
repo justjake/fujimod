@@ -161,6 +161,8 @@ export function parseEmulatorManifest(value: unknown): EmulatorManifest {
     manifest.ticksPerSecond <= 0 ||
     !Number.isSafeInteger(manifest.bootTicks) ||
     manifest.bootTicks < 0 ||
+    (manifest.recTicks !== undefined &&
+      (!Number.isSafeInteger(manifest.recTicks) || manifest.recTicks <= 0)) ||
     !Number.isSafeInteger(manifest.output) ||
     manifest.output < 0 ||
     manifest.output > 0xffffffff
@@ -208,7 +210,10 @@ export interface EmulatorManifest {
   dmpCpuRenderer?: boolean;
   session: Record<string, unknown>;
   ticksPerSecond: number;
+  /** Guest ticks run before any REC check; prepared boots stop at REC and run none. */
   bootTicks: number;
+  /** Prepared boots: the guest tick at which this bundle first reaches REC, for progress. */
+  recTicks?: number;
   output: number;
   inputs?: ControlInput[];
   /** Optional external endpoint and boot inputs configured by the caller. */

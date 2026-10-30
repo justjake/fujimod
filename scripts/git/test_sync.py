@@ -145,3 +145,45 @@ def test_untracked_file_where_origin_adds_one_is_a_conflict(
     result = sync(Repository(shared))
     assert result.conflicts == ["new.txt"]
     assert (shared / "new.txt").read_text() == "local\n"
+
+
+def test_a_pinned_submodule_follows_the_new_pin_unless_it_holds_work(
+    tmp_path: Path, repos: tuple[Path, Path, Path]
+) -> None:
+    remote, shared, other = repos
+    library = tmp_path / "library.git"
+    run("git", "init", "-q", "--bare", "-b", "main", str(library), cwd=tmp_path)
+    source = clone(library, tmp_path / "library")
+    pins = []
+    for version in ("1", "2", "3"):
+        (source / "v.txt").write_text(version)
+        run("git", "add", "v.txt", cwd=source)
+        run("git", "commit", "-qm", version, cwd=source)
+        pins.append(run("git", "rev-parse", "HEAD", cwd=source).strip())
+    run("git", "push", "-q", "origin", "main", cwd=source)
+    allow = ("-c", "protocol.file.allow=always")
+
+    def pin(commit: str) -> None:
+        run("git", *allow, "submodule", "update", "--init", "-q", "lib", cwd=other)
+        run("git", "-C", "lib", "checkout", "-q", "--detach", commit, cwd=other)
+        run("git", "add", "lib", cwd=other)
+        run("git", "commit", "-qm", "pin", cwd=other)
+        run("git", "push", "-q", "origin", "main", cwd=other)
+
+    run("git", *allow, "submodule", "add", "-q", str(library), "lib", cwd=other)
+    run("git", "-C", "lib", "checkout", "-q", "--detach", pins[0], cwd=other)
+    run("git", "add", "lib", cwd=other)
+    run("git", "commit", "-qm", "add lib", cwd=other)
+    run("git", "push", "-q", "origin", "main", cwd=other)
+    run("git", "pull", "-q", cwd=shared)
+    run("git", *allow, "submodule", "update", "--init", "-q", cwd=shared)
+
+    pin(pins[1])
+    sync(Repository(shared))
+    assert run("git", "rev-parse", "HEAD", cwd=shared / "lib").strip() == pins[1]
+
+    (shared / "lib" / "v.txt").write_text("local work")
+    pin(pins[2])
+    sync(Repository(shared))
+    assert run("git", "rev-parse", "HEAD", cwd=shared / "lib").strip() == pins[1]
+    assert (shared / "lib" / "v.txt").read_text() == "local work"

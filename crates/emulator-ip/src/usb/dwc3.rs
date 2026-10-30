@@ -462,6 +462,7 @@ impl Dwc3 {
                         ep.trb = None;
                         ep.stalled = false;
                         ep.cursor = 0;
+                        ep.not_ready = None;
                     }
                     self.state.control = Control::default();
                     self.state

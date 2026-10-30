@@ -418,7 +418,7 @@ fn reference(case: &ProgramCase) -> Result<[[u32; 4]; 16], String> {
     }
 
     let mut engine = Engine::default();
-    engine.execute(&commands, &mut |_, _| {
+    engine.execute_cpu(&commands, &mut |_, _| {
         panic!("immediate inputs need no DMA")
     })?;
     let diagnostics = engine.diagnostics();

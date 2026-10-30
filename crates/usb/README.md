@@ -72,6 +72,8 @@ separate caller policy. No setup command, retry or E8 is sent implicitly.
 well as earlier fragments in that command. `bytes_completed()` counts only
 chunks already returned successfully.
 
+Where the firmware's E1 DMA drops low source-address bits and rounds transfer lengths up, attach a `DataAlignment` with `DataWindow::with_alignment`. Ranges must then start on the address alignment and span whole granules (`Error::MisalignedDataRange`), and each command's length is rounded down to whole granules within capacity and host reply budget. A budget below one granule fails with `LengthLimit` before any request.
+
 `operations::data::upload` owns the complete setup/E0/E8 sequence. Supply the
 setup mode and E0 piece size explicitly. It checks the final receive budget
 before setup, stops on a framed setup error, and sends each piece and E8 once.

@@ -556,6 +556,28 @@ test('boot reports guest ticks against the fixed boot run', async () => {
   assert.equal(metrics.metrics.guestTicks, 3000000);
 });
 
+test('a boot that stops at REC reports guest ticks against its REC tick', async () => {
+  const f = setup();
+  f.manifest.recTicks = 2000000;
+  const result = await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  assert.equal(result.type, 'reply');
+  const loading = f.events.flatMap((event) =>
+    event.type === 'progress'
+      ? (event.assets ?? []).filter(
+          (asset) => asset.url === 'step:boot' && asset.status === 'loading',
+        )
+      : [],
+  );
+  assert(loading.length > 0);
+  assert(loading.every((asset) => asset.unit === 'ticks' && asset.total === 2000000));
+});
+
 test('a boot without a fixed tick run keeps boot progress indeterminate', async () => {
   const f = setup();
   await f.send({

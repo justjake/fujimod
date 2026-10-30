@@ -72,6 +72,8 @@ pub struct Memory {
     mappings: RefCell<Vec<BusMapping>>,
     trackers: Vec<fujimod_emulator_cpu::memory::pages::Tracker>,
     pub(super) observation: RefCell<Option<std::rc::Weak<RefCell<super::observation::Records>>>>,
+    pub(super) preservation:
+        RefCell<Option<std::rc::Weak<RefCell<super::preservation::PreservationRecords>>>>,
 }
 #[derive(Clone)]
 pub(super) struct Checkpoint {
@@ -89,21 +91,76 @@ impl Memory {
             .collect()
     }
     fn observe_transfer(&self, source: &str, address: u64, bytes: usize) {
-        if let Some(observer) = self
+        let Some(observer) = self
             .observation
             .borrow()
             .as_ref()
             .and_then(std::rc::Weak::upgrade)
-        {
-            if let Ok(chunks) = self.chunks(address, bytes, Access::Host) {
-                let mut offset = 0;
-                for (physical, _, len) in chunks.flatten() {
-                    observer
-                        .borrow_mut()
-                        .transfer(source, physical, address + offset, len);
-                    offset += len as u64;
-                }
+        else {
+            return;
+        };
+        let Ok(chunks) = self.chunks(address, bytes, Access::Host) else {
+            return;
+        };
+        let mut offset = 0u64;
+        for chunk in chunks {
+            let Ok((physical, _, len)) = chunk else {
+                continue;
+            };
+            observer
+                .borrow_mut()
+                .transfer(source, physical, address + offset, len);
+            offset += len as u64;
+        }
+    }
+    fn observe_preservation_write(
+        &self,
+        source: super::preservation::PreservationBusSource,
+        address: u64,
+        bytes: usize,
+    ) {
+        if bytes == 0 {
+            return;
+        }
+        let Some(observer) = self
+            .preservation
+            .borrow()
+            .as_ref()
+            .and_then(std::rc::Weak::upgrade)
+        else {
+            return;
+        };
+        let Ok(chunks) = self.chunks(address, bytes, Access::Host) else {
+            observer.borrow_mut().unresolved();
+            return;
+        };
+        let mut offset = 0u64;
+        for chunk in chunks {
+            let Ok((physical, _, len)) = chunk else {
+                observer.borrow_mut().unresolved();
+                return;
+            };
+            let Ok(physical) = super::preservation::PhysicalAddress::new(physical) else {
+                observer.borrow_mut().unresolved();
+                return;
+            };
+            let Ok(logical) = super::preservation::CpuAddress::new(address + offset) else {
+                observer.borrow_mut().unresolved();
+                return;
+            };
+            let Ok(chunk_size) = super::preservation::WriteSize::new(len) else {
+                observer
+                    .borrow_mut()
+                    .fault(super::preservation::PreservationFault::UnsupportedAccess);
+                return;
+            };
+            if observer.borrow().overlaps(physical, chunk_size) {
+                observer
+                    .borrow_mut()
+                    .bus_write(source, physical, logical, chunk_size);
+                return;
             }
+            offset += len as u64;
         }
     }
 
@@ -171,6 +228,11 @@ impl Memory {
         domain: &exclusive::Shared,
     ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
+        let preservation = self
+            .preservation
+            .borrow()
+            .as_ref()
+            .and_then(std::rc::Weak::upgrade);
         for (((base, b), t), (_, image)) in
             self.regions.iter().zip(&self.trackers).zip(&saved.regions)
         {
@@ -178,6 +240,26 @@ impl Memory {
             for (offset, bytes) in changed {
                 let pointer = unsafe { NonNull::new_unchecked(b.as_ptr().add(offset)) };
                 let physical = *base + offset as u64;
+                if let Some(observer) = &preservation {
+                    let typed = (|| {
+                        Ok::<_, String>((
+                            super::preservation::PhysicalAddress::new(physical)?,
+                            super::preservation::CpuAddress::new(physical)?,
+                            super::preservation::WriteSize::new(bytes)?,
+                        ))
+                    })();
+                    match typed {
+                        Ok((physical, address, size)) => observer.borrow_mut().bus_write(
+                            super::preservation::PreservationBusSource::HostWrite,
+                            physical,
+                            address,
+                            size,
+                        ),
+                        Err(_) => observer
+                            .borrow_mut()
+                            .fault(super::preservation::PreservationFault::UnsupportedAccess),
+                    }
+                }
                 for cpu in cpus {
                     unsafe {
                         cpu.backing_written(physical, pointer, bytes)?;
@@ -237,8 +319,22 @@ impl Memory {
             mappings: RefCell::new(mappings),
             trackers,
             observation: Default::default(),
+            preservation: Default::default(),
             continuation: Default::default(),
         })
+    }
+    pub(super) fn clear_preservation(
+        &self,
+        records: &Rc<RefCell<super::preservation::PreservationRecords>>,
+    ) {
+        let mut slot = self.preservation.borrow_mut();
+        let active = slot
+            .as_ref()
+            .and_then(std::rc::Weak::upgrade)
+            .is_some_and(|current| Rc::ptr_eq(&current, records));
+        if active {
+            *slot = None;
+        }
     }
     pub(super) fn regions(&self) -> &[(u64, Backing)] {
         &self.regions
@@ -343,6 +439,11 @@ impl Memory {
         address: u64,
         bytes: &[u8],
     ) -> Result<(), String> {
+        self.observe_preservation_write(
+            super::preservation::PreservationBusSource::HostWrite,
+            address,
+            bytes.len(),
+        );
         self.write(cpus, domain, address, bytes, Access::Host)?;
         self.observe_transfer("host-write", address, bytes.len());
         Ok(())
@@ -354,6 +455,11 @@ impl Memory {
         address: u64,
         bytes: &[u8],
     ) -> Result<(), String> {
+        self.observe_preservation_write(
+            super::preservation::PreservationBusSource::ModelBusWrite,
+            address,
+            bytes.len(),
+        );
         self.write(cpus, domain, address, bytes, Access::Write)?;
         self.observe_transfer("model-bus-write", address, bytes.len());
         if let Some(stops) = self

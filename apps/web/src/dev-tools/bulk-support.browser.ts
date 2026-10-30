@@ -106,10 +106,37 @@ try {
       path: new URL(mobile ? 'xe4-mobile.png' : 'xe4-desktop.png', output).pathname,
       fullPage: true,
     });
+    for (const [product, internal, release] of [
+      ['GFX100RF', '1.57', '1.13'],
+      ['X-T5', '2.14', '4.31'],
+    ]) {
+      await page.goto(new URL('dev-tools/state-captures/', base).href);
+      await page.evaluate(
+        async ([name, version]) => {
+          const fixture = (await import(
+            '/__test__/' + 'console.mjs'
+          )) as typeof import('./usb-fixture.ts');
+          fixture.installConsoleFixture({
+            1: 'FUJIFILM',
+            2: 'FUJIFILM',
+            4: name,
+            8: version,
+            16: 'CAMERA',
+            64: '1.00',
+          });
+        },
+        [product, internal],
+      );
+      await page.getByRole('button', { name: 'Connect camera', exact: true }).first().click();
+      await page.getByText(`${product} ${release}`, { exact: false }).first().waitFor();
+      assert.ok(
+        await page.locator('.cap-row').first().getByRole('button', { name: 'Capture' }).isEnabled(),
+      );
+    }
     assert.deepEqual(errors, []);
     await context.close();
   }
-  console.log('PASS: X-E4 bulk capture is available while missing service setup stays blocked');
+  console.log('PASS: X-E4, GFX100RF and X-T5 bulk capture profiles are available');
 } finally {
   await browser.close();
 }

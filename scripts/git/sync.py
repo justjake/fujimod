@@ -215,7 +215,8 @@ def advance(repository: Repository, ref: str, current: str, remote: str) -> Resu
         old = entry(repository, current, path)
         new = entry(repository, remote, path)
         if GITLINK in (old or ("",))[0] or GITLINK in (new or ("",))[0]:
-            continue  # Submodule pointers move with the index; the submodule syncs itself.
+            follow_pin(repository, path, old, new)
+            continue
         if path not in edited and path not in present:
             (clean_present if new else clean_deleted).append(path)
             continue
@@ -253,6 +254,32 @@ def advance(repository: Repository, ref: str, current: str, remote: str) -> Resu
             del conflicts[path]
     save_conflicts(repository, conflicts)
     return result
+
+
+def follow_pin(
+    repository: Repository,
+    path: str,
+    old: tuple[str, str] | None,
+    new: tuple[str, str] | None,
+) -> None:
+    """Move a pinned submodule checkout to origin's pin.
+
+    A submodule on a branch syncs itself. A detached checkout still at the old
+    pin, with no edits, follows the new pin; anything else is someone's work and
+    stays as it is.
+    """
+    checkout = Repository(Path(repository.root, path))
+    if old is None or new is None or not Path(checkout.root, ".git").exists():
+        return
+    if checkout.git("symbolic-ref", "-q", "HEAD", check=False).returncode == 0:
+        return
+    if checkout.output("rev-parse", "HEAD") != old[1] or checkout.output(
+        "status", "--porcelain"
+    ):
+        return
+    if checkout.git("cat-file", "-e", f"{new[1]}^{{commit}}", check=False).returncode:
+        checkout.git("fetch", "-q", "origin", new[1])
+    checkout.git("checkout", "-q", "--detach", new[1])
 
 
 def merge_path(

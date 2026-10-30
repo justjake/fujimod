@@ -1,5 +1,14 @@
 use super::*;
 
+fn host_write_selected(range: HookRange, address: u64, bytes: usize) -> bool {
+    match range {
+        HookRange::All => true,
+        HookRange::Inclusive { begin, end } => {
+            address <= end && begin < address.saturating_add(bytes as u64)
+        }
+    }
+}
+
 impl Cpu for Core {
     fn set_loop_mode(&self, mode: fujimod_emulator_cpu::loops::LoopMode) -> Result<(), String> {
         let e = &self.execution;
@@ -182,6 +191,22 @@ impl Cpu for Core {
         self.execution.cpu.read_virtual(address, access, bytes)
     }
     fn write_memory(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
+        if !bytes.is_empty() {
+            let index = self.execution.observer_index.borrow();
+            for (_, hook) in &index.host_writes {
+                let Hook::HostWrite {
+                    callback,
+                    data,
+                    range,
+                } = *hook
+                else {
+                    continue;
+                };
+                if host_write_selected(range, address, bytes.len()) {
+                    unsafe { callback(address, bytes.len(), data) };
+                }
+            }
+        }
         self.execution.mark_direct_write(address, bytes.len())?;
         self.execution.cpu.write_memory(address, bytes)?;
         self.memory_written(address, bytes.len())
@@ -511,6 +536,10 @@ impl Cpu for Core {
     }
     unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String> {
         let e = &self.execution;
+        e.observer_index
+            .try_borrow_mut()
+            .map(|_| ())
+            .map_err(|_| "cannot install a hook during host write dispatch".to_string())?;
         if e.active.get() {
             return Err("cannot install a hook during R-profile execution".into());
         }
@@ -529,6 +558,9 @@ impl Cpu for Core {
             // Owner synchronization is raised explicitly by the R-profile
             // execution adapter at sensitive memory operations.
             Hook::Synchronization { .. } => None,
+            // Host writes are dispatched by this backend before the worker
+            // mutation.
+            Hook::HostWrite { .. } => None,
             Hook::CompletedStore { range, .. } => {
                 // The permanent coherence hook already dispatches stores on
                 // watched pages. Reuse it instead of creating native hooks
@@ -559,6 +591,10 @@ impl Cpu for Core {
     }
     fn remove_hook(&self, hook: HookId) -> Result<(), String> {
         let e = &self.execution;
+        e.observer_index
+            .try_borrow_mut()
+            .map(|_| ())
+            .map_err(|_| "cannot remove a hook during host write dispatch".to_string())?;
         if e.active.get() || hook.owner != self.identity() {
             return Err("invalid R-profile hook owner or execution state".into());
         }

@@ -535,6 +535,13 @@ pub enum Hook {
         write: bool,
         range: HookRange,
     },
+    /// Runs before each nonempty public `write_memory` mutation. While the
+    /// callback runs, the R-profile CPU refuses hook registration or removal.
+    HostWrite {
+        callback: unsafe fn(u64, usize, *mut c_void),
+        data: *mut c_void,
+        range: HookRange,
+    },
     Fault {
         callback: unsafe fn(Fault, u64, i32, i64, *mut c_void) -> bool,
         data: *mut c_void,

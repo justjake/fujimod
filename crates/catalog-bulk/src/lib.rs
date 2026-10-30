@@ -38,6 +38,9 @@ pub struct FirmwareBulk {
     pub source: BulkSource,
     /// Addresses bulk reads may cover.
     pub window: BulkRange,
+    /// E1 DMA constraints, absent where they are not located.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dma: Option<BulkDma>,
     /// Stock code that must match before any bulk read.
     pub code_checks: Vec<CodeCheck>,
     /// Ranges read by both bulk and slow reads and compared.
@@ -95,9 +98,39 @@ pub enum BulkSource {
         registered_buffer: u64,
         /// Address of the 64-bit source pointer and 32-bit capacity.
         source_state: u64,
+        /// Address of the pointer to active configuration RAM.
+        configuration_pointer: u64,
+        /// Bytes in active configuration RAM to protect from scratch setup.
+        configuration_bytes: u64,
+        /// Located system-mode cell to protect from scratch setup.
+        system_mode_address: u64,
         /// Bytes the stock setup writes and each E1 request may return.
         capacity: u32,
     },
+}
+
+/// Constraints of the DMA that serves E1 reads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
+pub struct BulkDma {
+    /// The DMA source ignores address bits below this power of two.
+    pub address_alignment: u32,
+    /// The DMA rounds each transfer length up to this power of two.
+    pub length_granule: u32,
+}
+impl BulkDma {
+    /// True when `range` starts aligned and spans whole granules.
+    pub fn admits(self, range: BulkRange) -> bool {
+        range
+            .address
+            .is_multiple_of(u64::from(self.address_alignment))
+            && range.size.is_multiple_of(u64::from(self.length_granule))
+    }
 }
 
 /// An address range.
@@ -213,7 +246,27 @@ impl FirmwareBulk {
             | BulkSource::PatternZeroBase { capacity: 0, .. } => {
                 return fail("pattern capacity must be positive");
             }
+            BulkSource::PatternZeroBase {
+                configuration_pointer,
+                configuration_bytes,
+                system_mode_address,
+                ..
+            } if *configuration_pointer == 0
+                || *configuration_bytes == 0
+                || *system_mode_address == 0 =>
+            {
+                return fail("configuration protection must be specified");
+            }
             _ => {}
+        }
+        if let Some(dma) = self.dma
+            && (!dma.address_alignment.is_power_of_two()
+                || !dma.length_granule.is_power_of_two()
+                || dma.length_granule < dma.address_alignment)
+        {
+            return fail(
+                "DMA alignment and granule must be powers of two, granule at least alignment",
+            );
         }
         if self.code_checks.is_empty() || self.probes.is_empty() {
             return fail("stock code checks and probes are required");
@@ -244,9 +297,13 @@ impl FirmwareBulk {
             .copied()
             .chain(aliased)
             .chain(scoped.map(NamedRange::range))
-            .all(|range| positive(range) && self.window.contains(range))
+            .all(|range| {
+                positive(range)
+                    && self.window.contains(range)
+                    && self.dma.is_none_or(|dma| dma.admits(range))
+            })
         {
-            return fail("probe or scope outside the window");
+            return fail("probe or scope outside the window or DMA alignment");
         }
         if self.scopes.iter().any(|scope| scope.ranges.is_empty()) {
             return fail("empty capture scope");

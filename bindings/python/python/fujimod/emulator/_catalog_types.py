@@ -379,6 +379,11 @@ class BoundPosition(TypedDict, total=False):
     key: NotRequired[InputBinding | None]
 
 
+class BulkDma(TypedDict, total=False):
+    address_alignment: Required[int]
+    length_granule: Required[int]
+
+
 class BulkRange(TypedDict, total=False):
     address: Required[int]
     size: Required[int]
@@ -408,9 +413,12 @@ class BulkSourceVariant1(TypedDict, total=False):
 
 class BulkSourceVariant2(TypedDict, total=False):
     capacity: Required[int]
+    configuration_bytes: Required[int]
+    configuration_pointer: Required[int]
     mechanism: Required[Literal["pattern_zero_base"]]
     registered_buffer: Required[int]
     source_state: Required[int]
+    system_mode_address: Required[int]
 
 
 class CacheGeometry(TypedDict, total=False):
@@ -1503,6 +1511,7 @@ FirmwareBulk = TypedDict(
         "$schema": Required["str"],
         "code_alias": Required["int"],
         "code_checks": Required["list[CodeCheck]"],
+        "dma": NotRequired["BulkDma | None"],
         "firmware_id": Required["str"],
         "id": Required["str"],
         "internal_version": Required["str"],

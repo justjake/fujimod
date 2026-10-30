@@ -196,13 +196,16 @@ fn unconnected_wire_and_unsupported_modes_refuse_without_rx_or_completion() {
     }
     let mut h = RecordingHost::default();
     let mut c = controller();
-    for (offset, value) in [(0, 0x37), (4, 4), (0x14, 16), (0x24, 4)] {
+    for (offset, value) in [(0, 0x37), (4, 4), (0x24, 4)] {
         let before = c.save();
         let mut cx = Cx::new(&mut h, 0, 0, 0);
         c.write(&mut cx, BASE + offset, 2, value);
         assert!(cx.is_unmodeled());
         assert_eq!(c.save(), before);
     }
+    // Reserved interrupt mask bits read as zero; writes to them are ignored.
+    write(&mut c, &mut h, 0x14, 0xfff0 | 2);
+    assert_eq!(read(&mut c, &mut h, 0x14), 2);
 }
 #[test]
 fn explicit_fixed_wire_input_is_sampled_only_after_the_programmed_frame() {
