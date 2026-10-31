@@ -43,6 +43,23 @@ stopped. A validated camera error is returned as `DeviceStatus`, including both
 raw status values, rather than interpreted as a request to wait or retry.
 This conservative initial core has no recovery/reopen automation.
 
+`Session::close()` returns C4's two raw reply bytes; it does not interpret them
+as a firmware-specific acknowledgment. Rust callers that know the selected
+firmware's convention can use `Session::close_checked(expected)` instead. For
+example, a protocol that echoes the opened session ID little-endian requires
+`let expected = session.info().id.to_le_bytes()` before consuming the session
+with `session.close_checked(expected).await?`. Control requests still encode
+the ID big-endian. Do not assume a zero reply means success on that protocol,
+or apply its acknowledgment convention to every camera.
+
+The checked close sends C4 once, checks both reply length and value, then
+explicitly releases host resources only after a matching reply. A mismatch,
+timeout or cancellation consumes the session without retry or camera cleanup.
+The backend is dropped without marking its owner clean; existing ownership
+fences remain in effect. An error cannot determine whether the camera already
+completed the close. Python and JavaScript `close` methods retain the raw-reply
+behavior.
+
 Use `ReadMemory` and `WriteMemory` for individual requests. Their constructors
 validate the explicit firmware limits and the 32-bit address extent. Use
 `operations::memory::MemoryReader` for a range: each `next_chunk().await` issues

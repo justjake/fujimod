@@ -408,9 +408,27 @@ impl Session {
             _ => Ok(()),
         }
     }
-    /// Sends C4 once. This consumes the session even if the close fails.
+    /// Sends C4 once and returns its two raw reply bytes without interpreting
+    /// their meaning. This consumes the session even if the close fails.
     pub async fn close(mut self) -> Result<[u8; 2]> {
         let reply = self.core.close().await?;
+        self.core.io.release().await?;
+        Ok(reply)
+    }
+    /// Sends C4 once and requires the exact caller-selected acknowledgment.
+    ///
+    /// Select `expected` from the firmware's close protocol. A model that
+    /// echoes the session ID little-endian uses `self.info().id.to_le_bytes()`;
+    /// other reply conventions must be selected explicitly. A two-byte reply
+    /// alone does not establish that the camera accepted the close.
+    ///
+    /// This consumes the session on success, mismatch, transport failure or
+    /// cancellation. It never retries or sends implicit camera cleanup. Failure
+    /// drops the backend without marking its owner clean; existing ownership
+    /// fences remain in effect. An error does not prove that the camera session
+    /// remains open.
+    pub async fn close_checked(mut self, expected: [u8; 2]) -> Result<[u8; 2]> {
+        let reply = self.core.close_checked(expected).await?;
         self.core.io.release().await?;
         Ok(reply)
     }
@@ -428,7 +446,8 @@ pub(crate) struct Core<I> {
 impl<I: Io> Core<I> {
     async fn open(mut io: I, max_reply_bytes: u32) -> Result<Self> {
         check_limit(8, max_reply_bytes)?;
-        let bytes: [u8; 8] = exact(Self::lifecycle_io(&mut io, RequestKind::Open, 8, 0).await?)?;
+        let bytes: [u8; 8] =
+            exact(Self::lifecycle_io(&mut io, RequestKind::Open, 8, 0, None).await?)?;
         let packet = NonZeroU32::new(u32::from_be_bytes(bytes[4..8].try_into().unwrap()))
             .ok_or(ProtocolError::ZeroPacketLimit)?;
         if bytes[..2] == [0, 0] {
@@ -459,7 +478,13 @@ impl<I: Io> Core<I> {
         self.state = SessionState::CompletionUnknown;
         Ok(())
     }
-    async fn lifecycle_io(io: &mut I, kind: RequestKind, size: u32, id: u16) -> Result<Vec<u8>> {
+    async fn lifecycle_io(
+        io: &mut I,
+        kind: RequestKind,
+        size: u32,
+        id: u16,
+        expected: Option<[u8; 2]>,
+    ) -> Result<Vec<u8>> {
         let bytes = envelope(kind, size, id);
         let span = io
             .trace()
@@ -475,6 +500,11 @@ impl<I: Io> Core<I> {
                 }
                 .into());
             }
+            if let Some(expected) = expected
+                && reply != expected
+            {
+                return Err(ProtocolError::ExpectationMismatch.into());
+            }
             Ok(())
         }
         .await;
@@ -483,17 +513,21 @@ impl<I: Io> Core<I> {
         }
         result.map(|()| reply)
     }
-    async fn lifecycle(&mut self, kind: RequestKind) -> Result<[u8; 2]> {
+    async fn lifecycle(&mut self, kind: RequestKind, expected: Option<[u8; 2]>) -> Result<[u8; 2]> {
         self.start()?;
-        let reply = exact(Self::lifecycle_io(&mut self.io, kind, 2, self.info.id).await?)?;
+        let reply =
+            exact(Self::lifecycle_io(&mut self.io, kind, 2, self.info.id, expected).await?)?;
         self.state = SessionState::Ready;
         Ok(reply)
     }
     async fn ping(&mut self) -> Result<[u8; 2]> {
-        self.lifecycle(RequestKind::Ping).await
+        self.lifecycle(RequestKind::Ping, None).await
     }
     async fn close(&mut self) -> Result<[u8; 2]> {
-        self.lifecycle(RequestKind::Close).await
+        self.lifecycle(RequestKind::Close, None).await
+    }
+    async fn close_checked(&mut self, expected: [u8; 2]) -> Result<[u8; 2]> {
+        self.lifecycle(RequestKind::Close, Some(expected)).await
     }
 
     async fn command<T>(

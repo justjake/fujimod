@@ -93,6 +93,96 @@ fn session_id_decodes_little_endian_but_requests_encode_big_endian() {
 }
 
 #[test]
+fn checked_close_requires_the_selected_reply_with_mixed_endian_session_id() {
+    let (mut core, steps) = opened(vec![
+        Step::Control([0xc4, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0x12, 0x34]),
+        Step::Read(2, Ok(vec![0x34, 0x12])),
+    ]);
+    let expected = core.info.id.to_le_bytes();
+    assert_eq!(block_on(core.close_checked(expected)).unwrap(), expected);
+    assert_eq!(core.state, SessionState::Ready);
+    assert!(steps.borrow().is_empty());
+
+    // A caller may deliberately select another firmware's acknowledgment.
+    let (mut core, steps) = opened(vec![
+        Step::Control(envelope(RequestKind::Close, 2, 0x1234)),
+        Step::Read(2, Ok(vec![0, 0])),
+    ]);
+    assert_eq!(block_on(core.close_checked([0, 0])).unwrap(), [0, 0]);
+    assert!(steps.borrow().is_empty());
+}
+
+#[test]
+fn rejected_close_acknowledgments_fence_all_followups_without_more_traffic() {
+    for reply in [vec![0, 0], vec![0x12, 0x34], vec![0x35, 0x12]] {
+        let (mut core, steps) = opened(vec![
+            Step::Control(envelope(RequestKind::Close, 2, 0x1234)),
+            Step::Read(2, Ok(reply)),
+        ]);
+        assert!(matches!(
+            block_on(core.close_checked([0x34, 0x12])),
+            Err(Error::Protocol(ProtocolError::ExpectationMismatch))
+        ));
+        assert_eq!(core.state, SessionState::CompletionUnknown);
+        assert!(matches!(
+            block_on(core.ping()),
+            Err(Error::CompletionUnknown)
+        ));
+        assert!(matches!(
+            block_on(core.close()),
+            Err(Error::CompletionUnknown)
+        ));
+        assert!(matches!(
+            block_on(core.close_checked([0x34, 0x12])),
+            Err(Error::CompletionUnknown)
+        ));
+        assert!(steps.borrow().is_empty());
+    }
+}
+
+#[test]
+fn checked_close_bad_length_or_transport_failure_never_retries() {
+    for reply in [
+        Ok(vec![0x34]),
+        Ok(vec![0x34, 0x12, 0]),
+        Err(Error::Timeout(TransferStage::BulkIn)),
+    ] {
+        let (mut core, steps) = opened(vec![
+            Step::Control(envelope(RequestKind::Close, 2, 0x1234)),
+            Step::Read(2, reply),
+        ]);
+        assert!(block_on(core.close_checked([0x34, 0x12])).is_err());
+        assert_eq!(core.state, SessionState::CompletionUnknown);
+        assert!(matches!(
+            block_on(core.close_checked([0x34, 0x12])),
+            Err(Error::CompletionUnknown)
+        ));
+        assert!(steps.borrow().is_empty());
+    }
+}
+
+#[test]
+fn cancelled_checked_close_remains_fenced() {
+    let (mut core, steps) = opened(vec![
+        Step::Control(envelope(RequestKind::Close, 2, 0x1234)),
+        Step::PendingRead,
+    ]);
+    let mut close = Box::pin(core.close_checked([0x34, 0x12]));
+    assert!(block_on(poll_once(close.as_mut())).is_none());
+    drop(close);
+    assert_eq!(core.state, SessionState::CompletionUnknown);
+    assert!(matches!(
+        block_on(core.ping()),
+        Err(Error::CompletionUnknown)
+    ));
+    assert!(matches!(
+        block_on(core.close()),
+        Err(Error::CompletionUnknown)
+    ));
+    assert!(steps.borrow().is_empty());
+}
+
+#[test]
 fn direct_read_performs_one_command_and_returns_only_data() {
     let request = read_request();
     let mut reply = request.encode();
