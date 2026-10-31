@@ -271,6 +271,11 @@
   background: rgba(var(--wb-accent-rgb), 0.12);
   font-size: 12px;
 }
+.wb-remote-use.wb-interrupted {
+  border-bottom-color: var(--wb-amber);
+  background: #2a1f0c;
+  color: #ffe2b3;
+}
 .wb-kv {
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr);

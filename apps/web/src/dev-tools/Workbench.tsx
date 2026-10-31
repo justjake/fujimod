@@ -74,6 +74,27 @@ export function Workbench(props: {
     );
   });
   const cameras = () => props.model.cameras();
+  const remotePeers = () =>
+    cameras().reduce(
+      (count, camera) =>
+        camera.transport === 'remote' ? count : count + (camera.sharing?.peers.size ?? 0),
+      0,
+    );
+  // A controller that leaves while the tab is hidden: browsers throttle hidden
+  // tabs, so the strip turns amber on return and says when it happened.
+  const [hidden, setHidden] = createSignal(false);
+  const [interrupted, setInterrupted] = createSignal<number>();
+  const visibility = () => setHidden(document.visibilityState === 'hidden');
+  onSettled(() => document.addEventListener('visibilitychange', visibility));
+  onCleanup(() => globalThis.document?.removeEventListener('visibilitychange', visibility));
+  createEffect(
+    () => ({ peers: remotePeers(), hidden: hidden() }),
+    ({ peers, hidden }, previous) => {
+      if (hidden && previous && peers < previous.peers && interrupted() === undefined)
+        setInterrupted(Date.now());
+      if (!hidden && previous && peers > previous.peers) setInterrupted(undefined);
+    },
+  );
   // A shared camera is only reachable while this computer stays awake.
   useWakeLock(() =>
     cameras().some((camera) => camera.transport !== 'remote' && Boolean(camera.sharing)),
@@ -176,11 +197,17 @@ export function Workbench(props: {
         connecting={connecting()}
         onReconnect={() => void connect()}
       />
-      <Show
-        when={cameras().some(
-          (camera) => camera.transport !== 'remote' && camera.sharing?.peers.size,
+      <Show when={!hidden() && interrupted()}>
+        {(at) => (
+          <div class="wb-remote-use wb-interrupted" role="status">
+            A remote connection ended at{' '}
+            {new Date(at()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} while
+            this tab was in the background. Keep this tab in front and your computer on to stay
+            connected.
+          </div>
         )}
-      >
+      </Show>
+      <Show when={!interrupted() && remotePeers()}>
         <div class="wb-remote-use" role="status">
           Your camera is being used remotely. Keep this tab in front and your computer on to stay
           connected.

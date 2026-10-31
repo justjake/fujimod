@@ -277,6 +277,38 @@ test('a shared camera shows the warning, its controllers, battery and the remote
   expect(host.querySelector('.wb-remote-use')).toBeNull();
 });
 
+test('a controller lost while the tab was hidden turns the strip amber on return', () => {
+  let state: DocumentVisibilityState = 'visible';
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+  try {
+    const link = 'https://share.test/X70';
+    const test = createTestCameraModel({});
+    test.add(testCamera('X70', { sharing: { link, peers: new Map([['peer', 'queue']]) } }));
+    const host = mount(test.model);
+    flush();
+    state = 'hidden';
+    document.dispatchEvent(new Event('visibilitychange'));
+    flush();
+    test.update('X70', (camera) => ({ ...camera, sharing: { link, peers: new Map() } }));
+    flush();
+    state = 'visible';
+    document.dispatchEvent(new Event('visibilitychange'));
+    flush();
+    expect(host.querySelector('.wb-interrupted')!.textContent).toContain(
+      'while this tab was in the background',
+    );
+    test.update('X70', (camera) => ({
+      ...camera,
+      sharing: { link, peers: new Map([['peer', 'queue']]) },
+    }));
+    flush();
+    expect(host.querySelector('.wb-interrupted')).toBeNull();
+    expect(host.querySelector('.wb-remote-use')!.textContent).toContain('being used remotely');
+  } finally {
+    Reflect.deleteProperty(document, 'visibilityState');
+  }
+});
+
 test('Dump configuration adds configuration.bin to the Files pane', async () => {
   const pages: [number, number][] = [];
   const test = createTestCameraModel({

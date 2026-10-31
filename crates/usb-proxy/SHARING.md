@@ -143,7 +143,9 @@ Sharing is displayed independently of the device connection state.
 - **Strip:** only while at least one remote controller is connected, one slim
   strip at the top of the page, with no dialog, toast or dismiss button: "Your
   camera is being used remotely. Keep this tab in front and your computer on to
-  stay connected."
+  stay connected." If a controller disconnects while the tab is hidden, the strip
+  turns amber on return and says when it happened, until a controller connects
+  again.
 - **Wake lock:** held while any camera on this page is shared, so viewers can
   reach it; re-acquired when the tab becomes visible again (browsers drop it
   while the tab is hidden); released when sharing stops.

@@ -94,7 +94,8 @@ export default function DevTools(props: { model?: CameraModel; supported?: boole
         .catch((error: unknown) => {
           if (remoteConnection.signal.aborted) return;
           const message = error instanceof Error ? error.message : String(error);
-          if (message === 'Camera sharing ended') {
+          // A revoked or unknown link is the viewer's situation, not a crash.
+          if (message === 'Camera sharing ended' || message === 'Camera share unavailable') {
             setRemoteStatus(message);
             return;
           }

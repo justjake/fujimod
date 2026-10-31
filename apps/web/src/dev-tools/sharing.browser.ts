@@ -30,7 +30,13 @@ const fixture = (await browserScript(new URL('./usb-fixture.ts', import.meta.url
   '../../../../bindings/javascript/tests/webusb-fixture.ts',
   './upstream.mjs',
 );
-const browser = await chromium.launch({ headless: true });
+// Both peers run on this machine. Headless Chromium cannot resolve the other
+// context's mDNS host names, and the development relay is STUN-only, so expose
+// real host addresses as two computers on one network would.
+const browser = await chromium.launch({
+  headless: true,
+  args: ['--disable-features=WebRtcHideLocalIpsWithMdns'],
+});
 const errors: string[] = [];
 async function ready(page: Page) {
   await page.locator('.wb-camera h2').filter({ hasText: 'SYNTHETIC' }).waitFor();
