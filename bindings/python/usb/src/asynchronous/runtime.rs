@@ -181,7 +181,8 @@ impl RuntimeTask {
         }
         .map_err(invalid)?;
         if ![
-            "prepare", "install", "publish", "init", "status", "rollback", "set", "read",
+            "prepare", "install", "publish", "init", "status", "teardown", "rollback", "release",
+            "set", "read",
         ]
         .contains(&operation.as_str())
         {
@@ -217,7 +218,9 @@ impl RuntimeTask {
                     "publish" => json!(installer.publish(&mut peer, token).await?),
                     "init" => json!(installer.init(&mut peer, token).await?),
                     "status" => json!(installer.status(&mut peer, token).await?),
+                    "teardown" => json!(installer.teardown(&mut peer, token).await?),
                     "rollback" => json!(installer.rollback(&mut peer, token).await?),
+                    "release" => json!(installer.release(&mut peer, token).await?),
                     "set" => {
                         installer.set(&mut peer, address, data).await?;
                         json!(null)

@@ -19,6 +19,8 @@ pub struct Operations {
     pub rollback: u32,
     pub status: u32,
     pub init: u32,
+    /// Stops what INIT started; images without it can never be freed after INIT.
+    pub teardown: Option<u32>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -34,6 +36,10 @@ pub struct Mailbox {
     pub core: u32,
     pub token: u32,
     pub inits_done: Option<u32>,
+    /// Nonzero once TEARDOWN has run.
+    pub finis_done: Option<u32>,
+    /// Resources the image still holds (timers, tasks, stock stores).
+    pub live: Option<u32>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -149,11 +155,15 @@ impl RuntimeImage {
         }
         let mut operations = BTreeSet::new();
         for op in [
-            c.operations.install,
-            c.operations.rollback,
-            c.operations.status,
-            c.operations.init,
-        ] {
+            Some(c.operations.install),
+            Some(c.operations.rollback),
+            Some(c.operations.status),
+            Some(c.operations.init),
+            c.operations.teardown,
+        ]
+        .into_iter()
+        .flatten()
+        {
             if !operations.insert(op) {
                 return Err(bad("duplicate control operation"));
             }
@@ -170,6 +180,8 @@ impl RuntimeImage {
             Some(m.core),
             Some(m.token),
             m.inits_done,
+            m.finis_done,
+            m.live,
         ]
         .into_iter()
         .flatten()
@@ -180,6 +192,9 @@ impl RuntimeImage {
             {
                 return Err(bad("mailbox field outside mailbox"));
             }
+        }
+        if c.operations.teardown.is_some() != (m.finis_done.is_some() && m.live.is_some()) {
+            return Err(bad("teardown requires finis_done and live mailbox fields"));
         }
         let mut sites = BTreeSet::new();
         for hook in &self.hooks {

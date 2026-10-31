@@ -38,12 +38,13 @@ fn image() -> RuntimeImage {
                 rollback: 2,
                 status: 3,
                 init: 4,
+                teardown: Some(5),
             },
             read_alias: 0,
             code_size: 64,
             mailbox: Mailbox {
                 offset: 32,
-                size: 36,
+                size: 44,
                 nonce: 0,
                 operation: 4,
                 status: 8,
@@ -53,6 +54,8 @@ fn image() -> RuntimeImage {
                 core: 24,
                 token: 28,
                 inits_done: Some(32),
+                finis_done: Some(36),
+                live: Some(40),
             },
         },
     }
@@ -64,6 +67,10 @@ struct Memory {
     fail: Option<&'static str>,
     image: Option<RuntimeImage>,
     replay: bool,
+    /// Resources TEARDOWN cannot stop yet, one fewer per TEARDOWN.
+    busy: u32,
+    finis_done: u32,
+    inits_done: u32,
 }
 impl Memory {
     fn put(&mut self, a: u64, bytes: &[u8]) {
@@ -152,7 +159,7 @@ impl Body for Memory {
                     state + u64::from(c.installed_offset),
                     &(if op == c.operations.install { 1u32 } else { 0 }).to_le_bytes(),
                 );
-                for hook in image.hooks {
+                for hook in image.hooks.clone() {
                     self.put(
                         hook.address,
                         &if op == c.operations.install {
@@ -165,8 +172,21 @@ impl Body for Memory {
                 }
             }
             if op == c.operations.init {
+                self.inits_done = 1;
                 self.put(state + u64::from(c.inits_done_offset), &1u32.to_le_bytes());
             }
+            if Some(op) == c.operations.teardown {
+                self.finis_done = 1;
+                self.busy = self.busy.saturating_sub(1);
+            }
+            let holding = |want: fn(&HookWord) -> u32| {
+                image
+                    .hooks
+                    .iter()
+                    .filter(|hook| self.get(hook.address, 4) == want(hook).to_le_bytes())
+                    .count() as u32
+            };
+            let (words_new, words_old) = (holding(|h| h.new), holding(|h| h.old));
             let values = [
                 c.nonce,
                 op,
@@ -176,11 +196,13 @@ impl Body for Memory {
                 } else {
                     0
                 },
-                0,
-                0,
+                words_new,
+                words_old,
                 c.core,
                 if self.replay { token + 1 } else { token },
-                1,
+                self.inits_done,
+                self.finis_done,
+                self.busy,
             ];
             for (index, value) in values.iter().enumerate() {
                 self.put(
@@ -519,4 +541,60 @@ fn request_cell_is_written_and_cannot_overlap_ownership() {
     assert!(i.validate().is_err());
     i.control.operation_offset = Some(224);
     assert!(i.validate().is_err());
+}
+#[test]
+fn teardown_until_idle_then_release_frees() {
+    block_on(async {
+        let mut installer = Installer::plan(image()).unwrap();
+        let mut body = Memory {
+            busy: 2,
+            ..Memory::default()
+        };
+        installer
+            .install(&mut body, Placement::Relocate, 11)
+            .await
+            .unwrap();
+        installer.rollback(&mut body, 12).await.unwrap();
+        // Hooks stock, but INIT ran and TEARDOWN has not.
+        let error = installer.release(&mut body, 13).await.unwrap_err();
+        assert!(error.to_string().contains("TEARDOWN"), "{error}");
+        let first = installer.teardown(&mut body, 14).await.unwrap();
+        assert_eq!((first.finis_done, first.live), (Some(1), Some(1)));
+        let error = installer.release(&mut body, 15).await.unwrap_err();
+        assert!(error.to_string().contains("held"), "{error}");
+        let second = installer.teardown(&mut body, 16).await.unwrap();
+        assert_eq!(second.live, Some(0));
+        assert!(!body.events.iter().any(|s| s == "free"));
+        installer.release(&mut body, 17).await.unwrap();
+        assert!(installer.lease.as_ref().unwrap().freed);
+        assert_eq!(body.events.iter().filter(|s| *s == "free").count(), 1);
+        assert!(installer.status(&mut body, 18).await.is_err());
+    });
+}
+#[test]
+fn release_refuses_live_hooks_and_images_without_teardown() {
+    block_on(async {
+        let mut installer = Installer::plan(image()).unwrap();
+        let mut body = Memory::default();
+        installer
+            .install(&mut body, Placement::Relocate, 11)
+            .await
+            .unwrap();
+        installer.teardown(&mut body, 12).await.unwrap();
+        let error = installer.release(&mut body, 13).await.unwrap_err();
+        assert!(error.to_string().contains("stock"), "{error}");
+        let mut legacy = image();
+        legacy.control.operations.teardown = None;
+        assert!(legacy.validate().is_err());
+        legacy.control.mailbox.finis_done = None;
+        legacy.control.mailbox.live = None;
+        legacy.validate().unwrap();
+        let mut installer = Installer::plan(legacy).unwrap();
+        let mut body = Memory::default();
+        installer
+            .install(&mut body, Placement::Relocate, 11)
+            .await
+            .unwrap();
+        assert!(installer.teardown(&mut body, 12).await.is_err());
+    });
 }

@@ -96,8 +96,15 @@ class Installer:
     async def status(self, token=1):
         return await self._run('status', token=token)
 
+    async def teardown(self, token=1):
+        return await self._run('teardown', token=token)
+
     async def rollback(self, token=1):
         return await self._run('rollback', token=token)
+
+    async def release(self, token=1):
+        """Free an image whose hooks are stock and which holds nothing."""
+        return await self._run('release', token=token)
 
     async def set(self, address, data):
         return await self._run('set', address=address, data=bytes(data))

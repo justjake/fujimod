@@ -33,17 +33,21 @@ pub enum Operation {
     Install,
     Init,
     Status,
+    Teardown,
     Rollback,
 }
 impl Operation {
-    pub fn code(self, image: &RuntimeImage) -> u32 {
+    pub fn code(self, image: &RuntimeImage) -> Result<u32> {
         let ops = &image.control.operations;
-        match self {
+        Ok(match self {
             Self::Install => ops.install,
             Self::Init => ops.init,
             Self::Status => ops.status,
+            Self::Teardown => ops
+                .teardown
+                .ok_or(Error::Invalid("image has no TEARDOWN operation"))?,
             Self::Rollback => ops.rollback,
-        }
+        })
     }
 }
 /// Allocation and callback methods normally use operations::callback::invoke.
@@ -103,6 +107,8 @@ pub struct ControlResult {
     pub words_new: u32,
     pub words_old: u32,
     pub inits_done: Option<u32>,
+    pub finis_done: Option<u32>,
+    pub live: Option<u32>,
 }
 #[derive(Clone, Debug)]
 pub struct Installer {
@@ -235,8 +241,40 @@ impl Installer {
     pub async fn status(&mut self, body: &mut impl Body, token: u32) -> Result<ControlResult> {
         self.control(body, Operation::Status, token).await
     }
+    /// Stop what INIT started. Repeat until `live` is zero: a task between
+    /// safe points stays held until a later TEARDOWN.
+    pub async fn teardown(&mut self, body: &mut impl Body, token: u32) -> Result<ControlResult> {
+        self.control(body, Operation::Teardown, token).await
+    }
     pub async fn rollback(&mut self, body: &mut impl Body, token: u32) -> Result<ControlResult> {
         self.control(body, Operation::Rollback, token).await
+    }
+    /// Free a published image that can no longer be entered: one STATUS must
+    /// report every hook stock, TEARDOWN complete when INIT ran, and nothing
+    /// held. The body checks its target's own registries before freeing.
+    pub async fn release(&mut self, body: &mut impl Body, token: u32) -> Result<ControlResult> {
+        let status = self.status(body, token).await?;
+        let lease = self.lease.as_ref().ok_or(Error::Invalid("not allocated"))?;
+        if lease.installed
+            || status.words_new != 0
+            || status.words_old as usize != self.image.hooks.len()
+        {
+            return Err(Error::Invalid("release requires every hook stock"));
+        }
+        let initialized = match status.inits_done {
+            Some(done) => done != 0,
+            None => self.image.control.init_count != 0,
+        };
+        if initialized && status.finis_done != Some(1) {
+            return Err(Error::Invalid("release after INIT requires TEARDOWN"));
+        }
+        if status.live.unwrap_or(0) != 0 {
+            return Err(Error::Invalid("release requires no held resources"));
+        }
+        let base = lease.base;
+        body.free(base).await?;
+        self.lease.as_mut().unwrap().freed = true;
+        Ok(status)
     }
     async fn words(body: &mut impl Body, addresses: &[u64]) -> Result<Vec<u32>> {
         let ranges = addresses
@@ -303,11 +341,9 @@ impl Installer {
                 vec![0xa5; c.mailbox.size as usize],
             ),
         ];
+        let code = op.code(&self.image)?;
         if let Some(offset) = c.operation_offset {
-            writes.push((
-                state + u64::from(offset),
-                op.code(&self.image).to_le_bytes().to_vec(),
-            ));
+            writes.push((state + u64::from(offset), code.to_le_bytes().to_vec()));
         }
         self.write_many(body, writes).await?;
         body.synchronize(self.range()).await?;
@@ -315,11 +351,8 @@ impl Installer {
         if op == Operation::Install {
             self.lease.as_mut().unwrap().publication_attempted = true;
         }
-        body.control(
-            self.image.link_base + u64::from(c.control_offset),
-            op.code(&self.image),
-        )
-        .await?;
+        body.control(self.image.link_base + u64::from(c.control_offset), code)
+            .await?;
         let mut ranges = vec![
             Range {
                 address: (state + u64::from(c.mailbox.offset)) | c.read_alias,
@@ -356,7 +389,7 @@ impl Installer {
         };
         let m = &c.mailbox;
         if at(m.nonce) != c.nonce
-            || at(m.operation) != op.code(&self.image)
+            || at(m.operation) != code
             || at(m.token) != token
             || at(m.core) != c.core
         {
@@ -370,6 +403,8 @@ impl Installer {
             words_new: at(m.words_new),
             words_old: at(m.words_old),
             inits_done: m.inits_done.map(at),
+            finis_done: m.finis_done.map(at),
+            live: m.live.map(at),
         };
         if result.status != 0 {
             return Err(Error::Body(format!(
@@ -396,6 +431,9 @@ impl Installer {
             if value(bytes)? != *wanted {
                 return Err(Error::Invalid("hook readback differs"));
             }
+        }
+        if op == Operation::Teardown && result.finis_done != Some(1) {
+            return Err(Error::Invalid("TEARDOWN did not complete"));
         }
         if op == Operation::Init
             && (result.inits_done != Some(1)
