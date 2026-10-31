@@ -404,6 +404,21 @@ fn arm_and_aarch64_branch_limits_and_opcodes() {
     }
 }
 #[test]
+fn arm_jump24_covers_conditional_bl_and_call_only_unconditional_bl() {
+    // blne +8 relocated with R_ARM_JUMP24, as the assembler emits it.
+    assert_eq!(
+        relocation::encode(K::ArmJump24, 0x1b000000, 0x108, 0x100).unwrap(),
+        0x1b000002
+    );
+    assert_eq!(
+        relocation::encode(K::ArmJump24, 0x0a000000, 0x108, 0x100).unwrap(),
+        0x0a000002
+    );
+    assert!(relocation::encode(K::ArmJump24, 0xeb000000, 0x108, 0x100).is_err());
+    assert!(relocation::encode(K::ArmCall, 0x1b000000, 0x108, 0x100).is_err());
+    assert!(relocation::encode(K::ArmCall, 0xea000000, 0x108, 0x100).is_err());
+}
+#[test]
 fn aarch64_pages_low_bits_and_scaled_loads() {
     assert_eq!(
         relocation::encode(K::Aarch64Adrp, 0x90000000, 0x5000, 0x1000).unwrap(),

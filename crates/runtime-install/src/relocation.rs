@@ -70,8 +70,16 @@ pub fn encode(kind: Kind, word: u64, value: u64, place: u64) -> Result<u64> {
                 w & 0x0e000000 == 0x0a000000 && w >> 28 != 15,
                 "A32 branch opcode mismatch",
             )?;
+            // AAELF: R_ARM_CALL is an unconditional BL; R_ARM_JUMP24 is B with
+            // any condition or a conditional BL.
+            let link = w & 0x01000000 != 0;
+            let always = w >> 28 == 14;
             require(
-                (w & 0x01000000 != 0) == (kind == ArmCall),
+                if kind == ArmCall {
+                    link && always
+                } else {
+                    !link || !always
+                },
                 "A32 branch link bit mismatch",
             )?;
             let distance = i128::from(value) - i128::from(place);
