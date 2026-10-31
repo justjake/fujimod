@@ -23,7 +23,10 @@
 //! firmware moves +0xc0 through its buffers between frames (unit 1:
 //! 0xa7d6000 + 0x180000*k, 720 pixels) and the display shows the buffer the
 //! unit finished last. Other data the unit or the rest of the pipeline moves
-//! is not modeled.
+//! is not modeled. Instead of the uniform image a unit may declare the
+//! virtual post-ISP scene ([`fujimod_virtual_scene::PROFILE`]: colour bars, a
+//! ramp and a moving square, BT.601 limited 4:2:2), sampled over the whole
+//! scene into the programmed width and `lines`, one phase per frame.
 //!
 //! A block may instead declare a [`Job`]: each write that sets its start bit
 //! while no job is in flight finishes one job after the declared ticks. The
@@ -46,10 +49,23 @@
 //! 0xfff0f000 through 0xc6c64c (+0xb8 = 0x6a020202, then waits for +0xbc bits
 //! 5..0 = 0x27) and back through 0xc6c700 (0x01020202, waits for 0x20); these
 //! are its only +0xb8 commands. What the states mean is not known.
+//!
+//! A job may declare [`Work`]: when it finishes, before its interrupt rises,
+//! the block develops or scales a still from the registers the firmware
+//! programmed, with the declared approximation of [`crate::development`].
+//! A block may publish its words for another block to read: the development
+//! engine reads the colour unit 0xfff47000 this way when its film law is
+//! declared ([`crate::development::FILM_PROFILE`]).
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
+
+/// Words a block publishes: its current register file.
+pub type Published = Arc<Mutex<BTreeMap<u64, u32>>>;
 
 /// Frame law of a block: (offset, mask) of the start and stopped bits, the
 /// interrupt line and the frame period in ticks.
@@ -81,6 +97,59 @@ pub struct Command {
     pub mask: u32,
     pub state: u32,
 }
+/// Data a job moves when it finishes (see [`crate::development`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Work {
+    /// The development engine; the X-Trans site (line, sample) of the first
+    /// source sample.
+    Develop { phase: (u8, u8) },
+    /// The resizer.
+    Resize,
+}
+const DEVELOP_SOURCE: u64 = 0x08;
+const DEVELOP_SOURCE_STRIDE: u64 = 0x0c;
+const DEVELOP_SIZE: u64 = 0x14;
+const DEVELOP_DESTINATION: u64 = 0x1c;
+const DEVELOP_DESTINATION_STRIDE: u64 = 0x20;
+const RESIZE_INPUT: u64 = 0x08;
+const RESIZE_OUTPUT: u64 = 0x14;
+const RESIZE_STEP_X: u64 = 0x18;
+const RESIZE_STEP_Y: u64 = 0x1c;
+const RESIZE_SOURCE: u64 = 0xc0;
+const RESIZE_SOURCE_STRIDE: u64 = 0xc4;
+const RESIZE_DESTINATION: u64 = 0xc8;
+const RESIZE_DESTINATION_STRIDE: u64 = 0xcc;
+const RESIZE_FORMAT: u64 = 0x100;
+/// Packed 4:2:2 in and out, the format of a shot's jobs.
+const RESIZE_PACKED_422: u32 = 0x1100_0002;
+/// The same with bits 16 and 20 set: X-T20 2.11 playback (0x1548040) sets
+/// them from request bytes +0x32 and +0x31 when it magnifies the decoded
+/// picture to the display. Their effect is not modeled; the layout is
+/// declared packed 4:2:2 as well.
+const RESIZE_PACKED_422_PLAYBACK: u32 = 0x1111_0002;
+/// Picture a live-view output unit writes at each frame.
+#[derive(Clone, Debug, PartialEq)]
+enum Picture {
+    /// One packed pixel pair repeated.
+    Uniform([u8; 4]),
+    /// The declared virtual scene.
+    Scene,
+    /// A host RGB image: width, height and rows of red, green, blue bytes.
+    Host(u64, u64, Arc<[u8]>),
+}
+/// Virtual scene size: its normalized coordinates.
+const SCENE_WIDTH: u64 = 1024;
+const SCENE_HEIGHT: u64 = 768;
+/// The whole of a scene, unscaled.
+fn whole(scene: fujimod_virtual_scene::Scene) -> fujimod_virtual_scene::Crop {
+    fujimod_virtual_scene::Crop {
+        x: 0,
+        y: 0,
+        width: scene.width,
+        height: scene.height,
+    }
+}
+
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct State {
@@ -109,11 +178,17 @@ pub struct Block {
     idle: Vec<(u64, u32)>,
     frames: Option<Frames>,
     job: Option<Job>,
+    work: Option<Work>,
     /// Lines and the Y0 Y1 Cb Cr pixel pair of a uniform live-view image.
-    image: Option<(u32, [u8; 4])>,
+    image: Option<(u32, Picture)>,
     /// (offset, value) of words that read a fixed value whatever is written.
     fixed: Vec<(u64, u32)>,
     commands: Vec<Command>,
+    /// Where this block publishes its words.
+    published: Option<Published>,
+    /// The colour unit's words, for the film law of a development job, and
+    /// the declared reference white balance.
+    colour: Option<(Published, [u32; 3])>,
     state: State,
 }
 impl Block {
@@ -145,9 +220,12 @@ impl Block {
             idle,
             frames,
             job: None,
+            work: None,
             image: None,
             fixed: Vec::new(),
             commands: Vec::new(),
+            published: None,
+            colour: None,
             state: State::default(),
         })
     }
@@ -173,6 +251,124 @@ impl Block {
         }
         self.job = Some(job);
         Ok(self)
+    }
+    /// Data the job moves when it finishes.
+    pub fn with_work(mut self, work: Work) -> Result<Self, String> {
+        let words = match work {
+            Work::Develop { phase } if phase.0 < 6 && phase.1 < 6 => DEVELOP_DESTINATION_STRIDE,
+            Work::Resize => RESIZE_FORMAT,
+            Work::Develop { .. } => return Err("Invalid X-Trans phase".into()),
+        };
+        if self.job.is_none() || words >= self.size {
+            return Err("Invalid X-Processor Pro register block work".into());
+        }
+        self.work = Some(work);
+        Ok(self)
+    }
+    /// Publish this block's words to `words`.
+    pub fn with_published(mut self, words: Published) -> Self {
+        *words.lock().unwrap() = self.state.words.clone();
+        self.published = Some(words);
+        self
+    }
+    /// Develop with the film law and white balance of the colour unit's
+    /// published words, relative to the `reference` (R, G, B) gains.
+    pub fn with_colour(mut self, words: Published, reference: [u32; 3]) -> Result<Self, String> {
+        if !matches!(self.work, Some(Work::Develop { .. })) || reference.contains(&0) {
+            return Err("Only a development job reads a colour unit".into());
+        }
+        self.colour = Some((words, reference));
+        Ok(self)
+    }
+    fn publish(&self) {
+        if let Some(words) = &self.published {
+            *words.lock().unwrap() = self.state.words.clone();
+        }
+    }
+    fn run_work(&self, cx: &mut Cx<'_>, work: Work) -> Result<(), String> {
+        let word = |o| self.state.words.get(&o).copied().unwrap_or(0);
+        let address = |o| u64::from(word(o));
+        let stride = |o| word(o) as usize * 2;
+        let (rows, destination, destination_stride) = match work {
+            Work::Develop { phase } => {
+                let (lines, width) = crate::development::size(word(DEVELOP_SIZE));
+                let source_stride = stride(DEVELOP_SOURCE_STRIDE);
+                let raw = cx.ram_bytes(
+                    address(DEVELOP_SOURCE),
+                    source_stride * (lines - 1) + 2 * width,
+                )?;
+                let phase = (usize::from(phase.0), usize::from(phase.1));
+                let film = match &self.colour {
+                    Some((words, reference)) => {
+                        let words = words.lock().unwrap();
+                        Some((
+                            crate::development::film(&words)?,
+                            crate::development::white_balance(&words, *reference)?,
+                        ))
+                    }
+                    None => None,
+                };
+                let rows = crate::development::develop(
+                    &raw,
+                    source_stride,
+                    lines,
+                    width,
+                    phase,
+                    film.as_ref().map(|(film, factors)| (film, *factors)),
+                )?;
+                (
+                    rows,
+                    address(DEVELOP_DESTINATION),
+                    stride(DEVELOP_DESTINATION_STRIDE),
+                )
+            }
+            Work::Resize => {
+                if ![RESIZE_PACKED_422, RESIZE_PACKED_422_PLAYBACK].contains(&word(RESIZE_FORMAT)) {
+                    return Err(format!(
+                        "Unmodeled resizer format {:#x}",
+                        word(RESIZE_FORMAT)
+                    ));
+                }
+                let (lines, width) = crate::development::size(word(RESIZE_INPUT));
+                let (out_lines, out_width) = crate::development::size(word(RESIZE_OUTPUT));
+                let (Some(step_x), Some(step_y)) = (
+                    crate::development::step(word(RESIZE_STEP_X)),
+                    crate::development::step(word(RESIZE_STEP_Y)),
+                ) else {
+                    return Err("Unmodeled resizer step".into());
+                };
+                let scale = crate::development::Scale {
+                    stride: stride(RESIZE_SOURCE_STRIDE),
+                    lines,
+                    width,
+                    out_lines,
+                    out_width,
+                    step_x,
+                    step_y,
+                };
+                let source = cx.ram_bytes(
+                    address(RESIZE_SOURCE),
+                    scale.stride * (lines - 1) + 2 * width,
+                )?;
+                let rows = crate::development::resample(&source, scale)?;
+                (
+                    rows,
+                    address(RESIZE_DESTINATION),
+                    stride(RESIZE_DESTINATION_STRIDE),
+                )
+            }
+        };
+        if rows
+            .first()
+            .is_some_and(|row| row.len() > destination_stride)
+        {
+            return Err("Still picture line wider than its destination stride".into());
+        }
+        for (y, row) in rows.iter().enumerate() {
+            cx.ram_write(destination + (y * destination_stride) as u64, row)
+                .map_err(|e| format!("Still picture outside RAM: {e}"))?;
+        }
+        Ok(())
     }
     /// Words that read a fixed value: ready words a driver compares for
     /// equality before a run (0xfffc3000 +0xdc and 0xfff7e000 +0x1c read
@@ -226,16 +422,43 @@ impl Block {
         Ok(self)
     }
     /// A uniform live-view image written at each frame: lines and Y, Cb, Cr.
-    pub fn with_live_view_image(mut self, lines: u32, ycbcr: [u8; 3]) -> Result<Self, String> {
+    pub fn with_live_view_image(self, lines: u32, ycbcr: [u8; 3]) -> Result<Self, String> {
+        let [y, cb, cr] = ycbcr;
+        self.with_picture(lines, Picture::Uniform([y, y, cb, cr]))
+    }
+    /// The declared virtual scene written at each frame, over `lines` lines.
+    pub fn with_live_view_scene(self, lines: u32) -> Result<Self, String> {
+        self.with_picture(lines, Picture::Scene)
+    }
+    /// A host RGB image (post-ISP) sampled at each frame, over `lines` lines.
+    pub fn with_live_view_host_image(
+        self,
+        lines: u32,
+        width: u64,
+        height: u64,
+        rgb: Vec<u8>,
+    ) -> Result<Self, String> {
+        let scene = fujimod_virtual_scene::Scene {
+            width,
+            height,
+            frame: 0,
+        };
+        if fujimod_virtual_scene::validate_crop(scene, whole(scene)).is_err()
+            || width.checked_mul(height).and_then(|n| n.checked_mul(3)) != Some(rgb.len() as u64)
+        {
+            return Err("Invalid X-Processor Pro live-view host image".into());
+        }
+        self.with_picture(lines, Picture::Host(width, height, rgb.into()))
+    }
+    fn with_picture(mut self, lines: u32, picture: Picture) -> Result<Self, String> {
         if self.frames.is_none() || self.size <= WIDTH || !(1..=4096).contains(&lines) {
             return Err("Invalid X-Processor Pro live-view image".into());
         }
-        let [y, cb, cr] = ycbcr;
-        self.image = Some((lines, [y, y, cb, cr]));
+        self.image = Some((lines, picture));
         Ok(self)
     }
     fn write_image(&self, cx: &mut Cx<'_>) {
-        let Some((lines, pair)) = self.image else {
+        let Some((lines, picture)) = &self.image else {
             return;
         };
         let word = |o| self.state.words.get(&o).copied().unwrap_or(0);
@@ -246,7 +469,39 @@ impl Block {
         if width & 1 != 0 || width > 0x2000 {
             return cx.fail("Unsupported live-view line width");
         }
-        let image = pair.repeat(width as usize / 2 * lines as usize);
+        let (width, lines) = (u64::from(width), u64::from(*lines));
+        let image = match picture {
+            Picture::Uniform(pair) => Ok(pair.repeat((width / 2 * lines) as usize)),
+            Picture::Scene => {
+                let scene = fujimod_virtual_scene::Scene {
+                    width: SCENE_WIDTH,
+                    height: SCENE_HEIGHT,
+                    frame: self.state.frames,
+                };
+                fujimod_virtual_scene::output(scene, whole(scene), width, lines, None)
+            }
+            Picture::Host(w, h, rgb) => {
+                let scene = fujimod_virtual_scene::Scene {
+                    width: *w,
+                    height: *h,
+                    frame: 0,
+                };
+                fujimod_virtual_scene::output_rgb(
+                    scene,
+                    whole(scene),
+                    width,
+                    lines,
+                    None,
+                    |x, y| {
+                        let i = ((y * w + x) * 3) as usize;
+                        [rgb[i], rgb[i + 1], rgb[i + 2]]
+                    },
+                )
+            }
+        };
+        let Ok(image) = image else {
+            return cx.fail("Live-view scene output refused");
+        };
         if cx.ram_write(u64::from(address), &image).is_err() {
             cx.fail("Live-view buffer outside RAM");
         }
@@ -349,6 +604,7 @@ impl Device for Block {
                 self.state.words.insert(c.status, word);
             }
         }
+        self.publish();
         if let Some(frames) = self.frames {
             self.state.due = match (self.started(&frames), self.state.due) {
                 (false, _) => None,
@@ -363,6 +619,11 @@ impl Device for Block {
         if let Some(job) = self.job {
             if self.state.due.is_some_and(|at| at <= cx.now()) {
                 self.state.due = None;
+                if let Some(work) = self.work
+                    && let Err(e) = self.run_work(cx, work)
+                {
+                    return cx.fail(e);
+                }
                 self.state.jobs += 1;
                 self.state.status |= job.status.map_or(1, |(_, mask)| mask);
                 cx.set_irq(job.irq, true);
@@ -418,6 +679,7 @@ impl Device for Block {
             return Err("Invalid register block checkpoint".into());
         }
         self.state = state;
+        self.publish();
         Ok(())
     }
 }
@@ -588,6 +850,64 @@ mod tests {
     }
 
     #[test]
+    fn a_live_view_scene_unit_writes_the_moving_virtual_scene() {
+        use fujimod_emulator_devices::test_host::advance;
+        let frames = Frames {
+            start: (0xc8, 1 << 28),
+            stopped: (0xd8, 0x100),
+            irq: 108,
+            period: 10,
+        };
+        let mut unit = Block::new(BASE, 0x200, vec![(0, 1)], Some(frames))
+            .unwrap()
+            .with_live_view_scene(4)
+            .unwrap();
+        let mut h = TestHost::new();
+        write(&mut unit, &mut h, BASE + BUFFER, 0x1000);
+        write(&mut unit, &mut h, BASE + WIDTH, 8);
+        write(&mut unit, &mut h, BASE + 0xc8, 1 << 28);
+        advance(&mut unit, &mut h, 10);
+        // The white and yellow bars at the top left (eight pixels sample one
+        // bar each), BT.601 limited, chroma averaged over the pair.
+        assert_eq!(h.ram[0x1000..0x1004], [235, 210, 72, 137]);
+        let first = h.ram[0x1000..0x1040].to_vec();
+        advance(&mut unit, &mut h, 20);
+        // The ramp moves with the frame phase.
+        assert_ne!(h.ram[0x1000..0x1040], first[..]);
+        assert_eq!(h.ram[0x1040], 0);
+    }
+
+    #[test]
+    fn a_live_view_host_image_unit_samples_the_image_into_the_buffer() {
+        use fujimod_emulator_devices::test_host::advance;
+        let frames = Frames {
+            start: (0xc8, 1 << 28),
+            stopped: (0xd8, 0x100),
+            irq: 108,
+            period: 10,
+        };
+        let unit = || Block::new(BASE, 0x200, vec![(0, 1)], Some(frames)).unwrap();
+        let (red, blue) = ([255, 0, 0], [0, 0, 255]);
+        assert!(
+            unit()
+                .with_live_view_host_image(2, 2, 1, red.to_vec())
+                .is_err()
+        );
+        let mut unit = unit()
+            .with_live_view_host_image(2, 2, 1, [red, blue].concat())
+            .unwrap();
+        let mut h = TestHost::new();
+        write(&mut unit, &mut h, BASE + BUFFER, 0x1000);
+        write(&mut unit, &mut h, BASE + WIDTH, 4);
+        write(&mut unit, &mut h, BASE + 0xc8, 1 << 28);
+        advance(&mut unit, &mut h, 10);
+        // Each image pixel covers two output pixels, on both lines.
+        let row = [[81, 81, 90, 240], [41, 41, 240, 110]].concat();
+        assert_eq!(h.ram[0x1000..0x1010], [row.clone(), row].concat()[..]);
+        assert_eq!(h.ram[0x1010], 0);
+    }
+
+    #[test]
     fn development_engine_jobs_share_idle_status_words_or_have_no_status() {
         use fujimod_emulator_devices::test_host::advance;
         // 0xfffc4000: start +0x00 bit 0, done +0x3c bit 0 beside idle bit 20.
@@ -635,6 +955,102 @@ mod tests {
         assert_eq!(read(&mut engine, &mut h, 0xfff98000), 1);
         engine.restore(&saved).unwrap();
         assert_eq!(engine.state.status, 1);
+    }
+
+    #[test]
+    fn a_development_job_and_a_resizer_job_move_the_programmed_pictures() {
+        use fujimod_emulator_devices::test_host::advance;
+        let mut h = TestHost::new();
+        let job = Job {
+            start: (4, 1),
+            status: None,
+            stop: Some((0, 1)),
+            irq: 130,
+            ticks: 10,
+        };
+        let block = |base| Block::new(base, 0x1000, vec![(0, 1)], None).unwrap();
+        assert!(block(0xfff98000).with_work(Work::Resize).is_err());
+        assert!(
+            block(0xfff98000)
+                .with_job(job)
+                .unwrap()
+                .with_work(Work::Develop { phase: (6, 0) })
+                .is_err()
+        );
+        // A grey X-Trans frame of 12 lines x 12 samples, stride 32 bytes.
+        let grey = crate::imaging::BLACK + (crate::imaging::WHITE - crate::imaging::BLACK) / 5;
+        h.ram[0x1000..0x1000 + 32 * 12].copy_from_slice(&grey.to_le_bytes().repeat(16 * 12));
+        let mut engine = block(0xfff98000)
+            .with_job(job)
+            .unwrap()
+            .with_work(Work::Develop { phase: (2, 2) })
+            .unwrap();
+        for (offset, value) in [
+            (0x08, 0x1000),
+            (0x0c, 16),
+            (0x14, 0xb_000b),
+            (0x1c, 0x4000),
+            (0x20, 16),
+        ] {
+            write(&mut engine, &mut h, 0xfff98000 + offset, value);
+        }
+        write(&mut engine, &mut h, 0xfff98004, 1);
+        advance(&mut engine, &mut h, 10);
+        assert_eq!(engine.state.status, 1);
+        let developed = h.ram[0x4000..0x4000 + 32 * 12].to_vec();
+        let pixel = &developed[..4];
+        assert!(pixel[0] > 100 && pixel[0] == pixel[1] && pixel[2] == 128 && pixel[3] == 128);
+        assert!(
+            developed
+                .chunks(32)
+                .all(|line| line[..24].chunks(4).all(|p| p == pixel))
+        );
+        // The resizer halves it: 12 x 12 to 6 x 6 at 0x8000, stride 12 bytes.
+        let mut resizer = block(0xfffc3000)
+            .with_job(Job { irq: 131, ..job })
+            .unwrap()
+            .with_work(Work::Resize)
+            .unwrap();
+        for (offset, value) in [
+            (0x08, 0xb_000b),
+            (0x14, 0x5_0005),
+            (0x18, 0x1_1000),
+            (0x1c, 0x1_1000),
+            (0xc0, 0x4000),
+            (0xc4, 16),
+            (0xc8, 0x8000),
+            (0xcc, 6),
+        ] {
+            write(&mut resizer, &mut h, 0xfffc3000 + offset, value);
+        }
+        write(&mut resizer, &mut h, 0xfffc3004, 1);
+        h.now = 20;
+        let mut cx = h.cx();
+        resizer.advance(&mut cx);
+        assert!(cx.refusal().is_some_and(|f| f.contains("format")));
+        drop(cx);
+        write(&mut resizer, &mut h, 0xfffc3100, RESIZE_PACKED_422);
+        write(&mut resizer, &mut h, 0xfffc3004, 1);
+        advance(&mut resizer, &mut h, 40);
+        let scaled = &h.ram[0x8000..0x8000 + 12 * 6];
+        assert!(scaled.chunks(4).all(|p| p == pixel));
+        // Playback's format magnifies: 6x6 to 12x12 at half-pixel steps.
+        h.ram[0x8000..0x8000 + 24 * 12].fill(0);
+        for (offset, value) in [
+            (0x08, 0x5_0005),
+            (0x14, 0xb_000b),
+            (0x18, 0x800),
+            (0x1c, 0x800),
+            (0xc0, 0x4000),
+            (0xcc, 12),
+            (0x100, RESIZE_PACKED_422_PLAYBACK),
+        ] {
+            write(&mut resizer, &mut h, 0xfffc3000 + offset, value);
+        }
+        write(&mut resizer, &mut h, 0xfffc3004, 1);
+        advance(&mut resizer, &mut h, 60);
+        let magnified = &h.ram[0x8000..0x8000 + 24 * 12];
+        assert!(magnified.chunks(4).all(|p| p == pixel));
     }
 
     #[test]

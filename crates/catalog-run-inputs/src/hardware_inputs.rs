@@ -1248,6 +1248,103 @@ pub struct LiveViewImage {
     pub lines: u32,
     /// Luma, blue-difference and red-difference value of every pixel.
     pub ycbcr: [u8; 3],
+    /// Profile of a declared scene the unit writes instead of the uniform
+    /// image (the virtual post-ISP scene). Statistics stay with
+    /// `zone_statistics`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scene: Option<String>,
+    /// Host RGB image the unit writes instead of the uniform image (a
+    /// post-ISP display source). Statistics stay with `zone_statistics`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_image: Option<LiveViewHostImage>,
+}
+
+/// Host RGB image of a live-view output unit: an asset holding rows of red,
+/// green and blue bytes, sampled into the programmed buffer at each frame.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetLiveViewHostImage"))]
+pub struct LiveViewHostImage {
+    /// Asset identity in the configuration assets.
+    pub asset: String,
+    /// Declared basis.
+    pub basis: String,
+    /// Image height in pixels.
+    pub height: u32,
+    /// SHA-256 of the asset.
+    pub sha256: String,
+    /// Image width in pixels.
+    pub width: u32,
+}
+
+/// Declared sensor data of the still read-out: a profile the read-out unit
+/// writes into the line count, destination and stride the firmware programmed.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetSensorFrame"))]
+pub struct SensorFrame {
+    /// Declared basis.
+    pub basis: String,
+    /// Profile of the declared sensor response.
+    pub profile: String,
+}
+
+/// Declared still development: the register blocks that develop the
+/// read-out and scale the picture, acting on the registers the firmware
+/// programs, with a declared approximation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetStillDevelopment"))]
+pub struct StillDevelopment {
+    /// Declared basis.
+    pub basis: String,
+    /// Profile of the declared development and scaling.
+    pub profile: String,
+    /// Base of the development engine's register block.
+    pub developer: u64,
+    /// Base of the resizer's register block.
+    pub resizer: u64,
+    /// X-Trans site (line, sample) of the development engine's first source
+    /// sample.
+    pub source_phase: (u8, u8),
+    /// Base of the colour unit's register block, whose programmed film words
+    /// the development engine applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colour: Option<u64>,
+    /// Declared (R, G, B) white-balance gains at which the scene renders
+    /// neutral; the colour unit's programmed gains act by their ratio to it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub white_balance_reference: Option<[u32; 3]>,
+}
+
+/// Declared body calibration records in flash: bytes the firmware reads
+/// from its factory calibration stores, placed past the installed update.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetFlashCalibration"))]
+pub struct FlashCalibration {
+    /// Declared basis.
+    pub basis: String,
+    /// Records in ascending flash order.
+    pub records: Vec<FlashCalibrationRecord>,
+}
+
+/// One declared calibration record.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetFlashCalibrationRecord"))]
+pub struct FlashCalibrationRecord {
+    /// Declared basis.
+    pub basis: String,
+    /// Flash offset of the first byte.
+    pub flash: u64,
+    /// The bytes, as hexadecimal.
+    pub data: String,
 }
 
 /// Declared contents of one statistics engine output buffer: an asset
@@ -1312,6 +1409,15 @@ pub struct HardwareReset {
     /// Declared live-view image of the same scene.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub live_view_image: Option<LiveViewImage>,
+    /// Declared sensor frame the still read-out writes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sensor_frame: Option<SensorFrame>,
+    /// Declared still development of the read-out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub still_development: Option<StillDevelopment>,
+    /// Declared calibration records in the body's flash.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flash_calibration: Option<FlashCalibration>,
     /// Declared register-file parts on the I2C buses.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub i2c_parts: Vec<I2cPartInput>,
@@ -1395,11 +1501,11 @@ impl HardwareInputs {
             .ok_or_else(|| format!("unsupported hardware-input profile: {id}"))?;
         let inputs: Self = serde_json::from_str(document)
             .map_err(|error| format!("hardware-input profile {id}: {error}"))?;
-        if inputs.schema != 1
-            || inputs.schema_uri != HARDWARE_INPUTS_SCHEMA_URI
-            || inputs.id != id
+        if inputs.schema != 1 || inputs.schema_uri != HARDWARE_INPUTS_SCHEMA_URI || inputs.id != id
         {
-            return Err(format!("hardware-input profile {id} schema or identity differs"));
+            return Err(format!(
+                "hardware-input profile {id} schema or identity differs"
+            ));
         }
         fujimod_catalog_identity::validate_id(&inputs.body_id)?;
         Ok(inputs)

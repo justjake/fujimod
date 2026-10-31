@@ -455,6 +455,34 @@
       "ycbcr": [73, 114, 138],
       "basis": "Measured, uniform scene: X-T20 2.11 REC live view of the evenly lit wall (s2, 2026-10-29), the same capture as zone_statistics. Live-view output unit 1 (0xfff56000) holds the buffer address at +0xc0 and the line width at +0xc4 (0x2d0 = 720 pixels); on the XP4 board the firmware moves +0xc0 through 0xa7d6000 + 0x180000*k (k < 4) between frames and the display output scans out the buffer finished last. The camera's four buffers hold 720x480 packed 4:2:2 (Y0 Y1 Cb Cr, stride 1440): mean Y 73 (sd 26: texture and vignetting), Cb 114, Cr 138 in every buffer; with the lens cap on (s1) Y is 0 and Cb/Cr 128, so the range is full. Declared uniform: every pixel holds the means. The image the camera keeps below line 480 is not written."
     },
+    "sensor_frame": {
+      "profile": "xpp-declared-virtual-scene-linear-srgb-xtrans-u16-v1",
+      "basis": "Declared approximation, not measured: the still read-out writes the declared virtual scene through the profile's linear response as X-Trans u16 samples, in the buffer and geometry the firmware programs."
+    },
+    "still_development": {
+      "profile": "xpp-declared-xtrans-nearest-fff47-film-relative-wb-422-v1",
+      "developer": 4294541312,
+      "resizer": 4294717440,
+      "source_phase": [2, 2],
+      "colour": 4294209536,
+      "white_balance_reference": [734, 604, 2284],
+      "basis": "Declared approximation, not measured. X-T20 2.11 develops the read-out on 0xfff98000 (step marker 0x6023320: source +0x08 and stride +0x0c, size +0x14, mode +0x18, destination +0x1c and stride +0x20) and scales the picture on 0xfffc3000 (step marker 0x6023330: sizes +0x08/+0x10/+0x14, steps +0x18/+0x1c, source +0xc0/+0xc4, destination +0xc8/+0xcc, format +0x100). The first resizer job writes the packed 4:2:2 picture that the JPEG encoder reads at 0x80000000. The development source starts 16 lines into the read-out buffer, at X-Trans site (2, 2). The colour is that of the colour unit 0xfff47000, whose words a PROVIA and a Velvia shot program differently: the encodings of the X70 film stage at the X70 offset minus 0x100, with the curve widths of +0xa58 (inferred from the curve's slope joints). White balance is relative: the scene renders neutral at the reference gains, the AUTO white balance this body's firmware programs (+0x100/+0x104) for the declared zone statistics, and other programmed gains act by their ratio to it."
+    },
+    "flash_calibration": {
+      "basis": "Synthetic, not camera values. Segment 5 copies the factory calibration blocks at flash 0x3320000 and 0x3340000 to RAM 0x2e08000 and 0x2e28000. The store reader 0xcd7488 reaches them as offsets 0x1a0000 and 0x1c0000 from the store base 0x2c68000 (pointer 0xffb164). Past the installed update the flash reads erased, and erased values stop still development.",
+      "records": [
+        {
+          "flash": 53623372,
+          "data": "00000000",
+          "basis": "Lens correction enables, all clear. 0x160c730 enables the resizer's correction table from bit n of store offset 0x1a3a4c. With erased bits the first resizer job takes erased coefficients, its set-up 0xc6cccc refuses them (-30), and the main picture at 0x80000000 is never written."
+        },
+        {
+          "flash": 53788672,
+          "data": "000849089208dc0825096f09b809020a4b0a950ade0a280b710bbb0b040c4e0c970ce10c2a0d740dbd0d070e500e9a0ee30e2d0f760fc00f",
+          "basis": "Development tone curve: 28 u16 values rising evenly from 0x800 to 0xfc0. 0x160cd28 copies them from store offset 0x1cc000 into the parameters that 0x1563e4c programs at 0xfffa9048..0xfffa9088. Erased values make it fail (-30), and recfReccProcess then skips development."
+        }
+      ]
+    },
     "usb_cable": {
       "vbus_bank": 1,
       "vbus_pin": 14,

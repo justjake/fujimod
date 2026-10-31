@@ -89,7 +89,7 @@ enum Transfer {
     PioRead,
     PioWrite,
 }
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum Phase {
     Command,
     /// SDHC response reported; the first block's buffer event follows.
@@ -1155,8 +1155,12 @@ impl SdHost {
                 .set(0x32, self.regs.get(0x32) & self.regs.get(0x36));
             return self.signal(cx);
         }
-        if self.request.is_some() {
-            return Err("SD configuration changed during command".into());
+        if let Some(r) = &self.request {
+            return Err(format!(
+                "SD configuration changed during CMD{} ({:?}, byte {} of {}): offset {offset:#x} size {size} value {value:#x}",
+                r.command, r.phase, r.cursor, r.quantity
+            )
+            .into());
         }
         // Power-control bits 12-15 select SDHCI 4 VDD2, used only by UHS-II
         // cards; GFX 50R 0xcac8e4 sets them. They are stored with no effect.

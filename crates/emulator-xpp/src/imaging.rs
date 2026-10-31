@@ -29,7 +29,18 @@
 //! line stride +0x10), the interrupt enable +0x1c bit 0 and starts it with
 //! bit 0 of +0x00. The unit finishes after the declared ticks: status +0x20
 //! bit 0 sets (write 1 to clear) and, when enabled, the level interrupt is
-//! high until the status is cleared. No sensor data is written.
+//! high until the status is cleared. Without a declared sensor frame no
+//! sensor data is written. With [`SENSOR_PROFILE`] the unit writes, on
+//! completion, the programmed line count of `stride / 2` little-endian u16
+//! samples per line at the programmed destination and stride (X-T20 2.11 shot:
+//! 4072 lines, stride 0x3020 = 6160 samples, 0x147da100): the virtual scene's
+//! first frame over the whole raster, linear sRGB through a declared X-Trans
+//! response. sRGB black reads [`BLACK`], white [`WHITE`]; no optical or
+//! spectral calibration is claimed. The tile phase at the buffer origin is
+//! [`TILE_PHASE`] (line, sample): the 2.11 RAF writer stores 4032 lines of
+//! 6160 samples from buffer + 0x723c0, 38 lines down and 128 samples back
+//! (checked on an emulated RAF: the scene's edges move by exactly that), so
+//! this phase gives the file the standard X-Trans pattern its header names.
 //!
 //! +0x000 bit 0 is a run bit that reads set: 0xc33ec8 clears it and waits
 //! for it to read set again (stopped). Other words read back their last
@@ -56,6 +67,19 @@ const WRITE: u8 = 0x81;
 const READOUT_ENABLE: u64 = 0x1c;
 const READOUT_STATUS: u64 = 0x20;
 const READOUT_DONE: u32 = 1;
+const READOUT_LINES: u64 = 0x08;
+const READOUT_DESTINATION: u64 = 0x0c;
+const READOUT_STRIDE: u64 = 0x10;
+
+/// Declared sensor response of a readout unit (see the module notes).
+pub const SENSOR_PROFILE: &str = "xpp-declared-virtual-scene-linear-srgb-xtrans-u16-v1";
+/// Declared sample of sRGB black.
+pub const BLACK: u16 = 1024;
+/// Declared sample of sRGB white.
+pub const WHITE: u16 = 16383;
+/// X-Trans tile (line, sample) at the readout buffer origin.
+pub const TILE_PHASE: (u64, u64) = (4, 2);
+use crate::development::XTRANS;
 
 /// A sensor readout unit: its channel offset, level interrupt and the ticks
 /// a readout takes.
@@ -91,6 +115,8 @@ pub struct Control {
     readout: Option<Readout>,
     readout_due: Option<u64>,
     readout_status: u32,
+    /// The readout writes the declared sensor frame.
+    sensor_frame: bool,
 }
 impl Control {
     pub fn new(base: u64) -> Result<Self, String> {
@@ -105,6 +131,7 @@ impl Control {
             readout: None,
             readout_due: None,
             readout_status: 0,
+            sensor_frame: false,
         })
     }
     /// A sensor readout unit at a channel offset.
@@ -117,6 +144,52 @@ impl Control {
         }
         self.readout = Some(readout);
         Ok(self)
+    }
+    /// The readout writes the declared sensor frame named by `profile`.
+    pub fn with_sensor_frame(mut self, profile: &str) -> Result<Self, String> {
+        if self.readout.is_none() || profile != SENSOR_PROFILE {
+            return Err(format!("unknown X-Processor Pro sensor frame {profile}"));
+        }
+        self.sensor_frame = true;
+        Ok(self)
+    }
+    /// Lines of the declared sensor frame into the programmed buffer.
+    fn write_frame(&self, cx: &mut Cx<'_>, r: Readout) {
+        let lines = u64::from(self.word(r.offset + READOUT_LINES));
+        let stride = u64::from(self.word(r.offset + READOUT_STRIDE));
+        let destination = u64::from(self.word(r.offset + READOUT_DESTINATION));
+        if !(6..=8192).contains(&lines) || !(12..=0x8000).contains(&stride) || stride & 1 != 0 {
+            return cx.fail("Unsupported sensor readout geometry");
+        }
+        let width = stride / 2;
+        let scene = fujimod_virtual_scene::Scene {
+            width,
+            height: lines,
+            frame: 0,
+        };
+        let response: Vec<u16> = (0..=255u8)
+            .map(|v| {
+                let srgb = f64::from(v) / 255.;
+                let linear = if srgb <= 0.04045 {
+                    srgb / 12.92
+                } else {
+                    ((srgb + 0.055) / 1.055).powf(2.4)
+                };
+                BLACK + (linear * f64::from(WHITE - BLACK)).round() as u16
+            })
+            .collect();
+        let mut line = vec![0; stride as usize];
+        for y in 0..lines {
+            let sites = &XTRANS[((y + TILE_PHASE.0) % 6) as usize];
+            for (x, sample) in line.chunks_exact_mut(2).enumerate() {
+                let colour = sites[(x + TILE_PHASE.1 as usize) % 6] as usize;
+                let rgb = fujimod_virtual_scene::rgb(scene, x as u64, y);
+                sample.copy_from_slice(&response[usize::from(rgb[colour])].to_le_bytes());
+            }
+            if cx.ram_write(destination + y * stride, &line).is_err() {
+                return cx.fail("Sensor readout buffer outside RAM");
+            }
+        }
     }
     fn word(&self, offset: u64) -> u32 {
         self.words.get(&offset).copied().unwrap_or(0)
@@ -207,6 +280,9 @@ impl Device for Control {
         let Some(r) = self.readout else { return };
         if self.readout_due.is_some_and(|at| at <= cx.now()) {
             self.readout_due = None;
+            if self.sensor_frame {
+                self.write_frame(cx, r);
+            }
             self.readout_status |= READOUT_DONE;
             if self.word(r.offset + READOUT_ENABLE) & 1 != 0 {
                 cx.set_irq(r.irq, true);
@@ -366,5 +442,48 @@ mod tests {
         other.restore(&saved).unwrap();
         assert_eq!(read(&mut other, &mut h, unit + 0x20), 1);
         assert!(Control::new(BASE).unwrap().restore(&saved).is_err());
+    }
+
+    #[test]
+    fn a_readout_with_a_sensor_frame_writes_x_trans_samples_of_the_scene() {
+        let readout = Readout {
+            offset: 0xc0,
+            irq: 98,
+            ticks: 10,
+        };
+        assert!(
+            Control::new(BASE)
+                .unwrap()
+                .with_sensor_frame(SENSOR_PROFILE)
+                .is_err()
+        );
+        let control = || Control::new(BASE).unwrap().with_readout(readout).unwrap();
+        assert!(control().with_sensor_frame("other").is_err());
+        let mut control = control().with_sensor_frame(SENSOR_PROFILE).unwrap();
+        let mut h = TestHost::new();
+        let unit = BASE + 0xc0;
+        // Six lines of eight samples at 0x1000.
+        write(&mut control, &mut h, unit + 0x08, 6);
+        write(&mut control, &mut h, unit + 0x0c, 0x1000);
+        write(&mut control, &mut h, unit + 0x10, 16);
+        write(&mut control, &mut h, unit, 1);
+        advance(&mut control, &mut h, 9);
+        assert_eq!(h.ram[0x1000..0x1002], [0, 0]);
+        advance(&mut control, &mut h, 10);
+        let sample = |y: usize, x: usize| {
+            u16::from_le_bytes([
+                h.ram[0x1000 + 16 * y + 2 * x],
+                h.ram[0x1001 + 16 * y + 2 * x],
+            ])
+        };
+        // One bar per sample on the first line, X-Trans row 4 from site 2
+        // (B G G R G G B G):
+        // white, yellow, cyan, green, magenta, red, blue, black.
+        let row: Vec<u16> = (0..8).map(|x| sample(0, x)).collect();
+        assert_eq!(
+            row,
+            [WHITE, WHITE, WHITE, BLACK, BLACK, BLACK, WHITE, BLACK]
+        );
+        assert_eq!(h.ram[0x1000 + 16 * 6], 0);
     }
 }

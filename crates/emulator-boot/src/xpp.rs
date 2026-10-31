@@ -107,6 +107,26 @@ fn buffer_words(
         .collect())
 }
 
+/// Hexadecimal rows of a declared live-view host image, after its identity check.
+fn host_image(
+    assets: &BTreeMap<String, Vec<u8>>,
+    image: &fujimod_catalog_run_inputs::hardware_inputs::LiveViewHostImage,
+) -> Result<String, String> {
+    let asset = &image.asset;
+    let data = assets
+        .get(asset)
+        .ok_or_else(|| format!("live-view image asset {asset} was not supplied"))?;
+    let digest: String = Sha256::digest(data)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    let size = u64::from(image.width) * u64::from(image.height) * 3;
+    if size == 0 || data.len() as u64 != size || digest != image.sha256 {
+        return Err(format!("live-view image asset {asset} identity differs"));
+    }
+    Ok(data.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
 fn serial_nodes(
     maps: &RegisterLayouts,
     reset: &HardwareReset,
@@ -321,6 +341,15 @@ fn nodes(
     {
         return Err("the live-view image unit must be a register block with frames".into());
     }
+    let development = reset.still_development.as_ref();
+    if let Some(development) = development
+        && [development.developer, development.resizer]
+            .iter()
+            .chain(&development.colour)
+            .any(|&unit| !maps.register_blocks.iter().any(|block| block.base == unit))
+    {
+        return Err("still development units must be register blocks with jobs".into());
+    }
     for (n, block) in maps.register_blocks.iter().enumerate() {
         let mut model = json!({
             "kind": "register-block", "base": block.base, "size": block.size,
@@ -348,8 +377,36 @@ fn nodes(
                 "word": c.word, "value": c.value, "status": c.status, "mask": c.mask, "state": c.state,
             }))
             .collect::<Vec<_>>());
+        if let Some(development) = development {
+            let law = if block.base == development.developer {
+                let mut law = json!({ "law": "develop", "profile": development.profile,
+                                      "phase": development.source_phase });
+                if let Some(colour) = development.colour {
+                    law["colour"] = json!(colour);
+                    law["white_balance"] = json!(development.white_balance_reference);
+                }
+                Some(law)
+            } else if block.base == development.resizer {
+                Some(json!({ "law": "resize", "profile": development.profile }))
+            } else {
+                None
+            };
+            if let Some(law) = law {
+                if block.job.is_none() {
+                    return Err("still development units must be register blocks with jobs".into());
+                }
+                model["work"] = law;
+            }
+        }
         if let Some(image) = image.filter(|image| image.unit == block.base) {
-            model["live_view_image"] = json!({ "lines": image.lines, "ycbcr": image.ycbcr });
+            model["live_view_image"] =
+                json!({ "lines": image.lines, "ycbcr": image.ycbcr, "scene": image.scene });
+            if let Some(host) = &image.host_image {
+                model["live_view_image"]["host_image"] = json!({
+                    "width": host.width, "height": host.height,
+                    "rgb": host_image(inputs.assets, host)?,
+                });
+            }
         }
         node(format!("block{n}"), model);
     }
@@ -488,6 +545,9 @@ fn nodes(
         );
     }
     if let Some(control) = &maps.imaging_control {
+        if reset.sensor_frame.is_some() && control.readout.is_none() {
+            return Err("a sensor frame requires the sensor read-out unit".into());
+        }
         node(
             "imaging".into(),
             json!({
@@ -496,8 +556,11 @@ fn nodes(
                 "readout": control.readout.as_ref().map(|r| json!({
                     "offset": r.offset, "irq": r.irq_route, "ticks": r.ticks,
                 })),
+                "sensor_frame": reset.sensor_frame.as_ref().map(|frame| &frame.profile),
             }),
         );
+    } else if reset.sensor_frame.is_some() {
+        return Err("a sensor frame requires the imaging control page".into());
     }
     if let Some(sync) = &maps.frame_sync {
         node(
@@ -896,6 +959,169 @@ mod tests {
         ] {
             assert!(built.nodes.contains_key(name), "missing node {name}");
         }
+    }
+
+    #[test]
+    fn a_live_view_host_image_is_checked_and_passed_to_its_unit() {
+        use fujimod_catalog_run_inputs::hardware_inputs::LiveViewHostImage;
+        let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
+        let maps = soc_profile(&resolved)
+            .unwrap()
+            .register_maps
+            .as_ref()
+            .unwrap();
+        let selection = &resolved.reference;
+        let banks = ram_banks(&selection.soc.memory_regions);
+        let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let image = reset.live_view_image.as_mut().unwrap();
+        let unit = image.unit;
+        image.host_image = Some(LiveViewHostImage {
+            asset: "host".into(),
+            basis: "test".into(),
+            width: 2,
+            height: 1,
+            sha256: "0".repeat(64),
+        });
+        let starts = starts();
+        let mut assets = assets();
+        let pixels = vec![255, 0, 0, 0, 0, 255];
+        assets.insert("host".into(), pixels.clone());
+        let built = |reset: &HardwareReset, assets: &BTreeMap<String, Vec<u8>>| {
+            let inputs = Inputs {
+                starts: &starts,
+                sub_cpu_registers: &[],
+                assets,
+            };
+            nodes(maps, reset, selection.body.dram_bytes, &banks, &inputs)
+        };
+        assert_eq!(
+            built(&reset, &assets).err().unwrap(),
+            "live-view image asset host identity differs"
+        );
+        let host = reset
+            .live_view_image
+            .as_mut()
+            .unwrap()
+            .host_image
+            .as_mut()
+            .unwrap();
+        host.sha256 = Sha256::digest(&pixels)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        let nodes = built(&reset, &assets).unwrap();
+        let block = nodes
+            .iter()
+            .map(|node| &node["model"])
+            .find(|model| model["base"] == unit)
+            .unwrap();
+        assert_eq!(
+            block["live_view_image"]["host_image"],
+            json!({"width": 2, "height": 1, "rgb": "ff00000000ff"})
+        );
+    }
+
+    #[test]
+    fn a_declared_sensor_frame_reaches_the_read_out_unit() {
+        use fujimod_catalog_run_inputs::hardware_inputs::SensorFrame;
+        let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
+        let maps = soc_profile(&resolved)
+            .unwrap()
+            .register_maps
+            .as_ref()
+            .unwrap();
+        let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        reset.sensor_frame = Some(SensorFrame {
+            basis: "test".into(),
+            profile: "declared".into(),
+        });
+        let (starts, assets) = (starts(), assets());
+        let inputs = Inputs {
+            starts: &starts,
+            sub_cpu_registers: &[],
+            assets: &assets,
+        };
+        let banks = ram_banks(&resolved.reference.soc.memory_regions);
+        let nodes = nodes(
+            maps,
+            &reset,
+            resolved.reference.body.dram_bytes,
+            &banks,
+            &inputs,
+        )
+        .unwrap();
+        let imaging = nodes.iter().find(|node| node["name"] == "imaging").unwrap();
+        assert_eq!(imaging["model"]["sensor_frame"], "declared");
+        let mut maps = maps.clone();
+        maps.imaging_control.as_mut().unwrap().readout = None;
+        assert_eq!(
+            super::nodes(&maps, &reset, 0, &banks, &inputs)
+                .err()
+                .unwrap(),
+            "a sensor frame requires the sensor read-out unit"
+        );
+    }
+
+    #[test]
+    fn declared_still_development_reaches_the_developer_and_the_resizer() {
+        use fujimod_catalog_run_inputs::hardware_inputs::StillDevelopment;
+        let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
+        let maps = soc_profile(&resolved)
+            .unwrap()
+            .register_maps
+            .as_ref()
+            .unwrap();
+        let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        reset.still_development = Some(StillDevelopment {
+            basis: "test".into(),
+            profile: "declared".into(),
+            developer: 0xfff9_8000,
+            resizer: 0xfffc_3000,
+            source_phase: (2, 2),
+            colour: None,
+            white_balance_reference: None,
+        });
+        let (starts, assets) = (starts(), assets());
+        let inputs = Inputs {
+            starts: &starts,
+            sub_cpu_registers: &[],
+            assets: &assets,
+        };
+        let banks = ram_banks(&resolved.reference.soc.memory_regions);
+        let nodes = nodes(maps, &reset, 0, &banks, &inputs).unwrap();
+        let block = |base: u64| {
+            nodes
+                .iter()
+                .find(|node| node["model"]["base"] == base)
+                .unwrap()
+                .clone()
+        };
+        assert_eq!(
+            block(0xfff9_8000)["model"]["work"],
+            json!({ "law": "develop", "profile": "declared", "phase": [2, 2] })
+        );
+        assert_eq!(
+            block(0xfffc_3000)["model"]["work"],
+            json!({ "law": "resize", "profile": "declared" })
+        );
+        assert!(block(0xfff7_e000)["model"].get("work").is_none());
+        reset.still_development.as_mut().unwrap().colour = Some(0xfff4_7000);
+        let nodes = super::nodes(maps, &reset, 0, &banks, &inputs).unwrap();
+        let developer = nodes
+            .iter()
+            .find(|node| node["model"]["base"] == 0xfff9_8000u64)
+            .unwrap();
+        assert_eq!(developer["model"]["work"]["colour"], 0xfff4_7000u64);
+        reset.still_development.as_mut().unwrap().colour = Some(0xfff4_8000);
+        assert!(super::nodes(maps, &reset, 0, &banks, &inputs).is_err());
+        reset.still_development.as_mut().unwrap().colour = None;
+        reset.still_development.as_mut().unwrap().resizer = 0xfff7_f004;
+        assert_eq!(
+            super::nodes(maps, &reset, 0, &banks, &inputs)
+                .err()
+                .unwrap(),
+            "still development units must be register blocks with jobs"
+        );
     }
 
     #[test]

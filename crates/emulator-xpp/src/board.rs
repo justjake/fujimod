@@ -86,6 +86,20 @@ pub struct BlockFrames {
 pub struct LiveViewImage {
     pub lines: u32,
     pub ycbcr: [u8; 3],
+    /// Profile of a declared scene that replaces the uniform image.
+    #[serde(default)]
+    pub scene: Option<String>,
+    /// Host RGB image that replaces the uniform image.
+    #[serde(default)]
+    pub host_image: Option<HostImage>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostImage {
+    pub width: u64,
+    pub height: u64,
+    /// Rows of red, green and blue bytes, in hexadecimal.
+    pub rgb: String,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -98,6 +112,26 @@ pub struct BlockJob {
     pub stop: Option<(u64, u32)>,
     pub irq: u32,
     pub ticks: u64,
+}
+/// Data a register block's job moves when it finishes, with the declared
+/// approximation [`crate::development::PROFILE`], or
+/// [`crate::development::FILM_PROFILE`] with the colour unit's register block.
+#[derive(Deserialize)]
+#[serde(tag = "law", rename_all = "kebab-case", deny_unknown_fields)]
+pub enum BlockWork {
+    /// The development engine; the X-Trans site (line, sample) of its first
+    /// source sample.
+    Develop {
+        profile: String,
+        phase: (u8, u8),
+        #[serde(default)]
+        colour: Option<u64>,
+        /// Reference (R, G, B) gains at which the declared scene renders neutral.
+        #[serde(default)]
+        white_balance: Option<[u32; 3]>,
+    },
+    /// The resizer.
+    Resize { profile: String },
 }
 /// Writing `value` to `word` sets the bits `mask` of `status` to `state`.
 #[derive(Deserialize)]
@@ -161,6 +195,9 @@ pub enum Model {
         frames: Option<BlockFrames>,
         #[serde(default)]
         job: Option<BlockJob>,
+        /// Data the job moves when it finishes.
+        #[serde(default)]
+        work: Option<BlockWork>,
         /// A uniform live-view image written before each frame interrupt.
         #[serde(default)]
         live_view_image: Option<LiveViewImage>,
@@ -243,6 +280,9 @@ pub enum Model {
         /// A sensor readout unit at one of the channel offsets.
         #[serde(default)]
         readout: Option<imaging::Readout>,
+        /// Profile of the declared sensor frame the readout writes.
+        #[serde(default)]
+        sensor_frame: Option<String>,
     },
     FrameSync {
         base: u64,
@@ -397,6 +437,21 @@ impl Device for Timers {
         self.model.restore(v)
     }
 }
+/// Bytes of a hexadecimal node field.
+fn hex(text: &str) -> Result<Vec<u8>, String> {
+    if text.len() % 2 != 0 {
+        return Err("live-view host image is not whole bytes of hexadecimal".into());
+    }
+    (0..text.len())
+        .step_by(2)
+        .map(|i| {
+            text.get(i..i + 2)
+                .and_then(|pair| u8::from_str_radix(pair, 16).ok())
+                .ok_or_else(|| "live-view host image is not hexadecimal".to_string())
+        })
+        .collect()
+}
+
 pub fn build(
     graph: factory::Graph,
     spec: Spec,
@@ -426,6 +481,20 @@ pub fn build(
             _ => None,
         })
         .transpose()?;
+    // The colour unit a development engine reads, published by its block.
+    let colour = spec.nodes.iter().find_map(|n| match &n.model {
+        Model::RegisterBlock {
+            work:
+                Some(BlockWork::Develop {
+                    colour: Some(base),
+                    white_balance,
+                    ..
+                }),
+            ..
+        } => Some((*base, blocks::Published::default(), *white_balance)),
+        _ => None,
+    });
+    let mut colour_published = false;
     for node in spec.nodes {
         if nodes.contains_key(&node.name) {
             return Err("Repeated X-Processor Pro node".into());
@@ -589,6 +658,7 @@ pub fn build(
                 idle,
                 frames,
                 job,
+                work,
                 live_view_image,
                 fixed,
                 commands,
@@ -609,8 +679,57 @@ pub fn build(
                         ticks: j.ticks,
                     })?;
                 }
+                if let Some(work) = work {
+                    let film = colour.is_some();
+                    let (profile, law, reads_colour) = match work {
+                        BlockWork::Develop {
+                            profile,
+                            phase,
+                            colour,
+                            ..
+                        } => (profile, blocks::Work::Develop { phase }, colour.is_some()),
+                        BlockWork::Resize { profile } => (profile, blocks::Work::Resize, film),
+                    };
+                    let expected = if reads_colour {
+                        crate::development::FILM_PROFILE
+                    } else {
+                        crate::development::PROFILE
+                    };
+                    if profile != expected {
+                        return Err(format!("unknown still development profile {profile}"));
+                    }
+                    model = model.with_work(law)?;
+                    if let (blocks::Work::Develop { .. }, Some((_, words, reference))) =
+                        (law, &colour)
+                    {
+                        let reference = reference
+                            .ok_or("a still colour unit needs a reference white balance")?;
+                        model = model.with_colour(words.clone(), reference)?;
+                    }
+                }
+                if let Some((_, words, _)) = colour.as_ref().filter(|(unit, ..)| *unit == base) {
+                    model = model.with_published(words.clone());
+                    colour_published = true;
+                }
                 if let Some(image) = live_view_image {
-                    model = model.with_live_view_image(image.lines, image.ycbcr)?;
+                    model = match (image.scene.as_deref(), image.host_image) {
+                        (None, None) => model.with_live_view_image(image.lines, image.ycbcr)?,
+                        (Some(fujimod_virtual_scene::PROFILE), None) => {
+                            model.with_live_view_scene(image.lines)?
+                        }
+                        (None, Some(host)) => model.with_live_view_host_image(
+                            image.lines,
+                            host.width,
+                            host.height,
+                            hex(&host.rgb)?,
+                        )?,
+                        (Some(_), Some(_)) => {
+                            return Err("a live-view image has one source".into());
+                        }
+                        (Some(other), None) => {
+                            return Err(format!("unknown live-view scene {other}"));
+                        }
+                    };
                 }
                 if !fixed.is_empty() {
                     model = model.with_fixed(fixed)?;
@@ -757,6 +876,7 @@ pub fn build(
                 base,
                 hole,
                 readout,
+                sensor_frame,
             } => {
                 let end = base + imaging::WINDOW;
                 let windows = match hole {
@@ -776,9 +896,15 @@ pub fn build(
                             size: hi - lo,
                         })
                         .collect(),
-                    Box::new(match readout {
-                        Some(r) => imaging::Control::new(base)?.with_readout(r)?,
-                        None => imaging::Control::new(base)?,
+                    Box::new({
+                        let mut control = imaging::Control::new(base)?;
+                        if let Some(r) = readout {
+                            control = control.with_readout(r)?;
+                        }
+                        match sensor_frame {
+                            Some(profile) => control.with_sensor_frame(&profile)?,
+                            None => control,
+                        }
                     }),
                 )?
             }
@@ -957,6 +1083,9 @@ pub fn build(
             }
         };
         nodes.insert(node.name, id);
+    }
+    if colour.is_some() && !colour_published {
+        return Err("the still colour unit must be a register block".into());
     }
     let interrupts = InterruptMap {
         gic: Box::new(gicv2::Gic::new(cores, spec.gic.lines)),

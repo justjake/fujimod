@@ -88,6 +88,17 @@
           ],
           "description": "Declared flash aperture contents."
         },
+        "flash_calibration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetFlashCalibration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared calibration records in the body's flash."
+        },
         "gpio_input": {
           "anyOf": [
             {
@@ -219,6 +230,17 @@
           ],
           "description": "Declared SD card in the slot at power-on."
         },
+        "sensor_frame": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetSensorFrame"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared sensor frame the still read-out writes."
+        },
         "sensor_input": {
           "anyOf": [
             {
@@ -261,6 +283,17 @@
             "object",
             "null"
           ]
+        },
+        "still_development": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetStillDevelopment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared still development of the read-out."
         },
         "sub_cpu": {
           "anyOf": [
@@ -1151,6 +1184,54 @@
       ],
       "type": "object"
     },
+    "ResetFlashCalibration": {
+      "additionalProperties": false,
+      "description": "Declared body calibration records in flash: bytes the firmware reads\nfrom its factory calibration stores, placed past the installed update.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "records": {
+          "description": "Records in ascending flash order.",
+          "items": {
+            "$ref": "#/$defs/ResetFlashCalibrationRecord"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "records"
+      ],
+      "type": "object"
+    },
+    "ResetFlashCalibrationRecord": {
+      "additionalProperties": false,
+      "description": "One declared calibration record.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "data": {
+          "description": "The bytes, as hexadecimal.",
+          "type": "string"
+        },
+        "flash": {
+          "description": "Flash offset of the first byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "flash",
+        "data"
+      ],
+      "type": "object"
+    },
     "ResetGpio": {
       "additionalProperties": false,
       "description": "Declared gpio facts.",
@@ -1756,6 +1837,44 @@
       ],
       "type": "object"
     },
+    "ResetLiveViewHostImage": {
+      "additionalProperties": false,
+      "description": "Host RGB image of a live-view output unit: an asset holding rows of red,\ngreen and blue bytes, sampled into the programmed buffer at each frame.",
+      "properties": {
+        "asset": {
+          "description": "Asset identity in the configuration assets.",
+          "type": "string"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "height": {
+          "description": "Image height in pixels.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "SHA-256 of the asset.",
+          "type": "string"
+        },
+        "width": {
+          "description": "Image width in pixels.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "asset",
+        "basis",
+        "height",
+        "sha256",
+        "width"
+      ],
+      "type": "object"
+    },
     "ResetLiveViewImage": {
       "additionalProperties": false,
       "description": "Declared uniform image a live-view output unit writes at each frame.",
@@ -1764,11 +1883,29 @@
           "description": "Declared basis.",
           "type": "string"
         },
+        "host_image": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetLiveViewHostImage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Host RGB image the unit writes instead of the uniform image (a\npost-ISP display source). Statistics stay with `zone_statistics`."
+        },
         "lines": {
           "description": "Lines written to each buffer.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "scene": {
+          "description": "Profile of a declared scene the unit writes instead of the uniform\nimage (the virtual post-ISP scene). Statistics stay with\n`zone_statistics`.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "unit": {
           "description": "Base of the live-view output unit.",
@@ -2589,6 +2726,25 @@
       ],
       "type": "object"
     },
+    "ResetSensorFrame": {
+      "additionalProperties": false,
+      "description": "Declared sensor data of the still read-out: a profile the read-out unit\nwrites into the line count, destination and stride the firmware programmed.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "profile": {
+          "description": "Profile of the declared sensor response.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "basis",
+        "profile"
+      ],
+      "type": "object"
+    },
     "ResetSensorInput": {
       "additionalProperties": false,
       "description": "Declared sensor input facts.",
@@ -3001,6 +3157,83 @@
         "name",
         "samples_per_cell",
         "signal_shift"
+      ],
+      "type": "object"
+    },
+    "ResetStillDevelopment": {
+      "additionalProperties": false,
+      "description": "Declared still development: the register blocks that develop the\nread-out and scale the picture, acting on the registers the firmware\nprograms, with a declared approximation.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "colour": {
+          "description": "Base of the colour unit's register block, whose programmed film words\nthe development engine applies.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "developer": {
+          "description": "Base of the development engine's register block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "profile": {
+          "description": "Profile of the declared development and scaling.",
+          "type": "string"
+        },
+        "resizer": {
+          "description": "Base of the resizer's register block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_phase": {
+          "description": "X-Trans site (line, sample) of the development engine's first source\nsample.",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "white_balance_reference": {
+          "description": "Declared (R, G, B) white-balance gains at which the scene renders\nneutral; the colour unit's programmed gains act by their ratio to it.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "basis",
+        "profile",
+        "developer",
+        "resizer",
+        "source_phase"
       ],
       "type": "object"
     },

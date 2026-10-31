@@ -322,6 +322,12 @@ impl Gic {
                         break;
                     }
                     let bank = Self::bank(core, line);
+                    // GICv2 4.3.8: clearing a level-sensitive SPI's pending
+                    // state has no effect while its input stays asserted.
+                    let held = action == 3
+                        && line >= 32
+                        && self.levels[line]
+                        && self.config[line / 16] & (2 << (line % 16 * 2)) == 0;
                     let array = if action < 2 {
                         &mut self.enabled
                     } else if action < 4 {
@@ -336,7 +342,7 @@ impl Gic {
                     };
                     if write && value & (1 << bit) != 0 {
                         if line >= 16 {
-                            array[b][line] = action % 2 == 0;
+                            array[b][line] = action % 2 == 0 || held;
                         }
                     }
                     if array[b][line] {
@@ -495,6 +501,26 @@ mod tests {
         invalid["pending"][0][5] = serde_json::json!(false);
         assert!(resumed.restore(&invalid).is_err());
         assert_eq!(resumed.save(), before);
+    }
+    #[test]
+    fn clearing_an_asserted_level_line_leaves_it_pending() {
+        let mut g = Gic::new(1, 128);
+        g.access(0, true, 0, 4, true, 1).unwrap();
+        g.access(0, false, 0, 4, true, 1).unwrap();
+        g.access(0, false, 4, 4, true, 255).unwrap();
+        g.access(0, true, 0x108, 4, true, 1 << 19).unwrap();
+        g.set_line(83, true);
+        g.access(0, true, 0x288, 4, true, 1 << 19).unwrap();
+        assert_eq!(g.access(0, true, 0x288, 4, false, 0).unwrap(), 1 << 19);
+        assert_eq!(g.next_irq(0), Some(83));
+        g.set_line(83, false);
+        g.access(0, true, 0x288, 4, true, 1 << 19).unwrap();
+        assert_eq!(g.access(0, true, 0x288, 4, false, 0).unwrap(), 0);
+        // An edge-triggered line keeps its latch semantics.
+        g.access(0, true, 0xc14, 4, true, 2 << 6).unwrap();
+        g.set_line(83, true);
+        g.access(0, true, 0x288, 4, true, 1 << 19).unwrap();
+        assert_eq!(g.next_irq(0), None);
     }
     #[test]
     fn checkpoint_preserves_active_irq_and_deferred_sgi_sources() {
