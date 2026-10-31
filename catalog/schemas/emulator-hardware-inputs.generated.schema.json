@@ -3212,6 +3212,20 @@
             }
           ],
           "type": "array"
+        },
+        "white_balance_reference": {
+          "description": "Declared (R, G, B) white-balance gains at which the scene renders\nneutral; the colour unit's programmed gains act by their ratio to it.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": [
+            "array",
+            "null"
+          ]
         }
       },
       "required": [

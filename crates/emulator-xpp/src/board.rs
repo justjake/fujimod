@@ -126,6 +126,9 @@ pub enum BlockWork {
         phase: (u8, u8),
         #[serde(default)]
         colour: Option<u64>,
+        /// Reference (R, G, B) gains at which the declared scene renders neutral.
+        #[serde(default)]
+        white_balance: Option<[u32; 3]>,
     },
     /// The resizer.
     Resize { profile: String },
@@ -481,11 +484,14 @@ pub fn build(
     // The colour unit a development engine reads, published by its block.
     let colour = spec.nodes.iter().find_map(|n| match &n.model {
         Model::RegisterBlock {
-            work: Some(BlockWork::Develop {
-                colour: Some(base), ..
-            }),
+            work:
+                Some(BlockWork::Develop {
+                    colour: Some(base),
+                    white_balance,
+                    ..
+                }),
             ..
-        } => Some((*base, blocks::Published::default())),
+        } => Some((*base, blocks::Published::default(), *white_balance)),
         _ => None,
     });
     let mut colour_published = false;
@@ -680,6 +686,7 @@ pub fn build(
                             profile,
                             phase,
                             colour,
+                            ..
                         } => (profile, blocks::Work::Develop { phase }, colour.is_some()),
                         BlockWork::Resize { profile } => (profile, blocks::Work::Resize, film),
                     };
@@ -692,11 +699,15 @@ pub fn build(
                         return Err(format!("unknown still development profile {profile}"));
                     }
                     model = model.with_work(law)?;
-                    if let (blocks::Work::Develop { .. }, Some((_, words))) = (law, &colour) {
-                        model = model.with_colour(words.clone())?;
+                    if let (blocks::Work::Develop { .. }, Some((_, words, reference))) =
+                        (law, &colour)
+                    {
+                        let reference = reference
+                            .ok_or("a still colour unit needs a reference white balance")?;
+                        model = model.with_colour(words.clone(), reference)?;
                     }
                 }
-                if let Some((_, words)) = colour.as_ref().filter(|(unit, _)| *unit == base) {
+                if let Some((_, words, _)) = colour.as_ref().filter(|(unit, ..)| *unit == base) {
                     model = model.with_published(words.clone());
                     colour_published = true;
                 }

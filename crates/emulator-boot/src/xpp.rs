@@ -383,6 +383,7 @@ fn nodes(
                                       "phase": development.source_phase });
                 if let Some(colour) = development.colour {
                     law["colour"] = json!(colour);
+                    law["white_balance"] = json!(development.white_balance_reference);
                 }
                 Some(law)
             } else if block.base == development.resizer {
@@ -1078,6 +1079,7 @@ mod tests {
             resizer: 0xfffc_3000,
             source_phase: (2, 2),
             colour: None,
+            white_balance_reference: None,
         });
         let (starts, assets) = (starts(), assets());
         let inputs = Inputs {

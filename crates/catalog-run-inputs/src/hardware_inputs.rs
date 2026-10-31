@@ -1314,6 +1314,10 @@ pub struct StillDevelopment {
     /// the development engine applies.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub colour: Option<u64>,
+    /// Declared (R, G, B) white-balance gains at which the scene renders
+    /// neutral; the colour unit's programmed gains act by their ratio to it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub white_balance_reference: Option<[u32; 3]>,
 }
 
 /// Declared body calibration records in flash: bytes the firmware reads

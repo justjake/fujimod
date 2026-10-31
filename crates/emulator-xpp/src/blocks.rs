@@ -186,8 +186,9 @@ pub struct Block {
     commands: Vec<Command>,
     /// Where this block publishes its words.
     published: Option<Published>,
-    /// The colour unit's words, for the film law of a development job.
-    colour: Option<Published>,
+    /// The colour unit's words, for the film law of a development job, and
+    /// the declared reference white balance.
+    colour: Option<(Published, [u32; 3])>,
     state: State,
 }
 impl Block {
@@ -270,12 +271,13 @@ impl Block {
         self.published = Some(words);
         self
     }
-    /// Develop with the film law of the colour unit's published words.
-    pub fn with_colour(mut self, words: Published) -> Result<Self, String> {
-        if !matches!(self.work, Some(Work::Develop { .. })) {
+    /// Develop with the film law and white balance of the colour unit's
+    /// published words, relative to the `reference` (R, G, B) gains.
+    pub fn with_colour(mut self, words: Published, reference: [u32; 3]) -> Result<Self, String> {
+        if !matches!(self.work, Some(Work::Develop { .. })) || reference.contains(&0) {
             return Err("Only a development job reads a colour unit".into());
         }
-        self.colour = Some(words);
+        self.colour = Some((words, reference));
         Ok(self)
     }
     fn publish(&self) {
@@ -297,7 +299,13 @@ impl Block {
                 )?;
                 let phase = (usize::from(phase.0), usize::from(phase.1));
                 let film = match &self.colour {
-                    Some(words) => Some(crate::development::film(&words.lock().unwrap())?),
+                    Some((words, reference)) => {
+                        let words = words.lock().unwrap();
+                        Some((
+                            crate::development::film(&words)?,
+                            crate::development::white_balance(&words, *reference)?,
+                        ))
+                    }
                     None => None,
                 };
                 let rows = crate::development::develop(
@@ -306,7 +314,7 @@ impl Block {
                     lines,
                     width,
                     phase,
-                    film.as_ref(),
+                    film.as_ref().map(|(film, factors)| (film, *factors)),
                 )?;
                 (
                     rows,

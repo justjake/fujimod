@@ -44,17 +44,44 @@
 //! widths are those of the curve at +0xa60 (+0xa58/+0xa5c), which agree
 //! with the slope joints of the PROVIA curve. Each output pixel takes the
 //! nearest site of each colour as before, its black-subtracted level is
-//! scaled to 14 bits with unity white balance, and the film law develops it
-//! to Y, Cb and Cr. White balance, the order against the other units and the
-//! film unit's remaining words are not modeled.
+//! scaled to 14 bits and white balanced, and the film law develops it to Y,
+//! Cb and Cr. The order against the other units and the colour unit's
+//! remaining words are not modeled.
+//!
+//! White balance is relative, as for the X70's film scene: the declared scene
+//! renders neutral at a declared reference of (R, G, B) gains, and the gains
+//! the firmware programs into +0x100 (R bits 0-14, G bits 16-30) and +0x104
+//! (B bits 0-14) act by their ratio to it, normalized to green. A WB preset
+//! diff (AUTO against incandescent) changes only these words among the
+//! colour unit's (and their copies in 0xfffa9000/0xfffac000); successive
+//! passes of one shot program the same ratios at different scales.
 
 use fujimod_emulator_imaging::film::{Film, FilmPixels};
 use std::collections::BTreeMap;
 
 /// Declared development and scaling approximation (see the module notes).
 pub const PROFILE: &str = "xpp-declared-xtrans-nearest-srgb-jfif-422-v1";
-/// The same, with the colour of the programmed colour unit.
-pub const FILM_PROFILE: &str = "xpp-declared-xtrans-nearest-fff47-film-422-v1";
+/// The same, with the colour and white balance of the programmed colour unit.
+pub const FILM_PROFILE: &str = "xpp-declared-xtrans-nearest-fff47-film-relative-wb-422-v1";
+
+/// Q12 factors that move the programmed white balance's R and B ratios to
+/// green from the declared `reference` gains to the programmed ones.
+pub fn white_balance(words: &BTreeMap<u64, u32>, reference: [u32; 3]) -> Result<[u32; 3], String> {
+    let word = |o: u64| words.get(&o).copied().unwrap_or(0);
+    let gains = [
+        word(0x100) & 0x7fff,
+        word(0x100) >> 16 & 0x7fff,
+        word(0x104) & 0x7fff,
+    ];
+    if gains.contains(&0) || reference.contains(&0) {
+        return Err("Still development before the white balance was programmed".into());
+    }
+    Ok(std::array::from_fn(|c| {
+        let factor = (u64::from(gains[c]) * u64::from(reference[1]) << 12)
+            / (u64::from(gains[1]) * u64::from(reference[c]));
+        factor.min(u64::from(u32::MAX)) as u32
+    }))
+}
 
 /// Colour-unit word of each X70 film-stage word the film law reads.
 fn colour_offset(x70: u64) -> Option<u64> {
@@ -164,14 +191,15 @@ fn byte(v: i32) -> u8 {
 /// Packed 4:2:2 lines (Y0 Y1 Cb Cr, `2 * width` bytes rounded up to a pair)
 /// developed from `lines` lines of little-endian u16 X-Trans samples, `stride`
 /// bytes apart, whose first sample is the tile site `phase` (line, sample),
-/// with the declared sRGB colour or, given one, the film law.
+/// with the declared sRGB colour or, given one, the film law and its white
+/// balance factors.
 pub fn develop(
     raw: &[u8],
     stride: usize,
     lines: usize,
     width: usize,
     phase: (usize, usize),
-    film: Option<&Film>,
+    film: Option<(&Film, [u32; 3])>,
 ) -> Result<Vec<Vec<u8>>, String> {
     if lines < 6 || width < 6 || stride < 2 * width || raw.len() < stride * (lines - 1) + 2 * width
     {
@@ -201,10 +229,13 @@ pub fn develop(
         u32::from(crate::imaging::BLACK),
         u32::from(crate::imaging::WHITE),
     );
-    // 14-bit linear level with unity white balance.
-    let level =
-        |s: u16| (u32::from(s).saturating_sub(black) * 16383 / (white - black)).min(16383) as u16;
-    let mut pixels = film.map(FilmPixels::new);
+    // White-balanced 14-bit linear level.
+    let factors = film.map_or([1 << 12; 3], |(_, factors)| factors);
+    let level = |c: usize, s: u16| {
+        let linear = u64::from(u32::from(s).saturating_sub(black) * 16383 / (white - black));
+        (linear * u64::from(factors[c]) >> 12).min(16383) as u16
+    };
+    let mut pixels = film.map(|(film, _)| FilmPixels::new(film));
     let pairs = width.div_ceil(2);
     Ok((0..lines)
         .map(|y| {
@@ -217,7 +248,9 @@ pub fn develop(
                     let site = &row[(x + phase.1) % 6];
                     let rgb = [0, 1, 2].map(|c| sample(y as i64 + site[c].0, x as i64 + site[c].1));
                     *pixel = match pixels.as_mut() {
-                        Some(pixels) => pixels.develop(rgb.map(level)).map(i32::from),
+                        Some(pixels) => pixels
+                            .develop([level(0, rgb[0]), level(1, rgb[1]), level(2, rgb[2])])
+                            .map(i32::from),
                         None => ycbcr(rgb.map(|s| response[usize::from(s)])),
                     };
                 }
@@ -498,7 +531,8 @@ mod tests {
                 raw[y * stride + 2 * x..][..2].copy_from_slice(&v.to_le_bytes());
             }
         }
-        let out = develop(&raw, stride, lines, width, (2, 2), Some(&film)).unwrap();
+        let unity = [1 << 12; 3];
+        let out = develop(&raw, stride, lines, width, (2, 2), Some((&film, unity))).unwrap();
         let [y, cb, cr] = film.develop([0, 16383, 0]);
         for line in &out {
             for p in line.chunks_exact(4) {
@@ -506,5 +540,32 @@ mod tests {
             }
         }
         assert!(cb < 128 && cr < 128);
+    }
+
+    #[test]
+    fn white_balance_acts_by_its_ratio_to_the_reference() {
+        let mut words = provia();
+        // An AUTO pass and an incandescent pass of emulated shots (bootemu).
+        words.insert(0x100, 0x12e_025b);
+        words.insert(0x104, 0x227);
+        let reference = [603, 302, 551];
+        assert_eq!(white_balance(&words, reference).unwrap(), [4096; 3]);
+        // The same ratios at twice the scale.
+        assert_eq!(white_balance(&words, [1206, 604, 1102]).unwrap(), [4096; 3]);
+        words.insert(0x100, 0x12e_018a);
+        words.insert(0x104, 0x34c);
+        let [r, g, b] = white_balance(&words, reference).unwrap();
+        assert!(
+            r < 4096 * 7 / 10 && g == 4096 && b > 4096 * 15 / 10,
+            "{r} {g} {b}"
+        );
+        // Grey turns blue under the incandescent preset.
+        let film = film(&words).unwrap();
+        let grey = crate::imaging::BLACK + (crate::imaging::WHITE - crate::imaging::BLACK) / 4;
+        let raw: Vec<u8> = (0..12 * 12).flat_map(|_| grey.to_le_bytes()).collect();
+        let out = develop(&raw, 24, 12, 12, (0, 0), Some((&film, [r, g, b]))).unwrap();
+        assert!(out[6][2] > 140 && out[6][3] < 116, "{:?}", &out[6][..4]);
+        words.remove(&0x104);
+        assert!(white_balance(&words, reference).is_err());
     }
 }
