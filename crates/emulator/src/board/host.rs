@@ -185,5 +185,9 @@ impl Board {
 }
 
 fn missing_capability<C: ?Sized>(device: &dyn Device) -> String {
-    format!("{} has no {} capability", device.name(), std::any::type_name::<C>())
+    format!(
+        "{} has no {} capability",
+        device.name(),
+        std::any::type_name::<C>()
+    )
 }

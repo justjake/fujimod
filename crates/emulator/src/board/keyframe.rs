@@ -302,7 +302,15 @@ impl Board {
                 .mprofile
                 .iter()
                 .map(Option::is_some))
-            || state.armv7a.iter().map(|p|p.as_ref().map(|p|&p.config)).ne(saved.saved.armv7a.iter().map(|p|p.as_ref().map(|p|&p.config)))
+            || state
+                .armv7a
+                .iter()
+                .map(|p| p.as_ref().map(|p| &p.config))
+                .ne(saved
+                    .saved
+                    .armv7a
+                    .iter()
+                    .map(|p| p.as_ref().map(|p| &p.config)))
             || state.aprofile.iter().map(Option::is_some).ne(saved
                 .saved
                 .aprofile

@@ -287,7 +287,9 @@ export function startHome(
         throw Error('The replay scenario requires firmware ' + replayScenario.firmwareId);
       selectedFirmware = entry;
       modEnabled =
-        enabled ?? camera?.modEnabled ?? (modFirmwareHash === hash ? modEnabled : !replayScenario);
+        enabled ??
+        camera?.modEnabled ??
+        (modFirmwareHash === hash ? modEnabled : !replayScenario);
       modFirmwareHash = hash;
       const device = entry.device ?? (entry.body ? await loadDevice(entry.body) : undefined);
       if (current !== generation) return;

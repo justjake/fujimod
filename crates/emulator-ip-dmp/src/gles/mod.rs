@@ -98,7 +98,10 @@ fn host_gpu_mode_for(cpu_only: bool, verify: bool) -> (bool, bool) {
 #[cfg(not(target_arch = "wasm32"))]
 fn host_gpu_mode() -> (bool, bool) {
     let enabled = |name| std::env::var(name).is_ok_and(|value| value == "1");
-    host_gpu_mode_for(enabled("FUJIMOD_DMP_CPU"), enabled("FUJIMOD_DMP_VERIFY_GPU"))
+    host_gpu_mode_for(
+        enabled("FUJIMOD_DMP_CPU"),
+        enabled("FUJIMOD_DMP_VERIFY_GPU"),
+    )
 }
 pub fn float24(word: u32) -> f32 {
     let sign = (word & 0x800000) << 8;
@@ -460,8 +463,7 @@ impl Engine {
                     self.attribute_words.clear();
                     if self.attribute_cursor == 15 {
                         self.immediate.push(v);
-                        let state = self.draw_state();
-                        let n = state.vertex.immediate_attribute_count as usize;
+                        let n = (self.reg(0x402) >> 28) as usize + 1;
                         if n > 8 {
                             return Err(
                                 "DMP immediate attribute count exceeds permutation bank".into()

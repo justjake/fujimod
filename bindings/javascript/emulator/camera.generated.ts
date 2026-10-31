@@ -312,15 +312,6 @@ export interface QueueState {
 }
 
 /**
-* Host-visible controls and their current positions.
-*/
-export interface ControlState {
-    inputs: ControlInput[];
-    positions: Record<string, string>;
-    inputQueue: QueueState | null;
-}
-
-/**
 * Host-visible controls, card and power after a state-changing command.
 */
 export interface SessionState {

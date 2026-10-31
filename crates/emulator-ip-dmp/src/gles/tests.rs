@@ -544,7 +544,11 @@ fn linked_streams_execute_and_cycles_refuse_without_dma_output() {
     // A length-24 link that points to itself never acquires a framebuffer.
     words[0] = 3;
     let raw: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
-    assert!(engine.execute_cpu(&words, &mut |_, _| Ok(raw.clone())).is_err());
+    assert!(
+        engine
+            .execute_cpu(&words, &mut |_, _| Ok(raw.clone()))
+            .is_err()
+    );
 }
 
 #[test]
@@ -573,7 +577,9 @@ fn checkpoint_between_vertices_retains_uploaded_program_and_primitive_assembly()
     let mut last = vec![];
     upload(&mut last, 0x433, &packed(positions[2]), true);
     upload(&mut last, 0x433, &packed([1., 0., 0., 1.]), true);
-    let expected = engine.execute_cpu(&last, &mut |_, n| Ok(vec![0; n])).unwrap();
+    let expected = engine
+        .execute_cpu(&last, &mut |_, n| Ok(vec![0; n]))
+        .unwrap();
     #[cfg(not(target_arch = "wasm32"))]
     {
         let mut gpu_restored = restored.clone();
@@ -590,7 +596,9 @@ fn checkpoint_between_vertices_retains_uploaded_program_and_primitive_assembly()
         assert_eq!(actual, expected);
     }
     assert_eq!(
-        restored.execute_cpu(&last, &mut |_, n| Ok(vec![0; n])).unwrap(),
+        restored
+            .execute_cpu(&last, &mut |_, n| Ok(vec![0; n]))
+            .unwrap(),
         expected
     );
 }
@@ -644,7 +652,9 @@ fn completion_ranges_preserve_concurrent_pixels_and_masked_channels() {
             return;
         }
         let mut engine = Engine::default();
-        let snapshots = engine.execute_cpu(&words, &mut |_, n| Ok(vec![0; n])).unwrap();
+        let snapshots = engine
+            .execute_cpu(&words, &mut |_, n| Ok(vec![0; n]))
+            .unwrap();
         assert_eq!(snapshots.len(), 1);
         assert!(snapshots[0].1.iter().all(|&byte| byte == 0));
         let ranges = engine.written_ranges();

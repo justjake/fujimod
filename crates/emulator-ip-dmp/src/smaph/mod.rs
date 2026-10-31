@@ -1323,9 +1323,15 @@ mod tests {
             15,
             6,
             &[
-                1.0f32.to_bits(), 0, 0,
-                0, 1.0f32.to_bits(), 0,
-                0, 0, 1.0f32.to_bits(),
+                1.0f32.to_bits(),
+                0,
+                0,
+                0,
+                1.0f32.to_bits(),
+                0,
+                0,
+                0,
+                1.0f32.to_bits(),
             ],
         );
         append_packet(&mut words, 0x65, 15, 4, &[0]);
@@ -1440,7 +1446,8 @@ mod tests {
         assert!(host.bytes(0x102000, 1024).unwrap().iter().all(|b| *b == 0));
         let (device, at, token) = host.events.pop().unwrap();
         host.now = at;
-        bus.event(&mut Cx::new(&mut host, 0, 0, 0), device, token).unwrap();
+        bus.event(&mut Cx::new(&mut host, 0, 0, 0), device, token)
+            .unwrap();
         assert!(host.bytes(0x102000, 1024).unwrap().iter().all(|b| *b == 0));
         assert_eq!(host.irqs.last(), Some(&(153, true)));
         for (ack, status) in [(0x1800, COMMAND), (0x1020, 0)] {
@@ -1457,9 +1464,10 @@ mod tests {
         let mut bad_geometry = path.clone();
         bad_geometry[22] = 0;
         assert!(parse_path(&bad_geometry, Stream::default()).is_err());
-        assert!(bus
-            .write(&mut Cx::new(&mut host, 0, 0, 0), 0xff93cc18, 4, 1)
-            .is_err());
+        assert!(
+            bus.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff93cc18, 4, 1)
+                .is_err()
+        );
         assert!(host.events.is_empty());
         put(&mut host, 0x100000, &[11, 0x100000]);
         assert!(linked_words(&Cx::new(&mut host, 0, 0, 0), 0x100000, 2).is_err());
@@ -1480,7 +1488,8 @@ mod tests {
         submit(&mut bus, &mut host, &image_path, &image_fill, 0x2000);
         let (device, at, token) = host.events.pop().unwrap();
         host.now = at;
-        bus.event(&mut Cx::new(&mut host, 0, 0, 0), device, token).unwrap();
+        bus.event(&mut Cx::new(&mut host, 0, 0, 0), device, token)
+            .unwrap();
         let output = host.bytes(0x102000, 1024).unwrap();
         assert_eq!(output.len(), 1024);
         assert!(output.iter().any(|byte| *byte != 0));
@@ -1493,16 +1502,10 @@ mod tests {
             .stream
             .regs;
         sample_regs.insert(0x10c, 0x3a0000);
-        let texture = Texture::new(
-            &Cx::new(&mut host, 0, 0, 0),
-            &sample_regs,
-            0x102000,
-            1024,
-        )
-        .unwrap();
+        let texture =
+            Texture::new(&Cx::new(&mut host, 0, 0, 0), &sample_regs, 0x102000, 1024).unwrap();
         assert_eq!(texture.sample(1, 1).unwrap(), [0, 16, 0, 255]);
     }
-
 }
 
 impl State {

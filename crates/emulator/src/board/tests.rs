@@ -1,7 +1,7 @@
 use super::*;
-use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_cpu::Model;
 use fujimod_emulator_cpu_unicorn::Library;
+use fujimod_emulator_devices::{Cx, Device};
 use std::sync::{Arc, Mutex};
 #[derive(Default)]
 struct Probe {
@@ -519,7 +519,9 @@ fn per_core_irq_board() -> (Board, Arc<Mutex<Vec<u64>>>) {
     per_core_irq_board_with_backend(false)
 }
 fn per_core_irq_board_with_backend(counted: bool) -> (Board, Arc<Mutex<Vec<u64>>>) {
-    use fujimod_emulator_devices::exr2::irq::{Arbitration, Inputs, InterruptController, Options, Wiring};
+    use fujimod_emulator_devices::exr2::irq::{
+        Arbitration, Inputs, InterruptController, Options, Wiring,
+    };
     struct Setup;
     impl Host for Setup {
         fn now(&self) -> u64 {
@@ -967,10 +969,9 @@ fn external_device_inputs_preserve_time_and_keep_effects_due_after_refusal() {
     assert_eq!(saved.due, None);
     assert_eq!(board.instruction_counts(), vec![1]);
     let irq = board
-        .inspect_device::<fujimod_emulator_devices::exr2::irq::InterruptController, _>(
-            1,
-            |irq| Ok(irq.save()),
-        )
+        .inspect_device::<fujimod_emulator_devices::exr2::irq::InterruptController, _>(1, |irq| {
+            Ok(irq.save())
+        })
         .unwrap();
     assert_ne!(
         irq["registers"]["pending"][0].as_u64().unwrap() & (1 << 17),

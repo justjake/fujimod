@@ -293,7 +293,10 @@ impl Bus {
     }
 
     pub fn device_buffer(&self, kind: &str, name: &str) -> Result<Vec<u8>, String> {
-        let mut devices = self.windows.iter().filter(|node| node.device.name() == kind);
+        let mut devices = self
+            .windows
+            .iter()
+            .filter(|node| node.device.name() == kind);
         let device = devices.next().ok_or("no matching device")?;
         if devices.next().is_some() {
             return Err("buffer observation requires one matching device".into());
@@ -500,11 +503,7 @@ impl Bus {
     /// Published reads that fall inside this CPU's physical MMIO mapping.
     /// Device declarations are relative to their registered windows; return
     /// offsets relative to the requested mapping for the CPU backend.
-    pub(super) fn fast_reads(
-        &self,
-        physical_base: u64,
-        bytes: usize,
-    ) -> Vec<(u64, FastReadValue)> {
+    pub(super) fn fast_reads(&self, physical_base: u64, bytes: usize) -> Vec<(u64, FastReadValue)> {
         let Some(physical_end) = physical_base.checked_add(bytes as u64) else {
             return Vec::new();
         };
@@ -654,11 +653,10 @@ impl Bus {
         if self.transactions.is_some() {
             return Err("Another bus transaction observer is active".into());
         }
-        if ranges.is_empty()
-            || limit == 0
-            || ranges.iter().any(|&(begin, end)| begin >= end)
-        {
-            return Err("Bus transaction watch requires bounded address windows and records".into());
+        if ranges.is_empty() || limit == 0 || ranges.iter().any(|&(begin, end)| begin >= end) {
+            return Err(
+                "Bus transaction watch requires bounded address windows and records".into(),
+            );
         }
         self.transactions = Some(Transactions {
             limit,
@@ -674,7 +672,11 @@ impl Bus {
     }
 
     pub fn transaction_watch_end(&mut self) -> Result<TransactionBatch, String> {
-        if !self.transactions.as_ref().is_some_and(|log| log.ranges.is_some()) {
+        if !self
+            .transactions
+            .as_ref()
+            .is_some_and(|log| log.ranges.is_some())
+        {
             return Err("No scoped bus transaction observer is active".into());
         }
         let log = self.transactions.take().unwrap();
@@ -1174,7 +1176,10 @@ mod tests {
         let mut bus = Bus::new(Mode::Strict);
         let mut expected = bus.state();
         bus.register(0x1000, 4, Box::new(Complete)).unwrap();
-        assert_eq!(bus.device_fingerprints("complete").unwrap(), vec![json!({"payload":[1,2,3],"pending":7})]);
+        assert_eq!(
+            bus.device_fingerprints("complete").unwrap(),
+            vec![json!({"payload":[1,2,3],"pending":7})]
+        );
         assert!(bus.device_fingerprints("absent").unwrap().is_empty());
         expected["devices"] = json!([{"kind":"complete","windows":bus.windows[0].mappings,
             "native_dependencies":[],"state":{"payload":[1,2,3],"pending":7}}]);

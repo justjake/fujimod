@@ -137,42 +137,21 @@ impl Pair {
         self.connections
             .get(&routing.requests[lane])
             .map(Some)
-            .ok_or_else(|| {
-                format!(
-                    "XDMAC request has no connected peripheral; request={}",
-                    routing.requests[lane]
-                )
-            })
+            .ok_or_else(|| "XDMAC request has no connected peripheral".into())
     }
     fn validate(&self, lane: usize, c: &Channel) -> Result<(), String> {
         // SA serializes each source access before its destination access.
         // Every beat here already performs that ordered data movement.
-        // The request-descriptor option sets bit 0 in both shape registers.
-        let shape_mask = if c.control & REQUEST_OPTION != 0 {
-            0x30005
-        } else {
-            0x30004
-        };
         if c.counter_exhausted
             || c.control
                 & !(ENABLE | SOFTWARE | 0xf00000 | SERIAL_ACCESS | REQUEST_OPTION | BLOCK | ACK_WRITE | 3)
                 != 0
-            || c.source_shape & !shape_mask != 0
-            || c.destination_shape & !shape_mask != 0
+            || c.source_shape & !0x30004 != 0
+            || c.destination_shape & !0x30004 != 0
             || (c.source_shape ^ c.destination_shape) & 0x30000 != 0
             || c.link != 0
         {
-            return Err(format!(
-                "XDMAC control, burst, shape or linked mode is unmodeled; control={:#x} source_shape={:#x} destination_shape={:#x} link={:#x} count={:#x} source={:#x} destination={:#x} exhausted={}",
-                c.control,
-                c.source_shape,
-                c.destination_shape,
-                c.link,
-                c.count,
-                c.source,
-                c.destination,
-                c.counter_exhausted,
-            ));
+            return Err("XDMAC control, burst, shape or linked mode is unmodeled".into());
         }
         let width = c.width() as u64;
         if !(c.count as u64 + 1).is_multiple_of(width)
