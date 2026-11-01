@@ -94,7 +94,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "ValueError: power-cut routine: fuji_native_power_cut: 1 candidates, 0 verified results (0x1470210: no four settle calls with w0 = -6); 0 structural candidates "
+              "reason": "ValueError: power-cut routine: no verified family match (0x1470210: no four settle calls with w0 = -6); 0 structural candidates "
             }
           ]
         },
@@ -4459,7 +4459,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "ValueError: power-cut routine: fuji_native_power_cut: 0 candidates, 0 verified results; 2 structural candidates 0x914ba8, 0x148e548"
+              "reason": "ValueError: power-cut routine: no verified family match; 2 structural candidates 0x914ba8, 0x148e548"
             }
           ]
         },
