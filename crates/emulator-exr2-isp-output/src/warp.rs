@@ -9,6 +9,38 @@ use fujimod_emulator_imaging::exr2_isp::stream::{State, StreamHandle};
 use fujimod_emulator_imaging::exr2_isp::{due, word};
 use std::sync::Arc;
 
+/// Refuse a centered span that leaves its programmed source limit.
+///
+/// 0x34 is the decimation shift, 0x38/0x3c the Q12 x/y scales, 0x50 the
+/// source limits in source pixels (((extent >> shift) - 1) << shift, plus
+/// twice any pad) and 0x54 the destination centers (D - 1 while 0x24 is zero).
+/// The engine maps destination d to
+/// `limit/2 + (d - center/2) * scale/4096 * (1 << shift)` source pixels, so
+/// both edges stay inside the source only when
+/// `center * scale << shift <= limit * 4096` on each axis.
+///
+/// The X70 1.10 camera failed both observed overruns (2026-11-01). M 65:24
+/// JPEG (center 1279, scale 5803, shift 0, limit 1812 for a 1812.02 span)
+/// saved a solid green first row and, with HIGH PERFORMANCE on, froze the
+/// shot. The RAF preview (centers 1919 x 711, scales 5222/5223, shift 1,
+/// limits 2448 x 908 for 4893 x 1813 pixel spans) hung the encoder on every
+/// 65:24 FINE+RAW shot. Windows covering the span saved all 24 combinations.
+pub(crate) fn centered_span_fits(r: &[u32]) -> Result<(), String> {
+    let shift = r[0x34 / 4] & 3;
+    for (axis, name) in ["horizontal", "vertical"].into_iter().enumerate() {
+        let field = |word: u32| u64::from(word >> (16 * axis) & 0xffff);
+        let center = field(r[0x54 / 4]);
+        let limit = field(r[0x50 / 4]);
+        let scale = u64::from(r[0x38 / 4 + axis] & 0xffff);
+        if (center * scale) << shift > limit << 12 {
+            return Err(format!(
+                "warp {name} span {center} x {scale}/4096 << {shift} overruns source limit {limit}"
+            ));
+        }
+    }
+    Ok(())
+}
+
 pub struct Warp {
     r: Vec<u32>,
     options: Options,
@@ -64,6 +96,7 @@ impl Warp {
         );
         let last = [(r[0x50 / 4] & 65535) as usize, (r[0x50 / 4] >> 16) as usize];
         let mode = r[0x34 / 4];
+        centered_span_fits(r)?;
         // Source width is a logical crop extent. Rows begin at their
         // programmed pitch, and a selected endpoint can extend beyond it.
         src.validate(src.pitch)?;

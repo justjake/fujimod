@@ -121,3 +121,73 @@ fn warp_rejects_a_selected_source_endpoint_past_physical_dram() {
     );
     assert!(fujimod_emulator_imaging::exr2_isp::dma::physical(0x3ffffff0, 20).is_err());
 }
+
+/// Warp registers for one stock-programmed geometry: 0x34 shift, 0x38/0x3c
+/// scales, 0x50 source limits, 0x54 destination centers.
+fn span_registers(shift: u32, scale: [u32; 2], limit: [u32; 2], center: [u32; 2]) -> Vec<u32> {
+    let mut r = vec![0; 0x14c / 4];
+    r[0x34 / 4] = shift;
+    r[0x38 / 4] = scale[0];
+    r[0x3c / 4] = scale[1];
+    r[0x50 / 4] = limit[1] << 16 | limit[0];
+    r[0x54 / 4] = center[1] << 16 | center[0];
+    r
+}
+
+/// X70 1.10 camera, 2026-11-01: an M 65:24 JPEG with limit 1812 for a
+/// 1812.02-row span saved a green first row and froze one shot with HIGH
+/// PERFORMANCE on; the shift-1 RAF preview with 2448 x 908 limits hung the
+/// encoder. Covering limits saved every combination.
+#[test]
+fn warp_refuses_centered_spans_past_the_programmed_source_limit() {
+    let m_jpeg = |limit_y| span_registers(0, [5803, 5803], [4895, limit_y], [3455, 1279]);
+    let raf_preview = |limit| span_registers(1, [5222, 5223], limit, [1919, 711]);
+    let refused = crate::warp::centered_span_fits(&m_jpeg(1812)).unwrap_err();
+    assert!(
+        refused.contains("vertical span 1279 x 5803/4096 << 0"),
+        "{refused}"
+    );
+    let refused = crate::warp::centered_span_fits(&raf_preview([2448, 908])).unwrap_err();
+    assert!(
+        refused.contains("horizontal span 1919 x 5222/4096 << 1"),
+        "{refused}"
+    );
+    crate::warp::centered_span_fits(&m_jpeg(1813)).unwrap();
+    crate::warp::centered_span_fits(&raf_preview([4894, 1814])).unwrap();
+    // Stock full-frame scales end exactly on the limit.
+    crate::warp::centered_span_fits(&span_registers(0, [4095, 4095], [3, 1], [3, 1])).unwrap();
+
+    let mut h = TestHost::new();
+    let mut d = Warp::new(
+        fujimod_emulator_imaging::exr2_isp::options::warp::Options {
+            completion_ticks: 5,
+            stop_ticks: 2,
+        },
+        (Irq { core: 0, line: 74 }, Default::default()),
+    )
+    .unwrap();
+    for (o, v) in [
+        (0x10, 0x8000),
+        (0x14, 4896),
+        (0x18, 1813 << 16 | 4896),
+        (0x1c, 0x9000),
+        (0x20, 3456),
+        (0x28, 1280 << 16 | 3456),
+        (0x38, 5803),
+        (0x3c, 5803),
+        (0x40, 4096),
+        (0x44, 4096),
+        (0x4c, 0x10001),
+        (0x50, 1812 << 16 | 4895),
+        (0x54, 1279 << 16 | 3455),
+        (0x148, 0x21),
+    ] {
+        write(&mut d, &mut h, 0xfff65000 + o, v);
+    }
+    let mut cx = h.cx();
+    d.write(&mut cx, 0xfff65000, 4, 1);
+    assert_eq!(
+        cx.refusal(),
+        Some("warp vertical span 1279 x 5803/4096 << 0 overruns source limit 1812")
+    );
+}
