@@ -5,8 +5,8 @@
   "model": "X100T",
   "version": "1.11",
   "facts": {
-    "located": 35,
-    "total": 35
+    "located": 34,
+    "total": 34
   },
   "boot_rom": "X70",
   "stages": {

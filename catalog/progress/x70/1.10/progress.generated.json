@@ -5,8 +5,8 @@
   "model": "X70",
   "version": "1.10",
   "facts": {
-    "located": 37,
-    "total": 37
+    "located": 36,
+    "total": 36
   },
   "boot_rom": "X70",
   "stages": {

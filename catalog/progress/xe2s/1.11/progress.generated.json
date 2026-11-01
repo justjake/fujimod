@@ -5,8 +5,8 @@
   "model": "X-E2S",
   "version": "1.11",
   "facts": {
-    "located": 86,
-    "total": 86
+    "located": 85,
+    "total": 85
   },
   "boot_rom": "X70",
   "stages": {

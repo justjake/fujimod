@@ -5,8 +5,8 @@
   "model": "X100VI",
   "version": "1.31",
   "facts": {
-    "located": 21,
-    "total": 26
+    "located": 20,
+    "total": 25
   },
   "boot_rom": null,
   "stages": {

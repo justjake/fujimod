@@ -6,7 +6,7 @@
   "version": "1.50",
   "facts": {
     "located": 30,
-    "total": 35
+    "total": 34
   },
   "boot_rom": "X70",
   "stages": {

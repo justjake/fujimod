@@ -5,8 +5,8 @@
   "model": "X-T10",
   "version": "1.31",
   "facts": {
-    "located": 35,
-    "total": 35
+    "located": 34,
+    "total": 34
   },
   "boot_rom": "X70",
   "stages": {
