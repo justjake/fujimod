@@ -10,6 +10,7 @@ export const STAGES = [
   'camera-identity',
   'camera-snapshot',
   'camera-menu',
+  'camera-restart',
   'mod-target',
   'mod-build',
   'sd-image',
@@ -164,6 +165,7 @@ function recordedPhases(progress: FirmwareProgress): Phase[] {
       { label: 'ff80 identity', fraction: pass(stages['camera-identity']) },
       { label: 'RAM snapshot', fraction: pass(stages['camera-snapshot']) },
       { label: 'Remote menu control', fraction: pass(stages['camera-menu']) },
+      { label: 'Automatic restart', fraction: pass(stages['camera-restart']) },
     ]),
     {
       ...phase('mods', 'Mods', 25, [

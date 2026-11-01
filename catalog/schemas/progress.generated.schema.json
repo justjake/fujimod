@@ -60,6 +60,10 @@
           "$ref": "#/$defs/StageProgress",
           "description": "A camera's menus were driven over USB."
         },
+        "camera-restart": {
+          "$ref": "#/$defs/StageProgress",
+          "description": "A camera restarted itself on a USB request, without its switch or battery."
+        },
         "camera-snapshot": {
           "$ref": "#/$defs/StageProgress",
           "description": "A camera's memory was captured over USB."
@@ -101,6 +105,7 @@
         "camera-identity",
         "camera-snapshot",
         "camera-menu",
+        "camera-restart",
         "mod-target",
         "mod-build",
         "sd-image",

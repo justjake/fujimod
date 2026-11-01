@@ -5,8 +5,8 @@
   "model": "X70",
   "version": "1.10",
   "facts": {
-    "located": 36,
-    "total": 36
+    "located": 37,
+    "total": 37
   },
   "boot_rom": "X70",
   "stages": {
@@ -17,6 +17,7 @@
     "camera-identity": "pass",
     "camera-snapshot": "pass",
     "camera-menu": "pass",
+    "camera-restart": "pass",
     "mod-target": "stale",
     "mod-build": "stale",
     "sd-image": "stale",
@@ -87,6 +88,7 @@
     "desqueeze": "stale",
     "desqueeze-jpeg": "stale",
     "jpeg-max": "not-run",
+    "noise-reduction": "not-run",
     "framing-guideline": "stale",
     "film-sims": "not-run",
     "card-films": "stale",

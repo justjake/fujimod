@@ -55,6 +55,8 @@ pub struct ProgressStages {
     pub camera_snapshot: StageProgress,
     /// A camera's menus were driven over USB.
     pub camera_menu: StageProgress,
+    /// A camera restarted itself on a USB request, without its switch or battery.
+    pub camera_restart: StageProgress,
     /// The mod target was generated from the firmware's facts.
     pub mod_target: StageProgress,
     /// Every shipped mod was built for the firmware.

@@ -5,8 +5,8 @@
   "model": "X-E2S",
   "version": "1.11",
   "facts": {
-    "located": 84,
-    "total": 84
+    "located": 86,
+    "total": 86
   },
   "boot_rom": "X70",
   "stages": {
@@ -17,6 +17,7 @@
     "camera-identity": "not-run",
     "camera-snapshot": "not-run",
     "camera-menu": "not-run",
+    "camera-restart": "not-run",
     "mod-target": "not-run",
     "mod-build": "not-run",
     "sd-image": "not-run",
@@ -24,7 +25,7 @@
   },
   "stock": {
     "record-picture": {
-      "result": "fail",
+      "result": "stale",
       "passed": 0,
       "total": 1
     },
@@ -32,7 +33,7 @@
       "result": "not-run"
     },
     "control-input": {
-      "result": "partial",
+      "result": "stale",
       "passed": 4,
       "total": 40
     },
@@ -43,12 +44,12 @@
       "result": "not-run"
     },
     "film-simulations": {
-      "result": "fail",
+      "result": "stale",
       "passed": 0,
       "total": 11
     },
     "playback-picture": {
-      "result": "fail",
+      "result": "stale",
       "passed": 0,
       "total": 3
     },
@@ -59,7 +60,7 @@
       "result": "not-run"
     },
     "sd": {
-      "result": "fail",
+      "result": "stale",
       "passed": 0,
       "total": 2
     },
@@ -75,16 +76,19 @@
     "desqueeze": "not-run",
     "desqueeze-jpeg": "not-run",
     "jpeg-max": "not-run",
+    "noise-reduction": "not-run",
     "framing-guideline": "not-run",
     "film-sims": "not-run",
     "card-films": "not-run",
     "film-editor": "not-run",
     "highlight-meter": "not-run",
     "raw-view": "not-run",
+    "f-log": "not-run",
     "raw-exposure": "not-run",
     "hdmi-rec": "not-run",
     "controls": "not-run",
     "menu-theme": "not-run",
+    "overlay-opacity": "not-run",
     "menu-tap": "not-run",
     "recipes": "not-run",
     "snap-focus": "not-run",

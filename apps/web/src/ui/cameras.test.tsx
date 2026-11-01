@@ -72,7 +72,7 @@ test('each phase fills by its steps and names its value', () => {
   expect(list.map((phase) => [phase.id, phase.fraction, phase.value])).toEqual([
     ['research', (3 + 0.5 + 1) / 6, '4 of 6'],
     ['emulator', 1 / 2, '1 of 2'],
-    ['camera', 1 / 3, '1 of 3'],
+    ['camera', 1 / 4, '1 of 4'],
     ['mods', 1 / 4, '1 of 4'],
     ['sd-card', 0, 'Not yet'],
   ]);
@@ -213,7 +213,14 @@ test('the camera popover asks an owner for help until every camera step passes',
     [
       progress('X-E2', ['research', 'rec']),
       progress('X-E2S', ['research', 'rec', 'camera-identity']),
-      progress('X70', ['research', 'rec', 'camera-identity', 'camera-snapshot', 'camera-menu']),
+      progress('X70', [
+        'research',
+        'rec',
+        'camera-identity',
+        'camera-snapshot',
+        'camera-menu',
+        'camera-restart',
+      ]),
     ],
   );
   const help = [...host.querySelectorAll('.bar')].map(

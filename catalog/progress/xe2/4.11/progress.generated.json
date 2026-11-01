@@ -5,8 +5,8 @@
   "model": "X-E2",
   "version": "4.11",
   "facts": {
-    "located": 33,
-    "total": 33
+    "located": 36,
+    "total": 36
   },
   "boot_rom": "X70",
   "stages": {
@@ -17,6 +17,7 @@
     "camera-identity": "not-run",
     "camera-snapshot": "not-run",
     "camera-menu": "not-run",
+    "camera-restart": "not-run",
     "mod-target": "not-run",
     "mod-build": "not-run",
     "sd-image": "not-run",
@@ -65,16 +66,19 @@
     "desqueeze": "not-run",
     "desqueeze-jpeg": "not-run",
     "jpeg-max": "not-run",
+    "noise-reduction": "not-run",
     "framing-guideline": "not-run",
     "film-sims": "not-run",
     "card-films": "not-run",
     "film-editor": "not-run",
     "highlight-meter": "not-run",
     "raw-view": "not-run",
+    "f-log": "not-run",
     "raw-exposure": "not-run",
     "hdmi-rec": "not-run",
     "controls": "not-run",
     "menu-theme": "not-run",
+    "overlay-opacity": "not-run",
     "menu-tap": "not-run",
     "recipes": "not-run",
     "snap-focus": "not-run",
