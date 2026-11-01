@@ -32,7 +32,7 @@
         {
           "id": "service-facts",
           "title": "Service-mode entry, debug gate and FF80 memory access located",
-          "result": "not-run"
+          "result": "fail"
         },
         {
           "id": "bulk-source",
