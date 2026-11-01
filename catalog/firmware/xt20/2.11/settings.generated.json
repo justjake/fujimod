@@ -1171,6 +1171,18 @@
           30
         ]
       }
+    },
+    "film_simulation": {
+      "store": "main",
+      "offset": 536,
+      "values": {
+        "provia": [
+          0
+        ],
+        "velvia": [
+          3
+        ]
+      }
     }
   },
   "sections": []
