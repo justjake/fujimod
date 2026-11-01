@@ -5675,14 +5675,6 @@
           "status": "unavailable",
           "errors": [
             {
-              "locator": "remote_menu",
-              "reason": "ui_commit_pending_frame_mode: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "app80",
-              "reason": "App80 writer lacks the mailbox offset check"
-            },
-            {
               "locator": "service_exit.jig_deinit_link",
               "reason": "Defaults completion/action slot verified; full UI/SYS deinit routing is not yet located"
             },
@@ -5697,7 +5689,7 @@
           "errors": [
             {
               "locator": "first-start",
-              "reason": "ValueError: No catalog firmware and body record is published"
+              "reason": "ValueError: UI_MENU_KIND_SETUP_LANG_INIT: 0 verified enum chains"
             }
           ]
         },
@@ -5715,13 +5707,8 @@
           ]
         },
         "progress": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "progress",
-              "reason": "ValueError: No catalog firmware and body record is published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "service": {
           "status": "unavailable",
