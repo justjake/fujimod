@@ -6,8 +6,11 @@
 //! one byte per peripheral request. +0x4c frames a transfer (3 starts it, 0
 //! ends it; section 5 0xc4a908 / 0xc49eec) and +0x08 bit 0 re-enables the
 //! port. The link is full duplex: the lens's bytes leave while the body's
-//! arrive, so an answer can only depend on earlier transfers. Other port
-//! registers behave as the [`DiscoveryPort`].
+//! arrive, so an answer can only depend on earlier transfers. Both
+//! directions share the link clock, so the body's frame has left when its
+//! received bytes are in; when the body ends a word frame before the
+//! transmit channel's store has landed, the frame completes when it lands.
+//! Other port registers behave as the [`DiscoveryPort`].
 //!
 //! Word frames are four bytes, most significant first: bit 0 error, bits
 //! 1-5 the 5-bit sum of the fields at bits 7, 12, 17, 22 and 27 plus bit 6,
@@ -115,6 +118,9 @@ struct Link {
     out: Vec<u8>,
     received: usize,
     busy: bool,
+    /// A word frame ended before its transmit store landed.
+    #[serde(default)]
+    closing: bool,
 }
 impl Link {
     fn reset(&mut self) {
@@ -292,6 +298,14 @@ impl LensPort {
             }
             return;
         }
+        if link.transmitted.len() < 4 && link.received == 4 {
+            link.closing = true;
+            return;
+        }
+        self.close(cx, link);
+    }
+    fn close(&mut self, cx: &mut Cx<'_>, link: &mut Link) {
+        link.closing = false;
         let Ok(bytes) = <[u8; 4]>::try_from(link.transmitted.as_slice()) else {
             cx.unmodeled();
             return;
@@ -370,12 +384,21 @@ impl Device for LensPort {
         let mut link = link.lock().unwrap();
         match offset {
             ENABLE if value & 1 != 0 => link.reset(),
+            TRANSFER if value & 3 == 3 && link.closing => {
+                cx.fail("Lens transfer started before the previous frame's transmit store landed")
+            }
             TRANSFER if value & 3 == 3 && !link.busy => self.begin(&mut link),
             TRANSFER if value & 3 == 0 && link.busy => self.end(cx, &mut link),
             _ => {}
         }
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
+        let link = self.link.clone();
+        let mut link = link.lock().unwrap();
+        if link.closing && link.transmitted.len() >= 4 {
+            self.close(cx, &mut link);
+        }
+        drop(link);
         let now = cx.now();
         if now >= self.line.poll_at {
             self.line.poll_at = (now / self.timing.poll + 1) * self.timing.poll;
@@ -411,8 +434,10 @@ impl Device for LensPort {
             self.set_ready(cx, true);
         }
     }
-    fn next_deadline(&self, _now: u64) -> Option<u64> {
+    fn next_deadline(&self, now: u64) -> Option<u64> {
+        let closing = self.link.lock().unwrap().closing;
         [
+            closing.then(|| now + 1),
             Some(self.line.poll_at),
             self.line.ready_at,
             self.line.release_at,
@@ -500,6 +525,26 @@ mod tests {
         let back = data.read(BASE + RECEIVE, 4).unwrap();
         write(lens, h, BASE + TRANSFER, 0);
         u32::from_be_bytes(back.try_into().unwrap())
+    }
+
+    #[test]
+    fn a_frame_ended_before_its_transmit_store_completes_when_it_lands() {
+        let (mut lens, _) = lens();
+        let mut h = TestHost::new();
+        let data = data(&lens);
+        let query = seal(0x20 << 6);
+        write(&mut lens, &mut h, BASE + TRANSFER, 3);
+        data.read(BASE + RECEIVE, 4).unwrap();
+        write(&mut lens, &mut h, BASE + TRANSFER, 0);
+        assert!(lens.link.lock().unwrap().closing);
+        data.write(BASE + TRANSMIT, &query.to_be_bytes()).unwrap();
+        advance(&mut lens, &mut h, 1);
+        assert!(!lens.link.lock().unwrap().closing);
+        assert_eq!(transfer(&mut lens, &mut h, 0x0800_8832), 0x0800_8832);
+        assert_eq!(
+            transfer(&mut lens, &mut h, 0),
+            seal(0x300 << 16 | 0x20 << 6)
+        );
     }
 
     #[test]

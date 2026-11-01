@@ -6,6 +6,7 @@ pub mod blocks;
 pub mod board;
 pub mod boot;
 pub mod clocks;
+pub mod development;
 pub mod display;
 pub mod dram;
 pub mod face;
