@@ -1,6 +1,6 @@
 {
   "$schema": "https://fujimod.com/schemas/progress.generated.schema.json",
-  "schema": 1,
+  "schema": 2,
   "firmware_id": "xm1-150",
   "model": "X-M1",
   "version": "1.50",
@@ -9,20 +9,223 @@
     "total": 34
   },
   "boot_rom": "X70",
-  "stages": {
-    "research": "pass",
-    "analysis": "not-run",
-    "rec": "pass",
-    "menu": "not-run",
-    "camera-identity": "not-run",
-    "camera-snapshot": "not-run",
-    "camera-menu": "not-run",
-    "camera-restart": "not-run",
-    "mod-target": "not-run",
-    "mod-build": "not-run",
-    "sd-image": "not-run",
-    "sd-boot": "not-run"
-  },
+  "tracks": [
+    {
+      "id": "static",
+      "title": "Static analysis",
+      "stages": [
+        {
+          "id": "research",
+          "title": "Update file registered, unpacked and its corpus exported",
+          "result": "pass"
+        },
+        {
+          "id": "analysis",
+          "title": "Function index built and facts located",
+          "result": "not-run"
+        },
+        {
+          "id": "catalog",
+          "title": "Catalog firmware record published",
+          "result": "pass"
+        },
+        {
+          "id": "service-facts",
+          "title": "Service-mode entry, debug gate and FF80 memory access located",
+          "result": "pass"
+        },
+        {
+          "id": "bulk-source",
+          "title": "Bulk read source located",
+          "result": "pass"
+        },
+        {
+          "id": "flash-reader",
+          "title": "Flash reader located",
+          "result": "pass"
+        },
+        {
+          "id": "state-regions",
+          "title": "State-dump regions located",
+          "result": "pass"
+        },
+        {
+          "id": "restart-facts",
+          "title": "USB restart request located",
+          "result": "not-run"
+        },
+        {
+          "id": "controls",
+          "title": "Physical controls mapped to firmware inputs",
+          "result": "pass"
+        },
+        {
+          "id": "settings-layout",
+          "title": "Settings layout located",
+          "result": "pass"
+        },
+        {
+          "id": "sd-facts",
+          "title": "SD-boot load map and packaging located",
+          "result": "pass"
+        }
+      ]
+    },
+    {
+      "id": "emulator",
+      "title": "Emulator",
+      "stages": [
+        {
+          "id": "rec",
+          "title": "Boots to the shooting screen",
+          "result": "pass"
+        },
+        {
+          "id": "menu",
+          "title": "Menus respond to remote control",
+          "result": "not-run"
+        },
+        {
+          "id": "stock",
+          "title": "Stock features reproduced",
+          "result": "not-run"
+        },
+        {
+          "id": "emulator-sd-boot",
+          "title": "Our SD card of the stock firmware boots",
+          "result": "not-run"
+        },
+        {
+          "id": "emulator-updater",
+          "title": "The stock updater installs an update from the card",
+          "result": "not-run"
+        }
+      ]
+    },
+    {
+      "id": "camera",
+      "title": "Camera",
+      "stages": [
+        {
+          "id": "camera-identity",
+          "title": "Identified over FF80 in service mode",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-read-gate",
+          "title": "Debug read gate enabled in RAM",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-code",
+          "title": "Uploaded code runs in RAM and is cleaned up",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-bulk",
+          "title": "Bulk reads at 1 MiB/s or more",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-backup",
+          "title": "Internal flash backed up",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-snapshot",
+          "title": "Camera state dumped (RAM at least)",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-debug",
+          "title": "Debug mode saved persistently",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-normal",
+          "title": "FF80 answers in normal mode",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-restart",
+          "title": "Restarts itself on a USB request",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-menu",
+          "title": "Menus driven over FF80",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-mods",
+          "title": "FujiMod runs from RAM",
+          "result": "not-run"
+        }
+      ]
+    },
+    {
+      "id": "fujimod",
+      "title": "FujiMod",
+      "stages": [
+        {
+          "id": "mod-target",
+          "title": "Mod target generated from facts",
+          "result": "not-run"
+        },
+        {
+          "id": "mod-build",
+          "title": "Every shipped mod built",
+          "result": "not-run"
+        },
+        {
+          "id": "walkthroughs",
+          "title": "Mod walkthroughs pass",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-image",
+          "title": "Dual-boot SD image built",
+          "result": "not-run"
+        },
+        {
+          "id": "flash-update",
+          "title": "Flashable update built",
+          "result": "not-run"
+        }
+      ]
+    },
+    {
+      "id": "sd",
+      "title": "SD card and install",
+      "stages": [
+        {
+          "id": "sd-select",
+          "title": "The boot ROM loads a green-LED card",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-stock-boot",
+          "title": "Our card dual-boots the stock firmware",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-recovery",
+          "title": "A flash-free card applies an official update",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-boot",
+          "title": "FujiMod boots from the card",
+          "result": "not-run"
+        },
+        {
+          "id": "full-install",
+          "title": "FujiMod installed as a firmware update",
+          "result": "not-run"
+        }
+      ]
+    }
+  ],
   "stock": {
     "record-picture": {
       "result": "not-run"

@@ -28,43 +28,37 @@ pub struct FirmwareProgress {
     pub facts: Option<FactCount>,
     /// Camera model whose boot ROM dump this firmware boots with, if any.
     pub boot_rom: Option<String>,
-    /// Bring-up stages, in order.
-    pub stages: ProgressStages,
+    /// Bring-up tracks and their stages, in the bring-up graph's order.
+    pub tracks: Vec<TrackProgress>,
     /// Stock camera features the emulator is graded on, by feature; only features the body has.
     pub stock: BTreeMap<String, StockProgress>,
     /// Walkthrough result of every shipped mod, by mod name.
     pub mods: BTreeMap<String, ModProgress>,
 }
 
-/// Bring-up stages, grouped as research, emulator, camera, mods and SD card.
+/// One bring-up track: static analysis, emulator, camera, FujiMod, or SD card and install.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
-pub struct ProgressStages {
-    /// The update file was registered, its overlays unpacked and every code unit's corpus exported.
-    pub research: StageProgress,
-    /// The function index was built and the firmware's facts located.
-    pub analysis: StageProgress,
-    /// The emulator boots to the shooting screen.
-    pub rec: StageProgress,
-    /// The emulator's menus respond to remote control.
-    pub menu: StageProgress,
-    /// A camera was identified over USB.
-    pub camera_identity: StageProgress,
-    /// A camera's memory was captured over USB.
-    pub camera_snapshot: StageProgress,
-    /// A camera's menus were driven over USB.
-    pub camera_menu: StageProgress,
-    /// A camera restarted itself on a USB request, without its switch or battery.
-    pub camera_restart: StageProgress,
-    /// The mod target was generated from the firmware's facts.
-    pub mod_target: StageProgress,
-    /// Every shipped mod was built for the firmware.
-    pub mod_build: StageProgress,
-    /// The dual-boot SD card image was built.
-    pub sd_image: StageProgress,
-    /// A camera booted the SD card image.
-    pub sd_boot: StageProgress,
+#[serde(deny_unknown_fields)]
+pub struct TrackProgress {
+    /// Stable track identifier.
+    pub id: String,
+    /// Track title as the bring-up runner prints it.
+    pub title: String,
+    /// The track's stages, in order.
+    pub stages: Vec<StageEntry>,
+}
+
+/// One bring-up stage and its latest result.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct StageEntry {
+    /// Stable stage identifier.
+    pub id: String,
+    /// Stage title as the bring-up runner prints it.
+    pub title: String,
+    pub result: StageProgress,
 }
 
 /// How many of a firmware's facts were located.
@@ -110,6 +104,8 @@ pub enum StockResult {
 #[serde(rename_all = "kebab-case")]
 pub enum StageProgress {
     Pass,
+    /// Some of the stage's graded parts pass (stock features, mod walkthroughs).
+    Partial,
     Fail,
     /// Recorded, but its inputs changed since.
     Stale,

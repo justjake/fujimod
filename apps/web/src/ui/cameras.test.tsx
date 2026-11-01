@@ -2,14 +2,12 @@ import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
 import { afterEach, expect, test } from 'vite-plus/test';
 import {
-  STAGES,
   byModel,
   phases,
   started,
   withOverrides,
   type FirmwareProgress,
-  type Stage,
-  type StageProgress,
+  type TrackId,
 } from './camera-progress';
 import { CameraTable, type Owner } from './cameras';
 let dispose: (() => void) | undefined;
@@ -17,28 +15,59 @@ afterEach(() => {
   dispose?.();
   document.body.replaceChildren();
 });
+/** A small bring-up graph in the generated documents' shape. */
+const TRACKS: [TrackId, string, [string, string][]][] = [
+  ['static', 'Static analysis', [
+    ['research', 'Update file registered'],
+    ['analysis', 'Facts located'],
+  ]],
+  ['emulator', 'Emulator', [
+    ['rec', 'Boots'],
+    ['menu', 'Menus respond'],
+    ['stock', 'Stock features'],
+    ['emulator-updater', 'Updater'],
+  ]],
+  ['camera', 'Camera', [
+    ['camera-identity', 'Identified'],
+    ['camera-snapshot', 'State dumped'],
+    ['camera-menu', 'Menus driven'],
+    ['camera-restart', 'Restarts itself'],
+  ]],
+  ['fujimod', 'FujiMod', [
+    ['mod-target', 'Mod target'],
+    ['mod-build', 'Built'],
+    ['walkthroughs', 'Walkthroughs'],
+  ]],
+  ['sd', 'SD card and install', [['sd-boot', 'Boots from the card']]],
+];
 function progress(
   model: string,
-  passed: Stage[],
+  passed: string[],
   mods: Record<string, 'pass' | 'fail'> = {},
   version = '1.00',
 ): FirmwareProgress {
-  const stages = Object.fromEntries(
-    STAGES.map((stage): [Stage, StageProgress] => [
-      stage,
-      passed.includes(stage) ? 'pass' : 'not-run',
-    ]),
-  ) as Record<Stage, StageProgress>;
   return {
     firmware_id: `${model.toLowerCase()}-100`,
     model,
     version,
     facts: null,
     boot_rom: null,
-    stages,
+    tracks: TRACKS.map(([id, title, stages]) => ({
+      id,
+      title,
+      stages: stages.map(([stage, label]) => ({
+        id: stage,
+        title: label,
+        result: passed.includes(stage) ? 'pass' : 'not-run',
+      })),
+    })),
     stock: {},
     mods,
   };
+}
+function result(document: FirmwareProgress, id: string, value: 'stale' | 'fail') {
+  for (const entry of document.tracks)
+    for (const stage of entry.stages) if (stage.id === id) stage.result = value;
 }
 function table(
   columns: Parameters<typeof CameraTable>[0]['columns'],
@@ -70,18 +99,15 @@ test('each phase fills by its steps and names its value', () => {
   document.boot_rom = 'X70';
   const list = phases(document);
   expect(list.map((phase) => [phase.id, phase.fraction, phase.value])).toEqual([
-    ['research', (3 + 0.5 + 1) / 6, '4 of 6'],
-    ['emulator', 1 / 2, '1 of 2'],
+    ['research', (1 + 0.5 + 1) / 3, '2 of 3'],
+    ['emulator', 1 / 3, '1 of 3'],
     ['camera', 1 / 4, '1 of 4'],
     ['mods', 1 / 4, '1 of 4'],
     ['sd-card', 0, 'Not yet'],
   ]);
   expect(list[0]?.steps.map((step) => [step.label, step.fraction, step.detail])).toEqual([
     ['Update file registered', 1, undefined],
-    ['Overlays unpacked', 1, undefined],
-    ['Corpus exported', 1, undefined],
-    ['Function index built', 0, undefined],
-    ['Facts located', 1 / 2, '1 of 2'],
+    ['Facts located', 1 / 2, '1 of 2 facts'],
     ['Boot ROM', 1, 'X70 dump'],
   ]);
 });
@@ -101,6 +127,7 @@ test('the emulator draws one cell per feature the body has, partial ones by thei
     ['Film simulations', 9 / 11, '9 of 11'],
     ['IBIS', 1, undefined],
     ['SD', 0, undefined],
+    ['Updater', 0, undefined],
   ]);
   const host = table([[{ name: 'X-Processor 4', years: '', models: ['X-T4'] }]], [document]);
   const cells = [...host.querySelectorAll<HTMLElement>('.phase:nth-child(2) .cell')];
@@ -109,6 +136,7 @@ test('the emulator draws one cell per feature the body has, partial ones by thei
     '0%',
     `${(9 / 11) * 100}%`,
     '100%',
+    '0%',
     '0%',
   ]);
   expect(host.querySelector('.phase:nth-child(2) li.partial .step-detail')?.textContent).toBe(
@@ -119,10 +147,10 @@ test('the emulator draws one cell per feature the body has, partial ones by thei
 
 test('stale and failing stages do not count', () => {
   const document = progress('X-T10', ['rec']);
-  document.stages.menu = 'stale';
-  document.stages.research = 'fail';
+  result(document, 'menu', 'stale');
+  result(document, 'research', 'fail');
   const [research, emulator] = phases(document);
-  expect([research?.fraction, emulator?.fraction]).toEqual([0, 1 / 2]);
+  expect([research?.fraction, emulator?.fraction]).toEqual([0, 1 / 3]);
 });
 
 test('a model is started once any stage, stock feature or mod passes', () => {

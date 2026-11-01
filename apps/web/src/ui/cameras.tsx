@@ -213,11 +213,11 @@ function GenerationGroup(props: {
 }
 const LEGEND: Phase['id'][] = ['research', 'emulator', 'camera', 'mods', 'sd-card'];
 const LEGEND_LABELS: Record<Phase['id'], string> = {
-  research: 'Research',
+  research: 'Static analysis',
   emulator: 'Emulator',
   camera: 'Camera',
-  mods: 'Mods',
-  'sd-card': 'SD-boot image',
+  mods: 'FujiMod',
+  'sd-card': 'SD card and install',
 };
 export function CameraTable(props: {
   columns: Generation[][];

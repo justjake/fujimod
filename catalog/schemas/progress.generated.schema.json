@@ -44,72 +44,26 @@
         }
       ]
     },
-    "ProgressStages": {
+    "StageEntry": {
       "additionalProperties": false,
-      "description": "Bring-up stages, grouped as research, emulator, camera, mods and SD card.",
+      "description": "One bring-up stage and its latest result.",
       "properties": {
-        "analysis": {
-          "$ref": "#/$defs/StageProgress",
-          "description": "The function index was built and the firmware's facts located."
+        "id": {
+          "description": "Stable stage identifier.",
+          "type": "string"
         },
-        "camera-identity": {
-          "$ref": "#/$defs/StageProgress",
-          "description": "A camera was identified over USB."
+        "result": {
+          "$ref": "#/$defs/StageProgress"
         },
-        "camera-menu": {
-          "$ref": "#/$defs/StageProgress",
-          "description": "A camera's menus were driven over USB."
-        },
-        "camera-restart": {
-          "$ref": "#/$defs/StageProgress",
-          "description": "A camera restarted itself on a USB request, without its switch or battery."
-        },
-        "camera-snapshot": {
-          "$ref": "#/$defs/StageProgress",
-          "description": "A camera's memory was captured over USB."
-        },
-        "menu": {
-          "$ref": "#/$defs/StageProgress",
-          "description": "The emulator's menus respond to remote control."
-        },
-        "mod-build": {
-          "$ref": "#/$defs/StageProgress",
-          "description": "Every shipped mod was built for the firmware."
-        },
-        "mod-target": {
-          "$ref": "#/$defs/StageProgress",
-          "description": "The mod target was generated from the firmware's facts."
-        },
-        "rec": {
-          "$ref": "#/$defs/StageProgress",
-          "description": "The emulator boots to the shooting screen."
-        },
-        "research": {
-          "$ref": "#/$defs/StageProgress",
-          "description": "The update file was registered, its overlays unpacked and every code unit's corpus exported."
-        },
-        "sd-boot": {
-          "$ref": "#/$defs/StageProgress",
-          "description": "A camera booted the SD card image."
-        },
-        "sd-image": {
-          "$ref": "#/$defs/StageProgress",
-          "description": "The dual-boot SD card image was built."
+        "title": {
+          "description": "Stage title as the bring-up runner prints it.",
+          "type": "string"
         }
       },
       "required": [
-        "research",
-        "analysis",
-        "rec",
-        "menu",
-        "camera-identity",
-        "camera-snapshot",
-        "camera-menu",
-        "camera-restart",
-        "mod-target",
-        "mod-build",
-        "sd-image",
-        "sd-boot"
+        "id",
+        "title",
+        "result"
       ],
       "type": "object"
     },
@@ -122,6 +76,11 @@
             "fail",
             "not-run"
           ],
+          "type": "string"
+        },
+        {
+          "const": "partial",
+          "description": "Some of the stage's graded parts pass (stock features, mod walkthroughs).",
           "type": "string"
         },
         {
@@ -184,6 +143,33 @@
           "type": "string"
         }
       ]
+    },
+    "TrackProgress": {
+      "additionalProperties": false,
+      "description": "One bring-up track: static analysis, emulator, camera, FujiMod, or SD card and install.",
+      "properties": {
+        "id": {
+          "description": "Stable track identifier.",
+          "type": "string"
+        },
+        "stages": {
+          "description": "The track's stages, in order.",
+          "items": {
+            "$ref": "#/$defs/StageEntry"
+          },
+          "type": "array"
+        },
+        "title": {
+          "description": "Track title as the bring-up runner prints it.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "stages"
+      ],
+      "type": "object"
     }
   },
   "$id": "https://fujimod.com/schemas/progress.generated.schema.json",
@@ -235,16 +221,19 @@
       "minimum": 0,
       "type": "integer"
     },
-    "stages": {
-      "$ref": "#/$defs/ProgressStages",
-      "description": "Bring-up stages, in order."
-    },
     "stock": {
       "additionalProperties": {
         "$ref": "#/$defs/StockProgress"
       },
       "description": "Stock camera features the emulator is graded on, by feature; only features the body has.",
       "type": "object"
+    },
+    "tracks": {
+      "description": "Bring-up tracks and their stages, in the bring-up graph's order.",
+      "items": {
+        "$ref": "#/$defs/TrackProgress"
+      },
+      "type": "array"
     },
     "version": {
       "description": "Firmware version.",
@@ -257,7 +246,7 @@
     "firmware_id",
     "model",
     "version",
-    "stages",
+    "tracks",
     "stock",
     "mods"
   ],
