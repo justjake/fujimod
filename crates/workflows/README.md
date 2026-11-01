@@ -23,25 +23,33 @@ they return `(already_persisted, progress_lines)`.
 
 ## `restart`: restart through the stock power-off
 
-`restart::request` restarts a camera from the debug link using only stock
-code, from the firmware's `catalog/firmware/<body>/<version>/restart.generated.json`
-(`fujimod-catalog-restart`). A `wake_deadline` mechanism names a stock
-power-off request that carries a wake deadline. The workflow:
+`restart::request` restarts a camera from the debug link through its stock
+power-off, from the firmware's `catalog/firmware/<body>/<version>/restart.generated.json`
+(`fujimod-catalog-restart`). The mechanism names the stock power-off request
+that carries a wake deadline and how the sender is reached. The workflow:
 
 1. Requires the camera's product name and internal version, then every code
    check against live bytes, read at `address + code_alias`.
-2. Requires the stock callback in the query slot (`callback_offset` into the
-   table that `callback_table` points to), and, unless `recover`, REC idle:
-   UI mode `rec_mode`, no pending mode, no menu.
-3. Writes the request and deadline 1 into the query output fields at their
-   located parameter offsets and borrows the slot for one diagnostic query,
-   whose tag is the fields' address, calling the stock sender. A deadline at or
-   before the camera's clock arms the stock minimum alarm, one second.
+2. Unless `recover`, requires REC idle: UI mode `rec_mode`, and where located
+   no pending mode and no menu.
+3. Calls the sender once with the request and deadline 1 at their parameter
+   offsets. A deadline at or before the camera's clock arms the stock minimum
+   alarm, one second.
+   - `borrowed_query`: requires the stock callback in the query slot
+     (`callback_offset` into the table `callback_table` points to), writes the
+     parameters into the query output fields and borrows the slot for one
+     diagnostic query whose tag is the fields' address.
+   - `console_callback`: requires the translation entries, cache-ready words,
+     the stock callback in the console's command slot and an empty stub area.
+     It writes a stub (`adr x0, parameters; b sender`) and the parameters,
+     calls the stock data-cache clean and instruction-cache sync through the
+     slot, then calls the stub through it with the console `CMD` command.
+     Each call restores the stock callback.
 
 It returns `Accepted` when the query answered, or `SessionEnded` when the
 camera cut power before answering. Nothing is written when a check fails; a
 refused send leaves the slot and fields restored. The caller watches the camera
-leave USB and return. A `power_cut` mechanism has no wake and is refused.
+leave USB and return.
 Python exposes it as `AsyncSession.request_restart(profile_json, recover)` with
 profiles from `fujimod.catalog.restart_profiles()`; JavaScript as
 `Session.requestRestart(firmwareId, recover)` with the bundled catalog and

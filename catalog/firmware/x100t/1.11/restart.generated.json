@@ -1,6 +1,6 @@
 {
   "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
-  "schema": 1,
+  "schema": 2,
   "id": "x100t-111-restart",
   "firmware_id": "x100t-111",
   "product": "X100T",
@@ -63,8 +63,8 @@
     }
   ],
   "mechanism": {
-    "kind": "wake_deadline",
-    "query": {
+    "transport": {
+      "kind": "borrowed_query",
       "callback_table": 23318932,
       "callback_offset": 12,
       "stock_callback": 17747056,
@@ -75,6 +75,7 @@
     "request": 130,
     "request_offset": 0,
     "deadline_offset": 4,
+    "parameter_bytes": 8,
     "ui": {
       "mode_address": 13336052,
       "mode_size": 4,
@@ -85,11 +86,15 @@
     "power_off": {
       "entry": 18736816,
       "halt": 18737020,
+      "power_cut": 9569016,
       "request_deadline_offset": 8,
       "alarm": {
-        "low": 105,
-        "high": 106,
-        "enable": 104
+        "seconds": [
+          105,
+          106
+        ],
+        "enable": 104,
+        "enable_value": 1
       },
       "deadline_parameter": 0,
       "rollover_parameter": 13

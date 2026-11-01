@@ -1,6 +1,6 @@
 {
   "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
-  "schema": 1,
+  "schema": 2,
   "id": "xt10-131-restart",
   "firmware_id": "xt10-131",
   "product": "X-T10",
@@ -63,8 +63,8 @@
     }
   ],
   "mechanism": {
-    "kind": "wake_deadline",
-    "query": {
+    "transport": {
+      "kind": "borrowed_query",
       "callback_table": 23489756,
       "callback_offset": 12,
       "stock_callback": 17899856,
@@ -75,6 +75,7 @@
     "request": 130,
     "request_offset": 0,
     "deadline_offset": 4,
+    "parameter_bytes": 8,
     "ui": {
       "mode_address": 13488892,
       "mode_size": 4,
@@ -85,11 +86,15 @@
     "power_off": {
       "entry": 18916064,
       "halt": 18916268,
+      "power_cut": 9552568,
       "request_deadline_offset": 8,
       "alarm": {
-        "low": 105,
-        "high": 106,
-        "enable": 104
+        "seconds": [
+          105,
+          106
+        ],
+        "enable": 104,
+        "enable_value": 1
       },
       "deadline_parameter": 0,
       "rollover_parameter": 13

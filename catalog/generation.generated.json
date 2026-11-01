@@ -6799,8 +6799,13 @@
           ]
         },
         "restart": {
-          "status": "available",
-          "errors": []
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "RestartCatalogError: No normal-mode console callback facts for this firmware"
+            }
+          ]
         },
         "service": {
           "status": "unavailable",

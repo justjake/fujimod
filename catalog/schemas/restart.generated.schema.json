@@ -5,72 +5,31 @@
       "description": "Power-controller registers the power-off writes for the wake alarm.",
       "properties": {
         "enable": {
-          "description": "Alarm enable.",
+          "description": "Register that enables the alarm.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
         },
-        "high": {
-          "description": "High byte of the seconds until the alarm.",
+        "enable_value": {
+          "description": "Value written to enable it.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
         },
-        "low": {
-          "description": "Low byte of the seconds until the alarm.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+        "seconds": {
+          "description": "Registers holding the seconds until the alarm, least significant first.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
         }
       },
       "required": [
-        "low",
-        "high",
-        "enable"
-      ],
-      "type": "object"
-    },
-    "BorrowedQuery": {
-      "additionalProperties": false,
-      "description": "A diagnostic query whose callback slot is borrowed for one call.",
-      "properties": {
-        "callback_offset": {
-          "description": "Byte offset of the query callback in that table.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "callback_table": {
-          "description": "Address of the pointer to the diagnostic callback table.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "output_bytes": {
-          "description": "Bytes in the output fields.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "output_fields": {
-          "description": "Output fields passed to the callback; the query tag is their address.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "stock_callback": {
-          "description": "Stock callback value.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "callback_table",
-        "callback_offset",
-        "stock_callback",
-        "output_fields",
-        "output_bytes"
+        "seconds",
+        "enable",
+        "enable_value"
       ],
       "type": "object"
     },
@@ -116,10 +75,13 @@
           "description": "Power-controller registers for the alarm."
         },
         "deadline_parameter": {
-          "description": "Persistent power-controller parameter offset of the saved deadline word.",
+          "description": "Persistent power-controller parameter offset of the saved deadline\nword, where the power-off saves it.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "entry": {
           "description": "Stock power-off routine.",
@@ -133,6 +95,12 @@
           "minimum": 0,
           "type": "integer"
         },
+        "power_cut": {
+          "description": "Stock routine that cuts power.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
         "request_deadline_offset": {
           "description": "Byte offset of the deadline in the request the power-off receives.",
           "format": "uint32",
@@ -140,7 +108,7 @@
           "type": "integer"
         },
         "rollover_parameter": {
-          "description": "Persistent parameter offset of the alarm's high (rollover) byte.",
+          "description": "Persistent parameter offset of the alarm's rollover byte.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
@@ -149,9 +117,9 @@
       "required": [
         "entry",
         "halt",
+        "power_cut",
         "request_deadline_offset",
         "alarm",
-        "deadline_parameter",
         "rollover_parameter"
       ],
       "type": "object"
@@ -161,10 +129,13 @@
       "description": "UI state that is REC with nothing pending and no menu open.",
       "properties": {
         "menu_active_address": {
-          "description": "Nonzero while a menu is open.",
+          "description": "Nonzero while a menu is open, where located.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "mode_address": {
           "description": "Current UI mode.",
@@ -179,10 +150,13 @@
           "type": "integer"
         },
         "pending_mode_address": {
-          "description": "Pending UI mode; zero when no change is pending.",
+          "description": "Pending UI mode, zero when no change is pending, where located.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "rec_mode": {
           "description": "UI mode value for REC.",
@@ -194,107 +168,230 @@
       "required": [
         "mode_address",
         "mode_size",
-        "rec_mode",
-        "pending_mode_address",
-        "menu_active_address"
+        "rec_mode"
       ],
       "type": "object"
     },
-    "RestartMechanism": {
-      "description": "A restart path through stock code.",
+    "RequestTransport": {
+      "description": "How the host makes the camera call the sender.",
       "oneOf": [
         {
           "additionalProperties": false,
-          "description": "The stock power-off request carries a wake deadline. A borrowed\ndiagnostic query calls the sender with the request in the query output\nfields; the power-off arms the power controller's alarm and cuts power,\nand the alarm boots the camera again.",
+          "description": "A borrowed diagnostic query calls the sender with the address of the\nquery output fields, which hold the parameters.",
           "properties": {
-            "deadline_offset": {
-              "description": "Byte offset of the wake deadline in the sender's parameters.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "kind": {
-              "const": "wake_deadline",
-              "type": "string"
-            },
-            "power_off": {
-              "$ref": "#/$defs/PowerOff",
-              "description": "What the stock power-off does with the request."
-            },
-            "query": {
-              "$ref": "#/$defs/BorrowedQuery",
-              "description": "The borrowed diagnostic query."
-            },
-            "request": {
-              "description": "Request word that selects power-off.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "request_offset": {
-              "description": "Byte offset of the request word in the sender's parameters.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "sender": {
-              "description": "Stock routine that sends the power-off request; called with the\naddress of the query output fields as its first argument.",
+            "callback_offset": {
+              "description": "Byte offset of the query callback in that table.",
               "format": "uint64",
               "minimum": 0,
               "type": "integer"
             },
-            "ui": {
-              "$ref": "#/$defs/RecIdle",
-              "description": "Where REC idle is observed."
+            "callback_table": {
+              "description": "Address of the pointer to the diagnostic callback table.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "borrowed_query",
+              "type": "string"
+            },
+            "output_bytes": {
+              "description": "Bytes in the output fields.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "output_fields": {
+              "description": "Output fields passed to the callback; the query tag is their address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stock_callback": {
+              "description": "Stock callback value.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
             }
           },
           "required": [
             "kind",
-            "query",
-            "sender",
-            "request",
-            "request_offset",
-            "deadline_offset",
-            "ui",
-            "power_off"
+            "callback_table",
+            "callback_offset",
+            "stock_callback",
+            "output_fields",
+            "output_bytes"
           ],
           "type": "object"
         },
         {
           "additionalProperties": false,
-          "description": "A stock routine cuts power with no wake; the camera stays off.",
+          "description": "The debug console's command callback is pointed at a short stub in an\nunused executable area. The stub passes its parameters to the sender\nand returns through it; the stock callback is restored after the reply.",
           "properties": {
+            "data_cache_clean": {
+              "description": "Stock routine that cleans the data cache on every core.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "instruction_cache_sync": {
+              "description": "Stock routine that invalidates the instruction cache.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
             "kind": {
-              "const": "power_cut",
+              "const": "console_callback",
               "type": "string"
             },
-            "latch_pin": {
-              "description": "GPIO pin the routine releases to drop the power latch.",
+            "ready_words": {
+              "description": "Words showing the stock cache maintenance is ready on every core.",
+              "items": {
+                "$ref": "#/$defs/WordValue"
+              },
+              "type": "array"
+            },
+            "slot": {
+              "description": "Command callback slot (a pointer the console calls for `CMD`).",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stock_callback": {
+              "description": "Stock callback value the slot must hold and gets back.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stub_area": {
+              "description": "Unused executable area for the stub; it must read as zero.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stub_bytes": {
+              "description": "Bytes of the stub area.",
               "format": "uint32",
               "minimum": 0,
               "type": "integer"
             },
-            "power_cut": {
-              "description": "Stock power-cut routine.",
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
+            "translation": {
+              "description": "Translation entries that keep the stub area executable.",
+              "items": {
+                "$ref": "#/$defs/WordValue"
+              },
+              "type": "array"
             }
           },
           "required": [
             "kind",
-            "power_cut",
-            "latch_pin"
+            "slot",
+            "stock_callback",
+            "stub_area",
+            "stub_bytes",
+            "translation",
+            "ready_words",
+            "data_cache_clean",
+            "instruction_cache_sync"
           ],
           "type": "object"
         }
       ]
+    },
+    "RestartMechanism": {
+      "additionalProperties": false,
+      "description": "The stock power-off request with a wake deadline. The power-off arms the\npower controller's alarm and cuts power; the alarm boots the camera again.",
+      "properties": {
+        "deadline_offset": {
+          "description": "Byte offset of the wake deadline in the sender's parameters.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parameter_bytes": {
+          "description": "Bytes of sender parameters.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "power_off": {
+          "$ref": "#/$defs/PowerOff",
+          "description": "What the stock power-off does with the request."
+        },
+        "request": {
+          "description": "Request word that selects power-off with a wake.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request_offset": {
+          "description": "Byte offset of the request word in the sender's parameters.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sender": {
+          "description": "Stock routine that sends the power-off request; its first argument is\nthe address of the request parameters.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transport": {
+          "$ref": "#/$defs/RequestTransport",
+          "description": "How the host reaches the sender."
+        },
+        "ui": {
+          "$ref": "#/$defs/RecIdle",
+          "description": "Where REC idle is observed."
+        }
+      },
+      "required": [
+        "transport",
+        "sender",
+        "request",
+        "request_offset",
+        "deadline_offset",
+        "parameter_bytes",
+        "ui",
+        "power_off"
+      ],
+      "type": "object"
+    },
+    "WordValue": {
+      "additionalProperties": false,
+      "description": "An exact memory word.",
+      "properties": {
+        "address": {
+          "description": "Address of the word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Bytes in the word: 4 or 8.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Value, little-endian.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size",
+        "value"
+      ],
+      "type": "object"
     }
   },
   "$id": "https://fujimod.com/schemas/restart.generated.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Located restart mechanism for one firmware.",
+  "description": "Located restart for one firmware.",
   "properties": {
     "$schema": {
       "const": "https://fujimod.com/schemas/restart.generated.schema.json",

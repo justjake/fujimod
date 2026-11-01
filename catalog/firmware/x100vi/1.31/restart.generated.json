@@ -1,6 +1,6 @@
 {
   "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
-  "schema": 1,
+  "schema": 2,
   "id": "x100vi-131-restart",
   "firmware_id": "x100vi-131",
   "product": "X100VI",
@@ -8,15 +8,118 @@
   "code_alias": 0,
   "code_checks": [
     {
+      "name": "power_off_sender",
+      "address": 49540856,
+      "size": 248,
+      "sha256": "350c5e560d00a32f0be63266c69cd2196b970a966608d7266c3b4975cf08d7f1"
+    },
+    {
+      "name": "power_off",
+      "address": 50964304,
+      "size": 328,
+      "sha256": "274a1337f45e8b2109cc28c5272449b001a186681c49422d638a0fa957a8d378"
+    },
+    {
       "name": "power_cut",
       "address": 21411832,
       "size": 480,
       "sha256": "3357fb1f8ad4339983b14cdf44bb535c05138994cb84907bf23779b327d56ace"
+    },
+    {
+      "name": "console_handler",
+      "address": 21104376,
+      "size": 300,
+      "sha256": "31251a27afcaa22f73ca8d2a4e07bd4e0d1be56648c9b4b02e270218801afa02"
+    },
+    {
+      "name": "console_callback",
+      "address": 49072864,
+      "size": 768,
+      "sha256": "8f74087733093473421e76af9910c9ef7d9dac5d0382c9bf31ee131864c068b0"
+    },
+    {
+      "name": "data_cache_clean",
+      "address": 22665528,
+      "size": 264,
+      "sha256": "4e011b82d1a6677152de2e5464d2ed36a7220511b650e3947be2647a8a9e0dbe"
+    },
+    {
+      "name": "instruction_cache_sync",
+      "address": 641144,
+      "size": 380,
+      "sha256": "da344f492ec3bd2a4a75c92be95d1a1e36b0977a233f63c12163047201bfedcf"
     }
   ],
   "mechanism": {
-    "kind": "power_cut",
-    "power_cut": 21411832,
-    "latch_pin": 589828
+    "transport": {
+      "kind": "console_callback",
+      "slot": 34310760,
+      "stock_callback": 49072864,
+      "stub_area": 2162624,
+      "stub_bytes": 64,
+      "translation": [
+        {
+          "address": 978584,
+          "size": 8,
+          "value": 1081344
+        },
+        {
+          "address": 1081344,
+          "size": 8,
+          "value": 1093635
+        },
+        {
+          "address": 1093640,
+          "size": 8,
+          "value": 2098697
+        }
+      ],
+      "ready_words": [
+        {
+          "address": 30204344,
+          "size": 4,
+          "value": 1
+        },
+        {
+          "address": 30204348,
+          "size": 4,
+          "value": 15
+        },
+        {
+          "address": 36742888,
+          "size": 4,
+          "value": 655361
+        }
+      ],
+      "data_cache_clean": 22665748,
+      "instruction_cache_sync": 641168
+    },
+    "sender": 49540856,
+    "request": 135,
+    "request_offset": 0,
+    "deadline_offset": 4,
+    "parameter_bytes": 12,
+    "ui": {
+      "mode_address": 42187992,
+      "mode_size": 4,
+      "rec_mode": 3,
+      "pending_mode_address": null,
+      "menu_active_address": null
+    },
+    "power_off": {
+      "entry": 50964304,
+      "halt": 50964628,
+      "power_cut": 21411832,
+      "request_deadline_offset": 8,
+      "alarm": {
+        "seconds": [
+          37
+        ],
+        "enable": 18,
+        "enable_value": 257
+      },
+      "deadline_parameter": null,
+      "rollover_parameter": 5
+    }
   }
 }

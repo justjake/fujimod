@@ -1,6 +1,6 @@
 {
   "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
-  "schema": 1,
+  "schema": 2,
   "id": "xe2s-111-restart",
   "firmware_id": "xe2s-111",
   "product": "X-E2S",
@@ -63,8 +63,8 @@
     }
   ],
   "mechanism": {
-    "kind": "wake_deadline",
-    "query": {
+    "transport": {
+      "kind": "borrowed_query",
       "callback_table": 23508508,
       "callback_offset": 12,
       "stock_callback": 17913436,
@@ -75,6 +75,7 @@
     "request": 130,
     "request_offset": 0,
     "deadline_offset": 4,
+    "parameter_bytes": 8,
     "ui": {
       "mode_address": 13489116,
       "mode_size": 4,
@@ -85,11 +86,15 @@
     "power_off": {
       "entry": 18931312,
       "halt": 18931516,
+      "power_cut": 9554264,
       "request_deadline_offset": 8,
       "alarm": {
-        "low": 105,
-        "high": 106,
-        "enable": 104
+        "seconds": [
+          105,
+          106
+        ],
+        "enable": 104,
+        "enable_value": 1
       },
       "deadline_parameter": 0,
       "rollover_parameter": 13
