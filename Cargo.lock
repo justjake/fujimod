@@ -1725,7 +1725,7 @@ dependencies = [
  "futures-lite",
  "libm",
  "openh264",
- "rusty_h264-common",
+ "rusty_h264-common 0.17.0",
  "rusty_h264-encoder",
  "serde",
  "serde-wasm-bindgen",
@@ -2055,7 +2055,7 @@ dependencies = [
  "fujimod-workspace-hack",
  "futures-lite",
  "openh264",
- "rusty_h264-common",
+ "rusty_h264-common 0.17.0",
  "rusty_h264-encoder",
  "serde",
  "videotoolbox",
@@ -4822,12 +4822,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusty_h264-common"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd9a439a66eeda9c7792d701f93f5b6069943ce38220129a1aa624d4fd20da20"
+dependencies = [
+ "bytemuck",
+ "libm",
+ "once_cell",
+ "portable-atomic",
+ "wide",
+]
+
+[[package]]
 name = "rusty_h264-encoder"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99277b8dcb73a794d7084ee17fa4953ac9845b568d350ceede534fa2984a631e"
 dependencies = [
- "rusty_h264-common",
+ "rusty_h264-common 0.16.1",
 ]
 
 [[package]]
