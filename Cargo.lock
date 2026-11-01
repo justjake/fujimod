@@ -5847,9 +5847,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "videotoolbox"
-version = "0.21.0"
+version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9e3873dc5eb56496b2dc65af88d46bc09ceabdb14d71d17128afe1181f1b0b8"
+checksum = "13cf2b8b5472d2da9a812f2cf8a40081ed9cf6633733cff6a5139a360aa11a36"
 dependencies = [
  "apple-cf",
  "doom-fish-utils",
