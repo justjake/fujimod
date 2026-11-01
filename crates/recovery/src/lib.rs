@@ -218,6 +218,7 @@ impl Recipe {
             payload,
             base,
             Some(workspace),
+            green_led::xp4_lamp(self, source)?,
         )?;
         early_led::stage(self, source, &mut bytes, base, xp4::indicator_entry()?, ((api.workspace - setup.linked_sram_base) & !0xfff) as usize - 0x1000)?;
         let mut layout = xp4::layout(setup, api, base);

@@ -39,6 +39,17 @@ pub struct ColdStart {
     pub preload: Option<preload::Preload>,
 }
 
+/// FFBOOT bytes read per ROM call; the lamp toggles after each one.
+pub(crate) const READ_CHUNK: u32 = 0x100000;
+
+/// Masked GPIO data-register writes that turn the green lamp on and off.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Lamp {
+    pub register: u32,
+    pub on: u32,
+    pub off: u32,
+}
+
 /// The indication runs only after FFINIT's primary-core and endian setup.
 pub(crate) fn indicator_entry() -> Result<usize> {
     let asset = &sd_loader::LAYOUT.ffinit;
@@ -70,7 +81,8 @@ pub fn package(
         .ok_or_else(|| image::Error::Invalid("Missing XP4 preloaded data map".into()))?;
     let data = preload.install(inverted, &plan, setup.dat_offset, &mut ram)?;
     crate::green_led::preserve_loader_green(recipe, source, &mut ram)?;
-    let init = ffinit(inverted, setup, api, &ram, api.load_address, None)?;
+    let lamp = crate::green_led::xp4_lamp(recipe, source)?;
+    let init = ffinit(inverted, setup, api, &ram, api.load_address, None, lamp)?;
     Ok(vec![
         image::File::new("ffinit.bin", init)?,
         image::File::new("ffboot.bin", ram)?,
@@ -88,7 +100,7 @@ pub(super) fn rescue_baseline(
 ) -> Result<Vec<image::File>> {
     let plan = cold_plan(inverted, plan, cold)?;
     let ram = image::transform(inverted, &plan)?;
-    let init = ffinit(inverted, setup, api, &ram, api.load_address, None)?;
+    let init = ffinit(inverted, setup, api, &ram, api.load_address, None, None)?;
     Ok(vec![
         image::File::new("ffinit.bin", init)?,
         image::File::new("ffboot.bin", ram)?,
@@ -233,6 +245,7 @@ pub fn ffinit(
     payload: &[u8],
     base: u32,
     workspace_override: Option<u32>,
+    lamp: Option<Lamp>,
 ) -> Result<Vec<u8>> {
     let asset = &sd_loader::LAYOUT.ffinit;
     let symbols = &asset.symbols;
@@ -372,6 +385,10 @@ pub fn ffinit(
         api.read,
         api.close,
         data_address,
+        READ_CHUNK,
+        lamp.map_or(0, |l| l.register),
+        lamp.map_or(0, |l| l.on),
+        lamp.map_or(0, |l| l.off),
     ]
     .into_iter()
     .enumerate()
@@ -506,7 +523,8 @@ pub fn layout(setup: &Setup, api: &FileApi, base: u32) -> serde_json::Value {
         "ffinit_counter_read":region+symbols["ffinit_counter_read"] as u32,
         "ffinit_counter_stop":region+symbols["ffinit_counter_stop"] as u32,
         "ffinit_crc32":region+symbols["ffinit_crc32"] as u32,
-        "ffinit_halt":region+symbols["ffinit_halt"] as u32
+        "ffinit_halt":region+symbols["ffinit_halt"] as u32,
+        "ffinit_fail_wait":region+symbols["ffinit_fail_wait"] as u32
     });
     serde_json::json!({"load_address":base,"code_region":region,"stack_top":(api.workspace-api.load_address+base)&!0xfff,"symbols":symbols,"sections":[{"name":".text","offset":0,"size":text.len()}]})
 }

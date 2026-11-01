@@ -1,94 +1,105 @@
 {
   "ffinit": {
     "symbols": {
-      "ffinit_boot_header": 1956,
-      "ffinit_config": 1920,
-      "ffinit_counter_read": 868,
-      "ffinit_counter_start": 848,
-      "ffinit_counter_stop": 876,
-      "ffinit_crc32": 344,
-      "ffinit_crc_table": 896,
-      "ffinit_dram_ready": 800,
-      "ffinit_enter_ram": 832,
-      "ffinit_entry": 768,
-      "ffinit_halt": 840,
-      "ffinit_load": 408,
-      "ffinit_prepare": 28,
-      "ffinit_progress": 4028,
-      "ffinit_resume_setup": 824,
-      "ffinit_setup_data": 4004
+      "ffinit_boot_header": 2216,
+      "ffinit_config": 2164,
+      "ffinit_counter_read": 1112,
+      "ffinit_counter_start": 1092,
+      "ffinit_counter_stop": 1120,
+      "ffinit_crc32": 452,
+      "ffinit_crc_table": 1140,
+      "ffinit_dram_ready": 1044,
+      "ffinit_enter_ram": 1076,
+      "ffinit_entry": 1012,
+      "ffinit_fail_wait": 40,
+      "ffinit_halt": 1084,
+      "ffinit_load": 500,
+      "ffinit_prepare": 136,
+      "ffinit_progress": 4288,
+      "ffinit_resume_setup": 1068,
+      "ffinit_setup_data": 4264
     },
     "text": {
       "offset": 0,
-      "size": 896
+      "size": 1140
     },
     "suffix": {
-      "offset": 896,
+      "offset": 1140,
       "size": 20
     },
     "fixups": [
       [
-        4,
+        36,
+        2,
+        2164
+      ],
+      [
+        104,
+        2,
+        2164
+      ],
+      [
+        112,
         43,
-        4028
+        4288
       ],
       [
-        8,
+        116,
         44,
-        4028
+        4288
       ],
       [
-        332,
+        440,
         2,
-        1956
+        2216
       ],
       [
-        336,
+        444,
         2,
-        4028
+        4288
       ],
       [
-        340,
+        448,
         2,
-        1920
+        2164
       ],
       [
-        404,
+        496,
         2,
-        896
+        1140
       ],
       [
-        752,
+        996,
         2,
-        1920
+        2164
       ],
       [
-        756,
+        1000,
         2,
-        4028
+        4288
       ],
       [
-        760,
+        1004,
         2,
-        4008
+        4268
       ],
       [
-        764,
+        1008,
         2,
-        4016
+        4276
       ],
       [
-        796,
-        2,
-        -1
-      ],
-      [
-        820,
+        1040,
         2,
         -1
       ],
       [
-        828,
+        1064,
+        2,
+        -1
+      ],
+      [
+        1072,
         2,
         -2
       ]
@@ -96,7 +107,7 @@
   },
   "preloaded": {
     "address": 1703936,
-    "offset": 916,
+    "offset": 1160,
     "size": 1656,
     "symbols": {
       "preloaded_initialize_configuration": 984,
