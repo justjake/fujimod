@@ -16,6 +16,7 @@ fujimod-catalog.workspace = true
 fujimod-catalog-configuration.workspace = true
 fujimod-catalog-resolution.workspace = true
 fujimod-catalog-bulk.workspace = true
+fujimod-catalog-restart.workspace = true
 fujimod-catalog-construction.workspace = true
 fujimod-catalog-controls.workspace = true
 fujimod-catalog-remote.workspace = true
@@ -32,6 +33,7 @@ schema = [
   "fujimod-catalog-configuration/schema",
   "fujimod-catalog-resolution/schema",
   "fujimod-catalog-bulk/schema",
+  "fujimod-catalog-restart/schema",
   "fujimod-catalog-construction/schema",
   "fujimod-catalog-controls/schema",
   "fujimod-catalog-remote/schema",

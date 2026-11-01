@@ -2529,6 +2529,9 @@ pub struct ResolvedSelection {
     /// Stock diagnostic bulk reads, when located for this firmware.
     #[serde(default)]
     pub bulk: Option<fujimod_catalog_bulk::FirmwareBulk>,
+    /// Stock restart over debug USB, when located for this firmware.
+    #[serde(default)]
+    pub restart: Option<fujimod_catalog_restart::FirmwareRestart>,
     /// Settings-bank layout, when located for this firmware.
     #[serde(default)]
     pub settings: Option<fujimod_catalog_settings::FirmwareSettings>,
@@ -2554,6 +2557,7 @@ pub struct ReferenceCatalog {
     control_ids: BTreeMap<String, serde_json::Value>,
     first_start: BTreeMap<String, crate::first_start::FirstStartMenu>,
     bulk: BTreeMap<String, fujimod_catalog_bulk::FirmwareBulk>,
+    restart: BTreeMap<String, fujimod_catalog_restart::FirmwareRestart>,
     settings: BTreeMap<String, fujimod_catalog_settings::FirmwareSettings>,
     flash: BTreeMap<String, crate::capture::FirmwareFlash>,
     state: BTreeMap<String, crate::capture::FirmwareState>,
@@ -2652,6 +2656,7 @@ impl ReferenceCatalog {
             control_ids: self.control_ids.get(&firmware.id).cloned(),
             first_start: self.first_start.get(&firmware.id).cloned(),
             bulk: self.bulk.get(&firmware.id).cloned(),
+            restart: self.restart.get(&firmware.id).cloned(),
             settings: self.settings.get(&firmware.id).cloned(),
             flash: self.flash.get(&firmware.id).cloned(),
             state: self.state.get(&firmware.id).cloned(),
@@ -2706,6 +2711,18 @@ impl ReferenceCatalog {
         self.bulk.get(firmware_id)
     }
 
+    /// Located restart profiles, independent of a body or execution profile.
+    pub fn restart_profiles(
+        &self,
+    ) -> impl Iterator<Item = &fujimod_catalog_restart::FirmwareRestart> {
+        self.restart.values()
+    }
+
+    /// Return the restart profile for a firmware release.
+    pub fn restart(&self, firmware_id: &str) -> Option<&fujimod_catalog_restart::FirmwareRestart> {
+        self.restart.get(firmware_id)
+    }
+
     fn insert_document(
         &mut self,
         kind: ReferenceKind,
@@ -2742,6 +2759,11 @@ impl ReferenceCatalog {
                 let value: fujimod_catalog_bulk::FirmwareBulk = decode(bytes, path)?;
                 value.validate()?;
                 insert_unique(&mut self.bulk, value.firmware_id.clone(), value, path)
+            }
+            ReferenceKind::Restart => {
+                let value: fujimod_catalog_restart::FirmwareRestart = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(&mut self.restart, value.firmware_id.clone(), value, path)
             }
             ReferenceKind::Body => {
                 let value: Body = decode(bytes, path)?;
@@ -2785,7 +2807,7 @@ impl ReferenceCatalog {
                 ));
             }
         }
-        for firmware_id in self.bulk.keys() {
+        for firmware_id in self.bulk.keys().chain(self.restart.keys()) {
             if !self.firmwares.contains_key(firmware_id)
                 && !self
                     .firmware_versions
@@ -2793,7 +2815,7 @@ impl ReferenceCatalog {
                     .any(|release| &release.firmware_id == firmware_id)
             {
                 return Err(format!(
-                    "bulk facts refer to missing firmware {firmware_id}"
+                    "bulk or restart facts refer to missing firmware {firmware_id}"
                 ));
             }
         }
@@ -2873,6 +2895,16 @@ impl ReferenceCatalog {
                 {
                     return Err(format!(
                         "bulk identity differs from firmware version map for {}",
+                        release.firmware_id
+                    ));
+                }
+            }
+            if let Some(restart) = self.restart.get(&release.firmware_id) {
+                if release.product != restart.product
+                    || release.internal_version != restart.internal_version
+                {
+                    return Err(format!(
+                        "restart identity differs from firmware version map for {}",
                         release.firmware_id
                     ));
                 }
@@ -3329,6 +3361,7 @@ enum ReferenceKind {
     ControlIds,
     FirstStart,
     Bulk,
+    Restart,
     Settings,
     Flash,
     State,
@@ -3349,6 +3382,7 @@ impl ReferenceKind {
             Some("control-ids.generated.json") => Ok(Self::ControlIds),
             Some("first-start.generated.json") => Ok(Self::FirstStart),
             Some("bulk.generated.json") => Ok(Self::Bulk),
+            Some("restart.generated.json") => Ok(Self::Restart),
             Some("settings.generated.json") => Ok(Self::Settings),
             Some("flash.generated.json") => Ok(Self::Flash),
             Some("state.generated.json") => Ok(Self::State),

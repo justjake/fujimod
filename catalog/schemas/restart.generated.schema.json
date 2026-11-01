@@ -1,0 +1,357 @@
+{
+  "$defs": {
+    "AlarmRegisters": {
+      "additionalProperties": false,
+      "description": "Power-controller registers the power-off writes for the wake alarm.",
+      "properties": {
+        "enable": {
+          "description": "Alarm enable.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "high": {
+          "description": "High byte of the seconds until the alarm.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "low": {
+          "description": "Low byte of the seconds until the alarm.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "low",
+        "high",
+        "enable"
+      ],
+      "type": "object"
+    },
+    "BorrowedQuery": {
+      "additionalProperties": false,
+      "description": "A diagnostic query whose callback slot is borrowed for one call.",
+      "properties": {
+        "callback_offset": {
+          "description": "Byte offset of the query callback in that table.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "callback_table": {
+          "description": "Address of the pointer to the diagnostic callback table.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output_bytes": {
+          "description": "Bytes in the output fields.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output_fields": {
+          "description": "Output fields passed to the callback; the query tag is their address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stock_callback": {
+          "description": "Stock callback value.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "callback_table",
+        "callback_offset",
+        "stock_callback",
+        "output_fields",
+        "output_bytes"
+      ],
+      "type": "object"
+    },
+    "CodeCheck": {
+      "additionalProperties": false,
+      "description": "Stock code bytes identified by their SHA-256.",
+      "properties": {
+        "address": {
+          "description": "First address, before `code_alias`.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Routine or region name.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Lowercase hexadecimal SHA-256 of the stock bytes.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "PowerOff": {
+      "additionalProperties": false,
+      "description": "The stock power-off reached by the request.",
+      "properties": {
+        "alarm": {
+          "$ref": "#/$defs/AlarmRegisters",
+          "description": "Power-controller registers for the alarm."
+        },
+        "deadline_parameter": {
+          "description": "Persistent power-controller parameter offset of the saved deadline word.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "entry": {
+          "description": "Stock power-off routine.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "halt": {
+          "description": "Its final self-branch, reached after the power cut.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request_deadline_offset": {
+          "description": "Byte offset of the deadline in the request the power-off receives.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rollover_parameter": {
+          "description": "Persistent parameter offset of the alarm's high (rollover) byte.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "entry",
+        "halt",
+        "request_deadline_offset",
+        "alarm",
+        "deadline_parameter",
+        "rollover_parameter"
+      ],
+      "type": "object"
+    },
+    "RecIdle": {
+      "additionalProperties": false,
+      "description": "UI state that is REC with nothing pending and no menu open.",
+      "properties": {
+        "menu_active_address": {
+          "description": "Nonzero while a menu is open.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode_address": {
+          "description": "Current UI mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode_size": {
+          "description": "Bytes in each UI mode cell.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pending_mode_address": {
+          "description": "Pending UI mode; zero when no change is pending.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rec_mode": {
+          "description": "UI mode value for REC.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mode_address",
+        "mode_size",
+        "rec_mode",
+        "pending_mode_address",
+        "menu_active_address"
+      ],
+      "type": "object"
+    },
+    "RestartMechanism": {
+      "description": "A restart path through stock code.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "The stock power-off request carries a wake deadline. A borrowed\ndiagnostic query calls the sender with the request in the query output\nfields; the power-off arms the power controller's alarm and cuts power,\nand the alarm boots the camera again.",
+          "properties": {
+            "deadline_offset": {
+              "description": "Byte offset of the wake deadline in the sender's parameters.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "wake_deadline",
+              "type": "string"
+            },
+            "power_off": {
+              "$ref": "#/$defs/PowerOff",
+              "description": "What the stock power-off does with the request."
+            },
+            "query": {
+              "$ref": "#/$defs/BorrowedQuery",
+              "description": "The borrowed diagnostic query."
+            },
+            "request": {
+              "description": "Request word that selects power-off.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "request_offset": {
+              "description": "Byte offset of the request word in the sender's parameters.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sender": {
+              "description": "Stock routine that sends the power-off request; called with the\naddress of the query output fields as its first argument.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "ui": {
+              "$ref": "#/$defs/RecIdle",
+              "description": "Where REC idle is observed."
+            }
+          },
+          "required": [
+            "kind",
+            "query",
+            "sender",
+            "request",
+            "request_offset",
+            "deadline_offset",
+            "ui",
+            "power_off"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A stock routine cuts power with no wake; the camera stays off.",
+          "properties": {
+            "kind": {
+              "const": "power_cut",
+              "type": "string"
+            },
+            "latch_pin": {
+              "description": "GPIO pin the routine releases to drop the power latch.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "power_cut": {
+              "description": "Stock power-cut routine.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "power_cut",
+            "latch_pin"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$id": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Located restart mechanism for one firmware.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/restart.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "code_alias": {
+      "description": "Uncached RAM alias: debug reads of code, the callback table pointer,\nthe callback slot and UI state use `address + code_alias`.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "code_checks": {
+      "description": "Stock code that must match before any write.",
+      "items": {
+        "$ref": "#/$defs/CodeCheck"
+      },
+      "type": "array"
+    },
+    "firmware_id": {
+      "description": "Firmware whose stock code provides this mechanism.",
+      "type": "string"
+    },
+    "id": {
+      "description": "Stable document identity.",
+      "type": "string"
+    },
+    "internal_version": {
+      "description": "Internal version the camera reports.",
+      "type": "string"
+    },
+    "mechanism": {
+      "$ref": "#/$defs/RestartMechanism",
+      "description": "How the restart is requested."
+    },
+    "product": {
+      "description": "Product name the camera reports.",
+      "type": "string"
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "firmware_id",
+    "product",
+    "internal_version",
+    "code_alias",
+    "code_checks",
+    "mechanism"
+  ],
+  "title": "FirmwareRestart",
+  "type": "object"
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 1,
+  "id": "x100vi-131-restart",
+  "firmware_id": "x100vi-131",
+  "product": "X100VI",
+  "internal_version": "1.79",
+  "code_alias": 0,
+  "code_checks": [
+    {
+      "name": "power_cut",
+      "address": 21411832,
+      "size": 480,
+      "sha256": "3357fb1f8ad4339983b14cdf44bb535c05138994cb84907bf23779b327d56ace"
+    }
+  ],
+  "mechanism": {
+    "kind": "power_cut",
+    "power_cut": 21411832,
+    "latch_pin": 589828
+  }
+}

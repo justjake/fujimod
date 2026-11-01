@@ -22,6 +22,7 @@ fujimod-workflows.workspace = true
 fujimod-catalog.workspace = true
 fujimod-recovery.workspace = true
 fujimod-catalog-bulk.workspace = true
+fujimod-catalog-restart.workspace = true
 fujimod-catalog-workflows.workspace = true
 fujimod-catalog-firmware-identity.workspace = true
 fujimod-catalog-service.workspace = true

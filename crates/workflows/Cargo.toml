@@ -21,6 +21,7 @@ fujimod-catalog.workspace = true
 sha2.workspace = true
 fujimod-catalog-workflows.workspace = true
 fujimod-catalog-bulk.workspace = true
+fujimod-catalog-restart.workspace = true
 fujimod-usb.workspace = true
 thiserror.workspace = true
 serde = { workspace = true, features = ["derive"] }

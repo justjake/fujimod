@@ -1,0 +1,22 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 1,
+  "id": "xt5-431-restart",
+  "firmware_id": "xt5-431",
+  "product": "X-T5",
+  "internal_version": "2.14",
+  "code_alias": 0,
+  "code_checks": [
+    {
+      "name": "power_cut",
+      "address": 20448120,
+      "size": 480,
+      "sha256": "7df09841b0fe518227355346f43b2fe0e5dde3d163efbf25fc76cd8d189a7a4e"
+    }
+  ],
+  "mechanism": {
+    "kind": "power_cut",
+    "power_cut": 20448120,
+    "latch_pin": 589828
+  }
+}

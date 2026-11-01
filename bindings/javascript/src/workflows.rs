@@ -314,6 +314,54 @@ impl Session {
         })))
     }
 }
+pub(crate) struct Restart {
+    restart: fujimod_catalog_restart::FirmwareRestart,
+    limits: Limits,
+    recover: bool,
+}
+impl Restart {
+    pub(crate) async fn run(self, session: &mut usb::ff80::Session) -> Result<JsValue, JsValue> {
+        use fujimod_workflows::{bulk::BulkError, restart};
+        match restart::request(session, &self.restart, self.limits, self.recover).await {
+            Ok(restart::Requested::Accepted) => Ok(JsValue::from_str("accepted")),
+            Ok(restart::Requested::SessionEnded) => Ok(JsValue::from_str("session-ended")),
+            Err(BulkError::Usb(source)) => Err(crate::error::error(source)),
+            Err(other) => Err(workflow_error(other)),
+        }
+    }
+}
+#[wasm_bindgen]
+impl Session {
+    /// Restart the camera through the firmware's located stock power-off with
+    /// a wake deadline. Resolves "accepted" when the query returned, or
+    /// "session-ended" when the camera cut power before answering; either way
+    /// the camera leaves USB and boots again. `recover` skips the REC-idle
+    /// requirement. Nothing is written unless identity and stock code match.
+    #[wasm_bindgen(js_name=requestRestart, unchecked_return_type="Promise<'accepted' | 'session-ended'>")]
+    pub fn request_restart(
+        &self,
+        firmware_id: &str,
+        recover: bool,
+    ) -> Result<js_sys::Promise, JsValue> {
+        let restart = crate::reference::bundled()?
+            .restart(firmware_id)
+            .cloned()
+            .ok_or_else(|| {
+                workflow_error(fujimod_catalog::generation::missing_table_reason(
+                    firmware_id,
+                    "restart",
+                ))
+            })?;
+        self.call(Operation::Restart(Restart {
+            restart,
+            recover,
+            limits: Limits {
+                memory: self.limits.memory,
+                configuration: self.limits.configuration,
+            },
+        }))
+    }
+}
 fn sink_error(error: JsValue) -> String {
     error
         .as_string()

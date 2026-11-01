@@ -73,6 +73,12 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         schema::<fujimod_catalog_bulk::FirmwareBulk>(fujimod_catalog_bulk::BULK_SCHEMA_URI),
     );
     documents.insert(
+        "restart.generated.schema.json",
+        schema::<fujimod_catalog_restart::FirmwareRestart>(
+            fujimod_catalog_restart::RESTART_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
         "progress.generated.schema.json",
         schema::<fujimod_catalog::progress::FirmwareProgress>(
             fujimod_catalog::progress::PROGRESS_SCHEMA_URI,

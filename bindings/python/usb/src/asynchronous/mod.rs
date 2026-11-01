@@ -14,6 +14,7 @@ pub(super) mod connection;
 mod install;
 mod operations;
 mod reader;
+mod restart;
 mod runtime;
 mod sequence;
 mod workflows;

@@ -539,6 +539,7 @@ impl Session {
 pub(crate) enum Operation {
     Workflow(crate::workflows::Workflow),
     StateDump(crate::workflows::StateDump),
+    Restart(crate::workflows::Restart),
     FlashBackup(Box<crate::workflows::FlashBackup>),
     UploadOwned(
         fujimod_workflows::install::OwnedUpload,
@@ -604,6 +605,7 @@ impl Operation {
             Self::Workflow(workflow) => return workflow.run(s).await,
             Self::Memory(operation) => return operation.run(s).await,
             Self::StateDump(dump) => return dump.run(s).await,
+            Self::Restart(restart) => return restart.run(s).await,
             Self::FlashBackup(backup) => return backup.run(s).await,
             Self::UploadOwned(image, destination, limits) => image
                 .upload(s, destination, limits)

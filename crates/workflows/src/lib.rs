@@ -12,6 +12,7 @@ mod callback;
 pub mod debug_mode;
 pub mod flash;
 pub mod install;
+pub mod restart;
 #[cfg(feature = "service-capture")]
 pub mod service_capture;
 pub mod service_mode;

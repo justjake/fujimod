@@ -89,6 +89,15 @@
             }
           ]
         },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "ValueError: power-cut routine: fuji_native_power_cut: 1 candidates, 0 verified results (0x1470210: no four settle calls with w0 = -6); 0 structural candidates "
+            }
+          ]
+        },
         "service": {
           "status": "unavailable",
           "errors": [
@@ -1505,6 +1514,15 @@
           "status": "available",
           "errors": []
         },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "ValueError: power-off with wake alarm: 0 candidates"
+            }
+          ]
+        },
         "service": {
           "status": "unavailable",
           "errors": [
@@ -1560,6 +1578,10 @@
           "errors": []
         },
         "progress": {
+          "status": "available",
+          "errors": []
+        },
+        "restart": {
           "status": "available",
           "errors": []
         },
@@ -1750,6 +1772,10 @@
           "status": "available",
           "errors": []
         },
+        "restart": {
+          "status": "available",
+          "errors": []
+        },
         "service": {
           "status": "unavailable",
           "errors": [
@@ -1835,6 +1861,15 @@
           "status": "available",
           "errors": []
         },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "ValueError: power-off with wake alarm: 0 candidates"
+            }
+          ]
+        },
         "service": {
           "status": "unavailable",
           "errors": [
@@ -1893,6 +1928,10 @@
           "status": "available",
           "errors": []
         },
+        "restart": {
+          "status": "available",
+          "errors": []
+        },
         "service": {
           "status": "available",
           "errors": []
@@ -1938,6 +1977,10 @@
           "errors": []
         },
         "progress": {
+          "status": "available",
+          "errors": []
+        },
+        "restart": {
           "status": "available",
           "errors": []
         },
@@ -2006,6 +2049,15 @@
         "progress": {
           "status": "available",
           "errors": []
+        },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "ValueError: power-off with wake alarm: 0 candidates"
+            }
+          ]
         },
         "service": {
           "status": "unavailable",
@@ -2178,6 +2230,15 @@
         "progress": {
           "status": "available",
           "errors": []
+        },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "ValueError: power-off with wake alarm: 0 candidates"
+            }
+          ]
         },
         "service": {
           "status": "unavailable",
@@ -2794,6 +2855,10 @@
           "status": "available",
           "errors": []
         },
+        "restart": {
+          "status": "available",
+          "errors": []
+        },
         "service": {
           "status": "unavailable",
           "errors": [
@@ -2849,6 +2914,10 @@
           "errors": []
         },
         "progress": {
+          "status": "available",
+          "errors": []
+        },
+        "restart": {
           "status": "available",
           "errors": []
         },
@@ -3224,6 +3293,15 @@
             {
               "locator": "progress",
               "reason": "ValueError: No catalog firmware and body record is published"
+            }
+          ]
+        },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
             }
           ]
         },
@@ -3715,6 +3793,15 @@
             }
           ]
         },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+            }
+          ]
+        },
         "service": {
           "status": "unavailable",
           "errors": [
@@ -3813,6 +3900,15 @@
             {
               "locator": "progress",
               "reason": "ValueError: No catalog firmware and body record is published"
+            }
+          ]
+        },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
             }
           ]
         },
@@ -4038,6 +4134,15 @@
             }
           ]
         },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "ValueError: power-off with wake alarm: 0 candidates"
+            }
+          ]
+        },
         "service": {
           "status": "unavailable",
           "errors": [
@@ -4155,6 +4260,15 @@
             }
           ]
         },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "ValueError: power-off with wake alarm: 0 candidates"
+            }
+          ]
+        },
         "service": {
           "status": "unavailable",
           "errors": [
@@ -4235,6 +4349,15 @@
         "progress": {
           "status": "available",
           "errors": []
+        },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "ValueError: power-off with wake alarm: 0 candidates"
+            }
+          ]
         },
         "service": {
           "status": "unavailable",
@@ -4330,6 +4453,15 @@
         "progress": {
           "status": "available",
           "errors": []
+        },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "ValueError: power-cut routine: fuji_native_power_cut: 0 candidates, 0 verified results; 2 structural candidates 0x914ba8, 0x148e548"
+            }
+          ]
         },
         "service": {
           "status": "unavailable",
@@ -4838,6 +4970,15 @@
           "status": "available",
           "errors": []
         },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "ValueError: power-off with wake alarm: 0 candidates"
+            }
+          ]
+        },
         "service": {
           "status": "available",
           "errors": []
@@ -4907,6 +5048,15 @@
         "progress": {
           "status": "available",
           "errors": []
+        },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "ValueError: power-off with wake alarm: 0 candidates"
+            }
+          ]
         },
         "service": {
           "status": "available",
@@ -5249,6 +5399,15 @@
             }
           ]
         },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+            }
+          ]
+        },
         "service": {
           "status": "unavailable",
           "errors": [
@@ -5338,6 +5497,15 @@
           "status": "available",
           "errors": []
         },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "ValueError: power-off sender: 0 candidates"
+            }
+          ]
+        },
         "service": {
           "status": "available",
           "errors": []
@@ -5388,6 +5556,10 @@
           "errors": []
         },
         "progress": {
+          "status": "available",
+          "errors": []
+        },
+        "restart": {
           "status": "available",
           "errors": []
         },
@@ -6346,6 +6518,15 @@
             }
           ]
         },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+            }
+          ]
+        },
         "service": {
           "status": "unavailable",
           "errors": [
@@ -6617,6 +6798,10 @@
             }
           ]
         },
+        "restart": {
+          "status": "available",
+          "errors": []
+        },
         "service": {
           "status": "unavailable",
           "errors": [
@@ -6779,6 +6964,15 @@
             {
               "locator": "progress",
               "reason": "ValueError: No catalog firmware and body record is published"
+            }
+          ]
+        },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
             }
           ]
         },

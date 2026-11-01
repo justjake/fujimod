@@ -1365,6 +1365,7 @@ dependencies = [
  "fujimod-catalog-controls",
  "fujimod-catalog-identity",
  "fujimod-catalog-remote",
+ "fujimod-catalog-restart",
  "fujimod-catalog-settings",
  "fujimod-workspace-hack",
  "schemars",
@@ -1498,6 +1499,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-catalog-restart"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-bulk",
+ "fujimod-catalog-identity",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "fujimod-catalog-run-inputs"
 version = "0.1.0"
 dependencies = [
@@ -1524,6 +1540,7 @@ dependencies = [
  "fujimod-catalog-controls",
  "fujimod-catalog-remote",
  "fujimod-catalog-resolution",
+ "fujimod-catalog-restart",
  "fujimod-catalog-run-inputs",
  "fujimod-catalog-settings",
  "fujimod-workspace-hack",
@@ -2508,6 +2525,7 @@ dependencies = [
  "fujimod-catalog",
  "fujimod-catalog-bulk",
  "fujimod-catalog-firmware-identity",
+ "fujimod-catalog-restart",
  "fujimod-catalog-service",
  "fujimod-catalog-workflows",
  "fujimod-recovery",
@@ -2715,6 +2733,7 @@ name = "fujimod-python-usb"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog-firmware-identity",
+ "fujimod-catalog-restart",
  "fujimod-catalog-workflows",
  "fujimod-firmware",
  "fujimod-python-usb-base",
@@ -2922,6 +2941,7 @@ dependencies = [
  "fujimod-catalog",
  "fujimod-catalog-bulk",
  "fujimod-catalog-firmware-identity",
+ "fujimod-catalog-restart",
  "fujimod-catalog-workflows",
  "fujimod-corpus",
  "fujimod-firmware",

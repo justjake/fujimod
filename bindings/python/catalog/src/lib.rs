@@ -25,13 +25,23 @@ fn resolve_firmware(firmware_id: &str) -> PyResult<String> {
     serde_json::to_string(&selection).map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
+/// Every bundled `restart.generated.json` profile, as a JSON list.
+#[pyfunction]
+fn restart_profiles() -> PyResult<String> {
+    let catalog = fujimod_catalog::ReferenceCatalog::bundled().map_err(PyValueError::new_err)?;
+    let profiles: Vec<_> = catalog.restart_profiles().collect();
+    serde_json::to_string(&profiles).map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
 /// Resolve and validate a named run configuration and all reference identities.
 #[pyfunction]
 #[pyo3(signature = (configuration_id, overlays=Vec::new()))]
 fn resolve_configuration(configuration_id: &str, overlays: Vec<String>) -> PyResult<String> {
-    let resolved =
-        fujimod_catalog_resolution::ResolvedConfiguration::with_overlays(configuration_id, &overlays)
-            .map_err(PyValueError::new_err)?;
+    let resolved = fujimod_catalog_resolution::ResolvedConfiguration::with_overlays(
+        configuration_id,
+        &overlays,
+    )
+    .map_err(PyValueError::new_err)?;
     serde_json::to_string(&resolved).map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
@@ -42,6 +52,7 @@ pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
     catalog.add_function(wrap_pyfunction!(resolve_reference, &catalog)?)?;
     catalog.add_function(wrap_pyfunction!(resolve_firmware, &catalog)?)?;
     catalog.add_function(wrap_pyfunction!(resolve_configuration, &catalog)?)?;
+    catalog.add_function(wrap_pyfunction!(restart_profiles, &catalog)?)?;
     catalog.add("__path__", PyList::empty(py))?;
     let service = fujimod_python_service::register(py, &catalog)?;
     parent.add_submodule(&catalog)?;

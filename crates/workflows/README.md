@@ -21,6 +21,32 @@ retried. Python exposes `Session.enter_debug_mode` / `leave_debug_mode` with
 the same camera table and firmware identity arguments as `arm_reset_guard`;
 they return `(already_persisted, progress_lines)`.
 
+## `restart`: restart through the stock power-off
+
+`restart::request` restarts a camera from the debug link using only stock
+code, from the firmware's `catalog/firmware/<body>/<version>/restart.generated.json`
+(`fujimod-catalog-restart`). A `wake_deadline` mechanism names a stock
+power-off request that carries a wake deadline. The workflow:
+
+1. Requires the camera's product name and internal version, then every code
+   check against live bytes, read at `address + code_alias`.
+2. Requires the stock callback in the query slot (`callback_offset` into the
+   table that `callback_table` points to), and, unless `recover`, REC idle:
+   UI mode `rec_mode`, no pending mode, no menu.
+3. Writes the request and deadline 1 into the query output fields at their
+   located parameter offsets and borrows the slot for one diagnostic query,
+   whose tag is the fields' address, calling the stock sender. A deadline at or
+   before the camera's clock arms the stock minimum alarm, one second.
+
+It returns `Accepted` when the query answered, or `SessionEnded` when the
+camera cut power before answering. Nothing is written when a check fails; a
+refused send leaves the slot and fields restored. The caller watches the camera
+leave USB and return. A `power_cut` mechanism has no wake and is refused.
+Python exposes it as `AsyncSession.request_restart(profile_json, recover)` with
+profiles from `fujimod.catalog.restart_profiles()`; JavaScript as
+`Session.requestRestart(firmwareId, recover)` with the bundled catalog and
+`catalogRestartProfiles()`.
+
 ## `install`: debug mod installation
 
 Installation also uses two generic `fujimod-usb` operations:

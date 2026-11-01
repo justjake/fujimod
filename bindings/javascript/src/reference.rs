@@ -49,6 +49,15 @@ pub fn catalog_bulk_profiles() -> Result<JsValue, JsValue> {
     js_sys::JSON::parse(&json)
 }
 
+/// Restart profiles for known releases, including releases without execution profiles.
+#[wasm_bindgen(js_name=catalogRestartProfiles, unchecked_return_type="FirmwareRestart[]")]
+pub fn catalog_restart_profiles() -> Result<JsValue, JsValue> {
+    let profiles: Vec<_> = bundled()?.restart_profiles().collect();
+    let json = serde_json::to_string(&profiles)
+        .map_err(|error| fail(ErrorKind::Definition, &error.to_string()))?;
+    js_sys::JSON::parse(&json)
+}
+
 /// Per-firmware table outcomes, including failures for cameras without execution profiles.
 #[wasm_bindgen(js_name=catalogGenerationResults, unchecked_return_type="FirmwareGeneration[]")]
 pub fn catalog_generation_results() -> Result<JsValue, JsValue> {

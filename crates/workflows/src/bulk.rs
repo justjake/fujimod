@@ -230,9 +230,18 @@ impl Access<'_> {
 }
 
 pub(crate) async fn check_identity(session: &mut Session, bulk: &FirmwareBulk) -> Result<()> {
+    check_camera(session, &bulk.product, &bulk.internal_version).await
+}
+
+/// Require the camera's reported product name and internal version.
+pub(crate) async fn check_camera(
+    session: &mut Session,
+    expected_product: &str,
+    expected_version: &str,
+) -> Result<()> {
     let product = session.device_info(InfoSelector::Product).await?.text;
     require(
-        product.trim() == bulk.product,
+        product.trim() == expected_product,
         &format!("Connected camera {product:?} is not the selected camera"),
     )?;
     let version = session
@@ -240,7 +249,7 @@ pub(crate) async fn check_identity(session: &mut Session, bulk: &FirmwareBulk) -
         .await?
         .text;
     require(
-        version.trim() == bulk.internal_version,
+        version.trim() == expected_version,
         &format!("Internal version {version:?} is not the selected firmware"),
     )
 }

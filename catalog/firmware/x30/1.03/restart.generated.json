@@ -1,0 +1,98 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 1,
+  "id": "x30-103-restart",
+  "firmware_id": "x30-103",
+  "product": "X30",
+  "internal_version": "1.53",
+  "code_alias": 1073741824,
+  "code_checks": [
+    {
+      "name": "query_dispatch",
+      "address": 17723148,
+      "size": 136,
+      "sha256": "097ad84d33b812c41fd82a868b26a890819b149acd3c3858ebbadb4a69fba19d"
+    },
+    {
+      "name": "query_callback",
+      "address": 17731348,
+      "size": 140,
+      "sha256": "b31f837b2d5e7ce46e394f51dda8f2c4d6edb05e60e034fab09c069e0898e531"
+    },
+    {
+      "name": "power_off_sender",
+      "address": 17930112,
+      "size": 228,
+      "sha256": "474be37edecf5ecb51bad7f19d3fe21d7118416eab370410662f13471ed667c3"
+    },
+    {
+      "name": "service_command",
+      "address": 17929928,
+      "size": 64,
+      "sha256": "5323504ba674bef51d607613ca3e694e0a9c907201be5bd84eade9296ec9fd91"
+    },
+    {
+      "name": "message_send",
+      "address": 10263712,
+      "size": 472,
+      "sha256": "11b751773dec4e3e6c3ba00d1c920655a7ba4022d3cfabce923edf1659a82fc5"
+    },
+    {
+      "name": "request_decoder",
+      "address": 18986220,
+      "size": 212,
+      "sha256": "78e6e42bb82c34e42d1fcfb48395c61cda7686a960d7ebe29c7bd63f7d162983"
+    },
+    {
+      "name": "power_off",
+      "address": 18999852,
+      "size": 208,
+      "sha256": "e932c6504ab7f8e31a37240576f69a63c42bcc8b0a4b2720c31a0e8fdc34cefa"
+    },
+    {
+      "name": "alarm_setter",
+      "address": 9736728,
+      "size": 244,
+      "sha256": "0377b6647d45deb89a87f52fd7c70a84800c6163adef3d29d1801f46af3b2ce9"
+    },
+    {
+      "name": "power_cut",
+      "address": 9564008,
+      "size": 100,
+      "sha256": "eed5b746cce3e6349851871e39730dad2398bf95dc36c96a05382a902c376e5a"
+    }
+  ],
+  "mechanism": {
+    "kind": "wake_deadline",
+    "query": {
+      "callback_table": 23519284,
+      "callback_offset": 12,
+      "stock_callback": 18001044,
+      "output_fields": 25137260,
+      "output_bytes": 8
+    },
+    "sender": 17930112,
+    "request": 130,
+    "request_offset": 0,
+    "deadline_offset": 4,
+    "ui": {
+      "mode_address": 13584700,
+      "mode_size": 4,
+      "rec_mode": 3,
+      "pending_mode_address": 13584712,
+      "menu_active_address": 13409996
+    },
+    "power_off": {
+      "entry": 18999852,
+      "halt": 19000056,
+      "request_deadline_offset": 8,
+      "alarm": {
+        "low": 105,
+        "high": 106,
+        "enable": 104
+      },
+      "deadline_parameter": 0,
+      "rollover_parameter": 13
+    }
+  }
+}
