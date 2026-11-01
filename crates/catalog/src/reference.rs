@@ -787,8 +787,13 @@ pub struct Body {
     pub id: String,
     /// SoC identity implemented by this body.
     pub soc_id: String,
-    /// Installed DRAM capacity in bytes.
-    pub dram_bytes: u64,
+    /// Installed DRAM capacity in bytes, when established by hardware evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "number | null")
+    )]
+    pub dram_bytes: Option<u64>,
     /// Optional body-specific physical attachments and signal routing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
@@ -838,7 +843,7 @@ impl Body {
         }
         validate_id(&self.id)?;
         validate_id(&self.soc_id)?;
-        if self.dram_bytes == 0 {
+        if self.dram_bytes == Some(0) {
             return Err(format!("body {} has no DRAM capacity", self.id));
         }
         if let Some(hardware) = &self.hardware {
@@ -867,7 +872,10 @@ impl Body {
         if region_extents.windows(2).any(|pair| pair[0].1 > pair[1].0) {
             return Err(format!("body {} RAM regions overlap", self.id));
         }
-        if dram_region_bytes != 0 && dram_region_bytes != self.dram_bytes {
+        if self
+            .dram_bytes
+            .is_some_and(|dram_bytes| dram_region_bytes != 0 && dram_region_bytes != dram_bytes)
+        {
             return Err(format!(
                 "body {} DRAM regions differ from its capacity",
                 self.id

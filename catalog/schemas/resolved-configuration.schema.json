@@ -1215,10 +1215,13 @@
           "description": "Optional display assembly and its physical characteristics."
         },
         "dram_bytes": {
-          "description": "Installed DRAM capacity in bytes.",
+          "description": "Installed DRAM capacity in bytes, when established by hardware evidence.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "hardware": {
           "anyOf": [
@@ -1332,7 +1335,6 @@
         "schema",
         "id",
         "soc_id",
-        "dram_bytes",
         "control_bus_chips",
         "connections",
         "parts",
@@ -19636,6 +19638,17 @@
           ],
           "description": "Browser camera attachments declared by a selected overlay."
         },
+        "dram_address_space": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunDramAddressSpace"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Software-visible DRAM address-space extent modeled by this run.\nThis is separate from the body's installed DRAM capacity."
+        },
         "execution": {
           "anyOf": [
             {
@@ -19764,6 +19777,27 @@
         "declared-lens-step-feedback-unmeasured"
       ],
       "type": "string"
+    },
+    "RunDramAddressSpace": {
+      "additionalProperties": false,
+      "description": "Run-specific software-visible DRAM mapping extent and its evidence basis.",
+      "properties": {
+        "basis": {
+          "description": "Source and limits for this modeled mapping extent.",
+          "type": "string"
+        },
+        "limit_bytes": {
+          "description": "Exclusive mapped DRAM address-space extent in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "limit_bytes",
+        "basis"
+      ],
+      "type": "object"
     },
     "RunEncoderInput": {
       "additionalProperties": false,

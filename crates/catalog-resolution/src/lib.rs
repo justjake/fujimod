@@ -66,6 +66,25 @@ impl ResolvedConfiguration {
         Ok(Some(inputs))
     }
 
+    /// Address-space extent used to allocate and map emulated DRAM.
+    ///
+    /// An explicit run value describes the software-visible mapping. If the
+    /// run omits it, a known installed capacity supplies the default. Unknown
+    /// physical capacity without an explicit mapping remains unresolved.
+    pub fn dram_address_space_limit_bytes(&self) -> Result<u64, String> {
+        let limit = self
+            .configuration
+            .dram_address_space
+            .as_ref()
+            .map(|address_space| address_space.limit_bytes)
+            .or(self.reference.body.dram_bytes)
+            .ok_or("run configuration needs an explicit DRAM address-space limit")?;
+        if limit == 0 || limit % 4096 != 0 {
+            return Err("resolved DRAM address-space limit must be page-aligned".into());
+        }
+        Ok(limit)
+    }
+
     fn resolve_and_apply(
         mut configuration: RunConfiguration,
         overlay_ids: &[String],
@@ -216,6 +235,13 @@ pub fn validate_selection(
         || selection.firmware.body_id != configuration.body_id
     {
         return Err("run configuration identities differ from resolved hardware".into());
+    }
+
+    if selection.body.dram_bytes.is_none() && configuration.dram_address_space.is_none() {
+        return Err(format!(
+            "body {} has unknown installed DRAM capacity and the run has no address-space limit",
+            selection.body.id
+        ));
     }
 
     if let Some(hardware) = configuration

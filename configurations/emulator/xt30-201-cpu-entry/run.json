@@ -1,0 +1,25 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+  "schema": 1,
+  "id": "xt30-201-cpu-entry",
+  "purpose": "boot_access",
+  "body_id": "xt30",
+  "firmware_id": "xt30-201",
+  "start": {
+    "kind": "loader"
+  },
+  "execution": null,
+  "dram_address_space": {
+    "limit_bytes": 1073741824,
+    "basis": "Synthetic address-space limit for bounded X-T30 loader-entry discovery. The modeled mapping extent is not a measurement of installed DRAM capacity."
+  },
+  "overlays": [],
+  "preset": {
+    "factory_options": {},
+    "execution_scope": "offline-boot-development",
+    "hardware_selection": {
+      "soc_profile_id": "xp4",
+      "body_profile_id": "xt30-discovery"
+    }
+  }
+}

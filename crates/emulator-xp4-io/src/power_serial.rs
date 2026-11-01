@@ -76,7 +76,7 @@ impl PowerSerial {
             || pin >= 16
             || inputs
                 .keys()
-                .any(|k| !matches!(*k, 0..=6 | 16 | 32 | 34 | 35))
+                .any(|k| !matches!(*k, 0..=6 | 16 | 24 | 32 | 34 | 35))
             || [0, 1, 2, 3, 32, 34, 35]
                 .iter()
                 .any(|n| !inputs.contains_key(n))
@@ -138,8 +138,14 @@ impl Input for PowerSerial {
                 if bank && matches!(register, 32 | 34 | 35) {
                     return Err("Power RTC second bank is not modeled".into());
                 }
+                // Input 24 opts into a provisional fixed-response fixture.
+                // The board accepts it only in discovery, never as strict hardware.
+                let probe = self.inputs.contains_key(&24);
+                if probe && bank && matches!(register, 23 | 24) {
+                    return Err("Provisional power probe supports bank zero only".into());
+                }
                 if tx & 1 != 0 {
-                    if !Self::writable(register) {
+                    if !Self::writable(register) && !(probe && register == 23) {
                         return Err(format!("Unsupported power SPI write register{register}"));
                     }
                     self.response = 0;
@@ -168,7 +174,14 @@ impl Input for PowerSerial {
                 if self.header & 1 != 0 {
                     let register = self.header >> 2;
                     let value = u16::from(self.high) << 8 | u16::from(tx);
-                    if matches!(register, 32 | 34 | 35) {
+                    if register == 23 {
+                        if !self.inputs.contains_key(&24) || self.header & 2 != 0 || value != 0x0400
+                        {
+                            return Err("Unsupported provisional power probe payload".into());
+                        }
+                        // No retained register, inferred ready bit, or latency law:
+                        // selector 24 remains the explicitly declared raw input.
+                    } else if matches!(register, 32 | 34 | 35) {
                         self.rtc.write(register, value, tick)?;
                     } else {
                         if register == 38 && value & 0x8000 != 0 {
@@ -387,5 +400,51 @@ mod tests {
         peer.exchange(8, 0x80, 0).unwrap();
         assert!(peer.exchange(8, 0, 0).is_err());
         assert!(cx.refusal().is_none());
+    }
+
+    #[test]
+    fn provisional_probe_is_explicit_exact_and_preserves_raw_status() {
+        let pins = Pins::new([0; 16]);
+        let mut gpio = Gpio::new(BASE, pins.clone()).unwrap();
+        let make = |status: Option<u16>| {
+            let mut inputs: BTreeMap<u8, u16> =
+                [(0, 0), (1, 0), (2, 0), (3, 512), (32, 0), (34, 0), (35, 0)].into();
+            if let Some(status) = status {
+                inputs.insert(24, status);
+            }
+            PowerSerial::new(pins.clone(), 12, 5, true, false, inputs, 54_000_000).unwrap()
+        };
+        let mut host = Clock;
+        let mut cx = Cx::new(&mut host, 3, 0, 0);
+        gpio.write(&mut cx, BASE + 12 * 64, 4, (1 << 21) | (1 << 5));
+        assert!(make(None).exchange(8, 0x5d, 0).is_err());
+        assert!(make(None).exchange(8, 0x60, 0).is_err());
+        for status in [0x00a5, 0xff0c] {
+            let mut peer = make(Some(status));
+            assert_eq!(peer.exchange(8, 0x5d, 0).unwrap(), 0);
+            assert_eq!(peer.exchange(8, 4, 0).unwrap(), 0);
+            let saved = peer.save();
+            let mut restored = make(Some(status));
+            restored.restore(&saved).unwrap();
+            assert_eq!(restored.exchange(8, 0, 0).unwrap(), 0);
+            assert_eq!(restored.save()["registers"], json!([]));
+            assert_eq!(restored.exchange(8, 0x60, 0).unwrap(), 0);
+            assert_eq!(restored.exchange(8, 0, 0).unwrap(), status >> 8);
+            assert_eq!(restored.exchange(8, 0, 0).unwrap(), status & 255);
+            assert!(make(Some(status ^ 1)).restore(&saved).is_err());
+        }
+        let mut wrong = make(Some(0xa5));
+        wrong.exchange(8, 0x5d, 0).unwrap();
+        wrong.exchange(8, 4, 0).unwrap();
+        assert!(wrong.exchange(8, 1, 0).is_err());
+        assert!(make(Some(0xa5)).exchange(8, 0x5f, 0).is_err());
+        assert!(make(Some(0xa5)).exchange(8, 0x62, 0).is_err());
+        let mut cancelled = make(Some(0xa5));
+        cancelled.exchange(8, 0x5d, 0).unwrap();
+        gpio.write(&mut cx, BASE + 12 * 64, 4, 1 << 21);
+        gpio.write(&mut cx, BASE + 12 * 64, 4, (1 << 21) | (1 << 5));
+        assert_eq!(cancelled.exchange(8, 0x60, 0).unwrap(), 0);
+        assert_eq!(cancelled.exchange(8, 0, 0).unwrap(), 0);
+        assert_eq!(cancelled.exchange(8, 0, 0).unwrap(), 0xa5);
     }
 }

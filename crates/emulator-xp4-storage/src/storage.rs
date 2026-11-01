@@ -291,6 +291,40 @@ impl SerialFlashController {
         }
         match o {
             0 => self.regs[0] = (value & !0x80000000) | (self.regs[0] & 0x80000000),
+            0xb4 => {
+                // Functional initialization sequence inferred from X-T30 2.01
+                // 01070144 / loader 00006ea8 and X-T3 5.11 01075e8c.
+                // Eight ticks is acceptance timing, not measured hardware timing.
+                if self.due.is_some_and(|(_, token)| ![5, 6].contains(&token)) {
+                    return Err("Serial-flash initialization during an active command".into());
+                }
+                let configuration = value & !0x007f007f == 0xc0000000
+                    && matches!((value >> 16) & 0x7f, 0x1f | 0x3f);
+                match value {
+                    // Alternate setup in 01070bb0 / X-T3 01076840. Preserve
+                    // its prior passive storage behavior; no status inference.
+                    0x80200020 if self.due.is_none() => {}
+                    0 => {
+                        self.due = None;
+                        self.regs[0xbc / 4] &= !0x8001;
+                    }
+                    0x40000000 if self.due.is_none() => {
+                        self.regs[0xbc / 4] &= !0x8001;
+                        self.due = Some((cx.now() + 8, 5));
+                        cx.schedule(cx.now() + 8, 5);
+                    }
+                    _ if configuration
+                        && self.due.is_none()
+                        && self.regs[0xbc / 4] & 0x8000 != 0 =>
+                    {
+                        self.regs[0xbc / 4] &= !1;
+                        self.due = Some((cx.now() + 8, 6));
+                        cx.schedule(cx.now() + 8, 6);
+                    }
+                    _ => cx.unmodeled(),
+                }
+                self.regs[o / 4] = value;
+            }
             0x40 | 0xa0 => return Err("Write to serial-flash receive/status register".into()),
             0x90 if value & 1 != 0 => {
                 if self.due.is_some() {
@@ -429,6 +463,10 @@ impl Device for SerialFlashController {
         }
         let accepted_at = self.due.unwrap().0;
         self.due = None;
+        if token == 5 || token == 6 {
+            self.regs[0xbc / 4] |= if token == 5 { 0x8000 } else { 1 };
+            return; // No NOR command, DMA request or completion interrupt.
+        }
         self.operations += 1;
         if token == 1 {
             let mut port = self.port.lock().unwrap();
@@ -836,6 +874,91 @@ mod tests {
         d.event(&mut cx, token);
         assert_eq!(cx.refusal(), None);
     }
+    #[test]
+    fn initialization_status_requires_enable_then_configuration_and_survives_restore() {
+        let make = || {
+            SerialFlashController::new(
+                port(
+                    vec![],
+                    0x20,
+                    Geometry {
+                        erase_bytes: 65536,
+                        page_bytes: 256,
+                        erase_ticks: 100,
+                        page_ticks: 10,
+                    },
+                )
+                .unwrap(),
+                37,
+            )
+        };
+        let mut flash = make();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        // X-T30 2.01 main 01070144 and loader 00006ea8 use these three stages.
+        write(&mut flash, &mut h, 0, CONTROLLER + 0xb4, 0, 0);
+        assert_eq!(flash.regs[0xbc / 4] & 0x8001, 0);
+        write(&mut flash, &mut h, 0, CONTROLLER + 0xb4, 0x40000000, 0);
+        assert_eq!(flash.next_deadline(h.now), Some(108));
+        assert_eq!(flash.regs[0xbc / 4] & 0x8001, 0);
+        let mut resumed = make();
+        resumed.restore(&flash.save()).unwrap();
+        h.now = 107;
+        event(&mut resumed, &mut h, 0, 5);
+        assert_eq!(resumed.regs[0xbc / 4] & 0x8001, 0);
+        h.now = 108;
+        event(&mut resumed, &mut h, 0, 5);
+        assert_eq!(resumed.regs[0xbc / 4] & 0x8001, 0x8000);
+        write(&mut resumed, &mut h, 0, CONTROLLER + 0xb4, 0xc03f0020, 0);
+        assert_eq!(resumed.next_deadline(h.now), Some(116));
+        assert_eq!(resumed.regs[0xbc / 4] & 1, 0);
+        h.now = 116;
+        event(&mut resumed, &mut h, 0, 6);
+        assert_eq!(resumed.regs[0xbc / 4] & 0x8001, 0x8001);
+        assert_eq!(resumed.operations, 0); // Initialization is not a NOR command.
+        assert!(h.irqs.is_empty());
+        // Restart clears status and cancels a pending initialization event.
+        write(&mut resumed, &mut h, 0, CONTROLLER + 0xb4, 0, 0);
+        write(&mut resumed, &mut h, 0, CONTROLLER + 0xb4, 0x40000000, 0);
+        write(&mut resumed, &mut h, 0, CONTROLLER + 0xb4, 0, 0);
+        h.now = 124;
+        event(&mut resumed, &mut h, 0, 5);
+        assert_eq!(resumed.regs[0xbc / 4] & 0x8001, 0);
+        assert_eq!(resumed.next_deadline(h.now), None);
+        // The X-T3 configuration differs in bits 16..22; it uses the same stages.
+        write(&mut resumed, &mut h, 0, CONTROLLER + 0xb4, 0x40000000, 0);
+        h.now = 132;
+        event(&mut resumed, &mut h, 0, 5);
+        write(&mut resumed, &mut h, 0, CONTROLLER + 0xb4, 0xc01f001e, 0);
+        let mut configured = make();
+        configured.restore(&resumed.save()).unwrap();
+        h.now = 140;
+        event(&mut configured, &mut h, 0, 6);
+        assert_eq!(configured.regs[0xbc / 4] & 0x8001, 0x8001);
+        // Configuration without enable, or an unknown form, must not become ready.
+        let mut cold = make();
+        for value in [0xc03f0020, 0xc01f001e, 0xc07f0020] {
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            cold.write(&mut cx, CONTROLLER + 0xb4, 4, value);
+            assert!(cx.is_unmodeled());
+            assert_eq!(cold.next_deadline(140), None);
+            assert_eq!(cold.regs[0xbc / 4] & 0x8001, 0);
+        }
+        // Alternate setup in X-T30 01070bb0 / X-T3 01076840 was already
+        // accepted as a passive configuration write; do not invent status.
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        cold.write(&mut cx, CONTROLLER + 0xb4, 4, 0x80200020);
+        assert!(!cx.is_unmodeled());
+        assert_eq!(cold.regs[0xb4 / 4], 0x80200020);
+        assert_eq!(cold.regs[0xbc / 4] & 0x8001, 0);
+        assert_eq!(cold.next_deadline(140), None);
+    }
+
     #[test]
     fn route_strobes_preserve_peer_and_late_selection_starts_a_full_transfer() {
         let image: Vec<u8> = (0..32).collect();

@@ -334,8 +334,10 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
             RunInputs::Xp5(inputs) => Some(inputs.ticks_per_second),
             RunInputs::Exr2(_) | RunInputs::Xp4(_) => None,
         });
+    let dram_address_space_limit_bytes = resolved.dram_address_space_limit_bytes()?;
     let execution = graph::assemble(
         &resolved.reference,
+        dram_address_space_limit_bytes,
         execution_policy.instructions_per_tick,
         board_ticks_per_second,
     )?;
@@ -344,8 +346,13 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
         &execution,
         execution_policy.instructions_per_tick,
     );
-    let (plan, devices_value, scene) =
-        x70::assemble(&resolved.reference, configuration, inputs, scene_input)?;
+    let (plan, devices_value, scene) = x70::assemble(
+        &resolved.reference,
+        configuration,
+        dram_address_space_limit_bytes,
+        inputs,
+        scene_input,
+    )?;
     plan.validate_reset_outputs(
         &execution
             .processors

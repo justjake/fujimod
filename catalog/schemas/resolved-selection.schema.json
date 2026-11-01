@@ -688,10 +688,13 @@
           "description": "Optional display assembly and its physical characteristics."
         },
         "dram_bytes": {
-          "description": "Installed DRAM capacity in bytes.",
+          "description": "Installed DRAM capacity in bytes, when established by hardware evidence.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "hardware": {
           "anyOf": [
@@ -805,7 +808,6 @@
         "schema",
         "id",
         "soc_id",
-        "dram_bytes",
         "control_bus_chips",
         "connections",
         "parts",

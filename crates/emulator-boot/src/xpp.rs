@@ -633,8 +633,10 @@ pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result
         .execution_clock
         .as_ref()
         .map_or((1, 1), |clock| clock.instructions_per_tick);
+    let dram_address_space_limit_bytes = resolved.dram_address_space_limit_bytes()?;
     let execution = graph::assemble_with_starts(
         selection,
+        dram_address_space_limit_bytes,
         RunInstructionRate {
             numerator,
             denominator,
@@ -652,7 +654,7 @@ pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result
             "cache_sizes": [caches.l1_data_bytes, caches.l1_instruction_bytes, caches.l2_bytes],
         })).collect::<Vec<_>>(),
         "gic": { "distributor": gic.distributor, "cpu_interface": gic.cpu_interface, "lines": gic.lines },
-        "nodes": nodes(maps, &reset, selection.body.dram_bytes, &ram_banks(&selection.soc.memory_regions), inputs)?,
+        "nodes": nodes(maps, &reset, dram_address_space_limit_bytes, &ram_banks(&selection.soc.memory_regions), inputs)?,
     });
     Ok(Assembly {
         execution,

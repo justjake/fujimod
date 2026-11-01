@@ -7,7 +7,11 @@ fn firmware_layouts_and_body_inputs_decode_as_closed_records() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     for body in fs::read_dir(root.join("catalog/firmware")).unwrap() {
         for version in fs::read_dir(body.unwrap().path()).unwrap() {
+            // Bulk-only versions carry a located bulk profile and no firmware record.
             let path = version.unwrap().path().join("firmware.json");
+            if !path.exists() {
+                continue;
+            }
             let firmware: Firmware = serde_json::from_slice(&fs::read(&path).unwrap())
                 .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
             firmware

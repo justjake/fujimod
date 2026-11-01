@@ -1,0 +1,29 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "xt30",
+  "soc_id": "xp4",
+  "dram_bytes": null,
+  "nand": null,
+  "sensor": null,
+  "lens": null,
+  "display": null,
+  "microcontroller": null,
+  "power_control": null,
+  "card_slot": null,
+  "control_bus_chips": [],
+  "connections": [],
+  "parts": [],
+  "wiring": [],
+  "hardware": {
+    "serial_attachments": [],
+    "gpio_feedback": [],
+    "keypad_samples": {},
+    "thermal_connection_ids": [],
+    "profiles": {
+      "xt30-discovery": {
+        "dram_basis": "Installed DRAM capacity is unknown; this profile makes no body-level capacity claim."
+      }
+    }
+  }
+}

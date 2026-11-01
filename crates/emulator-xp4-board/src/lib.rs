@@ -1025,6 +1025,13 @@ impl Session {
         if !discovery && cbar.is_none() {
             return Err("Strict ARMv7-A requires an explicit CBAR reset input".to_owned());
         }
+        if !discovery
+            && power_spi
+                .as_ref()
+                .is_some_and(|(_, _, _, _, _, inputs, _)| inputs.contains_key(&24))
+        {
+            return Err("Provisional power status input requires discovery mode".to_owned());
+        }
         // Cortex-A7 TRM DDI0464F table4-47: L1D four ways/64-byte
         // lines, L1I two ways/32-byte lines, L2 eight ways/64-byte lines.
         // Capacities are explicit processor implementation inputs.
@@ -1675,6 +1682,22 @@ impl Session {
             ] {
                 unsafe { inner.cpus[core].install_hook(hook) }?;
             }
+            for window in &inner.memory {
+                if window.permissions & 2 != 0 {
+                    unsafe {
+                        inner.cpus[core].install_hook(CpuHook::Memory {
+                            callback: store,
+                            data,
+                            read: false,
+                            write: true,
+                            range: HookRange::Inclusive {
+                                begin: window.base,
+                                end: window.base + window.data.len() as u64 - 1,
+                            },
+                        })
+                    }?;
+                }
+            }
             inner.write_reg(core, arm::CPSR, 0xd3)?;
             if let Some(registers) = initial_registers.get(core) {
                 for &(register, value) in registers {
@@ -1727,6 +1750,9 @@ impl Session {
         if self.inner.cp(core, 1, 0, 0, 0)? & ((1 << 25) | 1) != 0 {
             return Err("Driver guard requires MMU-off little-endian execution".to_owned());
         }
+        self.inner
+            .memory_pointer(return_address, 4, 4)
+            .map_err(|_| "Driver guard return sentinel requires executable physical backing")?;
         state.driver_guard = Some(driver_guard::Guard::new(
             core,
             executable,
@@ -1734,7 +1760,14 @@ impl Session {
             writable,
             return_address,
             store_limit,
-            self.inner.ram.len() as u64,
+            std::iter::once((0, self.inner.ram.len() as u64))
+                .chain(
+                    self.inner
+                        .memory
+                        .iter()
+                        .map(|window| (window.base, window.base + window.data.len() as u64)),
+                )
+                .collect(),
         )?);
         Ok(())
     }

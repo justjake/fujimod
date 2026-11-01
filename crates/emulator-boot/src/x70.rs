@@ -405,7 +405,11 @@ fn card_contact(selection: &ResolvedSelection, connection_id: &str) -> Result<(P
 
 /// The SDHC host with its virtual card: formatted to the declared geometry and
 /// inserted through the body's detect and write-protect contacts.
-fn card_recipe(selection: &ResolvedSelection, browser: &RunBrowserCamera) -> Result<Value, String> {
+fn card_recipe(
+    selection: &ResolvedSelection,
+    browser: &RunBrowserCamera,
+    dram_address_space_limit_bytes: u64,
+) -> Result<Value, String> {
     let slot = selection
         .body
         .card_slot
@@ -426,7 +430,7 @@ fn card_recipe(selection: &ResolvedSelection, browser: &RunBrowserCamera) -> Res
             "transfer_ticks": 100,
             "clock_ticks": 2,
             "rca": 4660,
-            "ram_bytes": selection.body.dram_bytes,
+            "ram_bytes": dram_address_space_limit_bytes,
         },
         "card": {
             "kind": "formatted",
@@ -951,9 +955,10 @@ fn apply_body_facts(
     recipe: &mut Value,
     name: &str,
     selection: &ResolvedSelection,
+    dram_address_space_limit_bytes: u64,
 ) -> Result<(), String> {
     if recipe["options"].get("ram_bytes").is_some() {
-        recipe["options"]["ram_bytes"] = json!(selection.body.dram_bytes);
+        recipe["options"]["ram_bytes"] = json!(dram_address_space_limit_bytes);
     }
     match name {
         "serial_spi1" => {
@@ -1991,6 +1996,7 @@ fn scene(selection: &ResolvedSelection, scene: &Exr2RunScene) -> Result<Value, S
 pub(super) fn assemble(
     selection: &ResolvedSelection,
     configuration: &RunConfiguration,
+    dram_address_space_limit_bytes: u64,
     inputs: &Exr2RunInputs,
     scene_input: &Exr2RunScene,
 ) -> Result<(Plan, Value, Value), String> {
@@ -2018,7 +2024,9 @@ pub(super) fn assemble(
         .is_some_and(|p| p.factory_options.audio_input_profile.is_some());
     for rule in rules {
         let mut recipe = match (rule.name, browser) {
-            ("sd", Some(browser)) => card_recipe(selection, browser)?,
+            ("sd", Some(browser)) => {
+                card_recipe(selection, browser, dram_address_space_limit_bytes)?
+            }
             _ => model_recipe(rule.name)?,
         };
         if receive_audio && rule.name == "audio_registers" {
@@ -2057,7 +2065,12 @@ pub(super) fn assemble(
             recipe["options"]["backend"] = json!(selected);
         }
         apply_soc_blocks(&mut recipe, rule, selection)?;
-        apply_body_facts(&mut recipe, rule.name, selection)?;
+        apply_body_facts(
+            &mut recipe,
+            rule.name,
+            selection,
+            dram_address_space_limit_bytes,
+        )?;
         if let ("image_input", Some(browser)) = (rule.name, browser) {
             apply_image_sensor(&mut recipe, selection, browser)?;
         }
