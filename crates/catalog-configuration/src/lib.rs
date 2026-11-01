@@ -48,6 +48,14 @@ pub struct RunConfiguration {
     pub firmware_id: String,
     /// Firmware entry mode selected for this run.
     pub start: RunStart,
+    /// Software-visible DRAM address-space extent modeled by this run.
+    /// This is separate from the body's installed DRAM capacity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "RunDramAddressSpace | null")
+    )]
+    pub dram_address_space: Option<RunDramAddressSpace>,
     /// Execution policy for this run.
     #[serde(default)]
     pub execution: Option<RunExecution>,
@@ -102,6 +110,9 @@ impl RunConfiguration {
         if let Some(preset) = &self.preset {
             preset.validate()?;
         }
+        if let Some(address_space) = &self.dram_address_space {
+            address_space.validate()?;
+        }
         fujimod_catalog_identity::validate_id(&self.id)?;
         fujimod_catalog_identity::validate_id(&self.body_id)?;
         fujimod_catalog_identity::validate_id(&self.firmware_id)?;
@@ -126,6 +137,35 @@ impl RunConfiguration {
         }
         if let Some(browser) = &self.browser_camera {
             browser.validate()?;
+        }
+        Ok(())
+    }
+}
+
+/// Run-specific software-visible DRAM mapping extent and its evidence basis.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct RunDramAddressSpace {
+    /// Exclusive mapped DRAM address-space extent in bytes.
+    pub limit_bytes: u64,
+    /// Source and limits for this modeled mapping extent.
+    pub basis: String,
+}
+
+impl RunDramAddressSpace {
+    fn validate(&self) -> Result<(), String> {
+        if self.limit_bytes == 0
+            || self.limit_bytes % 4096 != 0
+            || self.basis.trim().is_empty()
+        {
+            return Err("DRAM address-space limit must be page-aligned with a basis".into());
         }
         Ok(())
     }

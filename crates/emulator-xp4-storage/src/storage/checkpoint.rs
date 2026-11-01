@@ -110,7 +110,7 @@ impl SerialFlashController {
             || state.jedec != state.nor.jedec
             || state
                 .next
-                .is_some_and(|(_, token)| ![1, 2, 4].contains(&token))
+                .is_some_and(|(_, token)| ![1, 2, 4, 5, 6].contains(&token))
             || state
                 .stream
                 .as_ref()

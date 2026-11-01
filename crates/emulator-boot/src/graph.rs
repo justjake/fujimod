@@ -218,22 +218,33 @@ fn decoder_selection(
 /// Construct and validate the processor/address graph for one resolved body.
 pub(super) fn assemble(
     selection: &ResolvedSelection,
+    dram_address_space_limit_bytes: u64,
     rate: RunInstructionRate,
     board_ticks_per_second: Option<u64>,
 ) -> Result<factory::Graph, String> {
-    assemble_with_starts(selection, rate, board_ticks_per_second, &[])
+    assemble_with_starts(
+        selection,
+        dram_address_space_limit_bytes,
+        rate,
+        board_ticks_per_second,
+        &[],
+    )
 }
 
 /// Construct the checked catalog memory/peripheral graph with caller-owned
 /// processor reset state. Missing companion state remains held in reset.
 pub fn assemble_with_starts(
     selection: &ResolvedSelection,
+    dram_address_space_limit_bytes: u64,
     rate: RunInstructionRate,
     board_ticks_per_second: Option<u64>,
     starts: &[ProcessorStart],
 ) -> Result<factory::Graph, String> {
     let soc = &selection.soc;
     let body = &selection.body;
+    if dram_address_space_limit_bytes == 0 || dram_address_space_limit_bytes % 4096 != 0 {
+        return Err("DRAM address-space limit must be positive and page-aligned".into());
+    }
     if body.soc_id != soc.id {
         return Err("resolved body and SoC identities differ".into());
     }
@@ -334,7 +345,7 @@ pub fn assemble_with_starts(
     let ram = soc
         .memory_regions
         .iter()
-        .map(|region| memory_region(region, body.dram_bytes))
+        .map(|region| memory_region(region, dram_address_space_limit_bytes))
         .collect::<Result<_, _>>()?;
     let mapping_by_id = soc
         .mappings
@@ -342,7 +353,7 @@ pub fn assemble_with_starts(
         .map(|mapping| {
             Ok::<_, String>((
                 mapping.id.as_str(),
-                address_mapping(mapping, &cores, body.dram_bytes)?,
+                address_mapping(mapping, &cores, dram_address_space_limit_bytes)?,
             ))
         })
         .collect::<Result<BTreeMap<_, _>, _>>()?;
@@ -378,7 +389,7 @@ pub fn assemble_with_starts(
                     physical: mapping.physical,
                     size: extent(
                         mapping.size,
-                        body.dram_bytes,
+                        dram_address_space_limit_bytes,
                         &format!("DMA mapping {}", mapping.id),
                     )?,
                     permissions: u32::from(mapping.permissions),
@@ -818,7 +829,7 @@ mod tests {
             schema: 1,
             id: "test-body".into(),
             soc_id: "test-soc".into(),
-            dram_bytes: 0x2000,
+            dram_bytes: Some(0x2000),
             hardware: None,
             ram_regions: vec![],
             nand: None,
@@ -859,6 +870,7 @@ mod tests {
         };
         let graph = assemble(
             &selection,
+            0x2000,
             RunInstructionRate {
                 numerator: 24,
                 denominator: 1,
@@ -889,7 +901,7 @@ mod tests {
             numerator: 24,
             denominator: 1,
         };
-        let graph = assemble(&selection, rate, None).unwrap();
+        let graph = assemble(&selection, selection.body.dram_bytes.unwrap(), rate, None).unwrap();
         let decoder = &graph.decoders[0];
         assert_eq!(decoder.initial, 0);
         assert_eq!(decoder.choices.len(), 2);
@@ -898,7 +910,7 @@ mod tests {
         assert_eq!(decoder.choices[1].dma[0].physical, 0);
 
         selection.soc.decoders[0].initial = selection.soc.decoders[0].choices[1].selection.clone();
-        let graph = assemble(&selection, rate, None).unwrap();
+        let graph = assemble(&selection, selection.body.dram_bytes.unwrap(), rate, None).unwrap();
         let decoder = &graph.decoders[0];
         assert_eq!(decoder.initial, 1);
         assert_eq!(decoder.choices.len(), 2);

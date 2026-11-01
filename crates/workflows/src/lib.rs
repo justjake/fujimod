@@ -16,5 +16,7 @@ pub mod install;
 pub mod service_capture;
 pub mod service_mode;
 pub mod state;
+pub mod xt30_201_bulk_words;
+pub mod xt30_201_snapshot;
 
 pub use access::Limits;

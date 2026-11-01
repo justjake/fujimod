@@ -6,7 +6,6 @@ fn located_bulk_profiles_resolve_without_body_or_execution_records() {
     for (id, product, internal) in [
         ("xe4-201", "X-E4", "1.43"),
         ("xpro3-200", "X-Pro3", "1.72"),
-        ("xt30-201", "X-T30", "1.64"),
         ("xt30ii-204", "X-T30 II", "1.46"),
         ("gfx100rf-113", "GFX100RF", "1.57"),
         ("xt5-431", "X-T5", "2.14"),
