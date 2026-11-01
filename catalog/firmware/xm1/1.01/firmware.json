@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xm1-101",
+  "body_id": "xm1",
+  "version": "1.01",
+  "update": {
+    "size": 38405156,
+    "sha256": "bfc5947eab8a1d9d92e464c16a2e480b8d52753d1d32aea6d5af7fdd8e17dd72"
+  },
+  "boot_rom": null,
+  "installation": null,
+  "generated_facts": null
+}
