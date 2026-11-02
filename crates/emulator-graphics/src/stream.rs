@@ -1,6 +1,8 @@
 //! Byte-lane command execution and draw-fence sampling.
 //!
-//! Sequence numbers can start anywhere and wrap FFFF to 1. Geometry and
+//! Sequence numbers can start anywhere, increase (with gaps for discarded
+//! draws), wrap FFFF to 1 and restart at 1 with each stream the driver
+//! prepares. Geometry and
 //! rendering admission are independent of the packet framing decoder.
 
 use super::commands::{self, Command};
@@ -121,10 +123,19 @@ pub fn parse(
                         return fail("Graphics UI unknown synchronization word");
                     }
                     sequence &= 0xffff;
+                    // Each draw stream the driver prepares starts both fence
+                    // counters again at 1, and one submitted list can hold
+                    // several streams. Otherwise fences count up, wrapping
+                    // FFFF to 1, with gaps where the driver discarded a
+                    // draw's commands after taking its fence (its client was
+                    // inactive).
                     if let Some(previous) = previous
-                        && sequence != if previous == 0xffff { 1 } else { previous + 1 }
+                        && sequence != 1
+                        && sequence <= previous
                     {
-                        return fail("Graphics UI nonconsecutive draw fences");
+                        return fail(format!(
+                            "Graphics UI nonconsecutive draw fences: {previous:#x} then {sequence:#x}"
+                        ));
                     }
                     previous = Some(sequence);
                     if path {
@@ -225,4 +236,52 @@ pub fn parse(
         return fail("Graphics UI list ends before its draw fence");
     }
     Ok((draws, registers))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write(words: &mut Vec<u32>, index: u32, lanes: u32, value: u32) {
+        words.extend([0x4000_0000 | lanes << 16 | index, value]);
+    }
+
+    fn fill_list(fences: &[u32]) -> Vec<u32> {
+        let mut words = Vec::new();
+        for &fence in fences {
+            write(&mut words, 0xad, 7, 0x10000 | fence);
+            write(&mut words, 0x1a9, 15, 3);
+        }
+        write(&mut words, 0x28, 15, 0x12345678);
+        write(&mut words, 0x31, 1, 0xf0);
+        write(&mut words, 0x18, 15, 0x12345678);
+        words.resize(words.len().next_multiple_of(16), 0);
+        words
+    }
+
+    fn sequences(fences: &[u32]) -> Result<Vec<u64>> {
+        parse(&fill_list(fences), false, None)
+            .map(|(draws, _)| draws.iter().map(|draw| draw.sequence).collect())
+    }
+
+    #[test]
+    fn fences_count_up_and_wrap() {
+        assert_eq!(sequences(&[0xfffe, 0xffff, 1]).unwrap(), [0xfffe, 0xffff, 1]);
+    }
+
+    #[test]
+    fn a_new_stream_in_the_same_list_restarts_at_one() {
+        assert_eq!(sequences(&[1, 2, 3, 1, 2]).unwrap(), [1, 2, 3, 1, 2]);
+    }
+
+    #[test]
+    fn discarded_draws_leave_gaps() {
+        assert_eq!(sequences(&[0x33, 0x35]).unwrap(), [0x33, 0x35]);
+    }
+
+    #[test]
+    fn fences_that_go_back_refuse() {
+        assert!(sequences(&[4, 2]).is_err());
+        assert!(sequences(&[4, 4]).is_err());
+    }
 }
