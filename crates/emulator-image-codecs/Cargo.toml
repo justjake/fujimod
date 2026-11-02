@@ -13,8 +13,8 @@ doctest = false
 [dependencies]
 fujimod-catalog-construction.workspace = true
 serde = { version = "1", features = ["derive", "rc"] }
-rusty_h264-encoder = { version = "=0.16.1", default-features = false, features = ["libm"] }
-rusty_h264-common = { version = "=0.16.1", default-features = false, features = ["libm"] }
+rusty_h264-encoder = { version = "=0.17.0", default-features = false, features = ["libm"] }
+rusty_h264-common = { version = "=0.17.0", default-features = false, features = ["libm"] }
 zune-jpeg = { version = "0.5", default-features = false, features = ["std"] }
 zune-core = { version = "0.5", default-features = false, features = ["std"] }
 fujimod-workspace-hack.workspace = true
