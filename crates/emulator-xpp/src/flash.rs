@@ -749,6 +749,7 @@ mod tests {
         let nor = micron_nor::Registers::new(micron_nor::Options {
             enhanced_volatile_reset: 0xff,
             write_ticks: 7,
+            identification: vec![],
         })
         .unwrap();
         let mut d = FlashController::new(
@@ -795,6 +796,7 @@ mod tests {
         let nor = micron_nor::Registers::new(micron_nor::Options {
             enhanced_volatile_reset: 0xff,
             write_ticks: 16,
+            identification: vec![],
         })
         .unwrap();
         let mut d = FlashController::new(
@@ -940,6 +942,7 @@ mod tests {
         let nor = micron_nor::Registers::new(micron_nor::Options {
             enhanced_volatile_reset: 0xff,
             write_ticks: 7,
+            identification: vec![],
         })
         .unwrap();
         let controller = FlashController::new(

@@ -1154,6 +1154,16 @@
           "minimum": 0,
           "type": "integer"
         },
+        "identification": {
+          "description": "Bytes the identification command (0x9f) returns, manufacturer first;\nwithout them the command refuses.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
         "page_bytes": {
           "description": "Declared page bytes.",
           "format": "uint64",

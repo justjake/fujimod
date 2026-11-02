@@ -989,6 +989,30 @@
           },
           "register_blocks": [
             {
+              "base": 4279508992,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Memory port block at 0xff142000 of X-T20 2.11 stage 2: the resident start writes 0xf to +0x104 of the blocks at 0xff142000, 0xff143000, 0xff147000 and 0xff148000 (store helper 0x8338 at 0x8340) before its flash set-up. +0x104 is the memory port access mask word that FujiMod's X-Processor Pro boot controller models for the ROM's own writes (memory_port_bases); a resident start runs without that controller. The words read back their last write; no arbitration is modeled."
+            },
+            {
+              "base": 4279513088,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Memory port block at 0xff143000 of X-T20 2.11 stage 2: the resident start writes 0xf to +0x104 of the blocks at 0xff142000, 0xff143000, 0xff147000 and 0xff148000 (store helper 0x8338 at 0x8340) before its flash set-up. +0x104 is the memory port access mask word that FujiMod's X-Processor Pro boot controller models for the ROM's own writes (memory_port_bases); a resident start runs without that controller. The words read back their last write; no arbitration is modeled."
+            },
+            {
+              "base": 4279529472,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Memory port block at 0xff147000 of X-T20 2.11 stage 2: the resident start writes 0xf to +0x104 of the blocks at 0xff142000, 0xff143000, 0xff147000 and 0xff148000 (store helper 0x8338 at 0x8340) before its flash set-up. +0x104 is the memory port access mask word that FujiMod's X-Processor Pro boot controller models for the ROM's own writes (memory_port_bases); a resident start runs without that controller. The words read back their last write; no arbitration is modeled."
+            },
+            {
+              "base": 4279533568,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Memory port block at 0xff148000 of X-T20 2.11 stage 2: the resident start writes 0xf to +0x104 of the blocks at 0xff142000, 0xff143000, 0xff147000 and 0xff148000 (store helper 0x8338 at 0x8340) before its flash set-up. +0x104 is the memory port access mask word that FujiMod's X-Processor Pro boot controller models for the ROM's own writes (memory_port_bases); a resident start runs without that controller. The words read back their last write; no arbitration is modeled."
+            },
+            {
               "base": 4293980160,
               "size": 4096,
               "idle_bits": [

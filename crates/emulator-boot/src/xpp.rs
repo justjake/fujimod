@@ -320,6 +320,7 @@ fn nodes(
                     "options": {
                         "enhanced_volatile_reset": nor.enhanced_volatile_reset,
                         "write_ticks": nor.register_write_ticks,
+                        "identification": nor.identification,
                     },
                     "array": {
                         "page_bytes": nor.page_bytes, "erase_ticks": nor.erase_ticks,

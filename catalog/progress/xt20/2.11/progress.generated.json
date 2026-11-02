@@ -93,7 +93,7 @@
         {
           "id": "emulator-sd-boot",
           "title": "Our SD card of the stock firmware boots",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "emulator-updater",

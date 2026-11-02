@@ -1,6 +1,6 @@
 //! Micron-compatible serial NOR control registers, independent of array data.
-//! Only status, write-enable and enhanced volatile configuration commands are
-//! supported; array commands and other register protocols refuse explicitly.
+//! Only status, write-enable, enhanced volatile configuration and declared
+//! identification commands are supported; array commands and other register protocols refuse explicitly.
 //! An array erase or program is started by its owner through
 //! [`Registers::begin_array_write`], which applies the write-enable and busy
 //! rules; the array bytes stay with the owner.
@@ -11,6 +11,10 @@ use serde::{Deserialize, Serialize};
 pub struct Options {
     pub enhanced_volatile_reset: u8,
     pub write_ticks: u64,
+    /// Declared identification (0x9f) bytes, manufacturer first. Reading
+    /// more bytes than declared refuses.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub identification: Vec<u8>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -108,6 +112,9 @@ impl Registers {
                 Ok(vec![])
             }
             (0x65, [], 1) => Ok(vec![self.enhanced_volatile]),
+            (0x9f, [], n) if n > 0 && n <= self.options.identification.len() => {
+                Ok(self.options.identification[..n].to_vec())
+            }
             (0x61, [value], 0) => {
                 if !self.write_enable {
                     return Err("Serial NOR register write requires write-enable".into());
@@ -135,6 +142,7 @@ mod tests {
         let mut device = Registers::new(Options {
             enhanced_volatile_reset: 0xff,
             write_ticks: 7,
+            identification: vec![],
         })
         .unwrap();
         assert!(device.command(0, 0x61, &[0xf5], 0).is_err());
@@ -159,6 +167,7 @@ mod tests {
         let mut device = Registers::new(Options {
             enhanced_volatile_reset: 0xff,
             write_ticks: 7,
+            identification: vec![],
         })
         .unwrap();
         assert!(device.begin_array_write(0, 20).is_err());
@@ -178,5 +187,20 @@ mod tests {
         legacy.as_object_mut().unwrap().remove("array_busy");
         let legacy: Registers = serde_json::from_value(legacy).unwrap();
         assert_eq!(legacy.next_deadline(), None);
+    }
+
+    #[test]
+    fn identification_returns_only_declared_bytes() {
+        let options = |identification| Options {
+            enhanced_volatile_reset: 0xff,
+            write_ticks: 7,
+            identification,
+        };
+        let mut device = Registers::new(options(vec![0x20])).unwrap();
+        assert_eq!(device.command(0, 0x9f, &[], 1).unwrap(), [0x20]);
+        assert!(device.command(0, 0x9f, &[], 2).is_err());
+        assert!(device.command(0, 0x9f, &[], 0).is_err());
+        let mut undeclared = Registers::new(options(vec![])).unwrap();
+        assert!(undeclared.command(0, 0x9f, &[], 1).is_err());
     }
 }

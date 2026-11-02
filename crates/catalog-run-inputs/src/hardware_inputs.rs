@@ -947,6 +947,10 @@ pub struct FlashApertureNor {
     pub chip_select: u64,
     /// Enhanced volatile configuration register value after reset.
     pub enhanced_volatile_reset: u64,
+    /// Bytes the identification command (0x9f) returns, manufacturer first;
+    /// without them the command refuses.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub identification: Vec<u8>,
     /// Declared erase ticks.
     pub erase_ticks: u64,
     /// Declared page bytes.

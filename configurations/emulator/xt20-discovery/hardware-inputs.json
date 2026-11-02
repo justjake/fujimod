@@ -398,11 +398,12 @@
       "nor": {
         "chip_select": 0,
         "enhanced_volatile_reset": 255,
+        "identification": [32],
         "register_write_ticks": 16,
         "page_bytes": 256,
         "erase_ticks": 4096,
         "page_ticks": 512,
-        "basis": "Declared discovery input. The X-T20 2.11 driver addresses chip select 0 below aperture 0xf4000000 (0xc505dc) and uses 4 KiB (0x21), 64 KiB (0xdc) erase and 256-byte 4PP (0x12) page programs (command table 0xed3f9c). The chip part, its reset configuration and all latencies are not measured; the ticks are synthetic."
+        "basis": "Declared discovery input. The X-T20 2.11 driver addresses chip select 0 below aperture 0xf4000000 (0xc505dc) and uses 4 KiB (0x21), 64 KiB (0xdc) erase and 256-byte 4PP (0x12) page programs (command table 0xed3f9c). Stage 2 reads one identification byte (0x9f, table entry 9 at 0xe2ac; 0xbd28) and configures the part only for Micron 0x20 (0xbac0) or Macronix 0xc2 (0xbd6c), from 0x484. The declared identification is Micron 0x20, the family whose 0x65/0x61 enhanced volatile configuration commands the section 5 driver uses. The chip part, its reset configuration and all latencies are not measured; the ticks are synthetic."
       }
     },
     "battery_gauge": {
