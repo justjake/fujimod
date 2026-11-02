@@ -64,3 +64,6 @@
   font-size: 0.9em;
   overflow-wrap: anywhere;
 }
+.recovery-steps .power-combo-keys {
+  margin: 4px 0 18px;
+}
