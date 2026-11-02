@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xpro3-200",
+  "body_id": "xpro3",
+  "version": "2.00",
+  "update": {
+    "size": 50087104,
+    "sha256": "30ca22af2e1341c65d8f0637cc5e3ec675628cee8f517de0f1275bb5725c9f39"
+  },
+  "boot_rom": null,
+  "installation": null,
+  "generated_facts": null
+}

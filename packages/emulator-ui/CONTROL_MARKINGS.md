@@ -133,8 +133,8 @@ Users:
   highlight and run behavior, followed by `+ POWER` and the combo's label. `PowerCombo` keeps `label`, `modes` and the
   derived `inputs`; its `keys` field is removed.
 - Recovery's boot step draws `PowerComboKeys` with modes `sd` and
-  `firmware_update`, replacing the list of sentences and the fixed DISP/BACK
-  line.
+  `firmware_update`. When the system card lights the green LED, it draws `sd`
+  until the LED lights, then `firmware_update` until the screen lights.
 - The Dev Tools service-mode guide draws `PowerComboKeys` with mode `service`
   in place of the hold sentence.
 
