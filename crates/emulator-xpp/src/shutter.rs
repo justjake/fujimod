@@ -16,9 +16,19 @@
 //!
 //! While exactly one of the two motor pins has a non-zero mode, the motor
 //! turns: every step period it moves the sensors to the next declared
-//! position and gives the line one edge. The positions and the step period
-//! are inferred from what the firmware checks, not measured. The motor
-//! modes are sampled once per poll period.
+//! position and asserts the line for one poll period. The positions and the
+//! step period are inferred from what the firmware checks, not measured. The
+//! motor modes are sampled once per poll period.
+//!
+//! The line stays asserted for a poll period because imgdc also arms it
+//! level sensitive: when sensor 31 is already high at the start of a drive,
+//! the shot's drive 0x17e6b20 arms source 44 (0x2c, interrupt row 0x61:
+//! line 3, resource type 1) instead of source 32 (row 0x56, type 3), and its
+//! handler 0x17f0f10 then polls sensor 31. Types 3 and 1 configure the
+//! distributor edge and level sensitive; a level-sensitive line that falls
+//! in the instant it rises is never pending, the drive runs into its 100 ms
+//! timeout and imgdc re-initializes REC. The asserted time is a model
+//! choice.
 use crate::resets::{FIRST_LINE_IRQ, LINES};
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_ip::socionext::gpio::SharedPins;
@@ -48,6 +58,9 @@ struct State {
     poll_at: u64,
     due: Option<u64>,
     steps: u64,
+    /// When the asserted line falls again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    release: Option<u64>,
 }
 pub struct Shutter {
     wiring: Wiring,
@@ -116,10 +129,12 @@ impl Shutter {
             pins.set_input(bank, pin, high);
         }
         drop(pins);
-        let irq = FIRST_LINE_IRQ + self.wiring.line as u32;
-        cx.set_irq(irq, true);
-        cx.set_irq(irq, false);
+        cx.set_irq(self.irq(), true);
+        self.state.release = cx.now().checked_add(self.timing.poll);
         self.state.steps += 1;
+    }
+    fn irq(&self) -> u32 {
+        FIRST_LINE_IRQ + self.wiring.line as u32
     }
 }
 impl Device for Shutter {
@@ -135,6 +150,10 @@ impl Device for Shutter {
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         let now = cx.now();
+        if self.state.release.is_some_and(|at| now >= at) {
+            self.state.release = None;
+            cx.set_irq(self.irq(), false);
+        }
         if now >= self.state.poll_at {
             self.state.poll_at = (now / self.timing.poll + 1) * self.timing.poll;
             self.state.due = match (self.turning(), self.state.due) {
@@ -149,7 +168,7 @@ impl Device for Shutter {
         }
     }
     fn next_deadline(&self, _now: u64) -> Option<u64> {
-        [Some(self.state.poll_at), self.state.due]
+        [Some(self.state.poll_at), self.state.due, self.state.release]
             .into_iter()
             .flatten()
             .min()
@@ -205,6 +224,12 @@ mod tests {
         assert_eq!(sensors(&pins), (false, true));
         advance(&mut shutter, &mut h, 31);
         assert_eq!((sensors(&pins), shutter.state.steps), ((false, false), 1));
+        // The step asserts the line for one poll period, so a level-sensitive
+        // configuration of its interrupt sees it too.
+        assert_eq!(shutter.state.release, Some(32));
+        assert_eq!(shutter.next_deadline(31), Some(32));
+        advance(&mut shutter, &mut h, 32);
+        assert_eq!(shutter.state.release, None);
         let saved = shutter.save();
         // Braking puts both pins in mode 0: the motor stops.
         write(&mut gpio, &mut h, GPIO + 0x4c, 0x3_0000);

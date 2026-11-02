@@ -88,7 +88,7 @@
         {
           "id": "stock",
           "title": "Stock features reproduced",
-          "result": "not-run"
+          "result": "partial"
         },
         {
           "id": "emulator-sd-boot",
@@ -228,7 +228,9 @@
   ],
   "stock": {
     "record-picture": {
-      "result": "not-run"
+      "result": "pass",
+      "passed": 1,
+      "total": 1
     },
     "record-movie": {
       "result": "not-run"
@@ -246,7 +248,9 @@
       "result": "not-run"
     },
     "playback-picture": {
-      "result": "not-run"
+      "result": "partial",
+      "passed": 2,
+      "total": 3
     },
     "playback-movie": {
       "result": "not-run"
@@ -255,7 +259,9 @@
       "result": "not-run"
     },
     "sd": {
-      "result": "not-run"
+      "result": "pass",
+      "passed": 2,
+      "total": 2
     },
     "control-layout": {
       "result": "not-run"
