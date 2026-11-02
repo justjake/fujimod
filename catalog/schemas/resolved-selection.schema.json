@@ -189,6 +189,39 @@
       ],
       "type": "object"
     },
+    "AlarmRegisters": {
+      "additionalProperties": false,
+      "description": "Power-controller registers the power-off writes for the wake alarm.",
+      "properties": {
+        "enable": {
+          "description": "Register that enables the alarm.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "enable_value": {
+          "description": "Value written to enable it.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "seconds": {
+          "description": "Registers holding the seconds until the alarm, least significant first.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "seconds",
+        "enable",
+        "enable_value"
+      ],
+      "type": "object"
+    },
     "AperturePosition": {
       "additionalProperties": false,
       "description": "An aperture mechanism position and f-number.",
@@ -8340,6 +8373,67 @@
       ],
       "type": "object"
     },
+    "FirmwareRestart": {
+      "additionalProperties": false,
+      "description": "Located restart for one firmware.",
+      "properties": {
+        "$schema": {
+          "description": "Schema identifying the generated document.",
+          "type": "string"
+        },
+        "code_alias": {
+          "description": "Uncached RAM alias: debug reads of code, the callback table pointer,\nthe callback slot and UI state use `address + code_alias`.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "code_checks": {
+          "description": "Stock code that must match before any write.",
+          "items": {
+            "$ref": "#/$defs/CodeCheck"
+          },
+          "type": "array"
+        },
+        "firmware_id": {
+          "description": "Firmware whose stock code provides this mechanism.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Stable document identity.",
+          "type": "string"
+        },
+        "internal_version": {
+          "description": "Internal version the camera reports.",
+          "type": "string"
+        },
+        "mechanism": {
+          "$ref": "#/$defs/RestartMechanism",
+          "description": "How the restart is requested."
+        },
+        "product": {
+          "description": "Product name the camera reports.",
+          "type": "string"
+        },
+        "schema": {
+          "description": "Document version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "id",
+        "firmware_id",
+        "product",
+        "internal_version",
+        "code_alias",
+        "code_checks",
+        "mechanism"
+      ],
+      "type": "object"
+    },
     "FirmwareSdioInputs": {
       "additionalProperties": false,
       "description": "Declared sdio inputs facts.",
@@ -13548,7 +13642,7 @@
     },
     "HardwareSensorReadout": {
       "additionalProperties": false,
-      "description": "Sensor read-out unit of the imaging control page: a started read-out\nfinishes after the declared ticks with its level interrupt.",
+      "description": "Sensor read-out unit of the imaging control page: a started read-out\nfinishes after the declared ticks with its level interrupt, counted from\nthe start or, with `starts_on_frame`, from the next frame of the frame sync.",
       "properties": {
         "basis": {
           "description": "Declared basis.",
@@ -13565,6 +13659,10 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "starts_on_frame": {
+          "description": "The read-out begins at the first frame of the frame sync after its\nstart, and its ticks count from that frame.",
+          "type": "boolean"
         },
         "ticks": {
           "description": "Device ticks a read-out takes.",
@@ -17372,6 +17470,64 @@
       ],
       "type": "object"
     },
+    "PowerOff": {
+      "additionalProperties": false,
+      "description": "The stock power-off reached by the request.",
+      "properties": {
+        "alarm": {
+          "$ref": "#/$defs/AlarmRegisters",
+          "description": "Power-controller registers for the alarm."
+        },
+        "deadline_parameter": {
+          "description": "Persistent power-controller parameter offset of the saved deadline\nword, where the power-off saves it.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "entry": {
+          "description": "Stock power-off routine.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "halt": {
+          "description": "Its final self-branch, reached after the power cut.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "power_cut": {
+          "description": "Stock routine that cuts power.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request_deadline_offset": {
+          "description": "Byte offset of the deadline in the request the power-off receives.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rollover_parameter": {
+          "description": "Persistent parameter offset of the alarm's rollover byte.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "entry",
+        "halt",
+        "power_cut",
+        "request_deadline_offset",
+        "alarm",
+        "rollover_parameter"
+      ],
+      "type": "object"
+    },
     "ProcessorArchitecture": {
       "description": "A processor architecture described by a system-on-chip record.",
       "oneOf": [
@@ -17879,6 +18035,54 @@
       ],
       "type": "object"
     },
+    "RecIdle": {
+      "additionalProperties": false,
+      "description": "UI state that is REC with nothing pending and no menu open.",
+      "properties": {
+        "menu_active_address": {
+          "description": "Nonzero while a menu is open, where located.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "mode_address": {
+          "description": "Current UI mode.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode_size": {
+          "description": "Bytes in each UI mode cell.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pending_mode_address": {
+          "description": "Pending UI mode, zero when no change is pending, where located.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "rec_mode": {
+          "description": "UI mode value for REC.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mode_address",
+        "mode_size",
+        "rec_mode"
+      ],
+      "type": "object"
+    },
     "RegionSize": {
       "description": "A memory extent with no repeated body-specific capacity.",
       "oneOf": [
@@ -17969,6 +18173,132 @@
         "value"
       ],
       "type": "object"
+    },
+    "RequestTransport": {
+      "description": "How the host makes the camera call the sender.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A borrowed diagnostic query calls the sender with the address of the\nquery output fields, which hold the parameters.",
+          "properties": {
+            "callback_offset": {
+              "description": "Byte offset of the query callback in that table.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "callback_table": {
+              "description": "Address of the pointer to the diagnostic callback table.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "borrowed_query",
+              "type": "string"
+            },
+            "output_bytes": {
+              "description": "Bytes in the output fields.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "output_fields": {
+              "description": "Output fields passed to the callback; the query tag is their address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stock_callback": {
+              "description": "Stock callback value.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "callback_table",
+            "callback_offset",
+            "stock_callback",
+            "output_fields",
+            "output_bytes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The debug console's command callback is pointed at a short stub in an\nunused executable area. The stub passes its parameters to the sender\nand returns through it; the stock callback is restored after the reply.",
+          "properties": {
+            "data_cache_clean": {
+              "description": "Stock routine that cleans the data cache on every core.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "instruction_cache_sync": {
+              "description": "Stock routine that invalidates the instruction cache.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "console_callback",
+              "type": "string"
+            },
+            "ready_words": {
+              "description": "Words showing the stock cache maintenance is ready on every core.",
+              "items": {
+                "$ref": "#/$defs/WordValue"
+              },
+              "type": "array"
+            },
+            "slot": {
+              "description": "Command callback slot (a pointer the console calls for `CMD`).",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stock_callback": {
+              "description": "Stock callback value the slot must hold and gets back.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stub_area": {
+              "description": "Unused executable area for the stub; it must read as zero.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stub_bytes": {
+              "description": "Bytes of the stub area.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "translation": {
+              "description": "Translation entries that keep the stub area executable.",
+              "items": {
+                "$ref": "#/$defs/WordValue"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "slot",
+            "stock_callback",
+            "stub_area",
+            "stub_bytes",
+            "translation",
+            "ready_words",
+            "data_cache_clean",
+            "instruction_cache_sync"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "Resources": {
       "additionalProperties": false,
@@ -18103,6 +18433,65 @@
         "supplementary_max_units",
         "bitmaps",
         "glyphs"
+      ],
+      "type": "object"
+    },
+    "RestartMechanism": {
+      "additionalProperties": false,
+      "description": "The stock power-off request with a wake deadline. The power-off arms the\npower controller's alarm and cuts power; the alarm boots the camera again.",
+      "properties": {
+        "deadline_offset": {
+          "description": "Byte offset of the wake deadline in the sender's parameters.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parameter_bytes": {
+          "description": "Bytes of sender parameters.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "power_off": {
+          "$ref": "#/$defs/PowerOff",
+          "description": "What the stock power-off does with the request."
+        },
+        "request": {
+          "description": "Request word that selects power-off with a wake.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request_offset": {
+          "description": "Byte offset of the request word in the sender's parameters.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sender": {
+          "description": "Stock routine that sends the power-off request; its first argument is\nthe address of the request parameters.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transport": {
+          "$ref": "#/$defs/RequestTransport",
+          "description": "How the host reaches the sender."
+        },
+        "ui": {
+          "$ref": "#/$defs/RecIdle",
+          "description": "Where REC idle is observed."
+        }
+      },
+      "required": [
+        "transport",
+        "sender",
+        "request",
+        "request_offset",
+        "deadline_offset",
+        "parameter_bytes",
+        "ui",
+        "power_off"
       ],
       "type": "object"
     },
@@ -19845,6 +20234,36 @@
         }
       ]
     },
+    "WordValue": {
+      "additionalProperties": false,
+      "description": "An exact memory word.",
+      "properties": {
+        "address": {
+          "description": "Address of the word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Bytes in the word: 4 or 8.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Value, little-endian.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size",
+        "value"
+      ],
+      "type": "object"
+    },
     "ZoomMechanism": {
       "additionalProperties": false,
       "description": "A zoom mechanism's travel and pulse settings.",
@@ -19981,6 +20400,18 @@
       ],
       "default": null,
       "description": "The body's hand-authored physical controls, when documented."
+    },
+    "restart": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FirmwareRestart"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Stock restart over debug USB, when located for this firmware."
     },
     "settings": {
       "anyOf": [

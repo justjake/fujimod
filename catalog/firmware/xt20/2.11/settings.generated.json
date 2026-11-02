@@ -1183,6 +1183,28 @@
           3
         ]
       }
+    },
+    "white_balance": {
+      "store": "main",
+      "offset": 500,
+      "values": {
+        "auto": [
+          0,
+          0
+        ],
+        "daylight": [
+          1,
+          0
+        ],
+        "incandescent": [
+          6,
+          0
+        ],
+        "kelvin_5000": [
+          8,
+          10
+        ]
+      }
     }
   },
   "sections": []

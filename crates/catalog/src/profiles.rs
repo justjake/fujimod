@@ -1542,7 +1542,8 @@ pub struct ImagingControl {
 }
 
 /// Sensor read-out unit of the imaging control page: a started read-out
-/// finishes after the declared ticks with its level interrupt.
+/// finishes after the declared ticks with its level interrupt, counted from
+/// the start or, with `starts_on_frame`, from the next frame of the frame sync.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -1556,6 +1557,10 @@ pub struct SensorReadout {
     pub offset: u64,
     /// Device ticks a read-out takes.
     pub ticks: u64,
+    /// The read-out begins at the first frame of the frame sync after its
+    /// start, and its ticks count from that frame.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub starts_on_frame: bool,
 }
 
 /// X-Processor Pro JPEG encoder or decoder.

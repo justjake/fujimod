@@ -45,6 +45,12 @@ class AddressMapping(TypedDict, total=False):
     size: Required[RegionSize]
 
 
+class AlarmRegisters(TypedDict, total=False):
+    enable: Required[int]
+    enable_value: Required[int]
+    seconds: Required[list[int]]
+
+
 class AperturePosition(TypedDict, total=False):
     f_number: Required[int]
     position: Required[int]
@@ -1899,6 +1905,23 @@ class FirmwareRemapping(TypedDict, total=False):
     start: Required[int]
 
 
+FirmwareRestart = TypedDict(
+    "FirmwareRestart",
+    {
+        "$schema": Required["str"],
+        "code_alias": Required["int"],
+        "code_checks": Required["list[CodeCheck]"],
+        "firmware_id": Required["str"],
+        "id": Required["str"],
+        "internal_version": Required["str"],
+        "mechanism": Required["RestartMechanism"],
+        "product": Required["str"],
+        "schema": Required["int"],
+    },
+    total=False,
+)
+
+
 class FirmwareSdioInputs(TypedDict, total=False):
     firmware_bytes: Required[int]
     mac_address: Required[list[int]]
@@ -2861,6 +2884,7 @@ class HardwareSensorReadout(TypedDict, total=False):
     basis: Required[str]
     irq_route: Required[int]
     offset: Required[int]
+    starts_on_frame: NotRequired[bool]
     ticks: Required[int]
 
 
@@ -3798,6 +3822,16 @@ class PowerControlAssembly(TypedDict, total=False):
     select_connection_id: Required[str]
 
 
+class PowerOff(TypedDict, total=False):
+    alarm: Required[AlarmRegisters]
+    deadline_parameter: NotRequired[int | None]
+    entry: Required[int]
+    halt: Required[int]
+    power_cut: Required[int]
+    request_deadline_offset: Required[int]
+    rollover_parameter: Required[int]
+
+
 type ProcessorArchitecture = Literal["arm32", "aarch64"]
 
 
@@ -3896,6 +3930,14 @@ class ReadinessAddresses(TypedDict, total=False):
     override_address: Required[int]
 
 
+class RecIdle(TypedDict, total=False):
+    menu_active_address: NotRequired[int | None]
+    mode_address: Required[int]
+    mode_size: Required[int]
+    pending_mode_address: NotRequired[int | None]
+    rec_mode: Required[int]
+
+
 type RegionSize = RegionSizeVariant0 | RegionSizeVariant1
 
 
@@ -3924,6 +3966,30 @@ class RegisterWord(TypedDict, total=False):
     value: Required[int]
 
 
+type RequestTransport = RequestTransportVariant0 | RequestTransportVariant1
+
+
+class RequestTransportVariant0(TypedDict, total=False):
+    callback_offset: Required[int]
+    callback_table: Required[int]
+    kind: Required[Literal["borrowed_query"]]
+    output_bytes: Required[int]
+    output_fields: Required[int]
+    stock_callback: Required[int]
+
+
+class RequestTransportVariant1(TypedDict, total=False):
+    data_cache_clean: Required[int]
+    instruction_cache_sync: Required[int]
+    kind: Required[Literal["console_callback"]]
+    ready_words: Required[list[WordValue]]
+    slot: Required[int]
+    stock_callback: Required[int]
+    stub_area: Required[int]
+    stub_bytes: Required[int]
+    translation: Required[list[WordValue]]
+
+
 class ResolvedConfiguration(TypedDict, total=False):
     configuration: Required[RunConfiguration]
     reference: Required[ResolvedSelection]
@@ -3938,6 +4004,7 @@ class ResolvedSelection(TypedDict, total=False):
     flash: NotRequired[FirmwareFlash | None]
     parts: Required[list[Part]]
     physical_controls: NotRequired[PhysicalControls | None]
+    restart: NotRequired[FirmwareRestart | None]
     settings: NotRequired[FirmwareSettings | None]
     soc: Required[Soc]
     state: NotRequired[FirmwareState | None]
@@ -3963,6 +4030,17 @@ class Resources(TypedDict, total=False):
     text_record_size: Required[int]
     text_unit_bytes: Required[int]
     text_variants_offset: Required[int]
+
+
+class RestartMechanism(TypedDict, total=False):
+    deadline_offset: Required[int]
+    parameter_bytes: Required[int]
+    power_off: Required[PowerOff]
+    request: Required[int]
+    request_offset: Required[int]
+    sender: Required[int]
+    transport: Required[RequestTransport]
+    ui: Required[RecIdle]
 
 
 class RootRoute(TypedDict, total=False):
@@ -5248,6 +5326,12 @@ type WireSignal = Literal[
     "pulse",
     "power",
 ]
+
+
+class WordValue(TypedDict, total=False):
+    address: Required[int]
+    size: Required[int]
+    value: Required[int]
 
 
 class ZoomMechanism(TypedDict, total=False):

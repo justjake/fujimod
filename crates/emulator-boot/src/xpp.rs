@@ -567,6 +567,14 @@ fn nodes(
         if reset.sensor_frame.is_some() && control.readout.is_none() {
             return Err("a sensor frame requires the sensor read-out unit".into());
         }
+        // A read-out that starts on a frame takes the frame sync's period.
+        let readout_frames = match (&control.readout, &maps.frame_sync) {
+            (Some(r), Some(sync)) if r.starts_on_frame => Some(frame_period(sync.period_ticks)),
+            (Some(r), None) if r.starts_on_frame => {
+                return Err("a read-out that starts on a frame requires the frame sync".into());
+            }
+            _ => None,
+        };
         node(
             "imaging".into(),
             json!({
@@ -574,6 +582,7 @@ fn nodes(
                 "hole": maps.frame_sync.as_ref().map(|sync| sync.interrupts),
                 "readout": control.readout.as_ref().map(|r| json!({
                     "offset": r.offset, "irq": r.irq_route, "ticks": r.ticks,
+                    "frame_period": readout_frames,
                 })),
                 "sensor_frame": reset.sensor_frame.as_ref().map(|frame| &frame.profile),
                 "sensor_image": inputs.sensor_image.map(|image| json!({
@@ -907,7 +916,7 @@ mod tests {
         );
         assert_eq!(
             node(devices, "imaging")["readout"],
-            json!({"offset": 0xc0, "irq": 98, "ticks": 2_880_000})
+            json!({"offset": 0xc0, "irq": 98, "ticks": 2_605_440, "frame_period": 880_000})
         );
         assert_eq!(node(devices, "jpeg-encoder")["kind"], "jpeg");
         assert_eq!(node(devices, "jpeg-decoder")["irq"], 135);

@@ -88,13 +88,17 @@ pub const TILE_PHASE: (u64, u64) = (4, 2);
 use crate::development::XTRANS;
 
 /// A sensor readout unit: its channel offset, level interrupt and the ticks
-/// a readout takes.
+/// a readout takes. With a frame period the readout begins at the first frame
+/// after its start (frames at multiples of the period, as the frame sync
+/// counts them) and the ticks count from that frame.
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Readout {
     pub offset: u64,
     pub irq: u32,
     pub ticks: u64,
+    #[serde(default)]
+    pub frame_period: Option<u64>,
 }
 const READ: u8 = 0x82;
 
@@ -149,6 +153,7 @@ impl Control {
         if ![0x80, 0xc0, 0x180].contains(&readout.offset)
             || !(32..512).contains(&readout.irq)
             || readout.ticks == 0
+            || readout.frame_period == Some(0)
         {
             return Err("Invalid X-Processor Pro sensor readout unit".into());
         }
@@ -299,7 +304,11 @@ impl Device for Control {
                 return;
             }
             if offset == r.offset && value & 1 != 0 && self.readout_due.is_none() {
-                self.readout_due = cx.now().checked_add(r.ticks);
+                let begin = match r.frame_period {
+                    Some(period) => (cx.now() / period + 1).checked_mul(period),
+                    None => Some(cx.now()),
+                };
+                self.readout_due = begin.and_then(|at| at.checked_add(r.ticks));
                 if self.readout_due.is_none() {
                     return cx.fail("Sensor readout deadline overflow");
                 }
@@ -464,6 +473,7 @@ mod tests {
             offset: 0xc0,
             irq: 98,
             ticks: 10,
+            frame_period: None,
         };
         assert!(
             Control::new(BASE)
@@ -495,11 +505,48 @@ mod tests {
     }
 
     #[test]
+    fn a_readout_on_frames_begins_at_the_next_frame() {
+        let readout = Readout {
+            offset: 0xc0,
+            irq: 98,
+            ticks: 10,
+            frame_period: Some(100),
+        };
+        assert!(
+            Control::new(BASE)
+                .unwrap()
+                .with_readout(Readout {
+                    frame_period: Some(0),
+                    ..readout
+                })
+                .is_err()
+        );
+        let mut control = Control::new(BASE).unwrap().with_readout(readout).unwrap();
+        let mut h = TestHost::new();
+        let unit = BASE + 0xc0;
+        write(&mut control, &mut h, unit + 0x1c, 1);
+        advance(&mut control, &mut h, 230);
+        write(&mut control, &mut h, unit, 1);
+        // Started at 230: the read-out begins with the frame at 300.
+        assert_eq!(control.next_deadline(230), Some(310));
+        advance(&mut control, &mut h, 309);
+        assert_eq!(read(&mut control, &mut h, unit + 0x20), 0);
+        advance(&mut control, &mut h, 310);
+        assert_eq!(read(&mut control, &mut h, unit + 0x20), 1);
+        // A start on a frame tick waits for the following frame.
+        write(&mut control, &mut h, unit + 0x20, 1);
+        advance(&mut control, &mut h, 400);
+        write(&mut control, &mut h, unit, 1);
+        assert_eq!(control.next_deadline(400), Some(510));
+    }
+
+    #[test]
     fn a_readout_with_a_sensor_frame_writes_x_trans_samples_of_the_scene() {
         let readout = Readout {
             offset: 0xc0,
             irq: 98,
             ticks: 10,
+            frame_period: None,
         };
         assert!(
             Control::new(BASE)
@@ -543,6 +590,7 @@ mod tests {
             offset: 0xc0,
             irq: 98,
             ticks: 10,
+            frame_period: None,
         };
         let control = || Control::new(BASE).unwrap().with_readout(readout).unwrap();
         // Four red pixels, then four blue: one pixel center per sample.
