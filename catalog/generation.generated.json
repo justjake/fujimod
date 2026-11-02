@@ -5835,35 +5835,16 @@
           ]
         },
         "controls": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "controls",
-              "reason": "ValueError: No unique referenced physical-to-UI translation table"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "facts": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "service_exit.jig_deinit_link",
-              "reason": "Defaults completion/action slot verified; full UI/SYS deinit routing is not yet located"
-            },
-            {
-              "locator": "framebuffer",
-              "reason": "Runtime scanout is required; static inspection cannot confirm a live framebuffer"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "first-start": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "first-start",
-              "reason": "ValueError: UI_MENU_KIND_SETUP_LANG_INIT: 0 verified enum chains"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "flash": {
           "status": "unavailable",

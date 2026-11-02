@@ -5,7 +5,7 @@
   "model": "X-T20",
   "version": "2.11",
   "facts": {
-    "located": 23,
+    "located": 24,
     "total": 24
   },
   "boot_rom": null,
@@ -57,7 +57,7 @@
         {
           "id": "controls",
           "title": "Physical controls mapped to firmware inputs",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "settings-layout",
@@ -154,7 +154,7 @@
         {
           "id": "camera-menu",
           "title": "Menus driven over FF80",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-mods",
