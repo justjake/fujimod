@@ -3044,7 +3044,7 @@ dependencies = [
  "bytes",
  "cc",
  "concurrent-queue",
- "const-oid 0.9.6",
+ "const-oid 0.10.2",
  "crossbeam-utils",
  "crypto-common 0.1.7",
  "crypto-common 0.2.2",
