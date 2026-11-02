@@ -37,15 +37,7 @@ fn build(bytes: &[u8], setup: &Setup, api: &FileApi) -> Result<Vec<u8>> {
     let mut setup = setup.clone();
     setup.active_sha256 = fujimod_firmware::sha256(&bytes[..setup.active_size]);
     setup.code_sha256 = fujimod_firmware::sha256(&bytes[0x800..0x900]);
-    ffinit(
-        bytes,
-        &setup,
-        api,
-        &[1, 2, 3, 4],
-        api.load_address,
-        None,
-        None,
-    )
+    ffinit(bytes, &setup, api, &[1, 2, 3, 4], api.load_address, None)
 }
 
 #[test]

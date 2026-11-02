@@ -218,7 +218,6 @@ impl Recipe {
             payload,
             base,
             Some(workspace),
-            green_led::xp4_lamp(self, source)?,
         )?;
         early_led::stage(self, source, &mut bytes, base, xp4::indicator_entry()?, ((api.workspace - setup.linked_sram_base) & !0xfff) as usize - 0x1000)?;
         let mut layout = xp4::layout(setup, api, base);
@@ -263,6 +262,8 @@ impl Recipe {
     }
     /// Boot files retain the stock updater and storage drivers. DAT is copied
     /// verbatim to its required root filename, including signed containers.
+    /// XP4 recovery cards use the full-image layout that booted X-S10 and
+    /// X100V cameras; the preloaded layout from `build_startup` has not.
     pub fn build(&self, source: &[u8]) -> Result<Vec<File>> {
         let missing = self.missing_facts();
         require(
@@ -273,9 +274,13 @@ impl Recipe {
             self.updater.is_some(),
             "Missing version-independent stock updater acceptance",
         )?;
+        if matches!(self.generation, Generation::Xp4) {
+            return self.build_rescue_baseline(source);
+        }
         self.build_startup(source)
     }
-    /// Reproduce the original XP4 cold card pair for regression comparisons.
+    /// The XP4 full-image cold card: one RAM image read by FFINIT, no
+    /// preloaded data file or startup indicator.
     pub fn build_rescue_baseline(&self, source: &[u8]) -> Result<Vec<File>> {
         require(
             matches!(self.generation, Generation::Xp4),
@@ -465,11 +470,9 @@ pub fn availability(firmware_id: &str) -> Result<Availability> {
                     output_filenames.push("ffuser.bin".into());
                 }
             }
-            Generation::Xp4 => output_filenames.extend([
-                "ffinit.bin".into(),
-                "ffboot.bin".into(),
-                "ffdata.bin".into(),
-            ]),
+            Generation::Xp4 => {
+                output_filenames.extend(["ffinit.bin".into(), "ffboot.bin".into()])
+            }
             Generation::Xp5 => {
                 output_filenames.extend(["marble_init.bin".into(), "ffboot.bin".into()])
             }

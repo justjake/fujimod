@@ -74,40 +74,6 @@ pub(crate) fn verified_writes(
     binding.writes(recipe, &verified)
 }
 
-/// The XP4 green pin's masked data-register values for FFINIT's progress blink.
-/// The high half enables writes to the pin; the low half holds its level.
-pub(crate) fn xp4_lamp(recipe: &Recipe, source: &[u8]) -> Result<Option<crate::xp4::Lamp>> {
-    if !matches!(recipe.generation, Generation::Xp4) || binding(&recipe.firmware_id)?.is_none() {
-        return Ok(None);
-    }
-    let writes = verified_writes(recipe, source)?;
-    let binding = binding(&recipe.firmware_id)?
-        .ok_or_else(|| image::Error::Invalid("Missing green LED binding".into()))?;
-    let pair = &binding.proofs[0];
-    let raw = pair.source.read(&fujimod_firmware::invert(source))?;
-    let ident = image::word(&raw, pair.offset + 4)?;
-    let polarity = image::word(&raw, pair.offset + 8)?;
-    let (port, pin) = (ident >> 16, ident & 0xffff);
-    require(
-        port < 16 && pin < 16 && polarity <= 1,
-        "Invalid XP4 green GPIO",
-    )?;
-    let register = 0xfff41000 + port * 0x40;
-    let mask = 1 << (pin + 16);
-    let lamp = crate::xp4::Lamp {
-        register,
-        on: mask | polarity << pin,
-        off: mask | (polarity ^ 1) << pin,
-    };
-    require(
-        writes
-            .iter()
-            .any(|w| w.address == register && w.clear == 0 && w.value == lamp.on),
-        "XP4 green data write differs from its startup setup",
-    )?;
-    Ok(Some(lamp))
-}
-
 /// Keep the selected green latch asserted through the stock loader GPIO table.
 /// The application and its endpoint writer remain unchanged.
 pub(crate) fn preserve_loader_green(

@@ -80,9 +80,9 @@ keep it enabled until stock system initialization reports completion in the
 normal or update mode. The marker then turns green off and releases control
 to the stock LED driver. ROM loading precedes this marker.
 
-XP4 `ffinit.bin` reads `ffboot.bin` in 1 MiB chunks and toggles the green lamp
-after each one, so the lamp blinks while the image loads and is steady once it
-has loaded. If loading or its CRC check fails, the lamp blinks fast.
+XP4 recovery cards (`Recipe::build`) contain `ffinit.bin`, one full RAM image
+in `ffboot.bin` and the update file. This is the layout that has booted X-S10
+and X100V cameras from the card.
 
 X-T1 5.52 also supplies the loader's footer header from the verified update
 embedded in the SD image. Only the footer checker's read call is redirected;
