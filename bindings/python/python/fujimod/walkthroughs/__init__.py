@@ -18,6 +18,7 @@ from string.templatelib import Template
 from typing import Literal, NotRequired, Protocol, Self, TypedDict, cast
 
 from ..recording import Frame
+from .menu import MenuScreen
 from .overlays import CardOverlay, CardSnapshot, DisplayOverlay
 from .text import (
     MenuEntry,
@@ -41,6 +42,8 @@ class RecordingCamera(Protocol):
 
 
 class MenuCamera(Protocol):
+    def menu(self) -> MenuScreen: ...
+    def menu_active(self) -> bool: ...
     def select_menu_item(self, item: MenuReference, /) -> None: ...
     def open_menu_item(self, item: MenuReference, /) -> None: ...
     def menu_reference(self, item: MenuReference, /) -> MenuEntry: ...

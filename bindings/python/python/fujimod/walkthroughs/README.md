@@ -163,6 +163,16 @@ template strings (`t"Choose {item}"`). Templates retain the interpolated menu
 reference; f-strings eagerly stringify it and are refused by reference objects.
 Normal Python interpolation and formatting still work for other values.
 
+`camera.menu()` returns the visible owner's `MenuScreen` observation. Its
+`screen_kind` covers lists, popups, titled windows, checklists, full pages,
+editors, live-view pickers and grids. `raw_items` contain row identities,
+native keys (`value`), destinations (`child_pointer`), current values and
+checkbox states. `cursor`, `focus` and `selected_item` describe the active
+selection; tab focus has no selected row. `camera.menu_active()` reports an
+active navigation session. Guides use these observations and the same
+selection/opening helpers across renderers; native addresses identify entries
+without requiring the guide to read the owning renderer's internal tables.
+
 `ref(menu=symbol_or_code, key=None, via=None)` identifies a menu entry. The
 adapter owns firmware-specific symbol/code lookup for **stock and mod menus**.
 Use `key=` to identify a particular row within a stock menu. Shared submenu
