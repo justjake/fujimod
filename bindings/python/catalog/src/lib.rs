@@ -33,6 +33,14 @@ fn restart_profiles() -> PyResult<String> {
     serde_json::to_string(&profiles).map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
+/// Every optional card-file capability, as a JSON list.
+#[pyfunction]
+fn card_profiles() -> PyResult<String> {
+    let catalog = fujimod_catalog::ReferenceCatalog::bundled().map_err(PyValueError::new_err)?;
+    serde_json::to_string(&catalog.card_profiles().collect::<Vec<_>>())
+        .map_err(|e| PyValueError::new_err(e.to_string()))
+}
+
 /// Resolve and validate a named run configuration and all reference identities.
 #[pyfunction]
 #[pyo3(signature = (configuration_id, overlays=Vec::new()))]
@@ -53,6 +61,7 @@ pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
     catalog.add_function(wrap_pyfunction!(resolve_firmware, &catalog)?)?;
     catalog.add_function(wrap_pyfunction!(resolve_configuration, &catalog)?)?;
     catalog.add_function(wrap_pyfunction!(restart_profiles, &catalog)?)?;
+    catalog.add_function(wrap_pyfunction!(card_profiles, &catalog)?)?;
     catalog.add("__path__", PyList::empty(py))?;
     let service = fujimod_python_service::register(py, &catalog)?;
     parent.add_submodule(&catalog)?;

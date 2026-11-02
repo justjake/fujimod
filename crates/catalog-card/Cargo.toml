@@ -1,0 +1,20 @@
+[package]
+name = "fujimod-catalog-card"
+description = "Optional debug-link card file capabilities"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+fujimod-catalog-bulk.workspace = true
+serde = { workspace = true, features = ["derive"] }
+schemars.workspace = true
+tsify.workspace = true
+serde-wasm-bindgen.workspace = true
+wasm-bindgen.workspace = true
+fujimod-workspace-hack.workspace = true
+
+[features]
+schema = ["fujimod-catalog-bulk/schema"]

@@ -1534,6 +1534,21 @@ FirmwareBulk = TypedDict(
 )
 
 
+FirmwareCard = TypedDict(
+    "FirmwareCard",
+    {
+        "$schema": Required["str"],
+        "code_checks": Required["list[CodeCheck]"],
+        "firmware_id": Required["str"],
+        "internal_version": Required["str"],
+        "mechanism": Required["Mechanism"],
+        "product": Required["str"],
+        "schema": Required["int"],
+    },
+    total=False,
+)
+
+
 class FirmwareCfgdata(TypedDict, total=False):
     address: Required[int]
     defaults_sha256: Required[str]
@@ -3179,6 +3194,59 @@ class ManualReference(TypedDict, total=False):
     url: Required[str]
 
 
+type Mechanism = MechanismVariant0 | MechanismVariant1
+
+
+class MechanismVariant0(TypedDict, total=False):
+    address_alias: Required[int]
+    build: NotRequired[int | None]
+    kind: Required[Literal["mailbox"]]
+    search_address: Required[int]
+    search_bytes: Required[int]
+
+
+class MechanismVariant1(TypedDict, total=False):
+    allocate: Required[int]
+    bulk_source: NotRequired[int | None]
+    cache: Required[int]
+    callback_offset: Required[int]
+    callback_table_pointer: Required[int]
+    chunk_bytes: Required[int]
+    close: Required[int]
+    completion: Required[int]
+    directory_attribute_offset: Required[int]
+    directory_context_bytes: Required[int]
+    directory_size_offset: Required[int]
+    dispatcher: Required[int]
+    drive_map: Required[int]
+    end_of_directory_status: Required[int]
+    error: Required[int]
+    kind: Required[Literal["stock_sdk"]]
+    list_first_code: Required[int]
+    list_next_code: Required[int]
+    normal_ui: Required[int]
+    open: Required[int]
+    pool_begin: Required[int]
+    pool_bytes: Required[int]
+    pool_id: Required[int]
+    query_output: Required[int]
+    read: Required[int]
+    receiver_cell: Required[int]
+    release: Required[int]
+    request: Required[int]
+    sdk_table: Required[int]
+    sdk_table_cell: Required[int]
+    send: Required[int]
+    status: Required[int]
+    stock_callback: Required[int]
+    table_bytes: Required[int]
+    table_sha256: Required[str]
+    ui_address: Required[int]
+    unlink: Required[int]
+    value: Required[int]
+    write: Required[int]
+
+
 type MemoryKind = Literal["dram", "rom", "sram", "tcm"]
 
 
@@ -3998,6 +4066,7 @@ class ResolvedConfiguration(TypedDict, total=False):
 class ResolvedSelection(TypedDict, total=False):
     body: Required[Body]
     bulk: NotRequired[FirmwareBulk | None]
+    card_files: NotRequired[FirmwareCard | None]
     control_ids: NotRequired[FirmwareControlIds | None]
     firmware: Required[Firmware]
     first_start: NotRequired[FirstStartMenu | None]

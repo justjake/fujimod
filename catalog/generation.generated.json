@@ -1613,6 +1613,10 @@
           "status": "available",
           "errors": []
         },
+        "card-files": {
+          "status": "available",
+          "errors": []
+        },
         "controls": {
           "status": "available",
           "errors": []
@@ -1957,6 +1961,10 @@
       "internal_version": "1.39",
       "tables": {
         "bulk": {
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
           "status": "available",
           "errors": []
         },
@@ -4797,6 +4805,10 @@
       "internal_version": "1.72",
       "tables": {
         "bulk": {
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
           "status": "available",
           "errors": []
         },

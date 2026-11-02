@@ -13,6 +13,8 @@ pub enum TransferStage {
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
+    #[error("card file operation failed: {0}")]
+    Card(String),
     #[error("the camera already has an open service session")]
     SessionAlreadyOpen,
     #[error("callback slot restoration failed: {0}")]

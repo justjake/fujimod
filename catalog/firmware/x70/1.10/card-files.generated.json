@@ -1,0 +1,15 @@
+{
+  "$schema": "https://fujimod.com/schemas/card-files.generated.schema.json",
+  "schema": 1,
+  "firmware_id": "x70-110",
+  "product": "X70",
+  "internal_version": "1.39",
+  "code_checks": [],
+  "mechanism": {
+    "kind": "mailbox",
+    "search_address": 3735552,
+    "search_bytes": 2555904,
+    "address_alias": 1073741824,
+    "build": null
+  }
+}

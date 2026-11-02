@@ -1,0 +1,371 @@
+{
+  "$defs": {
+    "CodeCheck": {
+      "additionalProperties": false,
+      "description": "Stock code bytes identified by their SHA-256.",
+      "properties": {
+        "address": {
+          "description": "First address, before `code_alias`.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Routine or region name.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Lowercase hexadecimal SHA-256 of the stock bytes.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "Mechanism": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "An installed file service, discovered by its FIL1 descriptor. The\ndescriptor, pointers and build identity are checked on every operation.",
+          "properties": {
+            "address_alias": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "build": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "mailbox",
+              "type": "string"
+            },
+            "search_address": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "search_bytes": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "search_address",
+            "search_bytes",
+            "address_alias"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Existing asynchronous file SDK, invoked through a stock dispatcher.",
+          "properties": {
+            "allocate": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "bulk_source": {
+              "description": "Optional checked E1 source pair. Each read borrows and restores it.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "cache": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "callback_offset": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "callback_table_pointer": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "chunk_bytes": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "close": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "completion": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "directory_attribute_offset": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "directory_context_bytes": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "directory_size_offset": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "dispatcher": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "drive_map": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "end_of_directory_status": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "error": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "stock_sdk",
+              "type": "string"
+            },
+            "list_first_code": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "list_next_code": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "normal_ui": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "open": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "pool_begin": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "pool_bytes": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "pool_id": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "query_output": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "read": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "receiver_cell": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "release": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "request": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sdk_table": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sdk_table_cell": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "send": {
+              "description": "The SDK request sender takes a persistent command descriptor in RAM.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "status": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stock_callback": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "table_bytes": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "table_sha256": {
+              "type": "string"
+            },
+            "ui_address": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "unlink": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "value": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "write": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "callback_table_pointer",
+            "callback_offset",
+            "stock_callback",
+            "table_bytes",
+            "table_sha256",
+            "query_output",
+            "dispatcher",
+            "request",
+            "completion",
+            "status",
+            "value",
+            "error",
+            "pool_id",
+            "pool_begin",
+            "pool_bytes",
+            "allocate",
+            "release",
+            "cache",
+            "sdk_table_cell",
+            "sdk_table",
+            "drive_map",
+            "ui_address",
+            "normal_ui",
+            "open",
+            "read",
+            "write",
+            "close",
+            "unlink",
+            "send",
+            "list_first_code",
+            "list_next_code",
+            "receiver_cell",
+            "directory_context_bytes",
+            "directory_attribute_offset",
+            "directory_size_offset",
+            "chunk_bytes",
+            "end_of_directory_status"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$id": "https://fujimod.com/schemas/card-files.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/card-files.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "code_checks": {
+      "items": {
+        "$ref": "#/$defs/CodeCheck"
+      },
+      "type": "array"
+    },
+    "firmware_id": {
+      "type": "string"
+    },
+    "internal_version": {
+      "type": "string"
+    },
+    "mechanism": {
+      "$ref": "#/$defs/Mechanism"
+    },
+    "product": {
+      "type": "string"
+    },
+    "schema": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "firmware_id",
+    "product",
+    "internal_version",
+    "code_checks",
+    "mechanism"
+  ],
+  "title": "FirmwareCard",
+  "type": "object"
+}

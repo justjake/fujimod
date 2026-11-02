@@ -1,5 +1,6 @@
 //! Host operations composed from direct firmware commands.
 pub mod borrowed;
+pub mod card;
 pub mod checks;
 pub mod configuration;
 pub mod data;

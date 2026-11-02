@@ -1,6 +1,18 @@
 # FujiMod USB
 
 Async Rust access to Fujifilm's reverse-engineered ff80 service/debug interface.
+
+`operations::card` provides list, read, write and delete through an optional
+`FirmwareCard` catalog capability. It supports the installed FIL1 file service
+used for reports and the stock asynchronous filesystem SDK. The SDK backend
+allocates data RAM, waits for each callback and restores every borrowed request,
+callback, diagnostic result and E1 source word before releasing the allocation.
+The installed service supports rewriting existing files of equal length; the
+stock SDK supports create/truncate. Paths are restricted to the SD0 `A:` drive.
+
+Python sessions expose `card_list`, `card_read`, `card_write` and `card_delete`.
+Pass a capability JSON document from `fujimod.catalog.card_profiles()`;
+`card_read` additionally requires an explicit maximum byte count.
 This first implementation provides nusb discovery and explicit interface
 selection, C0/C2/C4 session lifecycle, D0/D1 command exchanges, information
 selectors, configuration commands, debug events and console polling, log reads,

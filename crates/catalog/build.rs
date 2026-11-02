@@ -58,6 +58,7 @@ fn main() {
             ("Firmware", "control-ids.generated.json") => "ControlIds",
             ("Firmware", "first-start.generated.json") => "FirstStart",
             ("Firmware", "bulk.generated.json") => "Bulk",
+            ("Firmware", "card-files.generated.json") => "CardFiles",
             ("Firmware", "restart.generated.json") => "Restart",
             ("Firmware", "settings.generated.json") => "Settings",
             ("Firmware", "flash.generated.json") => "Flash",

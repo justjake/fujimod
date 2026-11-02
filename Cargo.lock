@@ -1361,6 +1361,7 @@ name = "fujimod-catalog"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog-bulk",
+ "fujimod-catalog-card",
  "fujimod-catalog-construction",
  "fujimod-catalog-controls",
  "fujimod-catalog-identity",
@@ -1399,6 +1400,19 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_json",
  "sha2 0.10.9",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-catalog-card"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-bulk",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
  "tsify",
  "wasm-bindgen",
 ]
@@ -1535,6 +1549,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
  "fujimod-catalog-bulk",
+ "fujimod-catalog-card",
  "fujimod-catalog-configuration",
  "fujimod-catalog-construction",
  "fujimod-catalog-controls",
@@ -2849,6 +2864,7 @@ version = "0.1.0"
 dependencies = [
  "async-channel",
  "async-lock",
+ "fujimod-catalog-card",
  "fujimod-usb-proxy",
  "fujimod-workspace-hack",
  "futures-lite",

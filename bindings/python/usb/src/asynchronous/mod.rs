@@ -9,6 +9,7 @@ use std::{
 };
 
 mod callback;
+mod card;
 mod commands;
 pub(super) mod connection;
 mod install;
