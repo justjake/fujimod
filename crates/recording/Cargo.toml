@@ -11,7 +11,7 @@ doctest = false
 
 [dependencies]
 png = "0.18"
-tiny-skia = { version = "0.11", default-features = false, features = ["std"] }
+tiny-skia = { version = "0.12", default-features = false, features = ["std"] }
 ab_glyph = "0.2"
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
