@@ -1,5 +1,5 @@
 version: 2
-# Each ecosystem's minor and patch updates arrive together in one monthly PR.
+# Each ecosystem's updates, major ones included, arrive together in one monthly PR.
 updates:
   - package-ecosystem: github-actions
     directory: /
@@ -14,18 +14,18 @@ updates:
       interval: monthly
     groups:
       python:
-        update-types: [minor, patch]
+        patterns: ["*"]
   - package-ecosystem: npm
     directories: [/, /apps/web, /apps/usb-sharing, /bindings/javascript, /crates/simulation/tools]
     schedule:
       interval: monthly
     groups:
       javascript:
-        update-types: [minor, patch]
+        patterns: ["*"]
   - package-ecosystem: cargo
     directory: /
     schedule:
       interval: monthly
     groups:
       rust:
-        update-types: [minor, patch]
+        patterns: ["*"]
