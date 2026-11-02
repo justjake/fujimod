@@ -186,12 +186,6 @@ export default function Recovery() {
                     <BatteryCycleIcon />
                     Switch the camera OFF, then remove and reinsert the battery.
                   </p>
-                  <p>
-                    Hold these while switching it on, and keep holding until{' '}
-                    {downloadType() === 'green-led'
-                      ? 'the green LED lights:'
-                      : 'the screen lights:'}
-                  </p>
                   <Show
                     when={result().sdBoot}
                     fallback={
@@ -201,10 +195,33 @@ export default function Recovery() {
                     }
                   >
                     {(controls) => (
-                      <PowerComboKeys
-                        controls={controls()}
-                        modes={downloadType() === 'green-led' ? ['sd'] : ['sd', 'firmware_update']}
-                      />
+                      <Show
+                        when={downloadType() !== 'green-led' && result().systemStartupLamp}
+                        fallback={
+                          <>
+                            <p>
+                              Hold these while switching it on, and keep holding until{' '}
+                              {downloadType() === 'green-led'
+                                ? 'the green LED lights:'
+                                : 'the screen lights:'}
+                            </p>
+                            <PowerComboKeys
+                              controls={controls()}
+                              modes={
+                                downloadType() === 'green-led' ? ['sd'] : ['sd', 'firmware_update']
+                              }
+                            />
+                          </>
+                        }
+                      >
+                        <p>Hold these while switching it on, until the green LED lights:</p>
+                        <PowerComboKeys controls={controls()} modes={['sd']} />
+                        <p>
+                          Then release them and hold this until the screen lights, which can take a
+                          few minutes:
+                        </p>
+                        <PowerComboKeys controls={controls()} modes={['firmware_update']} />
+                      </Show>
                     )}
                   </Show>
                   <aside class="recovery-led">

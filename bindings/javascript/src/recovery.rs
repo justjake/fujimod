@@ -25,6 +25,10 @@ impl RecoveryAvailability {
     pub fn missing(&self) -> Vec<String> {
         self.inner.missing.clone()
     }
+    #[wasm_bindgen(getter, js_name = systemStartupLamp)]
+    pub fn system_startup_lamp(&self) -> bool {
+        self.inner.system_startup_lamp
+    }
     #[wasm_bindgen(getter, js_name = outputFilenames)]
     pub fn output_filenames(&self) -> Vec<String> {
         self.inner.output_filenames.clone()

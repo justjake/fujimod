@@ -78,6 +78,27 @@ pub fn package(
     ])
 }
 
+/// The recovery card: the full-image cold pair with the green lamp held on
+/// by the stock loader's GPIO table. This card booted an X-Pro3 from SD.
+pub(super) fn recovery_card(
+    recipe: &crate::Recipe,
+    source: &[u8],
+    inverted: &[u8],
+    plan: &Plan,
+    cold: &ColdStart,
+    setup: &Setup,
+    api: &FileApi,
+) -> Result<Vec<image::File>> {
+    let plan = cold_plan(inverted, plan, cold)?;
+    let mut ram = image::transform(inverted, &plan)?;
+    crate::green_led::preserve_loader_green(recipe, source, &mut ram)?;
+    let init = ffinit(inverted, setup, api, &ram, api.load_address, None)?;
+    Ok(vec![
+        image::File::new("ffinit.bin", init)?,
+        image::File::new("ffboot.bin", ram)?,
+    ])
+}
+
 /// Reconstruct the original cold card pair without the firmware-reader extension.
 pub(super) fn rescue_baseline(
     inverted: &[u8],

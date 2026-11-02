@@ -81,8 +81,10 @@ normal or update mode. The marker then turns green off and releases control
 to the stock LED driver. ROM loading precedes this marker.
 
 XP4 recovery cards (`Recipe::build`) contain `ffinit.bin`, one full RAM image
-in `ffboot.bin` and the update file. This is the layout that has booted X-S10
-and X100V cameras from the card.
+in `ffboot.bin` and the update file. This is the layout that has booted X-S10,
+X100V and X-Pro3 cameras from the card. The stock loader's GPIO table holds the
+green lamp on, so it lights once `ffboot.bin` has loaded and the loader starts;
+then hold DISP/BACK until the update screen appears.
 
 X-T1 5.52 also supplies the loader's footer header from the verified update
 embedded in the SD image. Only the footer checker's read call is redirected;

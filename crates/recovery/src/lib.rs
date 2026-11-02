@@ -262,8 +262,9 @@ impl Recipe {
     }
     /// Boot files retain the stock updater and storage drivers. DAT is copied
     /// verbatim to its required root filename, including signed containers.
-    /// XP4 recovery cards use the full-image layout that booted X-S10 and
-    /// X100V cameras; the preloaded layout from `build_startup` has not.
+    /// XP4 recovery cards use the full-image layout that booted X-S10, X100V
+    /// and X-Pro3 cameras, with the loader holding the green lamp on; the
+    /// preloaded layout from `build_startup` has not booted.
     pub fn build(&self, source: &[u8]) -> Result<Vec<File>> {
         let missing = self.missing_facts();
         require(
@@ -275,7 +276,18 @@ impl Recipe {
             "Missing version-independent stock updater acceptance",
         )?;
         if matches!(self.generation, Generation::Xp4) {
-            return self.build_rescue_baseline(source);
+            let missing = || image::Error::Invalid("Missing XP4 recovery facts".into());
+            let mut files = xp4::recovery_card(
+                self,
+                source,
+                &fujimod_firmware::invert(source),
+                self.plan.as_ref().ok_or_else(missing)?,
+                self.cold_start.as_ref().ok_or_else(missing)?,
+                self.setup.as_ref().ok_or_else(missing)?,
+                self.file_api.as_ref().ok_or_else(missing)?,
+            )?;
+            files.push(File::new(&self.update_filename, source.to_vec())?);
+            return Ok(files);
         }
         self.build_startup(source)
     }
@@ -446,6 +458,8 @@ pub struct Availability {
     pub output_filenames: Vec<String>,
     pub sd_boot: Option<serde_json::Value>,
     pub firmware_update: Option<serde_json::Value>,
+    /// The system card turns the green lamp on during SD startup.
+    pub system_startup_lamp: bool,
 }
 pub fn availability(firmware_id: &str) -> Result<Availability> {
     let id = firmware_id;
@@ -479,9 +493,13 @@ pub fn availability(firmware_id: &str) -> Result<Availability> {
         }
         output_filenames.push(recipe.update_filename.clone());
     }
+    let system_startup_lamp = recipe
+        .as_ref()
+        .is_some_and(|r| !matches!(r.generation, Generation::Xp5));
     Ok(Availability {
         firmware_id: id.into(),
         generation: recipe.map(|r| r.generation),
+        system_startup_lamp,
         can_build: missing.is_empty(),
         missing,
         output_filenames,

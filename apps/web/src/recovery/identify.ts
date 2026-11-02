@@ -9,6 +9,8 @@ export interface RecoveryPlan {
   missing: string[];
   files: string[];
   greenLedFiles: string[];
+  /** The system card turns the green LED on while the camera boots from it. */
+  systemStartupLamp: boolean;
   /** How to hold the camera to boot from the SD card, when the catalog documents it. */
   sdBoot?: PhysicalControls;
 }
@@ -77,6 +79,7 @@ export function recoveryPlan(firmwareId: string): RecoveryPlan {
       missing: [...status.missing],
       files: [...status.outputFilenames],
       greenLedFiles: [...status.greenLedFilenames],
+      systemStartupLamp: status.systemStartupLamp,
       sdBoot: sd && controls ? controls : undefined,
     };
   } finally {
