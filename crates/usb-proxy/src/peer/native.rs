@@ -17,7 +17,7 @@ use async_tungstenite::{
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use futures_util::StreamExt;
-use rand::Rng;
+use rand::RngExt;
 use serde_json::{Value, json};
 use std::{
     collections::VecDeque,

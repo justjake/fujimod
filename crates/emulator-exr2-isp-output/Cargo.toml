@@ -34,7 +34,7 @@ fujimod-emulator-exr2-isp-input.workspace = true
 fujimod-emulator-exr2-isp-statistics.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-openh264 = "=0.9.3"
+openh264 = "=0.9.9"
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

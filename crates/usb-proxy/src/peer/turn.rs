@@ -4,8 +4,8 @@
 //!
 //! The client is sans-I/O. Its owner owns the socket, feeds it datagrams and
 //! clock ticks, and transmits the bytes it returns.
-use hmac::{Hmac, Mac};
-use rand::Rng;
+use hmac::{Hmac, KeyInit, Mac};
+use rand::RngExt;
 use serde_json::Value;
 use sha1::Sha1;
 use std::{

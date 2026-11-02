@@ -26,7 +26,7 @@ impl OwnerTicket {
     /// Create a persistent room ticket and its Dev Tools share link.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn create(signal: impl Into<String>, site: impl AsRef<str>) -> Result<Self> {
-        use rand::Rng;
+        use rand::RngExt;
 
         let mut rng = rand::rng();
         let room = URL_SAFE_NO_PAD.encode(rng.random::<[u8; 32]>());
