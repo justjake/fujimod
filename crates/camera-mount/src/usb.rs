@@ -1,11 +1,21 @@
-//! One worker owns the USB session and mount reservation. Bounded requests
-//! serialize both mount interfaces without a second claim or nested executor.
-use crate::{Device, Region, Result};
+//! The worker retains descriptors, never an idle ff80 session. Every bounded
+//! operation closes files and restores transport state before releasing USB.
+use crate::{Device, Region, Result, transport::Transport};
 use fujimod_catalog::ReferenceCatalog;
+use fujimod_catalog_bulk::FirmwareBulk;
 use fujimod_usb::{
-    connection::{self, Connection, DeviceFilter, TransferOptions},
-    ff80::{SessionState, commands::memory::DebugMemoryLimits},
-    operations::card::{DirectoryEntry, Request, Response, Volume},
+    connection::{self, Connection, DeviceFilter, InterfaceSelection, TransferOptions},
+    ff80::{
+        Session, SessionState,
+        commands::{
+            info::InfoSelector,
+            memory::{Address, DebugMemoryLimits, MemoryRange},
+        },
+    },
+    operations::{
+        card::{BufferIo, DirectoryEntry, FirmwareCard, Request, Response, Volume},
+        memory,
+    },
 };
 use futures_lite::future::block_on;
 use std::{
@@ -28,28 +38,141 @@ enum Answer {
 }
 type Work = (Operation, mpsc::Sender<Result<Answer>>);
 
+trait Sessions {
+    async fn open(&mut self) -> fujimod_usb::Result<Session>;
+}
+struct Target {
+    device: connection::Device,
+    interface: InterfaceSelection,
+}
+impl Sessions for Target {
+    async fn open(&mut self) -> fujimod_usb::Result<Session> {
+        let connection = Connection::open(
+            &self.device,
+            self.interface,
+            TransferOptions {
+                timeout: Duration::from_secs(5),
+                max_reply_bytes: NonZeroU32::new(1024 * 1024).expect("constant"),
+            },
+        )
+        .await?;
+        connection.set_tool("fujimod-mount".into());
+        connection.begin_session(None).await
+    }
+}
+struct Client<F> {
+    sessions: F,
+    capability: FirmwareCard,
+    bulk: Option<FirmwareBulk>,
+    limits: DebugMemoryLimits,
+    mailbox_hint: Option<u32>,
+    fenced: bool,
+}
+impl<F: Sessions> Client<F> {
+    async fn transaction(&mut self, op: Operation) -> fujimod_usb::Result<Answer> {
+        use fujimod_usb::Error;
+        if self.fenced {
+            return Err(Error::CompletionUnknown);
+        }
+        // Every write is committed and every handle closed before replying.
+        if matches!(op, Operation::Sync | Operation::Close) {
+            return Ok(Answer::Done);
+        }
+        let mut session = self.sessions.open().await?;
+        let mut transport = Transport::new(
+            self.bulk.as_ref(),
+            self.limits,
+            &session,
+            self.capability.upload.as_ref(),
+        );
+        let mut cleanup_known = true;
+        let result = async {
+            match op {
+                Operation::Card(request) => {
+                    let mut volume = Volume::attach(
+                        &mut session,
+                        self.limits,
+                        &self.capability,
+                        Some(&mut transport),
+                        self.mailbox_hint,
+                    )
+                    .await?;
+                    self.mailbox_hint = volume.mailbox_address();
+                    let result = volume.execute(request).await.map(Answer::Card);
+                    if let Err(error) = volume.close().await {
+                        cleanup_known = false;
+                        return Err(error);
+                    }
+                    result
+                }
+                Operation::Memory(address, size) => {
+                    if session
+                        .device_info(InfoSelector::Product)
+                        .await?
+                        .text
+                        .trim()
+                        != self.capability.product
+                        || session
+                            .device_info(InfoSelector::InternalVersion)
+                            .await?
+                            .text
+                            .trim()
+                            != self.capability.internal_version
+                    {
+                        return Err(Error::Card(
+                            "Connected camera differs from the mounted firmware".into(),
+                        ));
+                    }
+                    let data = if transport.admits(address, size) {
+                        transport.read(&mut session, address, size).await?
+                    } else {
+                        let range = MemoryRange::new(
+                            Address(address),
+                            NonZeroU32::new(size).ok_or(Error::InvalidLength)?,
+                        )?;
+                        memory::read_range(&mut session, range, self.limits).await?
+                    };
+                    Ok(Answer::Bytes(data))
+                }
+                Operation::Sync | Operation::Close => unreachable!("handled without a session"),
+            }
+        }
+        .await;
+        if !cleanup_known || session.state() != SessionState::Ready {
+            self.fenced = true;
+            return result.and(Err(Error::CompletionUnknown));
+        }
+        if let Err(error) = transport.restore(&mut session).await {
+            self.fenced = true;
+            return Err(error);
+        }
+        // Even a completed camera error yields its session. Unknown completion
+        // above never sends cleanup, close, reclaim or another request.
+        if let Err(error) = session.close().await {
+            self.fenced = true;
+            return Err(error);
+        }
+        result
+    }
+}
+
 pub struct UsbDevice {
     queue: SyncSender<Work>,
     worker: Option<JoinHandle<()>>,
 }
-
 impl UsbDevice {
-    /// Opens only an already available ff80 service. Never enables service
-    /// mode, installs code, reclaims a session, resets or retries a camera.
+    /// Select descriptors and preflight one bounded transaction. Idle mounts
+    /// hold no connection, ff80 session, file handle or camera RAM allocation.
     pub fn connect(
         firmware: String,
         device_id: Option<String>,
         limits: DebugMemoryLimits,
     ) -> std::result::Result<(Self, Vec<Region>), String> {
-        let catalog = ReferenceCatalog::bundled()?;
-        let selected = catalog.resolve_firmware(&firmware)?;
+        let selected = ReferenceCatalog::bundled()?.resolve_firmware(&firmware)?;
         let capability = selected
             .card_files
             .ok_or("Selected firmware has no card capability")?;
-        let bulk = selected
-            .bulk
-            .filter(|b| matches!(b.source, fujimod_catalog_bulk::BulkSource::Query { .. }));
-        let regions: Vec<_> = selected
+        let regions = selected
             .state
             .ok_or("Selected firmware has no readable memory map")?
             .regions
@@ -66,7 +189,7 @@ impl UsbDevice {
             .name("camera-mount-usb".into())
             .spawn(move || {
                 block_on(async {
-                    let prepared = async {
+                    let target = async {
                         let mut devices = connection::discover(DeviceFilter::Diagnostic)
                             .await
                             .map_err(|e| e.to_string())?;
@@ -95,99 +218,47 @@ impl UsbDevice {
                                 interfaces.len()
                             ));
                         }
-                        let connection = Connection::open(
-                            &device,
-                            interfaces[0],
-                            TransferOptions {
-                                timeout: Duration::from_secs(5),
-                                max_reply_bytes: NonZeroU32::new(1024 * 1024).expect("constant"),
-                            },
-                        )
-                        .await
-                        .map_err(|e| e.to_string())?;
-                        connection.set_tool("fujimod-mount".into());
-                        connection
-                            .begin_session(None)
-                            .await
-                            .map_err(|e| e.to_string())
+                        Ok(Target {
+                            device,
+                            interface: interfaces[0],
+                        })
                     }
                     .await;
-                    let mut session = match prepared {
-                        Ok(s) => s,
-                        Err(e) => {
-                            let _ = ready_tx.send(Err(e));
+                    let target = match target {
+                        Ok(target) => target,
+                        Err(error) => {
+                            let _ = ready_tx.send(Err(error));
                             return;
                         }
                     };
-                    let mut mapping = if let Some(bulk) = bulk {
-                        match fujimod_workflows::bulk::BulkMapping::prepare(
-                            &mut session,
-                            &bulk,
-                            fujimod_workflows::Limits {
-                                memory: limits,
-                                configuration: NonZeroU32::new(256).expect("constant"),
-                            },
-                        )
-                        .await
-                        {
-                            Ok(mapping) => Some(mapping),
-                            Err(error) => {
-                                let _ = ready_tx.send(Err(error.to_string()));
-                                return;
-                            }
-                        }
-                    } else {
-                        None
+                    let mut client = Client {
+                        sessions: target,
+                        capability,
+                        bulk: selected.bulk,
+                        limits,
+                        mailbox_hint: None,
+                        fenced: false,
                     };
-                    let reader = mapping
-                        .as_mut()
-                        .map(|m| m as &mut dyn fujimod_usb::operations::card::RangeRead);
-                    let mut volume =
-                        match Volume::attach(&mut session, limits, &capability, reader).await {
-                            Ok(v) => v,
-                            Err(e) => {
-                                let _ = ready_tx.send(Err(e.to_string()));
-                                let _ = finish(session, mapping, Ok(())).await;
-                                return;
-                            }
-                        };
-                    // Refuse an old installed service before exposing an unusable mount.
-                    if let Err(e) = volume
-                        .execute(Request::ReadDirectory {
+                    if let Err(error) = client
+                        .transaction(Operation::Card(Request::ReadDirectory {
                             path: "A:\\".into(),
-                        })
+                        }))
                         .await
                     {
-                        let _ = ready_tx.send(Err(e.to_string()));
-                        let result = volume.close().await;
-                        let _ = finish(session, mapping, result).await;
+                        let _ = ready_tx.send(Err(error.to_string()));
                         return;
                     }
                     if ready_tx.send(Ok(())).is_err() {
-                        let result = volume.close().await;
-                        let _ = finish(session, mapping, result).await;
                         return;
                     }
                     while let Ok((op, reply)) = rx.recv() {
-                        let result = match op {
-                            Operation::Card(request) => {
-                                volume.execute(request).await.map(Answer::Card)
-                            }
-                            Operation::Memory(address, size) => {
-                                volume.read_memory(address, size).await.map(Answer::Bytes)
-                            }
-                            Operation::Sync => volume.synchronize().await.map(|()| Answer::Done),
-                            Operation::Close => {
-                                let result = volume.close().await;
-                                let result = finish(session, mapping, result).await;
-                                let _ = reply.send(result.map(|()| Answer::Done).map_err(report));
-                                return;
-                            }
-                        };
-                        let _ = reply.send(result.map_err(report));
+                        let close = matches!(op, Operation::Close);
+                        let result = client.transaction(op).await.map_err(report);
+                        let _ = reply.send(result);
+                        if close {
+                            return;
+                        }
                     }
-                    let result = volume.close().await;
-                    let _ = finish(session, mapping, result).await;
                 });
             })
             .map_err(|e| e.to_string())?;
@@ -199,26 +270,23 @@ impl UsbDevice {
                 },
                 regions,
             )),
-            Err(e) => {
+            Err(error) => {
                 let _ = worker.join();
-                Err(e)
+                Err(error)
             }
         }
     }
-
     fn request(&self, op: Operation) -> Result<Answer> {
         let (tx, rx) = mpsc::channel();
         self.queue.send((op, tx)).map_err(|_| libc::ENODEV)?;
         rx.recv().map_err(|_| libc::ENODEV)?
     }
-
     fn card(&self, request: Request) -> Result<Response> {
         match self.request(Operation::Card(request))? {
             Answer::Card(r) => Ok(r),
             _ => Err(libc::EIO),
         }
     }
-
     pub fn close(mut self) -> Result<()> {
         self.shutdown()
     }
@@ -237,6 +305,7 @@ fn report(error: fujimod_usb::Error) -> i32 {
     eprintln!("fujimod-mount: {error}");
     match error {
         fujimod_usb::Error::CompletionUnknown => libc::ENODEV,
+        fujimod_usb::Error::SessionAlreadyOpen => libc::EBUSY,
         _ => libc::EIO,
     }
 }
@@ -306,20 +375,5 @@ impl Drop for UsbDevice {
     }
 }
 
-async fn finish(
-    mut session: fujimod_usb::ff80::Session,
-    mapping: Option<fujimod_workflows::bulk::BulkMapping>,
-    result: fujimod_usb::Result<()>,
-) -> fujimod_usb::Result<()> {
-    result?;
-    if session.state() == SessionState::Ready {
-        if let Some(mapping) = mapping {
-            mapping
-                .restore(&mut session)
-                .await
-                .map_err(|error| fujimod_usb::Error::Card(error.to_string()))?;
-        }
-        session.close().await?;
-    }
-    Ok(())
-}
+#[cfg(test)]
+mod tests;

@@ -2,6 +2,7 @@
 //! Memory is always read-only. Only the SD subtree delegates mutations.
 #[cfg(target_os = "macos")]
 pub mod fskit;
+mod transport;
 pub mod usb;
 
 use fujimod_usb::operations::card::DirectoryEntry;

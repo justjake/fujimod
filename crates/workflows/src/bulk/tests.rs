@@ -217,7 +217,7 @@ fn query_source_reads_the_range_relative_to_the_stock_base() {
 
 #[test]
 fn mounted_reader_rounds_dma_inside_its_window_and_never_caches_live_bytes() {
-    use fujimod_usb::operations::card::RangeRead;
+    use fujimod_usb::operations::card::BufferIo;
     let mut steps = data(0x800, &(0u8..32).collect::<Vec<_>>());
     steps.extend(data(0x820, &(32u8..64).collect::<Vec<_>>()));
     steps.extend(data(0x800, &[0xa5; 32]));
@@ -250,14 +250,14 @@ fn mounted_reader_rounds_dma_inside_its_window_and_never_caches_live_bytes() {
     assert!(mapping.admits(0x1fff, 1));
     assert!(!mapping.admits(0x1fff, 2));
     assert!(!mapping.admits(0xfff, 1));
-    let bytes = block_on(RangeRead::read(&mut mapping, &mut session, 0x1803, 35)).unwrap();
+    let bytes = block_on(BufferIo::read(&mut mapping, &mut session, 0x1803, 35)).unwrap();
     assert_eq!(bytes, (3u8..38).collect::<Vec<_>>());
     assert_eq!(
-        block_on(RangeRead::read(&mut mapping, &mut session, 0x1803, 35)).unwrap(),
+        block_on(BufferIo::read(&mut mapping, &mut session, 0x1803, 35)).unwrap(),
         vec![0xa5; 35]
     );
     assert!(matches!(
-        block_on(RangeRead::read(&mut mapping, &mut session, 0x1fff, 2)),
+        block_on(BufferIo::read(&mut mapping, &mut session, 0x1fff, 2)),
         Err(fujimod_usb::Error::OutsideDataWindow)
     ));
     assert_eq!(script.remaining(), 0);
@@ -399,5 +399,129 @@ fn foreign_query_callback_stops_before_the_query() {
     steps.extend(read(0x150c, &words(&[0x2004])));
     let (mut session, script) = opened(steps);
     assert!(block_on(read_bulk(&mut session, &query_camera(), limits(), target())).is_err());
+    assert_eq!(script.remaining(), 0);
+}
+
+#[test]
+fn preserving_reads_support_every_source_family_and_restore_without_pattern_writes() {
+    block_on(async {
+        for camera in [
+            query_camera(),
+            facts(BulkSource::Pattern {
+                registered_buffer: 0x1300,
+                source_state: 0x1400,
+                capacity: 32,
+            }),
+            zero_base_camera(),
+        ] {
+            let mut steps = qualified();
+            let (state, original, selected, base) = match camera.source {
+                BulkSource::Query { .. } => {
+                    let original = words(&[0xdead0000, 16]);
+                    steps.extend(read(0x1200, &original));
+                    steps.extend(read(0x1100, &words(&[0x1500])));
+                    steps.extend(read(0x150c, &words(&[0x2000])));
+                    steps.extend(diagnostic(0x450006, 0x80, 32));
+                    let selected = words(&[0x1000, 32]);
+                    steps.extend(read(0x1200, &selected));
+                    steps.extend(read(0x1200, &selected));
+                    (0x1200, original, selected, 0x1000)
+                }
+                BulkSource::Pattern { .. } | BulkSource::PatternZeroBase { .. } => {
+                    let wide = matches!(camera.source, BulkSource::PatternZeroBase { .. });
+                    let original = if wide {
+                        words(&[0x9000, 1, 16])
+                    } else {
+                        words(&[0x9000, 16])
+                    };
+                    let selected = if wide {
+                        words(&[0, 0, 32])
+                    } else {
+                        words(&[0, 32])
+                    };
+                    steps.extend(read(0x1400, &original));
+                    steps.extend(write(0x1400, &selected));
+                    steps.extend(read(0x1400, &selected));
+                    (0x1400, original, selected, 0)
+                }
+            };
+            steps.extend(read(0x1000, b"stoc"));
+            steps.extend(data(0x1000 - base, b"stoc"));
+            steps.extend(data(0x1800 - base, &[7; 32]));
+            steps.extend(data(0x1820 - base, &[8; 32]));
+            steps.extend(read(state, &selected));
+            steps.extend(write(state, &original));
+            steps.extend(read(state, &original));
+            let (mut session, script) = opened(steps);
+            let mapping = BulkMapping::prepare_preserving(&mut session, &camera, limits())
+                .await
+                .unwrap();
+            assert_eq!(mapping.overwritten(), None);
+            assert_eq!(
+                mapping.read(&mut session, target()).await.unwrap(),
+                [[7; 32], [8; 32]].concat()
+            );
+            mapping.restore(&mut session).await.unwrap();
+            assert_eq!(script.remaining(), 0, "all publication words restored");
+        }
+    });
+}
+
+#[test]
+fn preserving_bulk_mismatch_restores_publication_before_refusing() {
+    let camera = facts(BulkSource::Pattern {
+        registered_buffer: 0x1300,
+        source_state: 0x1400,
+        capacity: 32,
+    });
+    let original = words(&[0x9000, 16]);
+    let selected = words(&[0, 32]);
+    let mut steps = qualified();
+    steps.extend(read(0x1400, &original));
+    steps.extend(write(0x1400, &selected));
+    steps.extend(read(0x1400, &selected));
+    steps.extend(read(0x1000, b"stoc"));
+    steps.extend(data(0x1000, b"oops"));
+    steps.extend(read(0x1400, &selected));
+    steps.extend(write(0x1400, &original));
+    steps.extend(read(0x1400, &original));
+    let (mut session, script) = opened(steps);
+    assert!(
+        block_on(BulkMapping::prepare_preserving(
+            &mut session,
+            &camera,
+            limits()
+        ))
+        .is_err()
+    );
+    assert_eq!(session.state(), SessionState::Ready);
+    assert_eq!(script.remaining(), 0);
+}
+
+#[test]
+fn foreign_publication_during_preserving_setup_is_never_overwritten_and_fences_the_session() {
+    let camera = facts(BulkSource::Pattern {
+        registered_buffer: 0x1300,
+        source_state: 0x1400,
+        capacity: 32,
+    });
+    let original = words(&[0x9000, 16]);
+    let selected = words(&[0, 32]);
+    let foreign = words(&[0x7000, 12]);
+    let mut steps = qualified();
+    steps.extend(read(0x1400, &original));
+    steps.extend(write(0x1400, &selected));
+    steps.extend(read(0x1400, &foreign));
+    steps.extend(read(0x1400, &foreign));
+    let (mut session, script) = opened(steps);
+    assert!(
+        block_on(BulkMapping::prepare_preserving(
+            &mut session,
+            &camera,
+            limits()
+        ))
+        .is_err()
+    );
+    assert_eq!(session.state(), SessionState::CompletionUnknown);
     assert_eq!(script.remaining(), 0);
 }

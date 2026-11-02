@@ -315,6 +315,7 @@ fn profile() -> FirmwareCard {
         product: "Model".into(),
         internal_version: "1".into(),
         code_checks: vec![],
+        upload: None,
         mechanism: Mechanism::StockSdk(Box::new(StockSdk {
             callback_table_pointer: 0x1000,
             callback_offset: 12,
@@ -637,7 +638,7 @@ fn mounted_sdk_amortizes_reservation_and_random_io_preserves_file_tail() {
             .await
             .unwrap();
         let profile = profile();
-        let mut volume = Volume::attach(&mut session, limits(), &profile, None)
+        let mut volume = Volume::attach(&mut session, limits(), &profile, None, None)
             .await
             .unwrap();
         assert_eq!(camera.lock().unwrap().allocations, 1);
@@ -703,7 +704,7 @@ fn mounted_sdk_retains_uncertain_allocation_and_refuses_further_work() {
             .await
             .unwrap();
         let profile = profile();
-        let mut volume = Volume::attach(&mut session, limits(), &profile, None)
+        let mut volume = Volume::attach(&mut session, limits(), &profile, None, None)
             .await
             .unwrap();
         camera.lock().unwrap().failure = Some("lost");
@@ -721,5 +722,75 @@ fn mounted_sdk_retains_uncertain_allocation_and_refuses_further_work() {
         assert!(volume.close().await.is_err());
         assert!(camera.lock().unwrap().allocated);
         assert_eq!(session.state(), SessionState::CompletionUnknown);
+    });
+}
+
+#[test]
+fn sdk_delegates_only_owned_file_payloads_to_the_upload_accelerator() {
+    struct UploadBuffer {
+        camera: Arc<Mutex<Camera>>,
+        writes: Arc<Mutex<Vec<(u32, u32)>>>,
+    }
+    impl BufferIo for UploadBuffer {
+        fn admits(&self, _: u32, _: u32) -> bool {
+            false
+        }
+        fn read<'a>(
+            &'a mut self,
+            _: &'a mut Session,
+            _: u32,
+            _: u32,
+        ) -> crate::emulator::EndpointFuture<'a, Result<Vec<u8>>> {
+            Box::pin(async { unreachable!() })
+        }
+        fn write_owned<'a>(
+            &'a mut self,
+            _: &'a mut Session,
+            address: u32,
+            data: &'a [u8],
+            capacity: u32,
+        ) -> crate::emulator::EndpointFuture<'a, Result<bool>> {
+            Box::pin(async move {
+                assert_eq!(address % 32, 0);
+                assert!(data.len() <= capacity as usize);
+                self.writes.lock().unwrap().push((address, capacity));
+                self.camera.lock().unwrap().write(address, data);
+                Ok(true)
+            })
+        }
+    }
+    block_on(async {
+        let camera = camera();
+        let writes = Arc::new(Mutex::new(Vec::new()));
+        let mut upload = UploadBuffer {
+            camera: camera.clone(),
+            writes: writes.clone(),
+        };
+        let mut session = peer_session(Endpoint(camera.clone()), 8192, None)
+            .await
+            .unwrap();
+        let profile = profile();
+        let mut volume = Volume::attach(&mut session, limits(), &profile, Some(&mut upload), None)
+            .await
+            .unwrap();
+        volume
+            .execute(Request::WriteAt {
+                path: "A:\\OLD.BIN".into(),
+                offset: 1,
+                data: b"XYZ".to_vec(),
+            })
+            .await
+            .unwrap();
+        volume.close().await.unwrap();
+        assert_eq!(
+            &camera.lock().unwrap().files["A:\\OLD.BIN"],
+            &[1, b'X', b'Y', b'Z']
+        );
+        assert_eq!(
+            writes.lock().unwrap().len(),
+            1,
+            "control publications never use the payload uploader"
+        );
+        restored(&camera.lock().unwrap());
     });
 }

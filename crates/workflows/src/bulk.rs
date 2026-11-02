@@ -108,6 +108,40 @@ impl BulkMapping {
             dma: bulk.dma,
         })
     }
+    /// Borrow only the located E1 publication words. Unlike pattern setup this
+    /// does not fill diagnostic scratch, so reads preserve the requested RAM.
+    /// Restore before yielding the exclusive ff80 transaction to another client.
+    pub async fn prepare_preserving(
+        session: &mut Session,
+        bulk: &FirmwareBulk,
+        limits: Limits,
+    ) -> Result<Self> {
+        let alignment = bulk
+            .dma
+            .map(|dma| DataAlignment::new(dma.address_alignment, dma.length_granule))
+            .transpose()?;
+        check_identity(session, bulk).await?;
+        let mut access = Access { session, limits };
+        check_code(&mut access, bulk).await?;
+        let mut source = Source::borrow(&mut access, bulk).await?;
+        if let Some(alignment) = alignment {
+            source.window = source.window.with_alignment(alignment);
+        }
+        if let Err(error) = source.qualify(&mut access, bulk).await {
+            let restored = source.restore(&mut access).await;
+            if restored.is_err() {
+                access.session.invalidate_completion();
+            }
+            return finish(Err(error), restored);
+        }
+        Ok(Self {
+            source,
+            window: bulk.window,
+            limits,
+            dma: bulk.dma,
+        })
+    }
+
     /// Diagnostic scratch the stock setup overwrote (`address`, `size`).
     pub fn overwritten(&self) -> Option<(u64, u32)> {
         self.source.overwritten
@@ -132,7 +166,7 @@ impl BulkMapping {
     }
 }
 
-impl fujimod_usb::operations::card::RangeRead for BulkMapping {
+impl fujimod_usb::operations::card::BufferIo for BulkMapping {
     fn admits(&self, address: u32, size: u32) -> bool {
         self.enclosing(address, size).is_some()
     }
@@ -213,15 +247,7 @@ impl<'a> Qualified<'a> {
             .transpose()?;
         check_identity(session, bulk).await?;
         let mut access = Access { session, limits };
-        for check in &bulk.code_checks {
-            let bytes = access
-                .raw(check.address | bulk.code_alias, check.size)
-                .await?;
-            require(
-                hex(&checks::sha256_bytes(&bytes)) == check.sha256,
-                &format!("Stock code differs: {}", check.name),
-            )?;
-        }
+        check_code(&mut access, bulk).await?;
         let mut source = Source::prepare(&mut access, bulk).await?;
         if let Some(alignment) = alignment {
             source.window = source.window.with_alignment(alignment);
@@ -307,6 +333,19 @@ pub(crate) async fn check_camera(
     )
 }
 
+async fn check_code(access: &mut Access<'_>, bulk: &FirmwareBulk) -> Result<()> {
+    for check in &bulk.code_checks {
+        let bytes = access
+            .raw(check.address | bulk.code_alias, check.size)
+            .await?;
+        require(
+            hex(&checks::sha256_bytes(&bytes)) == check.sha256,
+            &format!("Stock code differs: {}", check.name),
+        )?;
+    }
+    Ok(())
+}
+
 fn word(bytes: &[u8], at: usize) -> u32 {
     u32::from_le_bytes(bytes[at..at + 4].try_into().expect("four bytes"))
 }
@@ -320,6 +359,75 @@ struct Source {
     saved: Option<(u64, Vec<u8>, Vec<Vec<u8>>)>,
 }
 impl Source {
+    async fn borrow(access: &mut Access<'_>, bulk: &FirmwareBulk) -> Result<Self> {
+        let aperture = memory_range(bulk.window)?;
+        let (state, original, selected, capacity) = match &bulk.source {
+            BulkSource::Query { source_state, .. } => {
+                let original = access.raw(*source_state, 8).await?;
+                let mut source = match Self::prepare(access, bulk).await {
+                    Ok(source) => source,
+                    Err(error) => {
+                        if access.session.state() == SessionState::Ready
+                            && access.raw(*source_state, 8).await? != original
+                        {
+                            access.session.invalidate_completion();
+                        }
+                        return Err(error);
+                    }
+                };
+                let selected = access.raw(*source_state, 8).await?;
+                source.saved = Some((*source_state, original.clone(), vec![original, selected]));
+                return Ok(source);
+            }
+            BulkSource::Pattern {
+                source_state,
+                capacity,
+                ..
+            } => {
+                let original = access.raw(*source_state, 8).await?;
+                let mut selected = vec![0; 4];
+                selected.extend(capacity.to_le_bytes());
+                (*source_state, original, selected, *capacity)
+            }
+            BulkSource::PatternZeroBase {
+                source_state,
+                capacity,
+                ..
+            } => {
+                let original = access.raw(*source_state, 12).await?;
+                let mut selected = vec![0; 8];
+                selected.extend(capacity.to_le_bytes());
+                (*source_state, original, selected, *capacity)
+            }
+        };
+        let source = Self {
+            window: DataWindow::new(
+                Address(0),
+                aperture,
+                NonZeroU32::new(capacity).ok_or(fujimod_usb::Error::InvalidLength)?,
+                OffsetMode::Checked,
+            )?,
+            overwritten: None,
+            saved: Some((state, original.clone(), vec![original, selected.clone()])),
+        };
+        let outcome = async {
+            access.write(state, &selected).await?;
+            require(
+                access.raw(state, selected.len() as u64).await? == selected,
+                "Borrowed E1 publication did not read back",
+            )
+        }
+        .await;
+        if let Err(error) = outcome {
+            let restored = source.restore(access).await;
+            if restored.is_err() {
+                access.session.invalidate_completion();
+            }
+            return finish(Err(error), restored);
+        }
+        Ok(source)
+    }
+
     async fn prepare(access: &mut Access<'_>, bulk: &FirmwareBulk) -> Result<Self> {
         let nonzero = |n: u32| NonZeroU32::new(n).ok_or(fujimod_usb::Error::InvalidLength);
         let aperture = memory_range(bulk.window)?;

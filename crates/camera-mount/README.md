@@ -34,11 +34,12 @@ cargo run -p fujimod-camera-mount --bin fujimod-mount -- \
 Use `--device` (or `FUJIMOD_USB_DEVICE`) to select a bus, bus/port key or serial
 when more than one camera is attached. `--read-limit` and `--write-limit` set
 ff80 command payload limits; both default to 256 bytes. These limits do not
-limit qualified E1 bulk transfers. Ctrl-C synchronizes the SD handle and
+limit qualified E0/E1 bulk transfers. Ctrl-C synchronizes and
 unmounts; keep the process running while using the volume.
 
 SD paths currently use 8.3 names and fewer than 48 bytes including drive and
-separators; regular files are limited to 4 GiB minus one byte. Existing directories can be traversed. Directory creation/removal,
+separators; regular files are limited to 4 GiB minus one byte. Existing
+directories can be traversed. Directory creation/removal,
 rename, extended attributes, links, ownership and permission changes are not
 implemented. Applications that save through a temporary file and rename will
 receive an unsupported-operation error. Capacity statistics are unavailable.
@@ -50,24 +51,42 @@ SDK backend needs no uploaded executable code.
 ## Architecture and performance
 
 The namespace and policy live in Rust independently of the platform adapter.
-A single bounded worker queue owns the USB session and serializes memory and
-SD requests. The stock SDK backend validates and allocates once per mount,
-retains sequential file handles, and skips redundant seeks. The installed
-service retains its discovered mailbox and checks ownership on every command.
-Regular-file I/O transfers bounded ranges rather than downloading and replacing
-whole files. Extending a file explicitly zero-fills its gap.
+The worker holds device descriptors while idle. Each bounded SD or memory
+operation acquires a fresh ff80 session, completes its callbacks, closes all
+file handles, releases its allocation, restores borrowed controls, and closes
+the session before replying. Other tools can use the camera between operations;
+there is no mount-lifetime session or idle USB claim. Synchronize and unmount
+need no new session because writes are already committed before replying.
 
-A qualified query-based E1 mapping accelerates readable RAM and mailbox data
-inside its admitted DMA aperture. Stock SDK file buffers use their checked E1
-source pair, restoring it after each transfer. Small reads and ranges outside
-the aperture use bounded ff80 reads. Memory contents are never cached. Directory
-snapshots are cached for 250 ms, invalidated by mutations, and carry generation
-cookies for enumeration.
+The installed-service descriptor address is cached as a discovery hint. Each
+transaction revalidates its descriptor, pointers and ownership; a missing hint
+triggers rediscovery. Firmware identity and stock code checks are repeated in
+the session that uses them. Regular-file I/O transfers bounded ranges rather
+than downloading and replacing whole files. Extending a file zero-fills its gap.
 
-Unknown asynchronous completion fences the volume and retains its reservation;
-cleanup never frees RAM that an outstanding storage callback may still use.
-Normal unmount closes handles, releases the allocation and restores borrowed
-controls before closing the USB session.
+Read transport selection compares CPU command count with qualified E1 setup,
+probes and transfers. It supports every published bulk source family: query,
+32-bit pattern publication and 64-bit zero-base publication. The latter two
+borrow and restore the located source words without running pattern generation
+or filling diagnostic scratch. DMA rounding must remain inside the admitted
+aperture. Small control reads use CPU commands when cheaper. Stock SDK file
+buffers use their checked E1 source pair for larger reads.
+
+Owned SD buffers use E0 uploads when a checked upload destination contract is
+published and complete padded pieces fit the buffer and registered capacity.
+The uploader guards and restores the destination pointer before the file
+operation continues, including completed transport refusals. Currently the
+X70 card profile publishes this contract. Cameras without a qualified E0
+contract use CPU writes; an unavailable fast path is never guessed.
+`--read-limit` and `--write-limit` apply to CPU commands, not E0/E1 pieces.
+These choices minimize known protocol work; actual end-to-end throughput has
+not yet been benchmarked on a mounted camera.
+
+Memory contents are never cached. Directory snapshots are cached for 250 ms,
+invalidated by mutations, and carry generation cookies for enumeration.
+Unknown completion fences the mount, prevents reacquisition and retains any
+reservation that an outstanding storage callback might still use. It never
+closes or reclaims an uncertain camera session.
 
 The macOS adapter pins [fskit-rs 0.2.0](https://docs.rs/fskit-rs/0.2.0/fskit_rs/).
 It delegates Apple extension packaging and the FSKit/XPC lifecycle to
@@ -87,5 +106,7 @@ cargo test -p fujimod-camera-mount -p fujimod-usb -p fujimod-workflows --lib --b
 
 The namespace tests exercise read-only memory, address bounds, live reads,
 random writes, zero-filled gaps, truncation and metadata invalidation. USB
-protocol tests check persistent allocation and uncertain-completion fencing.
+protocol tests check owned-buffer uploads and uncertain-completion fencing.
+Transaction tests require ff80 close before each reply and verify no session
+acquisition on idle synchronization.
 A live OS mount additionally requires the enabled signed extension and camera.

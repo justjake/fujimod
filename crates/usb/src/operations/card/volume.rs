@@ -1,5 +1,5 @@
-//! A mount owns its reservation until explicit close. Preparation is amortized
-//! across requests; the same exclusive session also serves read-only memory.
+//! A bounded file transaction owns its reservation until explicit close.
+//! Close before releasing its ff80 session to another client.
 use super::*;
 use crate::ff80::SessionState;
 
@@ -18,7 +18,8 @@ impl<'a> Volume<'a> {
         session: &'a mut Session,
         limits: DebugMemoryLimits,
         capability: &'a FirmwareCard,
-        reader: Option<&'a mut dyn RangeRead>,
+        io: Option<&'a mut dyn BufferIo>,
+        mailbox_hint: Option<u32>,
     ) -> Result<Self> {
         capability.validate().map_err(fail)?;
         require(
@@ -38,7 +39,7 @@ impl<'a> Volume<'a> {
         let mut host = Host {
             session,
             limits,
-            reader,
+            io,
         };
         for check in &capability.code_checks {
             let bytes = host
@@ -63,14 +64,30 @@ impl<'a> Volume<'a> {
                 address_alias,
                 build,
             } => Backend::Mailbox(
-                mailbox::prepare(host, *search_address, *search_bytes, *address_alias, *build)
-                    .await?,
+                mailbox::prepare(
+                    host,
+                    *search_address,
+                    *search_bytes,
+                    *address_alias,
+                    *build,
+                    mailbox_hint,
+                )
+                .await?,
             ),
         };
         Ok(Self {
             backend,
             usable: true,
         })
+    }
+
+    /// A discovery hint only; the descriptor and all pointers are revalidated
+    /// in the next transaction. No camera reservation survives close.
+    pub fn mailbox_address(&self) -> Option<u32> {
+        match &self.backend {
+            Backend::Sdk(_) => None,
+            Backend::Mailbox(s) => Some(s.location()),
+        }
     }
 
     fn host(&mut self) -> &mut Host<'a> {
@@ -119,7 +136,8 @@ impl<'a> Volume<'a> {
         result
     }
 
-    /// Caller validates readable regions. This never uses writes or E1 setup.
+    /// Caller validates readable regions. Only read access is exposed; an
+    /// accelerator may borrow and restore its transport publication state.
     pub async fn read_memory(&mut self, address: u32, size: u32) -> Result<Vec<u8>> {
         require(
             self.usable,

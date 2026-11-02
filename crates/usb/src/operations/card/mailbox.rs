@@ -14,6 +14,10 @@ pub(super) struct Mailbox<'a> {
     source: Option<u32>,
 }
 impl Mailbox<'_> {
+    pub(super) fn location(&self) -> u32 {
+        self.address
+    }
+
     fn address(&self, address: u32, size: u32) -> Result<u32> {
         let physical = address & !self.alias;
         require(
@@ -224,7 +228,9 @@ impl Mailbox<'_> {
                 self.source = Some(self.word(self.p[10]).await?);
                 self.host.put(self.address(self.p[10], 4)?, 0).await?;
                 for raw in data.chunks(self.capacity as usize) {
-                    self.write(self.p[6], raw).await?;
+                    self.host
+                        .write_owned(self.address(self.p[6], self.capacity)?, raw, self.capacity)
+                        .await?;
                     let n = self.command(6, raw.len() as u32).await?;
                     require(n as usize == raw.len(), "Short file write")?;
                 }
@@ -292,6 +298,7 @@ pub(super) async fn prepare<'a>(
     size: u32,
     alias: u32,
     build: Option<u32>,
+    hint: Option<u32>,
 ) -> Result<Mailbox<'a>> {
     require(
         start % 32 == 0
@@ -314,21 +321,39 @@ pub(super) async fn prepare<'a>(
         operations: 0,
         source: None,
     };
-    let raw = service.read(start, size).await?;
-    let found: Vec<_> = (0..raw.len() - 63)
-        .step_by(32)
-        .filter(|&i| {
-            u32_at(&raw, i) == 0x314c4946
-                && (1..=3).contains(&u32_at(&raw, i + 4))
-                && build.is_none_or(|v| u32_at(&raw, i + 8) == v)
-        })
-        .collect();
-    require(
-        found.len() == 1,
-        "No unique matching installed file service",
-    )?;
-    service.address = start + found[0] as u32;
-    service.descriptor = raw[found[0]..found[0] + 64].to_vec();
+    let matches = |raw: &[u8]| {
+        u32_at(raw, 0) == 0x314c4946
+            && (1..=3).contains(&u32_at(raw, 4))
+            && build.is_none_or(|v| u32_at(raw, 8) == v)
+    };
+    let mut descriptor = None;
+    if let Some(hint) = hint.filter(|h| {
+        *h % 32 == 0 && *h >= start && u64::from(*h) + 64 <= u64::from(start) + u64::from(size)
+    }) {
+        let raw = service.read(hint, 64).await?;
+        if matches(&raw) {
+            descriptor = Some((hint, raw));
+        }
+    }
+    let (location, descriptor) = if let Some(found) = descriptor {
+        found
+    } else {
+        let raw = service.read(start, size).await?;
+        let found: Vec<_> = (0..raw.len() - 63)
+            .step_by(32)
+            .filter(|&i| matches(&raw[i..i + 64]))
+            .collect();
+        require(
+            found.len() == 1,
+            "No unique matching installed file service",
+        )?;
+        (
+            start + found[0] as u32,
+            raw[found[0]..found[0] + 64].to_vec(),
+        )
+    };
+    service.address = location;
+    service.descriptor = descriptor;
     service.p = (0..11)
         .map(|i| u32_at(&service.descriptor, 12 + i * 4))
         .collect();
@@ -354,7 +379,7 @@ pub(super) async fn execute(
     build: Option<u32>,
     request: Request,
 ) -> Result<Response> {
-    let mut service = prepare(host, start, size, alias, build).await?;
+    let mut service = prepare(host, start, size, alias, build, None).await?;
     let result = service.transfer(request).await;
     if service.host.session.state() == crate::ff80::SessionState::Ready {
         service.finish().await?;

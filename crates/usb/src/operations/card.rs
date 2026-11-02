@@ -11,7 +11,7 @@ use crate::{
     },
     operations::memory::{read_range, write_range},
 };
-pub use fujimod_catalog_card::{FirmwareCard, Mechanism};
+pub use fujimod_catalog_card::{FirmwareCard, Mechanism, Upload};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -19,9 +19,20 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// A caller-qualified reader can accelerate owned buffers without changing
-/// file protocols. It must bound DMA to its own admitted address aperture.
-pub trait RangeRead: Send {
+/// Caller-qualified buffer transports keep file protocols independent of USB
+/// acceleration. Reads bound DMA to an admitted aperture; uploads own their padding.
+pub trait BufferIo: Send {
+    /// Return true after uploading only within this caller-owned buffer. False
+    /// selects bounded CPU writes. Control words always use the CPU writer.
+    fn write_owned<'a>(
+        &'a mut self,
+        _session: &'a mut Session,
+        _address: u32,
+        _data: &'a [u8],
+        _capacity: u32,
+    ) -> crate::emulator::EndpointFuture<'a, Result<bool>> {
+        Box::pin(async { Ok(false) })
+    }
     fn admits(&self, address: u32, size: u32) -> bool;
     fn read<'a>(
         &'a mut self,
@@ -171,19 +182,25 @@ fn path(value: &str, listing: bool) -> Result<()> {
 struct Host<'a> {
     session: &'a mut Session,
     limits: DebugMemoryLimits,
-    reader: Option<&'a mut dyn RangeRead>,
+    io: Option<&'a mut dyn BufferIo>,
 }
 impl Host<'_> {
     async fn read(&mut self, address: u32, size: u32) -> Result<Vec<u8>> {
-        if size >= 512 {
-            if let Some(reader) = self.reader.as_mut().filter(|r| r.admits(address, size)) {
-                return reader.read(self.session, address, size).await;
-            }
+        if let Some(reader) = self.io.as_mut().filter(|r| r.admits(address, size)) {
+            return reader.read(self.session, address, size).await;
         }
         read_range(self.session, range(address, size)?, self.limits).await
     }
     async fn write(&mut self, address: u32, raw: &[u8]) -> Result<()> {
         write_range(self.session, Address(address), raw, self.limits).await
+    }
+    async fn write_owned(&mut self, address: u32, raw: &[u8], capacity: u32) -> Result<()> {
+        if let Some(io) = self.io.as_mut() {
+            if io.write_owned(self.session, address, raw, capacity).await? {
+                return Ok(());
+            }
+        }
+        self.write(address, raw).await
     }
     async fn word(&mut self, address: u32) -> Result<u32> {
         Ok(u32_at(&self.read(address, 4).await?, 0))
@@ -235,7 +252,7 @@ pub async fn execute(
     let mut host = Host {
         session,
         limits,
-        reader: None,
+        io: None,
     };
     for c in &capability.code_checks {
         let bytes = host

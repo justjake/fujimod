@@ -342,6 +342,46 @@
           "type": "object"
         }
       ]
+    },
+    "Upload": {
+      "additionalProperties": false,
+      "description": "Located stock E0 upload destination and its independently checked code.",
+      "properties": {
+        "address_alignment": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "capacity_address": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "code_checks": {
+          "items": {
+            "$ref": "#/$defs/CodeCheck"
+          },
+          "type": "array"
+        },
+        "piece_bytes": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pointer": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pointer",
+        "capacity_address",
+        "piece_bytes",
+        "address_alignment",
+        "code_checks"
+      ],
+      "type": "object"
     }
   },
   "$id": "https://fujimod.com/schemas/card-files.generated.schema.json",
@@ -375,6 +415,16 @@
       "format": "uint32",
       "minimum": 0,
       "type": "integer"
+    },
+    "upload": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Upload"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [
