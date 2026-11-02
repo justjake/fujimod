@@ -1,8 +1,8 @@
 //! Declared packed-422 signed Q8 four-source arithmetic. Rounding, clipping
 //! and neutral chroma bias are explicit approximations, not silicon results.
-use fujimod_emulator_imaging::exr2_isp::dma::{MAX_BYTES, Raster};
-use super::{Prepared, read_rows};
+use super::Prepared;
 use fujimod_emulator_devices::Cx;
+use fujimod_emulator_imaging::exr2_isp::dma::{Raster, physical};
 
 pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared, String> {
     let count = (word(4) >> 4 & 7) as usize;
@@ -76,22 +76,40 @@ pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared
         {
             return Err("misaligned or partially overlapping combination signed-sum source".into());
         }
+        source.validate(width * 2)?;
         bytes += width * height * 2;
-        if bytes > MAX_BYTES {
-            return Err("combination signed-sum staging exceeds bound".into());
-        }
-        sources.push(Some(read_rows(cx, source, width * 2)?));
+        sources.push(Some(source));
     }
+    // Only the completed output is retained until DMA. Reading one source row
+    // at a time avoids retaining every full raster at START. The per-raster
+    // validation still bounds the output, addresses, strides and source spans.
+    // No destination write occurs until the existing DMA completion path.
     let mut pixels = vec![0; width * height * 2];
-    for (offset, pixel) in pixels.iter_mut().enumerate() {
-        let bias = if offset % 4 >= 2 { 128 } else { 0 };
-        let mut sum = 0;
+    let row_bytes = width * 2;
+    let mut row = vec![0u8; row_bytes];
+    let mut sums = vec![0i32; row_bytes];
+    for y in 0..height {
+        sums.fill(0);
         for (coefficient, source) in coefficients.iter().zip(&sources) {
             if let Some(source) = source {
-                sum += coefficient * (i32::from(source[offset]) - bias);
+                cx.ram_read(
+                    physical(source.address + (y * source.pitch) as u64, row_bytes)?,
+                    &mut row,
+                )?;
+                for (offset, (sum, &value)) in sums.iter_mut().zip(&row).enumerate() {
+                    let bias = if offset % 4 >= 2 { 128 } else { 0 };
+                    *sum += coefficient * (i32::from(value) - bias);
+                }
             }
         }
-        *pixel = (((sum + 128) >> 8) + bias).clamp(0, 255) as u8;
+        for (offset, (&sum, pixel)) in sums
+            .iter()
+            .zip(&mut pixels[y * row_bytes..(y + 1) * row_bytes])
+            .enumerate()
+        {
+            let bias = if offset % 4 >= 2 { 128 } else { 0 };
+            *pixel = (((sum + 128) >> 8) + bias).clamp(0, 255) as u8;
+        }
     }
     Ok(Prepared {
         destination,
@@ -185,6 +203,52 @@ pub(super) mod tests {
         );
         words.insert(0x20, 0);
         assert!(prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0)).is_err());
+        assert!(host.effects.is_empty());
+    }
+
+    #[test]
+    fn full_size_padded_pair_exceeds_aggregate_staging_without_exceeding_raster_bounds() {
+        let (mut host, mut words) = fixture();
+        let width = 4896;
+        let height = 3264;
+        let pitch = 9888;
+        let row_bytes = width * 2;
+        let first = 0x10000;
+        let second = first + pitch * height;
+        let output = second + pitch * height;
+        host.ram.resize(output + row_bytes * height, 0xee);
+        for (address, pattern) in [(first, [100, 240, 10, 250]), (second, [201, 11, 251, 11])] {
+            for y in 0..height {
+                for pixel in host.ram[address + y * pitch..address + y * pitch + row_bytes]
+                    .chunks_exact_mut(4)
+                {
+                    pixel.copy_from_slice(&pattern);
+                }
+            }
+        }
+        for (offset, value) in [
+            (0x10, first as u32),
+            (0x14, (pitch / 2) as u32),
+            (0x18, second as u32),
+            (0x1c, (pitch / 2) as u32),
+            (0x30, output as u32),
+            (0x34, width as u32),
+            (0x38, ((height << 16) | width) as u32),
+            (0x60, 0x00800080),
+        ] {
+            words.insert(offset, value);
+        }
+        let result = prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0)).unwrap();
+        assert_eq!(result.bytes, row_bytes * height * 3);
+        assert!(result.bytes > fujimod_emulator_imaging::exr2_isp::dma::MAX_BYTES);
+        assert_eq!(result.pixels.len(), row_bytes * height);
+        assert!(
+            result
+                .pixels
+                .chunks_exact(4)
+                .all(|p| p == [151, 126, 131, 131])
+        );
+        assert!(host.ram[output..].iter().all(|&byte| byte == 0xee));
         assert!(host.effects.is_empty());
     }
 }
