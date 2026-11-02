@@ -20,6 +20,7 @@ import { BulkSupportError } from './BulkSupportError';
 import { catalog } from 'fujimod';
 import { generationFailure } from './generation';
 import './getting-started.css';
+import { SETUP_PATH, stepNumber } from './setup-path';
 
 /** What the path produced on one camera during this page's life. */
 export interface PathResults {
@@ -214,7 +215,7 @@ export function GettingStarted(props: {
         Get started
       </h3>
       <ol class="gs-steps">
-        <Item number={1} state={backupStep()}>
+        <Item number={stepNumber('camera-backup')} state={backupStep()}>
           <div class="gs-stack">
             <div class="gs-row">
               <button
@@ -237,7 +238,7 @@ export function GettingStarted(props: {
           </div>
         </Item>
         <Item
-          number={2}
+          number={stepNumber('camera-snapshot')}
           state={running() === 'state' ? 'running' : props.results.state ? 'done' : 'todo'}
         >
           <div class="gs-stack">
@@ -247,7 +248,7 @@ export function GettingStarted(props: {
             <BulkSupportError reason={bulkError()} />
           </div>
         </Item>
-        <Item number={3} state={debugStep()}>
+        <Item number={stepNumber('camera-debug')} state={debugStep()}>
           <div class="gs-stack">
             <button
               class="wb-btn"
@@ -267,13 +268,13 @@ export function GettingStarted(props: {
             </p>
           </div>
         </Item>
-        <Item number={4} state={restarted() ? 'done' : 'todo'}>
+        <Item number={stepNumber('camera-normal')} state={restarted() ? 'done' : 'todo'}>
           <p class="gs-note">
             <BatteryCycleIcon />
             Remove and reinsert the battery, then switch on and reconnect.
           </p>
         </Item>
-        <Item number={5} state="todo">
+        <Item number={SETUP_PATH.length + 1} state="todo">
           <button
             class="wb-btn"
             disabled={!restarted()}

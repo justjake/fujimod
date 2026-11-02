@@ -1,0 +1,89 @@
+{
+  "stages": [
+    {
+      "id": "camera-identity",
+      "title": "Identified over FF80 in service mode",
+      "requires": [
+        "catalog",
+        "service-facts"
+      ]
+    },
+    {
+      "id": "camera-read-gate",
+      "title": "Debug read gate enabled in RAM",
+      "requires": [
+        "camera-identity"
+      ]
+    },
+    {
+      "id": "camera-code",
+      "title": "Uploaded code runs in RAM and is cleaned up",
+      "requires": [
+        "camera-read-gate"
+      ]
+    },
+    {
+      "id": "camera-bulk",
+      "title": "Bulk reads at 1 MiB/s or more",
+      "requires": [
+        "camera-read-gate",
+        "bulk-source"
+      ]
+    },
+    {
+      "id": "camera-backup",
+      "title": "Internal flash backed up",
+      "requires": [
+        "camera-bulk",
+        "flash-reader"
+      ]
+    },
+    {
+      "id": "camera-snapshot",
+      "title": "Camera state dumped (RAM at least)",
+      "requires": [
+        "camera-bulk",
+        "state-regions"
+      ]
+    },
+    {
+      "id": "camera-debug",
+      "title": "Debug mode saved persistently",
+      "requires": [
+        "camera-backup"
+      ]
+    },
+    {
+      "id": "camera-normal",
+      "title": "FF80 answers in normal mode",
+      "requires": [
+        "camera-debug"
+      ]
+    },
+    {
+      "id": "camera-restart",
+      "title": "Restarts itself on a USB request",
+      "requires": [
+        "camera-normal",
+        "restart-facts"
+      ]
+    },
+    {
+      "id": "camera-menu",
+      "title": "Menus driven over FF80",
+      "requires": [
+        "camera-normal",
+        "menu"
+      ]
+    },
+    {
+      "id": "camera-mods",
+      "title": "FujiMod runs from RAM",
+      "requires": [
+        "camera-normal",
+        "camera-code",
+        "mod-build"
+      ]
+    }
+  ]
+}
