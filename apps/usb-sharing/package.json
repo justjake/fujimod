@@ -15,6 +15,6 @@
     "@types/node": "^26.6.6",
     "miniflare": "5.20261012.1-beta",
     "typescript": "^7.0.2",
-    "wrangler": "4.155.0"
+    "wrangler": "4.156.0"
   }
 }
