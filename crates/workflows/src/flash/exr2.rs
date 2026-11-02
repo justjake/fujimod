@@ -236,6 +236,42 @@ fn words(values: &[u32]) -> Vec<u8> {
     values.iter().flat_map(|n| n.to_le_bytes()).collect()
 }
 
+async fn configuration_flags(session: &mut Session, limits: Limits) -> bulk::Result<[u8; 2]> {
+    let mut flags = [0; 2];
+    for (value, offset) in flags.iter_mut().zip([0xa3, 0xf7]) {
+        *value = configuration::read_byte(
+            session,
+            ConfigurationView::Ram,
+            offset,
+            limits.configuration,
+        )
+        .await?;
+    }
+    Ok(flags)
+}
+
+async fn require_debug_access(session: &mut Session, limits: Limits) -> bulk::Result<[u8; 2]> {
+    let flags = configuration_flags(session, limits).await?;
+    // The page reader needs debug transport, not service-mode teardown policy.
+    // Service-session callers prepare their reset guard before this workflow.
+    require(
+        flags[1] == 1,
+        "Existing debug access is required for NAND backup",
+    )?;
+    Ok(flags)
+}
+
+async fn verify_configuration_flags(
+    session: &mut Session,
+    limits: Limits,
+    before: [u8; 2],
+) -> bulk::Result<()> {
+    require(
+        configuration_flags(session, limits).await? == before,
+        "Configuration flags changed during NAND backup",
+    )
+}
+
 pub async fn backup(
     session: &mut Session,
     bulk: &FirmwareBulk,
@@ -247,18 +283,7 @@ pub async fn backup(
 ) -> bulk::Result<Backup> {
     payload.validate(flash, bulk, image)?;
     (callbacks.progress)(0, flash.window.size).map_err(BulkError::Check)?;
-    require(
-        configuration::read_byte(session, ConfigurationView::Ram, 0xa3, limits.configuration)
-            .await?
-            == 1,
-        "Existing reset guard must be 1",
-    )?;
-    require(
-        configuration::read_byte(session, ConfigurationView::Ram, 0xf7, limits.configuration)
-            .await?
-            == 1,
-        "Prepare the service session before NAND backup",
-    )?;
+    let flags_before = require_debug_access(session, limits).await?;
     let BulkSource::Query {
         callback_table,
         callback_offset,
@@ -304,19 +329,7 @@ pub async fn backup(
             &initial_source,
         )
         .await?;
-        for offset in [0xa3, 0xf7] {
-            require(
-                configuration::read_byte(
-                    reader.access.session,
-                    ConfigurationView::Ram,
-                    offset,
-                    limits.configuration,
-                )
-                .await?
-                    == 1,
-                "Service flags changed during NAND backup",
-            )?;
-        }
+        verify_configuration_flags(reader.access.session, limits, flags_before).await?;
         Ok(())
     }
     .await;

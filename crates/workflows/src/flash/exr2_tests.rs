@@ -18,6 +18,60 @@ fn checked_write(s: &mut Vec<E>, at: u32, bytes: &[u8]) {
     s.extend(read(at, bytes));
 }
 
+fn configuration_read(offset: u32, value: u8) -> Vec<E> {
+    use fujimod_usb::ff80::commands::configuration::{ConfigurationLocation, ReadConfiguration};
+    let request = ReadConfiguration::new(
+        ConfigurationLocation {
+            view: ConfigurationView::Ram,
+            page: 0,
+            offset,
+        },
+        std::num::NonZeroU32::MIN,
+        limits().configuration,
+    )
+    .unwrap()
+    .encode();
+    let mut reply = request[..36].to_vec();
+    reply.push(value);
+    crate::bulk::tests::exchange(request, reply)
+}
+
+#[test]
+fn debug_access_accepts_both_reset_guard_values_without_writing_configuration() {
+    for guard in [0, 1] {
+        let mut steps = configuration_read(0xa3, guard);
+        steps.extend(configuration_read(0xf7, 1));
+        steps.extend(configuration_read(0xa3, guard));
+        steps.extend(configuration_read(0xf7, 1));
+        let (mut session, script) = opened(steps);
+        let before = block_on(require_debug_access(&mut session, limits())).unwrap();
+        assert_eq!(before, [guard, 1]);
+        block_on(verify_configuration_flags(&mut session, limits(), before)).unwrap();
+        assert_eq!(script.remaining(), 0);
+    }
+}
+
+#[test]
+fn unavailable_debug_and_changed_configuration_flags_are_rejected() {
+    let mut steps = configuration_read(0xa3, 0);
+    steps.extend(configuration_read(0xf7, 0));
+    let (mut session, script) = opened(steps);
+    assert!(
+        block_on(require_debug_access(&mut session, limits()))
+            .unwrap_err()
+            .to_string()
+            .contains("Existing debug access")
+    );
+    assert_eq!(script.remaining(), 0);
+    for after in [[1, 1], [0, 0]] {
+        let mut steps = configuration_read(0xa3, after[0]);
+        steps.extend(configuration_read(0xf7, after[1]));
+        let (mut session, script) = opened(steps);
+        assert!(block_on(verify_configuration_flags(&mut session, limits(), [0, 1])).is_err());
+        assert_eq!(script.remaining(), 0);
+    }
+}
+
 #[test]
 fn query_restores_the_qualified_source_after_a_completed_call() {
     let mut s = setup();
