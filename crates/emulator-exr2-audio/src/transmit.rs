@@ -228,7 +228,9 @@ impl Device for Transmitter {
             || matches!(o, 0x30 | 0x34) && value != 0
             || o == 0x2c && !Self::configuration(value)
         {
-            cx.fail("unsupported serial-audio DMA register value");
+            cx.fail(format!(
+                "unsupported serial-audio DMA register value {value:#x} at offset {o:#x}"
+            ));
             return;
         }
         if o == 0x28 {

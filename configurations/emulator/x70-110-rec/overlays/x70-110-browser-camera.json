@@ -8,6 +8,7 @@
     "preset": {
       "factory_options": {
         "video_encoder_backend": "software",
+        "audio_input_profile": "declared-silent-stereo-pcm48000",
         "quantum": 10000,
         "storage_profile": "erased",
         "sd_card_profile": "declared-blank-sdhc-default-speed-unmeasured",

@@ -940,6 +940,17 @@ fn browser_graphs_select_portable_encoding_on_every_host() {
     }
 }
 
+#[test]
+fn browser_camera_captures_movie_audio() {
+    // Simulator report (issue 76): starting a movie programs the audio
+    // channel for capture, which a transmit-only channel refuses.
+    let run = prepare("x70-110-rec", &["x70-110-browser-camera".into()]).unwrap();
+    assert_eq!(
+        model(&run, "audio_registers")["kind"],
+        "serial-audio-duplex"
+    );
+}
+
 #[path = "tests/pwic.rs"]
 mod pwic;
 
