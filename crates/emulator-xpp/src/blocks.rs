@@ -363,11 +363,12 @@ impl Block {
                 )
             }
         };
-        if rows
-            .first()
-            .is_some_and(|row| row.len() > destination_stride)
-        {
-            return Err("Still picture line wider than its destination stride".into());
+        if let Some(row) = rows.first().filter(|row| row.len() > destination_stride) {
+            return Err(format!(
+                "Still picture line of {} bytes wider than its destination stride {destination_stride} ({} lines to {destination:#x})",
+                row.len(),
+                rows.len()
+            ));
         }
         for (y, row) in rows.iter().enumerate() {
             cx.ram_write(destination + (y * destination_stride) as u64, row)
