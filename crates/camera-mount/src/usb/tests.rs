@@ -101,22 +101,24 @@ fn client(scripts: Vec<Script>) -> Client<TestSessions> {
             scripts: scripts.into(),
             opens: Arc::new(AtomicUsize::new(0)),
         },
-        capability: FirmwareCard {
+        product: "Model".into(),
+        internal_version: "1".into(),
+        capability: Some(FirmwareCard {
             schema_uri: "https://fujimod.com/schemas/card-files.generated.schema.json".into(),
             schema: 1,
             firmware_id: "model-1".into(),
             product: "Model".into(),
             internal_version: "1".into(),
             code_checks: vec![],
-            upload: None,
             mechanism: Mechanism::Mailbox {
                 search_address: 0x1000,
                 search_bytes: 64,
                 address_alias: 0,
                 build: None,
             },
-        },
+        }),
         bulk: None,
+        flash: None,
         limits: DebugMemoryLimits {
             read: NonZeroU32::new(256).unwrap(),
             write: NonZeroU32::new(256).unwrap(),
@@ -309,7 +311,7 @@ fn sd_transactions_yield_to_another_ff80_client_and_revalidate_the_descriptor_hi
         state.put(0x111c, u32::MAX);
         let state = Arc::new(std::sync::Mutex::new(state));
         let mut profile = client(vec![]).capability;
-        profile.mechanism = Mechanism::Mailbox {
+        profile.as_mut().unwrap().mechanism = Mechanism::Mailbox {
             search_address: 0x1000,
             search_bytes: 0x400,
             address_alias: 0,
@@ -318,7 +320,10 @@ fn sd_transactions_yield_to_another_ff80_client_and_revalidate_the_descriptor_hi
         let mut client = Client {
             sessions: MailboxSessions(state.clone()),
             capability: profile,
+            product: "Model".into(),
+            internal_version: "1".into(),
             bulk: None,
+            flash: None,
             limits: DebugMemoryLimits {
                 read: NonZeroU32::new(256).unwrap(),
                 write: NonZeroU32::new(256).unwrap(),
@@ -354,5 +359,23 @@ fn sd_transactions_yield_to_another_ff80_client_and_revalidate_the_descriptor_hi
         );
         assert_eq!(client.mailbox_hint, Some(0x1000));
         assert_eq!(state.word(0x111c), u32::MAX);
+    });
+}
+
+#[test]
+fn memory_access_does_not_require_a_card_service() {
+    block_on(async {
+        let script = memory_script(7, false);
+        let mut client = client(vec![script.clone()]);
+        client.capability = None;
+        let Answer::Bytes(bytes) = client
+            .transaction(Operation::Memory(0x1000, 4))
+            .await
+            .unwrap()
+        else {
+            panic!("memory bytes")
+        };
+        assert_eq!(bytes, [7; 4]);
+        assert_eq!(script.remaining(), 0);
     });
 }

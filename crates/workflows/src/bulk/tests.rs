@@ -15,6 +15,7 @@ fn hex(bytes: &[u8]) -> String {
 }
 fn facts(source: BulkSource) -> FirmwareBulk {
     let facts = FirmwareBulk {
+        upload: None,
         schema_uri: BULK_SCHEMA_URI.into(),
         schema: 1,
         id: "sample-1-bulk".into(),
@@ -439,6 +440,14 @@ fn preserving_reads_support_every_source_family_and_restore_without_pattern_writ
                     } else {
                         words(&[0, 32])
                     };
+                    steps.extend(read(
+                        0x1300,
+                        &if wide {
+                            words(&[0x9000, 0, 32])
+                        } else {
+                            words(&[0x9000, 32])
+                        },
+                    ));
                     steps.extend(read(0x1400, &original));
                     steps.extend(write(0x1400, &selected));
                     steps.extend(read(0x1400, &selected));
@@ -477,6 +486,7 @@ fn preserving_bulk_mismatch_restores_publication_before_refusing() {
     let original = words(&[0x9000, 16]);
     let selected = words(&[0, 32]);
     let mut steps = qualified();
+    steps.extend(read(0x1300, &words(&[0x9000, 32])));
     steps.extend(read(0x1400, &original));
     steps.extend(write(0x1400, &selected));
     steps.extend(read(0x1400, &selected));
@@ -509,6 +519,7 @@ fn foreign_publication_during_preserving_setup_is_never_overwritten_and_fences_t
     let selected = words(&[0, 32]);
     let foreign = words(&[0x7000, 12]);
     let mut steps = qualified();
+    steps.extend(read(0x1300, &words(&[0x9000, 32])));
     steps.extend(read(0x1400, &original));
     steps.extend(write(0x1400, &selected));
     steps.extend(read(0x1400, &foreign));
@@ -524,4 +535,56 @@ fn foreign_publication_during_preserving_setup_is_never_overwritten_and_fences_t
     );
     assert_eq!(session.state(), SessionState::CompletionUnknown);
     assert_eq!(script.remaining(), 0);
+}
+
+#[test]
+fn preserving_e1_uses_registered_capacity_instead_of_the_pattern_length() {
+    for wide in [false, true] {
+        let camera = if wide {
+            zero_base_camera()
+        } else {
+            facts(BulkSource::Pattern {
+                registered_buffer: 0x1300,
+                source_state: 0x1400,
+                capacity: 32,
+            })
+        };
+        let original = if wide {
+            words(&[0x9000, 0, 16])
+        } else {
+            words(&[0x9000, 16])
+        };
+        let selected = if wide {
+            words(&[0, 0, 256])
+        } else {
+            words(&[0, 256])
+        };
+        let mut steps = qualified();
+        steps.extend(read(
+            0x1300,
+            &if wide {
+                words(&[0x9000, 0, 256])
+            } else {
+                words(&[0x9000, 256])
+            },
+        ));
+        steps.extend(read(0x1400, &original));
+        steps.extend(write(0x1400, &selected));
+        steps.extend(read(0x1400, &selected));
+        steps.extend(read(0x1000, b"stoc"));
+        steps.extend(data(0x1000, b"stoc"));
+        steps.extend(data(0x1800, &[7; 64]));
+        steps.extend(read(0x1400, &selected));
+        steps.extend(write(0x1400, &original));
+        steps.extend(read(0x1400, &original));
+        let (mut session, script) = opened(steps);
+        block_on(async {
+            let mapping = BulkMapping::prepare_preserving(&mut session, &camera, limits())
+                .await
+                .unwrap();
+            assert_eq!(mapping.read(&mut session, target()).await.unwrap(), [7; 64]);
+            mapping.restore(&mut session).await.unwrap();
+        });
+        assert_eq!(script.remaining(), 0, "one E1 for the whole range");
+    }
 }

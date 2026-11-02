@@ -7,6 +7,9 @@
 - `memory`: a read-only file with a 4 GiB logical size. File offsets are camera
   addresses. Only ranges admitted by the selected firmware’s readable memory
   map can be read; holes return `EIO`.
+- `flash`: a read-only file spanning the selected internal-storage window when
+  a prepared reader artifact is supplied. Offsets are logical storage bytes;
+  NAND readers return corrected main-area bytes.
 - `regions.json`: the readable ranges, with names, addresses and sizes.
 
 There is no `debug/` wrapper. Memory reads are live, not a snapshot. The adapter
@@ -22,7 +25,8 @@ following its extension setup instructions. macOS 15.4 or newer is required.
 Building requires Rust and `protoc` (`brew install protobuf`).
 
 The camera must already provide an available ff80 debug service. Select a
-firmware with a card capability in the bundled catalog. The command verifies
+firmware with readable memory facts in the bundled catalog. The `sd/` subtree
+is present when that firmware also has a card capability. The command verifies
 camera identity and the selected code checks before starting the mount.
 
 ```sh
@@ -30,6 +34,14 @@ mkdir -p /tmp/fuji
 cargo run -p fujimod-camera-mount --bin fujimod-mount -- \
   --firmware x100v-301 /tmp/fuji
 ```
+
+Add `--flash-reader /path/to/reader.json` (or set `FUJIMOD_FLASH_READER`) to
+expose internal storage. The metadata and separate image are the prepared
+[`flash::Artifact`](../workflows/README.md) output. Loading verifies firmware,
+image hashes, stock-reader contracts and bounds before opening USB. Each file
+read checks a control page, reads only the pages containing the requested
+range, restores temporary RAM and callbacks, and releases its session.
+It borrows E1 publication state without generating or restoring diagnostic scratch.
 
 Use `--device` (or `FUJIMOD_USB_DEVICE`) to select a bus, bus/port key or serial
 when more than one camera is attached. `--read-limit` and `--write-limit` set
@@ -51,7 +63,7 @@ SDK backend needs no uploaded executable code.
 ## Architecture and performance
 
 The namespace and policy live in Rust independently of the platform adapter.
-The worker holds device descriptors while idle. Each bounded SD or memory
+The worker holds device descriptors while idle. Each bounded SD, memory or flash
 operation acquires a fresh ff80 session, completes its callbacks, closes all
 file handles, releases its allocation, restores borrowed controls, and closes
 the session before replying. Other tools can use the camera between operations;
@@ -69,18 +81,27 @@ probes and transfers. It supports every published bulk source family: query,
 32-bit pattern publication and 64-bit zero-base publication. The latter two
 borrow and restore the located source words without running pattern generation
 or filling diagnostic scratch. DMA rounding must remain inside the admitted
-aperture. Small control reads use CPU commands when cheaper. Stock SDK file
+aperture. Preserving pattern sources use the live registered capacity up to
+the host transfer budget; the 64 KiB generated pattern size does not cap E1.
+The adapter keeps requests together up to 8 MiB per transaction rather than
+reopening and requalifying every 128 KiB. Small control reads use CPU commands when cheaper. Stock SDK file
 buffers use their checked E1 source pair for larger reads.
 
 Owned SD buffers use E0 uploads when a checked upload destination contract is
-published and complete padded pieces fit the buffer and registered capacity.
+published in the shared bulk capability and complete padded pieces fit the
+buffer and registered capacity.
+Cached SDK buffers are cleaned before DMA and synchronized before file I/O.
 The uploader guards and restores the destination pointer before the file
-operation continues, including completed transport refusals. Currently the
-X70 card profile publishes this contract. Cameras without a qualified E0
-contract use CPU writes; an unavailable fast path is never guessed.
+operation continues, including completed transport refusals. The catalog
+publishes destination contracts for all 25 firmwares with bulk reads, across
+32-bit EXR II, 32-bit XP4 and 64-bit XP5. Uploads preserve the full pointer width.
+A setup branch with configuration effects requires its published RAM-only
+precondition; otherwise that operation uses CPU writes. Cameras without a
+located upload contract use CPU writes.
 `--read-limit` and `--write-limit` apply to CPU commands, not E0/E1 pieces.
-These choices minimize known protocol work; actual end-to-end throughput has
-not yet been benchmarked on a mounted camera.
+Bulk DRAM throughput does not establish SD, internal-flash or CPU-only memory
+throughput. Those include file callbacks, storage-driver work or CPU copies.
+No mounted-camera benchmark establishes a universal 30+ MB/s rate.
 
 Memory contents are never cached. Directory snapshots are cached for 250 ms,
 invalidated by mutations, and carry generation cookies for enumeration.

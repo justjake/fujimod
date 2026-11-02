@@ -273,6 +273,28 @@
       ],
       "type": "object"
     },
+    "ConfigurationCheck": {
+      "additionalProperties": false,
+      "description": "A RAM configuration byte read before any destination is borrowed.",
+      "properties": {
+        "offset": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "value"
+      ],
+      "type": "object"
+    },
     "NamedRange": {
       "additionalProperties": false,
       "description": "A named address range.",
@@ -298,6 +320,60 @@
         "name",
         "address",
         "size"
+      ],
+      "type": "object"
+    },
+    "Upload": {
+      "additionalProperties": false,
+      "description": "Located stock E0 upload destination and its independently checked code.",
+      "properties": {
+        "address_alignment": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "capacity_address": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "code_checks": {
+          "items": {
+            "$ref": "#/$defs/CodeCheck"
+          },
+          "type": "array"
+        },
+        "configuration_checks": {
+          "description": "Existing RAM configuration required by a side-effect-free setup branch.",
+          "items": {
+            "$ref": "#/$defs/ConfigurationCheck"
+          },
+          "type": "array"
+        },
+        "piece_bytes": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pointer": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pointer_bytes": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pointer",
+        "pointer_bytes",
+        "configuration_checks",
+        "capacity_address",
+        "piece_bytes",
+        "address_alignment",
+        "code_checks"
       ],
       "type": "object"
     }
@@ -386,6 +462,17 @@
     "source": {
       "$ref": "#/$defs/BulkSource",
       "description": "Stock routine that points E1 reads at memory."
+    },
+    "upload": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Upload"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Checked E0 destination for caller-owned data buffers."
     },
     "window": {
       "$ref": "#/$defs/BulkRange",

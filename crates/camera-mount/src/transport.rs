@@ -16,9 +16,10 @@ pub(crate) struct Transport<'a> {
     facts: Option<&'a FirmwareBulk>,
     limits: DebugMemoryLimits,
     cpu_bytes: u32,
+    cpu_write: u32,
     bulk_bytes: u32,
     mapping: Option<BulkMapping>,
-    upload: Option<&'a fujimod_usb::operations::card::Upload>,
+    upload: Option<&'a fujimod_catalog_bulk::Upload>,
     upload_checked: bool,
 }
 impl<'a> Transport<'a> {
@@ -26,7 +27,7 @@ impl<'a> Transport<'a> {
         facts: Option<&'a FirmwareBulk>,
         limits: DebugMemoryLimits,
         session: &Session,
-        upload: Option<&'a fujimod_usb::operations::card::Upload>,
+        upload: Option<&'a fujimod_catalog_bulk::Upload>,
     ) -> Self {
         Self {
             facts,
@@ -37,6 +38,10 @@ impl<'a> Transport<'a> {
                 .min(session.info().advertised_packet_bytes.get())
                 .min(session.max_reply_bytes().get().saturating_sub(36))
                 .max(1),
+            cpu_write: limits
+                .write
+                .get()
+                .min(session.info().advertised_packet_bytes.get()),
             bulk_bytes: session.max_reply_bytes().get(),
             mapping: None,
             upload,
@@ -110,6 +115,38 @@ impl<'a> Transport<'a> {
     }
 }
 impl BufferIo for Transport<'_> {
+    fn admits_write(&self, address: u32, length: u32, capacity: u32) -> bool {
+        let Some(upload) = self.upload else {
+            return false;
+        };
+        let Some(piece) = NonZeroU32::new(upload.piece_bytes) else {
+            return false;
+        };
+        if length == 0
+            || !upload.address_alignment.is_power_of_two()
+            || !address.is_multiple_of(upload.address_alignment)
+            || !fujimod_workflows::install::padded_size(length, piece)
+                .is_ok_and(|n| n.get() <= capacity)
+        {
+            return false;
+        }
+        let qualification = if self.upload_checked {
+            0
+        } else {
+            upload
+                .code_checks
+                .iter()
+                .map(|c| c.size.div_ceil(u64::from(self.cpu_bytes)))
+                .sum::<u64>()
+        };
+        let commands = qualification
+            + upload.configuration_checks.len() as u64
+            + 9
+            + 2 * u64::from(upload.pointer_bytes).div_ceil(u64::from(self.cpu_write))
+            + u64::from(length).div_ceil(u64::from(upload.piece_bytes));
+        u64::from(length).div_ceil(u64::from(self.cpu_write)) > commands
+    }
+
     fn write_owned<'a>(
         &'a mut self,
         session: &'a mut Session,
@@ -131,29 +168,7 @@ impl BufferIo for Transport<'_> {
             };
             let piece = NonZeroU32::new(upload.piece_bytes).ok_or(Error::InvalidLength)?;
             let length = u32::try_from(data.len()).map_err(|_| Error::InvalidLength)?;
-            if length == 0
-                || !address.is_multiple_of(upload.address_alignment)
-                || padded_size(length, piece)?.get() > capacity
-            {
-                return Ok(false);
-            }
-            let cpu_write = self
-                .limits
-                .write
-                .get()
-                .min(session.info().advertised_packet_bytes.get());
-            let qualification = if self.upload_checked {
-                0
-            } else {
-                upload
-                    .code_checks
-                    .iter()
-                    .map(|c| c.size.div_ceil(u64::from(self.cpu_bytes)))
-                    .sum::<u64>()
-            };
-            let upload_commands =
-                qualification + 11 + u64::from(length).div_ceil(u64::from(upload.piece_bytes));
-            if u64::from(length).div_ceil(u64::from(cpu_write)) <= upload_commands {
+            if !self.admits_write(address, length, capacity) {
                 return Ok(false);
             }
             let range = |at, bytes| {
@@ -189,8 +204,26 @@ impl BufferIo for Transport<'_> {
                 }
                 self.upload_checked = true;
             }
-            let original =
-                memory::read_range(session, range(upload.pointer, 4)?, self.limits).await?;
+            for guard in &upload.configuration_checks {
+                use fujimod_usb::ff80::commands::configuration::ConfigurationView;
+                if fujimod_usb::operations::configuration::read_byte(
+                    session,
+                    ConfigurationView::Ram,
+                    guard.offset,
+                    NonZeroU32::new(256).unwrap(),
+                )
+                .await?
+                    != guard.value
+                {
+                    return Ok(false);
+                }
+            }
+            let original = memory::read_range(
+                session,
+                range(upload.pointer, upload.pointer_bytes)?,
+                self.limits,
+            )
+            .await?;
             let raw_capacity =
                 memory::read_range(session, range(upload.capacity_address, 4)?, self.limits)
                     .await?;
@@ -212,19 +245,28 @@ impl BufferIo for Transport<'_> {
             )?;
             let destination = UploadDestination::new(
                 Address(upload.pointer),
-                Address(u32::from_le_bytes(
-                    original.as_slice().try_into().expect("four bytes"),
-                )),
+                {
+                    let mut word = [0; 8];
+                    word[..original.len()].copy_from_slice(&original);
+                    u64::from_le_bytes(word)
+                },
+                upload.pointer_bytes,
                 Address(upload.capacity_address),
                 available,
             )?;
             let result = image.upload(session, destination, self.limits).await;
             if result.is_err() && session.state() == SessionState::Ready {
                 let restored = async {
-                    let current =
-                        memory::read_range(session, range(upload.pointer, 4)?, self.limits).await?;
+                    let current = memory::read_range(
+                        session,
+                        range(upload.pointer, upload.pointer_bytes)?,
+                        self.limits,
+                    )
+                    .await?;
                     if current != original {
-                        if current != address.to_le_bytes() {
+                        if current
+                            != u64::from(address).to_le_bytes()[..upload.pointer_bytes as usize]
+                        {
                             return Err(Error::Card("Upload destination changed owner".into()));
                         }
                         memory::write_range(
@@ -234,8 +276,12 @@ impl BufferIo for Transport<'_> {
                             self.limits,
                         )
                         .await?;
-                        if memory::read_range(session, range(upload.pointer, 4)?, self.limits)
-                            .await?
+                        if memory::read_range(
+                            session,
+                            range(upload.pointer, upload.pointer_bytes)?,
+                            self.limits,
+                        )
+                        .await?
                             != original
                         {
                             return Err(Error::Card("Upload destination was not restored".into()));
@@ -344,6 +390,7 @@ mod tests {
             },
         ] {
             let facts = FirmwareBulk {
+                upload: None,
                 schema_uri: fujimod_catalog_bulk::BULK_SCHEMA_URI.into(),
                 schema: 1,
                 id: "body-1-bulk".into(),

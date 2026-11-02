@@ -1,4 +1,4 @@
-//! Generated stock diagnostic bulk-read facts for one firmware.
+//! Generated stock diagnostic bulk-transfer facts for one firmware.
 //!
 //! The firmware's E1 data request reads memory through a source pointer that a
 //! stock routine prepares. The document names that routine's kind, the
@@ -36,6 +36,9 @@ pub struct FirmwareBulk {
     pub code_alias: u64,
     /// Stock routine that points E1 reads at memory.
     pub source: BulkSource,
+    /// Checked E0 destination for caller-owned data buffers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upload: Option<Upload>,
     /// Addresses bulk reads may cover.
     pub window: BulkRange,
     /// E1 DMA constraints, absent where they are not located.
@@ -49,6 +52,39 @@ pub struct FirmwareBulk {
     pub mapped_probe: Option<CodeCheck>,
     /// Named sets of ranges captured together.
     pub scopes: Vec<CaptureScope>,
+}
+
+/// Located stock E0 upload destination and its independently checked code.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(missing_as_null)
+)]
+#[serde(deny_unknown_fields)]
+pub struct Upload {
+    pub pointer: u32,
+    pub pointer_bytes: u32,
+    /// Existing RAM configuration required by a side-effect-free setup branch.
+    pub configuration_checks: Vec<ConfigurationCheck>,
+    pub capacity_address: u32,
+    pub piece_bytes: u32,
+    pub address_alignment: u32,
+    pub code_checks: Vec<CodeCheck>,
+}
+
+/// A RAM configuration byte read before any destination is borrowed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
+#[serde(deny_unknown_fields)]
+pub struct ConfigurationCheck {
+    pub offset: u32,
+    pub value: u8,
 }
 
 /// The stock routine that prepares the E1 source.
@@ -271,7 +307,27 @@ impl FirmwareBulk {
         if self.code_checks.is_empty() || self.probes.is_empty() {
             return fail("stock code checks and probes are required");
         }
-        for check in self.code_checks.iter().chain(&self.mapped_probe) {
+        if let Some(upload) = &self.upload {
+            if !matches!(upload.pointer_bytes, 4 | 8)
+                || !upload.pointer.is_multiple_of(upload.pointer_bytes)
+                || !upload.capacity_address.is_multiple_of(4)
+                || u64::from(upload.pointer) + u64::from(upload.pointer_bytes) > 1u64 << 32
+                || (u64::from(upload.pointer) < u64::from(upload.capacity_address) + 4
+                    && u64::from(upload.capacity_address)
+                        < u64::from(upload.pointer) + u64::from(upload.pointer_bytes))
+                || upload.piece_bytes == 0
+                || !upload.address_alignment.is_power_of_two()
+                || upload.code_checks.is_empty()
+            {
+                return fail("invalid upload destination contract");
+            }
+        }
+        for check in self
+            .code_checks
+            .iter()
+            .chain(&self.mapped_probe)
+            .chain(self.upload.iter().flat_map(|upload| &upload.code_checks))
+        {
             let range = BulkRange {
                 address: check.address,
                 size: check.size,

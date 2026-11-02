@@ -1,5 +1,6 @@
 //! Platform-independent namespace over bounded camera operations.
 //! Memory is always read-only. Only the SD subtree delegates mutations.
+mod flash;
 #[cfg(target_os = "macos")]
 pub mod fskit;
 mod transport;
@@ -16,11 +17,13 @@ pub const ROOT: u64 = 2; // FSKit reserves item 1 for its parent-of-root sentine
 pub const SD: u64 = 3;
 pub const MEMORY: u64 = 4;
 pub const REGIONS: u64 = 5;
-pub const IO_BYTES: usize = 128 * 1024;
+pub const FLASH: u64 = 6;
+pub const IO_BYTES: usize = fujimod_usb::operations::card::MAX_REQUEST_BYTES as usize;
 pub type Result<T> = std::result::Result<T, i32>;
 
 /// No memory-write operation exists at this boundary.
 pub trait Device: Send {
+    fn has_card(&self) -> bool;
     fn list(&mut self, path: &str) -> Result<Vec<DirectoryEntry>>;
     fn read(&mut self, path: &str, offset: u32, size: u32) -> Result<Vec<u8>>;
     fn write(&mut self, path: &str, offset: u32, data: &[u8]) -> Result<()>;
@@ -28,6 +31,9 @@ pub trait Device: Send {
     fn delete(&mut self, path: &str) -> Result<()>;
     fn shrink(&mut self, path: &str, size: u32) -> Result<()>;
     fn memory(&mut self, address: u32, size: u32) -> Result<Vec<u8>>;
+    /// Logical internal-storage bytes, available with a checked reader.
+    fn flash_size(&self) -> Option<u64>;
+    fn flash(&mut self, offset: u64, size: u32) -> Result<Vec<u8>>;
     fn synchronize(&mut self) -> Result<()>;
 }
 
@@ -108,6 +114,26 @@ impl<D: Device> CameraFs<D> {
                 },
             );
         }
+        if !device.has_card() {
+            nodes.remove(&SD);
+        }
+        if let Some(size) = device.flash_size() {
+            if size == 0 {
+                return Err(libc::EINVAL);
+            }
+            nodes.insert(
+                FLASH,
+                Node {
+                    id: FLASH,
+                    parent: ROOT,
+                    name: "flash".into(),
+                    path: None,
+                    size,
+                    directory: false,
+                    writable: false,
+                },
+            );
+        }
         Ok(Self {
             device,
             nodes,
@@ -115,7 +141,7 @@ impl<D: Device> CameraFs<D> {
             listings: BTreeMap::new(),
             regions,
             regions_json,
-            next_inode: 6,
+            next_inode: 7,
             generation: 1,
         })
     }
@@ -126,7 +152,7 @@ impl<D: Device> CameraFs<D> {
 
     pub fn metadata(&mut self, id: u64) -> Result<Node> {
         let node = self.node(id)?;
-        if id > REGIONS {
+        if id > FLASH {
             let (_, entries) = self.directory(node.parent, false)?;
             return entries.into_iter().find(|n| n.id == id).ok_or(libc::ESTALE);
         }
@@ -175,8 +201,9 @@ impl<D: Device> CameraFs<D> {
         if id == ROOT {
             return Ok((
                 1,
-                [SD, MEMORY, REGIONS]
+                [SD, MEMORY, FLASH, REGIONS]
                     .into_iter()
+                    .filter(|id| self.nodes.contains_key(id))
                     .map(|i| self.node(i))
                     .collect::<Result<_>>()?,
             ));
@@ -287,6 +314,14 @@ impl<D: Device> CameraFs<D> {
         }
         if id == REGIONS {
             return Ok(self.regions_json[offset as usize..offset as usize + size].to_vec());
+        }
+        if id == FLASH {
+            let data = self.device.flash(offset, size as u32)?;
+            return if data.len() == size {
+                Ok(data)
+            } else {
+                Err(libc::EIO)
+            };
         }
         let address = u32::try_from(offset).map_err(|_| libc::EINVAL)?;
         let data = if id == MEMORY {

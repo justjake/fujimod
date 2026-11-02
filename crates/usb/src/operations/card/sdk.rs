@@ -116,6 +116,22 @@ impl Sdk<'_, '_> {
         Ok(raw)
     }
 
+    async fn write_buffer(&mut self, address: u32, raw: &[u8]) -> Result<()> {
+        if self
+            .host
+            .io
+            .as_ref()
+            .is_some_and(|io| io.admits_write(address, raw.len() as u32, self.p.chunk_bytes))
+        {
+            // Discard dirty cached aliases before DMA. Afterward no CPU access
+            // touches the payload until the existing post-transfer sync.
+            self.call(self.p.cache, &[]).await?;
+        }
+        self.host
+            .write_owned(address, raw, self.p.chunk_bytes)
+            .await
+    }
+
     async fn allocate(&mut self) -> Result<()> {
         self.host.put(self.p.error, SENTINEL).await?;
         let result = self
@@ -402,9 +418,7 @@ impl Sdk<'_, '_> {
                 self.seek(offset).await?;
                 for raw in data.chunks(self.p.chunk_bytes as usize) {
                     let buffer = self.buffer()?;
-                    self.host
-                        .write_owned(buffer, raw, self.p.chunk_bytes)
-                        .await?;
+                    self.write_buffer(buffer, raw).await?;
                     self.call(self.p.cache, &[]).await?;
                     let (status, n) = self
                         .io(
@@ -474,9 +488,7 @@ impl Sdk<'_, '_> {
                 self.open(&path, 1).await?;
                 for raw in data.chunks(self.p.chunk_bytes as usize) {
                     let buffer = self.buffer()?;
-                    self.host
-                        .write_owned(buffer, raw, self.p.chunk_bytes)
-                        .await?;
+                    self.write_buffer(buffer, raw).await?;
                     self.call(self.p.cache, &[]).await?;
                     let (status, n) = self
                         .io(

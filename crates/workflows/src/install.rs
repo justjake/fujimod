@@ -47,23 +47,29 @@ fn read(address: Address, bytes: Vec<u8>) -> Result<SequenceCommand> {
 #[derive(Clone, Copy)]
 pub struct UploadDestination {
     pointer: Address,
-    original: Address,
+    original: u64,
+    pointer_bytes: u32,
     capacity_address: Address,
     capacity: NonZeroU32,
 }
 impl UploadDestination {
     pub fn new(
         pointer: Address,
-        original: Address,
+        original: u64,
+        pointer_bytes: u32,
         capacity_address: Address,
         capacity: NonZeroU32,
     ) -> Result<Self> {
-        if overlaps(range(pointer, 4)?, range(capacity_address, 4)?) {
+        if !matches!(pointer_bytes, 4 | 8) || pointer_bytes == 4 && original > u64::from(u32::MAX) {
+            return Err(Error::InvalidLength);
+        }
+        if overlaps(range(pointer, pointer_bytes)?, range(capacity_address, 4)?) {
             return Err(Error::OutsideDataWindow);
         }
         Ok(Self {
             pointer,
             original,
+            pointer_bytes,
             capacity_address,
             capacity,
         })
@@ -125,46 +131,58 @@ impl OwnedUpload {
         limits: DebugMemoryLimits,
     ) -> Result<UploadReply> {
         if self.padded_bytes() > destination.capacity.get()
-            || overlaps(self.allocation, range(destination.pointer, 4)?)
+            || overlaps(
+                self.allocation,
+                range(destination.pointer, destination.pointer_bytes)?,
+            )
             || overlaps(self.allocation, range(destination.capacity_address, 4)?)
-            || (destination.original.0 >= self.allocation.address().0
-                && u64::from(destination.original.0) < end(self.allocation))
+            || (destination.original >= u64::from(self.allocation.address().0)
+                && destination.original < end(self.allocation))
         {
             return Err(Error::OutsideDataWindow);
         }
-        let before = destination.original.0.to_le_bytes().to_vec();
-        let during = self.address.0.to_le_bytes().to_vec();
-        session
-            .sequence(
-                vec![
-                    read(destination.pointer, before.clone())?,
-                    read(
-                        destination.capacity_address,
-                        destination.capacity.get().to_le_bytes().to_vec(),
-                    )?,
-                    SequenceCommand::Write {
-                        address: destination.pointer,
-                        bytes: during.clone(),
-                    },
-                    read(destination.pointer, during.clone())?,
-                ],
-                limits,
-            )
-            .await?;
+        let before =
+            destination.original.to_le_bytes()[..destination.pointer_bytes as usize].to_vec();
+        let during =
+            u64::from(self.address.0).to_le_bytes()[..destination.pointer_bytes as usize].to_vec();
+        let read_bytes = limits
+            .read
+            .get()
+            .min(session.info().advertised_packet_bytes.get()) as usize;
+        let write_bytes = limits
+            .write
+            .get()
+            .min(session.info().advertised_packet_bytes.get()) as usize;
+        let guard = |address: Address, bytes: &[u8]| -> Result<Vec<SequenceCommand>> {
+            bytes
+                .chunks(read_bytes)
+                .enumerate()
+                .map(|(i, part)| read(Address(address.0 + (i * read_bytes) as u32), part.to_vec()))
+                .collect()
+        };
+        let publish = |address: Address, bytes: &[u8]| -> Vec<SequenceCommand> {
+            bytes
+                .chunks(write_bytes)
+                .enumerate()
+                .map(|(i, part)| SequenceCommand::Write {
+                    address: Address(address.0 + (i * write_bytes) as u32),
+                    bytes: part.to_vec(),
+                })
+                .collect()
+        };
+        let mut prepare = guard(destination.pointer, &before)?;
+        prepare.extend(guard(
+            destination.capacity_address,
+            &destination.capacity.get().to_le_bytes(),
+        )?);
+        prepare.extend(publish(destination.pointer, &during));
+        prepare.extend(guard(destination.pointer, &during)?);
+        session.sequence(prepare, limits).await?;
         let reply = data::upload(session, &self.bytes, self.piece, DataWriteMode::Preserve).await?;
-        session
-            .sequence(
-                vec![
-                    read(destination.pointer, during)?,
-                    SequenceCommand::Write {
-                        address: destination.pointer,
-                        bytes: before.clone(),
-                    },
-                    read(destination.pointer, before)?,
-                ],
-                limits,
-            )
-            .await?;
+        let mut restore = guard(destination.pointer, &during)?;
+        restore.extend(publish(destination.pointer, &before));
+        restore.extend(guard(destination.pointer, &before)?);
+        session.sequence(restore, limits).await?;
         Ok(reply)
     }
     /// Transfer a large owned image through a smaller stock staging capacity.

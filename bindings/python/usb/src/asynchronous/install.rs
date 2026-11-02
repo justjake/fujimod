@@ -140,7 +140,8 @@ impl AsyncSession {
     ) -> PyResult<data::UploadReply> {
         let destination = install::UploadDestination::new(
             Address(pointer),
-            Address(original),
+            u64::from(original),
+            4,
             Address(capacity_address),
             nz(capacity)?,
         )
@@ -162,7 +163,8 @@ impl AsyncSession {
     ) -> PyResult<()> {
         let destination = install::UploadDestination::new(
             Address(pointer),
-            Address(original),
+            u64::from(original),
+            4,
             Address(capacity_address),
             nz(capacity)?,
         )

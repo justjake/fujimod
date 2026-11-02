@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
-description = "Camera SD files and read-only live memory as a mounted filesystem"
+description = "Camera SD files, read-only live memory and internal storage as a mounted filesystem"
 
 [dependencies]
 fujimod-usb.workspace = true

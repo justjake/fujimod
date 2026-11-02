@@ -1,7 +1,7 @@
 use super::*;
+use fujimod_catalog_bulk::Upload;
 use fujimod_usb::{
     ff80::{SessionState, framing::RequestKind},
-    operations::card::Upload,
     testing::{Exchange as E, Script},
 };
 use futures_lite::future::block_on;
@@ -65,6 +65,8 @@ fn session(commands: Vec<E>) -> (Session, Script) {
 fn upload() -> Upload {
     Upload {
         pointer: 0x1000,
+        pointer_bytes: 4,
+        configuration_checks: vec![],
         capacity_address: 0x1004,
         piece_bytes: 128,
         address_alignment: 32,
@@ -171,4 +173,85 @@ fn tiny_writes_or_padding_outside_the_owned_buffer_choose_cpu_without_usb_setup(
         );
         assert_eq!(script.remaining(), 0);
     });
+}
+
+#[test]
+fn wide_upload_guards_and_restores_the_complete_64_bit_pointer() {
+    block_on(async {
+        let original = 0x1_0000_8000u64.to_le_bytes();
+        let selected = 0x4000u64.to_le_bytes();
+        let mut steps = read(0x9000, b"code");
+        for _ in 0..2 {
+            steps.extend(read(0x1000, &original));
+            steps.extend(read(0x1008, &128u32.to_le_bytes()));
+        }
+        steps.extend(write(0x1000, &selected[..4]));
+        steps.extend(write(0x1004, &selected[4..]));
+        steps.extend(read(0x1000, &selected));
+        let mut setup = vec![0; 32];
+        setup[..4].copy_from_slice(&0x760001u32.to_le_bytes());
+        setup[20..24].copy_from_slice(&128u32.to_le_bytes());
+        steps.extend(exchange(setup.clone(), setup.clone()));
+        let mut payload = vec![0x5a; 70];
+        payload.resize(128, 0);
+        steps.extend([
+            E::Control(envelope(RequestKind::WriteData, 128, 0x1234)),
+            E::Write(payload),
+            E::Control(envelope(RequestKind::EmptyResponse, 32, 0x1234)),
+            E::Read {
+                maximum: 32,
+                data: setup,
+            },
+        ]);
+        steps.extend(read(0x1000, &selected));
+        steps.extend(write(0x1000, &original[..4]));
+        steps.extend(write(0x1004, &original[4..]));
+        steps.extend(read(0x1000, &original));
+        let (mut session, script) = session(steps);
+        let mut upload = upload();
+        upload.pointer_bytes = 8;
+        upload.capacity_address = 0x1008;
+        let mut io = Transport::new(None, limits(), &session, Some(&upload));
+        assert!(
+            io.write_owned(&mut session, 0x4000, &[0x5a; 70], 128)
+                .await
+                .unwrap()
+        );
+        assert_eq!(script.remaining(), 0);
+    });
+}
+
+#[test]
+fn setup_with_configuration_effects_is_skipped_when_its_ram_only_precondition_is_absent() {
+    use fujimod_usb::ff80::commands::configuration::{
+        ConfigurationLocation, ConfigurationView, ReadConfiguration,
+    };
+    let request = ReadConfiguration::new(
+        ConfigurationLocation {
+            view: ConfigurationView::Ram,
+            page: 0,
+            offset: 0x1700,
+        },
+        NonZeroU32::MIN,
+        NonZeroU32::new(256).unwrap(),
+    )
+    .unwrap()
+    .encode();
+    let mut reply = request[..36].to_vec();
+    reply.push(1);
+    let mut steps = read(0x9000, b"code");
+    steps.extend(exchange(request, reply));
+    let (mut session, script) = session(steps);
+    let mut upload = upload();
+    upload.configuration_checks = vec![fujimod_catalog_bulk::ConfigurationCheck {
+        offset: 0x1700,
+        value: 0,
+    }];
+    let mut io = Transport::new(None, limits(), &session, Some(&upload));
+    assert!(!block_on(io.write_owned(&mut session, 0x4000, &[0x5a; 70], 128)).unwrap());
+    assert_eq!(
+        script.remaining(),
+        0,
+        "no pointer or configuration writes and no E0"
+    );
 }

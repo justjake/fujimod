@@ -148,7 +148,8 @@ impl Session {
     ) -> Result<js_sys::Promise, JsValue> {
         let destination = install::UploadDestination::new(
             Address(error::integer(pointer, u32::MAX)?),
-            Address(error::integer(original, u32::MAX)?),
+            u64::from(error::integer(original, u32::MAX)?),
+            4,
             Address(error::integer(capacity_address, u32::MAX)?),
             error::nz(error::integer(capacity, u32::MAX)?)?,
         )

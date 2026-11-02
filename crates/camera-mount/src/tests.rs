@@ -12,6 +12,9 @@ struct State {
 #[derive(Clone, Default)]
 struct TestDevice(Arc<Mutex<State>>);
 impl Device for TestDevice {
+    fn has_card(&self) -> bool {
+        true
+    }
     fn list(&mut self, path: &str) -> Result<Vec<DirectoryEntry>> {
         let mut s = self.0.lock().unwrap();
         s.lists += 1;
@@ -84,6 +87,19 @@ impl Device for TestDevice {
         s.calls.push(("memory".into(), address, size as usize));
         Ok(vec![s.memory_reads; size as usize])
     }
+    fn flash_size(&self) -> Option<u64> {
+        Some(128 * 1024 * 1024)
+    }
+    fn flash(&mut self, offset: u64, size: u32) -> Result<Vec<u8>> {
+        self.0
+            .lock()
+            .unwrap()
+            .calls
+            .push(("flash".into(), offset as u32, size as usize));
+        Ok((offset..offset + u64::from(size))
+            .map(|n| n as u8)
+            .collect())
+    }
     fn synchronize(&mut self) -> Result<()> {
         Ok(())
     }
@@ -131,7 +147,7 @@ fn namespace_is_flat_memory_is_live_and_every_mutation_is_refused() {
             .iter()
             .map(|n| n.name.as_str())
             .collect::<Vec<_>>(),
-        ["sd", "memory", "regions.json"]
+        ["sd", "memory", "flash", "regions.json"]
     );
     assert_eq!(fs.node(MEMORY).unwrap().size, 1 << 32);
     assert_eq!(fs.read(MEMORY, 0x1000, 3).unwrap(), [1, 1, 1]);
@@ -244,4 +260,34 @@ fn bad_paths_and_failed_writes_leave_metadata_and_other_files_intact() {
         device.0.lock().unwrap().files["A:\\DCIM\\IMAGE.JPG"].len(),
         128
     );
+}
+
+#[test]
+fn flash_is_a_single_read_only_random_access_file_with_exact_eof() {
+    let (mut fs, device) = filesystem();
+    let flash = fs.lookup(ROOT, "flash").unwrap();
+    assert_eq!(fs.metadata(flash.id).unwrap().size, 128 * 1024 * 1024);
+    assert_eq!(fs.read(FLASH, 253, 5).unwrap(), [253, 254, 255, 0, 1]);
+    assert_eq!(fs.read(FLASH, flash.size - 2, 8).unwrap().len(), 2);
+    assert!(fs.read(FLASH, flash.size, 1).unwrap().is_empty());
+    assert_eq!(fs.write(FLASH, 0, b"no"), Err(libc::EROFS));
+    assert_eq!(fs.truncate(FLASH, 0).unwrap_err(), libc::EROFS);
+    assert_eq!(fs.remove(ROOT, "flash"), Err(libc::EROFS));
+    assert_eq!(device.0.lock().unwrap().calls.len(), 2);
+}
+
+#[test]
+fn large_memory_reads_remain_one_bounded_device_transaction() {
+    let device = TestDevice::default();
+    let mut fs = CameraFs::new(
+        device.clone(),
+        vec![Region {
+            name: "ram".into(),
+            address: 0,
+            size: IO_BYTES as u64,
+        }],
+    )
+    .unwrap();
+    assert_eq!(fs.read(MEMORY, 0, IO_BYTES).unwrap().len(), IO_BYTES);
+    assert_eq!(device.0.lock().unwrap().calls.len(), 1);
 }

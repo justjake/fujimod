@@ -11,7 +11,7 @@ use crate::{
     },
     operations::memory::{read_range, write_range},
 };
-pub use fujimod_catalog_card::{FirmwareCard, Mechanism, Upload};
+pub use fujimod_catalog_card::{FirmwareCard, Mechanism};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -19,9 +19,18 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// Bound one request while the backend streams through its owned buffer.
+pub const MAX_REQUEST_BYTES: u32 = 8 * 1024 * 1024;
+
 /// Caller-qualified buffer transports keep file protocols independent of USB
 /// acceleration. Reads bound DMA to an admitted aperture; uploads own their padding.
 pub trait BufferIo: Send {
+    /// Admit an owned DMA upload. Cached-buffer callers clean/invalidate before
+    /// delegation, then synchronize again before the device consumes the data.
+    fn admits_write(&self, _address: u32, _size: u32, _capacity: u32) -> bool {
+        false
+    }
+
     /// Return true after uploading only within this caller-owned buffer. False
     /// selects bounded CPU writes. Control words always use the CPU writer.
     fn write_owned<'a>(
@@ -129,11 +138,11 @@ fn validate_request(request: &Request) -> Result<()> {
     match request {
         Request::Shrink { size, .. } => require(*size != 0, "Use Create to truncate to zero"),
         Request::ReadAt { offset, size, .. } => require(
-            *size <= 1024 * 1024 && offset.checked_add(*size).is_some(),
+            *size <= MAX_REQUEST_BYTES && offset.checked_add(*size).is_some(),
             "Invalid bounded card read",
         ),
         Request::WriteAt { offset, data, .. } => require(
-            data.len() <= 1024 * 1024
+            data.len() <= MAX_REQUEST_BYTES as usize
                 && u64::from(*offset) + data.len() as u64 <= u64::from(u32::MAX),
             "Invalid bounded card write",
         ),
@@ -195,7 +204,11 @@ impl Host<'_> {
         write_range(self.session, Address(address), raw, self.limits).await
     }
     async fn write_owned(&mut self, address: u32, raw: &[u8], capacity: u32) -> Result<()> {
-        if let Some(io) = self.io.as_mut() {
+        if let Some(io) = self
+            .io
+            .as_mut()
+            .filter(|io| io.admits_write(address, raw.len() as u32, capacity))
+        {
             if io.write_owned(self.session, address, raw, capacity).await? {
                 return Ok(());
             }

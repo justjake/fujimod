@@ -1,25 +1,28 @@
 use fujimod_usb::ff80::commands::memory::DebugMemoryLimits;
 use std::{num::NonZeroU32, path::PathBuf};
 
-const USAGE: &str = "Usage: fujimod-mount --firmware ID [--device BUS-OR-SERIAL] [--read-limit BYTES] [--write-limit BYTES] MOUNTPOINT\nRequires an installed, enabled FSKitBridge extension on macOS 15.4+.";
+const USAGE: &str = "Usage: fujimod-mount --firmware ID [--device BUS-OR-SERIAL] [--read-limit BYTES] [--write-limit BYTES] [--flash-reader ARTIFACT] MOUNTPOINT\nRequires an installed, enabled FSKitBridge extension on macOS 15.4+.";
 
 struct Options {
     firmware: String,
     device: Option<String>,
     mount: PathBuf,
     limits: DebugMemoryLimits,
+    flash_reader: Option<PathBuf>,
 }
 fn options(args: impl Iterator<Item = String>) -> std::result::Result<Options, String> {
     let mut args = args.peekable();
     let mut firmware = None;
     let mut device = std::env::var("FUJIMOD_USB_DEVICE").ok();
     let mut mount = None;
+    let mut flash_reader = std::env::var_os("FUJIMOD_FLASH_READER").map(PathBuf::from);
     let mut read = NonZeroU32::new(256).expect("constant");
     let mut write = read;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--firmware" => firmware = Some(args.next().ok_or(USAGE)?),
             "--device" => device = Some(args.next().ok_or(USAGE)?),
+            "--flash-reader" => flash_reader = Some(PathBuf::from(args.next().ok_or(USAGE)?)),
             "--read-limit" | "--write-limit" => {
                 let n = args
                     .next()
@@ -44,6 +47,7 @@ fn options(args: impl Iterator<Item = String>) -> std::result::Result<Options, S
         device,
         mount: mount.ok_or(USAGE)?,
         limits: DebugMemoryLimits { read, write },
+        flash_reader,
     })
 }
 
@@ -69,7 +73,12 @@ async fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
     if !metadata.is_dir() || std::fs::read_dir(&options.mount)?.next().is_some() {
         return Err("Mountpoint must be an empty existing directory".into());
     }
-    let (device, regions) = UsbDevice::connect(options.firmware, options.device, options.limits)?;
+    let (device, regions) = UsbDevice::connect(
+        options.firmware,
+        options.device,
+        options.limits,
+        options.flash_reader,
+    )?;
     let fs = CameraFs::new(device, regions).map_err(std::io::Error::from_raw_os_error)?;
     let adapter = Adapter::new(fs, metadata.uid(), metadata.gid());
     let session = fskit_rs::mount(

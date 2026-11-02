@@ -88,7 +88,7 @@ fn write(at: u32, bytes: &[u8]) -> Vec<E> {
     exchange(request, reply)
 }
 fn destination() -> UploadDestination {
-    UploadDestination::new(Address(0x1000), Address(0x8000), Address(0x1004), nz(32)).unwrap()
+    UploadDestination::new(Address(0x1000), 0x8000, 4, Address(0x1004), nz(32)).unwrap()
 }
 fn image() -> OwnedUpload {
     OwnedUpload::new(
@@ -231,8 +231,7 @@ fn capacity_change_stops_before_pointer_publication() {
 #[test]
 fn short_capacity_is_rejected_before_borrowing() {
     let (mut session, script) = opened(Vec::new());
-    let dest =
-        UploadDestination::new(Address(0x1000), Address(0x8000), Address(0x1004), nz(8)).unwrap();
+    let dest = UploadDestination::new(Address(0x1000), 0x8000, 4, Address(0x1004), nz(8)).unwrap();
     assert!(matches!(
         block_on(image().upload(&mut session, dest, limits())),
         Err(Error::OutsideDataWindow)
@@ -308,7 +307,7 @@ fn large_upload_restores_each_capacity_bounded_chunk() {
     steps.extend(upload_chunk_steps(0x4008, b"rld"));
     let (mut session, script) = opened(steps);
     let destination =
-        UploadDestination::new(Address(0x1000), Address(0x8000), Address(0x1004), nz(8)).unwrap();
+        UploadDestination::new(Address(0x1000), 0x8000, 4, Address(0x1004), nz(8)).unwrap();
     block_on(image().upload_chunks(&mut session, destination, limits())).unwrap();
     assert_eq!(script.remaining(), 0);
 }
@@ -318,7 +317,7 @@ fn chunk_guard_failure_preserves_foreign_destination() {
     steps.extend(read(0x1000, &0x9999u32.to_le_bytes()));
     let (mut session, script) = opened(steps);
     let destination =
-        UploadDestination::new(Address(0x1000), Address(0x8000), Address(0x1004), nz(8)).unwrap();
+        UploadDestination::new(Address(0x1000), 0x8000, 4, Address(0x1004), nz(8)).unwrap();
     assert!(block_on(image().upload_chunks(&mut session, destination, limits())).is_err());
     assert_eq!(script.remaining(), 0);
     assert_eq!(session.state(), SessionState::CompletionUnknown);

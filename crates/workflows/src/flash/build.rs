@@ -1,8 +1,8 @@
 //! Offline preparation and staging of compiled stock-reader payloads.
-use super::{CodeCheck, Payload, Range, Transport, WordCheck};
+use super::{Artifact, CodeCheck, Payload, Range, Transport, WordCheck};
 use fujimod_catalog::{ReferenceCatalog, ResolvedSelection};
 use fujimod_firmware::{extent, invert, sha256};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
     fs,
@@ -33,12 +33,6 @@ pub struct Stage {
     pub catalog: PathBuf,
     pub runtime: PathBuf,
     pub selections: Vec<Selection>,
-}
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Artifact {
-    pub payload: Payload,
-    pub image: String,
 }
 fn number(v: &Value) -> Result<u64> {
     if let Some(n) = v.as_u64() {

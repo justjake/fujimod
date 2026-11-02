@@ -30,6 +30,7 @@ struct Camera {
     allocations: usize,
     failure: Option<&'static str>,
     mutations: usize,
+    cache_calls: usize,
 }
 impl Camera {
     fn read(&self, a: u32, n: usize) -> Vec<u8> {
@@ -147,7 +148,9 @@ impl Camera {
                 assert!(self.opened.is_none());
                 self.allocated = false;
             }
-            3 => (),
+            3 => {
+                self.cache_calls += 1;
+            }
             4 => {
                 assert_eq!(a[0], 0x9100);
                 let name = self.text(a[1]);
@@ -315,7 +318,6 @@ fn profile() -> FirmwareCard {
         product: "Model".into(),
         internal_version: "1".into(),
         code_checks: vec![],
-        upload: None,
         mechanism: Mechanism::StockSdk(Box::new(StockSdk {
             callback_table_pointer: 0x1000,
             callback_offset: 12,
@@ -732,6 +734,9 @@ fn sdk_delegates_only_owned_file_payloads_to_the_upload_accelerator() {
         writes: Arc<Mutex<Vec<(u32, u32)>>>,
     }
     impl BufferIo for UploadBuffer {
+        fn admits_write(&self, _: u32, _: u32, _: u32) -> bool {
+            true
+        }
         fn admits(&self, _: u32, _: u32) -> bool {
             false
         }
@@ -754,7 +759,12 @@ fn sdk_delegates_only_owned_file_payloads_to_the_upload_accelerator() {
                 assert_eq!(address % 32, 0);
                 assert!(data.len() <= capacity as usize);
                 self.writes.lock().unwrap().push((address, capacity));
-                self.camera.lock().unwrap().write(address, data);
+                let mut camera = self.camera.lock().unwrap();
+                assert_eq!(
+                    camera.cache_calls, 1,
+                    "cached aliases must be cleaned before DMA"
+                );
+                camera.write(address, data);
                 Ok(true)
             })
         }
@@ -791,6 +801,43 @@ fn sdk_delegates_only_owned_file_payloads_to_the_upload_accelerator() {
             1,
             "control publications never use the payload uploader"
         );
+        assert_eq!(
+            camera.lock().unwrap().cache_calls,
+            2,
+            "post-transfer sync precedes SDK consumption"
+        );
         restored(&camera.lock().unwrap());
     });
+}
+
+#[test]
+fn bounded_requests_accept_the_mount_transfer_size_and_refuse_larger_or_overflowing_ranges() {
+    for size in [1, MAX_REQUEST_BYTES] {
+        assert!(
+            validate_request(&Request::ReadAt {
+                path: "A:\\F.BIN".into(),
+                offset: 0,
+                size
+            })
+            .is_ok()
+        );
+        assert!(
+            validate_request(&Request::WriteAt {
+                path: "A:\\F.BIN".into(),
+                offset: 0,
+                data: vec![0; size as usize]
+            })
+            .is_ok()
+        );
+    }
+    for (offset, size) in [(0, MAX_REQUEST_BYTES + 1), (u32::MAX, 1)] {
+        assert!(
+            validate_request(&Request::ReadAt {
+                path: "A:\\F.BIN".into(),
+                offset,
+                size
+            })
+            .is_err()
+        );
+    }
 }

@@ -236,6 +236,18 @@ pub(crate) struct Qualified<'a> {
     source: Source,
 }
 impl<'a> Qualified<'a> {
+    pub(crate) async fn prepare_preserving(
+        session: &'a mut Session,
+        bulk: &FirmwareBulk,
+        limits: Limits,
+    ) -> Result<Self> {
+        let mapping = BulkMapping::prepare_preserving(session, bulk, limits).await?;
+        Ok(Self {
+            access: Access { session, limits },
+            source: mapping.source,
+        })
+    }
+
     pub(crate) async fn prepare(
         session: &'a mut Session,
         bulk: &FirmwareBulk,
@@ -350,6 +362,17 @@ fn word(bytes: &[u8], at: usize) -> u32 {
     u32::from_le_bytes(bytes[at..at + 4].try_into().expect("four bytes"))
 }
 
+// The generated counting pattern is 64 KiB, but that is not an E1 transport
+// limit. Its checked echo arm can publish up to the registered data capacity.
+// Borrow that same bound without generating a pattern or touching its buffer.
+fn transfer_capacity(access: &Access<'_>, registered: u32, pattern: u32) -> Result<u32> {
+    require(
+        registered >= pattern && pattern > 0,
+        "Registered E1 capacity is unavailable",
+    )?;
+    Ok(registered.min(access.session.max_reply_bytes().get()))
+}
+
 /// The prepared E1 source: how offsets map to addresses, and what to restore.
 struct Source {
     window: DataWindow,
@@ -381,23 +404,28 @@ impl Source {
             }
             BulkSource::Pattern {
                 source_state,
+                registered_buffer,
                 capacity,
-                ..
             } => {
+                let descriptor = access.raw(*registered_buffer, 8).await?;
+                let capacity = transfer_capacity(access, word(&descriptor, 4), *capacity)?;
                 let original = access.raw(*source_state, 8).await?;
                 let mut selected = vec![0; 4];
                 selected.extend(capacity.to_le_bytes());
-                (*source_state, original, selected, *capacity)
+                (*source_state, original, selected, capacity)
             }
             BulkSource::PatternZeroBase {
                 source_state,
+                registered_buffer,
                 capacity,
                 ..
             } => {
+                let descriptor = access.raw(*registered_buffer, 12).await?;
+                let capacity = transfer_capacity(access, word(&descriptor, 8), *capacity)?;
                 let original = access.raw(*source_state, 12).await?;
                 let mut selected = vec![0; 8];
                 selected.extend(capacity.to_le_bytes());
-                (*source_state, original, selected, *capacity)
+                (*source_state, original, selected, capacity)
             }
         };
         let source = Self {

@@ -164,6 +164,12 @@ covers flash-offset order. Cleanup verifies ownership and restores the callback,
 executable reservation, source, scratch and original debug gate. Unknown
 completion sends no further commands. A sink error stops capture and runs the
 same cleanup.
+`flash::read_range` provides random access through the same checked readers.
+It rounds only the requested range to the driver's page alignment, checks the
+control page, and returns the requested bytes after restoring borrowed state.
+It does not perform a whole-device backup for a small read. `flash::Artifact`
+shares the separately stored image metadata with the offline builder.
+
 `flash::Callbacks` supplies chunk delivery and byte progress separately.
 Progress starts at zero, advances after each delivered chunk and excludes the
 control read. Progress callback errors follow the same cleanup path as sink

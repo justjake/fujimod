@@ -230,7 +230,12 @@ fn invoke(entry: u64, status: u8) -> Vec<fujimod_usb::testing::Exchange> {
 }
 #[test]
 fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
-    for (bad_control, stop_progress) in [(false, false), (true, false), (false, true)] {
+    for (bad_control, stop_progress, range_only) in [
+        (false, false, false),
+        (true, false, false),
+        (false, true, false),
+        (false, false, true),
+    ] {
         let (bulk, flash, payload, image) = fixture();
         payload.validate(&flash, &bulk, &image).unwrap();
         let original = [7; 12];
@@ -244,16 +249,24 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
         s.extend(cfg(247, 1, false));
         s.extend(memory_read(0x1300, &words(&[0x100000, 0, 32])));
         s.extend(memory_read(0x1900, &0x2000u64.to_le_bytes()));
-        s.extend(memory_read(0x100000, &original_scratch));
+        if !range_only {
+            s.extend(memory_read(0x100000, &original_scratch));
+        }
         s.extend(crate::bulk::tests::qualified());
         s.extend(memory_read(0x1300, &words(&[0x100000, 0, 32])));
-        s.extend(memory_read(0x1900, &words(&[0x2000, 0])));
-        s.extend(memory_read(0x1400, &original));
-        s.extend(diagnostic(0x550001, 0, 32));
-        s.extend(memory_read(0x1400, &words(&[0x100000, 0, 32])));
-        s.extend(data(0, &pattern));
-        s.extend(write(0x1400, &[0; 8]));
-        s.extend(memory_read(0x1400, &[0; 8]));
+        if range_only {
+            s.extend(memory_read(0x1400, &original));
+            s.extend(write(0x1400, &words(&[0, 0, 32])));
+            s.extend(memory_read(0x1400, &words(&[0, 0, 32])));
+        } else {
+            s.extend(memory_read(0x1900, &words(&[0x2000, 0])));
+            s.extend(memory_read(0x1400, &original));
+            s.extend(diagnostic(0x550001, 0, 32));
+            s.extend(memory_read(0x1400, &words(&[0x100000, 0, 32])));
+            s.extend(data(0, &pattern));
+            s.extend(write(0x1400, &[0; 8]));
+            s.extend(memory_read(0x1400, &[0; 8]));
+        }
         s.extend(memory_read(0x1000, b"stoc"));
         s.extend(data(0x1000, b"stoc"));
         s.extend(memory_read(0x1800, &[0; 16]));
@@ -267,7 +280,9 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
         s.extend(bulk_chunks(0x4000, &image));
         s.extend(invoke(0x1800, 7));
         s.extend(memory_read(0x4028, &[0; 8]));
-        let order = if bad_control {
+        let order = if range_only {
+            vec![(0, 64), (4096, 64)]
+        } else if bad_control {
             vec![(0, 64)]
         } else if stop_progress {
             vec![(0, 64), (4096, 4096)]
@@ -305,23 +320,47 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
         s.extend(memory_read(0x1400, &words(&[0, 0, 32])));
         s.extend(write(0x1400, &original));
         s.extend(memory_read(0x1400, &original));
-        s.extend(memory_read(0x100000, &pattern));
-        s.extend(write(0x100000, &original_scratch));
-        s.extend(memory_read(0x100000, &original_scratch));
+        if !range_only {
+            s.extend(memory_read(0x100000, &pattern));
+            s.extend(write(0x100000, &original_scratch));
+            s.extend(memory_read(0x100000, &original_scratch));
+        }
         s.extend(cfg(163, 1, false));
         s.extend(cfg(247, 1, false));
         s.extend(cfg(247, 0, true));
         s.extend(cfg(247, 0, false));
         let (mut session, script) = opened(s);
+        if range_only {
+            let bytes = block_on(crate::flash::read_range(
+                &mut session,
+                &bulk,
+                &flash,
+                &crate::flash::Payload::Xp5Command(payload.clone()),
+                &image,
+                limits(),
+                4097,
+                3,
+            ))
+            .unwrap();
+            assert_eq!(bytes, [5; 3]);
+            assert_eq!(
+                script.remaining(),
+                0,
+                "only the control page and requested storage page are read"
+            );
+            assert_eq!(session.state(), SessionState::Ready);
+            continue;
+        }
         let mut chunks = Vec::new();
         let mut progress = Vec::new();
-        let result = block_on(backup(
+        let result = block_on(read(
             &mut session,
             &bulk,
             &flash,
             &payload,
             &image,
             limits(),
+            crate::flash::Selection::Whole,
             &mut crate::flash::Callbacks {
                 chunk: &mut |o, d| {
                     chunks.push((o, d));
@@ -401,5 +440,34 @@ fn callback_unknown_completion_and_foreign_owner_withhold_cleanup() {
             SessionState::CompletionUnknown
         );
         assert_eq!(script.remaining(), 0);
+    }
+}
+
+#[test]
+fn file_ranges_round_to_driver_pages_without_crossing_storage_or_including_other_pages() {
+    let (_, flash, _, _) = fixture();
+    assert_eq!(
+        crate::flash::enclosing(&flash, 4097, 3).unwrap(),
+        BulkRange {
+            address: 4096,
+            size: 64
+        }
+    );
+    assert_eq!(
+        crate::flash::enclosing(&flash, 63, 2).unwrap(),
+        BulkRange {
+            address: 0,
+            size: 128
+        }
+    );
+    assert_eq!(
+        crate::flash::enclosing(&flash, 8191, 1).unwrap(),
+        BulkRange {
+            address: 8128,
+            size: 64
+        }
+    );
+    for (offset, size) in [(8192, 1), (8191, 2), (0, 0), (u64::MAX, 1)] {
+        assert!(crate::flash::enclosing(&flash, offset, size).is_err());
     }
 }

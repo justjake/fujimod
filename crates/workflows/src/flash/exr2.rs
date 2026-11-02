@@ -277,17 +277,19 @@ async fn verify_configuration_flags(
     )
 }
 
-pub async fn backup(
+pub(crate) async fn read(
     session: &mut Session,
     bulk: &FirmwareBulk,
     flash: &FirmwareFlash,
     payload: &Payload,
     image: &[u8],
     limits: Limits,
+    selection: super::Selection,
     callbacks: &mut super::Callbacks<'_>,
 ) -> bulk::Result<Backup> {
     payload.validate(flash, bulk, image)?;
-    (callbacks.progress)(0, flash.window.size).map_err(BulkError::Check)?;
+    let target = selection.range(flash);
+    (callbacks.progress)(0, target.size).map_err(BulkError::Check)?;
     let flags_before = require_debug_access(session, limits).await?;
     let BulkSource::Query {
         callback_table,
@@ -301,7 +303,11 @@ pub async fn backup(
     };
     let mut access = bulk::Access { session, limits };
     let initial_source = access.raw(source_state, 8).await?;
-    let mut reader = Qualified::prepare(access.session, bulk, limits).await?;
+    let mut reader = if selection.preserves_source() {
+        Qualified::prepare_preserving(access.session, bulk, limits).await?
+    } else {
+        Qualified::prepare(access.session, bulk, limits).await?
+    };
     let prepared_source = reader.access.raw(source_state, 8).await?;
     let table = word(&reader.access.raw(callback_table, 4).await?) & !bulk.code_alias;
     require(
@@ -316,7 +322,17 @@ pub async fn backup(
         stock: stock_callback as u32,
         outputs: source_state & !bulk.code_alias,
     };
-    let outcome = execute(&mut reader, &query, bulk, flash, payload, image, callbacks).await;
+    let outcome = execute(
+        &mut reader,
+        &query,
+        bulk,
+        flash,
+        payload,
+        image,
+        target,
+        callbacks,
+    )
+    .await;
     let cleanup = async {
         reader.restore().await?;
         require(
@@ -351,6 +367,7 @@ async fn execute(
     flash: &FirmwareFlash,
     p: &Payload,
     image: &[u8],
+    target: BulkRange,
     callbacks: &mut super::Callbacks<'_>,
 ) -> bulk::Result<Backup> {
     // Stock code is read through its uncached view before publishing any callback.
@@ -468,7 +485,7 @@ async fn execute(
         )?;
         let mut calls = 0;
         let mut uncorrectable_page_offsets = Vec::new();
-        let control = read(
+        let control = read_chunk(
             reader,
             query,
             bulk,
@@ -493,8 +510,9 @@ async fn execute(
         )?;
         let mut digest = super::xp5::OrderedDigest::default();
         let mut done = 0;
-        for (offset, size) in super::xp5::pieces(flash.window.size, CAPACITY, p.update_size) {
-            let bytes = read(
+        for (offset, size) in super::read_pieces(target, CAPACITY, p.update_size, flash.window.size)
+        {
+            let bytes = read_chunk(
                 reader,
                 query,
                 bulk,
@@ -509,15 +527,20 @@ async fn execute(
                 base + u64::from(p.observer_offset - p.reader_offset),
             )
             .await?;
-            digest.push(offset, &bytes);
+            require(
+                uncorrectable_page_offsets.is_empty()
+                    || target.address == 0 && target.size == flash.window.size,
+                "Requested flash range has uncorrectable NAND pages",
+            )?;
+            digest.push(offset - target.address, &bytes);
             (callbacks.chunk)(offset, bytes).map_err(BulkError::Check)?;
             done += size;
-            (callbacks.progress)(done, flash.window.size).map_err(BulkError::Check)?;
+            (callbacks.progress)(done, target.size).map_err(BulkError::Check)?;
         }
         Ok(Backup {
             device: flash.device.clone(),
-            size: flash.window.size,
-            sha256: digest.finish(flash.window.size)?,
+            size: target.size,
+            sha256: digest.finish(target.size)?,
             uncorrectable_page_offsets,
         })
     }
@@ -582,7 +605,7 @@ async fn execute(
     bulk::finish(outcome, cleanup)
 }
 
-async fn read(
+async fn read_chunk(
     reader: &mut Qualified<'_>,
     query: &Query,
     bulk: &FirmwareBulk,

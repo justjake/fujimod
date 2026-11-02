@@ -27,7 +27,9 @@ use std::{
 
 enum Operation {
     Card(Request),
+    Probe,
     Memory(u32, u32),
+    Flash(u64, u32),
     Sync,
     Close,
 }
@@ -62,8 +64,11 @@ impl Sessions for Target {
 }
 struct Client<F> {
     sessions: F,
-    capability: FirmwareCard,
+    capability: Option<FirmwareCard>,
+    product: String,
+    internal_version: String,
     bulk: Option<FirmwareBulk>,
+    flash: Option<crate::flash::Reader>,
     limits: DebugMemoryLimits,
     mailbox_hint: Option<u32>,
     fenced: bool,
@@ -83,7 +88,7 @@ impl<F: Sessions> Client<F> {
             self.bulk.as_ref(),
             self.limits,
             &session,
-            self.capability.upload.as_ref(),
+            self.bulk.as_ref().and_then(|facts| facts.upload.as_ref()),
         );
         let mut cleanup_known = true;
         let result = async {
@@ -92,7 +97,7 @@ impl<F: Sessions> Client<F> {
                     let mut volume = Volume::attach(
                         &mut session,
                         self.limits,
-                        &self.capability,
+                        self.capability.as_ref().ok_or(Error::OutsideDataWindow)?,
                         Some(&mut transport),
                         self.mailbox_hint,
                     )
@@ -105,19 +110,62 @@ impl<F: Sessions> Client<F> {
                     }
                     result
                 }
+                Operation::Flash(offset, size) => {
+                    let flash = self.flash.as_ref().ok_or(Error::OutsideDataWindow)?;
+                    let bulk = self.bulk.as_ref().ok_or(Error::OutsideDataWindow)?;
+                    let bytes = fujimod_workflows::flash::read_range(
+                        &mut session,
+                        bulk,
+                        &flash.facts,
+                        &flash.payload,
+                        &flash.image,
+                        fujimod_workflows::Limits {
+                            memory: self.limits,
+                            configuration: NonZeroU32::new(256).unwrap(),
+                        },
+                        offset,
+                        size,
+                    )
+                    .await
+                    .map_err(|e| match e {
+                        fujimod_workflows::bulk::BulkError::Usb(e) => e,
+                        e => Error::Card(e.to_string()),
+                    })?;
+                    Ok(Answer::Bytes(bytes))
+                }
+                Operation::Probe => {
+                    if session
+                        .device_info(InfoSelector::Product)
+                        .await?
+                        .text
+                        .trim()
+                        != self.product
+                        || session
+                            .device_info(InfoSelector::InternalVersion)
+                            .await?
+                            .text
+                            .trim()
+                            != self.internal_version
+                    {
+                        return Err(Error::Card(
+                            "Connected camera differs from the mounted firmware".into(),
+                        ));
+                    }
+                    Ok(Answer::Done)
+                }
                 Operation::Memory(address, size) => {
                     if session
                         .device_info(InfoSelector::Product)
                         .await?
                         .text
                         .trim()
-                        != self.capability.product
+                        != self.product
                         || session
                             .device_info(InfoSelector::InternalVersion)
                             .await?
                             .text
                             .trim()
-                            != self.capability.internal_version
+                            != self.internal_version
                     {
                         return Err(Error::Card(
                             "Connected camera differs from the mounted firmware".into(),
@@ -159,6 +207,8 @@ impl<F: Sessions> Client<F> {
 pub struct UsbDevice {
     queue: SyncSender<Work>,
     worker: Option<JoinHandle<()>>,
+    flash_bytes: Option<u64>,
+    has_card: bool,
 }
 impl UsbDevice {
     /// Select descriptors and preflight one bounded transaction. Idle mounts
@@ -167,11 +217,27 @@ impl UsbDevice {
         firmware: String,
         device_id: Option<String>,
         limits: DebugMemoryLimits,
+        flash_reader: Option<std::path::PathBuf>,
     ) -> std::result::Result<(Self, Vec<Region>), String> {
         let selected = ReferenceCatalog::bundled()?.resolve_firmware(&firmware)?;
-        let capability = selected
-            .card_files
-            .ok_or("Selected firmware has no card capability")?;
+        let flash = flash_reader
+            .as_deref()
+            .map(|path| crate::flash::Reader::load(path, &selected))
+            .transpose()?;
+        let flash_bytes = flash.as_ref().map(|reader| reader.facts.window.size);
+        let (product, internal_version) = selected
+            .bulk
+            .as_ref()
+            .map(|facts| (facts.product.clone(), facts.internal_version.clone()))
+            .or_else(|| {
+                selected
+                    .card_files
+                    .as_ref()
+                    .map(|facts| (facts.product.clone(), facts.internal_version.clone()))
+            })
+            .ok_or("Selected firmware has no located debug identity")?;
+        let capability = selected.card_files;
+        let has_card = capability.is_some();
         let regions = selected
             .state
             .ok_or("Selected firmware has no readable memory map")?
@@ -234,17 +300,22 @@ impl UsbDevice {
                     let mut client = Client {
                         sessions: target,
                         capability,
+                        product,
+                        internal_version,
                         bulk: selected.bulk,
+                        flash,
                         limits,
                         mailbox_hint: None,
                         fenced: false,
                     };
-                    if let Err(error) = client
-                        .transaction(Operation::Card(Request::ReadDirectory {
+                    let preflight = if has_card {
+                        Operation::Card(Request::ReadDirectory {
                             path: "A:\\".into(),
-                        }))
-                        .await
-                    {
+                        })
+                    } else {
+                        Operation::Probe
+                    };
+                    if let Err(error) = client.transaction(preflight).await {
                         let _ = ready_tx.send(Err(error.to_string()));
                         return;
                     }
@@ -267,6 +338,8 @@ impl UsbDevice {
                 Self {
                     queue: tx,
                     worker: Some(worker),
+                    flash_bytes,
+                    has_card,
                 },
                 regions,
             )),
@@ -311,6 +384,9 @@ fn report(error: fujimod_usb::Error) -> i32 {
 }
 
 impl Device for UsbDevice {
+    fn has_card(&self) -> bool {
+        self.has_card
+    }
     fn list(&mut self, path: &str) -> Result<Vec<DirectoryEntry>> {
         match self.card(Request::ReadDirectory { path: path.into() })? {
             Response::Directory(v) => Ok(v),
@@ -361,6 +437,18 @@ impl Device for UsbDevice {
     fn memory(&mut self, address: u32, size: u32) -> Result<Vec<u8>> {
         match self.request(Operation::Memory(address, size))? {
             Answer::Bytes(v) => Ok(v),
+            _ => Err(libc::EIO),
+        }
+    }
+    fn flash_size(&self) -> Option<u64> {
+        self.flash_bytes
+    }
+    fn flash(&mut self, offset: u64, size: u32) -> Result<Vec<u8>> {
+        if self.flash_bytes.is_none() {
+            return Err(libc::ENOTSUP);
+        }
+        match self.request(Operation::Flash(offset, size))? {
+            Answer::Bytes(bytes) => Ok(bytes),
             _ => Err(libc::EIO),
         }
     }

@@ -248,17 +248,19 @@ fn valid_hash(s: &str) -> bool {
 
 /// Deliver chunks in camera-only-first order. The final SHA-256 covers the
 /// complete image in flash-offset order. A sink failure still runs cleanup.
-pub async fn backup(
+pub(crate) async fn read(
     session: &mut Session,
     bulk: &FirmwareBulk,
     flash: &FirmwareFlash,
     payload: &Payload,
     image: &[u8],
     limits: Limits,
+    selection: super::Selection,
     callbacks: &mut super::Callbacks<'_>,
 ) -> bulk::Result<Backup> {
     payload.validate(flash, bulk, image)?;
-    (callbacks.progress)(0, flash.window.size).map_err(BulkError::Check)?;
+    let target = selection.range(flash);
+    (callbacks.progress)(0, target.size).map_err(BulkError::Check)?;
     // The built callback profile explicitly authorizes its empty arena and
     // registered diagnostic scratch, even when the bulk catalog only has a
     // bounded scouting window. No other addresses are inferred from capacity.
@@ -362,13 +364,26 @@ pub async fn backup(
                 && !bulk.code_checks.iter().any(|c| overlaps(c.address, c.size)),
             "Diagnostic scratch overlaps protected state or code",
         )?;
-        scratch = Some(
-            access
-                .raw(scratch_range.address, u64::from(capacity))
-                .await?,
-        );
-        let mut reader = Qualified::prepare(access.session, bulk, limits).await?;
-        let outcome = execute(&mut reader, flash, payload, image, limits, callbacks).await;
+        let mut reader = if selection.preserves_source() {
+            Qualified::prepare_preserving(access.session, bulk, limits).await?
+        } else {
+            scratch = Some(
+                access
+                    .raw(scratch_range.address, u64::from(capacity))
+                    .await?,
+            );
+            Qualified::prepare(access.session, bulk, limits).await?
+        };
+        let outcome = execute(
+            &mut reader,
+            flash,
+            payload,
+            image,
+            limits,
+            target,
+            callbacks,
+        )
+        .await;
         let restored = reader.restore().await;
         bulk::finish(outcome, restored)
     }
@@ -447,6 +462,7 @@ async fn execute(
     payload: &Payload,
     image: &[u8],
     limits: Limits,
+    target: BulkRange,
     callbacks: &mut super::Callbacks<'_>,
 ) -> bulk::Result<Backup> {
     callback::check_code(reader, &payload.transport.checks).await?;
@@ -485,7 +501,7 @@ async fn execute(
         )
         .await?;
         let mut calls = word(&reader.access.raw(payload.result + 16, 8).await?);
-        let control = read(
+        let control = read_chunk(
             reader,
             flash,
             payload,
@@ -500,24 +516,25 @@ async fn execute(
         )?;
         let mut digest = OrderedDigest::default();
         let mut done = 0;
-        for (offset, size) in pieces(
-            flash.window.size,
+        for (offset, size) in super::read_pieces(
+            target,
             u64::from(payload.buffer_capacity),
             payload.update_size,
+            flash.window.size,
         ) {
-            let bytes = read(reader, flash, payload, offset, size, &mut calls).await?;
-            digest.push(offset, &bytes);
+            let bytes = read_chunk(reader, flash, payload, offset, size, &mut calls).await?;
+            digest.push(offset - target.address, &bytes);
             (callbacks.chunk)(offset, bytes).map_err(BulkError::Check)?;
             done += size;
-            (callbacks.progress)(done, flash.window.size).map_err(BulkError::Check)?;
+            (callbacks.progress)(done, target.size).map_err(BulkError::Check)?;
         }
         require(
-            digest.next == flash.window.size && digest.pending.is_empty(),
+            digest.next == target.size && digest.pending.is_empty(),
             "Flash coverage is incomplete",
         )?;
         Ok(Backup {
             device: flash.device.clone(),
-            size: flash.window.size,
+            size: target.size,
             sha256: bulk::hex(&digest.hash.finalize()),
             uncorrectable_page_offsets: Vec::new(),
         })
@@ -529,7 +546,7 @@ async fn execute(
     }
     bulk::finish(outcome, restored)
 }
-async fn read(
+async fn read_chunk(
     reader: &mut Qualified<'_>,
     flash: &FirmwareFlash,
     payload: &Payload,

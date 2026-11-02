@@ -155,5 +155,63 @@
         }
       ]
     }
-  ]
+  ],
+  "upload": {
+    "pointer": 22160308,
+    "pointer_bytes": 4,
+    "capacity_address": 22160324,
+    "configuration_checks": [],
+    "piece_bytes": 65536,
+    "address_alignment": 32,
+    "code_checks": [
+      {
+        "name": "bulk_upload_command",
+        "address": 17486772,
+        "size": 152,
+        "sha256": "1fec122333322d5715699232d9bbd2161aef54533a63b1caf708fcd448c20fee"
+      },
+      {
+        "name": "bulk_upload_data",
+        "address": 17487048,
+        "size": 140,
+        "sha256": "8c438d004f5617f0a02ae4bd29b9f549db248f874656767e0474979c3a246857"
+      },
+      {
+        "name": "bulk_upload_complete",
+        "address": 17485004,
+        "size": 304,
+        "sha256": "56d078ddb0c1026c42f2f78c0c41225b4048594ebad4cb2ad8627d317b909005"
+      },
+      {
+        "name": "bulk_upload_setup",
+        "address": 17490832,
+        "size": 236,
+        "sha256": "a359906b81112a087d87a021864e4e79b565014edc434f82c4a6011a1779a1d4"
+      },
+      {
+        "name": "bulk_upload_le32",
+        "address": 17485748,
+        "size": 52,
+        "sha256": "da0d1aafabe4a745ed52912b524c18f05e372191fb6684b975400cc689e8456b"
+      },
+      {
+        "name": "bulk_upload_opcode_compare",
+        "address": 17492004,
+        "size": 16,
+        "sha256": "8d0c1ce0af90f339dcd0f9e443ba217de8bfba32df9f657e36305bb7158e0729"
+      },
+      {
+        "name": "bulk_upload_opcode_case",
+        "address": 17492128,
+        "size": 20,
+        "sha256": "c625ebe2bbd53678ab1edb61fa23543039f6d2961c888e9a57e11930d996d96f"
+      },
+      {
+        "name": "bulk_upload_opcode_branch",
+        "address": 17492020,
+        "size": 4,
+        "sha256": "1317eca5e6ec8ba0559706181d9a9b1d1b4902a750479f3f850b44027041b3f8"
+      }
+    ]
+  }
 }

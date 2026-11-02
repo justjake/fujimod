@@ -20,8 +20,6 @@ pub struct FirmwareCard {
     pub product: String,
     pub internal_version: String,
     pub code_checks: Vec<CodeCheck>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub upload: Option<Upload>,
     pub mechanism: Mechanism,
 }
 
@@ -98,23 +96,6 @@ pub struct StockSdk {
     pub end_of_directory_status: u32,
 }
 
-/// Located stock E0 upload destination and its independently checked code.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(
-    all(target_arch = "wasm32", not(target_os = "emscripten")),
-    derive(tsify::Tsify),
-    tsify(missing_as_null)
-)]
-#[serde(deny_unknown_fields)]
-pub struct Upload {
-    pub pointer: u32,
-    pub capacity_address: u32,
-    pub piece_bytes: u32,
-    pub address_alignment: u32,
-    pub code_checks: Vec<CodeCheck>,
-}
-
 impl FirmwareCard {
     pub fn validate(&self) -> Result<(), String> {
         if self.schema_uri != SCHEMA_URI
@@ -125,22 +106,7 @@ impl FirmwareCard {
         {
             return Err("Invalid card capability identity".into());
         }
-        if let Some(upload) = &self.upload {
-            if upload.pointer % 4 != 0
-                || upload.capacity_address % 4 != 0
-                || upload.pointer == upload.capacity_address
-                || upload.piece_bytes == 0
-                || !upload.address_alignment.is_power_of_two()
-                || upload.code_checks.is_empty()
-            {
-                return Err("Invalid card upload contract".into());
-            }
-        }
-        for c in self
-            .code_checks
-            .iter()
-            .chain(self.upload.iter().flat_map(|u| &u.code_checks))
-        {
+        for c in &self.code_checks {
             if c.size == 0
                 || c.address
                     .checked_add(c.size)
