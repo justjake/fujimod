@@ -94,6 +94,11 @@
               "icon": "ratio:65:24"
             },
             {
+              "label": "2.35:1",
+              "stock": false,
+              "icon": "ratio:2.35:1"
+            },
+            {
               "label": "16:9",
               "stock": true,
               "icon": "ratio:16:9"
@@ -191,7 +196,7 @@
       "icon": "aspect",
       "title": "IMAGE QUALITY",
       "path": ["SHOOTING MENU"],
-      "summary": "Choose ULTRA FINE to save JPEGs with finer compression.",
+      "summary": "Choose ULTRAFINE or ULTRAFINE+RAW to save JPEGs with finer compression.",
       "card": "image_quality",
       "media_cards": ["image_quality"],
       "controls": [
@@ -226,7 +231,52 @@
               "icon": null
             },
             {
-              "label": "ULTRA FINE",
+              "label": "ULTRAFINE",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "ULTRAFINE+RAW",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "noise_reduction",
+      "group": "photography",
+      "icon": "film",
+      "title": "NOISE REDUCTION",
+      "path": ["SHOOTING MENU"],
+      "summary": "Choose how much luminance and color noise reduction is applied to still pictures.",
+      "card": "noise_reduction",
+      "media_cards": ["noise_reduction"],
+      "controls": [
+        {
+          "title": "NOISE REDUCTION",
+          "primary": true,
+          "card": "noise_reduction",
+          "choices": [
+            {
+              "label": "LUMA NR OFF",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "COLOR NR LOW",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "NR OFF",
               "stock": false,
               "icon": null
             }
@@ -828,6 +878,7 @@
         "4:3": "A taller frame, like most phones.",
         "65:24": "A panoramic strip, as on the Hasselblad XPan.",
         "17:6": "A wide panoramic strip.",
+        "2.35:1": "CinemaScope widescreen.",
         "7:6": "A near-square frame, like 6×7 film.",
         "5:4": "A frame like 4×5 large-format film."
       },
@@ -957,10 +1008,29 @@
       "path": ["SHOOTING MENU"],
       "summary": null,
       "choices": {
-        "ULTRA FINE": "Save a JPEG with finer compression than FINE."
+        "ULTRAFINE": "Save a JPEG with finer compression than FINE.",
+        "ULTRAFINE+RAW": "Save a RAW file and an ULTRAFINE JPEG."
       },
       "related": [],
-      "changes": "Adds ULTRA FINE JPEG quality.",
+      "changes": "Adds ULTRAFINE and ULTRAFINE+RAW JPEG quality.",
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "noise_reduction": {
+      "title": "NOISE REDUCTION",
+      "path": ["SHOOTING MENU"],
+      "summary": null,
+      "choices": {
+        "LUMA NR OFF": "Turn off luminance noise reduction; color noise reduction stays on.",
+        "COLOR NR LOW": "LUMA NR OFF, with weaker color noise reduction.",
+        "NR OFF": "Turn off all noise reduction. Grain stays on."
+      },
+      "related": [],
+      "changes": "Adds three levels below -2.",
       "credits": {
         "premiere": false,
         "inspired": [],
