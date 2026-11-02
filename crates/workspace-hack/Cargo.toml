@@ -73,7 +73,7 @@ zerocopy = { version = "0.8", default-features = false, features = ["derive", "s
 [target.aarch64-apple-darwin.dependencies]
 arrayvec = { version = "0.7" }
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
-const-oid = { version = "0.9", default-features = false, features = ["db"] }
+const-oid = { version = "0.10", default-features = false, features = ["db"] }
 crossbeam-utils = { version = "0.8", default-features = false, features = ["std"] }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
 crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
@@ -99,14 +99,14 @@ smallvec = { version = "1", default-features = false, features = ["const_new", "
 subtle = { version = "2" }
 tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tracing = { version = "0.1", features = ["log"] }
-wide = { version = "0.7" }
+wide = { version = "1.7" }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [target.aarch64-apple-darwin.build-dependencies]
 arrayvec = { version = "0.7" }
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
 cc = { version = "1", default-features = false, features = ["parallel"] }
-const-oid = { version = "0.9", default-features = false, features = ["db"] }
+const-oid = { version = "0.10", default-features = false, features = ["db"] }
 crossbeam-utils = { version = "0.8", default-features = false, features = ["std"] }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
 crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
@@ -133,13 +133,13 @@ subtle = { version = "2" }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = ["visit", "visit-mut"] }
 tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tracing = { version = "0.1", features = ["log"] }
-wide = { version = "0.7" }
+wide = { version = "1.7" }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 arrayvec = { version = "0.7" }
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
-const-oid = { version = "0.9", default-features = false, features = ["db"] }
+const-oid = { version = "0.10", default-features = false, features = ["db"] }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
 crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
 digest = { version = "0.10", features = ["mac", "oid", "std"] }
@@ -163,14 +163,14 @@ smallvec = { version = "1", default-features = false, features = ["const_new", "
 subtle = { version = "2" }
 tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tracing = { version = "0.1", features = ["log"] }
-wide = { version = "0.7" }
+wide = { version = "1.7" }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 arrayvec = { version = "0.7" }
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
 cc = { version = "1", default-features = false, features = ["parallel"] }
-const-oid = { version = "0.9", default-features = false, features = ["db"] }
+const-oid = { version = "0.10", default-features = false, features = ["db"] }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
 crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
 digest = { version = "0.10", features = ["mac", "oid", "std"] }
@@ -195,7 +195,7 @@ subtle = { version = "2" }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = ["visit", "visit-mut"] }
 tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tracing = { version = "0.1", features = ["log"] }
-wide = { version = "0.7" }
+wide = { version = "1.7" }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [target.wasm32-unknown-unknown.dependencies]

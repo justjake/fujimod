@@ -44,7 +44,7 @@ schema = [
 ]
 
 [dev-dependencies]
-jsonschema = { version = "0.59.0", default-features = false }
+jsonschema = { version = "0.60.2", default-features = false }
 
 [[bin]]
 name = "catalog-schemas"
