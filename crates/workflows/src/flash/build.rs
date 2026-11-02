@@ -498,7 +498,7 @@ fn prepare_exr2(input: &Selection, selected: &ResolvedSelection) -> Result<(Arti
     let base = num(region, "address")?;
     let mut image = Vec::new();
     let mut sizes = Vec::new();
-    for name in ["flash_reader_call", "flash_reader"] {
+    for name in ["flash_reader_call", "flash_reader", "flash_reader_progress"] {
         let item = one(list(&manifest, "symbols")?, "name", name)?;
         let at = num(item, "address")?;
         let size = num(item, "size")?;
@@ -590,12 +590,13 @@ fn prepare_exr2(input: &Selection, selected: &ResolvedSelection) -> Result<(Arti
         flash.control.size,
     )?;
     let payload = super::exr2::Payload {
-        schema: 1,
+        schema: 2,
         firmware_id: selected.firmware.id.clone(),
         firmware_sha256: identity.sha256.clone(),
         sha256: sha256(&image),
         bootstrap_size: sizes[0] as u32,
         reader_offset: 32,
+        observer_offset: (32 + sizes[1]).try_into()?,
         allocate: num(&execution, "allocate")?.try_into()?,
         release: num(&execution, "release")?.try_into()?,
         configuration: serde_json::from_value(execution["configuration"].clone())?,

@@ -209,6 +209,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         "session_close_error": closed.as_ref().err(),
         "operation_error": result.as_ref().err().map(ToString::to_string)});
     if let Ok(backup) = &result {
+        report["uncorrectable_page_offsets"] = serde_json::json!(backup.uncorrectable_page_offsets);
         let digest = sink.digest()?;
         if digest != backup.sha256 {
             return Err("Saved flash hash differs from workflow".into());

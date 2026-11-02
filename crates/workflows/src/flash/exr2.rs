@@ -38,6 +38,7 @@ pub struct Payload {
     pub sha256: String,
     pub bootstrap_size: u32,
     pub reader_offset: u32,
+    pub observer_offset: u32,
     pub allocate: u32,
     pub release: u32,
     pub configuration: Configuration,
@@ -58,7 +59,7 @@ impl Payload {
     ) -> bulk::Result<()> {
         flash.validate().map_err(BulkError::Check)?;
         require(
-            self.schema == 1
+            self.schema == 2
                 && self.firmware_id == flash.firmware_id
                 && self.firmware_id == bulk.firmware_id,
             "Flash payload and catalog firmware differ",
@@ -77,6 +78,10 @@ impl Payload {
             self.bootstrap_size > 0
                 && self.bootstrap_size <= 32
                 && self.reader_offset == 32
+                && self.observer_offset > self.reader_offset
+                && self.observer_offset.is_multiple_of(4)
+                && u64::from(self.observer_offset) + 4 == image.len() as u64
+                && image[self.observer_offset as usize..] == [0x1e, 0xff, 0x2f, 0xe1]
                 && image.len() > 32
                 && image.len() <= REQUEST as usize
                 && self.sha256 == bulk::hex(&sha256_bytes(image)),
@@ -462,6 +467,7 @@ async fn execute(
             "Reader DMA readback differs",
         )?;
         let mut calls = 0;
+        let mut uncorrectable_page_offsets = Vec::new();
         let control = read(
             reader,
             query,
@@ -473,8 +479,14 @@ async fn execute(
                 size: flash.control.size,
             },
             &mut calls,
+            &mut uncorrectable_page_offsets,
+            base + u64::from(p.observer_offset - p.reader_offset),
         )
         .await?;
+        require(
+            uncorrectable_page_offsets.is_empty(),
+            "Control chunk has uncorrectable NAND pages",
+        )?;
         require(
             bulk::hex(&sha256_bytes(&control)) == p.control_sha256,
             "Control chunk differs from update; no backup read",
@@ -493,6 +505,8 @@ async fn execute(
                     size,
                 },
                 &mut calls,
+                &mut uncorrectable_page_offsets,
+                base + u64::from(p.observer_offset - p.reader_offset),
             )
             .await?;
             digest.push(offset, &bytes);
@@ -504,6 +518,7 @@ async fn execute(
             device: flash.device.clone(),
             size: flash.window.size,
             sha256: digest.finish(flash.window.size)?,
+            uncorrectable_page_offsets,
         })
     }
     .await;
@@ -575,6 +590,8 @@ async fn read(
     base: u64,
     target: BulkRange,
     calls: &mut u32,
+    uncorrectable_page_offsets: &mut Vec<u64>,
+    observer: u64,
 ) -> bulk::Result<Vec<u8>> {
     let (offset, size) = (target.address, target.size);
     let nand = flash.reader.nand.as_ref().expect("validated NAND ABI");
@@ -587,7 +604,7 @@ async fn read(
     let request = (base + REQUEST) | bulk.code_alias;
     let buffer = (base + BUFFER) | bulk.code_alias;
     let values = [
-        1,
+        2,
         offset as u32,
         size as u32,
         buffer as u32,
@@ -602,12 +619,15 @@ async fn read(
         0,
         0,
         0,
+        0,
+        0,
+        observer as u32,
     ];
     write(reader, request, &words(&values)).await?;
     query
         .invoke(reader, base as u32, request as u32, [0, 0], false)
         .await?;
-    let result = reader.access.raw(request + 40, 20).await?;
+    let result = reader.access.raw(request + 40, 28).await?;
     *calls = calls
         .checked_add(1)
         .ok_or(BulkError::Check("Reader count overflow".into()))?;
@@ -625,12 +645,31 @@ async fn read(
             word(&result[16..20])
         ),
     )?;
+    let bitmap = word(&result[20..24]) | (word(&result[24..28]) << 32);
+    uncorrectable_page_offsets.extend(decode_uncorrectable(bitmap, offset, size, nand.page_bytes)?);
     reader
         .read(BulkRange {
             address: buffer,
             size,
         })
         .await
+}
+
+fn decode_uncorrectable(
+    bitmap: u64,
+    offset: u64,
+    size: u64,
+    page_bytes: u32,
+) -> bulk::Result<Vec<u64>> {
+    let pages = size / u64::from(page_bytes);
+    require(
+        pages > 0 && pages <= 64 && (pages == 64 || bitmap >> pages == 0),
+        "NAND ECC bitmap exceeds request",
+    )?;
+    Ok((0..pages)
+        .filter(|index| bitmap & (1u64 << index) != 0)
+        .map(|index| offset + index * u64::from(page_bytes))
+        .collect())
 }
 
 #[cfg(test)]

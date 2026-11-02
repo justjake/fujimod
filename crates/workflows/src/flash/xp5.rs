@@ -44,6 +44,8 @@ pub struct Backup {
     pub device: FlashDevice,
     pub size: u64,
     pub sha256: String,
+    /// Physical byte offsets whose transferred data failed NAND correction.
+    pub uncorrectable_page_offsets: Vec<u64>,
 }
 
 impl Payload {
@@ -517,6 +519,7 @@ async fn execute(
             device: flash.device.clone(),
             size: flash.window.size,
             sha256: bulk::hex(&digest.hash.finalize()),
+            uncorrectable_page_offsets: Vec::new(),
         })
     }
     .await;

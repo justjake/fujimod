@@ -147,7 +147,8 @@ fn reader_metadata_rejects_corrupt_code_unbounded_ranges_and_unsupported_geometr
         .unwrap();
     let flash = selected.flash.unwrap();
     let bulk = selected.bulk.unwrap();
-    let image = [0u8; 64];
+    let mut image = [0u8; 64];
+    image[60..].copy_from_slice(&[0x1e, 0xff, 0x2f, 0xe1]);
     let checks = flash
         .code_ranges
         .iter()
@@ -163,12 +164,13 @@ fn reader_metadata_rejects_corrupt_code_unbounded_ranges_and_unsupported_geometr
         }])
         .collect();
     let p = Payload {
-        schema: 1,
+        schema: 2,
         firmware_id: "x70-110".into(),
         firmware_sha256: "c".repeat(64),
         sha256: bulk::hex(&sha256_bytes(&image)),
         bootstrap_size: 28,
         reader_offset: 32,
+        observer_offset: 60,
         allocate: 0x1000,
         release: 0x1004,
         configuration: Configuration::Fixed {
@@ -183,6 +185,12 @@ fn reader_metadata_rejects_corrupt_code_unbounded_ranges_and_unsupported_geometr
         update_size: flash.window.size,
     };
     p.validate(&flash, &bulk, &image).unwrap();
+    let mut invalid = p.clone();
+    invalid.schema = 1;
+    assert!(invalid.validate(&flash, &bulk, &image).is_err());
+    let mut invalid = p.clone();
+    invalid.observer_offset = u32::MAX - 3;
+    assert!(invalid.validate(&flash, &bulk, &image).is_err());
     assert!(p.validate(&flash, &bulk, &[1; 64]).is_err());
     let mut invalid = p.clone();
     invalid.bootstrap_size = 33;
@@ -193,4 +201,17 @@ fn reader_metadata_rejects_corrupt_code_unbounded_ranges_and_unsupported_geometr
     let mut invalid = flash.clone();
     invalid.reader.nand.as_mut().unwrap().controller_mode = 1;
     assert!(p.validate(&invalid, &bulk, &image).is_err());
+}
+
+#[test]
+fn ecc_bitmap_reports_physical_offsets_and_refuses_bits_outside_the_request() {
+    assert_eq!(
+        decode_uncorrectable(0x8000_0000_0000_0001, 0x20000, 0x8000, 512).unwrap(),
+        [0x20000, 0x27e00]
+    );
+    assert_eq!(
+        decode_uncorrectable(5, 0x40000, 0x2000, 2048).unwrap(),
+        [0x40000, 0x41000]
+    );
+    assert!(decode_uncorrectable(1 << 16, 0, 0x8000, 2048).is_err());
 }
