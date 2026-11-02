@@ -24,6 +24,8 @@ updates:
         patterns: ["*"]
   - package-ecosystem: cargo
     directory: /
+    exclude-paths:
+      - "crates/workspace-hack/Cargo.toml"
     schedule:
       interval: monthly
     groups:
