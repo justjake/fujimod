@@ -27,6 +27,7 @@ futures-core = { version = "0.3" }
 futures-util = { version = "0.3", features = ["sink"] }
 half = { version = "2", default-features = false, features = ["num-traits"] }
 hashbrown = { version = "0.17" }
+memchr = { version = "2" }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 percent-encoding = { version = "2" }
@@ -52,6 +53,7 @@ futures-core = { version = "0.3" }
 futures-util = { version = "0.3", features = ["sink"] }
 half = { version = "2", default-features = false, features = ["num-traits"] }
 hashbrown = { version = "0.17" }
+memchr = { version = "2" }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 percent-encoding = { version = "2" }
@@ -93,7 +95,6 @@ getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-f
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 indexmap = { version = "2" }
 libc = { version = "0.2" }
-memchr = { version = "2" }
 naga = { version = "30", features = ["glsl-in", "msl-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
 prost = { version = "0.14" }
@@ -136,7 +137,6 @@ getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-f
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 indexmap = { version = "2" }
 libc = { version = "0.2" }
-memchr = { version = "2" }
 naga = { version = "30", features = ["glsl-in", "msl-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
 prost = { version = "0.14" }
@@ -173,7 +173,6 @@ getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-f
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 linux-raw-sys = { version = "0.12", features = ["auxvec", "elf", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "xdp"] }
-memchr = { version = "2" }
 naga = { version = "30", features = ["glsl-in", "hlsl-out", "spv-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
@@ -204,7 +203,6 @@ getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-f
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 linux-raw-sys = { version = "0.12", features = ["auxvec", "elf", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "xdp"] }
-memchr = { version = "2" }
 naga = { version = "30", features = ["glsl-in", "hlsl-out", "spv-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
