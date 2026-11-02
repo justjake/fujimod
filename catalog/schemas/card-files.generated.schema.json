@@ -133,6 +133,18 @@
               "minimum": 0,
               "type": "integer"
             },
+            "directory_first_code": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "directory_next_code": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
             "directory_size_offset": {
               "format": "uint32",
               "minimum": 0,
@@ -234,6 +246,11 @@
               "minimum": 0,
               "type": "integer"
             },
+            "seek": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
             "send": {
               "description": "The SDK request sender takes a persistent command descriptor in RAM.",
               "format": "uint32",
@@ -308,10 +325,13 @@
             "read",
             "write",
             "close",
+            "seek",
             "unlink",
             "send",
             "list_first_code",
             "list_next_code",
+            "directory_first_code",
+            "directory_next_code",
             "receiver_cell",
             "directory_context_bytes",
             "directory_attribute_offset",

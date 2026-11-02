@@ -10,8 +10,8 @@ const REQUEST_BYTES: u32 = 36;
 const DATA_OFFSET: u32 = 512;
 const DATA_RESERVATION: u32 = DATA_OFFSET + 32;
 
-struct Sdk<'a, 'p> {
-    host: Host<'a>,
+pub(super) struct Sdk<'a, 'p> {
+    pub(super) host: Host<'a>,
     p: &'p StockSdk,
     slot: u32,
     table: u32,
@@ -19,6 +19,8 @@ struct Sdk<'a, 'p> {
     base: Option<u32>,
     pool: u32,
     handle: Option<u32>,
+    active: Option<(String, u32)>,
+    position: Option<u32>,
     pending: bool,
     cursor: bool,
 }
@@ -169,7 +171,15 @@ impl Sdk<'_, '_> {
             .await
     }
     async fn open(&mut self, path: &str, mode: u32) -> Result<()> {
-        require(self.handle.is_none(), "Another SDK file is open")?;
+        if self
+            .active
+            .as_ref()
+            .is_some_and(|(p, m)| p == path && *m == mode)
+            && self.handle.is_some()
+        {
+            return Ok(());
+        }
+        self.close().await?;
         self.path(path).await?;
         let (status, handle) = self.io(self.p.open, &[self.base()?, mode], true).await?;
         require(status == 0, &format!("Card open failed: {status:#x}"))?;
@@ -178,17 +188,41 @@ impl Sdk<'_, '_> {
             "Invalid SD0 file handle",
         )?;
         self.handle = Some(handle);
+        self.active = Some((path.to_owned(), mode));
+        self.position = if mode == 2 { None } else { Some(0) };
         Ok(())
     }
-    async fn close(&mut self) -> Result<()> {
+    async fn seek(&mut self, offset: u32) -> Result<()> {
+        if self.position == Some(offset) {
+            return Ok(());
+        }
+        let (status, _) = self
+            .io(
+                self.p.seek,
+                &[self.handle.expect("opened"), offset, 0, 0],
+                false,
+            )
+            .await?;
+        require(status == 0, "SDK seek failed")?;
+        self.position = Some(offset);
+        Ok(())
+    }
+    pub(super) fn idle(&self) -> bool {
+        !self.pending && !self.cursor
+    }
+
+    pub(super) async fn close(&mut self) -> Result<()> {
         if let Some(handle) = self.handle {
             let (status, _) = self.io(self.p.close, &[handle, 0], false).await?;
             require(status == 0, &format!("Card close failed: {status:#x}"))?;
             self.handle = None;
+            self.active = None;
+            self.position = None;
         }
         Ok(())
     }
-    async fn scan(&mut self, pattern: &str) -> Result<Vec<Entry>> {
+    async fn scan(&mut self, pattern: &str, directories: bool) -> Result<Vec<DirectoryEntry>> {
+        self.close().await?;
         require(
             !self.cursor && self.handle.is_none(),
             "SDK directory cursor already held",
@@ -203,9 +237,14 @@ impl Sdk<'_, '_> {
         payload[..8].copy_from_slice(&words(&[self.p.completion, base + 256]));
         payload[8..8 + folder.len()].copy_from_slice(folder.as_bytes());
         payload[40..40 + pattern.len()].copy_from_slice(pattern.as_bytes());
+        payload[56..60].copy_from_slice(&0u32.to_le_bytes());
         self.host.write(base + 64, &payload).await?;
         let mut entries = Vec::new();
-        let mut code = self.p.list_first_code;
+        let mut code = if directories {
+            self.p.directory_first_code
+        } else {
+            self.p.list_first_code
+        };
         let mut size = 60;
         self.cursor = true;
         loop {
@@ -228,7 +267,8 @@ impl Sdk<'_, '_> {
                 .host
                 .read(base + 256, self.p.directory_context_bytes)
                 .await?;
-            if raw[self.p.directory_attribute_offset as usize] & 0x18 == 0 {
+            let attributes = raw[self.p.directory_attribute_offset as usize];
+            if attributes & 8 == 0 && (directories || attributes & 0x10 == 0) {
                 let end = raw[..48].iter().position(|&v| v == 0).unwrap_or(48);
                 let tail = raw[..end]
                     .rsplit(|&v| v == b'\\' || v == b':')
@@ -259,7 +299,9 @@ impl Sdk<'_, '_> {
                     u32_at(&raw, self.p.directory_size_offset as usize + 4) == 0,
                     "Directory file size exceeds 32 bits",
                 )?;
-                entries.push(Entry {
+                entries.push(DirectoryEntry {
+                    directory: attributes & 0x10 != 0,
+                    read_only: attributes & 1 != 0,
                     name: String::from_utf8(name).map_err(|_| Error::InvalidToken)?,
                     bytes: u32_at(&raw, self.p.directory_size_offset as usize),
                 });
@@ -267,27 +309,119 @@ impl Sdk<'_, '_> {
             self.host
                 .write(base + 64, &words(&[self.p.completion, base + 256]))
                 .await?;
-            code = self.p.list_next_code;
+            code = if directories {
+                self.p.directory_next_code
+            } else {
+                self.p.list_next_code
+            };
             size = 8;
             require(entries.len() < 1_000_000, "Directory scan limit exceeded")?;
         }
     }
-    async fn transfer(&mut self, request: Request) -> Result<Response> {
+    pub(super) async fn transfer(&mut self, request: Request) -> Result<Response> {
         match request {
-            Request::List { pattern } => Ok(Response::Entries(self.scan(&pattern).await?)),
+            Request::List { pattern } => Ok(Response::Entries(
+                self.scan(&pattern, false)
+                    .await?
+                    .into_iter()
+                    .map(|e| Entry {
+                        name: e.name,
+                        bytes: e.bytes,
+                    })
+                    .collect(),
+            )),
+            Request::ReadDirectory { path } => {
+                let pattern = format!("{}\\*.*", path.trim_end_matches('\\'));
+                let mut entries = self.scan(&pattern, false).await?;
+                entries.extend(self.scan(&pattern, true).await?);
+                Ok(Response::Directory(entries))
+            }
+            Request::Shrink { path, size } => {
+                self.open(&path, 2).await?;
+                let (status, _) = self
+                    .io(
+                        self.p.close,
+                        &[self.handle.expect("opened"), size, 0],
+                        false,
+                    )
+                    .await?;
+                require(status == 0, "SDK truncate failed")?;
+                self.handle = None;
+                self.active = None;
+                self.position = None;
+                Ok(Response::Done)
+            }
+            Request::Create { path } => {
+                self.close().await?;
+                self.open(&path, 1).await?;
+                self.close().await?;
+                Ok(Response::Done)
+            }
+            Request::ReadAt { path, offset, size } => {
+                if size == 0 {
+                    return Ok(Response::Bytes(Vec::new()));
+                }
+                self.open(&path, 0).await?;
+                self.seek(offset).await?;
+                let mut data = Vec::with_capacity(size as usize);
+                while data.len() < size as usize {
+                    let count = self.p.chunk_bytes.min(size - data.len() as u32);
+                    let buffer = self.buffer()?;
+                    let (status, n) = self
+                        .io(
+                            self.p.read,
+                            &[self.handle.expect("opened"), count, buffer],
+                            true,
+                        )
+                        .await?;
+                    require(status == 0 && n <= count, "SDK ranged read failed")?;
+                    if n > 0 {
+                        self.call(self.p.cache, &[]).await?;
+                        data.extend(self.read_buffer(buffer, n).await?);
+                    }
+                    self.position = self.position.and_then(|p| p.checked_add(n));
+                    if n < count {
+                        break;
+                    }
+                }
+                Ok(Response::Bytes(data))
+            }
+            Request::WriteAt { path, offset, data } => {
+                self.open(&path, 2).await?;
+                self.seek(offset).await?;
+                for raw in data.chunks(self.p.chunk_bytes as usize) {
+                    let buffer = self.buffer()?;
+                    self.host.write(buffer, raw).await?;
+                    self.call(self.p.cache, &[]).await?;
+                    let (status, n) = self
+                        .io(
+                            self.p.write,
+                            &[self.handle.expect("opened"), raw.len() as u32, buffer],
+                            true,
+                        )
+                        .await?;
+                    require(
+                        status == 0 && n as usize == raw.len(),
+                        "SDK ranged write failed",
+                    )?;
+                    self.position = self.position.and_then(|p| p.checked_add(n));
+                }
+                Ok(Response::Done)
+            }
             Request::Delete { path } => {
-                if !self.scan(&path).await?.is_empty() {
+                if !self.scan(&path, false).await?.is_empty() {
                     self.path(&path).await?;
                     let (status, _) = self.io(self.p.unlink, &[self.base()?], false).await?;
                     require(status == 0, &format!("Card unlink failed: {status:#x}"))?;
                 }
                 require(
-                    self.scan(&path).await?.is_empty(),
+                    self.scan(&path, false).await?.is_empty(),
                     "Deleted card file remains visible",
                 )?;
                 Ok(Response::Done)
             }
             Request::Read { path, max_bytes } => {
+                self.close().await?;
                 self.open(&path, 0).await?;
                 let mut data = Vec::new();
                 loop {
@@ -346,7 +480,7 @@ impl Sdk<'_, '_> {
             }
         }
     }
-    async fn cleanup(&mut self) -> Result<()> {
+    pub(super) async fn cleanup(&mut self) -> Result<()> {
         require(
             self.host.session.state() == SessionState::Ready && !self.pending && !self.cursor,
             "Uncertain card operation; retain RAM",
@@ -379,11 +513,7 @@ impl Sdk<'_, '_> {
     }
 }
 
-pub(super) async fn execute(
-    mut host: Host<'_>,
-    p: &StockSdk,
-    request: Request,
-) -> Result<Response> {
+pub(super) async fn prepare<'a, 'p>(mut host: Host<'a>, p: &'p StockSdk) -> Result<Sdk<'a, 'p>> {
     require(
         p.chunk_bytes > 0
             && p.chunk_bytes <= 1024 * 1024
@@ -446,14 +576,23 @@ pub(super) async fn execute(
         base: None,
         pool,
         handle: None,
+        active: None,
+        position: None,
         pending: false,
         cursor: false,
     };
-    let result = async {
-        sdk.allocate().await?;
-        sdk.transfer(request).await
+    if let Err(error) = sdk.allocate().await {
+        return match sdk.cleanup().await {
+            Ok(()) => Err(error),
+            Err(cleanup) => Err(fail(format!("{error}; cleanup: {cleanup}"))),
+        };
     }
-    .await;
+    Ok(sdk)
+}
+
+pub(super) async fn execute(host: Host<'_>, p: &StockSdk, request: Request) -> Result<Response> {
+    let mut sdk = prepare(host, p).await?;
+    let result = sdk.transfer(request).await;
     let cleanup = sdk.cleanup().await;
     match (result, cleanup) {
         (Ok(value), Ok(())) => Ok(value),

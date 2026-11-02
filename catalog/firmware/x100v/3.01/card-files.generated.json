@@ -55,12 +55,24 @@
     },
     {
       "name": "card_first",
+      "address": 13843156,
+      "size": 164,
+      "sha256": "2cd39e4a9c1d27e1638791f304f35d85ee2be0a744aa5c0ea2e5bd535410bb21"
+    },
+    {
+      "name": "card_next",
+      "address": 13843320,
+      "size": 124,
+      "sha256": "b55d11b8da12113972f6a64d78cb9b863c0dfecd7b18ad1938601461db3d0318"
+    },
+    {
+      "name": "card_directory_first",
       "address": 13843444,
       "size": 156,
       "sha256": "3614897063ab7fc47c6c3d2c033d6c36e124f8628603e4de19c5bd7c0fc36f85"
     },
     {
-      "name": "card_next",
+      "name": "card_directory_next",
       "address": 13843600,
       "size": 124,
       "sha256": "d94e8003bdf1fae6e27c3ab8852d13ce34364c1c57aa8b17bba654dad8950e05"
@@ -136,6 +148,12 @@
       "address": 18068444,
       "size": 72,
       "sha256": "7544f6231a7763e6e4b1133c69ea251ff4811db060f4a9d8a74049c054c03aa2"
+    },
+    {
+      "name": "card_seek",
+      "address": 18068604,
+      "size": 108,
+      "sha256": "ff2cfa90535f0429641815077e4e9c10c87d03b367d5eb23bf54b9445839769f"
     },
     {
       "name": "bulk_poll",
@@ -228,10 +246,13 @@
     "read": 18068300,
     "write": 18068372,
     "close": 18068444,
+    "seek": 18068604,
     "unlink": 18068784,
     "send": 13855524,
-    "list_first_code": 4965,
-    "list_next_code": 4966,
+    "list_first_code": 4963,
+    "list_next_code": 4964,
+    "directory_first_code": 4965,
+    "directory_next_code": 4966,
     "receiver_cell": 14195258,
     "directory_context_bytes": 120,
     "directory_attribute_offset": 59,

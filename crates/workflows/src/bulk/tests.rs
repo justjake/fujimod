@@ -216,6 +216,54 @@ fn query_source_reads_the_range_relative_to_the_stock_base() {
 }
 
 #[test]
+fn mounted_reader_rounds_dma_inside_its_window_and_never_caches_live_bytes() {
+    use fujimod_usb::operations::card::RangeRead;
+    let mut steps = data(0x800, &(0u8..32).collect::<Vec<_>>());
+    steps.extend(data(0x820, &(32u8..64).collect::<Vec<_>>()));
+    steps.extend(data(0x800, &[0xa5; 32]));
+    steps.extend(data(0x820, &[0xa5; 32]));
+    let (mut session, script) = opened(steps);
+    let window = BulkRange {
+        address: 0x1000,
+        size: 0x1000,
+    };
+    let mut mapping = BulkMapping {
+        source: Source {
+            window: DataWindow::new(
+                Address(0x1000),
+                memory_range(window).unwrap(),
+                NonZeroU32::new(32).unwrap(),
+                OffsetMode::Wrapping,
+            )
+            .unwrap()
+            .with_alignment(DataAlignment::new(32, 32).unwrap()),
+            overwritten: None,
+            saved: None,
+        },
+        window,
+        limits: limits(),
+        dma: Some(BulkDma {
+            address_alignment: 32,
+            length_granule: 32,
+        }),
+    };
+    assert!(mapping.admits(0x1fff, 1));
+    assert!(!mapping.admits(0x1fff, 2));
+    assert!(!mapping.admits(0xfff, 1));
+    let bytes = block_on(RangeRead::read(&mut mapping, &mut session, 0x1803, 35)).unwrap();
+    assert_eq!(bytes, (3u8..38).collect::<Vec<_>>());
+    assert_eq!(
+        block_on(RangeRead::read(&mut mapping, &mut session, 0x1803, 35)).unwrap(),
+        vec![0xa5; 35]
+    );
+    assert!(matches!(
+        block_on(RangeRead::read(&mut mapping, &mut session, 0x1fff, 2)),
+        Err(fujimod_usb::Error::OutsideDataWindow)
+    ));
+    assert_eq!(script.remaining(), 0);
+}
+
+#[test]
 fn zero_base_source_is_restored_after_reading_addresses_directly() {
     let original = [7u8; 12];
     let mut steps = qualified();

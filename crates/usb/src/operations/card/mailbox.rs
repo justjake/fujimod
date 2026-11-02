@@ -1,8 +1,8 @@
 //! FIL1 descriptor ABI: the same file service used by camera reports.
 use super::*;
 
-struct Mailbox<'a> {
-    host: Host<'a>,
+pub(super) struct Mailbox<'a> {
+    pub(super) host: Host<'a>,
     start: u32,
     size: u32,
     alias: u32,
@@ -112,8 +112,125 @@ impl Mailbox<'_> {
             entries.extend(decode_entries(&self.read(self.p[6], count).await?)?);
         }
     }
-    async fn transfer(&mut self, request: Request) -> Result<Response> {
+    fn require_mount_abi(&self) -> Result<()> {
+        require(
+            u32_at(&self.descriptor, 4) >= 3,
+            "Mounting requires installed file-service ABI 3",
+        )
+    }
+    async fn seek(&mut self, offset: u32) -> Result<()> {
+        self.write(self.p[6], &offset.to_le_bytes()).await?;
+        self.command(11, 0).await?;
+        Ok(())
+    }
+    pub(super) async fn finish(&mut self) -> Result<()> {
+        self.idle().await?;
+        if self.word(self.p[9]).await? != u32::MAX {
+            self.command(4, 0).await?;
+        }
+        if let Some(source) = self.source {
+            self.idle().await?;
+            require(
+                self.word(self.p[10]).await? == 0,
+                "File-service source pointer changed",
+            )?;
+            self.write(self.p[10], &source.to_le_bytes()).await?;
+            require(
+                self.word(self.p[10]).await? == source,
+                "File-service source pointer was not restored",
+            )?;
+            self.source = None;
+        }
+        Ok(())
+    }
+
+    pub(super) async fn transfer(&mut self, request: Request) -> Result<Response> {
         match request {
+            Request::ReadDirectory { path } => {
+                self.require_mount_abi()?;
+                let pattern = format!("{}\\*.*", path.trim_end_matches('\\'));
+                let mut entries = Vec::new();
+                loop {
+                    self.path(&pattern).await?;
+                    let count = self
+                        .command(
+                            10,
+                            entries.len().try_into().map_err(|_| Error::InvalidLength)?,
+                        )
+                        .await?;
+                    require(
+                        count <= self.capacity && count % 24 == 0,
+                        "Invalid directory page",
+                    )?;
+                    if count == 0 {
+                        break;
+                    }
+                    let raw = self.read(self.p[6], count).await?;
+                    for row in raw.chunks_exact(24) {
+                        let mut legacy = row.to_vec();
+                        legacy[23] = 0;
+                        let entry = decode_entries(&legacy)?.remove(0);
+                        entries.push(DirectoryEntry {
+                            name: entry.name,
+                            bytes: entry.bytes,
+                            directory: row[23] & 0x10 != 0,
+                            read_only: row[23] & 1 != 0,
+                        });
+                    }
+                    require(entries.len() < 1_000_000, "Directory scan limit exceeded")?;
+                }
+                Ok(Response::Directory(entries))
+            }
+            Request::Shrink { path, size } => {
+                self.require_mount_abi()?;
+                self.path(&path).await?;
+                self.command(5, 0).await?;
+                self.write(self.p[6], &size.to_le_bytes()).await?;
+                self.command(12, 0).await?;
+                Ok(Response::Done)
+            }
+            Request::Create { path } => {
+                self.require_mount_abi()?;
+                self.path(&path).await?;
+                self.command(9, 0).await?;
+                self.command(3, 0).await?;
+                Ok(Response::Done)
+            }
+            Request::ReadAt { path, offset, size } => {
+                self.require_mount_abi()?;
+                self.path(&path).await?;
+                self.command(1, 0).await?;
+                self.seek(offset).await?;
+                let mut data = Vec::with_capacity(size as usize);
+                while data.len() < size as usize {
+                    let count = self.capacity.min(size - data.len() as u32);
+                    let n = self.command(2, count).await?;
+                    require(n <= count, "Invalid file read count")?;
+                    if n > 0 {
+                        data.extend(self.read(self.p[6], n).await?);
+                    }
+                    if n < count {
+                        break;
+                    }
+                }
+                self.command(3, 0).await?;
+                Ok(Response::Bytes(data))
+            }
+            Request::WriteAt { path, offset, data } => {
+                self.require_mount_abi()?;
+                self.path(&path).await?;
+                self.command(5, 0).await?;
+                self.seek(offset).await?;
+                self.source = Some(self.word(self.p[10]).await?);
+                self.host.put(self.address(self.p[10], 4)?, 0).await?;
+                for raw in data.chunks(self.capacity as usize) {
+                    self.write(self.p[6], raw).await?;
+                    let n = self.command(6, raw.len() as u32).await?;
+                    require(n as usize == raw.len(), "Short file write")?;
+                }
+                self.command(3, 0).await?;
+                Ok(Response::Done)
+            }
             Request::List { pattern } => Ok(Response::Entries(self.list(&pattern).await?)),
             Request::Delete { path } => {
                 self.path(&path).await?;
@@ -169,14 +286,13 @@ impl Mailbox<'_> {
     }
 }
 
-pub(super) async fn execute(
-    host: Host<'_>,
+pub(super) async fn prepare<'a>(
+    host: Host<'a>,
     start: u32,
     size: u32,
     alias: u32,
     build: Option<u32>,
-    request: Request,
-) -> Result<Response> {
+) -> Result<Mailbox<'a>> {
     require(
         start % 32 == 0
             && size >= 64
@@ -203,7 +319,7 @@ pub(super) async fn execute(
         .step_by(32)
         .filter(|&i| {
             u32_at(&raw, i) == 0x314c4946
-                && (1..=2).contains(&u32_at(&raw, i + 4))
+                && (1..=3).contains(&u32_at(&raw, i + 4))
                 && build.is_none_or(|v| u32_at(&raw, i + 8) == v)
         })
         .collect();
@@ -227,26 +343,21 @@ pub(super) async fn execute(
     )?;
     service.address(service.p[6], service.capacity)?;
     service.operations = service.word(service.p[7]).await?;
+    Ok(service)
+}
+
+pub(super) async fn execute(
+    host: Host<'_>,
+    start: u32,
+    size: u32,
+    alias: u32,
+    build: Option<u32>,
+    request: Request,
+) -> Result<Response> {
+    let mut service = prepare(host, start, size, alias, build).await?;
     let result = service.transfer(request).await;
-    if result.is_err() && service.host.session.state() == crate::ff80::SessionState::Ready {
-        service.idle().await?;
-        if service.word(service.p[9]).await? != u32::MAX {
-            service.command(4, 0).await?;
-        }
-    }
     if service.host.session.state() == crate::ff80::SessionState::Ready {
-        if let Some(source) = service.source {
-            service.idle().await?;
-            require(
-                service.word(service.p[10]).await? == 0,
-                "File-service source pointer changed",
-            )?;
-            service.write(service.p[10], &source.to_le_bytes()).await?;
-            require(
-                service.word(service.p[10]).await? == source,
-                "File-service source pointer was not restored",
-            )?;
-        }
+        service.finish().await?;
     }
     result
 }

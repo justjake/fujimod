@@ -86,6 +86,7 @@ members = [
   "crates/settings",
   "crates/fujimod",
   "crates/usb",
+  "crates/camera-mount",
   "crates/usb-app80",
   "crates/usb-app80-types",
   "crates/workflows",

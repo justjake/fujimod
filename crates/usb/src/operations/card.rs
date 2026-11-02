@@ -19,10 +19,24 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// A caller-qualified reader can accelerate owned buffers without changing
+/// file protocols. It must bound DMA to its own admitted address aperture.
+pub trait RangeRead: Send {
+    fn admits(&self, address: u32, size: u32) -> bool;
+    fn read<'a>(
+        &'a mut self,
+        session: &'a mut Session,
+        address: u32,
+        size: u32,
+    ) -> crate::emulator::EndpointFuture<'a, Result<Vec<u8>>>;
+}
+
 mod mailbox;
 #[cfg(test)]
 mod protocol_tests;
 mod sdk;
+mod volume;
+pub use volume::Volume;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Entry {
@@ -30,17 +44,90 @@ pub struct Entry {
     pub bytes: u32,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DirectoryEntry {
+    pub name: String,
+    pub bytes: u32,
+    pub directory: bool,
+    pub read_only: bool,
+}
+
 /// File contents remain binary and are never serialized into the capability.
 pub enum Request {
-    List { pattern: String },
-    Read { path: String, max_bytes: u32 },
-    Write { path: String, data: Vec<u8> },
-    Delete { path: String },
+    List {
+        pattern: String,
+    },
+    Read {
+        path: String,
+        max_bytes: u32,
+    },
+    Write {
+        path: String,
+        data: Vec<u8>,
+    },
+    Delete {
+        path: String,
+    },
+    ReadDirectory {
+        path: String,
+    },
+    ReadAt {
+        path: String,
+        offset: u32,
+        size: u32,
+    },
+    WriteAt {
+        path: String,
+        offset: u32,
+        data: Vec<u8>,
+    },
+    Create {
+        path: String,
+    },
+    /// Close an existing file with a nonzero byte limit.
+    Shrink {
+        path: String,
+        size: u32,
+    },
 }
 pub enum Response {
     Entries(Vec<Entry>),
     Bytes(Vec<u8>),
     Done,
+    Directory(Vec<DirectoryEntry>),
+}
+
+fn validate_request(request: &Request) -> Result<()> {
+    match request {
+        Request::List { pattern } => path(pattern, true),
+        Request::ReadDirectory { path: p } => {
+            if p == "A:\\" {
+                Ok(())
+            } else {
+                path(p, false)
+            }
+        }
+        Request::Read { path: p, .. }
+        | Request::Write { path: p, .. }
+        | Request::Delete { path: p }
+        | Request::ReadAt { path: p, .. }
+        | Request::WriteAt { path: p, .. }
+        | Request::Create { path: p }
+        | Request::Shrink { path: p, .. } => path(p, false),
+    }?;
+    match request {
+        Request::Shrink { size, .. } => require(*size != 0, "Use Create to truncate to zero"),
+        Request::ReadAt { offset, size, .. } => require(
+            *size <= 1024 * 1024 && offset.checked_add(*size).is_some(),
+            "Invalid bounded card read",
+        ),
+        Request::WriteAt { offset, data, .. } => require(
+            data.len() <= 1024 * 1024
+                && u64::from(*offset) + data.len() as u64 <= u64::from(u32::MAX),
+            "Invalid bounded card write",
+        ),
+        _ => Ok(()),
+    }
 }
 
 fn fail(message: impl Into<String>) -> Error {
@@ -84,9 +171,15 @@ fn path(value: &str, listing: bool) -> Result<()> {
 struct Host<'a> {
     session: &'a mut Session,
     limits: DebugMemoryLimits,
+    reader: Option<&'a mut dyn RangeRead>,
 }
 impl Host<'_> {
     async fn read(&mut self, address: u32, size: u32) -> Result<Vec<u8>> {
+        if size >= 512 {
+            if let Some(reader) = self.reader.as_mut().filter(|r| r.admits(address, size)) {
+                return reader.read(self.session, address, size).await;
+            }
+        }
         read_range(self.session, range(address, size)?, self.limits).await
     }
     async fn write(&mut self, address: u32, raw: &[u8]) -> Result<()> {
@@ -124,12 +217,7 @@ pub async fn execute(
         capability.schema == 1 && capability.schema_uri == fujimod_catalog_card::SCHEMA_URI,
         "Unsupported card capability",
     )?;
-    match &request {
-        Request::List { pattern } => path(pattern, true)?,
-        Request::Read { path: p, .. }
-        | Request::Write { path: p, .. }
-        | Request::Delete { path: p } => path(p, false)?,
-    }
+    validate_request(&request)?;
     require(
         session
             .device_info(InfoSelector::Product)
@@ -144,7 +232,11 @@ pub async fn execute(
                 == capability.internal_version,
         "Card capability identifies another firmware",
     )?;
-    let mut host = Host { session, limits };
+    let mut host = Host {
+        session,
+        limits,
+        reader: None,
+    };
     for c in &capability.code_checks {
         let bytes = host
             .read(

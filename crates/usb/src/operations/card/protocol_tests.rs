@@ -26,7 +26,8 @@ struct Camera {
     reply: Vec<u8>,
     opened: Option<(String, usize)>,
     allocated: bool,
-    scan: Vec<(String, Vec<u8>)>,
+    scan: Vec<(String, Vec<u8>, u8)>,
+    allocations: usize,
     failure: Option<&'static str>,
     mutations: usize,
 }
@@ -75,7 +76,7 @@ impl Camera {
             2 => {
                 let (name, offset) = self.opened.clone().unwrap();
                 let data = &self.files[&name];
-                let n = (size as usize).min(data.len() - offset);
+                let n = (size as usize).min(data.len().saturating_sub(offset));
                 let raw = data[offset..offset + n].to_vec();
                 self.write(0x41000, &raw);
                 self.opened = Some((name, offset + n));
@@ -138,6 +139,7 @@ impl Camera {
                 assert_eq!(a[0], 9);
                 assert_eq!(a[2], OUTPUT);
                 self.allocated = true;
+                self.allocations += 1;
                 self.put(OUTPUT, BASE);
             }
             2 => {
@@ -163,7 +165,7 @@ impl Camera {
                 assert_eq!(a[1], 16);
                 let (name, offset) = self.opened.clone().unwrap();
                 let data = &self.files[&name];
-                let n = (a[2] as usize).min(data.len() - offset);
+                let n = (a[2] as usize).min(data.len().saturating_sub(offset));
                 let raw = data[offset..offset + n].to_vec();
                 self.write(a[3], &raw);
                 self.opened = Some((name, offset + n));
@@ -178,13 +180,17 @@ impl Camera {
                 }
                 let raw = self.read(a[3], n as usize);
                 let data = self.files.get_mut(&name).unwrap();
-                data.resize(offset + n as usize, 0);
-                data[offset..].copy_from_slice(&raw);
+                data.resize(data.len().max(offset + n as usize), 0);
+                data[offset..offset + n as usize].copy_from_slice(&raw);
                 self.opened = Some((name, offset + n as usize));
                 self.done(0, n);
             }
             7 => {
                 assert_eq!(a[1], 16);
+                if a[2] != 0 {
+                    let (name, _) = self.opened.as_ref().unwrap();
+                    self.files.get_mut(name).unwrap().truncate(a[2] as usize);
+                }
                 self.opened = None;
                 self.done(0, 0);
             }
@@ -206,23 +212,31 @@ impl Camera {
                         .filter(|(n, _)| {
                             pattern == "*.*" || n.rsplit('\\').next().unwrap() == pattern
                         })
-                        .map(|(n, d)| (n.clone(), d.clone()))
+                        .map(|(n, d)| (n.clone(), d.clone(), 0x20))
                         .collect();
                     self.scan.reverse();
+                } else if code == 102 {
+                    self.scan = vec![("A:\\DCIM".into(), Vec::new(), 0x10)];
                 } else {
-                    assert_eq!(code, 101)
+                    assert!(code == 101 || code == 103)
                 }
-                if let Some((name, data)) = self.scan.pop() {
+                if let Some((name, data, attributes)) = self.scan.pop() {
                     let mut raw = vec![0; 120];
                     let n = name.rsplit('\\').next().unwrap().as_bytes();
                     raw[..n.len()].copy_from_slice(n);
-                    raw[59] = 0x20;
+                    raw[59] = attributes;
                     raw[80..84].copy_from_slice(&(data.len() as u32).to_le_bytes());
                     self.write(details, &raw);
                     self.done(0, 0);
                 } else {
                     self.done(6, 0)
                 }
+            }
+            10 => {
+                assert_eq!(&a[..2], &[0x9100, 16]);
+                let (name, _) = self.opened.clone().unwrap();
+                self.opened = Some((name, a[2] as usize));
+                self.done(0, 0);
             }
             _ => panic!("Unexpected stock call {target}"),
         }
@@ -330,10 +344,13 @@ fn profile() -> FirmwareCard {
             read: 5,
             write: 6,
             close: 7,
+            seek: 10,
             unlink: 8,
             send: 9,
             list_first_code: 100,
             list_next_code: 101,
+            directory_first_code: 102,
+            directory_next_code: 103,
             receiver_cell: 0x6400,
             directory_context_bytes: 120,
             directory_attribute_offset: 59,
@@ -605,4 +622,104 @@ fn wrong_mode_and_oversize_read_fail_without_success_receipts() {
         );
         restored(&camera.lock().unwrap());
     })
+}
+
+#[test]
+fn mounted_sdk_amortizes_reservation_and_random_io_preserves_file_tail() {
+    block_on(async {
+        let camera = camera();
+        camera
+            .lock()
+            .unwrap()
+            .files
+            .insert("A:\\OLD.BIN".into(), (0..=255).cycle().take(4096).collect());
+        let mut session = peer_session(Endpoint(camera.clone()), 8192, None)
+            .await
+            .unwrap();
+        let profile = profile();
+        let mut volume = Volume::attach(&mut session, limits(), &profile, None)
+            .await
+            .unwrap();
+        assert_eq!(camera.lock().unwrap().allocations, 1);
+        for offset in [77, 203, 12] {
+            let Response::Bytes(data) = volume
+                .execute(Request::ReadAt {
+                    path: "A:\\OLD.BIN".into(),
+                    offset,
+                    size: 3,
+                })
+                .await
+                .unwrap()
+            else {
+                panic!()
+            };
+            assert_eq!(data, [offset as u8, (offset + 1) as u8, (offset + 2) as u8]);
+        }
+        volume
+            .execute(Request::WriteAt {
+                path: "A:\\OLD.BIN".into(),
+                offset: 19,
+                data: b"new".to_vec(),
+            })
+            .await
+            .unwrap();
+        {
+            let c = camera.lock().unwrap();
+            assert_eq!(&c.files["A:\\OLD.BIN"][19..22], b"new");
+            assert_eq!(c.files["A:\\OLD.BIN"].len(), 4096);
+            assert_eq!(c.files["A:\\OLD.BIN"][22], 22);
+            assert_eq!(c.allocations, 1);
+            assert!(c.allocated);
+        }
+        let Response::Directory(entries) = volume
+            .execute(Request::ReadDirectory {
+                path: "A:\\".into(),
+            })
+            .await
+            .unwrap()
+        else {
+            panic!()
+        };
+        assert!(entries.iter().any(|e| e.name == "DCIM" && e.directory));
+        assert!(entries.iter().any(|e| e.name == "OLD.BIN" && !e.directory));
+        volume
+            .execute(Request::Shrink {
+                path: "A:\\OLD.BIN".into(),
+                size: 23,
+            })
+            .await
+            .unwrap();
+        assert_eq!(camera.lock().unwrap().files["A:\\OLD.BIN"].len(), 23);
+        volume.close().await.unwrap();
+        restored(&camera.lock().unwrap());
+    });
+}
+
+#[test]
+fn mounted_sdk_retains_uncertain_allocation_and_refuses_further_work() {
+    block_on(async {
+        let camera = camera();
+        let mut session = peer_session(Endpoint(camera.clone()), 8192, None)
+            .await
+            .unwrap();
+        let profile = profile();
+        let mut volume = Volume::attach(&mut session, limits(), &profile, None)
+            .await
+            .unwrap();
+        camera.lock().unwrap().failure = Some("lost");
+        assert!(
+            volume
+                .execute(Request::ReadAt {
+                    path: "A:\\OLD.BIN".into(),
+                    offset: 0,
+                    size: 1
+                })
+                .await
+                .is_err()
+        );
+        assert!(volume.read_memory(0x1000, 4).await.is_err());
+        assert!(volume.close().await.is_err());
+        assert!(camera.lock().unwrap().allocated);
+        assert_eq!(session.state(), SessionState::CompletionUnknown);
+    });
 }

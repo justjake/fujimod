@@ -92,6 +92,7 @@ pub struct BulkMapping {
     source: Source,
     window: BulkRange,
     limits: Limits,
+    dma: Option<fujimod_catalog_bulk::BulkDma>,
 }
 impl BulkMapping {
     pub async fn prepare(
@@ -104,6 +105,7 @@ impl BulkMapping {
             source,
             window: bulk.window,
             limits,
+            dma: bulk.dma,
         })
     }
     /// Diagnostic scratch the stock setup overwrote (`address`, `size`).
@@ -127,6 +129,57 @@ impl BulkMapping {
             session.invalidate_completion();
         }
         result
+    }
+}
+
+impl fujimod_usb::operations::card::RangeRead for BulkMapping {
+    fn admits(&self, address: u32, size: u32) -> bool {
+        self.enclosing(address, size).is_some()
+    }
+
+    fn read<'a>(
+        &'a mut self,
+        session: &'a mut Session,
+        address: u32,
+        size: u32,
+    ) -> fujimod_usb::emulator::EndpointFuture<'a, fujimod_usb::Result<Vec<u8>>> {
+        Box::pin(async move {
+            let target = self
+                .enclosing(address, size)
+                .ok_or(fujimod_usb::Error::OutsideDataWindow)?;
+            let raw =
+                BulkMapping::read(self, session, target)
+                    .await
+                    .map_err(|error| match error {
+                        BulkError::Usb(error) => error,
+                        error => fujimod_usb::Error::Card(error.to_string()),
+                    })?;
+            let skip = (u64::from(address) - target.address) as usize;
+            raw.get(skip..skip + size as usize)
+                .map(<[u8]>::to_vec)
+                .ok_or(fujimod_usb::Error::InvalidLength)
+        })
+    }
+}
+
+impl BulkMapping {
+    fn enclosing(&self, address: u32, size: u32) -> Option<BulkRange> {
+        if size == 0 {
+            return None;
+        }
+        let (alignment, granule) = self.dma.map_or((1, 1), |dma| {
+            (
+                u64::from(dma.address_alignment),
+                u64::from(dma.length_granule),
+            )
+        });
+        let start = u64::from(address) / alignment * alignment;
+        let size = (u64::from(address) - start + u64::from(size)).div_ceil(granule) * granule;
+        let range = BulkRange {
+            address: start,
+            size,
+        };
+        (start.checked_add(size)? <= 1u64 << 32 && self.window.contains(range)).then_some(range)
     }
 }
 
@@ -487,11 +540,11 @@ impl Source {
     async fn bulk(&self, access: &mut Access<'_>, target: BulkRange) -> Result<Vec<u8>> {
         self.bulk_progress(access, target, &mut |_| Ok(())).await
     }
-    async fn bulk_progress(
+    async fn bulk_progress<F: FnMut(u64) -> std::result::Result<(), String> + ?Sized>(
         &self,
         access: &mut Access<'_>,
         target: BulkRange,
-        progress: &mut dyn FnMut(u64) -> std::result::Result<(), String>,
+        progress: &mut F,
     ) -> Result<Vec<u8>> {
         let mut reader = DataReader::new(&mut *access.session, self.window, memory_range(target)?)?;
         let mut bytes = Vec::with_capacity(target.size as usize);
