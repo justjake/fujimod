@@ -407,10 +407,13 @@ impl ImageInput {
         let words = &bank.words;
         self.film.update(|o| words[o / 4])?;
         let mut cfa = self.cfa.as_ref().ok_or("RAW readback has no CFA layout")?.clone();
-        if self.wiring.sensor.is_some() && r[1] & 1 != 0 {
-            let [left, top] = *s.raw_origins.get(&physical(src.address, 1)?)
-                .ok_or("RAW readback source has no captured sensor window")?;
+        // The allocation retains its captured CFA phase after sensor capture
+        // is disabled for memory readback. The current mode cannot rephase
+        // pixels that were already written by the RAW DMA.
+        if let Some(&[left, top]) = s.raw_origins.get(&physical(src.address, 1)?) {
             cfa = cfa.window(left, top);
+        } else if self.wiring.sensor.is_some() && r[1] & 1 != 0 {
+            return Err("RAW readback source has no captured sensor window".into());
         } else if r[1] & 1 != 0 && r[0x35c / 4] & 1 != 0 {
             if physical(src.address, 1)? != physical(r[0x358 / 4] as u64, 1)? {
                 return Err("RAW readback source differs from the declared RAW window".into());

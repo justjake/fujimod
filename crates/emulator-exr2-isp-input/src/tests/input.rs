@@ -1408,3 +1408,49 @@ fn raw_window_crops_sensor_coordinates_and_preserves_aligned_row_padding() {
         assert!(h.effects.is_empty());
     }
 }
+
+#[test]
+fn raw_readback_retains_captured_color_phase_after_sensor_capture_is_disabled() {
+    use fujimod_emulator_image_processing::raw::Cfa;
+    let layout: Vec<u8> = (0..36).map(|i| ((i / 6 + i % 6) % 3) as u8).collect();
+    let sensor = Cfa::new(layout.clone()).unwrap();
+    for (left, top) in [(0, 62), (4, 3)] {
+        let mut h = TestHost::new();
+        let outputs: memory_outputs::MemoryOutputHandle = Default::default();
+        outputs.lock().unwrap().configure(0, Some(dma::Raster {
+            address: 0x9000, width: 6, height: 6, pitch: 12,
+        })).unwrap();
+        for y in 0..6 {
+            for x in 0..6 {
+                let value = [400u16, 800, 1600][sensor.color(left + x, top + y)];
+                let at = 0x8000 + (y * 6 + x) * 2;
+                h.ram[at..at + 2].copy_from_slice(&value.to_le_bytes());
+            }
+        }
+        let bank: parameters::ParameterHandle = Default::default();
+        let mut words = film_words();
+        words[0x200 / 4] = 1024 | (512 << 16);
+        words[0x204 / 4] = 256;
+        bank.lock().unwrap().words[..words.len()].copy_from_slice(&words);
+        let mut wiring = input_wiring();
+        wiring.parameters = Some(bank);
+        wiring.memory_outputs = Some(outputs.clone());
+        let mut options = input_options();
+        options.cfa = Some(layout.clone());
+        let mut device = ImageInput::new(options, wiring).unwrap();
+        // Restore the DMA-owned origin with its captured bytes. Turning off
+        // sensor capture does not change the color layout of that allocation.
+        let mut checkpoint = device.save();
+        checkpoint[0]["raw_origins"] = serde_json::json!({"32768": [left, top]});
+        device.restore(&checkpoint).unwrap();
+        for (offset, value) in [
+            (4, 0), (0x394, 0x1000000), (0x398, 6 << 16), (0x39c, 0x40000),
+            (0x3a0, 6), (0x3a4, 12), (0x3a8, 0x40008000),
+            (0x3ac, 0xc003), (0x3b8, 0xfb000000), (0x390, 1),
+        ] { write(&mut device, &mut h, 0xfff10000 + offset, value); }
+        h.now = 7;
+        assert!(outputs.lock().unwrap().transfers[0].write(&mut h.cx()).unwrap());
+        assert!(h.ram[0x9000..0x9048].chunks_exact(4)
+            .all(|p| p[0] == p[1] && p[2..] == [128, 128]));
+    }
+}
