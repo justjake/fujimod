@@ -60,7 +60,7 @@ const GROUP_TITLES: Record<string, string> = {
 };
 const MEDIA = '/artifacts/docs/';
 const media = featureMedia();
-const RATIO = /^ratio:(\d+):(\d+)$/;
+const RATIO = /^ratio:(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/;
 
 /** A sprite icon cropped to its ink, sized by the context's --icon-size so every icon has the same optical size. */
 function Icon(props: { name: string }) {
