@@ -338,6 +338,21 @@ pub fn exr2_flash<L: Lookup>(
     let (geometry_address, selected, table, blocks, page, pages) =
         one(geometry, "selected NAND geometry")?;
     let reader = locator.named("nand_read_transfer", |r| read_contract(r, page, pages))?;
+    // Bound each call to one erase block. Large-page reads of 256 sectors
+    // enter an RTOS timer path; 63 pages stay below that threshold.
+    let timer_sectors = [127, 255].into_iter().find(|limit| {
+        let operands = format!("r8, #0x{limit:x}");
+        reader.has("cmpne", &operands) || reader.has("cmp", &operands)
+    });
+    let max_pages_per_call = if page == 512 {
+        32
+    } else if reader.has("and", "sl, r2, #0x3f")
+        && reader.has("rsb", "sl, sl, #0x100")
+    {
+        timer_sectors.map_or(1, |sectors| sectors / 4)
+    } else {
+        1
+    };
     let (dma, handle_allocator, receive_handle, handle_literal) = receive_dma(&locator, &reader)?;
     let transfer_geometry = locator.named("nand_set_geometry", |r| {
         r.has("ldr", "r2, [r0]") && r.has("str", "r2, [r3, #-0xfff]")
@@ -446,7 +461,7 @@ pub fn exr2_flash<L: Lookup>(
         "device":{"kind":"raw-nand"},
         "window":{"address":0,"size":u64::from(blocks)*u64::from(page)*u64::from(pages)},
         "update_image":{"dat_offset":image_origin,"xor":255},
-        "reader":{"symbol":"nand_read_transfer","alignment":page,"nand":{"page_bytes":page,"pages_per_block":pages,"destination_alignment":32,"controller_mode":0,"event_mode":0,"timeout_ms":2000,"max_pages_per_call":1,"lock":lock.header.key.address,"unlock":unlock.header.key.address}},
+        "reader":{"symbol":"nand_read_transfer","alignment":page,"nand":{"page_bytes":page,"pages_per_block":pages,"destination_alignment":32,"controller_mode":0,"event_mode":0,"timeout_ms":2000,"max_pages_per_call":max_pages_per_call,"lock":lock.header.key.address,"unlock":unlock.header.key.address}},
         "transport":"exr2-query-heap","code_ranges":ranges,
         "state_checks":[{"name":"NAND receive DMA channel available","address":receive_handle,"size":4,"value":0},{"name":"selected NAND geometry","address":geometry_address,"size":4,"value":selected}],
         "control":{"offset":control_offset,"size":32768}

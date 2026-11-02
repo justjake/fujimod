@@ -46,14 +46,18 @@ impl MemoryOperation {
                 limits,
                 memory,
             } => {
-                let mapping = BulkMapping::prepare(s, &facts, limits)
+                let mapping = BulkMapping::prepare_preserving(s, &facts, limits)
                     .await
                     .map_err(bulk_error)?;
                 *memory.mapping.borrow_mut() = Some(mapping);
                 Ok(memory.into())
             }
             Self::Read(cell, range, limits) => {
-                if range.length().get() <= packet {
+                if range.length().get()
+                    <= packet
+                        .min(limits.memory.read.get())
+                        .min(s.max_reply_bytes().get().saturating_sub(36))
+                {
                     let command = ReadMemory::new(range, limits.memory).map_err(error)?;
                     return s.read_memory(command).await.map(bytes).map_err(error);
                 }
@@ -72,12 +76,11 @@ impl MemoryOperation {
                 if cell.borrow().is_none() {
                     return Err(closed());
                 }
-                if data.len() as u64 <= u64::from(packet) {
+                if data.len() as u64 <= u64::from(packet.min(limits.memory.write.get())) {
                     let command = WriteMemory::new(address, data, limits.memory).map_err(error)?;
                     s.write_memory(command).await.map_err(error)?;
                 } else {
-                    // The camera has no bulk write; larger writes are split
-                    // into packet-sized commands.
+                    // This handle uses bounded debug writes.
                     usb::operations::memory::write_range(s, address, &data, limits.memory)
                         .await
                         .map_err(error)?;

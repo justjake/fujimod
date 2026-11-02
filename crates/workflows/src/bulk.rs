@@ -260,7 +260,10 @@ impl<'a> Qualified<'a> {
         check_identity(session, bulk).await?;
         let mut access = Access { session, limits };
         check_code(&mut access, bulk).await?;
-        let mut source = Source::prepare(&mut access, bulk).await?;
+        let mut source = match bulk.source {
+            BulkSource::Query { .. } => Source::prepare(&mut access, bulk).await?,
+            _ => Source::borrow(&mut access, bulk).await?,
+        };
         if let Some(alignment) = alignment {
             source.window = source.window.with_alignment(alignment);
         }

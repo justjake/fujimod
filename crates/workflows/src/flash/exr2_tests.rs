@@ -18,6 +18,56 @@ fn checked_write(s: &mut Vec<E>, at: u32, bytes: &[u8]) {
     s.extend(read(at, bytes));
 }
 
+#[test]
+fn capture_callback_is_published_once_and_restored_after_multiple_checks() {
+    for width in [4, 8] {
+        let original = &0x2000u64.to_le_bytes()[..width];
+        let entry = &0x1800u64.to_le_bytes()[..width];
+        let mut steps = setup();
+        steps.extend(read(0x150c, original));
+        checked_write(&mut steps, 0x150c, entry);
+        steps.extend(read(0x150c, entry));
+        steps.extend(read(0x150c, entry));
+        steps.extend(read(0x150c, entry));
+        checked_write(&mut steps, 0x150c, original);
+        let (mut session, script) = opened(steps);
+        let mut reader =
+            block_on(Qualified::prepare(&mut session, &query_camera(), limits())).unwrap();
+        let mut lease = CallbackLease::new(0x150c, 0x2000, 0x1800, width);
+        block_on(lease.publish(&mut reader)).unwrap();
+        block_on(lease.check(&mut reader)).unwrap();
+        block_on(lease.check(&mut reader)).unwrap();
+        block_on(lease.restore(&mut reader)).unwrap();
+        assert_eq!(script.remaining(), 0);
+    }
+}
+
+#[test]
+fn capture_callback_never_restores_a_foreign_owner_or_unknown_completion() {
+    for unknown in [false, true] {
+        let mut steps = setup();
+        steps.extend(read(0x150c, &0x2000u32.to_le_bytes()));
+        checked_write(&mut steps, 0x150c, &0x1800u32.to_le_bytes());
+        if !unknown {
+            steps.extend(read(0x150c, &0x9999u32.to_le_bytes()));
+        }
+        let (mut session, script) = opened(steps);
+        let mut reader =
+            block_on(Qualified::prepare(&mut session, &query_camera(), limits())).unwrap();
+        let mut lease = CallbackLease::new(0x150c, 0x2000, 0x1800, 4);
+        block_on(lease.publish(&mut reader)).unwrap();
+        if unknown {
+            reader.access.session.invalidate_completion();
+        }
+        assert!(block_on(lease.restore(&mut reader)).is_err());
+        assert_eq!(
+            reader.access.session.state(),
+            SessionState::CompletionUnknown
+        );
+        assert_eq!(script.remaining(), 0);
+    }
+}
+
 fn configuration_read(offset: u32, value: u8) -> Vec<E> {
     use fujimod_usb::ff80::commands::configuration::{ConfigurationLocation, ReadConfiguration};
     let request = ReadConfiguration::new(
@@ -164,7 +214,7 @@ fn reader_metadata_rejects_corrupt_code_unbounded_ranges_and_unsupported_geometr
         }])
         .collect();
     let p = Payload {
-        schema: 2,
+        schema: 4,
         firmware_id: "x70-110".into(),
         firmware_sha256: "c".repeat(64),
         sha256: bulk::hex(&sha256_bytes(&image)),
@@ -206,12 +256,18 @@ fn reader_metadata_rejects_corrupt_code_unbounded_ranges_and_unsupported_geometr
 #[test]
 fn ecc_bitmap_reports_physical_offsets_and_refuses_bits_outside_the_request() {
     assert_eq!(
-        decode_uncorrectable(0x8000_0000_0000_0001, 0x20000, 0x8000, 512).unwrap(),
+        decode_uncorrectable(
+            &0x8000_0000_0000_0001u64.to_le_bytes(),
+            0x20000,
+            0x8000,
+            512
+        )
+        .unwrap(),
         [0x20000, 0x27e00]
     );
     assert_eq!(
-        decode_uncorrectable(5, 0x40000, 0x2000, 2048).unwrap(),
+        decode_uncorrectable(&5u32.to_le_bytes(), 0x40000, 0x2000, 2048).unwrap(),
         [0x40000, 0x41000]
     );
-    assert!(decode_uncorrectable(1 << 16, 0, 0x8000, 2048).is_err());
+    assert!(decode_uncorrectable(&(1u32 << 16).to_le_bytes(), 0, 0x8000, 2048).is_err());
 }

@@ -56,9 +56,7 @@ async def test_stream_exclusively_owns_session_and_returns_exact_tail() -> None:
             (await session.ping())
         with pytest.raises(usb.SessionBusyError):
             (await session.close())
-        assert (await anext(reader)) == b"abcd"
-        assert reader.bytes_completed == 4
-        assert (await anext(reader)) == b"ef"
+        assert (await anext(reader)) == b"abcdef"
         assert reader.bytes_completed == 6
         with pytest.raises(StopAsyncIteration):
             (await anext(reader))
@@ -69,12 +67,14 @@ async def test_stream_exclusively_owns_session_and_returns_exact_tail() -> None:
 
 
 async def test_early_close_restores_session_without_issuing_extra_commands() -> None:
-    session, script = await opened(memory_read(0x1000, b"abcd"))
-    reader = usb.memory.read_chunks(session, 0x1000, 8)
-    assert (await anext(reader)) == b"abcd"
+    batch = b"abcd" * 1024
+    steps = [step for i in range(1024) for step in memory_read(0x1000 + i * 4, b"abcd")]
+    session, script = await opened(steps)
+    reader = usb.memory.read_chunks(session, 0x1000, 8192)
+    assert (await anext(reader)) == batch
     (await reader.aclose())
     assert session.state == usb.SessionState.Ready
-    assert reader.bytes_completed == 4
+    assert reader.bytes_completed == len(batch)
     assert [part async for part in reader] == []
     assert script.remaining == 0
 
@@ -98,16 +98,18 @@ async def test_context_exception_returns_session_without_io() -> None:
 
 
 async def test_stream_failure_keeps_delivered_bytes_and_fences_session() -> None:
-    second = memory_read(0x1004, b"efgh")
+    batch = b"abcd" * 1024
+    first = [step for i in range(1024) for step in memory_read(0x1000 + i * 4, b"abcd")]
+    second = memory_read(0x2000, b"efgh")
     second[-1] = E.disconnected(40, b"\x01\x00")
-    session, script = await opened([*memory_read(0x1000, b"abcd"), *second])
+    session, script = await opened([*first, *second])
     sink = bytearray()
-    reader = usb.memory.read_chunks(session, 0x1000, 8)
+    reader = usb.memory.read_chunks(session, 0x1000, 8192)
     sink.extend(await anext(reader))
     with pytest.raises(usb.TransferError) as failure:
         (await anext(reader))
-    assert sink == b"abcd"
-    assert reader.bytes_completed == 4
+    assert sink == batch
+    assert reader.bytes_completed == len(batch)
     assert failure.value.partial == b"\x01\x00"
     assert failure.value.transferred == 2
     assert session.state == usb.SessionState.CompletionUnknown

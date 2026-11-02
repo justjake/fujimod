@@ -47,6 +47,20 @@
       ]
     },
     {
+      "id": "camera-fast-memory",
+      "title": "Memory capture measured at 8 MiB/s or more",
+      "requires": [
+        "camera-snapshot"
+      ]
+    },
+    {
+      "id": "camera-fast-flash",
+      "title": "Flash capture measured at 8 MiB/s or more",
+      "requires": [
+        "camera-backup"
+      ]
+    },
+    {
       "id": "camera-debug",
       "title": "Debug mode saved persistently",
       "requires": [

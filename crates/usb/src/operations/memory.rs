@@ -7,7 +7,7 @@ use crate::{
 };
 use std::{borrow::BorrowMut, num::NonZeroU32};
 
-/// Pull-based range download, one bounded command per `next_chunk().await`.
+/// Pull-based range download, a bounded command batch per `next_chunk().await`.
 ///
 /// Retains progress without accumulating the full range. If a chunk fails,
 /// previously returned chunks remain valid and no retry is issued automatically.
@@ -50,12 +50,13 @@ impl<S: BorrowMut<Session>> MemoryReader<S> {
                 limit: budget,
             });
         }
-        let Some(range) = chunk(self.range, self.offset, maximum) else {
+        // Keep the protocol's packet bound, but amortize language/relay waits
+        // over a batch. Large captures use E1; this also speeds fallback reads.
+        let yield_bytes = maximum.saturating_mul(BATCH_COMMANDS as u32).min(1 << 20);
+        let Some(range) = chunk(self.range, self.offset, yield_bytes) else {
             return Ok(None);
         };
-        let data = session
-            .read_memory(ReadMemory::new(range, self.limits)?)
-            .await?;
+        let data = read_range(session, range, self.limits).await?;
         self.offset += range.length().get();
         Ok(Some(data))
     }

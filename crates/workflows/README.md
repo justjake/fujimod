@@ -199,3 +199,18 @@ EXR II preparation also requires an explicit function index, checks its
 allocator/configuration candidates against initialized update bytes, locates
 CPU0 cache helpers by immutable fingerprints, and rejects absolute references
 into the compiled entrypoints' link image.
+
+Capture defaults use the live registered E1 capacity within the session budget;
+the 64 KiB diagnostic counting pattern does not cap bulk RAM transfers. Larger
+browser memory reads borrow that publication without overwriting scratch.
+Bounded debug-memory streams batch commands before yielding to the host.
+
+Flash captures publish their callback once for the exclusive capture, verify
+ownership before each execution, and restore it before releasing code. The
+query/heap reader uses a 1 MiB buffer and located NAND burst limits, stopping at
+erase-block boundaries. Failed nonblank or partial bursts are reread page by
+page. Completed erased ECC bursts flag every covered page; the returned
+`uncorrectable_granularity_bytes` reports the maximum observation span. The
+command-callback reader uses a 60 KiB buffer inside its 64 KiB executable
+reservation. The native backup example records elapsed workflow time, progress
+and command counts/timings alongside the verified file coverage and hash.

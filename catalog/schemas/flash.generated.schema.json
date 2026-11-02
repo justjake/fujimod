@@ -218,7 +218,7 @@
           "type": "integer"
         },
         "max_pages_per_call": {
-          "description": "One page per call, matching the stock physical-page caller.",
+          "description": "Qualified burst bound; callers also stop at erase-block boundaries.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"

@@ -24,7 +24,7 @@
       "controller_mode": 0,
       "event_mode": 0,
       "timeout_ms": 2000,
-      "max_pages_per_call": 1,
+      "max_pages_per_call": 31,
       "lock": 10210264,
       "unlock": 10210288
     }

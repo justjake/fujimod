@@ -111,7 +111,7 @@ pub struct NandPageReader {
     pub controller_mode: u32,
     pub event_mode: u32,
     pub timeout_ms: u32,
-    /// One page per call, matching the stock physical-page caller.
+    /// Qualified burst bound; callers also stop at erase-block boundaries.
     pub max_pages_per_call: u32,
     pub lock: u64,
     pub unlock: u64,
@@ -301,7 +301,8 @@ impl FirmwareFlash {
                     || nand.controller_mode != 0
                     || nand.event_mode != 0
                     || nand.timeout_ms == 0
-                    || nand.max_pages_per_call != 1
+                    || nand.max_pages_per_call == 0
+                    || nand.max_pages_per_call > nand.pages_per_block.min(63)
                     || self.reader.alignment != nand.page_bytes
                     || ![nand.lock, nand.unlock]
                         .iter()

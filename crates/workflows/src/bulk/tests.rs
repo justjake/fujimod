@@ -268,20 +268,14 @@ fn mounted_reader_rounds_dma_inside_its_window_and_never_caches_live_bytes() {
 fn zero_base_source_is_restored_after_reading_addresses_directly() {
     let original = [7u8; 12];
     let mut steps = qualified();
-    let scratch = [0x10_0000u32, 0, 64];
-    steps.extend(read(0x1300, &words(&scratch)));
-    steps.extend(read(0x1500, &words(&[0x200000, 0])));
+    steps.extend(read(0x1300, &words(&[0x10_0000, 0, 64])));
     steps.extend(read(0x1400, &original));
-    steps.extend(diagnostic(0x550001, 0, 32));
-    steps.extend(read(0x1400, &words(&[0x10_0000, 0, 32])));
-    steps.extend(data(0, &(0..32).collect::<Vec<u8>>()));
-    steps.extend(write(0x1400, &[0; 8]));
-    steps.extend(read(0x1400, &[0; 8]));
+    steps.extend(write(0x1400, &words(&[0, 0, 64])));
+    steps.extend(read(0x1400, &words(&[0, 0, 64])));
     steps.extend(read(0x1000, b"stoc"));
     steps.extend(data(0x1000, b"stoc"));
-    steps.extend(data(0x1800, &[3; 32]));
-    steps.extend(data(0x1820, &[4; 32]));
-    steps.extend(read(0x1400, &words(&[0, 0, 32])));
+    steps.extend(data(0x1800, &[[3; 32], [4; 32]].concat()));
+    steps.extend(read(0x1400, &words(&[0, 0, 64])));
     steps.extend(write(0x1400, &original));
     steps.extend(read(0x1400, &original));
     let (mut session, script) = opened(steps);
@@ -294,15 +288,14 @@ fn zero_base_source_is_restored_after_reading_addresses_directly() {
     ))
     .unwrap();
     assert_eq!(read.data, [[3; 32], [4; 32]].concat());
-    assert_eq!(read.overwritten, Some((0x10_0000, 32)));
+    assert_eq!(read.overwritten, None);
     assert_eq!(script.remaining(), 0);
 }
 
 #[test]
-fn zero_base_refuses_scratch_overlapping_active_configuration() {
+fn zero_base_refuses_a_registered_capacity_smaller_than_the_located_contract() {
     let mut steps = qualified();
-    steps.extend(read(0x1300, &words(&[0x20_0000, 0, 64])));
-    steps.extend(read(0x1500, &words(&[0x20_0000, 0])));
+    steps.extend(read(0x1300, &words(&[0x20_0000, 0, 31])));
     let (mut session, script) = opened(steps);
     let camera = zero_base_camera();
     let error = block_on(read_bulk(
@@ -312,33 +305,34 @@ fn zero_base_refuses_scratch_overlapping_active_configuration() {
         camera_scope_range(&camera),
     ))
     .unwrap_err();
-    assert!(error.to_string().contains("overlaps"), "{error}");
+    assert!(error.to_string().contains("capacity"), "{error}");
     assert_eq!(script.remaining(), 0);
 }
 
 #[test]
-fn zero_base_pattern_mismatch_restores_the_source_before_refusing() {
+fn zero_base_read_mismatch_restores_the_source_before_refusing() {
     let original = [7u8; 12];
     let mut steps = qualified();
     steps.extend(read(0x1300, &words(&[0x10_0000, 0, 64])));
-    steps.extend(read(0x1500, &words(&[0x200000, 0])));
     steps.extend(read(0x1400, &original));
-    steps.extend(diagnostic(0x550001, 0, 32));
-    steps.extend(read(0x1400, &words(&[0x10_0000, 0, 32])));
-    steps.extend(data(0, &[0; 32]));
-    steps.extend(read(0x1400, &words(&[0x10_0000, 0, 32])));
+    steps.extend(write(0x1400, &words(&[0, 0, 64])));
+    steps.extend(read(0x1400, &words(&[0, 0, 64])));
+    steps.extend(read(0x1000, b"stoc"));
+    steps.extend(data(0x1000, b"oops"));
+    steps.extend(read(0x1400, &words(&[0, 0, 64])));
     steps.extend(write(0x1400, &original));
     steps.extend(read(0x1400, &original));
     let (mut session, script) = opened(steps);
     let camera = zero_base_camera();
-    let error = block_on(read_bulk(
-        &mut session,
-        &camera,
-        limits(),
-        camera_scope_range(&camera),
-    ))
-    .unwrap_err();
-    assert!(error.to_string().contains("pattern mismatch"), "{error}");
+    assert!(
+        block_on(read_bulk(
+            &mut session,
+            &camera,
+            limits(),
+            camera_scope_range(&camera)
+        ))
+        .is_err()
+    );
     assert_eq!(script.remaining(), 0);
 }
 

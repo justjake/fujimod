@@ -172,7 +172,7 @@ def test_chunk_iterator_holds_session_and_preserves_exact_tail() -> None:
             assert s.state == usb.SessionState.ReadingRange
             with pytest.raises(usb.SessionBusyError):
                 await s.ping()
-            assert [b async for b in reader] == [b"abcd", b"ef"]
+            assert [b async for b in reader] == [b"abcdef"]
         assert reader.bytes_completed == 6
         assert s.state == usb.SessionState.Ready and script.remaining == 0
 

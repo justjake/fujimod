@@ -75,6 +75,73 @@ pub(crate) async fn write(
         "RAM write readback differs",
     )
 }
+
+/// One callback publication for an exclusive capture session. Each execution
+/// checks ownership; restoration happens once before the code can be released.
+pub(crate) struct CallbackLease {
+    slot: u64,
+    original: Vec<u8>,
+    entry: Vec<u8>,
+    touched: bool,
+}
+impl CallbackLease {
+    pub(crate) fn new(slot: u64, original: u64, entry: u64, width: usize) -> Self {
+        assert!(matches!(width, 4 | 8));
+        Self {
+            slot,
+            original: original.to_le_bytes()[..width].to_vec(),
+            entry: entry.to_le_bytes()[..width].to_vec(),
+            touched: false,
+        }
+    }
+    pub(crate) async fn publish(&mut self, reader: &mut Qualified<'_>) -> bulk::Result<()> {
+        require(
+            reader
+                .access
+                .raw(self.slot, self.original.len() as u64)
+                .await?
+                == self.original,
+            "Capture callback is occupied",
+        )?;
+        self.touched = true;
+        write(reader, self.slot, &self.entry).await
+    }
+    pub(crate) async fn check(&self, reader: &mut Qualified<'_>) -> bulk::Result<()> {
+        require(
+            reader
+                .access
+                .raw(self.slot, self.entry.len() as u64)
+                .await?
+                == self.entry,
+            "Capture callback ownership changed",
+        )
+    }
+    pub(crate) async fn restore(&self, reader: &mut Qualified<'_>) -> bulk::Result<()> {
+        if !self.touched {
+            return Ok(());
+        }
+        let cleanup = async {
+            require(
+                reader.access.session.state() == SessionState::Ready,
+                "Completion unknown; capture callback restoration withheld",
+            )?;
+            let current = reader
+                .access
+                .raw(self.slot, self.entry.len() as u64)
+                .await?;
+            require(
+                current == self.entry || current == self.original,
+                "Capture callback ownership changed; restoration withheld",
+            )?;
+            write(reader, self.slot, &self.original).await
+        }
+        .await;
+        if cleanup.is_err() {
+            reader.access.session.invalidate_completion();
+        }
+        cleanup
+    }
+}
 pub(crate) async fn check_code(
     reader: &mut Qualified<'_>,
     checks: &[CodeCheck],
@@ -104,22 +171,7 @@ pub(crate) async fn invoke(
     let replacement = entry.to_le_bytes();
     let outcome = async {
         write(reader, slot, &replacement).await?;
-        let text = b"CMD PROBE\n";
-        let mut body: Vec<u8> = [5u32, 0, 0, 0, text.len() as u32]
-            .into_iter()
-            .flat_map(u32::to_le_bytes)
-            .collect();
-        body.extend(text);
-        let request = Request::new(CommandCode(0x200001), body, NonZeroU32::new(256).unwrap())?;
-        let reply = reader.access.session.research_command(&request).await?;
-        require(
-            reply.body().len() >= 4 && word(&reply.body()[..4]) == 5,
-            "Service callback operation echo differs",
-        )?;
-        require(
-            !require_success || reply.status == CommandStatus::Success,
-            "Service callback returned an error",
-        )
+        execute(reader, require_success).await
     }
     .await;
     let restored = async {
@@ -142,6 +194,25 @@ pub(crate) async fn invoke(
         reader.access.session.invalidate_completion();
     }
     bulk::finish(outcome, restored)
+}
+
+pub(crate) async fn execute(reader: &mut Qualified<'_>, require_success: bool) -> bulk::Result<()> {
+    let text = b"CMD PROBE\n";
+    let mut body: Vec<u8> = [5u32, 0, 0, 0, text.len() as u32]
+        .into_iter()
+        .flat_map(u32::to_le_bytes)
+        .collect();
+    body.extend(text);
+    let request = Request::new(CommandCode(0x200001), body, NonZeroU32::new(256).unwrap())?;
+    let reply = reader.access.session.research_command(&request).await?;
+    require(
+        reply.body().len() >= 4 && word(&reply.body()[..4]) == 5,
+        "Service callback operation echo differs",
+    )?;
+    require(
+        !require_success || reply.status == CommandStatus::Success,
+        "Service callback returned an error",
+    )
 }
 
 /// Ownership accepts mutable objects but pins every code byte and unused tail.

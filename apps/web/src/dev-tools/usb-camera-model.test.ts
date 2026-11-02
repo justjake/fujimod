@@ -163,6 +163,7 @@ class CameraDevice implements ModelDevice {
         size: 4,
         sha256: 'a'.repeat(64),
         uncorrectablePageOffsets: [],
+        uncorrectableGranularityBytes: 0,
       }),
       dumpState: async () => {},
       memory: async () => ({
@@ -1249,6 +1250,7 @@ test('service preparation, flash chunks and state regions use the owned workflow
         size: 2,
         sha256: 'b'.repeat(64),
         uncorrectablePageOffsets: [],
+        uncorrectableGranularityBytes: 0,
       };
     },
   );

@@ -6,6 +6,7 @@ use fujimod_catalog::ReferenceCatalog;
 use fujimod_usb::{
     connection::{self, Connection, DeviceFilter, TransferOptions},
     ff80::{SessionState, commands::memory::DebugMemoryLimits},
+    trace::{Action, Trace},
 };
 use fujimod_workflows::{Limits, flash};
 use serde::Deserialize;
@@ -16,7 +17,7 @@ use std::{
     io::{Read, Seek, SeekFrom, Write},
     num::NonZeroU32,
     path::PathBuf,
-    time::Duration,
+    time::{Duration, Instant, SystemTime},
 };
 
 #[derive(Deserialize)]
@@ -31,6 +32,43 @@ struct Sink {
     size: u64,
     spans: BTreeMap<u64, u64>,
     delivered: u64,
+}
+
+#[derive(Default)]
+struct Timings {
+    pending: BTreeMap<u64, (u32, SystemTime)>,
+    commands: BTreeMap<u32, (u64, f64)>,
+    dropped: u64,
+}
+impl Timings {
+    fn collect(&mut self, trace: &Trace) {
+        let batch = trace.drain();
+        self.dropped += batch.dropped_events;
+        for event in batch.protocol_events {
+            match event.action {
+                Action::Submitted { .. } => {
+                    self.pending
+                        .insert(event.exchange, (event.command, event.timestamp));
+                }
+                Action::Completed { .. } | Action::Failed { .. } | Action::Canceled => {
+                    if let Some((command, start)) = self.pending.remove(&event.exchange) {
+                        let row = self.commands.entry(command).or_default();
+                        row.0 += 1;
+                        row.1 += event
+                            .timestamp
+                            .duration_since(start)
+                            .unwrap_or_default()
+                            .as_secs_f64();
+                    }
+                }
+            }
+        }
+    }
+    fn report(&self) -> serde_json::Value {
+        serde_json::json!({"dropped_trace_events":self.dropped,
+            "protocol":self.commands.iter().map(|(command,(count,seconds))|
+                serde_json::json!({"command":format!("{command:#x}"),"count":count,"seconds":seconds})).collect::<Vec<_>>()})
+    }
 }
 impl Sink {
     fn put(&mut self, offset: u64, data: &[u8]) -> Result<(), String> {
@@ -163,7 +201,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
     connection.set_tool("Whole-flash backup".into());
-    let mut session = connection.begin_session(None).await?;
+    let trace = Trace::new(
+        NonZeroU32::new(32768).unwrap(),
+        NonZeroU32::new(8 << 20).unwrap(),
+    );
+    let mut timings = Timings::default();
+    let mut session = connection.begin_session(Some(trace.clone())).await?;
     let limits = Limits {
         memory: DebugMemoryLimits {
             read: NonZeroU32::new(256).unwrap(),
@@ -172,6 +215,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         configuration: NonZeroU32::new(256).unwrap(),
     };
     let mut last = 0;
+    let started = Instant::now();
+    let mut progress_seconds = Vec::new();
     let result = flash::backup(
         &mut session,
         &bulk,
@@ -183,7 +228,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             chunk: &mut |offset, bytes| sink.put(offset, &bytes),
             progress: &mut |done, total| {
                 if done == 0 || done == total || done - last >= 1024 * 1024 {
-                    println!("{done}/{total} bytes");
+                    let elapsed = started.elapsed().as_secs_f64();
+                    println!("{done}/{total} bytes at {elapsed:.3}s");
+                    progress_seconds.push(serde_json::json!({"bytes":done,"seconds":elapsed}));
+                    timings.collect(&trace);
                     last = done;
                 }
                 Ok(())
@@ -191,6 +239,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         },
     )
     .await;
+    let workflow_seconds = started.elapsed().as_secs_f64();
     let closed = if session.state() == SessionState::Ready {
         session
             .close()
@@ -200,16 +249,23 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         Err("Session completion unknown; close withheld".into())
     };
+    timings.collect(&trace);
     sink.file.sync_all()?;
     let mut report = serde_json::json!({"complete": false, "firmware_id": flash.firmware_id,
+        "firmware_sha256": artifact.payload.firmware_sha256(),
         "size": flash.window.size, "delivered": sink.delivered,
         "written_ranges": sink.spans.iter().map(|(&offset, &size)|
             serde_json::json!({"offset": offset, "size": size})).collect::<Vec<_>>(),
         "session_closed": closed.as_ref().is_ok_and(|v| *v),
         "session_close_error": closed.as_ref().err(),
         "operation_error": result.as_ref().err().map(ToString::to_string)});
+    report["performance"] = timings.report();
+    report["performance"]["workflow_seconds"] = workflow_seconds.into();
+    report["performance"]["progress"] = progress_seconds.into();
     if let Ok(backup) = &result {
         report["uncorrectable_page_offsets"] = serde_json::json!(backup.uncorrectable_page_offsets);
+        report["uncorrectable_granularity_bytes"] =
+            serde_json::json!(backup.uncorrectable_granularity_bytes);
         let digest = sink.digest()?;
         if digest != backup.sha256 {
             return Err("Saved flash hash differs from workflow".into());

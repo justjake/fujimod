@@ -8,6 +8,8 @@ use fujimod_catalog_bulk::{BulkRange, FirmwareBulk};
 use fujimod_usb::ff80::Session;
 use serde::{Deserialize, Serialize};
 pub use xp5::Backup;
+/// Capture buffers use the stock bulk transport's MiB-scale transfers.
+pub const CAPTURE_CHUNK_BYTES: u32 = 1 << 20;
 
 /// Data delivery and logical flash-byte progress. Progress starts at zero and
 /// advances after each successfully delivered chunk, excluding the control read.
@@ -32,7 +34,7 @@ impl Payload {
     pub fn buffer_capacity(&self) -> u32 {
         match self {
             Self::Xp5Command(p) => p.buffer_capacity,
-            Self::Exr2Query(_) => 0x8000,
+            Self::Exr2Query(_) => CAPTURE_CHUNK_BYTES,
         }
     }
     pub fn firmware_sha256(&self) -> &str {

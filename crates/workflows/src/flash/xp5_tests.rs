@@ -239,8 +239,6 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
         let (bulk, flash, payload, image) = fixture();
         payload.validate(&flash, &bulk, &image).unwrap();
         let original = [7; 12];
-        let pattern: Vec<u8> = (0..32).collect();
-        let original_scratch = [8; 32];
         let mut s = info(4, "X-M5");
         s.extend(info(8, "2.06"));
         s.extend(cfg(163, 1, false));
@@ -249,24 +247,11 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
         s.extend(cfg(247, 1, false));
         s.extend(memory_read(0x1300, &words(&[0x100000, 0, 32])));
         s.extend(memory_read(0x1900, &0x2000u64.to_le_bytes()));
-        if !range_only {
-            s.extend(memory_read(0x100000, &original_scratch));
-        }
         s.extend(crate::bulk::tests::qualified());
         s.extend(memory_read(0x1300, &words(&[0x100000, 0, 32])));
-        if range_only {
-            s.extend(memory_read(0x1400, &original));
-            s.extend(write(0x1400, &words(&[0, 0, 32])));
-            s.extend(memory_read(0x1400, &words(&[0, 0, 32])));
-        } else {
-            s.extend(memory_read(0x1900, &words(&[0x2000, 0])));
-            s.extend(memory_read(0x1400, &original));
-            s.extend(diagnostic(0x550001, 0, 32));
-            s.extend(memory_read(0x1400, &words(&[0x100000, 0, 32])));
-            s.extend(data(0, &pattern));
-            s.extend(write(0x1400, &[0; 8]));
-            s.extend(memory_read(0x1400, &[0; 8]));
-        }
+        s.extend(memory_read(0x1400, &original));
+        s.extend(write(0x1400, &words(&[0, 0, 32])));
+        s.extend(memory_read(0x1400, &words(&[0, 0, 32])));
         s.extend(memory_read(0x1000, b"stoc"));
         s.extend(data(0x1000, b"stoc"));
         s.extend(memory_read(0x1800, &[0; 16]));
@@ -279,6 +264,8 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
         }
         s.extend(bulk_chunks(0x4000, &image));
         s.extend(invoke(0x1800, 7));
+        s.extend(memory_read(0x1700, &[0; 8]));
+        s.extend(write_verified(0x1700, &0x4080u64.to_le_bytes()));
         s.extend(memory_read(0x4028, &[0; 8]));
         let order = if range_only {
             vec![(0, 64), (4096, 64)]
@@ -296,7 +283,10 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
                 .flat_map(u64::to_le_bytes)
                 .collect();
             s.extend(write_verified(0x4000, &request));
-            s.extend(invoke(0x4080, 0));
+            let call = invoke(0x4080, 0);
+            // Keep ownership check and execution, with publication/restoration once.
+            s.extend(memory_read(0x1700, &0x4080u64.to_le_bytes()));
+            s.extend(call[12..16].iter().cloned());
             let result: Vec<u8> = [1, 0, index as u64 + 1, 0xf0000000 + offset, n]
                 .into_iter()
                 .flat_map(u64::to_le_bytes)
@@ -308,6 +298,8 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
             observed[24..64].copy_from_slice(&result);
             observed[0x100..0x100 + n as usize].copy_from_slice(&bytes);
         }
+        s.extend(memory_read(0x1700, &0x4080u64.to_le_bytes()));
+        s.extend(write_verified(0x1700, &[0; 8]));
         s.extend(memory_read(0x1700, &[0; 8]));
         let mut arena = observed;
         arena.resize(0x2000, 0);
@@ -320,11 +312,6 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
         s.extend(memory_read(0x1400, &words(&[0, 0, 32])));
         s.extend(write(0x1400, &original));
         s.extend(memory_read(0x1400, &original));
-        if !range_only {
-            s.extend(memory_read(0x100000, &pattern));
-            s.extend(write(0x100000, &original_scratch));
-            s.extend(memory_read(0x100000, &original_scratch));
-        }
         s.extend(cfg(163, 1, false));
         s.extend(cfg(247, 1, false));
         s.extend(cfg(247, 0, true));

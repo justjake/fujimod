@@ -442,6 +442,11 @@ impl FlashBackup {
             uncorrectable.push(&JsValue::from_f64(offset as f64));
         }
         property(&result, "uncorrectablePageOffsets", uncorrectable);
+        property(
+            &result,
+            "uncorrectableGranularityBytes",
+            backup.uncorrectable_granularity_bytes,
+        );
         Ok(result.into())
     }
 }
@@ -467,5 +472,6 @@ export interface FlashBackupResult {
     size: number;
     sha256: string;
     uncorrectablePageOffsets: number[];
+    uncorrectableGranularityBytes: number;
 }
 "#;

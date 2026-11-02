@@ -584,7 +584,7 @@ fn prepare_exr2(input: &Selection, selected: &ResolvedSelection) -> Result<(Arti
         flash.control.size,
     )?;
     let payload = super::exr2::Payload {
-        schema: 2,
+        schema: 4,
         firmware_id: selected.firmware.id.clone(),
         firmware_sha256: identity.sha256.clone(),
         sha256: sha256(&image),

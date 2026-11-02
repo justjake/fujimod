@@ -1,5 +1,5 @@
 //! Whole-flash backup through a stock reader and a temporary RAM payload.
-use crate::callback::{CodeCheck, Range, Transport};
+use crate::callback::{CallbackLease, CodeCheck, Range, Transport};
 use crate::{
     Limits,
     bulk::{self, BulkError, Qualified},
@@ -44,8 +44,10 @@ pub struct Backup {
     pub device: FlashDevice,
     pub size: u64,
     pub sha256: String,
-    /// Physical byte offsets whose transferred data failed NAND correction.
+    /// Physical page offsets covered by an uncorrectable NAND read.
     pub uncorrectable_page_offsets: Vec<u64>,
+    /// Largest ECC observation span; erased bursts may flag multiple pages.
+    pub uncorrectable_granularity_bytes: u32,
 }
 
 impl Payload {
@@ -303,7 +305,6 @@ pub(crate) async fn read(
     )
     .await?;
     require(original_gate <= 1, "Unexpected debug byte")?;
-    let mut scratch: Option<Vec<u8>> = None;
     let outcome = async {
         if original_gate == 0 {
             configuration::write_byte_verified(
@@ -319,7 +320,6 @@ pub(crate) async fn read(
         let BulkSource::PatternZeroBase {
             registered_buffer,
             source_state,
-            capacity,
             ..
         } = bulk.source
         else {
@@ -364,16 +364,7 @@ pub(crate) async fn read(
                 && !bulk.code_checks.iter().any(|c| overlaps(c.address, c.size)),
             "Diagnostic scratch overlaps protected state or code",
         )?;
-        let mut reader = if selection.preserves_source() {
-            Qualified::prepare_preserving(access.session, bulk, limits).await?
-        } else {
-            scratch = Some(
-                access
-                    .raw(scratch_range.address, u64::from(capacity))
-                    .await?,
-            );
-            Qualified::prepare(access.session, bulk, limits).await?
-        };
+        let mut reader = Qualified::prepare_preserving(access.session, bulk, limits).await?;
         let outcome = execute(
             &mut reader,
             flash,
@@ -393,28 +384,6 @@ pub(crate) async fn read(
             session.state() == SessionState::Ready,
             "Completion unknown; flash cleanup withheld",
         )?;
-        if let Some(original) = scratch {
-            let mut access = bulk::Access { session, limits };
-            let current = access
-                .raw(transport.registered_scratch.address, original.len() as u64)
-                .await?;
-            require(
-                current == original || current.iter().enumerate().all(|(i, &b)| b == i as u8),
-                "Diagnostic scratch ownership changed; restoration withheld",
-            )?;
-            if current != original {
-                access
-                    .write(transport.registered_scratch.address, &original)
-                    .await?;
-                require(
-                    access
-                        .raw(transport.registered_scratch.address, original.len() as u64)
-                        .await?
-                        == original,
-                    "Diagnostic scratch restoration differs",
-                )?;
-            }
-        }
         require(
             configuration::read_byte(
                 session,
@@ -500,44 +469,54 @@ async fn execute(
             false,
         )
         .await?;
-        let mut calls = word(&reader.access.raw(payload.result + 16, 8).await?);
-        let control = read_chunk(
-            reader,
-            flash,
-            payload,
-            flash.control.offset,
-            flash.control.size,
-            &mut calls,
-        )
-        .await?;
-        require(
-            bulk::hex(&sha256_bytes(&control)) == payload.control_sha256,
-            "Control chunk differs from update; no backup read",
-        )?;
-        let mut digest = OrderedDigest::default();
-        let mut done = 0;
-        for (offset, size) in super::read_pieces(
-            target,
-            u64::from(payload.buffer_capacity),
-            payload.update_size,
-            flash.window.size,
-        ) {
-            let bytes = read_chunk(reader, flash, payload, offset, size, &mut calls).await?;
-            digest.push(offset - target.address, &bytes);
-            (callbacks.chunk)(offset, bytes).map_err(BulkError::Check)?;
-            done += size;
-            (callbacks.progress)(done, target.size).map_err(BulkError::Check)?;
+        let mut lease = CallbackLease::new(payload.transport.callback, 0, payload.entry, 8);
+        let capture = async {
+            lease.publish(reader).await?;
+            let mut calls = word(&reader.access.raw(payload.result + 16, 8).await?);
+            let control = read_chunk(
+                reader,
+                flash,
+                payload,
+                flash.control.offset,
+                flash.control.size,
+                &mut calls,
+                &lease,
+            )
+            .await?;
+            require(
+                bulk::hex(&sha256_bytes(&control)) == payload.control_sha256,
+                "Control chunk differs from update; no backup read",
+            )?;
+            let mut digest = OrderedDigest::default();
+            let mut done = 0;
+            for (offset, size) in super::read_pieces(
+                target,
+                u64::from(payload.buffer_capacity),
+                payload.update_size,
+                flash.window.size,
+            ) {
+                let bytes =
+                    read_chunk(reader, flash, payload, offset, size, &mut calls, &lease).await?;
+                digest.push(offset - target.address, &bytes);
+                (callbacks.chunk)(offset, bytes).map_err(BulkError::Check)?;
+                done += size;
+                (callbacks.progress)(done, target.size).map_err(BulkError::Check)?;
+            }
+            require(
+                digest.next == target.size && digest.pending.is_empty(),
+                "Flash coverage is incomplete",
+            )?;
+            Ok(Backup {
+                device: flash.device.clone(),
+                size: target.size,
+                sha256: bulk::hex(&digest.hash.finalize()),
+                uncorrectable_page_offsets: Vec::new(),
+                uncorrectable_granularity_bytes: 0,
+            })
         }
-        require(
-            digest.next == target.size && digest.pending.is_empty(),
-            "Flash coverage is incomplete",
-        )?;
-        Ok(Backup {
-            device: flash.device.clone(),
-            size: target.size,
-            sha256: bulk::hex(&digest.hash.finalize()),
-            uncorrectable_page_offsets: Vec::new(),
-        })
+        .await;
+        let restored = lease.restore(reader).await;
+        bulk::finish(capture, restored)
     }
     .await;
     let restored = arena.restore(reader, payload.transport.callback).await;
@@ -553,6 +532,7 @@ async fn read_chunk(
     offset: u64,
     size: u64,
     calls: &mut u64,
+    lease: &CallbackLease,
 ) -> bulk::Result<Vec<u8>> {
     let source = flash.window.address + offset;
     let request: Vec<u8> = [1, source, size]
@@ -560,7 +540,8 @@ async fn read_chunk(
         .flat_map(u64::to_le_bytes)
         .collect();
     callback::write(reader, payload.request, &request).await?;
-    callback::invoke(reader, payload.transport.callback, payload.entry, true).await?;
+    lease.check(reader).await?;
+    callback::execute(reader, true).await?;
     let result = reader.access.raw(payload.result, 40).await?;
     require(
         word(&result[..8]) == 1
