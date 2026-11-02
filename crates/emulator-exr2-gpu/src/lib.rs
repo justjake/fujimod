@@ -2108,9 +2108,13 @@ pub fn ui_render(draws: &[batch::Draw], cpu: i64, host: &mut dyn Inputs) -> Resu
         let (a, w, h, _) = d.target;
         if let std::collections::hash_map::Entry::Vacant(entry) = targets.entry(a) {
             let p = host
-                .read(cpu, a, w as u64 * h as u64 * 4)
+                .read(
+                    cpu,
+                    a,
+                    w as u64 * h as u64 * d.target_format.bytes_per_pixel(),
+                )
                 .map_err(Unsupported)?;
-            if p.len() as u64 != w as u64 * h as u64 * 4 {
+            if p.len() as u64 != w as u64 * h as u64 * d.target_format.bytes_per_pixel() {
                 return fail("Graphics UI destination/texture snapshot is incomplete");
             }
             entry.insert(p);

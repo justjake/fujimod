@@ -231,12 +231,38 @@ pub struct Texture {
     pub matrix: Affine,
 }
 
+/// Color storage selected by the fill target-format register.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[repr(u32)]
+pub enum TargetFormat {
+    Rgba8 = 0,
+    Rgba4444 = 3,
+}
+
+impl TargetFormat {
+    pub fn from_register(value: u64) -> Result<Self> {
+        match value {
+            0 => Ok(Self::Rgba8),
+            3 => Ok(Self::Rgba4444),
+            _ => fail("Graphics UI target color format is unsupported"),
+        }
+    }
+
+    pub fn bytes_per_pixel(self) -> u64 {
+        match self {
+            Self::Rgba8 => 4,
+            Self::Rgba4444 => 2,
+        }
+    }
+}
+
 /// (physical address, width, height, channel order).
 pub type Target = (u64, u32, u32, u32);
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Draw {
     pub target: Target,
+    pub target_format: TargetFormat,
     pub sequence: u64,
     pub matrix: Affine,
     pub geometry: Vec<Geometry>,
@@ -294,7 +320,7 @@ pub fn batch_parsed(
         return fail("Graphics UI requires a bounded paired path/fill draw batch");
     }
     let mut draws = Vec::new();
-    let mut targets: Vec<(u64, Target)> = Vec::new();
+    let mut targets: Vec<(u64, Target, TargetFormat)> = Vec::new();
     let (mut texture_ranges, mut scratch_ranges) =
         (Vec::<(u64, u64)>::new(), Vec::<(u64, u64)>::new());
     let mut texture_shapes: Vec<(u64, u32, u32)> = Vec::new();
@@ -315,7 +341,8 @@ pub fn batch_parsed(
             return fail("Graphics UI draw has incomplete framebuffer/path state");
         }
         let (width, height) = (f.at(0x1a3) & 0xffff, f.at(0x1a3) >> 16);
-        let frame_bytes = width * height * 4;
+        let target_format = TargetFormat::from_register(f.at(0x1a2))?;
+        let frame_bytes = width * height * target_format.bytes_per_pixel();
         if width == 0
             || height == 0
             || width & 7 != 0
@@ -326,12 +353,8 @@ pub fn batch_parsed(
         {
             return fail("Graphics UI framebuffer dimensions exceed supported tiled bounds");
         }
-        if f.at(0x1a2) != 0
-            || f.at(0x1a1) != 0
-            || f.at(0x1aa) != 0
-            || !matches!(f.at(0x1a7), 0x100 | 0x101)
-        {
-            return fail("Graphics UI supports only unmasked format0 RGBA targets");
+        if f.at(0x1a1) != 0 || f.at(0x1aa) != 0 || !matches!(f.at(0x1a7), 0x100 | 0x101) {
+            return fail("Graphics UI supports only unmasked color targets");
         }
         let destination = ram(f.at(0x1a4), frame_bytes, ram_bytes, "framebuffer")?;
         let target: Target = (
@@ -340,12 +363,12 @@ pub fn batch_parsed(
             height as u32,
             (f.at(0x1a7) & 255) as u32,
         );
-        match targets.iter().find(|(key, _)| *key == destination) {
-            Some((_, existing)) if *existing != target => {
-                return fail("Graphics UI changes dimensions/order of a batch target");
+        match targets.iter().find(|(key, _, _)| *key == destination) {
+            Some((_, existing, format)) if *existing != target || *format != target_format => {
+                return fail("Graphics UI changes dimensions/order/format of a batch target");
             }
             Some(_) => {}
-            None => targets.push((destination, target)),
+            None => targets.push((destination, target, target_format)),
         }
         let style = p.at(0x60);
         let sample_mode = style & 255;
@@ -452,6 +475,7 @@ pub fn batch_parsed(
         let fill_color = f.at(0x185);
         let mut draw = Draw {
             target,
+            target_format,
             sequence: path.sequence,
             matrix,
             geometry: path.geometry.clone().unwrap_or_default(),
@@ -557,7 +581,7 @@ pub fn batch_parsed(
     }
     let target_ranges: Vec<(u64, u64)> = targets
         .iter()
-        .map(|(key, t)| (*key, t.1 as u64 * t.2 as u64 * 4))
+        .map(|(key, t, format)| (*key, t.1 as u64 * t.2 as u64 * format.bytes_per_pixel()))
         .collect();
     let overlap = |a: &(u64, u64), b: &(u64, u64)| a.0 < b.0 + b.1 && b.0 < a.0 + a.1;
     if target_ranges.iter().any(|a| {
@@ -590,4 +614,54 @@ pub fn batch_parsed(
             fill: fill_bank,
         },
     ))
+}
+
+#[cfg(test)]
+mod target_format_tests {
+    use super::*;
+
+    fn streams(
+        format: u64,
+        destination: u64,
+    ) -> (Vec<StreamDraw>, Vec<StreamDraw>, Registers, Registers) {
+        let (path, fill) = crate::clear::fixtures::lists();
+        let (mut paths, pb) = stream::parse(&path, true, None).unwrap();
+        let (mut fills, fb) = stream::parse(&fill, false, None).unwrap();
+        paths[0].registers.set(0x8e, 16 << 16);
+        fills[0].registers.set(0x1a2, format);
+        fills[0].registers.set(0x1a4, destination);
+        (paths, fills, pb, fb)
+    }
+
+    #[test]
+    fn rgba4444_uses_two_byte_target_ranges_and_limits() {
+        let (p, f, pb, fb) = streams(3, 4096 - 128);
+        let (draws, _) = batch_parsed(p, f, pb, fb, 8192, 128).unwrap();
+        assert_eq!(draws[0].target_format, TargetFormat::Rgba4444);
+        assert_eq!(draws[0].target.0, 4096 - 128);
+        // The same address with four bytes per pixel overlaps scratch RAM.
+        let (p, f, pb, fb) = streams(0, 4096 - 128);
+        assert!(batch_parsed(p, f, pb, fb, 8192, 256).is_err());
+        let (p, f, pb, fb) = streams(3, 8192 - 128);
+        assert!(batch_parsed(p, f, pb, fb, 8192, 128).is_ok());
+        let (p, f, pb, fb) = streams(3, 8192 - 124);
+        assert!(batch_parsed(p, f, pb, fb, 8192, 128).is_err());
+    }
+
+    #[test]
+    fn masks_unknown_formats_and_reinterpreted_targets_still_refuse() {
+        for format in [1, 2, 4, 255] {
+            let (p, f, pb, fb) = streams(format, 256);
+            assert!(batch_parsed(p, f, pb, fb, 8192, 256).is_err());
+        }
+        let (p, mut f, pb, fb) = streams(3, 256);
+        f[0].registers.set(0x1a1, 1);
+        assert!(batch_parsed(p, f, pb, fb, 8192, 256).is_err());
+        let (mut p, mut f, pb, fb) = streams(3, 256);
+        p.push(p[0].clone());
+        f.push(f[0].clone());
+        f[1].registers.set(0x1a2, 0);
+        let error = batch_parsed(p, f, pb, fb, 8192, 256).err().unwrap();
+        assert!(error.0.contains("changes dimensions/order/format"));
+    }
 }

@@ -77,7 +77,7 @@ pub fn path_descriptor(words: &[u32], ram_bytes: u64, max_clear_bytes: u64) -> R
     let (draws, final_bank) = stream::parse(words, true, None)?;
     let commands = commands::decode(words, true)?;
     if draws.is_empty() {
-        let (width, height, frame_bytes) = init::dimensions(&final_bank, max_clear_bytes)?;
+        let (width, height, frame_bytes) = init::dimensions(&final_bank, max_clear_bytes, 4)?;
         if final_bank.get(0x60) != Some(2) || final_bank.get(0x81) != Some(0x1000001) {
             return fail(
                 "Graphics clear initializer requires sample mode2 and known path controls",
@@ -111,7 +111,7 @@ pub fn path_descriptor(words: &[u32], ram_bytes: u64, max_clear_bytes: u64) -> R
     }
     let draw = &draws[0];
     let path = &draw.registers;
-    let (width, height, frame_bytes) = init::dimensions(path, max_clear_bytes)?;
+    let (width, height, frame_bytes) = init::dimensions(path, max_clear_bytes, 4)?;
     if path.get(0x60) != Some(0x100)
         || path.get(0x81) != Some(0x1000101)
         || path.get(0x7c) != Some(1)
@@ -188,6 +188,13 @@ pub fn parse_clear(
     let (_, path) = stream::parse(path_words, true, initial_path)?;
     let (fills, fill) = stream::parse(fill_words, false, initial_fill)?;
     let commands = commands::decode(fill_words, false)?;
+    if fill.get(0x1a2) != Some(0)
+        || fills
+            .iter()
+            .any(|draw| draw.registers.get(0x1a2) != Some(0))
+    {
+        return fail("Graphics clear-only profile requires RGBA8 targets");
+    }
     super::gamma::validate_upload(&commands)?;
     let width = int(&descriptor, "width") as u64;
     let height = int(&descriptor, "height") as u64;

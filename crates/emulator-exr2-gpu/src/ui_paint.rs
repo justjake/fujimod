@@ -91,7 +91,7 @@ fn paint_parameters(
         .as_ref()
         .map(|texture| [texture.valid_width, texture.valid_height])
         .unwrap_or([0; 2]);
-    let mut words = Vec::with_capacity(40);
+    let mut words = Vec::with_capacity(41);
     words.extend([
         plan.x0 as u32,
         plan.y0 as u32,
@@ -149,7 +149,8 @@ fn paint_parameters(
         words.extend([0; 8]);
     }
     words.push(u32::from_le_bytes(draw.color));
-    if words.len() != 40 {
+    words.push(draw.target_format as u32);
+    if words.len() != 41 {
         return fail("Graphics UI GPU paint parameters have an invalid extent");
     }
     Ok(words)
@@ -211,7 +212,7 @@ pub(super) async fn render_async(
         if let std::collections::hash_map::Entry::Vacant(entry) = target_slots.entry(address) {
             let length = (width as u64)
                 .checked_mul(height as u64)
-                .and_then(|count| count.checked_mul(4))
+                .and_then(|count| count.checked_mul(draw.target_format.bytes_per_pixel()))
                 .ok_or_else(|| Unsupported("Graphics UI target size overflow".into()))?;
             let bytes = host.read(cpu, address, length).map_err(Unsupported)?;
             if bytes.len() as u64 != length {
@@ -219,7 +220,10 @@ pub(super) async fn render_async(
             }
             let key = SurfaceKey {
                 guest_address: address,
-                format: SurfaceFormat::Rgba8,
+                format: match draw.target_format {
+                    batch::TargetFormat::Rgba8 => SurfaceFormat::Rgba8,
+                    batch::TargetFormat::Rgba4444 => SurfaceFormat::Rgba4,
+                },
                 extent: SurfaceExtent { width, height },
                 layout: SurfaceLayout::Morton8x8,
             };
@@ -316,12 +320,12 @@ pub(super) async fn render_async(
         })
         .collect::<Result<_>>()?;
     let touched = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("EXR2 vector GPU touched-pixel count"),
+        label: Some("EXR2 vector GPU touched-halfword count"),
         contents: &0u32.to_le_bytes(),
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
     });
     let touched_readback = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("EXR2 vector GPU touched-pixel readback"),
+        label: Some("EXR2 vector GPU touched-halfword readback"),
         size: 4,
         usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
@@ -429,8 +433,8 @@ pub(super) async fn render_async(
         .finish_readbacks_async(pending)
         .await
         .map_err(|error| Unsupported(format!("Graphics UI GPU readback {error}")))?;
-    let touched_bytes = map_buffer_async(&touched_readback, device).await?;
-    let touched_pixels = u32::from_le_bytes(touched_bytes[..4].try_into().unwrap()) as u64;
+    let touched_halfwords = map_buffer_async(&touched_readback, device).await?;
+    let touched_halfwords = u32::from_le_bytes(touched_halfwords[..4].try_into().unwrap()) as u64;
 
     let mut output_by_key = HashMap::new();
     for (key, readback) in readbacks {
@@ -445,7 +449,7 @@ pub(super) async fn render_async(
                 .ok_or_else(|| Unsupported("Graphics UI GPU readback omitted a target".into()))
         })
         .collect::<Result<_>>()?;
-    Ok((output, touched_pixels * 4))
+    Ok((output, touched_halfwords * 2))
 }
 
 async fn map_buffer_async(buffer: &wgpu::Buffer, _device: &wgpu::Device) -> Result<Vec<u8>> {
@@ -474,17 +478,17 @@ async fn map_buffer_async(buffer: &wgpu::Buffer, _device: &wgpu::Device) -> Resu
     #[cfg(not(target_arch = "wasm32"))]
     _device
         .poll(wgpu::PollType::wait_indefinitely())
-        .map_err(|error| Unsupported(format!("Graphics UI GPU touched-pixel poll: {error}")))?;
+        .map_err(|error| Unsupported(format!("Graphics UI GPU touched-halfword poll: {error}")))?;
 
     std::future::poll_fn(|context| {
         let Ok(mut state) = state.lock() else {
             return Poll::Ready(Err(Unsupported(
-                "Graphics UI GPU touched-pixel mapping state lock poisoned".into(),
+                "Graphics UI GPU touched-halfword mapping state lock poisoned".into(),
             )));
         };
         if let Some(result) = state.result.take() {
             Poll::Ready(result.map_err(|error| {
-                Unsupported(format!("Graphics UI GPU touched-pixel map: {error}"))
+                Unsupported(format!("Graphics UI GPU touched-halfword map: {error}"))
             }))
         } else {
             state.waker = Some(context.waker().clone());
@@ -496,7 +500,7 @@ async fn map_buffer_async(buffer: &wgpu::Buffer, _device: &wgpu::Device) -> Resu
     let mapped = buffer
         .slice(..)
         .get_mapped_range()
-        .map_err(|error| Unsupported(format!("Graphics UI GPU touched-pixel range: {error}")))?;
+        .map_err(|error| Unsupported(format!("Graphics UI GPU touched-halfword range: {error}")))?;
     let bytes = mapped.to_vec();
     drop(mapped);
     buffer.unmap();
@@ -593,6 +597,7 @@ mod tests {
     ) -> batch::Draw {
         batch::Draw {
             target: (address, 8, 8, order),
+            target_format: batch::TargetFormat::Rgba8,
             sequence: 0,
             matrix: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
             geometry: path(bounds),
@@ -616,7 +621,7 @@ mod tests {
         render::coverage(draw).map(Rc::new)
     }
 
-    fn compare_with_cpu(order: u32) {
+    fn compare_with_cpu(order: u32, format: batch::TargetFormat) {
         let context = match fujimod_emulator_gpu::context() {
             Ok(context) => context,
             Err(error) if error.starts_with("host GPU adapter:") => {
@@ -630,9 +635,9 @@ mod tests {
             "the EXR2 paint path requires in-place R32Uint storage support"
         );
 
-        let target_address = 0x175000 + u64::from(order) * 0x1000;
+        let target_address = 0x175000 + u64::from(order) * 0x1000 + (format as u64) * 0x10000;
         let texture_address = target_address + 0x1000;
-        let target: Vec<u8> = (0..8 * 8 * 4)
+        let target: Vec<u8> = (0..8 * 8 * format.bytes_per_pixel())
             .map(|index| (index * 37 + 11) as u8)
             .collect();
         let texture_bytes: Vec<u8> = (0..8 * 8 * 4).map(|index| (index * 19 + 7) as u8).collect();
@@ -699,6 +704,9 @@ mod tests {
             matrix: [1.0, 0.0, 0.25, 0.0, 1.0, -0.5],
         });
         draws.extend([gradient_draw, texture_draw]);
+        for draw in &mut draws {
+            draw.target_format = format;
+        }
 
         let mut host = TestInputs {
             regions: HashMap::from([
@@ -732,7 +740,60 @@ mod tests {
 
     #[test]
     fn rgba8_src_src_over_texture_and_linear_ramp_match_cpu_reference() {
-        compare_with_cpu(0);
-        compare_with_cpu(1);
+        compare_with_cpu(0, batch::TargetFormat::Rgba8);
+        compare_with_cpu(1, batch::TargetFormat::Rgba8);
+    }
+    #[test]
+    fn rgba4444_src_src_over_texture_and_linear_ramp_match_cpu_reference() {
+        compare_with_cpu(0, batch::TargetFormat::Rgba4444);
+        compare_with_cpu(1, batch::TargetFormat::Rgba4444);
+    }
+
+    #[test]
+    fn packed_target_shader_and_parameters_validate() {
+        let module = wgpu::naga::front::wgsl::parse_str(include_str!("ui_paint.wgsl")).unwrap();
+        wgpu::naga::valid::Validator::new(
+            wgpu::naga::valid::ValidationFlags::all(),
+            wgpu::naga::valid::Capabilities::all(),
+        )
+        .validate(&module)
+        .unwrap();
+        let mut draw = draw(0x123400, 0, [0., 0., 8., 8.], 1, 0, [1, 2, 3, 4]);
+        for format in [batch::TargetFormat::Rgba8, batch::TargetFormat::Rgba4444] {
+            draw.target_format = format;
+            let plan = render::coverage_plan(&draw).unwrap();
+            let params = paint_parameters(&draw, &plan, 0).unwrap();
+            assert_eq!(params.len(), 41);
+            assert_eq!(params[40], format as u32);
+        }
+    }
+    #[test]
+    fn rgba4444_and_rgba8_targets_share_a_batch_with_exact_byte_counts() {
+        let mut packed = draw(
+            0x1c0000,
+            0,
+            [0., 0., 8., 8.],
+            1,
+            0,
+            [0x12, 0x34, 0x56, 0x78],
+        );
+        packed.target_format = batch::TargetFormat::Rgba4444;
+        let full = draw(
+            0x1c1000,
+            0,
+            [0., 0., 8., 8.],
+            1,
+            0,
+            [0x12, 0x34, 0x56, 0x78],
+        );
+        let mut host = TestInputs {
+            regions: HashMap::from([(0x1c0000, vec![0xac; 128]), (0x1c1000, vec![0xac; 256])]),
+        };
+        let (output, touched) = render(&[packed, full], 0, &mut host).unwrap();
+        assert_eq!(touched, 128 + 256);
+        assert_eq!(output[0].0, 0x1c0000);
+        assert_eq!(output[0].1.as_slice(), [0x57, 0x13].repeat(64));
+        assert_eq!(output[1].0, 0x1c1000);
+        assert_eq!(output[1].1.as_slice(), [0x78, 0x56, 0x34, 0x12].repeat(64));
     }
 }

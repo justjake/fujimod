@@ -1,12 +1,13 @@
 //! Coverage, paint and compositing of a UI batch in the tiled target layout.
 //!
 //! Declared unmeasured laws: regular 1/2/4 squared sample-grid winding
-//! coverage, straight RGBA8 SRC/SRC_OVER, nearest image lookup with a
+//! coverage, straight SRC/SRC_OVER in RGBA8 or RGBA4444 storage, nearest image lookup with a
 //! transparent border, linear ramp interpolation, atomic whole-batch output.
 //! Fractional coverage and nonsolid paint retain the reference f64 order.
-//! Full-coverage opaque solids use its exact RGBA8 byte result.
+//! Full-coverage opaque solids use its exact RGBA8 byte result. RGBA4444
+//! stores the high nibbles of each rounded RGBA8 blend result after every draw.
 
-use super::batch::{ColorTransform, Draw, Gradient, Texture};
+use super::batch::{ColorTransform, Draw, Gradient, TargetFormat, Texture};
 use super::geometry::{self, Point};
 use fujimod_emulator_devices::record::{Result, Unsupported};
 use std::collections::HashMap;
@@ -586,6 +587,7 @@ pub struct Target {
     pub width: usize,
     pub height: usize,
     pub order: u32,
+    pub format: TargetFormat,
 }
 
 // Morton columns within one 8x8 tile, in words.
@@ -633,6 +635,39 @@ fn blend_target_pixel(
     bytes[channels[3]] = pixel[3];
 }
 
+/// Packed RGBA4444/ARGB4444 lanes. Expand each nibble before blending and
+/// quantize after each draw, so subsequent draws read the stored precision.
+fn composite_rgba4444(
+    target: &mut Target,
+    cover: &Coverage,
+    colors: impl Iterator<Item = [f64; 4]>,
+    blend: bool,
+) {
+    let shifts = if target.order == 0 {
+        [12, 8, 4, 0]
+    } else {
+        [8, 4, 0, 12]
+    };
+    for (index, (coverage, color)) in cover.values.iter().zip(colors).enumerate() {
+        if *coverage == 0.0 || (blend && color[3] * coverage == 0.0) {
+            continue;
+        }
+        let x = cover.x0 as usize + index % cover.width;
+        let y = cover.y0 as usize + index / cover.width;
+        let at = morton(target.width, x, y) * 2;
+        let word = u16::from_le_bytes(target.bytes[at..at + 2].try_into().unwrap());
+        let mut rgba = shifts.map(|shift| ((word >> shift) & 15) as u8 * 17);
+        blend_pixel(&mut rgba, *coverage, color, blend);
+        let packed = rgba
+            .into_iter()
+            .zip(shifts)
+            .fold(0u16, |word, (byte, shift)| {
+                word | u16::from(byte >> 4) << shift
+            });
+        target.bytes[at..at + 2].copy_from_slice(&packed.to_le_bytes());
+    }
+}
+
 fn composite_solid(
     target: &mut Target,
     cover: &Coverage,
@@ -640,6 +675,15 @@ fn composite_solid(
     blend: bool,
     opaque_solid: Option<[u8; 4]>,
 ) {
+    if target.format == TargetFormat::Rgba4444 {
+        composite_rgba4444(
+            target,
+            cover,
+            std::iter::repeat_n(color, cover.values.len()),
+            blend,
+        );
+        return;
+    }
     let channels: [usize; 4] = if target.order == 0 {
         [3, 2, 1, 0]
     } else {
@@ -721,6 +765,10 @@ fn composite_solid(
 }
 
 fn composite_pixels(target: &mut Target, cover: &Coverage, colors: &[[f64; 4]], blend: bool) {
+    if target.format == TargetFormat::Rgba4444 {
+        composite_rgba4444(target, cover, colors.iter().copied(), blend);
+        return;
+    }
     let channels: [usize; 4] = if target.order == 0 {
         [3, 2, 1, 0]
     } else {
@@ -772,12 +820,18 @@ pub fn render(
             let Some(bytes) = targets_in.get(&address) else {
                 return fail("Graphics UI destination/texture snapshot is incomplete");
             };
+            if bytes.len()
+                != width as usize * height as usize * draw.target_format.bytes_per_pixel() as usize
+            {
+                return fail("Graphics UI destination snapshot has the wrong color-format extent");
+            }
             targets.push(Target {
                 address,
                 bytes: bytes.clone(),
                 width: width as usize,
                 height: height as usize,
                 order,
+                format: draw.target_format,
             });
         }
         if let Some(texture) = &draw.texture {
@@ -836,7 +890,8 @@ pub fn render(
                 );
             }
         }
-        touched += cover.values.iter().filter(|&&v| v != 0.0).count() as u64 * 4;
+        touched += cover.values.iter().filter(|&&v| v != 0.0).count() as u64
+            * draw.target_format.bytes_per_pixel();
     }
     Ok((
         targets.into_iter().map(|t| (t.address, t.bytes)).collect(),
@@ -897,6 +952,7 @@ mod color_transform_tests {
     fn solid(color: [u8; 4], color_transform: Option<ColorTransform>) -> Draw {
         Draw {
             target: (0x1000, 8, 8, 1),
+            target_format: TargetFormat::Rgba8,
             sequence: 0,
             matrix: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
             geometry: Vec::new(),
@@ -964,5 +1020,119 @@ mod color_transform_tests {
             render_solid(solid([200, 200, 100, 255], transform)),
             [164, 255, 155, 128]
         );
+    }
+}
+
+#[cfg(test)]
+mod target_format_tests {
+    use super::*;
+    use std::rc::Rc;
+
+    fn solid(order: u32, color: [u8; 4]) -> Draw {
+        Draw {
+            target: (0x1000, 16, 8, order),
+            target_format: TargetFormat::Rgba4444,
+            sequence: 1,
+            matrix: [1., 0., 0., 0., 1., 0.],
+            geometry: vec![],
+            samples: 1,
+            clips: vec![],
+            nonzero: false,
+            blend: 0,
+            color,
+            stroke: false,
+            texture: None,
+            gradient: None,
+            color_transform: None,
+            radius: 0.,
+            cap: 0,
+            join: 0,
+            device_radius: false,
+        }
+    }
+
+    #[test]
+    fn rgba4444_preserves_channel_order_morton_tiles_and_neighboring_pixels() {
+        for (order, word) in [(0, 0x1357u16), (1, 0x7135u16)] {
+            let draw = solid(order, [0x12, 0x34, 0x56, 0x78]);
+            let original = vec![0xacu8; 16 * 8 * 2];
+            let targets = HashMap::from([(0x1000, original.clone())]);
+            let coverage = Rc::new(Coverage {
+                x0: 7,
+                y0: 3,
+                width: 3,
+                height: 2,
+                values: vec![1.; 6],
+            });
+            let (output, touched) = render(&[draw], &targets, &HashMap::new(), &mut |_| {
+                Ok(coverage.clone())
+            })
+            .unwrap();
+            assert_eq!(touched, 12);
+            let mut expected = original;
+            for y in 3..5 {
+                for x in 7..10 {
+                    let at = morton(16, x, y) * 2;
+                    expected[at..at + 2].copy_from_slice(&word.to_le_bytes());
+                }
+            }
+            assert_eq!(output[0].1, expected);
+        }
+    }
+
+    #[test]
+    fn rgba4444_rounding_occurs_between_draws_and_zero_coverage_preserves_bytes() {
+        let first = solid(0, [24, 40, 56, 255]);
+        let mut second = solid(0, [255, 255, 255, 128]);
+        second.blend = 1;
+        let coverage = Rc::new(Coverage {
+            x0: 0,
+            y0: 0,
+            width: 2,
+            height: 1,
+            values: vec![1., 0.],
+        });
+        let targets = HashMap::from([(0x1000, vec![0xacu8; 16 * 8 * 2])]);
+        let (output, touched) = render(&[first, second], &targets, &HashMap::new(), &mut |_| {
+            Ok(coverage.clone())
+        })
+        .unwrap();
+        // First stores 0x123f. SRC_OVER reads expanded 17,34,51,255,
+        // then rounds to 136,145,153,255 before packing the high nibbles.
+        assert_eq!(&output[0].1[..4], &[0x9f, 0x89, 0xac, 0xac]);
+        assert_eq!(touched, 4);
+    }
+
+    #[test]
+    fn rgba4444_rejects_incomplete_snapshots() {
+        let draw = solid(0, [0; 4]);
+        let targets = HashMap::from([(0x1000, vec![0; 16 * 8 * 2 - 1])]);
+        assert!(render(&[draw], &targets, &HashMap::new(), &mut |_| unreachable!()).is_err());
+    }
+    #[test]
+    fn rgba4444_retains_fractional_edge_alpha() {
+        for order in [0, 1] {
+            let draw = solid(order, [255; 4]);
+            let targets = HashMap::from([(0x1000, vec![0; 16 * 8 * 2])]);
+            let coverage = Rc::new(Coverage {
+                x0: 0,
+                y0: 0,
+                width: 2,
+                height: 2,
+                values: vec![0.25, 0.5, 0.75, 0.],
+            });
+            let (output, touched) = render(&[draw], &targets, &HashMap::new(), &mut |_| {
+                Ok(coverage.clone())
+            })
+            .unwrap();
+            let expected: [u16; 4] = if order == 0 {
+                [0xfff3, 0xfff7, 0xfffb, 0]
+            } else {
+                [0x3fff, 0x7fff, 0xbfff, 0]
+            };
+            let expected: Vec<u8> = expected.into_iter().flat_map(u16::to_le_bytes).collect();
+            assert_eq!(&output[0].1[..8], expected);
+            assert_eq!(touched, 6);
+        }
     }
 }

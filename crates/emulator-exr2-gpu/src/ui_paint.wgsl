@@ -5,7 +5,7 @@ requires readonly_and_readwrite_storage_textures;
 @group(0) @binding(2) var<storage, read> clip_mask: array<u32>;
 @group(0) @binding(3) var resident_surface: texture_storage_2d<r32uint, read_write>;
 @group(0) @binding(4) var<storage, read> paint_data: array<u32>;
-@group(0) @binding(5) var<storage, read_write> touched_pixels: atomic<u32>;
+@group(0) @binding(5) var<storage, read_write> touched_halfwords: atomic<u32>;
 
 fn parameter_float(index: u32) -> f32 {
     return bitcast<f32>(params[index]);
@@ -165,7 +165,8 @@ fn main(@builtin(global_invocation_id) invocation: vec3<u32>) {
     if coverage_count == 0u {
         return;
     }
-    atomicAdd(&touched_pixels, 1u);
+    // Halfwords keep the maximum bounded batch within a 32-bit atomic.
+    atomicAdd(&touched_halfwords, select(1u, 2u, params[40u] == 0u));
     let coverage_byte = coverage_count * 255u / params[7u];
     if coverage_byte == 0u {
         return;
@@ -174,16 +175,29 @@ fn main(@builtin(global_invocation_id) invocation: vec3<u32>) {
     let x = params[0u] + invocation.x;
     let y = params[1u] + invocation.y;
     let packed_destination = textureLoad(resident_surface, vec2<i32>(i32(x), i32(y))).r;
-    var destination = vec4<f32>(
-        f32(packed_destination & 255u),
-        f32((packed_destination >> 8u) & 255u),
-        f32((packed_destination >> 16u) & 255u),
-        f32((packed_destination >> 24u) & 255u),
-    ) / 255.0;
-    if params[8u] == 0u {
-        destination = destination.wzyx;
+    var destination: vec4<f32>;
+    if params[40u] == 3u {
+        destination = vec4<f32>(
+            f32((packed_destination >> 12u) & 15u),
+            f32((packed_destination >> 8u) & 15u),
+            f32((packed_destination >> 4u) & 15u),
+            f32(packed_destination & 15u),
+        ) / 15.0;
+        if params[8u] != 0u {
+            destination = destination.yzwx;
+        }
     } else {
-        destination = destination.zyxw;
+        destination = vec4<f32>(
+            f32(packed_destination & 255u),
+            f32((packed_destination >> 8u) & 255u),
+            f32((packed_destination >> 16u) & 255u),
+            f32((packed_destination >> 24u) & 255u),
+        ) / 255.0;
+        if params[8u] == 0u {
+            destination = destination.wzyx;
+        } else {
+            destination = destination.zyxw;
+        }
     }
     let coverage_fraction = f32(coverage_byte) / 255.0;
     let source = source_color(f32(x) + 0.5, f32(y) + 0.5);
@@ -206,6 +220,13 @@ fn main(@builtin(global_invocation_id) invocation: vec3<u32>) {
     var packed_output = rgba.w << 24u | rgba.x << 16u | rgba.y << 8u | rgba.z;
     if params[8u] == 0u {
         packed_output = rgba.x << 24u | rgba.y << 16u | rgba.z << 8u | rgba.w;
+    }
+    if params[40u] == 3u {
+        let nibble = rgba >> vec4<u32>(4u);
+        packed_output = nibble.x << 12u | nibble.y << 8u | nibble.z << 4u | nibble.w;
+        if params[8u] != 0u {
+            packed_output = nibble.w << 12u | nibble.x << 8u | nibble.y << 4u | nibble.z;
+        }
     }
     textureStore(resident_surface, vec2<i32>(i32(x), i32(y)), vec4<u32>(packed_output, 0u, 0u, 0u));
 }

@@ -51,6 +51,7 @@ fn draw_dict<'py>(py: Python<'py>, draw: &batch::Draw) -> PyResult<Bound<'py, Py
     let d = PyDict::new(py);
     let (address, width, height, order) = draw.target;
     d.set_item("target", (address, width, height, order))?;
+    d.set_item("target_format", draw.target_format as u32)?;
     d.set_item("sequence", draw.sequence)?;
     d.set_item("matrix", affine(py, &draw.matrix)?)?;
     let geometry = PyList::empty(py);
@@ -168,7 +169,11 @@ impl UiBatch {
             let (address, width, height, _) = draw.target;
             if !targets.contains(&address) {
                 targets.push(address);
-                list.append(("target", address, width as u64 * height as u64 * 4))?;
+                list.append((
+                    "target",
+                    address,
+                    width as u64 * height as u64 * draw.target_format.bytes_per_pixel(),
+                ))?;
             }
             if let Some(t) = &draw.texture {
                 let key = (t.source, t.width, t.height);

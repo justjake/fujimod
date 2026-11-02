@@ -1,7 +1,7 @@
 //! State-only GPU submissions. Admission depends on decoded register values,
 //! supported modes and bounded scissor records, not a writer's instruction order.
 
-use super::batch::{affine, float24};
+use super::batch::{TargetFormat, affine, float24};
 use super::clear::Descriptor;
 use super::commands::{self, Command};
 use super::regs::Registers;
@@ -18,13 +18,17 @@ pub(crate) fn writes(commands: &[Command<'_>], index: u32) -> bool {
         .any(|command| matches!(command, Command::Write(write) if write.index == index))
 }
 
-pub(crate) fn dimensions(path: &Registers, max_bytes: u64) -> Result<(u64, u64, u64)> {
+pub(crate) fn dimensions(
+    path: &Registers,
+    max_bytes: u64,
+    bytes_per_pixel: u64,
+) -> Result<(u64, u64, u64)> {
     let dimensions = path.get(0x7b).unwrap_or(0);
     if dimensions > u64::from(u32::MAX) {
         return fail("Graphics initializer dimensions exceed the register width");
     }
     let (width, height) = (dimensions >> 16, dimensions & 0xffff);
-    let frame_bytes = width * height * 4;
+    let frame_bytes = width * height * bytes_per_pixel;
     if width == 0
         || height == 0
         || width & 7 != 0
@@ -54,12 +58,12 @@ pub(crate) fn validate_fill(fill: &Registers, width: u64, height: u64) -> Result
         (0x178, 1),
         (0x16c, 0x40001),
         (0x187, 0),
-        (0x1a2, 0),
     ] {
         if fill.get(index) != Some(expected) {
             return fail("Graphics initializer has unsupported mask, paint or sampler state");
         }
     }
+    TargetFormat::from_register(fill.get(0x1a2).unwrap_or(u64::MAX))?;
     if fill.get(0x1a3) != Some(height << 16 | width) {
         return fail("Graphics initializer path/fill dimensions disagree");
     }
@@ -87,7 +91,9 @@ pub fn initialize(
     let path_commands = commands::decode(path_words, true)?;
     let fill_commands = commands::decode(fill_words, false)?;
     super::gamma::validate_upload(&fill_commands)?;
-    let (width, height, frame_bytes) = dimensions(&path_bank, max_bytes)?;
+    let target_format = TargetFormat::from_register(fill_bank.get(0x1a2).unwrap_or(u64::MAX))?;
+    let (width, height, frame_bytes) =
+        dimensions(&path_bank, max_bytes, target_format.bytes_per_pixel())?;
     let mode = path_bank.get(0x60).unwrap_or(255) & 255;
     if mode > 2
         || path_bank
@@ -160,6 +166,7 @@ pub fn initialize(
         ("width", Value::int(width)),
         ("height", Value::int(height)),
         ("frame_bytes", Value::int(frame_bytes)),
+        ("target_format", Value::int(target_format as u32)),
         ("path_mode", Value::int(mode)),
         ("order", Value::int(order)),
         ("matrix_refresh", Value::Bool(matrix_refresh)),
@@ -240,5 +247,26 @@ mod tests {
             fill.set(0x115, mode);
             assert!(initialize(&path_words, &fill_words, Some(&path), Some(&fill), 256).is_err());
         }
+    }
+    #[test]
+    fn rgba4444_state_only_initialization_uses_its_packed_extent() {
+        let mut path = Registers::new();
+        path.set(0x7b, 8 << 16 | 8);
+        path.set(0x60, 0);
+        path.set(0x81, 0x1000001);
+        let mut fill_state = crate::clear::fixtures::fill_state();
+        crate::clear::fixtures::flush(&mut fill_state);
+        let (_, mut fill) =
+            stream::parse(&crate::clear::fixtures::align(fill_state), false, None).unwrap();
+        fill.set(0x1a2, 3);
+        let path_words = crate::clear::fixtures::align(vec![0x400f007b, 8 << 16 | 8]);
+        let mut fill_words = vec![];
+        crate::clear::fixtures::flush(&mut fill_words);
+        let fill_words = crate::clear::fixtures::align(fill_words);
+        let (descriptor, _) =
+            initialize(&path_words, &fill_words, Some(&path), Some(&fill), 128).unwrap();
+        assert_eq!(crate::clear::int(&descriptor, "frame_bytes"), 128);
+        assert_eq!(crate::clear::int(&descriptor, "target_format"), 3);
+        assert!(initialize(&path_words, &fill_words, Some(&path), Some(&fill), 127).is_err());
     }
 }
