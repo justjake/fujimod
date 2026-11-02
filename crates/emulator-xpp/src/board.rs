@@ -283,6 +283,10 @@ pub enum Model {
         /// Profile of the declared sensor frame the readout writes.
         #[serde(default)]
         sensor_frame: Option<String>,
+        /// Caller-owned host RGB image the sensor frame writes instead of
+        /// the virtual scene.
+        #[serde(default)]
+        sensor_image: Option<HostImage>,
     },
     FrameSync {
         base: u64,
@@ -877,6 +881,7 @@ pub fn build(
                 hole,
                 readout,
                 sensor_frame,
+                sensor_image,
             } => {
                 let end = base + imaging::WINDOW;
                 let windows = match hole {
@@ -901,8 +906,16 @@ pub fn build(
                         if let Some(r) = readout {
                             control = control.with_readout(r)?;
                         }
-                        match sensor_frame {
+                        let control = match sensor_frame {
                             Some(profile) => control.with_sensor_frame(&profile)?,
+                            None => control,
+                        };
+                        match sensor_image {
+                            Some(image) => control.with_sensor_image(
+                                image.width,
+                                image.height,
+                                hex(&image.rgb)?,
+                            )?,
                             None => control,
                         }
                     }),

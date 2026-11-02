@@ -42,13 +42,14 @@ pub(crate) fn register() {
 /// X-Processor Pro execution and device graphs of a bundled run configuration, as JSON.
 /// `registers` is a JSON list of each application core's reset registers.
 #[pyo3::pyfunction]
-#[pyo3(signature = (configuration_id, registers, overlays=Vec::new(), sub_cpu_registers=Vec::new(), assets=None))]
+#[pyo3(signature = (configuration_id, registers, overlays=Vec::new(), sub_cpu_registers=Vec::new(), assets=None, sensor_image=None))]
 pub(crate) fn xpp_definition(
     configuration_id: &str,
     registers: &str,
     overlays: Vec<String>,
     sub_cpu_registers: Vec<(u8, u8)>,
     assets: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>,
+    sensor_image: Option<(u32, u32, Vec<u8>)>,
 ) -> pyo3::PyResult<String> {
     use pyo3::types::{PyAnyMethods, PyBytes, PyBytesMethods, PyDictMethods};
     let mut loaded = std::collections::BTreeMap::new();
@@ -66,7 +67,11 @@ pub(crate) fn xpp_definition(
         registers,
         &sub_cpu_registers,
         &loaded,
+        sensor_image
+            .map(|(width, height, rgb)| boot::xpp::SensorImage { width, height, rgb })
+            .as_ref(),
     )
     .map_err(fujimod_python_base::error)?;
-    serde_json::to_string(&definition).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    serde_json::to_string(&definition)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
 }

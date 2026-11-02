@@ -14,8 +14,14 @@
 //! handler 0x1557390 reads the status and the stream size at +0x94. The
 //! stream is SOI, DHT, DQT, DRI, SOF0 (4:2:2), SOS, scan and EOI, as in the
 //! camera's files; the firmware puts its EXIF/APP2 segments in front of the
-//! main picture and checks that the file ends with EOI (0x16390cc). Other
-//! words read back their last write.
+//! main picture and checks that the file ends with EOI (0x16390cc). The
+//! firmware encodes the thumbnail and the preview twice (size control): the
+//! handler reports an overflow (context +0x28 = 2) when the size at +0x94 is
+//! larger than the limit it programmed (+0x110 limit, context +0x20) and then
+//! re-encodes with other tables. A run whose stream is longer than the limit
+//! completes, writes only the limit's bytes and reports the full stream
+//! length (a declared approximation: what the hardware writes beyond the
+//! limit is not observed). Other words read back their last write.
 //!
 //! The JPEG decoder at 0xfffc9000, interrupt 135 (section 6 driver
 //! 0x1556e60..0x1557390, section 5 0xc6d844..0xc6dbfc), shows pictures in
@@ -98,10 +104,15 @@ impl Encoder {
         };
         let source = cx.ram_bytes(self.word(SOURCE).into(), width * height * 2)?;
         let mut body = Vec::new();
-        codec.encode(&source, width, height, restart, &mut body, limit - 2)?;
+        codec.encode(&source, width, height, restart, &mut body, MAX_STREAM - 2)?;
         let mut stream = vec![0xff, 0xd8];
         stream.extend_from_slice(&body);
-        cx.ram_write(self.word(DESTINATION).into(), &stream)?;
+        // Only the programmed limit is written; the reported length tells the
+        // firmware the stream overflowed.
+        cx.ram_write(
+            self.word(DESTINATION).into(),
+            &stream[..stream.len().min(limit)],
+        )?;
         self.state.stream = stream.len() as u32;
         Ok(())
     }
@@ -447,6 +458,34 @@ mod tests {
         let mut other = Encoder::new(BASE, 134, 10).unwrap();
         other.restore(&saved).unwrap();
         assert_eq!(read(&mut other, &mut h, BASE + STREAM) as usize, size);
+    }
+
+    #[test]
+    fn a_stream_longer_than_the_limit_completes_and_reports_its_length() {
+        let mut encoder = Encoder::new(BASE, 134, 10).unwrap();
+        let mut h = TestHost::new();
+        for _ in 0..TABLE_WORDS {
+            write(&mut encoder, &mut h, BASE + TABLES, 0x0101_0101);
+        }
+        // A noisy source does not fit in 64 bytes.
+        let source: Vec<u8> = (0..32 * 16 * 2).map(|i| (i * 97 % 251) as u8).collect();
+        h.ram_write(0x1000, &source).unwrap();
+        write(&mut encoder, &mut h, BASE + SIZE, 16 << 16 | 32);
+        write(&mut encoder, &mut h, BASE + SOURCE, 0x1000);
+        write(&mut encoder, &mut h, BASE + DESTINATION, 0x4000);
+        write(&mut encoder, &mut h, BASE + LIMIT, 64);
+        write(&mut encoder, &mut h, BASE, START);
+        advance(&mut encoder, &mut h, 10);
+        assert_eq!(
+            read(&mut encoder, &mut h, BASE + STATUS),
+            u64::from(READY | DONE)
+        );
+        let size = read(&mut encoder, &mut h, BASE + STREAM) as usize;
+        assert!(size > 64, "{size}");
+        let mut written = vec![0; 80];
+        h.ram_read(0x4000, &mut written).unwrap();
+        assert_eq!(&written[..2], &[0xff, 0xd8]);
+        assert!(written[64..].iter().all(|&b| b == 0));
     }
 
     #[test]

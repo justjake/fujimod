@@ -47,6 +47,16 @@ pub struct Inputs<'a> {
     pub sub_cpu_registers: &'a [(u8, u8)],
     /// Configuration assets by name; declared statistics buffers are read from here.
     pub assets: &'a BTreeMap<String, Vec<u8>>,
+    /// Host RGB image the declared sensor frame writes instead of its virtual
+    /// scene, such as a local picture that is not a catalog input.
+    pub sensor_image: Option<&'a SensorImage>,
+}
+
+/// A caller-owned RGB picture: `width` x `height` rows of red, green and blue bytes.
+pub struct SensorImage {
+    pub width: u32,
+    pub height: u32,
+    pub rgb: Vec<u8>,
 }
 
 fn soc_profile<'a>(resolved: &'a ResolvedConfiguration) -> Result<&'a SocProfile, String> {
@@ -544,6 +554,15 @@ fn nodes(
             }),
         );
     }
+    if inputs.sensor_image.is_some() && reset.sensor_frame.is_none() {
+        return Err("a sensor host image requires a declared sensor frame".into());
+    }
+    if let Some(image) = inputs.sensor_image {
+        let size = u64::from(image.width) * u64::from(image.height) * 3;
+        if size == 0 || image.rgb.len() as u64 != size {
+            return Err("sensor host image size differs from its rows".into());
+        }
+    }
     if let Some(control) = &maps.imaging_control {
         if reset.sensor_frame.is_some() && control.readout.is_none() {
             return Err("a sensor frame requires the sensor read-out unit".into());
@@ -557,6 +576,10 @@ fn nodes(
                     "offset": r.offset, "irq": r.irq_route, "ticks": r.ticks,
                 })),
                 "sensor_frame": reset.sensor_frame.as_ref().map(|frame| &frame.profile),
+                "sensor_image": inputs.sensor_image.map(|image| json!({
+                    "width": image.width, "height": image.height,
+                    "rgb": image.rgb.iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
+                })),
             }),
         );
     } else if reset.sensor_frame.is_some() {
@@ -742,6 +765,7 @@ pub fn definition(
     registers: Value,
     sub_cpu_registers: &[(u8, u8)],
     assets: &BTreeMap<String, Vec<u8>>,
+    sensor_image: Option<&SensorImage>,
 ) -> Result<Value, String> {
     let resolved = ResolvedConfiguration::with_overlays(configuration_id, overlays)?;
     let registers: Vec<Vec<(Register, u64)>> =
@@ -770,6 +794,7 @@ pub fn definition(
             starts: &starts,
             sub_cpu_registers,
             assets,
+            sensor_image,
         },
     )?;
     let (numerator, denominator) = assembly.rate;
@@ -818,6 +843,7 @@ mod tests {
                 starts: &starts(),
                 sub_cpu_registers: &[],
                 assets,
+                sensor_image: None,
             },
         )
     }
@@ -993,8 +1019,15 @@ mod tests {
                 starts: &starts,
                 sub_cpu_registers: &[],
                 assets,
+                sensor_image: None,
             };
-            nodes(maps, reset, selection.body.dram_bytes.unwrap(), &banks, &inputs)
+            nodes(
+                maps,
+                reset,
+                selection.body.dram_bytes.unwrap(),
+                &banks,
+                &inputs,
+            )
         };
         assert_eq!(
             built(&reset, &assets).err().unwrap(),
@@ -1024,6 +1057,66 @@ mod tests {
     }
 
     #[test]
+    fn a_caller_sensor_image_needs_a_declared_frame_and_matching_rows() {
+        use fujimod_catalog_run_inputs::hardware_inputs::SensorFrame;
+        let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
+        let maps = soc_profile(&resolved)
+            .unwrap()
+            .register_maps
+            .as_ref()
+            .unwrap();
+        let selection = &resolved.reference;
+        let banks = ram_banks(&selection.soc.memory_regions);
+        let starts = starts();
+        let assets = assets();
+        let built = |reset: &HardwareReset, image: &SensorImage| {
+            let inputs = Inputs {
+                starts: &starts,
+                sub_cpu_registers: &[],
+                assets: &assets,
+                sensor_image: Some(image),
+            };
+            nodes(
+                maps,
+                reset,
+                resolved.dram_address_space_limit_bytes().unwrap(),
+                &banks,
+                &inputs,
+            )
+        };
+        let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let image = SensorImage {
+            width: 2,
+            height: 1,
+            rgb: vec![255, 0, 0, 0, 0, 255],
+        };
+        reset.sensor_frame = None;
+        assert_eq!(
+            built(&reset, &image).err().unwrap(),
+            "a sensor host image requires a declared sensor frame"
+        );
+        reset.sensor_frame = Some(SensorFrame {
+            profile: fujimod_emulator_xpp::imaging::SENSOR_PROFILE.into(),
+            basis: "test".into(),
+        });
+        let short = SensorImage {
+            width: 2,
+            height: 2,
+            rgb: image.rgb.clone(),
+        };
+        assert!(built(&reset, &short).is_err());
+        let nodes = built(&reset, &image).unwrap();
+        let imaging = nodes
+            .iter()
+            .find(|node| node["model"]["kind"] == "imaging-control")
+            .unwrap();
+        assert_eq!(
+            imaging["model"]["sensor_image"],
+            json!({"width": 2, "height": 1, "rgb": "ff00000000ff"})
+        );
+    }
+
+    #[test]
     fn a_declared_sensor_frame_reaches_the_read_out_unit() {
         use fujimod_catalog_run_inputs::hardware_inputs::SensorFrame;
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
@@ -1042,6 +1135,7 @@ mod tests {
             starts: &starts,
             sub_cpu_registers: &[],
             assets: &assets,
+            sensor_image: None,
         };
         let banks = ram_banks(&resolved.reference.soc.memory_regions);
         let nodes = nodes(
@@ -1088,6 +1182,7 @@ mod tests {
             starts: &starts,
             sub_cpu_registers: &[],
             assets: &assets,
+            sensor_image: None,
         };
         let banks = ram_banks(&resolved.reference.soc.memory_regions);
         let nodes = nodes(maps, &reset, 0, &banks, &inputs).unwrap();
@@ -1153,6 +1248,7 @@ mod tests {
             starts: &starts,
             sub_cpu_registers: &[],
             assets: &assets,
+            sensor_image: None,
         };
         assert_eq!(
             assemble(&resolved, &inputs).err().unwrap(),
@@ -1164,6 +1260,7 @@ mod tests {
             starts: &starts,
             sub_cpu_registers: &[(0x70, 0xa5)],
             assets: &assets,
+            sensor_image: None,
         };
         let devices = assemble(&resolved, &inputs).unwrap().devices;
         let registers = node(&devices, "serial2")["peer"]["registers"]
@@ -1179,7 +1276,7 @@ mod tests {
             [["Pc", 0x40000], ["Pstate", 0xd3], [{"Arm32": {"R": 0}}, 7]],
             [["Pc", 0x40000], ["Pstate", 0xd3], [{"Arm32": {"R": 1}}, 9]],
         ]);
-        let value = definition("xt20-211", &[], registers, &[], &assets()).unwrap();
+        let value = definition("xt20-211", &[], registers, &[], &assets(), None).unwrap();
         let execution: factory::Graph = serde_json::from_value(value["execution"].clone()).unwrap();
         assert_eq!(
             execution.processors[1].registers[2],
@@ -1190,7 +1287,7 @@ mod tests {
         );
         let _: Spec = serde_json::from_value(value["devices"].clone()).unwrap();
         assert_eq!(value["flash_asset"], "flash");
-        let error = definition("xt20-211", &[], json!([[]]), &[], &assets()).err();
+        let error = definition("xt20-211", &[], json!([[]]), &[], &assets(), None).err();
         assert_eq!(
             error.unwrap(),
             "reset registers name 1 cores; SoC xpp has 2"
