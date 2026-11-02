@@ -135,8 +135,13 @@ pub fn gradient(registers: &Registers) -> Result<Gradient> {
                 ((difference as u64) >> 1) << shift
             })
             .sum();
-        if registers.at(UI_RAMP_VALUES + 128 + index as u32) != delta {
-            return fail("Graphics UI gradient delta bank disagrees with B7DF90");
+        let actual = registers.at(UI_RAMP_VALUES + 128 + index as u32);
+        if actual != delta {
+            return fail(format!(
+                "Graphics UI gradient delta bank disagrees with B7DF90: entry {index} \
+                 colors {current:#010x}, {following:#010x} need delta {delta:#010x}, \
+                 bank has {actual:#010x}"
+            ));
         }
     }
     let mut coefficients = [0.0f64; 6];
