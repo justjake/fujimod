@@ -51,5 +51,30 @@ class Firmware(unittest.TestCase):
         )
 
 
+    def test_update_sums(self) -> None:
+        data = bytearray(0x274 + 0x80)
+        struct.pack_into("<I", data, 0, 6)
+        struct.pack_into("<2I", data, 0x214 + 4 * 3, 0x60, 0x10)
+        struct.pack_into("<3I", data, 0x214 + 4 * 13, 0x40, 0x40, 0x20)
+        struct.pack_into("<2I", data, 0x214 + 4 * 18, 0x70, 0x08)
+        struct.pack_into("<2I", data, 0x214 + 4 * 21, 0x78, 0x08)
+        sums = firmware.update_sums(bytes(data))
+        self.assertEqual(
+            [(s["name"], s["computed"], s["decoded"]) for s in sums],
+            [
+                ("image", ~(0xFF * 0x40) & 0xFFFFFFFF, True),
+                ("table", ~(0xFF * 0x20) & 0xFFFFFFFF, True),
+                ("trailer", ~(0xFF * 0x10) & 0xFFFFFFFF, True),
+                ("segment-a", 0xFFFFFFFF, False),
+                ("segment-b", 0xFFFFFFFF, False),
+            ],
+        )
+        sealed, _ = firmware.reseal_update_sums(bytes(data))
+        self.assertTrue(
+            all(s["stored"] == s["computed"] for s in firmware.update_sums(sealed))
+        )
+        with self.assertRaises(ValueError):
+            firmware.update_sums(bytes(data[:0x274]))
+
 if __name__ == "__main__":
     unittest.main()

@@ -4,8 +4,10 @@ use sha2::{Digest, Sha256};
 
 mod error;
 mod recompress;
+mod sums;
 pub use error::Error;
 pub use recompress::recompress;
+pub use sums::{SumBytes, UpdateSum, reseal_update_sums, update_sums};
 pub type Result<T> = std::result::Result<T, Error>;
 fn require(ok: bool, error: Error) -> Result<()> {
     if ok { Ok(()) } else { Err(error) }

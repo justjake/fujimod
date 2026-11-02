@@ -150,6 +150,34 @@ fn outer_header<'py>(py: Python<'py>, source: &[u8]) -> PyResult<Bound<'py, PyDi
     )?;
     Ok(d)
 }
+fn sums_list<'py>(py: Python<'py>, sums: &[core::UpdateSum]) -> PyResult<Bound<'py, PyList>> {
+    let list = PyList::empty(py);
+    for s in sums {
+        let d = PyDict::new(py);
+        d.set_item("name", s.name)?;
+        d.set_item("stored_at", s.stored_at)?;
+        d.set_item("start", s.start)?;
+        d.set_item("size", s.size)?;
+        d.set_item("decoded", s.bytes == core::SumBytes::Decoded)?;
+        d.set_item("stored", s.stored)?;
+        d.set_item("computed", s.computed)?;
+        list.append(d)?;
+    }
+    Ok(list)
+}
+#[pyfunction]
+fn update_sums<'py>(py: Python<'py>, source: &[u8]) -> PyResult<Bound<'py, PyList>> {
+    sums_list(py, &core::update_sums(source).map_err(error)?)
+}
+#[pyfunction]
+fn reseal_update_sums<'py>(
+    py: Python<'py>,
+    source: &[u8],
+) -> PyResult<(Bound<'py, PyBytes>, Bound<'py, PyList>)> {
+    let mut bytes = source.to_vec();
+    let sums = core::reseal_update_sums(&mut bytes).map_err(error)?;
+    Ok((PyBytes::new(py, &bytes), sums_list(py, &sums)?))
+}
 #[pyclass(frozen, module = "fujimod.firmware")]
 struct Unit {
     inner: core::Unit,
@@ -226,6 +254,8 @@ pub(crate) fn register(py: Python<'_>, parent: &Bound<'_, PyModule>, name: &str)
     module.add_function(wrap_pyfunction!(raw, &module)?)?;
     module.add_function(wrap_pyfunction!(overlays, &module)?)?;
     module.add_function(wrap_pyfunction!(outer_header, &module)?)?;
+    module.add_function(wrap_pyfunction!(update_sums, &module)?)?;
+    module.add_function(wrap_pyfunction!(reseal_update_sums, &module)?)?;
     module.add_function(wrap_pyfunction!(decode, &module)?)?;
     module.add_class::<Image>()?;
     module.add_class::<Unit>()?;

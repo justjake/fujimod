@@ -44,6 +44,18 @@ def decode(
 ) -> Image: ...
 def outer_header(data: bytes) -> dict[str, object]: ...
 
+class UpdateSum(TypedDict):
+    name: str
+    stored_at: int
+    start: int
+    size: int
+    decoded: bool
+    stored: int
+    computed: int
+
+def update_sums(source: bytes) -> list[UpdateSum]: ...
+def reseal_update_sums(source: bytes) -> tuple[bytes, list[UpdateSum]]: ...
+
 class Unit:
     @property
     def name(self) -> str: ...

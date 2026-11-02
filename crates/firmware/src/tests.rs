@@ -273,3 +273,69 @@ fn overlay_descriptors_address_bytes_not_hardware_flash_blocks() {
     assert_eq!(rows[0].sha256, sha256(b"code"));
     assert!(parse_overlays(&data[..0x20007]).is_err());
 }
+
+fn update_sums_fixture() -> Vec<u8> {
+    let mut data = vec![0; 0x274 + 0x80];
+    put(&mut data, 0, &[6]);
+    put(&mut data, 0x214 + 4 * 3, &[0x60, 0x10]); // trailer
+    put(&mut data, 0x214 + 4 * 13, &[0x40, 0x40, 0x20]); // image end, table start and size
+    put(&mut data, 0x214 + 4 * 18, &[0x70, 0x08]); // segment a
+    put(&mut data, 0x214 + 4 * 21, &[0x78, 0x08]); // segment b
+    data
+}
+
+#[test]
+fn update_sums_complement_decoded_and_raw_byte_sums() {
+    let mut data = update_sums_fixture();
+    let sums = update_sums(&data).unwrap();
+    let computed: Vec<_> = sums.iter().map(|s| (s.name, s.computed)).collect();
+    assert_eq!(
+        computed,
+        [
+            ("image", !(0xff * 0x40)),
+            ("table", !(0xff * 0x20)),
+            ("trailer", !(0xff * 0x10)),
+            ("segment-a", u32::MAX),
+            ("segment-b", u32::MAX),
+        ]
+    );
+    assert!(sums.iter().all(|s| !s.matches()));
+    reseal_update_sums(&mut data).unwrap();
+    assert!(update_sums(&data).unwrap().iter().all(UpdateSum::matches));
+    let sealed = data.clone();
+    reseal_update_sums(&mut data).unwrap();
+    assert_eq!(data, sealed);
+}
+
+#[test]
+fn update_sum_regions_are_independent() {
+    let mut base = update_sums_fixture();
+    reseal_update_sums(&mut base).unwrap();
+    for (offset, name) in [
+        (0x00, "image"),
+        (0x45, "table"),
+        (0x6f, "trailer"),
+        (0x70, "segment-a"),
+        (0x7f, "segment-b"),
+    ] {
+        let mut data = base.clone();
+        data[0x274 + offset] = 0x10;
+        let moved: Vec<_> = update_sums(&data)
+            .unwrap()
+            .into_iter()
+            .filter(|s| !s.matches())
+            .map(|s| s.name)
+            .collect();
+        assert_eq!(moved, [name]);
+    }
+}
+
+#[test]
+fn update_sums_reject_other_types_and_truncated_regions() {
+    let mut data = update_sums_fixture();
+    put(&mut data, 0, &[4]);
+    assert!(matches!(update_sums(&data), Err(Error::HeaderValue { .. })));
+    let mut data = update_sums_fixture();
+    data.truncate(0x274 + 0x7f);
+    assert!(matches!(update_sums(&data), Err(Error::Extent { .. })));
+}
