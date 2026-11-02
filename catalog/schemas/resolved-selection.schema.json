@@ -5690,6 +5690,11 @@
           "type": "string"
         },
         {
+          "const": "StillProcessor",
+          "description": "Shared still processor with body-declared CFA.",
+          "type": "string"
+        },
+        {
           "const": "SPI1SerialBus",
           "description": "S P I1 Serial Bus.",
           "type": "string"

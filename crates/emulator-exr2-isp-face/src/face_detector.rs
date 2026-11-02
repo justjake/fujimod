@@ -58,6 +58,7 @@ enum DmaPhase {
     ConfigCount,
     ConfigExtra,
     Configured,
+    CloseEnable,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -211,6 +212,17 @@ impl FaceDetector {
             (DmaPhase::ConfigExtra, DmaOperation::Write, 0x44) if matches!(value, 0 | 2) => {
                 DmaPhase::Configured
             }
+            // Reopening an inactive channel polls its retained idle status
+            // before repeating the existing clear/configuration sequence.
+            (DmaPhase::Configured, DmaOperation::Read, 0x10) if value == 0 && stored == 0 => {
+                DmaPhase::PollEnable
+            }
+            // Closing a configured inactive channel is another read/clear
+            // of its retained disabled control word, without a DMA request.
+            (DmaPhase::Configured, DmaOperation::Read, 4) if value == 0 && stored == 0 => {
+                DmaPhase::CloseEnable
+            }
+            (DmaPhase::CloseEnable, DmaOperation::Write, 4) if value == 0 => DmaPhase::Configured,
             _ => return false,
         };
         if operation == DmaOperation::Write {
@@ -456,7 +468,7 @@ impl FaceDetector {
                     return false;
                 };
                 if (offset == 0x48 && !crate::valid_image_source_address(value))
-                    || (offset == 0x578 && value != 0x000b000b)
+                    || (offset == 0x578 && value >> 16 != value & 0xffff)
                 {
                     return false;
                 }
@@ -1157,6 +1169,67 @@ mod tests {
     }
 
     #[test]
+    fn configured_idle_dma_close_and_reopen_preserve_registers_without_completion() {
+        // X-E2 4.11 close_image_channel performs read/clear of +4 on an
+        // already disabled configured channel. This is not a DMA request.
+        let mut model = FaceDetector::default();
+        for channel in 0..4 {
+            let base = 0x800 + channel * 0x80;
+            let setup = [
+                (DmaOperation::Read, 4, 0),
+                (DmaOperation::Write, 4, 0),
+                (DmaOperation::Read, 0x10, 0),
+                (DmaOperation::Read, 4, 0),
+                (DmaOperation::Write, 0, 0),
+                (DmaOperation::Read, 0x20, 0),
+                (DmaOperation::Write, 0x20, 0x403000),
+                (DmaOperation::Write, 4, 0),
+                (DmaOperation::Write, 0x28, 0x100),
+                (DmaOperation::Write, 0x44, 0),
+            ];
+            for (operation, offset, value) in setup {
+                let result = match operation {
+                    DmaOperation::Read => read(&mut model, base + offset),
+                    DmaOperation::Write => write(&mut model, base + offset, value),
+                };
+                assert_eq!(result, None);
+            }
+            let before = model.state.dma[channel as usize].registers.clone();
+            for _ in 0..2 {
+                assert_eq!(read(&mut model, base + 4), None);
+                let saved = model.save();
+                let mut resumed = FaceDetector::default();
+                resumed.restore(&saved).unwrap();
+                assert!(write(&mut resumed, base + 4, 1).is_some());
+                assert_eq!(write(&mut model, base + 4, 0), None);
+                assert_eq!(write(&mut resumed, base + 4, 0), None);
+                assert_eq!(resumed.save(), model.save());
+                assert_eq!(
+                    model.state.dma[channel as usize].phase,
+                    DmaPhase::Configured
+                );
+                assert_eq!(model.state.dma[channel as usize].registers, before);
+                assert!(model.state.request.is_none());
+                let saved = model.save();
+                resumed.restore(&saved).unwrap();
+                assert_eq!(resumed.save(), saved);
+            }
+            // Reopen performs the same inactive poll/setup, now retaining the
+            // configured values instead of starting from an empty word bank.
+            for (operation, offset, value) in setup {
+                let result = match operation {
+                    DmaOperation::Read => read(&mut model, base + offset),
+                    DmaOperation::Write => write(&mut model, base + offset, value),
+                };
+                assert_eq!(result, None);
+            }
+            assert_eq!(model.state.dma[channel as usize].registers, before);
+            assert!(model.state.request.is_none());
+            assert!(read(&mut model, base + 8).is_some());
+        }
+    }
+
+    #[test]
     fn idle_dma_setup_replays_extra_mode_two_from_zero() {
         use DmaOperation::{Read, Write};
         let mut model = FaceDetector::default();
@@ -1206,7 +1279,7 @@ mod tests {
         assert!(read(&mut model, 0x600).is_some());
     }
 
-    fn armed() -> FaceDetector {
+    fn armed_with_mask(mask: u64) -> FaceDetector {
         let mut model = FaceDetector::new(Options::default());
         initialize(&mut model, 0);
         assert_eq!(write(&mut model, 0x14, 0x0fff), None);
@@ -1221,9 +1294,14 @@ mod tests {
         for offset in program {
             let value = match offset {
                 0x48 => 0x40000000,
-                0x578 => 0x000b000b,
+                0x578 => mask,
                 _ => 0,
             };
+            if offset == 0x578 {
+                let before = model.save();
+                assert!(write(&mut model, u64::from(offset), value ^ 1).is_some());
+                assert_eq!(model.save(), before);
+            }
             assert_eq!(write(&mut model, u64::from(offset), value), None);
         }
         for channel in [0u64, 2, 3, 1] {
@@ -1245,6 +1323,21 @@ mod tests {
         assert_eq!(write(&mut model, 0x8f8, 0x10000000), None);
         assert_eq!(write(&mut model, 4, 1), None);
         model
+    }
+
+    fn armed() -> FaceDetector {
+        armed_with_mask(0x000b000b)
+    }
+
+    #[test]
+    fn paired_search_selections_restore_without_producing_results() {
+        for mask in [0x00070007, 0x00090009, 0x000b000b] {
+            let model = armed_with_mask(mask);
+            let mut restored = FaceDetector::default();
+            restored.restore(&model.save()).unwrap();
+            assert_eq!(restored.save(), model.save());
+            assert_eq!(model.next_deadline(0), None);
+        }
     }
 
     #[test]

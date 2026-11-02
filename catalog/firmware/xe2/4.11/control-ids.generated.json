@@ -3753,7 +3753,8 @@
       "event": 38,
       "debug_key": "ISO",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "drive_button"
       },
       "scanner": {
         "index": 11,
@@ -5425,17 +5426,6 @@
         "connection_id": "controls-encoder-3-8-3-9",
         "cycle_sign": -1
       }
-    },
-    {
-      "id": "debug-23",
-      "event": 23,
-      "debug_key": "DRIVE",
-      "target": {
-        "kind": "control",
-        "control_id": "drive_button"
-      },
-      "scanner": null,
-      "electrical": null
     }
   ],
   "undelivered_rows": [],

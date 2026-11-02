@@ -21,7 +21,7 @@ fujimod-python-base = { path = "../base", optional = true }
 fujimod-emulator = { workspace = true, optional = true }
 fujimod-catalog.workspace = true
 fujimod-catalog-remote.workspace = true
-fujimod-remote = { workspace = true, default-features = false, features = ["ff80"] }
+fujimod-remote = { workspace = true, features = ["ff80"] }
 fujimod-usb.workspace = true
 pyo3.workspace = true
 serde.workspace = true

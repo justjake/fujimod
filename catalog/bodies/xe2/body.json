@@ -155,6 +155,52 @@
               "name": "displayformatter",
               "kind": "DisplayFormatter",
               "refs": {}
+            },
+            {
+              "name": "prefilter",
+              "kind": "PrefilterControl",
+              "refs": {}
+            },
+            {
+              "name": "rawstatistics",
+              "kind": "RawStatisticsControl",
+              "refs": {}
+            },
+            {
+              "name": "stillisp",
+              "kind": "StillProcessor",
+              "refs": {}
+            },
+            {
+              "name": "imagescaler",
+              "kind": "ImageScaler",
+              "refs": {}
+            },
+            {
+              "name": "imagewarp",
+              "kind": "ImageWarpControl",
+              "refs": {}
+            },
+            {
+              "name": "jpegencoder",
+              "kind": "ApproximateJPEGEncodeControl",
+              "refs": {
+                "stream_source": "imagewarp"
+              }
+            },
+            {
+              "name": "rawreadback",
+              "kind": "MemoryReadback",
+              "refs": {
+                "input_controller": "inputprocessingcontrol",
+                "image_output": "imageworkcontrol",
+                "parameters": "imageparametercontrol"
+              }
+            },
+            {
+              "name": "jpegdecoder",
+              "kind": "JPEGDecodeControl",
+              "refs": {}
             }
           ],
           "construction_order": [
@@ -184,7 +230,15 @@
             "graphicsaccelerator",
             "displayscanout",
             "displaytiming",
-            "displayformatter"
+            "displayformatter",
+            "prefilter",
+            "rawstatistics",
+            "stillisp",
+            "imagescaler",
+            "imagewarp",
+            "jpegencoder",
+            "rawreadback",
+            "jpegdecoder"
           ],
           "attachment_order": [
             "bootcontrols",
@@ -213,7 +267,15 @@
             "graphicsaccelerator",
             "displayscanout",
             "displaytiming",
-            "displayformatter"
+            "displayformatter",
+            "prefilter",
+            "rawstatistics",
+            "stillisp",
+            "imagescaler",
+            "imagewarp",
+            "jpegencoder",
+            "rawreadback",
+            "jpegdecoder"
           ]
         },
         "controllers": {
@@ -336,7 +398,8 @@
           "basis": "Declared catalog input."
         },
         "limits": [
-          "Command-dial phase pacing is a declared external input: 120000 virtual ticks per Gray-code edge; stock polling rate is unmeasured."
+          "Command-dial phase pacing is a declared external input: 120000 virtual ticks per Gray-code edge; stock polling rate is unmeasured.",
+          "Still capture uses declared synthetic sensor color/CFA and cadence, identity sparse repair, programmed RAW statistics and the shared approximate ISP/JPEG arithmetic. Physical color, timing and sensor fidelity are unmeasured."
         ],
         "dram_basis": "Declared catalog input.",
         "attachments": {
@@ -354,7 +417,116 @@
           "device-6",
           "device-7",
           "device-8"
-        ]
+        ],
+        "imaging": {
+          "sensor_capture": {
+            "width": 4992,
+            "height": 3362,
+            "period_ticks": 1200000,
+            "dma_ticks": 1000,
+            "cfa_origin": [
+              0,
+              62
+            ]
+          },
+          "capture_color": {
+            "black": 0,
+            "full_scale": 16380,
+            "reference_white": [
+              568,
+              302,
+              558
+            ],
+            "initial_rgb": [
+              128,
+              128,
+              128
+            ],
+            "sensor_cfa": [
+              1,
+              1,
+              2,
+              1,
+              1,
+              0,
+              1,
+              1,
+              0,
+              1,
+              1,
+              2,
+              0,
+              2,
+              1,
+              2,
+              0,
+              1,
+              1,
+              1,
+              0,
+              1,
+              1,
+              2,
+              1,
+              1,
+              2,
+              1,
+              1,
+              0,
+              2,
+              0,
+              1,
+              0,
+              2,
+              1
+            ],
+            "processing_cfa": [
+              0,
+              2,
+              1,
+              2,
+              0,
+              1,
+              1,
+              1,
+              0,
+              1,
+              1,
+              2,
+              1,
+              1,
+              2,
+              1,
+              1,
+              0,
+              2,
+              0,
+              1,
+              0,
+              2,
+              1,
+              1,
+              1,
+              2,
+              1,
+              1,
+              0,
+              1,
+              1,
+              0,
+              1,
+              1,
+              2
+            ],
+            "sensor_image_area": [
+              0,
+              62,
+              4992,
+              3300
+            ],
+            "basis": "Declared synthetic X-Trans input with fixed inverse-gain RGB normalization. CFA phase, spectral response, exposure and physical cadence are unmeasured on this body."
+          }
+        }
       },
       "xe2-411-browser-usb": {
         "graph": {

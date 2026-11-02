@@ -1387,6 +1387,7 @@ type DeviceKind = Literal[
     "QuadratureCounters",
     "RawConversionRegisters",
     "RawStatisticsControl",
+    "StillProcessor",
     "SPI1SerialBus",
     "SPI2Serial",
     "SecondaryControlBus",

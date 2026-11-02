@@ -2312,6 +2312,8 @@ pub enum DeviceKind {
     RawConversionRegisters,
     /// Raw Statistics Control.
     RawStatisticsControl,
+    /// Shared still processor with body-declared CFA.
+    StillProcessor,
     /// S P I1 Serial Bus.
     SPI1SerialBus,
     /// S P I2 Serial.
