@@ -34,7 +34,7 @@ unsafe_op_in_unsafe_fn = "deny"
 sha2 = { version = "0.10", features = ["asm-aarch64"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-openh264 = "=0.9.3"
+openh264 = "=0.9.9"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-cf = { version = "0.11", default-features = false, features = ["cm", "cv", "iosurface"] }
