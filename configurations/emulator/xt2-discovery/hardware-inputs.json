@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "xt2-discovery",
+  "body_id": "xt2",
+  "reset": {
+    "kernel_unit": "kernel",
+    "loader_handoff": {
+      "address": 9437184,
+      "size": 1472,
+      "fill": 0,
+      "words": [],
+      "basis": "Declared discovery input: an all-zero loader handoff in a free RAM gap, not a capture. X-T2 4.41 section 0 0x58b74 stores r0 at 0x7f4f8 and, when r1 is non-zero, copies 0x5c0 bytes from r1 to 0x7f4fc. 0x900000-0x9005c0 lies between section 2 (ends 0x780330) and the section table at 0x950000. Kernel entry bypasses the boot ROM."
+    },
+    "flash_aperture": {
+      "contents": "registered-update",
+      "basis": "Declared discovery input: the update image from its flash offset; bytes past it read erased. No flash capture exists."
+    }
+  }
+}

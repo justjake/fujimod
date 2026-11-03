@@ -1,0 +1,23 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+  "schema": 1,
+  "id": "xt2-441",
+  "purpose": "rom_boot",
+  "body_id": "xt2",
+  "firmware_id": "xt2-441",
+  "start": {
+    "kind": "loader"
+  },
+  "execution": null,
+  "inputs": null,
+  "scene": null,
+  "overlays": [],
+  "preset": {
+    "factory_options": {},
+    "hardware_selection": {
+      "soc_profile_id": "xpp",
+      "body_profile_id": "xt2-discovery"
+    },
+    "hardware_inputs_id": "xt2-discovery"
+  }
+}
