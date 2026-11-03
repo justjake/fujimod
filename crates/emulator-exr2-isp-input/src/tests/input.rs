@@ -70,7 +70,7 @@ fn input_wiring() -> input::Wiring {
         frame_period: None,
         statistics_grid: None,
 
-        phase_irqs: [Irq { core: 0, line: 39 }, Irq { core: 1, line: 41 }],
+        phase_irqs: [Irq { core: 0, line: 39 }, Irq { core: 1, line: 41 }, Irq { core: 0, line: 40 }],
         raw_irq: Irq { core: 0, line: 36 },
         readback_irq: Irq { core: 0, line: 38 },
         shutter_output: None,
@@ -192,17 +192,17 @@ fn phase_clock_coalesces_irqs_but_preserves_physical_edges() {
     advance(&mut d, &mut h, 9);
     assert!(h.irqs.is_empty());
     advance(&mut d, &mut h, 10);
-    assert_eq!(h.irqs, [(0, 39), (1, 41)]);
+    assert_eq!(h.irqs, [(0, 39), (1, 41), (0, 40)]);
     assert_eq!(edges.lock().unwrap()[0].unwrap().tick, 10);
     advance(&mut d, &mut h, 30);
-    assert_eq!(h.irqs.len(), 2);
+    assert_eq!(h.irqs, [(0, 39), (1, 41), (0, 40), (0, 40)]);
     assert_eq!(
         edges.lock().unwrap()[0],
         Some(fujimod_emulator_imaging::scene::FrameEdge { index: 3, tick: 30 })
     );
     write(&mut d, &mut h, 0xfff10388, 1);
     advance(&mut d, &mut h, 40);
-    assert_eq!(h.irqs.len(), 3);
+    assert_eq!(h.irqs, [(0, 39), (1, 41), (0, 40), (0, 40), (0, 39), (0, 40)]);
     assert_eq!(edges.lock().unwrap()[0].unwrap().index, 4);
     write(&mut d, &mut h, 0xfff10048, 0);
     assert_eq!(d.next_deadline(40), None);
@@ -242,7 +242,7 @@ fn another_source_joins_the_scan_edge_and_command_dma_does_not_pause_it() {
     }
     assert_eq!(d.next_deadline(5), Some(10));
     advance(&mut d, &mut h, 10);
-    assert_eq!(h.irqs, [(0, 39), (1, 41)]);
+    assert_eq!(h.irqs, [(0, 39), (1, 41), (0, 40)]);
     assert!(edges.lock().unwrap().iter().all(|e| e.unwrap().tick == 10));
     assert_eq!(read(&mut d, &mut h, 0xfff10094), 1);
     write(&mut d, &mut h, 0xfff10388, 0);
@@ -380,7 +380,7 @@ fn sensor_frames_after_a_drive_mode_change_raise_no_edge() {
     advance(&mut d, &mut h, 30);
     let edge = frames.lock().unwrap().edge.unwrap();
     assert_eq!(edges.lock().unwrap()[0], Some(edge));
-    assert_eq!(h.irqs, [(0, 39)]);
+    assert_eq!(h.irqs, [(0, 39), (0, 40)]);
 }
 #[test]
 fn register_sources_can_explicitly_follow_a_synthetic_sensor_without_input_enable() {
@@ -1453,4 +1453,42 @@ fn raw_readback_retains_captured_color_phase_after_sensor_capture_is_disabled() 
         assert!(h.ram[0x9000..0x9048].chunks_exact(4)
             .all(|p| p[0] == p[1] && p[2..] == [128, 128]));
     }
+}
+
+#[test]
+fn record_phase_has_an_independent_register_gated_frame_edge() {
+    let mut h = TestHost::new();
+    let mut o = input_options();
+    o.clock = Some(fujimod_emulator_imaging::exr2_isp::options::input::Clock {
+        mode: fujimod_emulator_imaging::exr2_isp::options::input::ClockMode::InputEnable,
+        source: fujimod_emulator_imaging::exr2_isp::options::input::ClockSource::Periodic {
+            period_ticks: 10,
+            first_delay_ticks: None,
+        },
+        secondary: true,
+        companion_secondary: true,
+    });
+    let mut d = ImageInput::new(o, input_wiring()).unwrap();
+    write(&mut d, &mut h, 0xfff10048, 1);
+    write(&mut d, &mut h, 0xfff1038c, 0x10203);
+    advance(&mut d, &mut h, 10);
+    assert_eq!(h.irqs, [(0, 39), (1, 41), (0, 40)]);
+    h.irqs.clear();
+    // The two ACK-controlled phases remain pending. They do not suppress
+    // the independent record frame edge used by the processing pipeline.
+    advance(&mut d, &mut h, 20);
+    advance(&mut d, &mut h, 30);
+    assert_eq!(h.irqs, [(0, 40), (0, 40)]);
+    h.irqs.clear();
+    write(&mut d, &mut h, 0xfff1038c, 0x10003);
+    advance(&mut d, &mut h, 40);
+    assert_eq!(h.irqs, [(0, 40)]);
+    h.irqs.clear();
+    write(&mut d, &mut h, 0xfff1038c, 0x10203);
+    advance(&mut d, &mut h, 50);
+    assert_eq!(h.irqs, [(0, 40)]);
+    h.irqs.clear();
+    write(&mut d, &mut h, 0xfff10048, 0);
+    advance(&mut d, &mut h, 60);
+    assert!(h.irqs.is_empty());
 }

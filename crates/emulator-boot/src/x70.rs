@@ -68,7 +68,7 @@ fn model_recipe(name: &str) -> Result<Value, String> {
         "companion" => serde_json::from_str::<Value>("{\"kind\":\"fe80-processing\",\"transport\":{},\"options\":{\"irq\":88,\"pixels_per_tick\":64},\"frames\":\"live_image\",\"routes\":\"imaging_routes\"}").map_err(|e| e.to_string())?,
         // A RAW channel transfer completes 153,600 ticks (12.8 ms at 12 MHz) after
         // it starts, the post-wait interval of a stock X70 AF-S performance trace.
-        "image_input" => serde_json::from_str::<Value>("{\"kind\":\"image-input\",\"options\":{\"reset_ticks\":2,\"command_ticks\":2,\"phase_ticks\":2,\"command\":\"packed_writes\",\"command_controls\":[0],\"phase_ack\":\"inactive\",\"clock\":{\"mode\":\"input_enable\",\"source\":{\"kind\":\"periodic\",\"period_ticks\":400000,\"first_delay_ticks\":null},\"secondary\":true,\"companion_secondary\":true},\"sensor_period_ticks\":null,\"raw_dma_ticks\":153600,\"readback_ticks\":750000,\"cfa\":[0,2,1,2,0,1,1,1,0,1,1,2,1,1,2,1,1,0,2,0,1,0,2,1,1,1,2,1,1,0,1,1,0,1,1,2]},\"phase_irqs\":[{\"core\":0,\"line\":39},{\"core\":0,\"line\":41}],\"raw_irq\":{\"core\":0,\"line\":36},\"readback_irq\":{\"core\":0,\"line\":38},\"shutter_output\":null,\"sensor\":null,\"parameters\":\"parameters\",\"memory_outputs\":\"memory_outputs\",\"statistics_grid\":null,\"frame_period\":null,\"edges\":\"phase_edges\"}").map_err(|e| e.to_string())?,
+        "image_input" => serde_json::from_str::<Value>("{\"kind\":\"image-input\",\"options\":{\"reset_ticks\":2,\"command_ticks\":2,\"phase_ticks\":2,\"command\":\"packed_writes\",\"command_controls\":[0],\"phase_ack\":\"inactive\",\"clock\":{\"mode\":\"input_enable\",\"source\":{\"kind\":\"periodic\",\"period_ticks\":400000,\"first_delay_ticks\":null},\"secondary\":true,\"companion_secondary\":true},\"sensor_period_ticks\":null,\"raw_dma_ticks\":153600,\"readback_ticks\":750000,\"cfa\":[0,2,1,2,0,1,1,1,0,1,1,2,1,1,2,1,1,0,2,0,1,0,2,1,1,1,2,1,1,0,1,1,0,1,1,2]},\"phase_irqs\":[{\"core\":0,\"line\":39},{\"core\":0,\"line\":41},{\"core\":0,\"line\":40}],\"raw_irq\":{\"core\":0,\"line\":36},\"readback_irq\":{\"core\":0,\"line\":38},\"shutter_output\":null,\"sensor\":null,\"parameters\":\"parameters\",\"memory_outputs\":\"memory_outputs\",\"statistics_grid\":null,\"frame_period\":null,\"edges\":\"phase_edges\"}").map_err(|e| e.to_string())?,
         "input_auxiliary" => serde_json::from_str::<Value>("{\"kind\":\"block11000\",\"options\":{\"control_mode\":{\"ClearBit0Ack\":{\"delay_ticks\":2}}}}").map_err(|e| e.to_string())?,
         "parameters" => serde_json::from_str::<Value>("{\"kind\":\"parameters\",\"options\":{},\"bank\":\"parameters\"}").map_err(|e| e.to_string())?,
         "hdmisink" => serde_json::from_str::<Value>("{\"kind\":\"hdmi-sink\",\"options\":{\"connected\":false,\"edid\":[]}}").map_err(|e| e.to_string())?,
@@ -682,7 +682,8 @@ fn apply_interrupts(
         "image_input" => {
             recipe["phase_irqs"] = json!([
                 {"core":core(selection,"core0")?,"line":irq(selection,"image-input","phase-0")?["Core"]["line"]},
-                {"core":core(selection,"core0")?,"line":irq(selection,"image-input","phase-1")?["Core"]["line"]}
+                {"core":core(selection,"core0")?,"line":irq(selection,"image-input","phase-1")?["Core"]["line"]},
+                {"core":core(selection,"core0")?,"line":irq(selection,"image-input","record-phase")?["Core"]["line"]}
             ]);
             recipe["raw_irq"] = json!({"core":core(selection,"core0")?,"line":irq(selection,"image-input","raw")?["Core"]["line"]});
             recipe["readback_irq"] = json!({"core":core(selection,"core0")?,"line":irq(selection,"image-input","readback")?["Core"]["line"]});

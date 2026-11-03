@@ -378,7 +378,7 @@ pub enum Model {
     },
     ImageInput {
         options: serde_json::Value,
-        phase_irqs: [fujimod_emulator_devices::exr2::irq_routes::Irq; 2],
+        phase_irqs: [fujimod_emulator_devices::exr2::irq_routes::Irq; 3],
         raw_irq: fujimod_emulator_devices::exr2::irq_routes::Irq,
         readback_irq: fujimod_emulator_devices::exr2::irq_routes::Irq,
         shutter_output: Option<usize>,

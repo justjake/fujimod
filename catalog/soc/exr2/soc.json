@@ -1104,6 +1104,12 @@
     },
     {
       "core": "core0",
+      "line": 40,
+      "source_block": "image-input",
+      "output_id": "record-phase"
+    },
+    {
+      "core": "core0",
       "line": 36,
       "source_block": "image-input",
       "output_id": "raw"

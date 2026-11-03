@@ -513,7 +513,7 @@ fn readback_and_jpeg_peers_share_real_constructor_handles() {
             0xfff10000,
             0x400,
             json!({"kind":"image-input","options":{"reset_ticks":2,"command_ticks":3,"phase_ticks":2,"command":"packed_words","command_controls":[0],"phase_ack":"enabled","clock":null,"sensor_period_ticks":null,"raw_dma_ticks":5,"readback_ticks":7,"cfa":(0..36).map(|i|i%3).collect::<Vec<_>>()},
-            "phase_irqs":[{"core":0,"line":39},{"core":1,"line":41}],"raw_irq":{"core":0,"line":36},"readback_irq":{"core":0,"line":38},"sensor":null,"parameters":"parameters","memory_outputs":"readback","edges":"edges"}),
+            "phase_irqs":[{"core":0,"line":39},{"core":1,"line":41},{"core":0,"line":40}],"raw_irq":{"core":0,"line":36},"readback_irq":{"core":0,"line":38},"sensor":null,"parameters":"parameters","memory_outputs":"readback","edges":"edges"}),
         ),
         node(
             "out0",

@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 pub struct Wiring {
     pub frame_period: Option<fujimod_emulator_imaging::timing::FramePeriod>,
     pub statistics_grid: Option<fujimod_emulator_imaging::analysis::GridHandle>,
-    pub phase_irqs: [Irq; 2],
+    pub phase_irqs: [Irq; 3],
     pub raw_irq: Irq,
     pub readback_irq: Irq,
     pub shutter_output: Option<usize>,
@@ -281,6 +281,20 @@ impl ImageInput {
             self.state.r[0x384 / 4] |= flags;
         }
         self.wiring.phase_irqs[i].raise(cx)
+    }
+    fn publish_record_phase(&self, cx: &mut Cx<'_>) -> Result<(), String> {
+        // The sensor frame has its own interrupt, independent of source selection.
+        // It is an edge output, independent of the two acknowledged phases.
+        if self
+            .options
+            .clock
+            .as_ref()
+            .is_some_and(|c| c.mode == ClockMode::InputEnable)
+            && self.clock_gates().into_iter().any(|enabled| enabled)
+        {
+            self.wiring.phase_irqs[2].raise(cx)?;
+        }
+        Ok(())
     }
     fn selected_period(&self, fixed: u64) -> Result<u64, String> {
         let period = self
@@ -756,6 +770,7 @@ impl ImageInput {
             }
         }
         self.sync_clocks(now)?;
+        let mut record_edge = false;
         for i in 0..2 {
             if self.state.phase_due[i].is_some_and(|t| now >= t) {
                 let clock = self.options.clock.as_ref().unwrap();
@@ -783,7 +798,11 @@ impl ImageInput {
                     let edge = self.wiring.edges.lock().unwrap()[i].unwrap();
                     self.publish_phase(i, edge, cx)?;
                 }
+                record_edge = true;
             }
+        }
+        if record_edge {
+            self.publish_record_phase(cx)?;
         }
         if self.state.sensor_due.is_some_and(|t| now >= t) {
             let period = self.selected_period(self.options.sensor_period_ticks.unwrap())?;
@@ -810,6 +829,7 @@ impl ImageInput {
                         self.publish_phase(i, edge, cx)?;
                     }
                 }
+                self.publish_record_phase(cx)?;
             }
         }
         if self.state.dma.write(cx)? {

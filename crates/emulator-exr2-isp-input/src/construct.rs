@@ -103,7 +103,7 @@ fn image_input(builder: Builder<'_>, model: Model) -> Result<Built, String> {
                 statistics_grid: statistics_grid
                     .map(|name| Ok(fujimod_emulator_exr2_images::image_wire!(resources, id, name, ImageGrid)))
                     .transpose()?,
-                phase_irqs: [route(phase_irqs[0])?, route(phase_irqs[1])?],
+                phase_irqs: [route(phase_irqs[0])?, route(phase_irqs[1])?, route(phase_irqs[2])?],
                 raw_irq: route(raw_irq)?,
                 readback_irq: route(readback_irq)?,
                 shutter_output,
