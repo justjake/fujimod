@@ -186,7 +186,7 @@ function configuration(quantum: number) {
           node('lz', { kind: 'lz', options: {}, base: 0xfff43000, controllers: ['irq'] }, [
             { base: 0xfff43000, size: 256 },
           ]),
-          node('memory', { kind: 'memory-dma', options: {}, base: 0xfff02000, routes: 'routing' }, [
+          node('memory', { kind: 'memory-dma', options: { irq: 0x5b }, base: 0xfff02000, routes: 'routing' }, [
             { base: 0xfff02000, size: 64 },
             { base: 0xfff02300, size: 4 },
           ]),

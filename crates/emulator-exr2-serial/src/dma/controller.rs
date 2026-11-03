@@ -313,7 +313,7 @@ mod tests {
 
     fn controller() -> Controller {
         let memory = memory::MemoryDma::new(
-            memory::Options {},
+            memory::Options { irq: 91 },
             memory::Wiring {
                 base: BASE,
                 routes: IrqRoutes::default(),

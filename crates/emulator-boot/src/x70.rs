@@ -52,7 +52,7 @@ fn model_recipe(name: &str) -> Result<Value, String> {
         "sdio" => serde_json::from_str::<Value>("{\"kind\":\"sdio-host\",\"options\":{\"transfer_ticks\":100,\"clock_ticks\":2,\"rca\":4660,\"ram_bytes\":536870912},\"module\":{\"protocol\":\"mt5931\",\"firmware_bytes\":136640,\"mt5931\":{\"mac_address\":[2,0,0,0,0,1]}},\"irq\":{\"Core\":{\"core\":0,\"line\":79}}}").map_err(|e| e.to_string())?,
         "nand" => serde_json::from_str::<Value>("{\"kind\":\"nand\",\"options\":{\"erase_ticks\":64},\"medium\":\"nand\"}").map_err(|e| e.to_string())?,
         "lz" => serde_json::from_str::<Value>("{\"kind\":\"lz\",\"options\":{\"resize\":\"declared_packed_pyramid\",\"resize_ticks\":400000},\"base\":4294193152,\"controllers\":[\"irq0\",\"irq1\"]}").map_err(|e| e.to_string())?,
-        "memory_dma" => serde_json::from_str::<Value>("{\"kind\":\"memory-dma\",\"options\":{},\"base\":4293926912,\"routes\":\"imaging_routes\"}").map_err(|e| e.to_string())?,
+        "memory_dma" => serde_json::from_str::<Value>("{\"kind\":\"memory-dma\",\"options\":{\"irq\":91},\"base\":4293926912,\"routes\":\"imaging_routes\"}").map_err(|e| e.to_string())?,
         "usb" => serde_json::from_str::<Value>("{\"kind\":\"usb\",\"options\":{\"endpoints\":null},\"cable\":\"usb_cable\",\"endpoints\":null}").map_err(|e| e.to_string())?,
         "power_peripherals" => serde_json::from_str::<Value>("{\"kind\":\"power\",\"options\":{\"transfer_ticks\":4,\"max_program_bytes\":536870912,\"spi0\":{\"required\":[192,48,0],\"selection\":{\"pin\":{\"port\":11,\"pin\":2},\"high\":false},\"presence\":{\"pin\":{\"port\":11,\"pin\":2},\"high\":false}}},\"gpio\":\"serial_gpio\"}").map_err(|e| e.to_string())?,
         // Channel 1 transmit DMA with both serial-audio banks: a beep's

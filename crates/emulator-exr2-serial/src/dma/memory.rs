@@ -1,7 +1,7 @@
 //! EXR II channel 0 memory DMA at FFF02000; global configuration at +300.
 //!
-//! Supports uniform fill and linear copy, with physical IRQ 5B; active bit 0
-//! reports transfer progress.
+//! Supports uniform fill and linear copy, with a declared IRQ line (X70: 0x5B);
+//! active bit 0 reports transfer progress.
 //! Alternate descriptor words are retained but inactive in supported modes.
 //!
 //! Delay max(2, bytes/32), atomic completion, fill-seed latching at START and
@@ -18,7 +18,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 pub const BASE: u64 = 0xfff02000;
-pub const IRQ: u32 = 0x5b;
 const MAX_BYTES: u32 = 0x08000000;
 const SCRATCH_BYTES: usize = 0x8000;
 const STATUS: usize = 0x24 / 4;
@@ -27,7 +26,10 @@ const CONFIG: usize = 0x2c / 4;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Options {}
+pub struct Options {
+    /// The physical IRQ line this engine is wired to.
+    pub irq: u32,
+}
 
 pub struct Wiring {
     pub base: u64,
@@ -66,6 +68,7 @@ struct Saved {
 
 pub struct MemoryDma {
     base: u64,
+    irq: u32,
     routes: IrqRoutes,
     state: State,
     scratch: Box<[u8]>,
@@ -73,12 +76,16 @@ pub struct MemoryDma {
     status: Arc<AtomicU32>,
 }
 impl MemoryDma {
-    pub fn new(_options: Options, wiring: Wiring) -> Result<Self, String> {
+    pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
+        if options.irq >= 128 {
+            return Err("memory DMA IRQ line out of range".into());
+        }
         if wiring.base & 0x3f != 0 || wiring.base.checked_add(0x304).is_none() {
             return Err("memory DMA requires an aligned channel register window".into());
         }
         Ok(Self {
             base: wiring.base,
+            irq: options.irq,
             routes: wiring.routes,
             state: State::default(),
             scratch: vec![0; SCRATCH_BYTES].into_boxed_slice(),
@@ -140,7 +147,7 @@ impl MemoryDma {
         let irq = if application {
             Some(
                 self.routes
-                    .latch(IRQ)
+                    .latch(self.irq)
                     .map_err(|_| "application memory DMA IRQ bank missing or ambiguous")?,
             )
         } else {
@@ -216,7 +223,7 @@ impl MemoryDma {
         }
         Ok(())
     }
-    fn valid_state(state: &State) -> bool {
+    fn valid_state(&self, state: &State) -> bool {
         if state.global != 0
             || state.registers[6..9].iter().any(|v| *v != 0)
             || !matches!(state.registers[CONTROL], 0 | 1 | 5 | 8)
@@ -236,7 +243,7 @@ impl MemoryDma {
                         }
                         Operation::Fill(_) => true,
                     }
-                    && p.irq.is_none_or(|irq| irq.core < 2 && irq.line == IRQ)
+                    && p.irq.is_none_or(|irq| irq.core < 2 && irq.line == self.irq)
             }
         }
     }
@@ -256,7 +263,7 @@ impl Device for MemoryDma {
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
         let saved: Saved = saved.decode(self.name())?;
-        if saved.base != self.base || !Self::valid_state(&saved.state) {
+        if saved.base != self.base || !self.valid_state(&saved.state) {
             return Err("invalid memory DMA checkpoint or wiring".into());
         }
         Ok(())
@@ -376,7 +383,7 @@ impl Device for MemoryDma {
         if base != self.base {
             return Err("memory DMA checkpoint has different wiring".into());
         }
-        if !Self::valid_state(&state) {
+        if !self.valid_state(&state) {
             return Err("invalid memory DMA checkpoint".into());
         }
         self.state = state;
@@ -389,6 +396,8 @@ impl Device for MemoryDma {
 mod tests {
     use super::*;
     use fujimod_emulator_devices::{Host, Record};
+
+    const IRQ: u32 = 0x5b;
 
     struct Memory {
         now: u64,
@@ -447,7 +456,7 @@ mod tests {
     }
     fn model() -> MemoryDma {
         MemoryDma::new(
-            Options {},
+            Options { irq: IRQ },
             Wiring {
                 base: BASE,
                 routes: IrqRoutes::default(),
@@ -823,7 +832,7 @@ mod tests {
         assert!(serde_json::from_str::<Options>(r#"{"unknown":true}"#).is_err());
         assert!(
             MemoryDma::new(
-                Options {},
+                Options { irq: IRQ },
                 Wiring {
                     base: BASE + 4,
                     routes: IrqRoutes::default()
