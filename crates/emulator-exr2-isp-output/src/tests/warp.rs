@@ -2,6 +2,62 @@ use crate::*;
 use fujimod_emulator_devices::Device;
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::test_host::*;
+
+#[test]
+fn warp_dma_and_jpeg_stream_keep_a_centered_unity_scale_crop() {
+    for streamed in [false, true] {
+        let mut h = TestHost::new();
+        let mut expected = Vec::new();
+        for y in 0..4usize {
+            for x in (0..8usize).step_by(2) {
+                let pair = [(y * 16 + x) as u8, (y * 16 + x + 1) as u8, 128, 128];
+                h.ram[0x8000 + y * 16 + x * 2..0x8000 + y * 16 + x * 2 + 4].copy_from_slice(&pair);
+                if x == 2 || x == 4 {
+                    expected.extend_from_slice(&pair);
+                }
+            }
+        }
+        let stream = fujimod_emulator_imaging::exr2_isp::stream::StreamHandle::default();
+        let mut d = Warp::new(
+            fujimod_emulator_imaging::exr2_isp::options::warp::Options {
+                completion_ticks: 5,
+                stop_ticks: 2,
+            },
+            (Irq { core: 0, line: 74 }, stream.clone()),
+        )
+        .unwrap();
+        for (o, v) in [
+            (4, if streamed { 0x40 } else { 0 }),
+            (0x10, 0x8000),
+            (0x14, 8),
+            (0x18, 4 << 16 | 8),
+            (0x1c, 0x9000),
+            (0x20, 4),
+            (0x28, 4 << 16 | 4),
+            (0x38, 4096),
+            (0x3c, 4096),
+            (0x40, 4096),
+            (0x44, 4096),
+            (0x4c, 0x10001),
+            (0x50, 3 << 16 | 7),
+            (0x54, 3 << 16 | 3),
+            (0x148, 0x21),
+            (0, 1),
+        ] {
+            write(&mut d, &mut h, 0xfff65000 + o, v);
+        }
+        if streamed {
+            let stream = stream.lock().unwrap();
+            assert_eq!(stream.width, 4);
+            assert_eq!(stream.height, 4);
+            assert_eq!(stream.pixels.to_vec(), expected);
+        } else {
+            advance(&mut d, &mut h, 5);
+            assert_eq!(&h.ram[0x9000..0x9020], expected);
+        }
+    }
+}
+
 #[test]
 fn warp_memory_dma_keeps_alignment_rows_and_acknowledges_status() {
     let mut h = TestHost::new();
@@ -23,6 +79,8 @@ fn warp_memory_dma_keeps_alignment_rows_and_acknowledges_status() {
         (0x1c, 0x9000),
         (0x20, 8),
         (0x28, 4 << 16 | 6),
+        (0x38, 4096),
+        (0x3c, 4096),
         (0x40, 4096),
         (0x44, 4096),
         (0x4c, 0x10001),
@@ -88,10 +146,12 @@ fn warp_bounds_a_logical_source_view_that_crosses_its_row_pitch() {
         (0x1c, 0x9000),
         (0x20, 4),
         (0x28, 2 << 16 | 4),
+        (0x38, 4096),
+        (0x3c, 4096),
         (0x40, 4096),
         (0x44, 4096),
         (0x4c, 0x10001),
-        (0x50, 1 << 16 | 4),
+        (0x50, 1 << 16 | 5),
         (0x54, 1 << 16 | 3),
         (0x148, 0x21),
         (0, 1),
@@ -99,21 +159,22 @@ fn warp_bounds_a_logical_source_view_that_crosses_its_row_pitch() {
         write(&mut d, &mut h, 0xfff65000 + o, v);
     }
     advance(&mut d, &mut h, 5);
-    assert_eq!(&h.ram[0x9000..0x9008], &[0, 1, 2, 3, 4, 8, 6, 7]);
-    assert_eq!(&h.ram[0x9008..0x9010], &[8, 9, 10, 11, 12, 16, 14, 15]);
+    assert_eq!(&h.ram[0x9000..0x9008], &[1, 4, 2, 3, 5, 8, 6, 7]);
+    assert_eq!(&h.ram[0x9008..0x9010], &[9, 12, 10, 11, 13, 16, 14, 15]);
     assert!(h.ram[0x9010..0x9020].iter().all(|&byte| byte == 0xa5));
 }
 
 #[test]
 fn warp_rejects_a_selected_source_endpoint_past_physical_dram() {
     assert_eq!(
-        fujimod_emulator_image_processing::resample::Endpoint::source_bytes(
+        fujimod_emulator_image_processing::resample::Centered::source_bytes(
             6,
             2,
             8,
             4,
             2,
-            [4, 1],
+            [5, 1],
+            [4096, 4096],
             0,
         )
         .unwrap(),

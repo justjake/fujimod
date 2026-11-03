@@ -53,34 +53,84 @@ pub fn bilinear(
     Ok(())
 }
 
-pub fn endpoint(
+pub fn centered(
     source: &[u8],
     sw: usize,
     sh: usize,
     pitch: usize,
     dw: usize,
     dh: usize,
-    last: [usize; 2],
+    limits: [usize; 2],
+    scale: [u32; 2],
     mode: u32,
     out: &mut [u8],
 ) -> Result<(), String> {
-    let plan = Endpoint::new(source.len(), sw, sh, pitch, dw, dh, last, mode, out.len())?;
+    let plan = Centered::new(
+        source.len(),
+        sw,
+        sh,
+        pitch,
+        dw,
+        dh,
+        limits,
+        scale,
+        mode,
+        out.len(),
+    )?;
     plan.render_rows(source, 0..dh, out);
     Ok(())
 }
 
-/// Validated endpoint geometry. The pure row kernel cannot inspect registers,
+/// One axis of the programmed centered transform. The source limit and
+/// destination center are doubled coordinates; scale is Q12 before decimation.
+#[derive(Clone, Copy)]
+struct Axis {
+    bias: usize,
+    step: usize,
+    shift: u32,
+}
+impl Axis {
+    fn new(count: usize, limit: usize, scale: u32, shift: u32) -> Result<Self, String> {
+        if count == 0 || shift > 2 {
+            return Err("invalid centered axis geometry".into());
+        }
+        let decimation = 1usize << shift;
+        let scale = (scale as usize)
+            .checked_mul(decimation)
+            .ok_or("centered axis scale overflow")?;
+        let span = (count - 1)
+            .checked_mul(scale)
+            .ok_or("centered axis span overflow")?;
+        let center = limit
+            .checked_mul(4096)
+            .ok_or("centered axis limit overflow")?;
+        let bias = center
+            .checked_sub(span)
+            .ok_or("centered axis overruns source limit")?;
+        center
+            .checked_add(span)
+            .ok_or("centered axis coordinate overflow")?;
+        Ok(Self {
+            bias,
+            step: scale.checked_mul(2).ok_or("centered axis step overflow")?,
+            shift,
+        })
+    }
+    fn at(self, index: usize) -> usize {
+        (self.bias + index * self.step) >> (13 + self.shift) << self.shift
+    }
+}
+
+/// Validated centered Q12 geometry. The pure row kernel cannot inspect registers,
 /// live memory or a stream; callers may run it on disjoint worker-owned rows.
 #[derive(Clone, Copy)]
-pub struct Endpoint {
+pub struct Centered {
     pitch: usize,
     dw: usize,
-    dh: usize,
-    last: [usize; 2],
-    mode: u32,
+    axes: [Axis; 2],
 }
-impl Endpoint {
-    /// Length of the register-addressed source window needed by this endpoint
+impl Centered {
+    /// Length of the register-addressed source window needed by this centered
     /// operation. Source width describes the logical view; row pitch describes
     /// where each row begins, so the selected view may extend into later rows.
     pub fn source_bytes(
@@ -89,7 +139,8 @@ impl Endpoint {
         pitch: usize,
         dw: usize,
         dh: usize,
-        last: [usize; 2],
+        limits: [usize; 2],
+        scale: [u32; 2],
         mode: u32,
     ) -> Result<usize, String> {
         if mode > 2
@@ -98,14 +149,17 @@ impl Endpoint {
             || pitch == 0
             || dw == 0
             || dh == 0
-            || last[0] >= sw
-            || last[1] >= sh
+            || limits[0] >= sw
+            || limits[1] >= sh
         {
-            return Err("invalid packed422 endpoint geometry".into());
+            return Err("invalid packed422 centered geometry".into());
         }
-        let step = 1usize << mode;
-        let x = if dw > 1 { last[0] / step * step } else { 0 };
-        let y = if dh > 1 { last[1] / step * step } else { 0 };
+        let axes = [
+            Axis::new(dw, limits[0], scale[0], mode)?,
+            Axis::new(dh, limits[1], scale[1], mode)?,
+        ];
+        let x = axes[0].at(dw - 1);
+        let y = axes[1].at(dh - 1);
         let sample_end = y
             .checked_mul(pitch)
             .and_then(|row| {
@@ -114,10 +168,10 @@ impl Endpoint {
                     .and_then(|pair| row.checked_add(pair))
             })
             .and_then(|pair| pair.checked_add(4))
-            .ok_or("packed422 endpoint source size overflow")?;
+            .ok_or("packed422 centered source size overflow")?;
         let raster_bytes = pitch
             .checked_mul(sh)
-            .ok_or("packed422 endpoint source size overflow")?;
+            .ok_or("packed422 centered source size overflow")?;
         Ok(raster_bytes.max(sample_end))
     }
 
@@ -128,7 +182,8 @@ impl Endpoint {
         pitch: usize,
         dw: usize,
         dh: usize,
-        last: [usize; 2],
+        limits: [usize; 2],
+        scale: [u32; 2],
         mode: u32,
         output_bytes: usize,
     ) -> Result<Self, String> {
@@ -139,40 +194,37 @@ impl Endpoint {
             || dw == 0
             || !dw.is_multiple_of(2)
             || dh == 0
-            || last[0] >= sw
-            || last[1] >= sh
-            || source_bytes < Self::source_bytes(sw, sh, pitch, dw, dh, last, mode)?
-            || output_bytes != dw * dh * 2
+            || limits[0] >= sw
+            || limits[1] >= sh
+            || source_bytes < Self::source_bytes(sw, sh, pitch, dw, dh, limits, scale, mode)?
+            || Some(output_bytes) != dw.checked_mul(dh).and_then(|pixels| pixels.checked_mul(2))
         {
-            return Err("invalid packed422 endpoint geometry".into());
+            return Err("invalid packed422 centered geometry".into());
         }
         Ok(Self {
             pitch,
             dw,
-            dh,
-            last,
-            mode,
+            axes: [
+                Axis::new(dw, limits[0], scale[0], mode)?,
+                Axis::new(dh, limits[1], scale[1], mode)?,
+            ],
         })
     }
     pub fn render_rows(&self, source: &[u8], rows: std::ops::Range<usize>, out: &mut [u8]) {
         let Self {
             pitch,
             dw,
-            dh,
-            last,
-            mode,
+            axes: [sx, sy],
         } = *self;
-        let step = 1usize << mode;
-        let sx = |x: usize| x * (last[0] / step) / (dw - 1).max(1) * step;
         for (local_y, y) in rows.enumerate() {
-            let sy = y * (last[1] / step) / (dh - 1).max(1) * step;
+            let sy = sy.at(y);
             for x in (0..dw).step_by(2) {
                 let at = (local_y * dw + x) * 2;
                 out[at..at + 4].copy_from_slice(&[
-                    sample(source, pitch, sx(x), sy, 0),
-                    sample(source, pitch, sx(x + 1), sy, 0),
-                    sample(source, pitch, sx(x), sy, 1),
-                    sample(source, pitch, sx(x), sy, 2),
+                    sample(source, pitch, sx.at(x), sy, 0),
+                    sample(source, pitch, sx.at(x + 1), sy, 0),
+                    sample(source, pitch, sx.at(x), sy, 1),
+                    sample(source, pitch, sx.at(x), sy, 2),
                 ]);
             }
         }
@@ -182,6 +234,65 @@ impl Endpoint {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn grid() -> Vec<u8> {
+        let mut source = Vec::new();
+        for y in 0..8 {
+            for x in (0..8).step_by(2) {
+                source.extend_from_slice(&[y * 16 + x, y * 16 + x + 1, 100 + x, 200 + y]);
+            }
+        }
+        source
+    }
+
+    #[test]
+    fn centered_unity_scale_crops_instead_of_stretching_the_source() {
+        let source = grid();
+        let mut out = vec![0; 4 * 8 * 2];
+        centered(&source, 8, 8, 16, 4, 8, [7, 7], [4096; 2], 0, &mut out).unwrap();
+        assert_eq!(&out[..8], &[2, 3, 102, 200, 4, 5, 104, 200]);
+        assert_eq!(&out[56..], &[114, 115, 102, 207, 116, 117, 104, 207]);
+        let mut vertical = vec![0; 8 * 2 * 2];
+        centered(&source, 8, 8, 16, 8, 2, [7, 7], [4096; 2], 0, &mut vertical).unwrap();
+        assert_eq!(&vertical[..4], &[48, 49, 100, 203]);
+        assert_eq!(&vertical[16..20], &[64, 65, 100, 204]);
+    }
+
+    #[test]
+    fn centered_fractional_scale_and_decimation_use_the_programmed_grid() {
+        let source = grid();
+        let mut out = vec![0; 4 * 4 * 2];
+        centered(&source, 8, 8, 16, 4, 4, [7, 7], [6144; 2], 0, &mut out).unwrap();
+        assert_eq!(&out[..8], &[17, 18, 100, 201, 20, 21, 104, 201]);
+        let mut decimated = vec![0; 8];
+        centered(
+            &source,
+            8,
+            8,
+            16,
+            2,
+            2,
+            [6, 6],
+            [4096; 2],
+            1,
+            &mut decimated,
+        )
+        .unwrap();
+        assert_eq!(decimated, [34, 36, 102, 202, 66, 68, 102, 204]);
+        assert!(Centered::new(source.len(), 8, 8, 16, 8, 8, [7, 7], [4097; 2], 0, 128).is_err());
+    }
+
+    #[test]
+    fn centered_disjoint_rows_match_the_complete_kernel() {
+        let source = grid();
+        let plan = Centered::new(source.len(), 8, 8, 16, 4, 4, [7, 7], [6144; 2], 0, 32).unwrap();
+        let mut complete = vec![0; 32];
+        let mut rows = vec![0; 32];
+        plan.render_rows(&source, 0..4, &mut complete);
+        plan.render_rows(&source, 0..2, &mut rows[..16]);
+        plan.render_rows(&source, 2..4, &mut rows[16..]);
+        assert_eq!(rows, complete);
+    }
+
     #[test]
     fn identity_and_half_sample_ties() {
         let s = [0, 10, 20, 30, 20, 30, 40, 50];

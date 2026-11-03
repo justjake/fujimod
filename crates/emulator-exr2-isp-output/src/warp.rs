@@ -1,4 +1,4 @@
-//! FFF65000 warp registers. Endpoint nearest
+//! FFF65000 warp registers. Centered Q12 nearest
 //! packed422 sampling and timing are declared approximations. Memory DMA
 //! completes with IRQ74; the explicit JPEG stream has joint START ownership.
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
@@ -96,12 +96,13 @@ impl Warp {
         );
         let last = [(r[0x50 / 4] & 65535) as usize, (r[0x50 / 4] >> 16) as usize];
         let mode = r[0x34 / 4];
+        let scale = [r[0x38 / 4] & 0xffff, r[0x3c / 4] & 0xffff];
         centered_span_fits(r)?;
         // Source width is a logical crop extent. Rows begin at their
         // programmed pitch, and a selected endpoint can extend beyond it.
         src.validate(src.pitch)?;
-        let source_bytes = fujimod_emulator_image_processing::resample::Endpoint::source_bytes(
-            src.width, src.height, src.pitch, w, h, last, mode,
+        let source_bytes = fujimod_emulator_image_processing::resample::Centered::source_bytes(
+            src.width, src.height, src.pitch, w, h, last, scale, mode,
         )?;
         fujimod_emulator_imaging::exr2_isp::dma::physical(src.address, source_bytes)?;
         if mode > 2
@@ -129,7 +130,7 @@ impl Warp {
         let source = self.source.clone();
         if r[1] == 0x40 {
             let mut stream = self.stream.lock().unwrap();
-            let plan = fujimod_emulator_image_processing::resample::Endpoint::new(
+            let plan = fujimod_emulator_image_processing::resample::Centered::new(
                 self.source.len(),
                 src.width,
                 src.height,
@@ -137,6 +138,7 @@ impl Warp {
                 w,
                 h,
                 last,
+                scale,
                 mode,
                 w * h * 2,
             )?;
@@ -164,7 +166,7 @@ impl Warp {
             }
             self.dma
                 .prepare_deferred(cx.now(), self.options.completion_ticks, active, w * 2)?;
-            let plan = match fujimod_emulator_image_processing::resample::Endpoint::new(
+            let plan = match fujimod_emulator_image_processing::resample::Centered::new(
                 self.source.len(),
                 src.width,
                 src.height,
@@ -172,6 +174,7 @@ impl Warp {
                 w,
                 h,
                 last,
+                scale,
                 mode,
                 w * h * 2,
             ) {
