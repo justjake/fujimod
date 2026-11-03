@@ -93,6 +93,58 @@ fn memory_encode_publishes_complete_jpeg_and_decoder_pixels_before_irq() {
     assert_eq!(read(&mut decoder, &mut h, 0xfff63004), 0x10000);
 }
 #[test]
+fn decoder_reserved_prefix_preserves_consumed_bytes_across_refills() {
+    for split_prefix in [false, true] {
+        let mut h = TestHost::new();
+        h.ram[0x8000..0x8100].fill(128);
+        let mut encoded = encoder(Default::default());
+        configure(&mut encoded, &mut h, false);
+        write(&mut encoded, &mut h, 0xfff62000, 5);
+        advance(&mut encoded, &mut h, 10);
+        let count = read(&mut encoded, &mut h, 0xfff62094) as usize;
+        let mut jpeg = h.ram[0x9000..0x9000 + count].to_vec();
+        jpeg.splice(2..2, [0; 16]);
+        h.ram[0x9000..0x9000 + jpeg.len()].copy_from_slice(&jpeg);
+        h.ram[0xa000..0xa100].fill(0xa5);
+        let mut decoded = Decoder::new(
+            decoder::Options {
+                completion_ticks: 5,
+                reset_ticks: 2,
+            },
+            Irq { core: 0, line: 76 },
+        )
+        .unwrap();
+        let first = if split_prefix { 10 } else { jpeg.len() };
+        for (offset, value) in [
+            (8, 0xfd0020),
+            (0x100, 0xa000),
+            (0x104, 256),
+            (0x10c, 0x9000),
+            (0x110, first as u32),
+            (0, 1),
+        ] {
+            write(&mut decoded, &mut h, 0xfff63000 + offset, value);
+        }
+        advance_from_checkpoint(&mut decoded, &mut h, 15);
+        if split_prefix {
+            assert_eq!(read(&mut decoded, &mut h, 0xfff63004), 0x1000000);
+            assert_eq!(&h.ram[0xa000..0xa100], &[0xa5; 256]);
+            for (offset, value) in [
+                (4, 0x1000000),
+                (0x10c, 0x9000 + first as u32),
+                (0x110, (jpeg.len() - first) as u32),
+                (0x118, 4),
+            ] {
+                write(&mut decoded, &mut h, 0xfff63000 + offset, value);
+            }
+            advance_from_checkpoint(&mut decoded, &mut h, 20);
+        }
+        assert_eq!(&h.ram[0xa000..0xa100], &[128; 256]);
+        assert_eq!(read(&mut decoded, &mut h, 0xfff63108), jpeg.len() as u64);
+    }
+}
+
+#[test]
 fn decoder_refills_input_without_publishing_partial_pixels_and_survives_checkpoint() {
     let mut h = TestHost::new();
     h.ram[0x8000..0x8100].fill(128);

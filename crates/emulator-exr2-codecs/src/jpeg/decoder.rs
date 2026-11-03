@@ -34,6 +34,26 @@ pub struct Decoder {
     waiting_input: bool,
 }
 
+// DMA streams may reserve sixteen zero bytes between SOI and the first table.
+// Keep the addressed input intact for refill/count/checkpoint accounting; only
+// the strict software codec's view omits this transport reservation.
+fn codec_stream(source: &Arc<[u8]>) -> Arc<[u8]> {
+    let end = source.len().min(18);
+    if source.len() > 2
+        && source.starts_with(&[255, 216])
+        && source[2..end].iter().all(|&byte| byte == 0)
+    {
+        let mut bytes = Vec::with_capacity(source.len().saturating_sub(16));
+        bytes.extend_from_slice(&source[..2]);
+        if source.len() > 18 {
+            bytes.extend_from_slice(&source[18..]);
+        }
+        bytes.into()
+    } else {
+        source.clone()
+    }
+}
+
 // Marker lengths exclude embedded marker-like data. Within entropy FF00
 // is data, and restart markers do not end the scan. Split markers wait.
 fn complete_jpeg(bytes: &[u8]) -> Result<bool, String> {
@@ -183,7 +203,8 @@ impl Decoder {
                 return Err("JPEG decode input has no supported stream header".into());
             }
         }
-        if !complete_jpeg(&self.source)? {
+        let stream = codec_stream(&self.source);
+        if !complete_jpeg(&stream)? {
             self.waiting_input = true;
             self.pending = Some(Pending::Input(due(
                 cx.now(),
@@ -201,7 +222,7 @@ impl Decoder {
             .set_max_height(u16::MAX as usize)
             .jpeg_set_out_colorspace(ColorSpace::RGB);
         let mut decoder =
-            zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(self.source.as_ref()), options);
+            zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(stream.as_ref()), options);
         decoder
             .decode_headers()
             .map_err(|e| format!("invalid JPEG header: {e:?}"))?;
@@ -233,7 +254,7 @@ impl Decoder {
             },
             pitch * 2,
         )?;
-        let source = self.source.clone();
+        let source = stream;
         self.dma.pixels.defer_fallible(move |mut pixels| {
             pixels.resize(pitch * rows * 2, 0);
             let result = (|| {
@@ -428,6 +449,19 @@ impl Device for Decoder {
 #[cfg(test)]
 mod pixel_tests {
     use super::*;
+
+    #[test]
+    fn reserved_prefix_is_exact_and_other_header_junk_still_refuses() {
+        let mut bytes = vec![255, 216];
+        bytes.extend_from_slice(&[0; 16]);
+        bytes.extend_from_slice(&[255, 217]);
+        let source: Arc<[u8]> = bytes.clone().into();
+        assert_eq!(&*codec_stream(&source), &[255, 216, 255, 217]);
+        assert_eq!(&*source, &bytes);
+        bytes[8] = 1;
+        let source: Arc<[u8]> = bytes.into();
+        assert!(complete_jpeg(&codec_stream(&source)).is_err());
+    }
 
     #[test]
     fn marker_completion_ignores_app_payload_and_stuffed_entropy() {
