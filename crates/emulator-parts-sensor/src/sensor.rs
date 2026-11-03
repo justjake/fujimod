@@ -3,7 +3,7 @@
 //! is a declared linear sRGB approximation, not measured sensor calibration.
 //! RGB light maps to the active image area; explicit RAW spans the clock raster.
 use fujimod_emulator_devices::parts::optics::ApertureHandle;
-use fujimod_emulator_image_formation::exposure::ExposedFrame;
+use fujimod_emulator_image_formation::exposure::{ExposedFrame, SampleOffsets};
 use fujimod_emulator_image_processing::raw::{Cfa, Packing};
 use fujimod_emulator_imaging::exposure::{Calibration, ExposureHandle};
 use fujimod_emulator_imaging::scene::{Frame, FrameEdge, FramePixels, SensorFramesHandle};
@@ -173,6 +173,29 @@ mod tests {
             .encode(Packing::U16, [0, 0, 6, 6], &mut first)
             .unwrap();
         let frozen = sensor.freeze_readout(Packing::U16, [0, 0, 6, 6]).unwrap();
+        // Prepared readout offsets must preserve the scalar sampling law,
+        // including crop coordinates, CFA phase, packing, and row partitions.
+        for area in [[0, 0, 6, 6], [1, 1, 4, 4]] {
+            sensor.image_area = area;
+            for (packing, window) in [
+                (Packing::U16, [0, 0, 6, 6]),
+                (Packing::Packed12, [0, 0, 6, 6]),
+                (Packing::U16, [1, 1, 4, 4]),
+                (Packing::Packed12, [1, 1, 4, 4]),
+            ] {
+                let mut readout = sensor.freeze_readout(packing, window).unwrap();
+                assert!(readout.samples.is_some());
+                let row = packing.row_bytes(window[2]);
+                let mut accelerated = vec![0; row * window[3]];
+                readout.write_rows(0..2, &mut accelerated[..row * 2]);
+                readout.write_rows(2..window[3], &mut accelerated[row * 2..]);
+                readout.samples = None;
+                let mut scalar = vec![0; accelerated.len()];
+                readout.encode(&mut scalar).unwrap();
+                assert_eq!(accelerated, scalar);
+            }
+        }
+        sensor.image_area = [0, 0, 6, 6];
         let saved = sensor.checkpoint().unwrap();
         let saved_frames = frames.lock().unwrap().clone();
         let saved_exposure = *wire.lock().unwrap();
@@ -380,6 +403,7 @@ pub struct FrozenReadout {
     radiometric: bool,
     packing: Packing,
     window: [usize; 4],
+    samples: Option<([usize; 2], SampleOffsets)>,
 }
 impl Sensor {
     pub fn new(options: Options, frames: SensorFramesHandle) -> Result<Self, String> {
@@ -641,6 +665,29 @@ impl Sensor {
         if matches!(frame.pixels, FramePixels::Mosaic { .. }) && self.radiometry.is_none() {
             return Err("mosaic scene input needs a radiometric sensor exposure".into());
         }
+        let [image_left, image_top, image_width, image_height] = self.image_area;
+        let x0 = left.clamp(image_left, image_left + image_width);
+        let x1 = (left + width).clamp(image_left, image_left + image_width);
+        let y0 = top.clamp(image_top, image_top + image_height);
+        let y1 = (top + height).clamp(image_top, image_top + image_height);
+        let samples = if self.radiometry.is_some()
+            && !matches!(frame.pixels, FramePixels::Raw16(_))
+            && x0 < x1
+            && y0 < y1
+        {
+            self.exposed
+                .as_ref()
+                .and_then(|frame| {
+                    frame.sample_offsets(
+                        [image_width, image_height],
+                        [x0 - image_left, y0 - image_top, x1 - x0, y1 - y0],
+                        1,
+                    )
+                })
+                .map(|samples| ([x0, y0], samples))
+        } else {
+            None
+        };
         Ok(FrozenReadout {
             width: self.width,
             height: self.height,
@@ -653,6 +700,7 @@ impl Sensor {
             radiometric: self.radiometry.is_some(),
             packing,
             window: [left, top, width, height],
+            samples,
         })
     }
     pub fn encode(
@@ -684,6 +732,20 @@ impl FrozenReadout {
         debug_assert_eq!(out.len(), packing.row_bytes(width) * rows.len());
         let f = &self.frame;
         let sample = |x: usize, y: usize| {
+            if let Some(([left, top], samples)) = &self.samples {
+                if x < *left
+                    || y < *top
+                    || x - left >= samples.columns.len()
+                    || y - top >= samples.rows.len()
+                {
+                    return self.black;
+                }
+                return self.black.saturating_add(samples.channel(
+                    samples.rows[y - top],
+                    samples.columns[x - left],
+                    self.cfa.color(x, y),
+                ));
+            }
             let sx = ((2 * x + 1) * f.width / (2 * self.width)).min(f.width - 1);
             let sy = ((2 * y + 1) * f.height / (2 * self.height)).min(f.height - 1);
             match &f.pixels {
