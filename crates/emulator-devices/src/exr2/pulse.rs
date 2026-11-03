@@ -25,6 +25,9 @@ const CAPTURE_MODE: u32 = 0x438b;
 pub struct Options {
     pub counter_channels: Vec<u8>,
     pub timer_channels: Vec<u8>,
+    /// Channels that also accept a polled countdown: control 0x800x with
+    /// reload 0 runs once without an IRQ. A channel listed here and in
+    /// `timer_channels` chooses the form each time it is armed.
     #[serde(default)]
     pub one_shot_channels: Vec<u8>,
     /// Interval-timer channels whose +08 word reads the running down-count
@@ -267,10 +270,8 @@ impl PulseUnit {
         }
         let mut one_shots = 0u16;
         for channel in options.one_shot_channels {
-            if channel >= 12 || timers & (1 << channel) != 0 || one_shots & (1 << channel) != 0 {
-                return Err(
-                    "one-shot channels must be unique, below twelve and not interval timers".into(),
-                );
+            if channel >= 12 || one_shots & (1 << channel) != 0 {
+                return Err("one-shot channels must be unique and below twelve".into());
             }
             one_shots |= 1 << channel;
         }
@@ -319,11 +320,13 @@ impl PulseUnit {
         (channel < 12 && offset <= 16).then_some((channel, offset as usize / 4))
     }
 
-    fn arm(&self, s: &State, channel: usize, now: u64) -> Result<Option<(u64, u64)>, String> {
+    /// Returns the deadline, the interval and whether this arming is a polled one-shot.
+    fn arm(&self, s: &State, channel: usize, now: u64) -> Result<Option<(u64, u64, bool)>, String> {
         let c = &s.channels[channel];
         let [control, config, period, reload, duty] = c.words;
         if self.pins.one_shots & (1 << channel) != 0
             && (0x8000..=0x8003).contains(&(control & !0x5000))
+            && (reload == 0 || self.pins.timers & (1 << channel) == 0)
         {
             if config != 0 || period == 0 || reload != 0 || duty != 0 {
                 return Err("incomplete one-shot timer configuration".into());
@@ -332,6 +335,7 @@ impl PulseUnit {
             return Ok(Some((
                 now.checked_add(interval).ok_or("pulse deadline overflow")?,
                 interval,
+                true,
             )));
         }
         if control & !0x5000 >= 0x8000 && control & !0x5000 <= 0x8003 {
@@ -348,6 +352,7 @@ impl PulseUnit {
             return Ok(Some((
                 now.checked_add(interval).ok_or("pulse deadline overflow")?,
                 interval,
+                false,
             )));
         }
         if (0x8800..=0x8803).contains(&control) {
@@ -408,12 +413,10 @@ impl PulseUnit {
                         s.channels[ch].due = None;
                         s.channels[ch].start = None;
                     }
-                    if let Some((due, interval)) = timer {
+                    if let Some((due, interval, once)) = timer {
                         s.channels[ch].due = Some(due);
                         s.channels[ch].interval = interval;
-                        if self.pins.one_shots & (1 << ch) != 0 {
-                            s.channels[ch].start = Some(cx.now());
-                        }
+                        s.channels[ch].start = once.then(|| cx.now());
                     }
                 }
                 if starting & 1 != 0 && self.pins.quadrature && s.channels[0].words[0] == 0x870c {
@@ -604,7 +607,7 @@ impl Device for PulseUnit {
             }
             // A one-shot countdown fires once and stays expired until the
             // channel is disabled; an interval timer re-arms immediately.
-            let one_shot = self.pins.one_shots & (1 << ch) != 0;
+            let one_shot = c.start.is_some();
             let Some(line) = self.pins.irqs[ch] else {
                 if one_shot {
                     c.due = None;
