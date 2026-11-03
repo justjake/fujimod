@@ -21,6 +21,31 @@ pub struct FirmwareCard {
     pub internal_version: String,
     pub code_checks: Vec<CodeCheck>,
     pub mechanism: Mechanism,
+    /// Optional owned service used when the stock interface cannot implement
+    /// the complete file namespace. The client supplies its compiled helper.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service: Option<QueryService>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
+#[serde(deny_unknown_fields)]
+pub struct QueryService {
+    pub allocate: u32,
+    pub release: u32,
+    pub configuration_pointer: u32,
+    pub cache_clean: u32,
+    pub instruction_invalidate: u32,
+    pub barrier: u32,
+    pub instruction_barrier: u32,
+    pub worker_slots: u32,
+    /// Stock file, dispatch, and cursor entrypoints in the helper ABI's order.
+    pub functions: Vec<u32>,
+    pub checks: Vec<CodeCheck>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -115,6 +140,64 @@ impl FirmwareCard {
                 || !c.sha256.bytes().all(|b| b.is_ascii_hexdigit())
             {
                 return Err("Invalid card code check".into());
+            }
+        }
+        if let Some(service) = &self.service {
+            if service.checks.iter().any(|c| {
+                c.size == 0
+                    || c.address
+                        .checked_add(c.size)
+                        .is_none_or(|end| end > 1u64 << 32)
+                    || c.sha256.len() != 64
+                    || !c.sha256.bytes().all(|b| b.is_ascii_hexdigit())
+            }) {
+                return Err("Invalid owned file-service code check".into());
+            }
+            if !matches!(
+                self.mechanism,
+                Mechanism::Mailbox {
+                    address_alias: 0x40000000,
+                    ..
+                }
+            ) || service.functions.len() != 20
+                || service.functions.iter().any(|n| *n == 0 || n % 4 != 0)
+                || service.configuration_pointer == 0
+                || service.configuration_pointer % 4 != 0
+                || service.worker_slots == 0
+                || service.worker_slots % 4 != 0
+            {
+                return Err("Invalid owned file-service contract".into());
+            }
+            for address in [
+                service.allocate,
+                service.release,
+                service.cache_clean,
+                service.instruction_invalidate,
+                service.barrier,
+                service.instruction_barrier,
+            ]
+            .into_iter()
+            .chain(
+                service
+                    .functions
+                    .iter()
+                    .copied()
+                    .enumerate()
+                    .filter(|(i, _)| *i != 15)
+                    .map(|(_, a)| a),
+            ) {
+                if address == 0
+                    || address % 4 != 0
+                    || !service.checks.iter().any(|c| {
+                        c.size > 0
+                            && u64::from(address) >= c.address
+                            && u64::from(address) < c.address + c.size
+                            && c.sha256.len() == 64
+                            && c.sha256.bytes().all(|b| b.is_ascii_hexdigit())
+                    })
+                {
+                    return Err("Unpinned owned file-service primitive".into());
+                }
             }
         }
         match &self.mechanism {

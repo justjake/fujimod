@@ -12,6 +12,7 @@ pub(super) struct Mailbox<'a> {
     capacity: u32,
     operations: u32,
     source: Option<u32>,
+    pub(super) trigger: Option<super::QueryTrigger>,
 }
 impl Mailbox<'_> {
     pub(super) fn location(&self) -> u32 {
@@ -58,6 +59,24 @@ impl Mailbox<'_> {
         require(size <= 0xffffff, "File-service argument too large")?;
         self.idle().await?;
         self.write(self.p[1], &words(&[op | size << 8])).await?;
+        if let Some(trigger) = self.trigger {
+            use crate::ff80::commands::diagnostic::DiagnosticTag;
+            use crate::operations::borrowed::BorrowedQueries;
+            let outputs = self.host.read(trigger.outputs, 8).await?;
+            let mut call = BorrowedQueries::new(
+                Address(trigger.slot),
+                Address(trigger.stock),
+                Address(trigger.outputs),
+                outputs,
+            )?;
+            call.call(
+                Address(trigger.entry),
+                DiagnosticTag::Research(trigger.argument),
+                vec![(0, 0)],
+                vec![0; 8],
+            )?;
+            call.invoke(self.host.session, self.host.limits).await?;
+        }
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
             require(
@@ -320,6 +339,7 @@ pub(super) async fn prepare<'a>(
         capacity: 0,
         operations: 0,
         source: None,
+        trigger: None,
     };
     let matches = |raw: &[u8]| {
         u32_at(raw, 0) == 0x314c4946

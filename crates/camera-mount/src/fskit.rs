@@ -8,6 +8,22 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+/// FSKitBridge's raw resource must have a nonzero extent before attachment.
+/// The bridge crate otherwise creates an empty file on a fresh installation.
+pub fn prepare_bridge_resource() -> std::io::Result<()> {
+    use std::os::unix::fs::OpenOptionsExt;
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open("/tmp/fskitbridge.dmg")
+    {
+        Ok(file) => file.set_len(1 << 20),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
 pub struct Adapter<D> {
     fs: Arc<Mutex<CameraFs<D>>>,
     uid: u32,
@@ -25,6 +41,9 @@ impl<D> Clone for Adapter<D> {
 }
 
 impl<D: Device + 'static> Adapter<D> {
+    pub async fn shutdown(&self) -> Result<()> {
+        self.work(|fs| fs.shutdown()).await
+    }
     pub fn new(fs: CameraFs<D>, uid: u32, gid: u32) -> Self {
         Self {
             fs: Arc::new(Mutex::new(fs)),

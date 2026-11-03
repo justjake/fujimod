@@ -342,6 +342,79 @@
           "type": "object"
         }
       ]
+    },
+    "QueryService": {
+      "additionalProperties": false,
+      "properties": {
+        "allocate": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "barrier": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cache_clean": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/CodeCheck"
+          },
+          "type": "array"
+        },
+        "configuration_pointer": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "functions": {
+          "description": "Stock file, dispatch, and cursor entrypoints in the helper ABI's order.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "instruction_barrier": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "instruction_invalidate": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "release": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "worker_slots": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "allocate",
+        "release",
+        "configuration_pointer",
+        "cache_clean",
+        "instruction_invalidate",
+        "barrier",
+        "instruction_barrier",
+        "worker_slots",
+        "functions",
+        "checks"
+      ],
+      "type": "object"
     }
   },
   "$id": "https://fujimod.com/schemas/card-files.generated.schema.json",
@@ -375,6 +448,17 @@
       "format": "uint32",
       "minimum": 0,
       "type": "integer"
+    },
+    "service": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/QueryService"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Optional owned service used when the stock interface cannot implement\nthe complete file namespace. The client supplies its compiled helper."
     }
   },
   "required": [

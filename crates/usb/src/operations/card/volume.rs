@@ -14,6 +14,15 @@ pub struct Volume<'a> {
 }
 
 impl<'a> Volume<'a> {
+    pub fn set_query_trigger(&mut self, trigger: QueryTrigger) -> Result<()> {
+        match &mut self.backend {
+            Backend::Mailbox(service) => {
+                service.trigger = Some(trigger);
+                Ok(())
+            }
+            Backend::Sdk(_) => Err(fail("Query trigger requires an owned file service")),
+        }
+    }
     pub async fn attach(
         session: &'a mut Session,
         limits: DebugMemoryLimits,
@@ -36,26 +45,32 @@ impl<'a> Volume<'a> {
                     == capability.internal_version,
             "Card capability identifies another firmware",
         )?;
-        let mut host = Host {
-            session,
-            limits,
-            io,
-        };
-        for check in &capability.code_checks {
-            let bytes = host
-                .read(
+        let checks = capability
+            .code_checks
+            .iter()
+            .map(|check| {
+                super::super::checks::Sha256Check::from_hex(
                     check
                         .address
                         .try_into()
                         .map_err(|_| Error::AddressOverflow)?,
                     check.size.try_into().map_err(|_| Error::InvalidLength)?,
+                    &check.sha256,
                 )
-                .await?;
-            require(
-                format!("{:x}", Sha256::digest(bytes)) == check.sha256,
-                "Stock card instructions differ",
-            )?;
-        }
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let mut host = Host {
+            session,
+            limits,
+            io,
+        };
+        super::super::checks::verify_sha256(
+            host.session,
+            host.limits,
+            &checks,
+            host.io.as_mut().map(|io| &mut **io as &mut dyn BufferIo),
+        )
+        .await?;
         let backend = match &capability.mechanism {
             Mechanism::StockSdk(p) => Backend::Sdk(sdk::prepare(host, p).await?),
             Mechanism::Mailbox {

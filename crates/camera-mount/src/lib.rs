@@ -1,8 +1,11 @@
 //! Platform-independent namespace over bounded camera operations.
 //! Memory is always read-only. Only the SD subtree delegates mutations.
+#[cfg(target_os = "macos")]
+pub mod bridge;
 mod flash;
 #[cfg(target_os = "macos")]
 pub mod fskit;
+mod service;
 mod transport;
 pub mod usb;
 
@@ -23,6 +26,9 @@ pub type Result<T> = std::result::Result<T, i32>;
 
 /// No memory-write operation exists at this boundary.
 pub trait Device: Send {
+    fn shutdown(&mut self) -> Result<()> {
+        self.synchronize()
+    }
     fn has_card(&self) -> bool;
     fn list(&mut self, path: &str) -> Result<Vec<DirectoryEntry>>;
     fn read(&mut self, path: &str, offset: u32, size: u32) -> Result<Vec<u8>>;
@@ -73,6 +79,9 @@ pub struct CameraFs<D> {
 }
 
 impl<D: Device> CameraFs<D> {
+    pub fn shutdown(&mut self) -> Result<()> {
+        self.device.shutdown()
+    }
     pub fn new(device: D, mut regions: Vec<Region>) -> Result<Self> {
         regions.sort_by_key(|r| r.address);
         for region in &regions {

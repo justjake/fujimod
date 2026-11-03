@@ -318,6 +318,7 @@ fn profile() -> FirmwareCard {
         product: "Model".into(),
         internal_version: "1".into(),
         code_checks: vec![],
+        service: None,
         mechanism: Mechanism::StockSdk(Box::new(StockSdk {
             callback_table_pointer: 0x1000,
             callback_offset: 12,

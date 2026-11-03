@@ -11,15 +11,18 @@ description = "Camera SD files, read-only live memory and internal storage as a 
 fujimod-usb.workspace = true
 fujimod-catalog.workspace = true
 fujimod-catalog-bulk.workspace = true
+fujimod-catalog-card.workspace = true
 fujimod-workflows.workspace = true
 fujimod-workspace-hack.workspace = true
 futures-lite.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+sha2.workspace = true
 libc = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 fskit-rs = "=0.2.0"
+plist = "1"
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "signal", "macros"] }
 

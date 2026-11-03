@@ -52,6 +52,15 @@ pub trait BufferIo: Send {
 }
 
 mod mailbox;
+/// A client-owned service entered through a temporarily borrowed query slot.
+#[derive(Clone, Copy, Debug)]
+pub struct QueryTrigger {
+    pub slot: u32,
+    pub stock: u32,
+    pub outputs: u32,
+    pub entry: u32,
+    pub argument: u32,
+}
 #[cfg(test)]
 mod protocol_tests;
 mod sdk;

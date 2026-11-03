@@ -20,9 +20,18 @@ The current adapter does not provide a custom `mmap` interface.
 
 ## Run
 
-Install and enable the signed [FSKitBridge 0.2.0 application](https://github.com/debox-network/FSKitBridge/releases/tag/v0.2.0),
-following its extension setup instructions. macOS 15.4 or newer is required.
-Building requires Rust and `protoc` (`brew install protobuf`).
+macOS 15.4 or newer is required. On first use the command installs and registers
+the signed [FSKitBridge 0.2.0 application](https://github.com/debox-network/FSKitBridge/releases/tag/v0.2.0),
+checking the pinned archive hash and the application signatures. macOS requires
+enabling `fskitbridge` once under System Settings → General → Login Items &
+Extensions → File System Extensions.
+The command checks embedded provisioning-profile expiration before opening USB.
+The published 0.2.0 archive's profile expired on October 29, 2026; it currently
+requires a replacement release or a locally signed build to mount. Rebooting
+does not repair an expired profile.
+Building requires Rust, `protoc`, Clang with ARM support, and LLD
+(`brew install protobuf llvm`). `CLANG` and `LD_LLD` select build tools.
+The camera helper is compiled into the mount executable; mounting runs no compiler.
 
 The camera must already provide an available ff80 debug service. Select a
 firmware with readable memory facts in the bundled catalog. The `sd/` subtree
@@ -56,24 +65,40 @@ rename, extended attributes, links, ownership and permission changes are not
 implemented. Applications that save through a temporary file and rename will
 receive an unsupported-operation error. Capacity statistics are unavailable.
 
-The X70 installed file service requires descriptor ABI 3 for mounted access.
-An older service is rejected during the root-directory preflight. The stock
-SDK backend needs no uploaded executable code.
+For a firmware with an owned query-service contract, the command allocates and
+loads its bundled file helper automatically. No preinstalled camera mod or
+separate helper artifact is needed. The helper runs stock asynchronous storage
+operations, uses its own buffer and directory cursor, and installs no hooks or
+background timer. The stock SDK backend uses existing camera code.
+
+`--benchmark` mounts the volume, measures uncached POSIX memory and existing SD
+file reads at several request sizes, and unmounts. It reports decimal MB/s and
+does not write SD files. `FUJIMOD_MOUNT_TRACE=1` logs backend request sizes,
+session acquisition time, and operation time to stderr.
+`--benchmark-usb` measures the same bounded camera backend directly, without
+starting FSKit, and labels its output `usb-backend`. This isolates transport
+and storage costs while diagnosing the OS adapter.
 
 ## Architecture and performance
 
 The namespace and policy live in Rust independently of the platform adapter.
-The worker holds device descriptors while idle. Each bounded SD, memory or flash
+The worker holds device descriptors and any owned file-helper allocation while idle.
+Each bounded SD, memory or flash
 operation acquires a fresh ff80 session, completes its callbacks, closes all
-file handles, releases its allocation, restores borrowed controls, and closes
+file handles, restores borrowed controls, and closes
 the session before replying. Other tools can use the camera between operations;
-there is no mount-lifetime session or idle USB claim. Synchronize and unmount
-need no new session because writes are already committed before replying.
+there is no mount-lifetime session or idle USB claim. Synchronization needs no
+new session because writes are already committed before replying. Unmount
+acquires one bounded cleanup session when it must release a helper allocation,
+and reports cleanup errors. Flash reads yield the helper allocation first,
+then recreate it on the next SD operation.
 
 The installed-service descriptor address is cached as a discovery hint. Each
 transaction revalidates its descriptor, pointers and ownership; a missing hint
 triggers rediscovery. Firmware identity and stock code checks are repeated in
-the session that uses them. Regular-file I/O transfers bounded ranges rather
+the session that uses them. Nearby code checks share qualified bulk reads when
+that costs fewer commands; CPU fallback reads only the checked spans. Each
+individual digest is still verified. Regular-file I/O transfers bounded ranges rather
 than downloading and replacing whole files. Extending a file zero-fills its gap.
 
 Read transport selection compares CPU command count with qualified E1 setup,

@@ -69,6 +69,7 @@ struct Client<F> {
     internal_version: String,
     bulk: Option<FirmwareBulk>,
     flash: Option<crate::flash::Reader>,
+    service: Option<crate::service::Service>,
     limits: DebugMemoryLimits,
     mailbox_hint: Option<u32>,
     fenced: bool,
@@ -80,10 +81,20 @@ impl<F: Sessions> Client<F> {
             return Err(Error::CompletionUnknown);
         }
         // Every write is committed and every handle closed before replying.
-        if matches!(op, Operation::Sync | Operation::Close) {
+        if matches!(op, Operation::Sync) || matches!(op, Operation::Close) && self.service.is_none()
+        {
             return Ok(Answer::Done);
         }
+        let acquisition = std::time::Instant::now();
         let mut session = self.sessions.open().await?;
+        let acquisition_seconds = acquisition.elapsed().as_secs_f64();
+        let started = std::time::Instant::now();
+        let metric = match &op {
+            Operation::Memory(_, size) => Some(("memory", *size)),
+            Operation::Card(Request::ReadAt { size, .. }) => Some(("sd", *size)),
+            Operation::Flash(_, size) => Some(("flash", *size)),
+            _ => None,
+        };
         let mut transport = Transport::new(
             self.bulk.as_ref(),
             self.limits,
@@ -94,14 +105,64 @@ impl<F: Sessions> Client<F> {
         let result = async {
             match op {
                 Operation::Card(request) => {
+                    if self.service.is_none() {
+                        if let Some(facts) =
+                            self.capability.as_ref().and_then(|c| c.service.as_ref())
+                        {
+                            if session
+                                .device_info(InfoSelector::Product)
+                                .await?
+                                .text
+                                .trim()
+                                != self.product
+                                || session
+                                    .device_info(InfoSelector::InternalVersion)
+                                    .await?
+                                    .text
+                                    .trim()
+                                    != self.internal_version
+                            {
+                                return Err(Error::Card(
+                                    "Connected camera differs from the mounted firmware".into(),
+                                ));
+                            }
+                            self.service = Some(
+                                crate::service::Service::install(
+                                    &mut session,
+                                    self.limits,
+                                    self.bulk.as_ref().ok_or(Error::OutsideDataWindow)?,
+                                    facts,
+                                )
+                                .await?,
+                            );
+                        }
+                    }
+                    let owned =
+                        if let Some(service) = &self.service {
+                            service
+                                .check(&mut session, self.limits, Some(&mut transport))
+                                .await?;
+                            self.mailbox_hint = Some(service.base + 0x2000);
+                            Some(service.capability(
+                                self.capability.as_ref().ok_or(Error::OutsideDataWindow)?,
+                            ))
+                        } else {
+                            None
+                        };
                     let mut volume = Volume::attach(
                         &mut session,
                         self.limits,
-                        self.capability.as_ref().ok_or(Error::OutsideDataWindow)?,
+                        owned
+                            .as_ref()
+                            .or(self.capability.as_ref())
+                            .ok_or(Error::OutsideDataWindow)?,
                         Some(&mut transport),
                         self.mailbox_hint,
                     )
                     .await?;
+                    if let Some(service) = &self.service {
+                        volume.set_query_trigger(service.trigger())?;
+                    }
                     self.mailbox_hint = volume.mailbox_address();
                     let result = volume.execute(request).await.map(Answer::Card);
                     if let Err(error) = volume.close().await {
@@ -111,6 +172,13 @@ impl<F: Sessions> Client<F> {
                     result
                 }
                 Operation::Flash(offset, size) => {
+                    // Both backends use owned camera RAM. Yield the file helper
+                    // allocation before a flash reader requests its workspace.
+                    if let Some(service) = &self.service {
+                        service.release(&mut session, self.limits).await?;
+                        self.service = None;
+                        self.mailbox_hint = None;
+                    }
                     let flash = self.flash.as_ref().ok_or(Error::OutsideDataWindow)?;
                     let bulk = self.bulk.as_ref().ok_or(Error::OutsideDataWindow)?;
                     let bytes = fujimod_workflows::flash::read_range(
@@ -182,7 +250,14 @@ impl<F: Sessions> Client<F> {
                     };
                     Ok(Answer::Bytes(data))
                 }
-                Operation::Sync | Operation::Close => unreachable!("handled without a session"),
+                Operation::Close => {
+                    if let Some(service) = &self.service {
+                        service.release(&mut session, self.limits).await?;
+                    }
+                    self.service = None;
+                    Ok(Answer::Done)
+                }
+                Operation::Sync => unreachable!("handled without a session"),
             }
         }
         .await;
@@ -199,6 +274,15 @@ impl<F: Sessions> Client<F> {
         if let Err(error) = session.close().await {
             self.fenced = true;
             return Err(error);
+        }
+        if std::env::var_os("FUJIMOD_MOUNT_TRACE").is_some() {
+            if let Some((kind, size)) = metric {
+                eprintln!(
+                    "{}",
+                    serde_json::json!({"mount_io":kind,"bytes":size,
+                    "seconds":started.elapsed().as_secs_f64(),"acquisition_seconds":acquisition_seconds,"success":result.is_ok()})
+                );
+            }
         }
         result
     }
@@ -220,6 +304,9 @@ impl UsbDevice {
         flash_reader: Option<std::path::PathBuf>,
     ) -> std::result::Result<(Self, Vec<Region>), String> {
         let selected = ReferenceCatalog::bundled()?.resolve_firmware(&firmware)?;
+        if let Some(capability) = &selected.card_files {
+            capability.validate()?;
+        }
         let flash = flash_reader
             .as_deref()
             .map(|path| crate::flash::Reader::load(path, &selected))
@@ -304,6 +391,7 @@ impl UsbDevice {
                         internal_version,
                         bulk: selected.bulk,
                         flash,
+                        service: None,
                         limits,
                         mailbox_hint: None,
                         fenced: false,
@@ -316,6 +404,9 @@ impl UsbDevice {
                         Operation::Probe
                     };
                     if let Err(error) = client.transaction(preflight).await {
+                        if !client.fenced {
+                            let _ = client.transaction(Operation::Close).await;
+                        }
                         let _ = ready_tx.send(Err(error.to_string()));
                         return;
                     }
@@ -384,6 +475,9 @@ fn report(error: fujimod_usb::Error) -> i32 {
 }
 
 impl Device for UsbDevice {
+    fn shutdown(&mut self) -> Result<()> {
+        UsbDevice::shutdown(self)
+    }
     fn has_card(&self) -> bool {
         self.has_card
     }

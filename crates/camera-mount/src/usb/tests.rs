@@ -110,6 +110,7 @@ fn client(scripts: Vec<Script>) -> Client<TestSessions> {
             product: "Model".into(),
             internal_version: "1".into(),
             code_checks: vec![],
+            service: None,
             mechanism: Mechanism::Mailbox {
                 search_address: 0x1000,
                 search_bytes: 64,
@@ -119,6 +120,7 @@ fn client(scripts: Vec<Script>) -> Client<TestSessions> {
         }),
         bulk: None,
         flash: None,
+        service: None,
         limits: DebugMemoryLimits {
             read: NonZeroU32::new(256).unwrap(),
             write: NonZeroU32::new(256).unwrap(),
@@ -324,6 +326,7 @@ fn sd_transactions_yield_to_another_ff80_client_and_revalidate_the_descriptor_hi
             internal_version: "1".into(),
             bulk: None,
             flash: None,
+            service: None,
             limits: DebugMemoryLimits {
                 read: NonZeroU32::new(256).unwrap(),
                 write: NonZeroU32::new(256).unwrap(),

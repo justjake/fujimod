@@ -1409,13 +1409,16 @@ dependencies = [
  "fskit-rs",
  "fujimod-catalog",
  "fujimod-catalog-bulk",
+ "fujimod-catalog-card",
  "fujimod-usb",
  "fujimod-workflows",
  "fujimod-workspace-hack",
  "futures-lite",
  "libc",
+ "plist",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tokio",
 ]
 

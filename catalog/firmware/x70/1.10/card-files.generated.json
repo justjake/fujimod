@@ -11,5 +11,327 @@
     "search_bytes": 2555904,
     "address_alias": 1073741824,
     "build": null
+  },
+  "service": {
+    "allocate": 12420356,
+    "release": 12420388,
+    "configuration_pointer": 12466684,
+    "cache_clean": 271932,
+    "instruction_invalidate": 272160,
+    "barrier": 277300,
+    "instruction_barrier": 271908,
+    "worker_slots": 1086195524,
+    "functions": [
+      10053852,
+      10054032,
+      10054128,
+      10054224,
+      10054604,
+      10054508,
+      10066300,
+      10070304,
+      10230240,
+      10084604,
+      10097412,
+      10088976,
+      10107276,
+      10092912,
+      10105532,
+      12947928,
+      10057412,
+      9772916,
+      272160,
+      271908
+    ],
+    "checks": [
+      {
+        "name": "card_service_0x9968dc",
+        "address": 10053852,
+        "size": 40,
+        "sha256": "19dda2284adab5d8c22f1897d15248cc57489cc5f9725adf63ebde57e1092891"
+      },
+      {
+        "name": "card_service_0x996544",
+        "address": 10052932,
+        "size": 596,
+        "sha256": "71aa79b040c6b2cc43e119cc4acb11707b1a0fcbccba0f1ded7162f46ca762c2"
+      },
+      {
+        "name": "card_service_0x996990",
+        "address": 10054032,
+        "size": 36,
+        "sha256": "08ce4b2c4da12f7cd7d3bfee5e9d94d543766a89f819618caf493c2ee98c3d38"
+      },
+      {
+        "name": "card_service_0x996108",
+        "address": 10051848,
+        "size": 364,
+        "sha256": "9d2ef87d36e587ebda0a95192aa1b9254afa95e287f6627446c78a775e9be066"
+      },
+      {
+        "name": "card_service_0x9969f0",
+        "address": 10054128,
+        "size": 36,
+        "sha256": "39948ee0cba419bb1f1a2649dae58e6ef5577339ace080f0e96e9f04f7948944"
+      },
+      {
+        "name": "card_service_0x996274",
+        "address": 10052212,
+        "size": 340,
+        "sha256": "7161fa0eccaf375ba0ee5ee049f3986ae4b8897667d997f436548db9f45f1443"
+      },
+      {
+        "name": "card_service_0x996a50",
+        "address": 10054224,
+        "size": 36,
+        "sha256": "015ba78406fa1b07bcf924356bd03b4284f0f725ce5afbc89d2cdaecc118a60c"
+      },
+      {
+        "name": "card_service_0x9963c8",
+        "address": 10052552,
+        "size": 380,
+        "sha256": "a1861aeeb98ad6d7ee1c273c555539fd0c2693398ad1e1f6f450052575e04f02"
+      },
+      {
+        "name": "card_service_0x996bcc",
+        "address": 10054604,
+        "size": 20,
+        "sha256": "97818c7296bf461077c3763c10d40674fccaa97c51fd0ae43aa6dede8e4a3a67"
+      },
+      {
+        "name": "card_service_0x996798",
+        "address": 10053528,
+        "size": 304,
+        "sha256": "ece068daf4bd19008c2218383233ee1ce68ebe6708fe1985f68aef3ea7ed8f67"
+      },
+      {
+        "name": "card_service_0x996b6c",
+        "address": 10054508,
+        "size": 44,
+        "sha256": "b0d2cbd846ec62a77a93f9044ad777829aa1915c9d914292f46a7a150aebf838"
+      },
+      {
+        "name": "card_service_0x995f5c",
+        "address": 10051420,
+        "size": 428,
+        "sha256": "e0b2560b700373764ddee6cda76a46018695a61e9f62c13c766ea8068d5a0b09"
+      },
+      {
+        "name": "card_service_0x99997c",
+        "address": 10066300,
+        "size": 16,
+        "sha256": "9c46a932b647992b5bc1dde23b98f9dab053dd0784f4a184f2ae1542d66b949d"
+      },
+      {
+        "name": "card_service_0x999d34",
+        "address": 10067252,
+        "size": 60,
+        "sha256": "c408882a315c88005b8fa0d9f63d55d2c29b2c6c47b1c101b38b4f35e11fe1cb"
+      },
+      {
+        "name": "card_service_0x99a920",
+        "address": 10070304,
+        "size": 72,
+        "sha256": "9ed80285d047606660f534419ab893f8cb903737290aa2d57e2f5ba74e0053d5"
+      },
+      {
+        "name": "card_service_0x9c2d64",
+        "address": 10235236,
+        "size": 472,
+        "sha256": "72690f68017038133895088ead160cfee6f39abe93282299ccada7165bf2261d"
+      },
+      {
+        "name": "card_service_0x9c19e0",
+        "address": 10230240,
+        "size": 48,
+        "sha256": "4c6c77a2f571f1dbbc557b6eb7667a25635fdc608fe1ea3b30043786a1398400"
+      },
+      {
+        "name": "card_service_0x99e0fc",
+        "address": 10084604,
+        "size": 768,
+        "sha256": "8929932761762d3a2db5b43792b0e920286caa05a85814b80bce11ce06f403ce"
+      },
+      {
+        "name": "card_service_0x9aa3f0",
+        "address": 10134512,
+        "size": 96,
+        "sha256": "5611b3d803ecdbde8136bfbb113fc070f5bdab5cb1df78d3c5e5a510a0682f38"
+      },
+      {
+        "name": "card_service_0x9aa450",
+        "address": 10134608,
+        "size": 132,
+        "sha256": "2f0b1836c92d808a334318f9e903bdff5fbe0ae4cc5545841dcd2efd58ea11b6"
+      },
+      {
+        "name": "card_service_0x9aa5e0",
+        "address": 10135008,
+        "size": 48,
+        "sha256": "8e9077b372977a115fbc77daee6887cc255c3de24ca2a1e10805a2e1d2a6edbe"
+      },
+      {
+        "name": "card_service_0x99dd6c",
+        "address": 10083692,
+        "size": 40,
+        "sha256": "e7ff059a8f5aa4352b3e681636a36de5f7ebc52e777ab736494f6eef75a7fdb8"
+      },
+      {
+        "name": "card_service_0x99de2c",
+        "address": 10083884,
+        "size": 92,
+        "sha256": "7832030ada413e831ce7c2380727d42fe208f266c278ffc2eb078119a7549d2c"
+      },
+      {
+        "name": "card_service_0x9a1304",
+        "address": 10097412,
+        "size": 64,
+        "sha256": "c530eb94f6758eb2a8a89cfe76532eda88457f4d14081927f0f70d64a3bda81f"
+      },
+      {
+        "name": "card_service_0x99f210",
+        "address": 10088976,
+        "size": 1176,
+        "sha256": "e132a9080b4aa9e046916fa518d98dbecb6c5f8be63c7cfe4fb266fead01aeea"
+      },
+      {
+        "name": "card_service_0x99dcf0",
+        "address": 10083568,
+        "size": 124,
+        "sha256": "94b849670362fd5b7e5716c8f37efdc1a3fd8d838ad1ba77b54fafbc7fd949ff"
+      },
+      {
+        "name": "card_service_0x9a42e0",
+        "address": 10109664,
+        "size": 104,
+        "sha256": "cb5cb746b75c235d93e9a238b0f530b0b9b2e7c104a90b9068c2e68a27be27c3"
+      },
+      {
+        "name": "card_service_0x9a511c",
+        "address": 10113308,
+        "size": 764,
+        "sha256": "1f6a8e2a9666bf277820e08442920a2f50d90b147a233a3b018b72347ee53510"
+      },
+      {
+        "name": "card_service_0x99e0c0",
+        "address": 10084544,
+        "size": 60,
+        "sha256": "ac0d03dc2c45b2dad0ae449cdb042369c8be0501c087a8085900ce8510a942a8"
+      },
+      {
+        "name": "card_service_0x9aa664",
+        "address": 10135140,
+        "size": 140,
+        "sha256": "657adefa674bf4235658acd0e2ddcd596c18dd61a70462c3984d055e9bb1d619"
+      },
+      {
+        "name": "card_service_0x99e3fc",
+        "address": 10085372,
+        "size": 40,
+        "sha256": "8d1453f3dbec0beb0d51d1b957ecc170dcf7e1b53e84230350c8583d73f6397a"
+      },
+      {
+        "name": "card_service_0x9a398c",
+        "address": 10107276,
+        "size": 1452,
+        "sha256": "5eacbb407f8f187663bd47b6c43868490d9341f1f14b69cc2fb0876462c7e620"
+      },
+      {
+        "name": "card_service_0x9a6274",
+        "address": 10117748,
+        "size": 216,
+        "sha256": "b095207c1f86b6ad748be3db8301ff7b808da7fca1443bb3d92d4eceeb9290bc"
+      },
+      {
+        "name": "card_service_0x9a2d98",
+        "address": 10104216,
+        "size": 644,
+        "sha256": "aac81da352986fa3094a30e91ec5435894a697e8ca57a7c3f0c2ca93d99d9e93"
+      },
+      {
+        "name": "card_service_0x9a0170",
+        "address": 10092912,
+        "size": 836,
+        "sha256": "7f4eb49b6ad7ea83bea9cfb7eb6b4d6f4e7df8ce2929d5f9ae68e6ac21a929dd"
+      },
+      {
+        "name": "card_service_0x99fc90",
+        "address": 10091664,
+        "size": 148,
+        "sha256": "7b9673eef51816e409048a4c2f9dec2040d9144dcf2045bb4d90048115b01158"
+      },
+      {
+        "name": "card_service_0x9a32bc",
+        "address": 10105532,
+        "size": 1744,
+        "sha256": "150316c57d3dbf77956879e4ebc7a676c57f773abb655ae45a00fdbf85fc80dd"
+      },
+      {
+        "name": "card_service_0x9976c4",
+        "address": 10057412,
+        "size": 20,
+        "sha256": "f231486b2f17c631c837c29b7b6c41380d3967356b8ce2fa24df953ad093a3e2"
+      },
+      {
+        "name": "card_service_0x951f74",
+        "address": 9772916,
+        "size": 56,
+        "sha256": "2ccc8e42a516ee62bf811ed811ac1a08788b274b26acbf852729b7d07cd0fa91"
+      },
+      {
+        "name": "card_service_0x951dd8",
+        "address": 9772504,
+        "size": 408,
+        "sha256": "0ecc32a1143df1e949cbdb4faeb393a8b3576bf1e3066a5178d8661a8fceaf6d"
+      },
+      {
+        "name": "card_service_0xbd8504",
+        "address": 12420356,
+        "size": 28,
+        "sha256": "a4f2cfba02320758d129137ea243d424373290ec2e22ef54d4544bbb8264bd54"
+      },
+      {
+        "name": "card_service_0xbd8544",
+        "address": 12420420,
+        "size": 1800,
+        "sha256": "698b418d43de6fecd863b3f375262ba8742989abaef676011b0dd80a3e662ff1"
+      },
+      {
+        "name": "card_service_0xbd8524",
+        "address": 12420388,
+        "size": 28,
+        "sha256": "bbd034cdaf3726d053f665af6313bae837209cc33b7559b5b34be67026176656"
+      },
+      {
+        "name": "card_service_0xbdd434",
+        "address": 12440628,
+        "size": 592,
+        "sha256": "d386fc4405f72a299e8d9c76a0d96ad737a20cfdaaf87242f22e1e158a3b846c"
+      },
+      {
+        "name": "card_service_0x945318",
+        "address": 9720600,
+        "size": 32,
+        "sha256": "c47970b9741973b3b808cca197ab7811feffec60ffc7aaec802b43a9a8c8befc"
+      },
+      {
+        "name": "card_service_0x94522c",
+        "address": 9720364,
+        "size": 136,
+        "sha256": "e1463111b72ebda184e97aefd9b45e0f7a737d8704585a49442f5fd885fda511"
+      },
+      {
+        "name": "card_service_cache",
+        "address": 271908,
+        "size": 532,
+        "sha256": "10aad5ca7b798181283de15647d4cae836a2feaf0ce7363f23b430a0855d316c"
+      },
+      {
+        "name": "card_service_cache",
+        "address": 277300,
+        "size": 40,
+        "sha256": "4f5e46f3fcacb11933fd0f5e8fc33ae5837f738e38902a0e475c040ac5897890"
+      }
+    ]
   }
 }

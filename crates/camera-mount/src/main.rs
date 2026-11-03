@@ -1,7 +1,9 @@
 use fujimod_usb::ff80::commands::memory::DebugMemoryLimits;
 use std::{num::NonZeroU32, path::PathBuf};
 
-const USAGE: &str = "Usage: fujimod-mount --firmware ID [--device BUS-OR-SERIAL] [--read-limit BYTES] [--write-limit BYTES] [--flash-reader ARTIFACT] MOUNTPOINT\nRequires an installed, enabled FSKitBridge extension on macOS 15.4+.";
+const USAGE: &str = "Usage: fujimod-mount --firmware ID [--device BUS-OR-SERIAL] [--read-limit BYTES] [--write-limit BYTES] [--flash-reader ARTIFACT] [--benchmark | --benchmark-usb] MOUNTPOINT\nRequires macOS 15.4+. Installs the signed filesystem extension on first use; macOS may require enabling it in System Settings.";
+#[cfg(target_os = "macos")]
+mod benchmark;
 
 struct Options {
     firmware: String,
@@ -9,6 +11,8 @@ struct Options {
     mount: PathBuf,
     limits: DebugMemoryLimits,
     flash_reader: Option<PathBuf>,
+    benchmark: bool,
+    benchmark_usb: bool,
 }
 fn options(args: impl Iterator<Item = String>) -> std::result::Result<Options, String> {
     let mut args = args.peekable();
@@ -17,12 +21,16 @@ fn options(args: impl Iterator<Item = String>) -> std::result::Result<Options, S
     let mut mount = None;
     let mut flash_reader = std::env::var_os("FUJIMOD_FLASH_READER").map(PathBuf::from);
     let mut read = NonZeroU32::new(256).expect("constant");
+    let mut benchmark = false;
+    let mut benchmark_usb = false;
     let mut write = read;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--firmware" => firmware = Some(args.next().ok_or(USAGE)?),
             "--device" => device = Some(args.next().ok_or(USAGE)?),
             "--flash-reader" => flash_reader = Some(PathBuf::from(args.next().ok_or(USAGE)?)),
+            "--benchmark" => benchmark = true,
+            "--benchmark-usb" => benchmark_usb = true,
             "--read-limit" | "--write-limit" => {
                 let n = args
                     .next()
@@ -48,6 +56,8 @@ fn options(args: impl Iterator<Item = String>) -> std::result::Result<Options, S
         mount: mount.ok_or(USAGE)?,
         limits: DebugMemoryLimits { read, write },
         flash_reader,
+        benchmark,
+        benchmark_usb,
     })
 }
 
@@ -73,15 +83,29 @@ async fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
     if !metadata.is_dir() || std::fs::read_dir(&options.mount)?.next().is_some() {
         return Err("Mountpoint must be an empty existing directory".into());
     }
-    let (device, regions) = UsbDevice::connect(
+    if !options.benchmark_usb {
+        fujimod_camera_mount::bridge::prepare()?;
+        fujimod_camera_mount::fskit::prepare_bridge_resource()?;
+    }
+    let (mut device, regions) = UsbDevice::connect(
         options.firmware,
         options.device,
         options.limits,
         options.flash_reader,
     )?;
-    let fs = CameraFs::new(device, regions).map_err(std::io::Error::from_raw_os_error)?;
+    if options.benchmark_usb {
+        use fujimod_camera_mount::Device;
+        let result = benchmark::usb(&mut device, &regions);
+        device
+            .shutdown()
+            .map_err(std::io::Error::from_raw_os_error)?;
+        println!("{}", serde_json::to_string_pretty(&result?)?);
+        return Ok(());
+    }
+    let fs = CameraFs::new(device, regions.clone()).map_err(std::io::Error::from_raw_os_error)?;
     let adapter = Adapter::new(fs, metadata.uid(), metadata.gid());
-    let session = fskit_rs::mount(
+    let cleanup = adapter.clone();
+    let mounted = fskit_rs::mount(
         adapter,
         fskit_rs::MountOptions {
             mount_point: options.mount.clone(),
@@ -89,13 +113,30 @@ async fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
             ..Default::default()
         },
     )
-    .await?;
+    .await;
+    let session = match mounted {
+        Ok(session) => session,
+        Err(error) => {
+            cleanup.shutdown().await?;
+            return Err(error.into());
+        }
+    };
     println!(
         "Mounted {}. Press Ctrl+C to unmount.",
         options.mount.display()
     );
+    if options.benchmark {
+        let mount = options.mount.clone();
+        let result = tokio::task::spawn_blocking(move || benchmark::run(&mount, &regions)).await?;
+        // Unmount even when the benchmark reports an I/O error.
+        drop(session);
+        cleanup.shutdown().await?;
+        println!("{}", serde_json::to_string_pretty(&result?)?);
+        return Ok(());
+    }
     tokio::signal::ctrl_c().await?;
     drop(session);
+    cleanup.shutdown().await?;
     Ok(())
 }
 
