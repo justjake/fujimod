@@ -217,6 +217,61 @@ fn configure_soft_focus_first_crop(d: &mut Decompressor, h: &mut Ram) {
     }
     put(d, h, 0x8c, 1).unwrap();
 }
+
+#[test]
+fn box_pyramid_preserves_packed_color_at_every_transfer_group_size() {
+    let mut pixels = Vec::with_capacity(640 * 480 * 2);
+    for y in 0..480 {
+        for x in 0..320 {
+            pixels.extend_from_slice(&[
+                ((x * 3 + y) % 256) as u8,
+                ((x * 5 + y * 7) % 256) as u8,
+                (64 + (x + y * 3) % 96) as u8,
+                (96 + (x * 7 + y) % 96) as u8,
+            ]);
+        }
+    }
+    for stage in PYRAMID {
+        let (mut d, mut host, mut controller) = setup();
+        reset(&mut d, &mut host);
+        enabled(&mut controller, &mut host, 1, true);
+        host.bytes[0x10000..0x10000 + pixels.len()].copy_from_slice(&pixels);
+        let source_pitch = stage[0] as usize;
+        let width = (stage[3] & 8191) as usize;
+        let height = (stage[3] >> 16) as usize;
+        let mut expected = Vec::with_capacity(width * height * 2);
+        for y in 0..height {
+            for x in 0..width / 2 {
+                let base = y * 2 * source_pitch + x * 8;
+                for (left, right) in [(0, 1), (4, 5), (2, 6), (3, 7)] {
+                    let sum = [
+                        base + left,
+                        base + right,
+                        base + source_pitch + left,
+                        base + source_pitch + right,
+                    ]
+                    .map(|i| u16::from(pixels[i]))
+                    .iter()
+                    .sum::<u16>();
+                    expected.push(((sum + 2) / 4) as u8);
+                }
+            }
+        }
+        configure(&mut d, &mut host, stage, 0);
+        put(&mut d, &mut host, 4, 1).unwrap();
+        let due = d.next_deadline(host.now).unwrap();
+        tick(&mut d, &mut host, due).unwrap();
+        let actual = &host.bytes[0x100000..0x100000 + expected.len()];
+        assert_eq!(actual, expected, "pyramid destination {width}x{height}");
+        pixels = actual.to_vec();
+    }
+    assert_eq!(pixels.len(), 40 * 30 * 2);
+    assert!(
+        pixels
+            .chunks_exact(4)
+            .all(|pair| pair[2] != 0 && pair[3] != 0)
+    );
+}
 fn configure_soft_focus_weighted_crop(d: &mut Decompressor, h: &mut Ram) {
     let values = [
         0x1000, 0x10000, 0x5a0, 0x00f00170, 0x102e0, 0x5a0, 0x007800c0, 0x40, 0x00191a1a,
@@ -247,7 +302,7 @@ fn every_declared_resize_descriptor_latches_pixels_preserves_padding_and_complet
         enabled(&mut c, &mut h, 1, true);
         let sh = (stage[1] >> 16) as usize;
         let sp = stage[0] as usize;
-        let scalar = stage[5] >> 12 & 3 == 0;
+        let scalar = kind != 0 && stage[5] >> 12 & 3 == 0;
         for pair in h.bytes[0x10000..0x10000 + sh * sp].chunks_exact_mut(4) {
             pair.copy_from_slice(if scalar {
                 &[1, 2, 1, 2]
@@ -270,18 +325,13 @@ fn every_declared_resize_descriptor_latches_pixels_preserves_padding_and_complet
             (stage[3] >> 16) as usize,
             stage[2] as usize,
         );
-        let scalar_out = stage[5] >> 28 & 3 == 0;
         for row in 0..height {
             let bytes = &h.bytes[0x100000 + row * pitch..0x100000 + (row + 1) * pitch];
             for pair in bytes[..w * 2].chunks_exact(4) {
                 assert_eq!(
                     pair,
-                    if scalar_out {
-                        if scalar {
-                            &[1, 2, 1, 2]
-                        } else {
-                            &[20, 0, 20, 0]
-                        }
+                    if scalar {
+                        &[1, 2, 1, 2]
                     } else {
                         &[20, 20, 90, 170]
                     }

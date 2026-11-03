@@ -583,16 +583,11 @@ impl Decompressor {
             }
             return Ok((row_bytes, h, pitch));
         }
+        // Every admitted box-pyramid descriptor has packed-422 controls.
+        // Register 80's transfer-group sizes shrink with the raster; they
+        // do not switch its samples to scalar16 at the smaller levels.
         let get = |x: usize, y: usize| -> u32 {
-            if sf == 1 {
-                self.source[y * sp + x / 2 * 4 + x % 2] as u32
-            } else {
-                u16::from_le_bytes(
-                    self.source[y * sp + x * 2..y * sp + x * 2 + 2]
-                        .try_into()
-                        .unwrap(),
-                ) as u32
-            }
+            self.source[y * sp + x / 2 * 4 + x % 2] as u32
         };
         for y in 0..h {
             for x in 0..w {
@@ -602,26 +597,19 @@ impl Decompressor {
                     + get(x * 2 + 1, y * 2 + 1)
                     + 2)
                     / 4;
-                if df == 0 {
-                    self.output[(y * w + x) * 2..(y * w + x) * 2 + 2]
-                        .copy_from_slice(&(luma as u16).to_le_bytes());
-                } else {
-                    self.output[y * w * 2 + x / 2 * 4 + x % 2] = luma as u8;
-                }
+                self.output[y * w * 2 + x / 2 * 4 + x % 2] = luma as u8;
             }
         }
-        if df == 1 {
-            for y in 0..h {
-                for x in 0..w / 2 {
-                    for c in 2..4 {
-                        let at = y * 2 * sp + x * 8 + c;
-                        self.output[y * w * 2 + x * 4 + c] = ((self.source[at] as u16
-                            + self.source[at + 4] as u16
-                            + self.source[at + sp] as u16
-                            + self.source[at + sp + 4] as u16
-                            + 2)
-                            / 4) as u8;
-                    }
+        for y in 0..h {
+            for x in 0..w / 2 {
+                for c in 2..4 {
+                    let at = y * 2 * sp + x * 8 + c;
+                    self.output[y * w * 2 + x * 4 + c] = ((self.source[at] as u16
+                        + self.source[at + 4] as u16
+                        + self.source[at + sp] as u16
+                        + self.source[at + sp + 4] as u16
+                        + 2)
+                        / 4) as u8;
                 }
             }
         }
