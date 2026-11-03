@@ -432,7 +432,23 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
+    pub fn functional_system_control(
+        &mut self, config: fujimod_emulator_xp4_io::system_control::Config,
+    ) -> Result<(), String> {
+        let model = fujimod_emulator_xp4_io::system_control::SystemControl::new(config)?;
+        let windows = model.windows();
+        if windows.iter().any(|&(a, b)| self.windows.iter().any(|&(lo, hi, _)| a < hi && lo < b)) {
+            return Err("Overlapping XP4 functional system-control window".into());
+        }
+        let id = self.models.len();
+        self.windows.extend(windows.into_iter().map(|(a, b)| (a, b, id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
     pub fn requests(&mut self, inputs: Vec<(u64, u64)>) -> Result<(), String> {
+        if inputs.iter().any(|&(a, _)| self.windows.iter().any(|&(lo, hi, _)| a < hi && lo < a.saturating_add(4))) {
+            return Err("Overlapping XP4 control request window".into());
+        }
         let id = self.models.len();
         let model = fujimod_emulator_xp4_io::requests::Requests::new(&inputs)?;
         // Each request word is the `+0x80` word of a block; own the whole block
