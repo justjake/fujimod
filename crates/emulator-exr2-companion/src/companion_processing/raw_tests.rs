@@ -91,10 +91,11 @@ fn raw_dma_crop_tone_phases_statistics_and_checkpoint_complete_before_irq() {
     assert_eq!(h.effects, ["dma", "dma", "dma", "irq"]);
     assert_eq!(h.irqs, [(0, 88)]);
     // Independent fixture samples: x=2,5,...,23; sensor rows=1,2,4,5.
-    let expected = [1u16, 2, 4, 5]
+    let expected = [1u8, 2, 4, 5]
         .into_iter()
-        .flat_map(|y| (0..8).map(move |x| (2 + 3 * x) * 8 + y))
-        .flat_map(u16::to_le_bytes)
+        .flat_map(|y| {
+            (0..4).flat_map(move |pair| [(2 + 6 * pair) * 8 + y, (5 + 6 * pair) * 8 + y, 128, 128])
+        })
         .collect::<Vec<_>>();
     assert_eq!(&h.ram[0x8000..0x8040], expected);
     assert_eq!(h.ram[0x7fff], 0xa5);
@@ -125,15 +126,16 @@ fn raw_mask_and_tone_are_addressed_inputs_and_invalid_requests_have_no_effects()
     h.ram_write(0xb000, &(1u32 << 16).to_le_bytes()).unwrap();
     start(&mut d, &mut h);
     advance(&mut d, &mut h, 37);
-    assert_eq!(
-        u16::from_le_bytes(h.ram[0x8000..0x8002].try_into().unwrap()),
-        41
-    );
+    assert_eq!(h.ram[0x8000], 41);
     let (mut d, mut h) = fixture();
     h.ram[0xc000..0xc400].fill(73);
     start(&mut d, &mut h);
     advance(&mut d, &mut h, 37);
-    assert!(h.ram[0x8000..0x8040].chunks_exact(2).all(|b| b == [73, 0]));
+    assert!(
+        h.ram[0x8000..0x8040]
+            .chunks_exact(4)
+            .all(|b| b == [73, 73, 128, 128])
+    );
     for (address, value) in [
         (0x5004, 2 << 16 | 36),
         (0x5008, 0x9000),

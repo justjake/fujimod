@@ -161,7 +161,7 @@ impl Request {
         let mut counts = vec![0u32; columns * rows];
         // A three-column by three-row sensor cell yields two scalar samples.
         // Keep the two row phases separate for split-image reconstruction.
-        // Each output sample occupies a little-endian U16 transport word.
+        // Two luma samples share neutral chroma in packed Y0 Y1 Cb Cr.
         for oy in 0..self.output_height() {
             let y = oy / 2 * 3 + oy % 2;
             for ox in 0..self.width / 3 {
@@ -170,8 +170,10 @@ impl Request {
                 let raw = u32::from(corrected(x, y));
                 let gained = (raw * u32::from(self.gains[phase]) + 64) / 128;
                 let value = tone[(gained.min(4095) >> 2) as usize];
-                let i = (oy * self.pitch + ox) * 2;
-                raster[i..i + 2].copy_from_slice(&u16::from(value).to_le_bytes());
+                let i = oy * self.pitch * 2 + ox / 2 * 4;
+                raster[i + ox % 2] = value;
+                raster[i + 2] = 128;
+                raster[i + 3] = 128;
                 let bin = (y / 12) * columns + x / 96;
                 sums[bin] += u64::from(raw);
                 counts[bin] += 1;

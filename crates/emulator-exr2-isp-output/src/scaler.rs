@@ -1,4 +1,4 @@
-//! FFF47000 packed422 and centered scalar scaler. Register fields define
+//! FFF47000 packed422 scaler with centered phase sampling. Register fields define
 //! addresses, pitches, centers, phases and 16.16 steps. Bilinear sampling is
 //! a declared numerical approximation.
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
@@ -25,8 +25,8 @@ fn has_zero_chroma(source: &[u8], raster: &Raster) -> bool {
         })
 }
 // Centers and the destination rectangle are integer sample coordinates;
-// phases are signed Q16 offsets. Scalar samples are little-endian U16.
-fn centered_scalar(
+// phases are signed Q16 offsets. Samples use packed Y0 Y1 Cb Cr.
+fn centered_packed422(
     source: &[u8],
     src: Raster,
     dst: Raster,
@@ -65,17 +65,35 @@ fn centered_scalar(
     }
     for y in 0..dst.height {
         let (y0, y1, dy) = coordinate(1, y)?;
-        for x in 0..dst.width {
-            let (x0, x1, dx) = coordinate(0, x)?;
-            let sample = |x, y| {
-                let i = y * src.pitch + x * 2;
-                u64::from(u16::from_le_bytes([source[i], source[i + 1]]))
-            };
-            let a = sample(x0, y0) * (65536 - dx) + sample(x1, y0) * dx;
-            let b = sample(x0, y1) * (65536 - dx) + sample(x1, y1) * dx;
-            let value = ((a * (65536 - dy) + b * dy + (1 << 31)) >> 32) as u16;
-            let i = (y * dst.width + x) * 2;
-            out[i..i + 2].copy_from_slice(&value.to_le_bytes());
+        for x in (0..dst.width).step_by(2) {
+            let at = (y * dst.width + x) * 2;
+            for lane in 0..4 {
+                let channel = if lane < 2 { 0 } else { lane - 1 };
+                let index = if channel == 0 { x + lane } else { x };
+                let (mut x0, _, dx) = coordinate(0, index)?;
+                let mut fixed = ((x0 as u64) << 16) + dx;
+                let width = if channel == 0 {
+                    src.width
+                } else {
+                    src.width / 2
+                };
+                if channel != 0 {
+                    fixed /= 2;
+                }
+                x0 = (fixed >> 16) as usize;
+                let x1 = (x0 + 1).min(width - 1);
+                let dx = fixed & 65535;
+                let sample = |x: usize, y: usize| {
+                    let pixel = if channel == 0 { x } else { x * 2 };
+                    let i = y * src.pitch
+                        + pixel / 2 * 4
+                        + if channel == 0 { pixel % 2 } else { channel + 1 };
+                    u64::from(source[i])
+                };
+                let a = sample(x0, y0) * (65536 - dx) + sample(x1, y0) * dx;
+                let b = sample(x0, y1) * (65536 - dx) + sample(x1, y1) * dx;
+                out[at + lane] = ((a * (65536 - dy) + b * dy + (1 << 31)) >> 32).min(255) as u8;
+            }
         }
     }
     Ok(())
@@ -119,7 +137,7 @@ impl Scaler {
                     .iter()
                     .any(|&o| r[o / 4] & !0x1fff1fff != 0))
         {
-            return Err("scaler centered scalar fields are unsupported".into());
+            return Err("scaler centered fields are unsupported".into());
         }
         if self.dma.deadline().is_some()
             || r[0x7c / 4] & 0x1000 == 0
@@ -144,7 +162,7 @@ impl Scaler {
         cx.ram_read(src.address, &mut self.source)?;
         // Retouch treats zero chroma as validity tags, including a neighboring
         // row. The bilinear-only implementation cannot render those inputs.
-        if !centered && mode == 1 && has_zero_chroma(&self.source, &src) {
+        if mode == 1 && has_zero_chroma(&self.source, &src) {
             return Err("scaler zero-chroma validity tags are unsupported".into());
         }
         if centered {
@@ -154,7 +172,7 @@ impl Scaler {
             }
             dst.address += u64::from(origin[1]) * dst.pitch as u64 + u64::from(origin[0]) * 2;
             self.dma.prepare(cx.now(), self.delay, dst, dst.width * 2)?;
-            if let Err(error) = centered_scalar(
+            if let Err(error) = centered_packed422(
                 &self.source,
                 src,
                 dst,

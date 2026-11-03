@@ -77,12 +77,17 @@ fn scaler_refuses_zero_chroma_validity_tags_before_scheduling_dma() {
 }
 
 #[test]
-fn centered_scalar_phases_place_a_rectangle_without_touching_canvas_padding() {
+fn centered_phases_place_a_rectangle_without_touching_canvas_padding() {
     let mut h = TestHost::new();
     for y in 0..8 {
-        for x in 0..16 {
+        for x in (0..16).step_by(2) {
             let at = 0x8000 + (y * 16 + x) * 2;
-            h.ram[at..at + 2].copy_from_slice(&((y * 100 + x * 2) as u16).to_le_bytes());
+            h.ram[at..at + 4].copy_from_slice(&[
+                (y * 20 + x * 2) as u8,
+                (y * 20 + (x + 1) * 2) as u8,
+                80,
+                160,
+            ]);
         }
     }
     h.ram[0x9000..0x9100].fill(0xa5);
@@ -119,17 +124,19 @@ fn centered_scalar_phases_place_a_rectangle_without_touching_canvas_padding() {
     assert_eq!(h.irqs, [(0, 67)]);
     let output = h.ram[0x9000..0x9100].to_vec();
     for y in 0..8 {
-        for x in 0..16 {
+        for x in (0..16).step_by(2) {
             let at = 0x9000 + (y * 16 + x) * 2;
             let expected = if (2..6).contains(&y) && (4..12).contains(&x) {
-                (y * 100 + x * 2 + 1) as u16
+                [
+                    (y * 20 + x * 2 + 1) as u8,
+                    (y * 20 + (x + 1) * 2 + 1) as u8,
+                    80,
+                    160,
+                ]
             } else {
-                0xa5a5
+                [0xa5; 4]
             };
-            assert_eq!(
-                u16::from_le_bytes(h.ram[at..at + 2].try_into().unwrap()),
-                expected
-            );
+            assert_eq!(&h.ram[at..at + 4], expected);
         }
     }
     d.restore_checkpoint(&saved).unwrap();
@@ -138,6 +145,7 @@ fn centered_scalar_phases_place_a_rectangle_without_touching_canvas_padding() {
     h.irqs.clear();
     advance(&mut d, &mut h, 4);
     assert_eq!(&h.ram[0x9000..0x9100], output);
+    h.ram[0x8000..0x8100].fill(128);
     write(&mut d, &mut h, 0xfff4704c, 0x20000000);
     let mut cx = h.cx();
     d.write(&mut cx, 0xfff47004, 4, 1);
