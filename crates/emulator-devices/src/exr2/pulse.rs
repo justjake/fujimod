@@ -27,6 +27,10 @@ pub struct Options {
     pub timer_channels: Vec<u8>,
     #[serde(default)]
     pub one_shot_channels: Vec<u8>,
+    /// Interval-timer channels whose +08 word reads the running down-count
+    /// instead of the programmed period.
+    #[serde(default)]
+    pub counter_readback_channels: Vec<u8>,
     pub quadrature: bool,
     pub initial_phase: u8,
     pub capture_channel: Option<u8>,
@@ -71,6 +75,7 @@ pub struct PulsePins {
     counters: u16,
     timers: u16,
     one_shots: u16,
+    readbacks: u16,
     quadrature: bool,
     capture: Option<u8>,
     irqs: [Option<InterruptLine>; 12],
@@ -269,6 +274,13 @@ impl PulseUnit {
             }
             one_shots |= 1 << channel;
         }
+        let mut readbacks = 0u16;
+        for channel in options.counter_readback_channels {
+            if channel >= 12 || timers & (1 << channel) == 0 || readbacks & (1 << channel) != 0 {
+                return Err("counter readback channels must be unique interval timers".into());
+            }
+            readbacks |= 1 << channel;
+        }
         if options.initial_phase > 3
             || options.capture_channel.is_some_and(|v| v != 1)
             || options.quadrature && options.capture_channel.is_some()
@@ -285,6 +297,7 @@ impl PulseUnit {
                 counters,
                 timers,
                 one_shots,
+                readbacks,
                 quadrature: options.quadrature,
                 capture: options.capture_channel,
                 irqs: wiring.irqs,
@@ -541,6 +554,13 @@ impl Device for PulseUnit {
                                 s.channels[ch].words[2].saturating_sub((elapsed / divisor) as u32),
                             );
                         }
+                    }
+                    if word == 2
+                        && self.pins.readbacks & (1 << ch) != 0
+                        && let Some(due) = s.channels[ch].due
+                    {
+                        let divisor = DIVISORS[(s.channels[ch].words[0] & 3) as usize];
+                        return due.saturating_sub(cx.now()).div_ceil(divisor) & 0xffff_ffff;
                     }
                     if s.enabled & (1 << ch) != 0 && (word == 2 || word == 3) {
                         if s.channels[ch].words[0] == CAPTURE_MODE {

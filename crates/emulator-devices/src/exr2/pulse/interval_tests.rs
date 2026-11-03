@@ -1,6 +1,6 @@
 //! Channel 11: a 600-microsecond period uses 14400 ticks and IRQ31.
 use super::*;
-use crate::test_host::{TestHost, advance, write};
+use crate::test_host::{TestHost, advance, read, write};
 fn configured(core: usize, control: u32, period: u32) -> (PulseUnit, TestHost) {
     let mut irqs = [None; 12];
     irqs[11] = Some(InterruptLine::Core { core, line: 31 });
@@ -9,6 +9,7 @@ fn configured(core: usize, control: u32, period: u32) -> (PulseUnit, TestHost) {
             counter_channels: vec![],
             timer_channels: vec![11],
             one_shot_channels: vec![],
+            counter_readback_channels: vec![],
             quadrature: false,
             initial_phase: 0,
             capture_channel: None,
@@ -88,6 +89,7 @@ fn invalid_channel11_configuration_or_absent_irq_refuses_before_enable() {
                 counter_channels: vec![],
                 timer_channels: vec![11],
                 one_shot_channels: vec![],
+                counter_readback_channels: vec![],
                 quadrature: false,
                 initial_phase: 0,
                 capture_channel: None
@@ -96,4 +98,34 @@ fn invalid_channel11_configuration_or_absent_irq_refuses_before_enable() {
         )
         .is_err()
     );
+}
+#[test]
+fn counter_readback_reports_the_running_down_count_only_when_declared() {
+    let mut irqs = [None; 12];
+    irqs[7] = Some(InterruptLine::Core { core: 0, line: 27 });
+    for readback in [true, false] {
+        let mut device = PulseUnit::new(
+            Options {
+                counter_channels: vec![],
+                timer_channels: vec![7],
+                one_shot_channels: vec![],
+                counter_readback_channels: if readback { vec![7] } else { vec![] },
+                quadrature: false,
+                initial_phase: 0,
+                capture_channel: None,
+            },
+            Wiring { irqs },
+        )
+        .unwrap();
+        let mut host = TestHost::new();
+        host.now = 100;
+        let channel = CHANNEL_BASE + 7 * 0x100;
+        for (offset, value) in [(0, 0x9001), (4, 0), (8, 0x7530), (12, 0x752f), (16, 0)] {
+            write(&mut device, &mut host, channel + offset, value);
+        }
+        write(&mut device, &mut host, BASE, 0x0080_0080);
+        advance(&mut device, &mut host, 100 + 8 * 10);
+        let expected = if readback { 0x7530 - 10 } else { 0x7530 };
+        assert_eq!(read(&mut device, &mut host, channel + 8), expected);
+    }
 }
