@@ -984,3 +984,6 @@ fn statistics_dma_uses_its_selected_latency_instead_of_the_scene_frame_period() 
         400000
     );
 }
+
+#[path = "tests/output_timing.rs"]
+mod output_timing;

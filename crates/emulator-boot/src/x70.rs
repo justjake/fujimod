@@ -2095,6 +2095,15 @@ pub(super) fn assemble(
                 recipe["options"]["clock"]["ticks"] = json!(ticks);
             }
         }
+        if matches!(rule.name, "image_output_0" | "image_output_1") {
+            if let Some(ticks) = configuration
+                .preset
+                .as_ref()
+                .and_then(|p| p.factory_options.image_work_data_ticks)
+            {
+                recipe["options"]["clock"]["ticks"] = json!(ticks);
+            }
+        }
         let model: Model = serde_json::from_value(recipe.clone())
             .map_err(|error| format!("X70 node {}: {error}", rule.name))?;
         let windows = rule

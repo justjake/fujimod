@@ -27,6 +27,7 @@
         "counter_input_profile": "declared-lens-step-feedback-unmeasured",
         "image_work_stop_profile": "stock-idle-image-banks-bit0-stop-ack-unmeasured",
         "image_work_data_profile": "declared-postisp-yycbcr-scene-unmeasured",
+        "image_work_data_ticks": 1024,
         "histogram_profile": "declared-postisp-histogram256-u32-unmeasured",
         "movrsz_profile": "declared-packed-yycbcr-pyramid-unmeasured",
         "auxiliary_control_profile": "stock-control3-bit0-clear-ack-unmeasured",
