@@ -69,6 +69,8 @@ pub struct Config {
     pub graphics: Option<Graphics>,
     #[serde(default)]
     pub retained_request_banks: Option<RequestBanks>,
+    #[serde(default)]
+    pub configuration_requests: Option<crate::configuration_request::Inputs>,
 }
 impl Config {
     fn validate(&self) -> Result<(), String> {
@@ -76,6 +78,12 @@ impl Config {
             || self.graphics.as_ref().is_some_and(|g| g.initial_value & !0x1ff != 0 || g.completion_ticks == 0)
         {
             return Err("Invalid experimental XP4 functional system-control input".into());
+        }
+        if let Some(inputs) = &self.configuration_requests {
+            inputs.validate()?;
+            if self.graphics.is_some() {
+                return Err("XP4 graphics and configuration/request family inputs overlap".into());
+            }
         }
         if let Some(banks) = &self.retained_request_banks {
             if banks.a_reset[15] != self.control_f03c_reset
@@ -109,6 +117,8 @@ pub struct SystemControl {
     control: u32,
     #[serde(default)]
     retained_banks: Option<RetainedBanks>,
+    #[serde(default)]
+    configuration_state: Option<crate::configuration_request::ConfigurationRequests>,
     staged: u32,
     applied: u32,
     value_written: bool,
@@ -123,7 +133,9 @@ impl SystemControl {
         let retained_banks = config.retained_request_banks.as_ref().map(|banks| RetainedBanks {
             a: banks.a_reset[..15].try_into().unwrap(), b: banks.b_reset,
         });
-        Ok(Self { control: config.control_f03c_reset, retained_banks, config, staged: initial,
+        let configuration_state = config.configuration_requests.clone()
+            .map(crate::configuration_request::ConfigurationRequests::new).transpose()?;
+        Ok(Self { control: config.control_f03c_reset, retained_banks, configuration_state, config, staged: initial,
             applied: initial, value_written: false, pending: None, generation: 0, admitted: false })
     }
     pub fn windows(&self) -> Vec<(u64, u64)> {
@@ -131,6 +143,7 @@ impl SystemControl {
         if self.retained_banks.is_some() {
             spans.extend(A_WORDS[..15].iter().chain(B_WORDS.iter()).map(|&(address, _)| (address, address + 4)));
         }
+        if let Some(model) = &self.configuration_state { spans.extend(model.windows()); }
         if self.config.graphics.is_some() { spans.extend([(VALUE, VALUE + 4), (REQUEST, REQUEST + 4)]); }
         spans
     }
@@ -142,7 +155,8 @@ impl SystemControl {
                 .map(|index| (false, index, B_WORDS[index].1)))
     }
     fn known(&self, address: u64, size: u8) -> bool {
-        size == 4 && (address == CONTROL || self.request_word(address).is_some() || self.config.graphics.is_some() && matches!(address, VALUE | REQUEST))
+        size == 4 && (address == CONTROL || self.request_word(address).is_some()
+            || self.configuration_state.as_ref().is_some_and(|model| model.owns(address, size)) || self.config.graphics.is_some() && matches!(address, VALUE | REQUEST))
     }
     fn admit(&mut self, cx: &mut Cx<'_>) {
         if !self.admitted {
@@ -173,6 +187,9 @@ impl Device for SystemControl {
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         if !self.known(address, size) { cx.unmodeled(); return 0; }
         self.admit(cx);
+        if let Some(model) = &mut self.configuration_state {
+            if model.owns(address, size) { return model.read(cx, address, size); }
+        }
         if let Some((is_a, index, _)) = self.request_word(address) {
             let banks = self.retained_banks.as_ref().unwrap();
             return u64::from(if is_a { banks.a[index] } else { banks.b[index] });
@@ -182,6 +199,9 @@ impl Device for SystemControl {
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
         if !self.known(address, size) { cx.unmodeled(); return; }
         if value > u32::MAX as u64 { cx.fail("XP4 functional control requires a 32-bit value"); return; }
+        if let Some(model) = &mut self.configuration_state {
+            if model.owns(address, size) { model.write(cx, address, size, value); return; }
+        }
         let value = value as u32;
         if let Some((is_a, index, mask)) = self.request_word(address) {
             if value & !mask != 0 {
@@ -228,8 +248,12 @@ impl Device for SystemControl {
             }
         }
     }
-    fn next_deadline(&self, _: u64) -> Option<u64> { self.pending.as_ref().map(|p| p.at) }
+    fn next_deadline(&self, now: u64) -> Option<u64> {
+        self.pending.as_ref().map(|p| p.at).into_iter()
+            .chain(self.configuration_state.as_ref().and_then(|model| model.next_deadline(now))).min()
+    }
     fn event(&mut self, cx: &mut Cx<'_>, token: u64) {
+        if let Some(model) = &mut self.configuration_state { model.event(cx, token); }
         if self.pending.as_ref().is_some_and(|p| p.token == token && p.at <= cx.now()) {
             let pending = self.pending.take().unwrap(); self.applied = pending.value;
             cx.record(Record::new("XP4 experimental command 2 acknowledged; busy bits cleared", [
@@ -241,6 +265,11 @@ impl Device for SystemControl {
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: Self = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         state.config.validate()?;
+        let configuration_valid = match (&state.configuration_state, &state.config.configuration_requests) {
+            (None, None) => true,
+            (Some(model), Some(inputs)) => model.validate_state(inputs).is_ok(),
+            _ => false,
+        };
         let banks_valid = match (&state.retained_banks, &state.config.retained_request_banks) {
             (None, None) => true,
             (Some(banks), Some(_)) => banks.a.iter().zip(A_WORDS).all(|(value, (_, mask))| value & !mask == 0)
@@ -249,7 +278,7 @@ impl Device for SystemControl {
         };
         let no_graphics = state.config.graphics.is_none();
         let initial = state.config.graphics.as_ref().map_or(0, |g| g.initial_value);
-        if !banks_valid || (!state.value_written && (state.staged != initial || state.applied != initial || state.generation != 0))
+        if !configuration_valid || !banks_valid || (!state.value_written && (state.staged != initial || state.applied != initial || state.generation != 0))
             || (state.generation == 0 && state.applied != initial)
             || state.config != self.config || state.control & !0x7ff != 0 || state.staged & !0x1ff != 0 || state.applied & !0x1ff != 0
             || no_graphics && (state.staged != 0 || state.applied != 0 || state.value_written || state.pending.is_some() || state.generation != 0)
@@ -276,7 +305,7 @@ mod tests {
         fn record(&mut self, r: Record) { self.records.push(r); }
     }
     fn config(ticks: Option<u64>) -> Config {
-        Config { profile: PROFILE.into(), control_f03c_reset: 7, retained_request_banks: None,
+        Config { profile: PROFILE.into(), control_f03c_reset: 7, retained_request_banks: None, configuration_requests: None,
             graphics: ticks.map(|completion_ticks| Graphics { initial_value: 0, completion_ticks }) }
     }
     fn write(d: &mut SystemControl, c: &mut Clock, address: u64, size: u8, value: u64) -> Result<(), String> {
@@ -520,6 +549,33 @@ mod tests {
         for (address, _) in A_WORDS[..15].iter().chain(B_WORDS.iter()) {
             assert!(read(&mut old, &mut c, *address, 4).is_err());
         }
+    }
+
+    #[test]
+    fn nested_configuration_deadline_event_and_restore_use_the_original_device_context() {
+        let mut cfg = config(None);
+        cfg.configuration_requests = Some(crate::configuration_request::Inputs {
+            initial_values: vec![0; 52], completion_ticks: vec![8; 20],
+        });
+        let mut d = SystemControl::new(cfg.clone()).unwrap(); let mut c = Clock::default();
+        write(&mut d, &mut c, 0xff701a40, 4, 0x100).unwrap();
+        write(&mut d, &mut c, 0xff701a80, 4, 2).unwrap();
+        assert_eq!(d.next_deadline(0), Some(8)); assert_eq!(c.events, [(8, 1)]);
+        let good = d.save(); let mut resumed = SystemControl::new(cfg).unwrap();
+        resumed.restore(&good).unwrap();
+        let mut bad = good.clone(); bad["configuration_state"] = Value::Null;
+        assert!(resumed.restore(&bad).is_err());
+        let mut bad = good.clone(); bad["configuration_state"]["inputs"]["completion_ticks"][5] = json!(9);
+        assert!(resumed.restore(&bad).is_err());
+        let mut bad = good.clone(); bad["configuration_state"]["pending"][5]["values"][0] = json!(0x200);
+        assert!(resumed.restore(&bad).is_err()); assert_eq!(resumed.save(), good);
+        c.now = 7; resumed.event(&mut Cx::new(&mut c, 3, 0xdead0000, 0), 1);
+        assert_eq!(read(&mut resumed, &mut c, 0xff701a80, 4).unwrap(), 2);
+        c.now = 8; resumed.event(&mut Cx::new(&mut c, 3, 0xdead0000, 0), 1);
+        assert_eq!(read(&mut resumed, &mut c, 0xff701a80, 4).unwrap(), 0);
+        assert_eq!(resumed.next_deadline(8), None);
+        assert_eq!(resumed.save()["configuration_state"]["applied"][19], 0x100);
+        assert_eq!(resumed.control, 7); assert_eq!(resumed.generation, 0);
     }
 
 }
