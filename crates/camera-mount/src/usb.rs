@@ -296,7 +296,8 @@ pub struct UsbDevice {
 }
 impl UsbDevice {
     /// Select descriptors and preflight one bounded transaction. Idle mounts
-    /// hold no connection, ff80 session, file handle or camera RAM allocation.
+    /// hold no connection, ff80 session or file handle. An owned helper keeps
+    /// only its allocation until shutdown.
     pub fn connect(
         firmware: String,
         device_id: Option<String>,

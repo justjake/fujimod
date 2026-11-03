@@ -8,8 +8,9 @@ use std::{
 };
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 const APP: &str = "FSKitBridge.app";
-const URL: &str = "https://github.com/debox-network/FSKitBridge/releases/download/v0.2.0/FSKitBridge_0.2.0_arm64.zip";
-const SHA256: &str = "95d6426f967af82b29b9d8465cc8fda896c008fa7565209f7b5829aa5b65ba6d";
+const URL: &str =
+    "https://github.com/debox-network/FSKitBridge/releases/download/v0.1.0/FSKitBridge-0.1.0.zip";
+const SHA256: &str = "bb5cf867f4c73e10fb33cb779c7367628eb6a339fcdda745993ef72586fcbe11";
 fn run(command: &mut Command) -> Result<()> {
     let output = command.output()?;
     if !output.status.success() {
@@ -19,7 +20,7 @@ fn run(command: &mut Command) -> Result<()> {
 }
 pub fn prepare() -> Result<()> {
     if !Path::new("/Applications").join(APP).is_dir() {
-        eprintln!("Installing FSKitBridge 0.2.0...");
+        eprintln!("Installing FSKitBridge 0.1.0...");
         let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
         let directory =
             std::env::temp_dir().join(format!("fujimod-fskit-{}-{unique}", std::process::id()));

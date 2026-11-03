@@ -21,14 +21,14 @@ The current adapter does not provide a custom `mmap` interface.
 ## Run
 
 macOS 15.4 or newer is required. On first use the command installs and registers
-the signed [FSKitBridge 0.2.0 application](https://github.com/debox-network/FSKitBridge/releases/tag/v0.2.0),
+the signed [FSKitBridge 0.1.0 application](https://github.com/debox-network/FSKitBridge/releases/tag/v0.1.0),
 checking the pinned archive hash and the application signatures. macOS requires
 enabling `fskitbridge` once under System Settings → General → Login Items &
 Extensions → File System Extensions.
 The command checks embedded provisioning-profile expiration before opening USB.
-The published 0.2.0 archive's profile expired on October 29, 2026; it currently
-requires a replacement release or a locally signed build to mount. Rebooting
-does not repair an expired profile.
+The pinned 0.1.0 host has a profile valid through October 25, 2043 and uses the
+same wire protocol as the Rust crate. The 0.2.0 host archive has an expired
+profile and cannot launch; rebooting does not repair that profile.
 Building requires Rust, `protoc`, Clang with ARM support, and LLD
 (`brew install protobuf llvm`). `CLANG` and `LD_LLD` select build tools.
 The camera helper is compiled into the mount executable; mounting runs no compiler.
@@ -67,7 +67,9 @@ receive an unsupported-operation error. Capacity statistics are unavailable.
 
 For a firmware with an owned query-service contract, the command allocates and
 loads its bundled file helper automatically. No preinstalled camera mod or
-separate helper artifact is needed. The helper runs stock asynchronous storage
+separate helper artifact is needed. The helper negotiates a buffer up to 8 MiB with the stock allocator, reducing
+its request after confirmed allocation refusals. It combines open/seek/read/close
+for ranges fitting that buffer. The helper runs stock asynchronous storage
 operations, uses its own buffer and directory cursor, and installs no hooks or
 background timer. The stock SDK backend uses existing camera code.
 
@@ -108,7 +110,7 @@ borrow and restore the located source words without running pattern generation
 or filling diagnostic scratch. DMA rounding must remain inside the admitted
 aperture. Preserving pattern sources use the live registered capacity up to
 the host transfer budget; the 64 KiB generated pattern size does not cap E1.
-The adapter keeps requests together up to 8 MiB per transaction rather than
+The adapter keeps requests together up to 64 MiB for memory and 8 MiB for SD per transaction rather than
 reopening and requalifying every 128 KiB. Small control reads use CPU commands when cheaper. Stock SDK file
 buffers use their checked E1 source pair for larger reads.
 

@@ -22,6 +22,7 @@ pub const MEMORY: u64 = 4;
 pub const REGIONS: u64 = 5;
 pub const FLASH: u64 = 6;
 pub const IO_BYTES: usize = fujimod_usb::operations::card::MAX_REQUEST_BYTES as usize;
+pub const MEMORY_IO_BYTES: usize = 64 << 20;
 pub type Result<T> = std::result::Result<T, i32>;
 
 /// No memory-write operation exists at this boundary.
@@ -318,7 +319,13 @@ impl<D: Device> CameraFs<D> {
             return Ok(Vec::new());
         }
         let size = (size as u64).min(node.size - offset) as usize;
-        if size > IO_BYTES {
+        if size
+            > if id == MEMORY {
+                MEMORY_IO_BYTES
+            } else {
+                IO_BYTES
+            }
+        {
             return Err(libc::EINVAL);
         }
         if id == REGIONS {

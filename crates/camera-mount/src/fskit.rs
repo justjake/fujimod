@@ -1,6 +1,6 @@
 //! FSKit adapter through the version-pinned FSKitBridge protocol. Storage,
 //! addressing, namespace, bounds and USB ownership remain in Rust.
-use crate::{CameraFs, Device, IO_BYTES, MEMORY, Node, ROOT};
+use crate::{CameraFs, Device, IO_BYTES, MEMORY, MEMORY_IO_BYTES, Node, ROOT};
 use async_trait::async_trait;
 use fskit_rs::*;
 use std::{
@@ -330,13 +330,18 @@ impl<D: Device + 'static> Filesystem for Adapter<D> {
     async fn read(&mut self, id: u64, offset: i64, length: i64) -> Result<Vec<u8>> {
         let offset = u64::try_from(offset).map_err(|_| Error::Posix(libc::EINVAL))?;
         let length = usize::try_from(length).map_err(|_| Error::Posix(libc::EINVAL))?;
-        if length > 16 * 1024 * 1024 {
+        if length > MEMORY_IO_BYTES {
             return Err(Error::Posix(libc::EINVAL));
         }
         self.work(move |fs| {
             let mut data = Vec::with_capacity(length);
             while data.len() < length {
-                let n = IO_BYTES.min(length - data.len());
+                let limit = if id == MEMORY {
+                    MEMORY_IO_BYTES
+                } else {
+                    IO_BYTES
+                };
+                let n = limit.min(length - data.len());
                 let part = fs.read(
                     id,
                     offset.checked_add(data.len() as u64).ok_or(libc::EINVAL)?,

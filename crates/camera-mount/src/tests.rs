@@ -284,10 +284,13 @@ fn large_memory_reads_remain_one_bounded_device_transaction() {
         vec![Region {
             name: "ram".into(),
             address: 0,
-            size: IO_BYTES as u64,
+            size: MEMORY_IO_BYTES as u64,
         }],
     )
     .unwrap();
-    assert_eq!(fs.read(MEMORY, 0, IO_BYTES).unwrap().len(), IO_BYTES);
+    assert_eq!(
+        fs.read(MEMORY, 0, MEMORY_IO_BYTES).unwrap().len(),
+        MEMORY_IO_BYTES
+    );
     assert_eq!(device.0.lock().unwrap().calls.len(), 1);
 }

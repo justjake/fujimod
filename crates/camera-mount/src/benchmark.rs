@@ -67,7 +67,7 @@ pub fn run(mount: &Path, regions: &[Region]) -> io::Result<Value> {
         .max_by_key(|r| r.size)
         .ok_or_else(|| io::Error::other("No sufficiently large readable memory region"))?;
     let mut memory = Vec::new();
-    for size in [128 << 10, 1 << 20, 8 << 20] {
+    for size in [128 << 10, 1 << 20, 8 << 20, 64 << 20] {
         memory.push(read(
             &mount.join("memory"),
             u64::from(region.address) + (16 << 20),
@@ -161,7 +161,7 @@ pub fn usb(
     let address = u32::try_from(region.address + (16 << 20))
         .map_err(|_| io::Error::other("Memory address exceeds 32 bits"))?;
     let mut memory = Vec::new();
-    for size in [128 << 10, 1 << 20, 8 << 20] {
+    for size in [128 << 10, 1 << 20, 8 << 20, 64 << 20] {
         let result = measure(64 << 20, size, |offset, count| {
             check(device.memory(address + offset, count))
         })?;
