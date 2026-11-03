@@ -175,7 +175,7 @@ impl<D: Device> CameraFs<D> {
             || name == ".."
             || !name
                 .bytes()
-                .all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c))
+                .all(fujimod_usb::operations::card::is_short_name_byte)
         {
             return Err(libc::EINVAL);
         }

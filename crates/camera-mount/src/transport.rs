@@ -23,6 +23,12 @@ pub(crate) struct Transport<'a> {
     upload_checked: bool,
 }
 impl<'a> Transport<'a> {
+    pub fn resume(&mut self, mapping: Option<BulkMapping>) {
+        self.mapping = mapping;
+    }
+    pub fn suspend(&mut self) -> Option<BulkMapping> {
+        self.mapping.take()
+    }
     pub fn new(
         facts: Option<&'a FirmwareBulk>,
         limits: DebugMemoryLimits,

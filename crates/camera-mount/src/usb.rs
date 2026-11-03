@@ -1,5 +1,5 @@
-//! The worker retains descriptors, never an idle ff80 session. Every bounded
-//! operation closes files and restores transport state before releasing USB.
+//! The worker releases idle ff80 sessions. Consecutive large reads may share
+//! one bounded burst; every file handle is closed before its reply.
 use crate::{Device, Region, Result, transport::Transport};
 use fujimod_catalog::ReferenceCatalog;
 use fujimod_catalog_bulk::FirmwareBulk;
@@ -73,12 +73,54 @@ struct Client<F> {
     limits: DebugMemoryLimits,
     mailbox_hint: Option<u32>,
     fenced: bool,
+    lease: Option<ReadLease>,
+}
+const READ_IDLE: Duration = Duration::from_millis(20);
+struct ReadLease {
+    session: Session,
+    mapping: Option<fujimod_workflows::bulk::BulkMapping>,
+    started: std::time::Instant,
+    bytes: u64,
+    service_checked: bool,
 }
 impl<F: Sessions> Client<F> {
+    async fn release_lease(&mut self) -> fujimod_usb::Result<()> {
+        let Some(mut lease) = self.lease.take() else {
+            return Ok(());
+        };
+        let mut transport = Transport::new(self.bulk.as_ref(), self.limits, &lease.session, None);
+        transport.resume(lease.mapping.take());
+        let result = async {
+            transport.restore(&mut lease.session).await?;
+            lease.session.close().await?;
+            Ok(())
+        }
+        .await;
+        if result.is_err() {
+            self.fenced = true;
+        }
+        result
+    }
     async fn transaction(&mut self, op: Operation) -> fujimod_usb::Result<Answer> {
         use fujimod_usb::Error;
         if self.fenced {
             return Err(Error::CompletionUnknown);
+        }
+        let read_bytes = match &op {
+            Operation::Memory(_, size) | Operation::Card(Request::ReadAt { size, .. })
+                if *size >= 65536 =>
+            {
+                u64::from(*size)
+            }
+            _ => 0,
+        };
+        if read_bytes == 0
+            || self.lease.as_ref().is_some_and(|lease| {
+                lease.started.elapsed() >= Duration::from_secs(2)
+                    || lease.bytes + read_bytes > 64 << 20
+            })
+        {
+            self.release_lease().await?;
         }
         // Every write is committed and every handle closed before replying.
         if matches!(op, Operation::Sync) || matches!(op, Operation::Close) && self.service.is_none()
@@ -86,7 +128,26 @@ impl<F: Sessions> Client<F> {
             return Ok(Answer::Done);
         }
         let acquisition = std::time::Instant::now();
-        let mut session = self.sessions.open().await?;
+        let previous = self.lease.take();
+        let reused = previous.is_some();
+        let (mut session, mapping, burst_started, burst_bytes, mut service_checked) =
+            if let Some(lease) = previous {
+                (
+                    lease.session,
+                    lease.mapping,
+                    lease.started,
+                    lease.bytes,
+                    lease.service_checked,
+                )
+            } else {
+                (
+                    self.sessions.open().await?,
+                    None,
+                    std::time::Instant::now(),
+                    0,
+                    false,
+                )
+            };
         let acquisition_seconds = acquisition.elapsed().as_secs_f64();
         let started = std::time::Instant::now();
         let metric = match &op {
@@ -101,6 +162,7 @@ impl<F: Sessions> Client<F> {
             &session,
             self.bulk.as_ref().and_then(|facts| facts.upload.as_ref()),
         );
+        transport.resume(mapping);
         let mut cleanup_known = true;
         let result = async {
             match op {
@@ -139,9 +201,12 @@ impl<F: Sessions> Client<F> {
                     }
                     let owned =
                         if let Some(service) = &self.service {
-                            service
-                                .check(&mut session, self.limits, Some(&mut transport))
-                                .await?;
+                            if !service_checked {
+                                service
+                                    .check(&mut session, self.limits, Some(&mut transport))
+                                    .await?;
+                                service_checked = true;
+                            }
                             self.mailbox_hint = Some(service.base + 0x2000);
                             Some(service.capability(
                                 self.capability.as_ref().ok_or(Error::OutsideDataWindow)?,
@@ -222,18 +287,19 @@ impl<F: Sessions> Client<F> {
                     Ok(Answer::Done)
                 }
                 Operation::Memory(address, size) => {
-                    if session
-                        .device_info(InfoSelector::Product)
-                        .await?
-                        .text
-                        .trim()
-                        != self.product
-                        || session
-                            .device_info(InfoSelector::InternalVersion)
+                    if !reused
+                        && (session
+                            .device_info(InfoSelector::Product)
                             .await?
                             .text
                             .trim()
-                            != self.internal_version
+                            != self.product
+                            || session
+                                .device_info(InfoSelector::InternalVersion)
+                                .await?
+                                .text
+                                .trim()
+                                != self.internal_version)
                     {
                         return Err(Error::Card(
                             "Connected camera differs from the mounted firmware".into(),
@@ -265,15 +331,29 @@ impl<F: Sessions> Client<F> {
             self.fenced = true;
             return result.and(Err(Error::CompletionUnknown));
         }
-        if let Err(error) = transport.restore(&mut session).await {
-            self.fenced = true;
-            return Err(error);
-        }
-        // Even a completed camera error yields its session. Unknown completion
-        // above never sends cleanup, close, reclaim or another request.
-        if let Err(error) = session.close().await {
-            self.fenced = true;
-            return Err(error);
+        let retain = result.is_ok()
+            && read_bytes != 0
+            && burst_bytes + read_bytes < 64 << 20
+            && burst_started.elapsed() < Duration::from_secs(2);
+        if retain {
+            self.lease = Some(ReadLease {
+                session,
+                mapping: transport.suspend(),
+                started: burst_started,
+                bytes: burst_bytes + read_bytes,
+                service_checked,
+            });
+        } else {
+            if let Err(error) = transport.restore(&mut session).await {
+                self.fenced = true;
+                return Err(error);
+            }
+            // Even a completed camera error yields its session. Unknown completion
+            // above never sends cleanup, close, reclaim or another request.
+            if let Err(error) = session.close().await {
+                self.fenced = true;
+                return Err(error);
+            }
         }
         if std::env::var_os("FUJIMOD_MOUNT_TRACE").is_some() {
             if let Some((kind, size)) = metric {
@@ -396,6 +476,7 @@ impl UsbDevice {
                         limits,
                         mailbox_hint: None,
                         fenced: false,
+                        lease: None,
                     };
                     let preflight = if has_card {
                         Operation::Card(Request::ReadDirectory {
@@ -414,7 +495,26 @@ impl UsbDevice {
                     if ready_tx.send(Ok(())).is_err() {
                         return;
                     }
-                    while let Ok((op, reply)) = rx.recv() {
+                    loop {
+                        let pending = if client.lease.is_some() {
+                            rx.recv_timeout(READ_IDLE)
+                        } else {
+                            rx.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected)
+                        };
+                        let (op, reply) = match pending {
+                            Ok(work) => work,
+                            Err(mpsc::RecvTimeoutError::Timeout) => {
+                                if let Err(error) = client.release_lease().await {
+                                    eprintln!("fujimod-mount: {error}");
+                                }
+                                continue;
+                            }
+                            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                                let _ = client.release_lease().await;
+                                let _ = client.transaction(Operation::Close).await;
+                                return;
+                            }
+                        };
                         let close = matches!(op, Operation::Close);
                         let result = client.transaction(op).await.map_err(report);
                         let _ = reply.send(result);

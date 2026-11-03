@@ -127,6 +127,7 @@ fn client(scripts: Vec<Script>) -> Client<TestSessions> {
         },
         mailbox_hint: None,
         fenced: false,
+        lease: None,
     }
 }
 #[test]
@@ -301,6 +302,73 @@ impl Sessions for MailboxSessions {
     }
 }
 #[test]
+fn large_read_bursts_reuse_a_session_but_idle_sync_and_deadlines_release_it() {
+    block_on(async {
+        let state = Arc::new(std::sync::Mutex::new(MailboxState::default()));
+        let mut client = Client {
+            sessions: MailboxSessions(state.clone()),
+            capability: None,
+            product: "Model".into(),
+            internal_version: "1".into(),
+            bulk: None,
+            flash: None,
+            service: None,
+            limits: DebugMemoryLimits {
+                read: NonZeroU32::new(256).unwrap(),
+                write: NonZeroU32::new(256).unwrap(),
+            },
+            mailbox_hint: None,
+            fenced: false,
+            lease: None,
+        };
+        for _ in 0..2 {
+            assert!(matches!(
+                client
+                    .transaction(Operation::Memory(0x2000, 65536))
+                    .await
+                    .unwrap(),
+                Answer::Bytes(_)
+            ));
+        }
+        {
+            let s = state.lock().unwrap();
+            assert_eq!((s.opens, s.closes), (1, 0));
+        }
+        client.lease.as_mut().unwrap().started = std::time::Instant::now() - Duration::from_secs(3);
+        client
+            .transaction(Operation::Memory(0x2000, 65536))
+            .await
+            .unwrap();
+        {
+            let s = state.lock().unwrap();
+            assert_eq!((s.opens, s.closes), (2, 1));
+        }
+        client.transaction(Operation::Sync).await.unwrap();
+        {
+            let s = state.lock().unwrap();
+            assert!(!s.live);
+            assert_eq!((s.opens, s.closes), (2, 2));
+        }
+        let outside = fujimod_usb::testing::peer_session(MailboxPeer(state.clone()), 65536, None)
+            .await
+            .unwrap();
+        outside.close().await.unwrap();
+        client
+            .transaction(Operation::Memory(0x2000, 65536))
+            .await
+            .unwrap();
+        client.lease.as_mut().unwrap().bytes = (64 << 20) - 65536;
+        client
+            .transaction(Operation::Memory(0x2000, 65536))
+            .await
+            .unwrap();
+        assert!(client.lease.is_none());
+        let s = state.lock().unwrap();
+        assert_eq!((s.opens, s.closes), (4, 4));
+        assert!(!s.live);
+    });
+}
+#[test]
 fn sd_transactions_yield_to_another_ff80_client_and_revalidate_the_descriptor_hint() {
     block_on(async {
         let mut state = MailboxState::default();
@@ -335,6 +403,7 @@ fn sd_transactions_yield_to_another_ff80_client_and_revalidate_the_descriptor_hi
             },
             mailbox_hint: None,
             fenced: false,
+            lease: None,
         };
         for _ in 0..2 {
             assert!(matches!(

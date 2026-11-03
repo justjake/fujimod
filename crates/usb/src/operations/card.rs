@@ -184,9 +184,9 @@ fn path(value: &str, listing: bool) -> Result<()> {
         "Only SD0 A-drive paths are allowed",
     )?;
     require(
-        b[3..].iter().all(|c| {
-            c.is_ascii_alphanumeric() || b"._-\\".contains(c) || listing && b"*?".contains(c)
-        }),
+        b[3..]
+            .iter()
+            .all(|c| is_short_name_byte(*c) || *c == b'\\' || listing && b"*?".contains(c)),
         "Invalid card path",
     )?;
     require(
@@ -195,6 +195,11 @@ fn path(value: &str, listing: bool) -> Result<()> {
             .any(|s| s.is_empty() || s == "." || s == ".."),
         "Invalid card path component",
     )
+}
+
+/// ASCII characters accepted in FAT short names, including generated aliases.
+pub fn is_short_name_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || b".$%'-_@~`!(){}^#&".contains(&byte)
 }
 
 struct Host<'a> {

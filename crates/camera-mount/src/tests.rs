@@ -294,3 +294,19 @@ fn large_memory_reads_remain_one_bounded_device_transaction() {
     );
     assert_eq!(device.0.lock().unwrap().calls.len(), 1);
 }
+
+#[test]
+fn fat_short_aliases_can_be_listed_traversed_and_read() {
+    let device = TestDevice::default();
+    device
+        .0
+        .lock()
+        .unwrap()
+        .files
+        .insert("A:\\SYSTEM~1\\FILE~1.JPG".into(), b"photo".to_vec());
+    let mut fs = CameraFs::new(device, vec![]).unwrap();
+    let folder = fs.lookup(SD, "SYSTEM~1").unwrap();
+    assert!(folder.directory);
+    let file = fs.lookup(folder.id, "FILE~1.JPG").unwrap();
+    assert_eq!(fs.read(file.id, 0, 5).unwrap(), b"photo");
+}

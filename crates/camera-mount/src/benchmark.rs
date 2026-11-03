@@ -68,18 +68,22 @@ pub fn run(mount: &Path, regions: &[Region]) -> io::Result<Value> {
         .ok_or_else(|| io::Error::other("No sufficiently large readable memory region"))?;
     let mut memory = Vec::new();
     for size in [128 << 10, 1 << 20, 8 << 20, 64 << 20] {
-        memory.push(read(
+        let result = read(
             &mount.join("memory"),
             u64::from(region.address) + (16 << 20),
             64 << 20,
             size,
-        )?);
+        )?;
+        eprintln!("{}", json!({"benchmark_layer":"posix","memory":result}));
+        memory.push(result);
     }
     let sd = if let Some(path) = candidate(&mount.join("sd"), 5)? {
         let n = std::fs::metadata(&path)?.len().min(64 << 20);
         let mut runs = Vec::new();
         for size in [128 << 10, 1 << 20, 8 << 20] {
-            runs.push(read(&path, 0, n, size)?);
+            let result = read(&path, 0, n, size)?;
+            eprintln!("{}", json!({"benchmark_layer":"posix","sd":result}));
+            runs.push(result);
         }
         json!({"path":path.strip_prefix(mount).unwrap_or(&path),"runs":runs})
     } else {

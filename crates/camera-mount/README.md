@@ -85,20 +85,21 @@ and storage costs while diagnosing the OS adapter.
 
 The namespace and policy live in Rust independently of the platform adapter.
 The worker holds device descriptors and any owned file-helper allocation while idle.
-Each bounded SD, memory or flash
-operation acquires a fresh ff80 session, completes its callbacks, closes all
-file handles, restores borrowed controls, and closes
-the session before replying. Other tools can use the camera between operations;
-there is no mount-lifetime session or idle USB claim. Synchronization needs no
-new session because writes are already committed before replying. Unmount
-acquires one bounded cleanup session when it must release a helper allocation,
-and reports cleanup errors. Flash reads yield the helper allocation first,
-then recreate it on the next SD operation.
+Writes, small control operations and flash reads use one ff80 session per
+operation. Consecutive SD and memory reads of at least 64 KiB may reuse one
+qualified session. A burst stops at 64 MiB or two seconds between operations;
+an in-flight bounded operation completes before release. The worker restores
+publication state and closes ff80 after 20 ms without another read. It blocks
+without polling after releasing the lease. File handles close before each reply,
+and writes are committed before replying. Synchronization flushes a pending
+read lease. Unmount releases the helper allocation and reports cleanup errors.
+Flash reads yield the file helper allocation first, then recreate it on the next
+SD operation. Other tools can acquire ff80 between bursts and while idle.
 
 The installed-service descriptor address is cached as a discovery hint. Each
 transaction revalidates its descriptor, pointers and ownership; a missing hint
 triggers rediscovery. Firmware identity and stock code checks are repeated in
-the session that uses them. Nearby code checks share qualified bulk reads when
+each session that uses them; a bounded burst shares that qualification. Nearby code checks share qualified bulk reads when
 that costs fewer commands; CPU fallback reads only the checked spans. Each
 individual digest is still verified. Regular-file I/O transfers bounded ranges rather
 than downloading and replacing whole files. Extending a file zero-fills its gap.
