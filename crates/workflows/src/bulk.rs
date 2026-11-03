@@ -389,20 +389,24 @@ impl Source {
         let aperture = memory_range(bulk.window)?;
         let (state, original, selected, capacity) = match &bulk.source {
             BulkSource::Query { source_state, .. } => {
-                let original = access.raw(*source_state, 8).await?;
+                // The callback and diagnostic dispatcher use the cacheable
+                // publication cell. Borrow and restore that same view; writing
+                // its uncached alias can be overwritten by a dirty cache line.
+                let state = *source_state & !bulk.code_alias;
+                let original = access.raw(state, 8).await?;
                 let mut source = match Self::prepare(access, bulk).await {
                     Ok(source) => source,
                     Err(error) => {
                         if access.session.state() == SessionState::Ready
-                            && access.raw(*source_state, 8).await? != original
+                            && access.raw(state, 8).await? != original
                         {
                             access.session.invalidate_completion();
                         }
                         return Err(error);
                     }
                 };
-                let selected = access.raw(*source_state, 8).await?;
-                source.saved = Some((*source_state, original.clone(), vec![original, selected]));
+                let selected = access.raw(state, 8).await?;
+                source.saved = Some((state, original.clone(), vec![original, selected]));
                 return Ok(source);
             }
             BulkSource::Pattern {
@@ -498,7 +502,7 @@ impl Source {
                     reply.status == CommandStatus::Success,
                     "Bulk source query refused",
                 )?;
-                let state = access.raw(source_state, 8).await?;
+                let state = access.raw(source_state & !alias, 8).await?;
                 let capacity = word(&state, 4);
                 require(
                     u64::from(word(&state, 0)) == base

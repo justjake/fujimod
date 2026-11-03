@@ -471,6 +471,56 @@ fn preserving_reads_support_every_source_family_and_restore_without_pattern_writ
 }
 
 #[test]
+fn query_publication_is_restored_through_the_stock_cacheable_view() {
+    // Observed on X70 after a fresh restart, 2026-11-03: restoring
+    // 0x417d548c while callbacks use 0x017d548c failed readback after a
+    // freshly restarted body. The aliases must not be mixed for mutable state.
+    block_on(async {
+        let mut camera = query_camera();
+        camera.code_alias = 0x40000000;
+        camera.window.address |= camera.code_alias;
+        if let BulkSource::Query {
+            callback_table,
+            source_state,
+            base,
+            ..
+        } = &mut camera.source
+        {
+            *callback_table |= camera.code_alias;
+            *source_state |= camera.code_alias;
+            *base |= camera.code_alias;
+        }
+        camera.probes[0].address |= camera.code_alias;
+        let original = words(&[0xdead0000, 16]);
+        let selected = words(&[0x40001000, 32]);
+        let mut steps = info(4, "X-M5");
+        steps.extend(info(8, "2.06"));
+        steps.extend(read(0x40001000, CODE));
+        steps.extend(read(0x1200, &original));
+        steps.extend(read(0x40001100, &words(&[0x1500])));
+        steps.extend(read(0x4000150c, &words(&[0x2000])));
+        steps.extend(diagnostic(0x450006, 0x80, 32));
+        steps.extend(read(0x1200, &selected));
+        steps.extend(read(0x1200, &selected));
+        steps.extend(read(0x40001000, b"stoc"));
+        steps.extend(data(0, b"stoc"));
+        steps.extend(read(0x1200, &selected));
+        steps.extend(write(0x1200, &original));
+        steps.extend(read(0x1200, &original));
+        let (mut session, script) = opened(steps);
+        let mapping = BulkMapping::prepare_preserving(&mut session, &camera, limits())
+            .await
+            .unwrap();
+        mapping.restore(&mut session).await.unwrap();
+        assert_eq!(
+            script.remaining(),
+            0,
+            "publication never writes the uncached alias"
+        );
+    });
+}
+
+#[test]
 fn preserving_bulk_mismatch_restores_publication_before_refusing() {
     let camera = facts(BulkSource::Pattern {
         registered_buffer: 0x1300,
