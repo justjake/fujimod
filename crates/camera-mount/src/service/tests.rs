@@ -20,6 +20,7 @@ struct State {
     allocations: usize,
     frees: usize,
     refuse_init: bool,
+    maximum_allocation: Option<u32>,
 }
 impl State {
     fn put(&mut self, at: u32, raw: &[u8]) {
@@ -84,7 +85,12 @@ impl Peer for Device {
                     0x6080 => match s.word(0x4004) {
                         0x8000 => {
                             s.allocations += 1;
-                            s.number(0x4000, 0x100000);
+                            let address = if s.maximum_allocation.is_some_and(|max| w(16) > max) {
+                                0
+                            } else {
+                                0x100000
+                            };
+                            s.number(0x4000, address);
                         }
                         0x8004 => {
                             assert_eq!(w(16), 0x100000);
@@ -229,6 +235,30 @@ fn completed_setup_refusal_frees_its_allocation_and_restores_scratch() {
         let s = state.lock().unwrap();
         restored(&s);
         assert_eq!((s.allocations, s.frees), (1, 1));
+    });
+}
+
+#[test]
+fn confirmed_null_allocations_reduce_capacity_and_bound_the_owned_reservation() {
+    block_on(async {
+        let (state, facts, bulk, limits) = fixture();
+        state.lock().unwrap().maximum_allocation = Some(BUFFER + (1 << 20) + 32);
+        let mut session = peer_session(Device(state.clone()), 1 << 20, None)
+            .await
+            .unwrap();
+        let service = Service::install(&mut session, limits, &bulk, &facts)
+            .await
+            .unwrap();
+        assert_eq!(service.bytes, BUFFER + (1 << 20) + 32);
+        assert_eq!(
+            state.lock().unwrap().word(service.base + SHARED + 64),
+            1 << 20
+        );
+        assert_eq!(state.lock().unwrap().allocations, 4);
+        service.release(&mut session, limits).await.unwrap();
+        assert_eq!(state.lock().unwrap().frees, 1);
+        restored(&state.lock().unwrap());
+        session.close().await.unwrap();
     });
 }
 #[test]

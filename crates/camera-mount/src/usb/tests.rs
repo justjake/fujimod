@@ -257,7 +257,9 @@ impl fujimod_usb::testing::Peer for MailboxPeer {
                 state.reply = raw[..36].to_vec();
                 match word(16) {
                     2 => {
-                        if at == 0x1000 && size > 64 {
+                        // The last chunk of the complete 0x400-byte search;
+                        // compact descriptor/status snapshots stay below it.
+                        if at == 0x1300 && size == 256 {
                             state.searches += 1;
                         }
                         let bytes: Vec<_> = (0..size)

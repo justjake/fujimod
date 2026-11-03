@@ -20,7 +20,6 @@ const IMAGE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/card.bin"));
 const SHARED: u32 = 0x2000;
 const BUFFER: u32 = 0x3000;
 const CAPACITY: u32 = 8 << 20;
-const ALLOCATION: u32 = BUFFER + CAPACITY + 32;
 const ALIAS: u32 = 0x40000000;
 fn require(ok: bool, message: &str) -> Result<()> {
     if ok {
@@ -143,6 +142,7 @@ impl Query {
 pub(crate) struct Service {
     raw: u32,
     pub base: u32,
+    bytes: u32,
     query: Query,
     facts: QueryService,
 }
@@ -160,7 +160,7 @@ impl Service {
         let mut capability = original.clone();
         capability.mechanism = Mechanism::Mailbox {
             search_address: self.base,
-            search_bytes: ALLOCATION - 32,
+            search_bytes: self.bytes - 32,
             address_alias: ALIAS,
             build: Some(1),
         };
@@ -282,24 +282,33 @@ impl Service {
                 read(session, limits, bootstrap | ALIAS, 32).await? == stub,
                 "Bootstrap synchronization differs",
             )?;
-            let allocated = word(
-                &query
-                    .call(
-                        session,
-                        limits,
-                        bootstrap,
-                        ALLOCATION,
-                        [0, facts.allocate],
-                        false,
-                    )
-                    .await?,
-            );
+            let mut capacity = CAPACITY;
+            let allocated = loop {
+                let allocated = word(
+                    &query
+                        .call(
+                            session,
+                            limits,
+                            bootstrap,
+                            BUFFER + capacity + 32,
+                            [0, facts.allocate],
+                            false,
+                        )
+                        .await?,
+                );
+                if allocated != 0 {
+                    break allocated;
+                }
+                require(capacity > 65536, "Owned service allocation failed")?;
+                capacity /= 2;
+            };
+            let bytes = BUFFER + capacity + 32;
             require(
                 allocated != 0
                     && allocated < ALIAS
                     && allocated % 8 == 0
                     && u64::from(allocated | ALIAS) >= bulk.window.address
-                    && u64::from(allocated | ALIAS) + u64::from(ALLOCATION)
+                    && u64::from(allocated | ALIAS) + u64::from(bytes)
                         <= bulk.window.address + bulk.window.size,
                 "Owned service allocation failed or is outside DRAM",
             )?;
@@ -319,7 +328,7 @@ impl Service {
             ) {
                 require(
                     !(u64::from(allocated) < u64::from(at) + u64::from(size)
-                        && u64::from(at) < u64::from(allocated) + u64::from(ALLOCATION)),
+                        && u64::from(at) < u64::from(allocated) + u64::from(bytes)),
                     "Allocation overlaps protected state",
                 )?;
             }
@@ -346,7 +355,7 @@ impl Service {
                 0,
             ];
             data[..64].copy_from_slice(&words(&api));
-            data[64..68].copy_from_slice(&CAPACITY.to_le_bytes());
+            data[64..68].copy_from_slice(&capacity.to_le_bytes());
             data[156..160].copy_from_slice(&u32::MAX.to_le_bytes());
             data[164..244].copy_from_slice(&words(&facts.functions));
             // Initialize through the cacheable view, then publish the complete
@@ -360,9 +369,13 @@ impl Service {
             let service = Self {
                 raw: allocated,
                 base,
+                bytes,
                 query: query.clone(),
                 facts: facts.clone(),
             };
+            if std::env::var_os("FUJIMOD_MOUNT_TRACE").is_some() {
+                eprintln!("{}", serde_json::json!({"service_capacity_bytes":capacity}));
+            }
             service.check_image(session, limits).await?;
             write(session, limits, shared + 68, &13u32.to_le_bytes()).await?;
             query

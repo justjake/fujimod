@@ -44,16 +44,64 @@ impl Mailbox<'_> {
         self.host.write(at, raw).await
     }
     async fn idle(&mut self) -> Result<()> {
+        let state = self.snapshot().await?;
         require(
-            self.read(self.address, 64).await? == self.descriptor,
-            "File-service descriptor changed",
-        )?;
-        require(
-            self.word(self.p[7]).await? == self.operations
-                && self.word(self.p[1]).await? == 0
-                && self.word(self.p[2]).await? != 1,
+            state[0] == self.operations && state[1] == 0 && state[2] != 1,
             "File service busy or another operation intervened",
         )
+    }
+    async fn snapshot(&mut self) -> Result<[u32; 6]> {
+        let mut fields = [
+            self.p[7], self.p[1], self.p[2], self.p[8], self.p[3], self.p[4],
+        ];
+        for field in &mut fields {
+            *field = self.address(*field, 4)?;
+        }
+        let descriptor_address = self.address(self.address, 64)?;
+        let start = fields
+            .iter()
+            .copied()
+            .chain([descriptor_address])
+            .min()
+            .unwrap();
+        let end = fields
+            .iter()
+            .map(|&a| u64::from(a) + 4)
+            .chain([u64::from(descriptor_address) + 64])
+            .max()
+            .unwrap();
+        let size = u32::try_from(end - u64::from(start)).map_err(|_| Error::InvalidLength)?;
+        // These are already checked RAM pointers in the service reservation.
+        // The owned helper puts them in one small span, so descriptor and
+        // completion guards cost one bounded command instead of seven waits.
+        let (descriptor, values) = if size <= 1024 {
+            let raw = self.read(start, size).await?;
+            let d = (descriptor_address - start) as usize;
+            (
+                raw[d..d + 64].to_vec(),
+                fields.map(|at| u32_at(&raw, (at - start) as usize)),
+            )
+        } else {
+            let mut ranges = vec![range(descriptor_address, 64)?];
+            ranges.extend(
+                fields
+                    .iter()
+                    .map(|&at| range(at, 4))
+                    .collect::<Result<Vec<_>>>()?,
+            );
+            let raw =
+                super::super::memory::read_ranges(self.host.session, &ranges, self.host.limits)
+                    .await?;
+            (
+                raw[0].clone(),
+                std::array::from_fn(|i| u32_at(&raw[i + 1], 0)),
+            )
+        };
+        require(
+            descriptor == self.descriptor,
+            "File-service descriptor changed",
+        )?;
+        Ok(values)
     }
     async fn command(&mut self, op: u32, size: u32) -> Result<u32> {
         require(size <= 0xffffff, "File-service argument too large")?;
@@ -79,25 +127,21 @@ impl Mailbox<'_> {
         }
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
-            require(
-                self.read(self.address, 64).await? == self.descriptor,
-                "File-service descriptor changed",
-            )?;
-            let request = self.word(self.p[1]).await?;
-            let state = self.word(self.p[2]).await?;
+            let snapshot = self.snapshot().await?;
+            let request = snapshot[1];
+            let state = snapshot[2];
             if request == 0 && state != 1 {
                 require(
-                    self.word(self.p[7]).await? == self.operations.wrapping_add(1)
-                        && self.word(self.p[8]).await? == 0,
+                    snapshot[0] == self.operations.wrapping_add(1) && snapshot[3] == 0,
                     "File-service operation ownership changed",
                 )?;
                 self.operations = self.operations.wrapping_add(1);
-                let status = self.word(self.p[3]).await?;
+                let status = snapshot[4];
                 require(
                     state == 2 && status == 0,
                     &format!("File-service operation {op} failed: {status:#x}"),
                 )?;
-                return self.word(self.p[4]).await;
+                return Ok(snapshot[5]);
             }
             if Instant::now() >= deadline {
                 self.host.session.invalidate_completion();
