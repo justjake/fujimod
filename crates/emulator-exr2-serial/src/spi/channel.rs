@@ -66,11 +66,6 @@ impl SerialChannel {
                 "serial channel requires explicit transport, selection, and clock wiring".into(),
             );
         }
-        if options.base == 0xfff84080
-            && (options.queue != Queue::Single || options.transports.iter().any(|t| t.receive))
-        {
-            return Err("SPI2 supports only single transmit-only shifts".into());
-        }
         for (i, t) in options.transports.iter().enumerate() {
             if t.control & 1 != 0
                 || t.control & 0x80 == 0
@@ -325,3 +320,7 @@ impl Device for SerialChannel {
         self.advance(cx);
     }
 }
+
+#[cfg(test)]
+#[path = "channel_tests.rs"]
+mod channel_tests;
