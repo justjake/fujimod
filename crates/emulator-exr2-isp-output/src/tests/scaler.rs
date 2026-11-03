@@ -1,7 +1,7 @@
-use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use crate::*;
-use fujimod_emulator_devices::test_host::*;
 use fujimod_emulator_devices::Device;
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
+use fujimod_emulator_devices::test_host::*;
 #[test]
 fn scaler_dma_padding_reset_and_unsupported_transform() {
     let mut h = TestHost::new();
@@ -40,4 +40,38 @@ fn scaler_dma_padding_reset_and_unsupported_transform() {
     let mut cx = h.cx();
     d.write(&mut cx, 0xfff47004, 4, 1);
     assert!(cx.refusal().is_some());
+}
+
+#[test]
+fn scaler_refuses_zero_chroma_validity_tags_before_scheduling_dma() {
+    let mut host = TestHost::new();
+    host.ram[0x8000..0x8020].fill(128);
+    host.ram[0x8000..0x8004].copy_from_slice(&[32, 33, 0, 208]);
+    host.ram[0x9000..0x9020].fill(0xa5);
+    let mut device = Scaler::new(
+        fujimod_emulator_imaging::exr2_isp::options::scaler::Options {
+            completion_ticks: 4,
+        },
+        Irq { core: 0, line: 67 },
+    )
+    .unwrap();
+    for (offset, value) in [
+        (0x10, 0x8000),
+        (0x14, 8),
+        (0x18, 2 << 16 | 8),
+        (0x20, 0x9000),
+        (0x24, 8),
+        (0x28, 2 << 16 | 8),
+        (0x40, 65536),
+        (0x54, 65536),
+        (0x7c, 0x1000),
+    ] {
+        write(&mut device, &mut host, 0xfff47000 + offset, value);
+    }
+    let mut cx = host.cx();
+    device.write(&mut cx, 0xfff47004, 4, 1);
+    assert!(cx.refusal().is_some());
+    assert!(device.next_deadline(0).is_none());
+    assert_eq!(&host.ram[0x9000..0x9020], &[0xa5; 32]);
+    assert!(host.irqs.is_empty());
 }

@@ -1,16 +1,27 @@
 //! FFF47000 packed422 scaler. Register fields define address, pitch, dimensions
 //! and positive 16.16 steps; bilinear sampling is declared, not measured.
-use fujimod_emulator_imaging::exr2_isp::dma::{Raster, Transfer};
-use fujimod_emulator_imaging::exr2_isp::word;
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_imaging::exr2_isp::dma::{Raster, Transfer};
 use fujimod_emulator_imaging::exr2_isp::options::scaler::Options;
+use fujimod_emulator_imaging::exr2_isp::word;
 pub struct Scaler {
     r: Vec<u32>,
     irq: Irq,
     delay: u64,
     dma: Transfer,
     source: Vec<u8>,
+}
+
+fn has_zero_chroma(source: &[u8], raster: &Raster) -> bool {
+    source
+        .chunks_exact(raster.pitch)
+        .take(raster.height)
+        .any(|row| {
+            row[..raster.width * 2]
+                .chunks_exact(4)
+                .any(|pair| pair[2] == 0 || pair[3] == 0)
+        })
 }
 impl Scaler {
     pub fn new(options: Options, irq: Irq) -> Result<Self, String> {
@@ -28,7 +39,7 @@ impl Scaler {
     fn valid(o: usize) -> bool {
         matches!(o,0|4|8|0x10|0x14|0x18|0x20..=0x2c|0x40..=0x64|0x70..=0x80)
     }
-    fn start(&mut self, cx: &Cx<'_>) -> Result<(), String> {
+    fn start(&mut self, cx: &Cx<'_>, mode: u32) -> Result<(), String> {
         let r = &self.r;
         let src = Raster {
             address: (r[0x10 / 4] & 0x3fffffff) as u64,
@@ -63,6 +74,11 @@ impl Scaler {
         }
         self.source.resize(src.pitch * src.height, 0);
         cx.ram_read(src.address, &mut self.source)?;
+        // Retouch treats zero chroma as validity tags, including a neighboring
+        // row. The bilinear-only implementation cannot render those inputs.
+        if mode == 1 && has_zero_chroma(&self.source, &src) {
+            return Err("scaler zero-chroma validity tags are unsupported".into());
+        }
         self.dma.prepare(cx.now(), self.delay, dst, dst.width * 2)?;
         if let Err(e) = fujimod_emulator_image_processing::resample::bilinear(
             &self.source,
@@ -124,7 +140,7 @@ impl Device for Scaler {
                 return;
             }
             if v & 1 != 0
-                && let Err(e) = self.start(cx)
+                && let Err(e) = self.start(cx, v as u32)
             {
                 cx.fail(e);
                 return;
@@ -163,5 +179,28 @@ impl Device for Scaler {
         self.r = r;
         self.dma = d;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validity_tags_exclude_luma_and_stride_padding() {
+        let raster = Raster {
+            address: 0,
+            width: 4,
+            height: 1,
+            pitch: 12,
+        };
+        let mut source = [0, 255, 80, 96, 12, 13, 90, 110, 0, 0, 0, 0];
+        assert!(!has_zero_chroma(&source, &raster));
+        for index in [2, 3, 6, 7] {
+            let saved = source[index];
+            source[index] = 0;
+            assert!(has_zero_chroma(&source, &raster));
+            source[index] = saved;
+        }
     }
 }
