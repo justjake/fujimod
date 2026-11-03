@@ -68,3 +68,23 @@ fn configuration_family_has_one_owner_and_preserves_absent_graphics_semantics() 
     let error = Session::new(serde_json::from_value(v).unwrap(), None, vec![]).err().unwrap();
     assert!(error.contains("overlap"), "{error}");
 }
+
+#[test]
+fn selection_special_owns_exactly_three_words_and_leaves_b14_to_its_existing_owner() {
+    let mut cfg = config();
+    cfg["selection_special"] = json!({"selection_reset": 0, "special52_reset": 2, "special53_reset": 0});
+    let mut v = input(); v["xp4_functional_system_control"] = cfg.clone();
+    let session = Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).unwrap();
+    let state: Value = serde_json::from_str(&session.device_state_json()["xp4-functional-system-control"]).unwrap();
+    assert!(state["selection_state"].is_object());
+    for address in [0xfff48600u64, 0xfff48604, 0xfff4860c] {
+        let mut bad = v.clone(); bad["control_requests"] = json!([[address, 8]]);
+        let error = Session::new(serde_json::from_value(bad).unwrap(), None, vec![]).err().unwrap();
+        assert!(error.contains("Overlapping"), "{error}");
+    }
+    v["control_requests"] = json!([[0xfff48608u64, 8]]);
+    assert!(Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).is_ok());
+    cfg["selection_special"]["selection_reset"] = json!(0xc00);
+    v["xp4_functional_system_control"] = cfg;
+    assert!(Session::new(serde_json::from_value(v).unwrap(), None, vec![]).is_err());
+}

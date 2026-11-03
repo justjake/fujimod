@@ -71,6 +71,8 @@ pub struct Config {
     pub retained_request_banks: Option<RequestBanks>,
     #[serde(default)]
     pub configuration_requests: Option<crate::configuration_request::Inputs>,
+    #[serde(default)]
+    pub selection_special: Option<crate::selection_special::Inputs>,
 }
 impl Config {
     fn validate(&self) -> Result<(), String> {
@@ -79,6 +81,7 @@ impl Config {
         {
             return Err("Invalid experimental XP4 functional system-control input".into());
         }
+        if let Some(inputs) = &self.selection_special { inputs.validate()?; }
         if let Some(inputs) = &self.configuration_requests {
             inputs.validate()?;
             if self.graphics.is_some() {
@@ -119,6 +122,8 @@ pub struct SystemControl {
     retained_banks: Option<RetainedBanks>,
     #[serde(default)]
     configuration_state: Option<crate::configuration_request::ConfigurationRequests>,
+    #[serde(default)]
+    selection_state: Option<crate::selection_special::SelectionSpecial>,
     staged: u32,
     applied: u32,
     value_written: bool,
@@ -135,7 +140,9 @@ impl SystemControl {
         });
         let configuration_state = config.configuration_requests.clone()
             .map(crate::configuration_request::ConfigurationRequests::new).transpose()?;
-        Ok(Self { control: config.control_f03c_reset, retained_banks, configuration_state, config, staged: initial,
+        let selection_state = config.selection_special.clone()
+            .map(crate::selection_special::SelectionSpecial::new).transpose()?;
+        Ok(Self { control: config.control_f03c_reset, retained_banks, configuration_state, selection_state, config, staged: initial,
             applied: initial, value_written: false, pending: None, generation: 0, admitted: false })
     }
     pub fn windows(&self) -> Vec<(u64, u64)> {
@@ -144,6 +151,7 @@ impl SystemControl {
             spans.extend(A_WORDS[..15].iter().chain(B_WORDS.iter()).map(|&(address, _)| (address, address + 4)));
         }
         if let Some(model) = &self.configuration_state { spans.extend(model.windows()); }
+        if let Some(model) = &self.selection_state { spans.extend(model.windows()); }
         if self.config.graphics.is_some() { spans.extend([(VALUE, VALUE + 4), (REQUEST, REQUEST + 4)]); }
         spans
     }
@@ -156,6 +164,7 @@ impl SystemControl {
     }
     fn known(&self, address: u64, size: u8) -> bool {
         size == 4 && (address == CONTROL || self.request_word(address).is_some()
+            || self.selection_state.as_ref().is_some_and(|model| model.owns(address, size))
             || self.configuration_state.as_ref().is_some_and(|model| model.owns(address, size)) || self.config.graphics.is_some() && matches!(address, VALUE | REQUEST))
     }
     fn admit(&mut self, cx: &mut Cx<'_>) {
@@ -190,6 +199,9 @@ impl Device for SystemControl {
         if let Some(model) = &mut self.configuration_state {
             if model.owns(address, size) { return model.read(cx, address, size); }
         }
+        if let Some(model) = &mut self.selection_state {
+            if model.owns(address, size) { return model.read(cx, address, size); }
+        }
         if let Some((is_a, index, _)) = self.request_word(address) {
             let banks = self.retained_banks.as_ref().unwrap();
             return u64::from(if is_a { banks.a[index] } else { banks.b[index] });
@@ -200,6 +212,9 @@ impl Device for SystemControl {
         if !self.known(address, size) { cx.unmodeled(); return; }
         if value > u32::MAX as u64 { cx.fail("XP4 functional control requires a 32-bit value"); return; }
         if let Some(model) = &mut self.configuration_state {
+            if model.owns(address, size) { model.write(cx, address, size, value); return; }
+        }
+        if let Some(model) = &mut self.selection_state {
             if model.owns(address, size) { model.write(cx, address, size, value); return; }
         }
         let value = value as u32;
@@ -265,6 +280,11 @@ impl Device for SystemControl {
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: Self = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         state.config.validate()?;
+        let selection_valid = match (&state.selection_state, &state.config.selection_special) {
+            (None, None) => true,
+            (Some(model), Some(inputs)) => model.validate_state(inputs).is_ok(),
+            _ => false,
+        };
         let configuration_valid = match (&state.configuration_state, &state.config.configuration_requests) {
             (None, None) => true,
             (Some(model), Some(inputs)) => model.validate_state(inputs).is_ok(),
@@ -278,7 +298,7 @@ impl Device for SystemControl {
         };
         let no_graphics = state.config.graphics.is_none();
         let initial = state.config.graphics.as_ref().map_or(0, |g| g.initial_value);
-        if !configuration_valid || !banks_valid || (!state.value_written && (state.staged != initial || state.applied != initial || state.generation != 0))
+        if !selection_valid || !configuration_valid || !banks_valid || (!state.value_written && (state.staged != initial || state.applied != initial || state.generation != 0))
             || (state.generation == 0 && state.applied != initial)
             || state.config != self.config || state.control & !0x7ff != 0 || state.staged & !0x1ff != 0 || state.applied & !0x1ff != 0
             || no_graphics && (state.staged != 0 || state.applied != 0 || state.value_written || state.pending.is_some() || state.generation != 0)
@@ -305,7 +325,7 @@ mod tests {
         fn record(&mut self, r: Record) { self.records.push(r); }
     }
     fn config(ticks: Option<u64>) -> Config {
-        Config { profile: PROFILE.into(), control_f03c_reset: 7, retained_request_banks: None, configuration_requests: None,
+        Config { profile: PROFILE.into(), control_f03c_reset: 7, retained_request_banks: None, configuration_requests: None, selection_special: None,
             graphics: ticks.map(|completion_ticks| Graphics { initial_value: 0, completion_ticks }) }
     }
     fn write(d: &mut SystemControl, c: &mut Clock, address: u64, size: u8, value: u64) -> Result<(), String> {
@@ -576,6 +596,34 @@ mod tests {
         assert_eq!(resumed.next_deadline(8), None);
         assert_eq!(resumed.save()["configuration_state"]["applied"][19], 0x100);
         assert_eq!(resumed.control, 7); assert_eq!(resumed.generation, 0);
+    }
+
+    #[test]
+    fn selection_state_routes_three_words_without_owning_or_coupling_b14() {
+        let mut cfg = banks_config(0);
+        cfg.configuration_requests = Some(crate::configuration_request::Inputs {
+            initial_values: vec![0; 52], completion_ticks: vec![8; 20],
+        });
+        cfg.selection_special = Some(crate::selection_special::Inputs {
+            selection_reset: 0, special52_reset: 2, special53_reset: 0,
+        });
+        let mut d = SystemControl::new(cfg.clone()).unwrap(); let mut c = Clock::default();
+        assert_eq!(d.windows().len(), 106);
+        write(&mut d, &mut c, 0xfff48600, 4, 0x50222).unwrap();
+        write(&mut d, &mut c, 0xfff4860c, 4, 0x102).unwrap();
+        write(&mut d, &mut c, 0xfff48604, 4, 0x110).unwrap();
+        let selection = d.save()["selection_state"].clone();
+        write(&mut d, &mut c, 0xfff48608, 4, 7).unwrap();
+        assert_eq!(d.save()["selection_state"], selection);
+        assert_eq!(read(&mut d, &mut c, 0xfff48608, 4).unwrap(), 7);
+        assert_eq!(d.next_deadline(0), None); assert!(c.events.is_empty());
+        let saved = d.save(); let mut resumed = SystemControl::new(cfg).unwrap(); resumed.restore(&saved).unwrap();
+        let mut bad = saved.clone(); bad["selection_state"]["selection"] = json!(0xc00);
+        assert!(resumed.restore(&bad).is_err());
+        let mut bad = saved.clone(); bad["selection_state"] = Value::Null;
+        assert!(resumed.restore(&bad).is_err()); assert_eq!(resumed.save(), saved);
+        let mut absent = SystemControl::new(config(None)).unwrap();
+        assert!(read(&mut absent, &mut c, 0xfff48600, 4).is_err());
     }
 
 }

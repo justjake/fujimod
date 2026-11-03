@@ -13,3 +13,5 @@ pub mod usb_condition;
 pub mod usb_phy;
 
 pub mod configuration_request;
+
+pub mod selection_special;
