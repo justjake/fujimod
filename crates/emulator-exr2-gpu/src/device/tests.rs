@@ -545,6 +545,67 @@ fn linear_copy_keeps_all_pixel_bytes_through_dma_completion() {
 }
 
 #[test]
+fn in_place_untile_latches_the_complete_raster_across_ram_aliases() {
+    for destination in [128, 0x40000080] {
+        let (mut gpu, mut host, mut controllers) = setup();
+        enable(&mut controllers, &mut host, 1);
+        let mut expected = Vec::new();
+        for row in 0..16usize {
+            for x in 0..16usize {
+                let y = 15 - row;
+                let pixel = [x as u8, y as u8, (x + y) as u8, 231];
+                let at = 128 + fujimod_emulator_graphics::render::morton(16, x, y) * 4;
+                host.bytes[at..at + 4].copy_from_slice(&pixel);
+                expected.extend_from_slice(&pixel);
+            }
+        }
+        let before = host.bytes.clone();
+        for (offset, value) in [
+            (0xc00, 128),
+            (0xc04, destination),
+            (0xc08, 0x100010),
+            (0xc0c, 64),
+            (0xc10, 1),
+            (0xc18, 1),
+        ] {
+            assert_eq!(put(&mut gpu, &mut host, offset, value), None);
+        }
+        assert_eq!(host.bytes, before);
+        assert_eq!(host.writes, 0);
+        host.bytes[128..1152].fill(0);
+        host.now = gpu.next_deadline(host.now).unwrap();
+        gpu.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(host.bytes[128..1152], expected);
+        assert_eq!(host.writes, 1);
+        assert_eq!(host.effects, [(1, IRQ.into())]);
+    }
+}
+
+#[test]
+fn partial_or_differently_pitched_untile_overlap_remains_refused() {
+    for (destination, pitch) in [(132, 64), (128, 80)] {
+        let (mut gpu, mut host, _) = setup();
+        for (offset, value) in [
+            (0xc00, 128),
+            (0xc04, destination),
+            (0xc08, 0x100010),
+            (0xc0c, pitch),
+            (0xc10, 1),
+        ] {
+            assert_eq!(put(&mut gpu, &mut host, offset, value), None);
+        }
+        assert!(
+            put(&mut gpu, &mut host, 0xc18, 1)
+                .unwrap()
+                .contains("overlapping copy")
+        );
+        assert_eq!(host.writes, 0);
+        assert!(host.effects.is_empty());
+        assert_eq!(gpu.next_deadline(host.now), None);
+    }
+}
+
+#[test]
 fn decoded_clear_preserves_pending_dma_deadline_restore_and_observational_reads() {
     let (path, fill) = fujimod_emulator_graphics::clear::fixtures::lists();
     let mut options = options();

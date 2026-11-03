@@ -1310,7 +1310,10 @@ impl CommandProcessor {
             addresses.push(p);
         }
         let (source, destination) = (addresses[0], addresses[1]);
-        if source < destination + destination_count && destination < source + count {
+        // An exact in-place untile consumes a complete latched source raster.
+        // Other overlaps, including a changed destination pitch, remain refused.
+        let in_place = source == destination && output_pitch == u64::from(w) * 4;
+        if source < destination + destination_count && destination < source + count && !in_place {
             return fail("Graphics software-profile overlapping copy is unproved");
         }
         if !host.has_reader() || !host.has_irq() {
