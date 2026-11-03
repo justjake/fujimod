@@ -336,6 +336,10 @@ pub enum Model {
     Blocka8000 {
         options: fujimod_emulator_devices::exr::blocka8000::Options,
     },
+    #[serde(rename = "exr-display-layer")]
+    ExrDisplayLayer {
+        options: fujimod_emulator_devices::exr::display_layer::Options,
+    },
     Companion {
         options: serde_json::Value,
     },
@@ -520,6 +524,7 @@ impl Model {
             Model::I2cMotorBridge { .. } => "i2c-motor-bridge",
             Model::Block86000 { .. } => "block86000",
             Model::Blocka8000 { .. } => "blocka8000",
+            Model::ExrDisplayLayer { .. } => "exr-display-layer",
             Model::Companion { .. } => "companion",
             Model::Fe80Processing { .. } => "fe80-processing",
             Model::Formatter { .. } => "formatter",
