@@ -8,6 +8,7 @@ fn configured(core: usize, control: u32, period: u32) -> (PulseUnit, TestHost) {
         Options {
             counter_channels: vec![],
             timer_channels: vec![11],
+            one_shot_channels: vec![],
             quadrature: false,
             initial_phase: 0,
             capture_channel: None,
@@ -86,6 +87,7 @@ fn invalid_channel11_configuration_or_absent_irq_refuses_before_enable() {
             Options {
                 counter_channels: vec![],
                 timer_channels: vec![11],
+                one_shot_channels: vec![],
                 quadrature: false,
                 initial_phase: 0,
                 capture_channel: None

@@ -25,6 +25,8 @@ const CAPTURE_MODE: u32 = 0x438b;
 pub struct Options {
     pub counter_channels: Vec<u8>,
     pub timer_channels: Vec<u8>,
+    #[serde(default)]
+    pub one_shot_channels: Vec<u8>,
     pub quadrature: bool,
     pub initial_phase: u8,
     pub capture_channel: Option<u8>,
@@ -40,6 +42,9 @@ struct Channel {
     words: [u32; 5],
     due: Option<u64>,
     interval: u64,
+    /// Tick when a one-shot countdown was armed; cleared on disable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    start: Option<u64>,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -65,6 +70,7 @@ pub struct PulsePins {
     state: Arc<Mutex<State>>,
     counters: u16,
     timers: u16,
+    one_shots: u16,
     quadrature: bool,
     capture: Option<u8>,
     irqs: [Option<InterruptLine>; 12],
@@ -254,6 +260,15 @@ impl PulseUnit {
             }
             timers |= 1 << channel;
         }
+        let mut one_shots = 0u16;
+        for channel in options.one_shot_channels {
+            if channel >= 12 || timers & (1 << channel) != 0 || one_shots & (1 << channel) != 0 {
+                return Err(
+                    "one-shot channels must be unique, below twelve and not interval timers".into(),
+                );
+            }
+            one_shots |= 1 << channel;
+        }
         if options.initial_phase > 3
             || options.capture_channel.is_some_and(|v| v != 1)
             || options.quadrature && options.capture_channel.is_some()
@@ -269,6 +284,7 @@ impl PulseUnit {
                 state: Arc::new(Mutex::new(state)),
                 counters,
                 timers,
+                one_shots,
                 quadrature: options.quadrature,
                 capture: options.capture_channel,
                 irqs: wiring.irqs,
@@ -293,6 +309,18 @@ impl PulseUnit {
     fn arm(&self, s: &State, channel: usize, now: u64) -> Result<Option<(u64, u64)>, String> {
         let c = &s.channels[channel];
         let [control, config, period, reload, duty] = c.words;
+        if self.pins.one_shots & (1 << channel) != 0
+            && (0x8000..=0x8003).contains(&(control & !0x5000))
+        {
+            if config != 0 || period == 0 || reload != 0 || duty != 0 {
+                return Err("incomplete one-shot timer configuration".into());
+            }
+            let interval = u64::from(period) * DIVISORS[(control & 3) as usize];
+            return Ok(Some((
+                now.checked_add(interval).ok_or("pulse deadline overflow")?,
+                interval,
+            )));
+        }
         if control & !0x5000 >= 0x8000 && control & !0x5000 <= 0x8003 {
             if self.pins.timers & (1 << channel) == 0
                 || self.pins.irqs[channel].is_none()
@@ -365,10 +393,14 @@ impl PulseUnit {
                 for (ch, timer) in timers.into_iter().enumerate() {
                     if enabled & (1 << ch) == 0 {
                         s.channels[ch].due = None;
+                        s.channels[ch].start = None;
                     }
                     if let Some((due, interval)) = timer {
                         s.channels[ch].due = Some(due);
                         s.channels[ch].interval = interval;
+                        if self.pins.one_shots & (1 << ch) != 0 {
+                            s.channels[ch].start = Some(cx.now());
+                        }
                     }
                 }
                 if starting & 1 != 0 && self.pins.quadrature && s.channels[0].words[0] == 0x870c {
@@ -410,12 +442,15 @@ impl PulseUnit {
                 if word == 0 {
                     let timer = self.pins.timers & (1 << ch) != 0
                         && (0x8000..=0x8003).contains(&(value & !0x5000));
+                    let one_shot = self.pins.one_shots & (1 << ch) != 0
+                        && (0x8000..=0x8003).contains(&(value & !0x5000));
                     let counter =
                         self.pins.counters & (1 << ch) != 0 && matches!(value, 0x2089..=0x208b);
                     let quad = self.pins.quadrature
                         && (ch == 0 && matches!(value, 0 | 0x870c)
                             || ch == 1 && matches!(value, 0 | 0x2089 | 0x208a));
                     if !timer
+                        && !one_shot
                         && !counter
                         && !quad
                         && !(0x8800..=0x8803).contains(&value)
@@ -498,6 +533,15 @@ impl Device for PulseUnit {
             a if a == BASE + 0x14 => s.clock_route as u64,
             _ => match Self::locate(address, size) {
                 Some((ch, word)) => {
+                    if word == 2 && self.pins.one_shots & (1 << ch) != 0 {
+                        if let Some(start) = s.channels[ch].start {
+                            let divisor = DIVISORS[(s.channels[ch].words[0] & 3) as usize];
+                            let elapsed = cx.now().saturating_sub(start);
+                            return u64::from(
+                                s.channels[ch].words[2].saturating_sub((elapsed / divisor) as u32),
+                            );
+                        }
+                    }
                     if s.enabled & (1 << ch) != 0 && (word == 2 || word == 3) {
                         if s.channels[ch].words[0] == CAPTURE_MODE {
                             if word == 3 {
@@ -534,28 +578,35 @@ impl Device for PulseUnit {
     fn advance(&mut self, cx: &mut Cx<'_>) {
         let mut s = self.pins.state.lock().unwrap();
         for (ch, c) in s.channels.iter_mut().enumerate() {
-            if let Some(due) = c.due
-                && cx.now() >= due
-            {
-                let Some(line) = self.pins.irqs[ch] else {
-                    cx.fail("pulse IRQ is unconnected");
-                    return;
-                };
-                match line {
-                    InterruptLine::Core { core, line } => {
-                        if let Err(error) = cx.raise_irq(core, line) {
-                            cx.fail(error);
-                            return;
-                        }
-                    }
-                    InterruptLine::Shared(line) => cx.set_irq(line, true),
-                }
-                c.due = if c.words[0] & 0x4000 != 0 {
-                    None
-                } else {
-                    due.checked_add((1 + (cx.now() - due) / c.interval) * c.interval)
-                };
+            let Some(due) = c.due else { continue };
+            if cx.now() < due {
+                continue;
             }
+            // A one-shot countdown fires once and stays expired until the
+            // channel is disabled; an interval timer re-arms immediately.
+            let one_shot = self.pins.one_shots & (1 << ch) != 0;
+            let Some(line) = self.pins.irqs[ch] else {
+                if one_shot {
+                    c.due = None;
+                    continue;
+                }
+                cx.fail("pulse IRQ is unconnected");
+                return;
+            };
+            match line {
+                InterruptLine::Core { core, line } => {
+                    if let Err(error) = cx.raise_irq(core, line) {
+                        cx.fail(error);
+                        return;
+                    }
+                }
+                InterruptLine::Shared(line) => cx.set_irq(line, true),
+            }
+            c.due = if one_shot || c.words[0] & 0x4000 != 0 {
+                None
+            } else {
+                due.checked_add((1 + (cx.now() - due) / c.interval) * c.interval)
+            };
         }
     }
     fn event(&mut self, cx: &mut Cx<'_>, _: u64) {
@@ -582,3 +633,6 @@ mod input_tests;
 #[cfg(test)]
 #[path = "pulse/interval_tests.rs"]
 mod interval_tests;
+#[cfg(test)]
+#[path = "pulse/one_shot_tests.rs"]
+mod one_shot_tests;

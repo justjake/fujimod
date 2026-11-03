@@ -11,6 +11,7 @@ pub fn register_interface_models(constructors: &mut Constructors) {
     constructors.add("gpio", gpio);
     constructors.add("exr2-pulse", pulse_unit);
     constructors.add("block86000", block86000);
+    constructors.add("blocka8000", blocka8000);
     constructors.add("hdmi-sink", hdmi_sink);
     constructors.add("exr-system-control", exr_system_control);
     constructors.add("exr-clocks", exr_clocks);
@@ -161,6 +162,15 @@ fn block86000(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
     Ok(Built::Device(Box::new(pulse::block86000::Block86000::new(
         options,
     ))))
+}
+
+fn blocka8000(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
+    let Model::Blocka8000 { options } = model else {
+        return Err("constructor called for another model kind".into());
+    };
+    Ok(Built::Device(Box::new(
+        fujimod_emulator_devices::exr::blocka8000::Blocka8000::new(options),
+    )))
 }
 
 fn hdmi_sink(builder: Builder<'_>, model: Model) -> Result<Built, String> {

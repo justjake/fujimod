@@ -34,6 +34,7 @@ fn unit() -> LensUnit {
         PulseOptions {
             counter_channels: Vec::new(),
             timer_channels: Vec::new(),
+            one_shot_channels: Vec::new(),
             quadrature: false,
             initial_phase: 0,
             capture_channel: None,

@@ -333,6 +333,9 @@ pub enum Model {
     Block86000 {
         options: pulse::block86000::Options,
     },
+    Blocka8000 {
+        options: fujimod_emulator_devices::exr::blocka8000::Options,
+    },
     Companion {
         options: serde_json::Value,
     },
@@ -516,6 +519,7 @@ impl Model {
             Model::Encoder { .. } => "encoder",
             Model::I2cMotorBridge { .. } => "i2c-motor-bridge",
             Model::Block86000 { .. } => "block86000",
+            Model::Blocka8000 { .. } => "blocka8000",
             Model::Companion { .. } => "companion",
             Model::Fe80Processing { .. } => "fe80-processing",
             Model::Formatter { .. } => "formatter",

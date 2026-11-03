@@ -9,6 +9,7 @@ fn unit(quadrature: bool) -> PulseUnit {
         Options {
             counter_channels: vec![],
             timer_channels: vec![],
+            one_shot_channels: vec![],
             quadrature,
             initial_phase: 0,
             capture_channel: (!quadrature).then_some(1),
