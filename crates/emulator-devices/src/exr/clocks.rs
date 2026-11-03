@@ -1,10 +1,13 @@
-//! EXR clock mux/PLL latches. PLL +34 enable/lock use virtual settling time.
+//! EXR clock mux/PLL latches; the PLL offset and the latch set are declared
+//! inputs. PLL enable/lock use virtual settling time.
 //! Frequencies and analog lock timing are unmeasured declared inputs.
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
 
 const BASE: u64 = 0xfff88000;
-const PLL: usize = 0x34 / 4;
+/// Read-only readiness word; bit 16 is `reset_ready`.
+const READY: u32 = 0x80;
+const WORDS: usize = 0x88 / 4;
 const ENABLE: u32 = 1 << 28;
 const LOCKED: u32 = 1 << 24;
 #[derive(Deserialize)]
@@ -12,6 +15,10 @@ const LOCKED: u32 = 1 << 24;
 pub struct Options {
     pub settle_ticks: u64,
     pub reset_ready: bool,
+    /// Byte offset of the PLL enable/lock register.
+    pub pll: u32,
+    /// Byte offsets of the plain read/write latch registers.
+    pub latches: Vec<u32>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -21,6 +28,10 @@ struct State {
 }
 pub struct Clocks {
     options: Options,
+    /// Word index of the declared PLL register.
+    pll: usize,
+    /// Word indices of the declared latch registers.
+    latches: Vec<usize>,
     state: State,
 }
 impl Clocks {
@@ -28,20 +39,53 @@ impl Clocks {
         if options.settle_ticks == 0 {
             return Err("EXR PLL needs positive settling time".into());
         }
-        let mut registers = vec![0; 0x88 / 4];
-        registers[0x80 / 4] = u32::from(options.reset_ready) << 16;
+        fn word(offset: u32, role: &str) -> Result<usize, String> {
+            if !offset.is_multiple_of(4) || offset >= 0x88 {
+                return Err(format!(
+                    "EXR clock {role} offset {offset:#x} is not an aligned word below 0x88"
+                ));
+            }
+            if offset == READY {
+                return Err(format!(
+                    "EXR clock {role} offset {offset:#x} is the readiness word"
+                ));
+            }
+            Ok(offset as usize / 4)
+        }
+        let pll = word(options.pll, "PLL")?;
+        let mut latches = Vec::with_capacity(options.latches.len());
+        for &offset in &options.latches {
+            let latch = word(offset, "latch")?;
+            if latch == pll {
+                return Err(format!(
+                    "EXR clock latch offset {offset:#x} is the PLL register"
+                ));
+            }
+            if latches.contains(&latch) {
+                return Err(format!("EXR clock latch offset {offset:#x} is repeated"));
+            }
+            latches.push(latch);
+        }
+        let mut registers = vec![0; WORDS];
+        registers[READY as usize / 4] = u32::from(options.reset_ready) << 16;
         Ok(Self {
             options,
+            pll,
+            latches,
             state: State {
                 registers,
                 due: None,
             },
         })
     }
-    fn index(address: u64, size: u8) -> Option<usize> {
+    fn index(&self, address: u64, size: u8) -> Option<usize> {
         let offset = address.checked_sub(BASE)?;
-        (size == 4 && offset.is_multiple_of(4) && matches!(offset, 0..=0x38 | 0x80 | 0x84))
-            .then_some((offset / 4) as usize)
+        if size != 4 || !offset.is_multiple_of(4) || offset >= 0x88 {
+            return None;
+        }
+        let index = (offset / 4) as usize;
+        (index == self.pll || index == READY as usize / 4 || self.latches.contains(&index))
+            .then_some(index)
     }
 }
 impl Device for Clocks {
@@ -50,7 +94,7 @@ impl Device for Clocks {
         "exr-clock-control"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
-        match Self::index(address, size) {
+        match self.index(address, size) {
             Some(index) => self.state.registers[index].into(),
             None => {
                 cx.unmodeled();
@@ -59,7 +103,7 @@ impl Device for Clocks {
         }
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
-        let Some(index) = Self::index(address, size) else {
+        let Some(index) = self.index(address, size) else {
             cx.unmodeled();
             return;
         };
@@ -67,11 +111,11 @@ impl Device for Clocks {
             cx.fail("EXR clock word exceeds 32 bits");
             return;
         };
-        if index == 0x80 / 4 {
+        if index == READY as usize / 4 {
             cx.fail("EXR clock readiness is read-only");
             return;
         }
-        if index == PLL {
+        if index == self.pll {
             let due = if word & ENABLE != 0 {
                 let Some(due) = cx.now().checked_add(self.options.settle_ticks) else {
                     cx.fail("EXR PLL deadline overflow");
@@ -92,12 +136,12 @@ impl Device for Clocks {
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         if self.state.due.is_some_and(|due| due <= cx.now()) {
-            self.state.registers[PLL] |= LOCKED;
+            self.state.registers[self.pll] |= LOCKED;
             self.state.due = None;
         }
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
-        Self::index(address, size).is_some()
+        self.index(address, size).is_some()
     }
     fn fingerprint(&self) -> Result<serde_json::Value, String> {
         Ok(self.save())
@@ -107,9 +151,9 @@ impl Device for Clocks {
     }
     fn restore(&mut self, value: &serde_json::Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        if state.registers.len() != 0x88 / 4
-            || state.registers[0x80 / 4] != u32::from(self.options.reset_ready) << 16
-            || state.due.is_some() && state.registers[PLL] & (ENABLE | LOCKED) != ENABLE
+        if state.registers.len() != WORDS
+            || state.registers[READY as usize / 4] != u32::from(self.options.reset_ready) << 16
+            || state.due.is_some() && state.registers[self.pll] & (ENABLE | LOCKED) != ENABLE
         {
             return Err("invalid EXR clock checkpoint".into());
         }
@@ -123,9 +167,16 @@ mod tests {
     use crate::test_host::{TestHost, advance, read, write};
     #[test]
     fn pll_locks_only_at_the_enabled_register_deadline_and_inspection_is_passive() {
+        // The register layout this model fixed before the offsets were declared.
         let mut model = Clocks::new(Options {
             settle_ticks: 17,
             reset_ready: true,
+            pll: 0x34,
+            latches: (0..=0x38)
+                .step_by(4)
+                .filter(|&o| o != 0x34)
+                .chain([0x84])
+                .collect(),
         })
         .unwrap();
         let mut host = TestHost::new();
@@ -158,5 +209,56 @@ mod tests {
         advance(&mut model, &mut host, 1000);
         assert_eq!(read(&mut model, &mut host, BASE + 0x34), 7);
         assert!(host.effects.is_empty());
+    }
+    #[test]
+    fn pll_offset_and_latches_are_declared() {
+        let mut model = Clocks::new(Options {
+            settle_ticks: 5,
+            reset_ready: false,
+            pll: 0x40,
+            latches: vec![0x0, 0x28, 0x58, 0x5c, 0x84],
+        })
+        .unwrap();
+        let mut host = TestHost::new();
+        write(&mut model, &mut host, BASE + 0x40, ENABLE | 3);
+        assert_eq!(
+            read(&mut model, &mut host, BASE + 0x40),
+            u64::from(ENABLE | 3)
+        );
+        advance(&mut model, &mut host, 4);
+        assert_eq!(
+            read(&mut model, &mut host, BASE + 0x40),
+            u64::from(ENABLE | 3)
+        );
+        advance(&mut model, &mut host, 5);
+        assert_eq!(
+            read(&mut model, &mut host, BASE + 0x40),
+            u64::from(ENABLE | LOCKED | 3)
+        );
+        write(&mut model, &mut host, BASE + 0x58, 0x1234_5678);
+        assert_eq!(read(&mut model, &mut host, BASE + 0x58), 0x1234_5678);
+        write(&mut model, &mut host, BASE + 0x5c, 0x9abc_def0);
+        assert_eq!(read(&mut model, &mut host, BASE + 0x5c), 0x9abc_def0);
+        assert!(!model.pollable(BASE + 0x34, 4));
+        let mut cx = host.cx();
+        assert_eq!(model.read(&mut cx, BASE + 0x34, 4), 0);
+        assert!(cx.is_unmodeled());
+    }
+    #[test]
+    fn invalid_pll_and_latches_are_rejected() {
+        let options = |pll: u32, latches: Vec<u32>| Options {
+            settle_ticks: 5,
+            reset_ready: false,
+            pll,
+            latches,
+        };
+        assert!(Clocks::new(options(0x80, vec![])).is_err());
+        assert!(Clocks::new(options(0x34, vec![0x80])).is_err());
+        assert!(Clocks::new(options(0x34, vec![0x34])).is_err());
+        assert!(Clocks::new(options(0x34, vec![0x20, 0x20])).is_err());
+        assert!(Clocks::new(options(0x36, vec![])).is_err());
+        assert!(Clocks::new(options(0x34, vec![0x84, 0x86])).is_err());
+        assert!(Clocks::new(options(0x34, vec![0x88])).is_err());
+        assert!(Clocks::new(options(0x34, vec![0x84, 0x0])).is_ok());
     }
 }
