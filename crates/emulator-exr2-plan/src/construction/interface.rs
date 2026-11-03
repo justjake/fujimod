@@ -12,7 +12,7 @@ pub fn register_interface_models(constructors: &mut Constructors) {
     constructors.add("exr2-pulse", pulse_unit);
     constructors.add("block86000", block86000);
     constructors.add("blocka8000", blocka8000);
-    constructors.add("exr-display-layer", exr_display_layer);
+    constructors.add("exr-display-pipe", exr_display_pipe);
     constructors.add("hdmi-sink", hdmi_sink);
     constructors.add("exr-system-control", exr_system_control);
     constructors.add("exr-clocks", exr_clocks);
@@ -174,12 +174,18 @@ fn blocka8000(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
     )))
 }
 
-fn exr_display_layer(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
-    let Model::ExrDisplayLayer { options } = model else {
+fn exr_display_pipe(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
+    let Model::ExrDisplayPipe { options, irq } = model else {
         return Err("constructor called for another model kind".into());
     };
+    if let Some(irq) = irq {
+        line(irq)?;
+    }
     Ok(Built::Device(Box::new(
-        fujimod_emulator_devices::exr::display_layer::DisplayLayer::new(options)?,
+        fujimod_emulator_devices::exr::display_pipe::DisplayPipe::new(
+            options,
+            fujimod_emulator_devices::exr::display_pipe::Wiring { irq },
+        )?,
     )))
 }
 
