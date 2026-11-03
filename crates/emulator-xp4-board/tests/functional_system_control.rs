@@ -88,3 +88,25 @@ fn selection_special_owns_exactly_three_words_and_leaves_b14_to_its_existing_own
     v["xp4_functional_system_control"] = cfg;
     assert!(Session::new(serde_json::from_value(v).unwrap(), None, vec![]).is_err());
 }
+
+#[test]
+fn base_parameter_family_reuses_request_ownership_and_rejects_all_added_window_overlaps() {
+    let mut cfg = config();
+    cfg["configuration_requests"] = json!({"initial_values": vec![0; 52], "completion_ticks": vec![8; 20],
+        "base_parameters": {"initial_pairs": vec![[0, 0]; 13], "initial_status": vec![1; 13],
+            "request_ticks": vec![8; 13], "settle_ticks": vec![32; 13]}});
+    let mut v = input(); v["xp4_functional_system_control"] = cfg.clone();
+    let session = Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).unwrap();
+    let state: Value = serde_json::from_str(&session.device_state_json()["xp4-functional-system-control"]).unwrap();
+    assert!(state["configuration_state"]["base_state"].is_object());
+    for base in fujimod_emulator_xp4_io::base_parameter::BASES {
+        for address in [base, base + 8, base + 0x80, base + 0xf0] {
+            let mut bad = v.clone(); bad["control_requests"] = json!([[address, 8]]);
+            let error = Session::new(serde_json::from_value(bad).unwrap(), None, vec![]).err().unwrap();
+            assert!(error.contains("Overlapping"), "{error}");
+        }
+    }
+    cfg["configuration_requests"]["base_parameters"]["initial_status"][0] = json!(2);
+    v["xp4_functional_system_control"] = cfg;
+    assert!(Session::new(serde_json::from_value(v).unwrap(), None, vec![]).is_err());
+}
