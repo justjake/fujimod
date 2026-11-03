@@ -222,6 +222,16 @@ impl Mailbox<'_> {
             Request::ReadAt { path, offset, size } => {
                 self.require_mount_abi()?;
                 self.path(&path).await?;
+                if u32_at(&self.descriptor, 56) & 1 != 0 && size <= self.capacity {
+                    self.write(self.p[6], &offset.to_le_bytes()).await?;
+                    let count = self.command(14, size).await?;
+                    require(count <= size, "Invalid file range read count")?;
+                    return Ok(Response::Bytes(if count == 0 {
+                        Vec::new()
+                    } else {
+                        self.read(self.p[6], count).await?
+                    }));
+                }
                 self.command(1, 0).await?;
                 self.seek(offset).await?;
                 let mut data = Vec::with_capacity(size as usize);

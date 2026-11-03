@@ -19,7 +19,7 @@ const CALL: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/call.bin"));
 const IMAGE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/card.bin"));
 const SHARED: u32 = 0x2000;
 const BUFFER: u32 = 0x3000;
-const CAPACITY: u32 = 1 << 20;
+const CAPACITY: u32 = 8 << 20;
 const ALLOCATION: u32 = BUFFER + CAPACITY + 32;
 const ALIAS: u32 = 0x40000000;
 fn require(ok: bool, message: &str) -> Result<()> {
@@ -342,7 +342,7 @@ impl Service {
                 shared + 152,
                 shared + 156,
                 shared + 160,
-                0,
+                1, // Descriptor feature: one asynchronous open/seek/read/close.
                 0,
             ];
             data[..64].copy_from_slice(&words(&api));

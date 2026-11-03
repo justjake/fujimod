@@ -129,6 +129,7 @@ fn cheap_or_unadmitted_groups_use_only_the_original_cpu_spans() {
                 corrupt: None,
                 short: false,
             };
+            let before = session.round_trips();
             verify_sha256(
                 &mut session,
                 limits(),
@@ -137,6 +138,11 @@ fn cheap_or_unadmitted_groups_use_only_the_original_cpu_spans() {
             )
             .await
             .unwrap();
+            assert_eq!(
+                session.round_trips() - before,
+                1,
+                "all bounded disjoint CPU reads share one host wait"
+            );
             assert!(io.reads.is_empty());
             assert!(
                 state

@@ -349,10 +349,18 @@ pub(crate) async fn check_camera(
 }
 
 async fn check_code(access: &mut Access<'_>, bulk: &FirmwareBulk) -> Result<()> {
-    for check in &bulk.code_checks {
-        let bytes = access
-            .raw(check.address | bulk.code_alias, check.size)
-            .await?;
+    let ranges = bulk
+        .code_checks
+        .iter()
+        .map(|check| {
+            memory_range(BulkRange {
+                address: check.address | bulk.code_alias,
+                size: check.size,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let bytes = memory::read_ranges(access.session, &ranges, access.limits.memory).await?;
+    for (check, bytes) in bulk.code_checks.iter().zip(bytes) {
         require(
             hex(&checks::sha256_bytes(&bytes)) == check.sha256,
             &format!("Stock code differs: {}", check.name),

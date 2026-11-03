@@ -14,6 +14,7 @@ struct service {
     u32 operations, enqueue, handle, source, functions[FUNCTIONS];
     u32 directory_started, skip, include_directories;
     unsigned char first[60], command[12], cursor[136];
+    u32 range_offset, range_size, range_status;
 };
 static struct service *active = (void *)1;
 /* Both the query task and asynchronous storage callbacks use the uncached
@@ -38,6 +39,30 @@ static void opened(int status, int handle) {
 }
 static void transferred(int status, int count) { current()->count = count; done(status); }
 static void closed(int status) { current()->handle = UINT32_MAX; done(status); }
+static void range_closed(int status) {
+    struct service *s=current(); s->handle=UINT32_MAX;
+    done(status ? status : s->range_status);
+}
+static void range_close(int status) {
+    struct service *s=current(); s->range_status=status;
+    ((int (*)(cb1,int,u32,int))(uintptr_t)s->functions[CLOSE])(range_closed,s->handle,0,0);
+}
+static void range_read(int status,int count) {
+    current()->count=count; range_close(status);
+}
+static void range_seek(int status) {
+    struct service *s=current();
+    if(status) { range_close(status); return; }
+    ((int (*)(cb2,int,int,void *))(uintptr_t)s->functions[READ])(
+        range_read,s->handle,s->range_size,(void *)(uintptr_t)s->api[9]);
+}
+static void range_open(int status,int handle) {
+    struct service *s=current();
+    if(status) { done(status); return; }
+    s->handle=handle;
+    ((void (*)(cb1,int,u32,int,int))(uintptr_t)s->functions[SEEK])(
+        range_seek,handle,s->range_offset,0,0);
+}
 static int translate(int status) {
     struct service *s = current();
     return ((int (*)(u32,int))(uintptr_t)s->functions[TRANSLATE])(0x2c06, status);
@@ -105,15 +130,20 @@ unsigned char card_service(struct service *s, u32 *output) {
         ((submit)(uintptr_t)s->functions[CPU_CALL])(1,s->functions[INSTRUCTION_BARRIER],0,0);
         done(0); return 0;
     }
-    if (op==1 || op==5 || op==7 || op==8 || op==9 || op==10)
+    if (op==1 || op==5 || op==7 || op==8 || op==9 || op==10 || op==14)
         s->path[0] = ((int (*)(void))(uintptr_t)s->functions[DRIVE])();
-    if ((op==1 || op==5 || op==7 || op==8 || op==9 || op==10) && s->handle!=UINT32_MAX) {
+    if ((op==1 || op==5 || op==7 || op==8 || op==9 || op==10 || op==14) && s->handle!=UINT32_MAX) {
         done(-16); return 0;
     }
     if ((op==2 || op==3 || op==4 || op==6 || op==11 || op==12) && s->handle==UINT32_MAX) {
         done(-16); return 0;
     }
-    if (op==1 || op==5 || op==9) {
+    if (op==14) {
+        if (!size || size>s->capacity) { done(-22); return 0; }
+        s->range_offset=word((void *)(uintptr_t)s->api[9]);
+        s->range_size=size; s->range_status=0; s->count=0;
+        ((int (*)(cb2,const char *,int))(uintptr_t)s->functions[OPEN])(range_open,s->path,0);
+    } else if (op==1 || op==5 || op==9) {
         ((int (*)(cb2,const char *,int))(uintptr_t)s->functions[OPEN])(
             opened,s->path,op==1 ? 0 : op==5 ? 2 : 1);
     } else if (op==2 || op==6) {

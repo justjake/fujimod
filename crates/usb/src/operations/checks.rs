@@ -113,9 +113,11 @@ pub async fn verify_sha256(
                 }
             }
         } else {
-            for index in group.members {
+            let ranges: Vec<_> = group.members.iter().map(|&i| checks[i].range).collect();
+            let raw = super::memory::read_ranges(session, &ranges, limits).await?;
+            for (index, bytes) in group.members.into_iter().zip(raw) {
                 let check = &checks[index];
-                if !region_matches(session, check.range, limits, check.expected).await? {
+                if sha256_bytes(&bytes) != check.expected {
                     return Err(Error::Card(format!(
                         "Code differs at {:#x}",
                         check.range.address().0

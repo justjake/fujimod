@@ -120,6 +120,20 @@ impl Camera {
                 count = raw.len() as u32;
                 self.write(0x41000, &raw);
             }
+            14 => {
+                assert!(self.opened.is_none());
+                assert_eq!(self.word(0x4011c), u32::MAX);
+                let offset = self.word(0x41000) as usize;
+                let data = &self.files[&path];
+                let n = (size as usize).min(data.len().saturating_sub(offset));
+                let raw = if n == 0 {
+                    vec![]
+                } else {
+                    data[offset..offset + n].to_vec()
+                };
+                self.write(0x41000, &raw);
+                count = n as u32;
+            }
             _ => panic!("Unexpected mailbox operation {op}"),
         }
         self.put(0x40104, 0);
@@ -464,6 +478,54 @@ fn installed_report_service_uses_the_same_file_operations_and_preserves_source_p
         .await
         .unwrap();
         assert!(camera.lock().unwrap().files.is_empty());
+    })
+}
+
+#[test]
+fn owned_range_read_is_one_operation_and_preserves_eof_and_closed_handles() {
+    block_on(async {
+        let camera = camera();
+        {
+            let mut c = camera.lock().unwrap();
+            c.write(
+                0x40000,
+                &words(&[
+                    0x314c4946, 3, 123, 0x40100, 0x40104, 0x40108, 0x4010c, 0x40110, 0x40200,
+                    0x41000, 0x40114, 0x40118, 0x4011c, 0x40120, 1, 0,
+                ]),
+            );
+            c.put(0x40100, 64);
+            c.put(0x4011c, u32::MAX);
+        }
+        let mut p = profile();
+        p.mechanism = Mechanism::Mailbox {
+            search_address: 0x40000,
+            search_bytes: 0x4000,
+            address_alias: 0,
+            build: Some(123),
+        };
+        let mut session = peer_session(Endpoint(camera.clone()), 8192, None)
+            .await
+            .unwrap();
+        for (offset, expected) in [(1, vec![2]), (2, vec![])] {
+            let Response::Bytes(bytes) = execute(
+                &mut session,
+                limits(),
+                &p,
+                Request::ReadAt {
+                    path: "A:\\OLD.BIN".into(),
+                    offset,
+                    size: 16,
+                },
+            )
+            .await
+            .unwrap() else {
+                panic!()
+            };
+            assert_eq!(bytes, expected);
+            assert!(camera.lock().unwrap().opened.is_none());
+        }
+        assert_eq!(camera.lock().unwrap().word(0x40114), 2);
     })
 }
 fn restored(c: &Camera) {

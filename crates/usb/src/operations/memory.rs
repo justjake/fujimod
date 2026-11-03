@@ -82,6 +82,16 @@ pub async fn read_range(
     range: MemoryRange,
     limits: DebugMemoryLimits,
 ) -> Result<Vec<u8>> {
+    Ok(read_ranges(session, &[range], limits).await?.remove(0))
+}
+
+/// Read disjoint spans in bounded command batches, without reading their gaps.
+/// Returned buffers have the same order and exact lengths as the input spans.
+pub async fn read_ranges(
+    session: &mut Session,
+    ranges: &[MemoryRange],
+    limits: DebugMemoryLimits,
+) -> Result<Vec<Vec<u8>>> {
     let budget = session.max_reply_bytes().get();
     let maximum = limits
         .read
@@ -95,17 +105,25 @@ pub async fn read_range(
         });
     }
     let mut commands = Vec::new();
-    let mut offset = 0;
-    while let Some(part) = chunk(range, offset, maximum) {
-        commands.push(ReadMemory::new(part, limits)?);
-        offset += part.length().get();
+    for (index, &range) in ranges.iter().enumerate() {
+        let mut offset = 0;
+        while let Some(part) = chunk(range, offset, maximum) {
+            commands.push((index, ReadMemory::new(part, limits)?));
+            offset += part.length().get();
+        }
     }
-    let mut data = Vec::with_capacity(range.length().get() as usize);
+    let mut data: Vec<Vec<u8>> = ranges
+        .iter()
+        .map(|range| Vec::with_capacity(range.length().get() as usize))
+        .collect();
     let mut commands = commands.into_iter().peekable();
     while commands.peek().is_some() {
-        let group: Vec<ReadMemory> = commands.by_ref().take(BATCH_COMMANDS).collect();
-        for part in session.read_memory_many(group).await? {
-            data.extend_from_slice(&part);
+        let (indices, group): (Vec<_>, Vec<_>) = commands.by_ref().take(BATCH_COMMANDS).unzip();
+        for (index, part) in indices
+            .into_iter()
+            .zip(session.read_memory_many(group).await?)
+        {
+            data[index].extend_from_slice(&part);
         }
     }
     Ok(data)
