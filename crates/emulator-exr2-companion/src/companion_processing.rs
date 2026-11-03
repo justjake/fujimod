@@ -1,9 +1,12 @@
-//! FE80 addressed parameter DMA and a declared fourteen-threshold luma engine.
+//! FE80 addressed parameter DMA for declared luma and RAW processing laws.
 //! Uploads remain opaque in ProgramUpload. This separately selected datapath
 //! consumes only channel descriptors, image bytes, frame edges, and IRQ wiring.
 use super::companion;
-use fujimod_emulator_imaging::exr2_isp::dma;
+mod raw_processing;
+#[cfg(test)]
+mod raw_tests;
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_imaging::exr2_isp::dma;
 use fujimod_emulator_imaging::scene::ImageFrames;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -20,11 +23,18 @@ pub struct Wiring {
     pub routes: fujimod_emulator_devices::exr2::irq_routes::IrqRoutes,
 }
 #[derive(Clone, Serialize, Deserialize)]
+struct DmaOutput {
+    address: u32,
+    #[serde(with = "fujimod_emulator_devices::checkpoint::bytes")]
+    bytes: Vec<u8>,
+}
+#[derive(Clone, Serialize, Deserialize)]
 struct Job {
+    #[serde(with = "fujimod_emulator_devices::checkpoint::bytes")]
     packet: Vec<u8>,
     started: u64,
     due: Option<u64>,
-    output: Vec<u8>,
+    outputs: Vec<DmaOutput>,
     route: fujimod_emulator_devices::exr2::irq_routes::Irq,
 }
 #[derive(Serialize, Deserialize)]
@@ -117,22 +127,25 @@ impl Processing {
             return Err("invalid FE80 processing checkpoint registers".into());
         }
         if let Some(job) = &saved.job {
-            if job.packet.len() != 44
-                || job.output.len() != 56
-                || job.route.line != self.options.irq
-                || job.route.core > 1
-            {
-                return Err("invalid FE80 processing checkpoint job".into());
+            if job.route.line != self.options.irq || job.route.core > 1 {
+                return Err("invalid FE80 processing checkpoint IRQ".into());
             }
-            let (width, height, x, y, w, h) = Self::geometry(&job.packet)?;
-            dma::physical(word(&job.packet, 0).into(), width * height * 2)?;
-            dma::physical(word(&job.packet, 4).into(), 56)?;
-            dma::physical(word(&job.packet, 40).into(), 256)?;
+            let (pixels, spans) = Self::output_spans(&job.packet)?;
+            if spans.len() != job.outputs.len()
+                || spans
+                    .iter()
+                    .zip(&job.outputs)
+                    .any(|(&(address, length), output)| {
+                        address != output.address || length != output.bytes.len()
+                    })
+            {
+                return Err("invalid FE80 processing checkpoint DMA outputs".into());
+            }
             let due = job
                 .started
-                .checked_add((w * h) as u64 / self.options.pixels_per_tick + 1);
-            if x + w > width || y + h > height || job.due.is_none() || job.due != due {
-                return Err("invalid FE80 processing checkpoint geometry or deadline".into());
+                .checked_add(pixels / self.options.pixels_per_tick + 1);
+            if job.due.is_none() || job.due != due {
+                return Err("invalid FE80 processing checkpoint deadline".into());
             }
         }
         Ok(saved)
@@ -163,23 +176,27 @@ impl Processing {
             return Err("FE80 processing channel already has work".into());
         }
         let desc = cx.ram_bytes(dma::physical(pointer.into(), 16)?, 16)?;
-        if word(&desc, 0) != 0x03000207 || word(&desc, 8) != 44 || word(&desc, 12) != 0 {
-            return Err("FE80 luma engine requires one 44-byte parameter DMA descriptor".into());
+        let length = word(&desc, 8) as usize;
+        if word(&desc, 0) != 0x03000207 || ![44, 80].contains(&length) || word(&desc, 12) != 0 {
+            return Err(
+                "FE80 requires one supported parameter DMA descriptor (44 or 80 bytes)".into(),
+            );
         }
-        let packet = cx.ram_bytes(dma::physical(word(&desc, 4).into(), 44)?, 44)?;
-        let (width, height, x, y, w, h) = Self::geometry(&packet)?;
-        dma::physical(word(&packet, 0).into(), width * height * 2)?;
-        dma::physical(word(&packet, 4).into(), 56)?;
-        if x + w > width || y + h > height {
-            return Err("FE80 luma window escapes input raster".into());
-        }
-        // The descriptor addresses an already captured memory raster. Latch
-        // it at START; waiting for another sensor edge would pair its result
-        // with a later exposure and can halve a continuous AF stream.
-        let output = Self::calculate(cx, &packet)?;
+        let packet = cx.ram_bytes(dma::physical(word(&desc, 4).into(), length)?, length)?;
+        let (pixels, _) = Self::output_spans(&packet)?;
+        // Both parameter formats address captured memory. START freezes all
+        // data effects; later sensor edges cannot change an in-flight job.
+        let outputs = if length == 44 {
+            vec![DmaOutput {
+                address: word(&packet, 4),
+                bytes: Self::calculate(cx, &packet)?,
+            }]
+        } else {
+            raw_processing::Request::parse(&packet)?.calculate(cx)?
+        };
         let due = cx
             .now()
-            .checked_add((w * h) as u64 / self.options.pixels_per_tick + 1)
+            .checked_add(pixels / self.options.pixels_per_tick + 1)
             .ok_or("FE80 processing deadline overflow")?;
         self.last_frame = self
             .wiring
@@ -193,10 +210,27 @@ impl Processing {
             packet,
             started: cx.now(),
             due: Some(due),
-            output,
+            outputs,
             route: self.wiring.routes.latch(self.options.irq)?,
         });
         Ok(())
+    }
+    fn output_spans(p: &[u8]) -> Result<(u64, Vec<(u32, usize)>), String> {
+        if p.len() == 80 {
+            let request = raw_processing::Request::parse(p)?;
+            return Ok((request.pixels(), request.output_spans()?));
+        }
+        if p.len() != 44 {
+            return Err("invalid FE80 parameter packet length".into());
+        }
+        let (width, height, x, y, w, h) = Self::geometry(p)?;
+        if x + w > width || y + h > height {
+            return Err("FE80 luma window escapes input raster".into());
+        }
+        dma::physical(word(p, 0).into(), width * height * 2)?;
+        dma::physical(word(p, 4).into(), 56)?;
+        dma::physical(word(p, 40).into(), 256)?;
+        Ok(((w * h) as u64, vec![(word(p, 4), 56)]))
     }
     fn geometry(p: &[u8]) -> Result<(usize, usize, usize, usize, usize, usize), String> {
         let size = word(p, 8);
@@ -240,7 +274,9 @@ impl Processing {
         if let Some(job) = self.job.as_mut() {
             if job.due.is_some_and(|due| due <= cx.now()) {
                 self.wiring.routes.validate(job.route)?;
-                dma::write(cx, word(&job.packet, 4).into(), &job.output)?;
+                for output in &job.outputs {
+                    dma::write(cx, output.address.into(), &output.bytes)?;
+                }
                 self.registers.insert(0xfe80c100, 0x100);
                 self.registers.insert(0xfe80c440, 0x40000);
                 self.registers.insert(0xfe80d804, 0);
@@ -287,7 +323,7 @@ impl Processing {
                 return Err("unsupported FE80 input channel gate".into());
             }
         } else if gate && v == 1 {
-            return Err("FE80 luma engine supports parameter input channel zero only".into());
+            return Err("FE80 processing supports parameter input channel zero only".into());
         } else if [0xfe80c000, 0xfe80c400, 0xfe80c404, 0xfe80c800, 0xfe80c804].contains(&a) {
             let old = self.registers.get(&a).copied().unwrap_or(0);
             self.registers.insert(a, old & !v);
@@ -305,11 +341,17 @@ impl Processing {
 impl Device for Processing {
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         Ok(
-            fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.snapshot())?
-                .with_children(vec![self.upload.checkpoint()?]),
+            fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+                self.name(),
+                &self.snapshot(),
+            )?
+            .with_children(vec![self.upload.checkpoint()?]),
         )
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         if saved.children().len() != 1 || !saved.blobs().is_empty() {
             return Err("FE80 processing checkpoint transport differs".into());
         }
@@ -317,7 +359,10 @@ impl Device for Processing {
         self.validate_snapshot(saved.decode(self.name())?)
             .map(|_| ())
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         let state = saved.decode(self.name())?;
         self.upload.restore_checkpoint(&saved.children()[0])?;
@@ -326,7 +371,7 @@ impl Device for Processing {
     }
 
     fn name(&self) -> &'static str {
-        "fe80-luma-processing"
+        "fe80-parameter-processing"
     }
     fn read(&mut self, cx: &mut Cx<'_>, a: u64, size: u8) -> u64 {
         self.advance(cx);
@@ -383,27 +428,20 @@ impl Device for Processing {
         self.advance(cx);
     }
     fn save(&self) -> Value {
-        json!({"transport":self.upload.save(),"options":self.options,
-        "registers":self.registers,"job":self.job,"completed":self.completed,"last_frame":self.last_frame})
+        json!({"transport":self.upload.fingerprint().expect("FE80 transport fingerprint is infallible"),"options":self.options,
+        "registers":self.registers,"job":self.job.as_ref().map(|j| json!({
+            "packet":j.packet,"started":j.started,"due":j.due,"route":j.route,
+            "outputs":j.outputs.iter().map(|o|json!({"address":o.address,
+                "bytes":fujimod_emulator_devices::fingerprint::bytes(&o.bytes)})).collect::<Vec<_>>()
+        })),"completed":self.completed,"last_frame":self.last_frame})
     }
     fn fingerprint(&self) -> Result<Value, String> {
         Ok(self.save())
     }
-    fn restore(&mut self, v: &Value) -> Result<(), String> {
-        let mut fields = v
-            .as_object()
-            .ok_or("FE80 processing state must be an object")?
-            .clone();
-        let transport = fields
-            .remove("transport")
-            .ok_or("missing FE80 transport state")?;
-        let saved = self.validate_snapshot(
-            serde_json::from_value(Value::Object(fields))
-                .map_err(|e| format!("invalid FE80 processing state: {e}"))?,
-        )?;
-        self.upload.restore(&transport)?;
-        self.apply_snapshot(saved);
-        Ok(())
+    fn restore(&mut self, _v: &Value) -> Result<(), String> {
+        // JSON inspection omits captured DMA bytes. Only a typed binary
+        // checkpoint can restore all outputs and transport state atomically.
+        Err("FE80 parameter processing requires a binary checkpoint".into())
     }
 }
 
@@ -443,8 +481,8 @@ mod tests {
         }
     }
     use super::*;
-    use fujimod_emulator_devices::test_host::{TestHost, advance, write};
     use fujimod_emulator_devices::Host;
+    use fujimod_emulator_devices::test_host::{TestHost, advance, write};
     use fujimod_emulator_imaging::analysis::ImageLayout;
     fn fixture() -> (Processing, ImageFrames, TestHost) {
         let frames = ImageFrames::new(ImageLayout {
@@ -536,7 +574,8 @@ mod tests {
         let wire = std::sync::Arc::clone(&frames.0);
         let mut binary = Vec::new();
         ciborium::into_writer(&saved, &mut binary).unwrap();
-        let saved: fujimod_emulator_devices::checkpoint::Checkpoint = ciborium::from_reader(&*binary).unwrap();
+        let saved: fujimod_emulator_devices::checkpoint::Checkpoint =
+            ciborium::from_reader(&*binary).unwrap();
         assert_eq!(d.fingerprint().unwrap(), before);
         assert!(h.effects.is_empty());
         h.ram[0x6000..0x6020].fill(0);
@@ -603,13 +642,13 @@ mod tests {
     #[test]
     fn unknown_descriptor_and_corrupt_pending_state_refuse() {
         let (mut d, _, mut h) = fixture();
-        h.ram[0x4008..0x400c].copy_from_slice(&80u32.to_le_bytes());
+        h.ram[0x4008..0x400c].copy_from_slice(&76u32.to_le_bytes());
         write(&mut d, &mut h, 0xfe80c108, 0x4000);
         write(&mut d, &mut h, 0xfe80c440, 0x40001);
         let before = d.save();
         let mut cx = h.cx();
         d.write(&mut cx, 0xfe80c100, 4, 1);
-        assert!(cx.refusal().unwrap().contains("44-byte"));
+        assert!(cx.refusal().unwrap().contains("parameter DMA"));
         assert_eq!(d.save(), before);
         assert!(h.effects.is_empty());
         let mut corrupt = d.save();

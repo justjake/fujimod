@@ -1,5 +1,6 @@
-//! FFF47000 packed422 scaler. Register fields define address, pitch, dimensions
-//! and positive 16.16 steps; bilinear sampling is declared, not measured.
+//! FFF47000 packed422 and centered scalar scaler. Register fields define
+//! addresses, pitches, centers, phases and 16.16 steps. Bilinear sampling is
+//! a declared numerical approximation.
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_imaging::exr2_isp::dma::{Raster, Transfer};
@@ -22,6 +23,62 @@ fn has_zero_chroma(source: &[u8], raster: &Raster) -> bool {
                 .chunks_exact(4)
                 .any(|pair| pair[2] == 0 || pair[3] == 0)
         })
+}
+// Centers and the destination rectangle are integer sample coordinates;
+// phases are signed Q16 offsets. Scalar samples are little-endian U16.
+fn centered_scalar(
+    source: &[u8],
+    src: Raster,
+    dst: Raster,
+    step: [u32; 2],
+    phase: [u32; 2],
+    input_center: u32,
+    output_center: u32,
+    origin: [u32; 2],
+    out: &mut [u8],
+) -> Result<(), String> {
+    let coordinate = |axis: usize, index: usize| -> Result<(usize, usize, u64), String> {
+        let center = |word: u32| i64::from(word >> (axis * 16) & 8191);
+        let signed_phase = i64::from((phase[axis] << 2) as i32 >> 2);
+        let value = (center(input_center) << 16)
+            + (i64::from(origin[axis]) + index as i64 - center(output_center))
+                * i64::from(step[axis])
+            + signed_phase;
+        let bound = if axis == 0 { src.width } else { src.height };
+        if value < 0 || value > ((bound - 1) as i64) << 16 {
+            return Err("scaler centered span escapes source raster".into());
+        }
+        let first = (value >> 16) as usize;
+        Ok((first, (first + 1).min(bound - 1), (value & 65535) as u64))
+    };
+    // Validate both endpoints before touching the staging buffer.
+    for axis in 0..2 {
+        coordinate(axis, 0)?;
+        coordinate(
+            axis,
+            if axis == 0 {
+                dst.width - 1
+            } else {
+                dst.height - 1
+            },
+        )?;
+    }
+    for y in 0..dst.height {
+        let (y0, y1, dy) = coordinate(1, y)?;
+        for x in 0..dst.width {
+            let (x0, x1, dx) = coordinate(0, x)?;
+            let sample = |x, y| {
+                let i = y * src.pitch + x * 2;
+                u64::from(u16::from_le_bytes([source[i], source[i + 1]]))
+            };
+            let a = sample(x0, y0) * (65536 - dx) + sample(x1, y0) * dx;
+            let b = sample(x0, y1) * (65536 - dx) + sample(x1, y1) * dx;
+            let value = ((a * (65536 - dy) + b * dy + (1 << 31)) >> 32) as u16;
+            let i = (y * dst.width + x) * 2;
+            out[i..i + 2].copy_from_slice(&value.to_le_bytes());
+        }
+    }
+    Ok(())
 }
 impl Scaler {
     pub fn new(options: Options, irq: Irq) -> Result<Self, String> {
@@ -47,7 +104,7 @@ impl Scaler {
             height: (r[0x18 / 4] >> 16 & 8191) as usize,
             pitch: (r[0x14 / 4] & 32767) as usize * 2,
         };
-        let dst = Raster {
+        let mut dst = Raster {
             address: (r[0x20 / 4] & 0x3fffffff) as u64,
             width: (r[0x28 / 4] & 8191) as usize,
             height: (r[0x28 / 4] >> 16 & 8191) as usize,
@@ -55,12 +112,23 @@ impl Scaler {
         };
         src.validate(src.width * 2)?;
         dst.validate(dst.width * 2)?;
+        let centered = r[0x60 / 4] != 0 || r[0x64 / 4] != 0;
+        if centered
+            && (r[2] != 0
+                || [0x2c, 0x60, 0x64]
+                    .iter()
+                    .any(|&o| r[o / 4] & !0x1fff1fff != 0))
+        {
+            return Err("scaler centered scalar fields are unsupported".into());
+        }
         if self.dma.deadline().is_some()
             || r[0x7c / 4] & 0x1000 == 0
             || r[2] > 2
-            || [0x2c, 0x44, 0x48, 0x4c, 0x50, 0x58, 0x5c, 0x70]
+            || [0x44, 0x48, 0x50, 0x58, 0x70]
                 .iter()
                 .any(|&o| r[o / 4] != 0)
+            || !centered && [0x2c, 0x4c, 0x5c].iter().any(|&o| r[o / 4] != 0)
+            || centered && [0x4c, 0x5c].iter().any(|&o| r[o / 4] & !0x3fffffff != 0)
             || [src.width, dst.width, src.pitch / 2, dst.pitch / 2]
                 .iter()
                 .any(|v| v % 8 != 0)
@@ -76,22 +144,45 @@ impl Scaler {
         cx.ram_read(src.address, &mut self.source)?;
         // Retouch treats zero chroma as validity tags, including a neighboring
         // row. The bilinear-only implementation cannot render those inputs.
-        if mode == 1 && has_zero_chroma(&self.source, &src) {
+        if !centered && mode == 1 && has_zero_chroma(&self.source, &src) {
             return Err("scaler zero-chroma validity tags are unsupported".into());
         }
-        self.dma.prepare(cx.now(), self.delay, dst, dst.width * 2)?;
-        if let Err(e) = fujimod_emulator_image_processing::resample::bilinear(
-            &self.source,
-            src.width,
-            src.height,
-            src.pitch,
-            dst.width,
-            dst.height,
-            [r[0x40 / 4], r[0x54 / 4]],
-            &mut self.dma.pixels,
-        ) {
-            self.dma.cancel();
-            return Err(e);
+        if centered {
+            let origin = [r[0x2c / 4] & 8191, r[0x2c / 4] >> 16 & 8191];
+            if (origin[0] as usize + dst.width) * 2 > dst.pitch {
+                return Err("scaler destination rectangle exceeds row pitch".into());
+            }
+            dst.address += u64::from(origin[1]) * dst.pitch as u64 + u64::from(origin[0]) * 2;
+            self.dma.prepare(cx.now(), self.delay, dst, dst.width * 2)?;
+            if let Err(error) = centered_scalar(
+                &self.source,
+                src,
+                dst,
+                [r[0x40 / 4], r[0x54 / 4]],
+                [r[0x4c / 4], r[0x5c / 4]],
+                r[0x60 / 4],
+                r[0x64 / 4],
+                origin,
+                &mut self.dma.pixels,
+            ) {
+                self.dma.cancel();
+                return Err(error);
+            }
+        } else {
+            self.dma.prepare(cx.now(), self.delay, dst, dst.width * 2)?;
+            if let Err(e) = fujimod_emulator_image_processing::resample::bilinear(
+                &self.source,
+                src.width,
+                src.height,
+                src.pitch,
+                dst.width,
+                dst.height,
+                [r[0x40 / 4], r[0x54 / 4]],
+                &mut self.dma.pixels,
+            ) {
+                self.dma.cancel();
+                return Err(e);
+            }
         }
         Ok(())
     }

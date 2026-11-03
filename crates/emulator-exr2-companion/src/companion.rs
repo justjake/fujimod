@@ -713,7 +713,14 @@ impl Device for ProgramUpload {
     fujimod_emulator_devices::checkpoint_fields!(state: State);
 
     fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
-        Ok(self.save())
+        let mut state = self.state.clone();
+        state.program.clear();
+        state.pending_program.clear();
+        let mut value = json!({"state":state,"options":self.options});
+        value["state"]["program"] = fujimod_emulator_devices::fingerprint::bytes(&self.state.program);
+        value["state"]["pending_program"] =
+            fujimod_emulator_devices::fingerprint::bytes(&self.state.pending_program);
+        Ok(value)
     }
 
     fn name(&self) -> &'static str {
