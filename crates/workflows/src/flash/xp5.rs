@@ -46,8 +46,9 @@ pub struct Backup {
     pub sha256: String,
     /// Physical page offsets covered by an uncorrectable NAND read.
     pub uncorrectable_page_offsets: Vec<u64>,
-    /// Largest ECC observation span; erased bursts may flag multiple pages.
+    /// Largest ECC observation span; completed bursts may flag multiple pages.
     pub uncorrectable_granularity_bytes: u32,
+    pub nand_read_stats: Option<super::NandReadStats>,
 }
 
 impl Payload {
@@ -512,6 +513,7 @@ async fn execute(
                 sha256: bulk::hex(&digest.hash.finalize()),
                 uncorrectable_page_offsets: Vec::new(),
                 uncorrectable_granularity_bytes: 0,
+                nand_read_stats: None,
             })
         }
         .await;

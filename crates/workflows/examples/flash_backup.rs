@@ -118,7 +118,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
-    if !(args.len() == 2 || args.len() == 3 && args[2] == "--execute") {
+    let diagnostic = match args.get(3).map(String::as_str) {
+        None => None,
+        Some("--diagnostic=corrected") => Some(flash::NandReadMode::Corrected),
+        Some("--diagnostic=uncorrected") => Some(flash::NandReadMode::Uncorrected),
+        _ => return Err("Unknown diagnostic mode".into()),
+    };
+    if !(args.len() == 2 || (args.len() == 3 || args.len() == 4) && args[2] == "--execute") {
         return Err("Usage: flash_backup ARTIFACT OUTPUT_DIRECTORY [--execute]".into());
     }
     let metadata = PathBuf::from(&args[0]);
@@ -185,9 +191,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .read(true)
         .write(true)
         .open(output.join("flash.partial"))?;
+    let size = if diagnostic.is_some() {
+        8 << 20
+    } else {
+        flash.window.size
+    };
     let mut sink = Sink {
         file,
-        size: flash.window.size,
+        size,
         spans: BTreeMap::new(),
         delivered: 0,
     };
@@ -217,28 +228,50 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut last = 0;
     let started = Instant::now();
     let mut progress_seconds = Vec::new();
-    let result = flash::backup(
-        &mut session,
-        &bulk,
-        &flash,
-        &artifact.payload,
-        &image,
-        limits,
-        &mut flash::Callbacks {
-            chunk: &mut |offset, bytes| sink.put(offset, &bytes),
-            progress: &mut |done, total| {
-                if done == 0 || done == total || done - last >= 1024 * 1024 {
-                    let elapsed = started.elapsed().as_secs_f64();
-                    println!("{done}/{total} bytes at {elapsed:.3}s");
-                    progress_seconds.push(serde_json::json!({"bytes":done,"seconds":elapsed}));
-                    timings.collect(&trace);
-                    last = done;
-                }
-                Ok(())
-            },
+    let mut callbacks = flash::Callbacks {
+        chunk: &mut |offset, bytes| {
+            sink.put(
+                offset - if diagnostic.is_some() { 64 << 20 } else { 0 },
+                &bytes,
+            )
         },
-    )
-    .await;
+        progress: &mut |done, total| {
+            if done == 0 || done == total || done - last >= 1024 * 1024 {
+                let elapsed = started.elapsed().as_secs_f64();
+                println!("{done}/{total} bytes at {elapsed:.3}s");
+                progress_seconds.push(serde_json::json!({"bytes":done,"seconds":elapsed}));
+                timings.collect(&trace);
+                last = done;
+            }
+            Ok(())
+        },
+    };
+    let result = if let Some(mode) = diagnostic {
+        flash::diagnose_nand(
+            &mut session,
+            &bulk,
+            &flash,
+            &artifact.payload,
+            &image,
+            limits,
+            64 << 20,
+            size as u32,
+            mode,
+            &mut callbacks,
+        )
+        .await
+    } else {
+        flash::backup(
+            &mut session,
+            &bulk,
+            &flash,
+            &artifact.payload,
+            &image,
+            limits,
+            &mut callbacks,
+        )
+        .await
+    };
     let workflow_seconds = started.elapsed().as_secs_f64();
     let closed = if session.state() == SessionState::Ready {
         session
@@ -253,7 +286,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     sink.file.sync_all()?;
     let mut report = serde_json::json!({"complete": false, "firmware_id": flash.firmware_id,
         "firmware_sha256": artifact.payload.firmware_sha256(),
-        "size": flash.window.size, "delivered": sink.delivered,
+        "size": size, "source_offset": if diagnostic.is_some() { 64u64 << 20 } else { 0 }, "diagnostic": args.get(3), "delivered": sink.delivered,
         "written_ranges": sink.spans.iter().map(|(&offset, &size)|
             serde_json::json!({"offset": offset, "size": size})).collect::<Vec<_>>(),
         "session_closed": closed.as_ref().is_ok_and(|v| *v),
@@ -263,6 +296,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     report["performance"]["workflow_seconds"] = workflow_seconds.into();
     report["performance"]["progress"] = progress_seconds.into();
     if let Ok(backup) = &result {
+        report["nand_read_stats"] = serde_json::json!(backup.nand_read_stats);
         report["uncorrectable_page_offsets"] = serde_json::json!(backup.uncorrectable_page_offsets);
         report["uncorrectable_granularity_bytes"] =
             serde_json::json!(backup.uncorrectable_granularity_bytes);

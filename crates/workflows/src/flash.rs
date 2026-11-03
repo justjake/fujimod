@@ -9,7 +9,17 @@ use fujimod_usb::ff80::Session;
 use serde::{Deserialize, Serialize};
 pub use xp5::Backup;
 /// Capture buffers use the stock bulk transport's MiB-scale transfers.
-pub const CAPTURE_CHUNK_BYTES: u32 = 1 << 20;
+pub const CAPTURE_CHUNK_BYTES: u32 = 8 << 20;
+
+/// Stock NAND execution counts, including the control read and ECC fallback.
+#[derive(Clone, Copy, Debug, Default, Serialize)]
+pub struct NandReadStats {
+    pub buffer_bytes: u64,
+    pub stock_calls: u64,
+    pub burst_calls: u64,
+    pub fallback_pages: u64,
+    pub uncorrectable_burst_pages: u64,
+}
 
 /// Data delivery and logical flash-byte progress. Progress starts at zero and
 /// advances after each successfully delivered chunk, excluding the control read.
@@ -61,6 +71,7 @@ impl Payload {
 pub(super) enum Selection {
     Whole,
     Range(BulkRange),
+    DiagnosticNand(BulkRange, NandReadMode),
 }
 impl Selection {
     fn range(self, flash: &FirmwareFlash) -> BulkRange {
@@ -69,12 +80,67 @@ impl Selection {
                 address: 0,
                 size: flash.window.size,
             },
-            Self::Range(range) => range,
+            Self::Range(range) | Self::DiagnosticNand(range, _) => range,
         }
     }
-    fn preserves_source(self) -> bool {
-        matches!(self, Self::Range(_))
+    fn controller_mode(self) -> u32 {
+        match self {
+            Self::DiagnosticNand(_, NandReadMode::Uncorrected) => 1,
+            _ => 0,
+        }
     }
+    fn allows_uncorrectable(self) -> bool {
+        !matches!(self, Self::Range(_))
+    }
+    fn preserves_source(self) -> bool {
+        !matches!(self, Self::Whole)
+    }
+}
+
+/// Diagnostic comparison only; uncorrected reads do not establish data integrity.
+#[derive(Clone, Copy)]
+pub enum NandReadMode {
+    Corrected,
+    Uncorrected,
+}
+
+/// Read a bounded diagnostic NAND range with explicit correction mode. The
+/// corrected control read is always required, and correction is restored after
+/// each uncorrected stock call, including completed error returns.
+pub async fn diagnose_nand(
+    session: &mut Session,
+    bulk: &FirmwareBulk,
+    flash: &FirmwareFlash,
+    payload: &Payload,
+    image: &[u8],
+    limits: Limits,
+    offset: u64,
+    size: u32,
+    mode: NandReadMode,
+    callbacks: &mut Callbacks<'_>,
+) -> bulk::Result<Backup> {
+    let target = enclosing(flash, offset, size)?;
+    if target.address != offset || target.size != u64::from(size) {
+        return Err(bulk::BulkError::Check(
+            "Diagnostic range must be page aligned".into(),
+        ));
+    }
+    let Payload::Exr2Query(p) = payload else {
+        return Err(bulk::BulkError::Check(
+            "Selected reader has no diagnostic NAND mode".into(),
+        ));
+    };
+    exr2::read(
+        session,
+        bulk,
+        flash,
+        p,
+        image,
+        limits,
+        Selection::DiagnosticNand(target, mode),
+        callbacks,
+    )
+    .await
 }
 
 pub async fn backup(

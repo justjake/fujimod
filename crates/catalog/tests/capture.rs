@@ -85,13 +85,22 @@ fn parallel_nand_requires_the_corrected_main_page_contract() {
                 nand.controller_mode,
                 nand.max_pages_per_call
             ),
-            (2048, 64, 0, if matches!(firmware, "x100t-111" | "x30-103" | "xt1-552") { 31 } else { 63 })
+            (
+                2048,
+                64,
+                0,
+                if matches!(firmware, "x100t-111" | "x30-103" | "xt1-552") {
+                    31
+                } else {
+                    63
+                }
+            )
         );
         let mut invalid = flash.clone();
         invalid.reader.nand.as_mut().unwrap().controller_mode = 1;
         assert!(invalid.validate().is_err());
         invalid.reader.nand.as_mut().unwrap().controller_mode = 0;
-        invalid.reader.nand.as_mut().unwrap().max_pages_per_call = 64;
+        invalid.reader.nand.as_mut().unwrap().max_pages_per_call = 65;
         assert!(invalid.validate().is_err());
     }
     for firmware in ["x100s-121", "x20-103"] {

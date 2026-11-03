@@ -214,7 +214,7 @@ fn reader_metadata_rejects_corrupt_code_unbounded_ranges_and_unsupported_geometr
         }])
         .collect();
     let p = Payload {
-        schema: 4,
+        schema: 6,
         firmware_id: "x70-110".into(),
         firmware_sha256: "c".repeat(64),
         sha256: bulk::hex(&sha256_bytes(&image)),

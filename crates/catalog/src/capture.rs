@@ -302,7 +302,7 @@ impl FirmwareFlash {
                     || nand.event_mode != 0
                     || nand.timeout_ms == 0
                     || nand.max_pages_per_call == 0
-                    || nand.max_pages_per_call > nand.pages_per_block.min(63)
+                    || nand.max_pages_per_call > nand.pages_per_block
                     || self.reader.alignment != nand.page_bytes
                     || ![nand.lock, nand.unlock]
                         .iter()
