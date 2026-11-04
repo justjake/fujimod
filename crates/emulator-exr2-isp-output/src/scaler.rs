@@ -37,40 +37,40 @@ fn centered_packed422(
     origin: [u32; 2],
     out: &mut [u8],
 ) -> Result<(), String> {
-    let coordinate = |axis: usize, index: usize| -> Result<(usize, usize, u64), String> {
+    let fixed_coordinate = |axis: usize, index: usize| -> i64 {
         let center = |word: u32| i64::from(word >> (axis * 16) & 8191);
         let signed_phase = i64::from((phase[axis] << 2) as i32 >> 2);
-        let value = (center(input_center) << 16)
+        (center(input_center) << 16)
             + (i64::from(origin[axis]) + index as i64 - center(output_center))
                 * i64::from(step[axis])
-            + signed_phase;
-        let bound = if axis == 0 { src.width } else { src.height };
-        if value < 0 || value > ((bound - 1) as i64) << 16 {
-            return Err("scaler centered span escapes source raster".into());
-        }
-        let first = (value >> 16) as usize;
-        Ok((first, (first + 1).min(bound - 1), (value & 65535) as u64))
+            + signed_phase
     };
-    // Validate both endpoints before touching the staging buffer.
+    let coordinate = |axis: usize, index: usize| -> (usize, usize, u64) {
+        let bound = if axis == 0 { src.width } else { src.height };
+        let value = fixed_coordinate(axis, index).clamp(0, ((bound - 1) as i64) << 16);
+        let first = (value >> 16) as usize;
+        (first, (first + 1).min(bound - 1), (value & 65535) as u64)
+    };
+    // Admit partial overlap with replicated source edges, as in the plain
+    // bilinear path. An aligned destination tail need not lie inside the
+    // source. Refuse wholly disjoint spans before touching staging storage.
     for axis in 0..2 {
-        coordinate(axis, 0)?;
-        coordinate(
-            axis,
-            if axis == 0 {
-                dst.width - 1
-            } else {
-                dst.height - 1
-            },
-        )?;
+        let count = if axis == 0 { dst.width } else { dst.height };
+        let bound = if axis == 0 { src.width } else { src.height };
+        if fixed_coordinate(axis, count - 1) < 0
+            || fixed_coordinate(axis, 0) > ((bound - 1) as i64) << 16
+        {
+            return Err("scaler centered span misses source raster".into());
+        }
     }
     for y in 0..dst.height {
-        let (y0, y1, dy) = coordinate(1, y)?;
+        let (y0, y1, dy) = coordinate(1, y);
         for x in (0..dst.width).step_by(2) {
             let at = (y * dst.width + x) * 2;
             for lane in 0..4 {
                 let channel = if lane < 2 { 0 } else { lane - 1 };
                 let index = if channel == 0 { x + lane } else { x };
-                let (mut x0, _, dx) = coordinate(0, index)?;
+                let (mut x0, _, dx) = coordinate(0, index);
                 let mut fixed = ((x0 as u64) << 16) + dx;
                 let width = if channel == 0 {
                     src.width

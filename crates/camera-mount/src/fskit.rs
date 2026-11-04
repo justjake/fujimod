@@ -132,7 +132,7 @@ impl<D: Device + 'static> Filesystem for Adapter<D> {
     async fn get_path_conf_operations(&mut self) -> Result<PathConfOperations> {
         Ok(PathConfOperations {
             maximum_link_count: 1,
-            maximum_name_length: 12,
+            maximum_name_length: 255,
             maximum_file_size: Some(1u64 << 32),
             maximum_xattr_size: Some(0),
             restricts_ownership_changes: true,
@@ -207,8 +207,8 @@ impl<D: Device + 'static> Filesystem for Adapter<D> {
         let value = name(value)?;
         Ok(self.item(self.work(move |fs| fs.lookup(parent, &value)).await?))
     }
-    async fn reclaim_item(&mut self, _: u64) -> Result<()> {
-        Ok(())
+    async fn reclaim_item(&mut self, id: u64) -> Result<()> {
+        self.work(move |fs| fs.reclaim(id)).await
     }
     async fn read_symbolic_link(&mut self, _: u64) -> Result<Vec<u8>> {
         Err(Error::Posix(libc::ENOTSUP))
@@ -320,12 +320,12 @@ impl<D: Device + 'static> Filesystem for Adapter<D> {
             if modes.contains(&OpenMode::Write) && !node.writable {
                 return Err(libc::EROFS);
             }
-            Ok(())
+            fs.open(id)
         })
         .await
     }
-    async fn close_item(&mut self, _: u64, _: Vec<OpenMode>) -> Result<()> {
-        self.work(|fs| fs.synchronize()).await
+    async fn close_item(&mut self, id: u64, _: Vec<OpenMode>) -> Result<()> {
+        self.work(move |fs| fs.close(id)).await
     }
     async fn read(&mut self, id: u64, offset: i64, length: i64) -> Result<Vec<u8>> {
         let offset = u64::try_from(offset).map_err(|_| Error::Posix(libc::EINVAL))?;

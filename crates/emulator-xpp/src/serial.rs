@@ -152,6 +152,9 @@ impl Device for ConfigurationPort {
         *self = saved.decode(self.name())?;
         Ok(())
     }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
 }
 
 /// Byte-frame peer: 16-bit registers addressed by the even command byte and
@@ -417,40 +420,96 @@ impl Device for DiscoveryPort {
         state
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
-        let registers: Vec<u32> =
-            serde_json::from_value(value["registers"].clone()).map_err(|e| e.to_string())?;
-        let peer: Option<Vec<u8>> =
-            serde_json::from_value(value["peer"].clone()).map_err(|e| e.to_string())?;
-        let frames: Option<FramePeer> = match value.get("frames") {
-            Some(frames) => {
-                Some(serde_json::from_value(frames.clone()).map_err(|e| e.to_string())?)
-            }
-            None => None,
+        fn field<T: serde::de::DeserializeOwned>(
+            value: &Value,
+            name: &str,
+        ) -> Result<Option<T>, String> {
+            value
+                .get(name)
+                .map(|v| serde_json::from_value(v.clone()).map_err(|e| e.to_string()))
+                .transpose()
+        }
+        let state = PortState {
+            registers: serde_json::from_value(value["registers"].clone())
+                .map_err(|e| e.to_string())?,
+            peer: serde_json::from_value(value["peer"].clone()).map_err(|e| e.to_string())?,
+            frames: field(value, "frames")?,
+            clock: field(value, "clock")?,
+            idle: value.get("idle").and_then(Value::as_bool).unwrap_or(false),
         };
-        let clock: Option<ClockState> = match value.get("clock") {
-            Some(clock) => Some(serde_json::from_value(clock.clone()).map_err(|e| e.to_string())?),
-            None => None,
-        };
-        if value.get("idle").and_then(Value::as_bool).unwrap_or(false) != self.idle {
+        self.check(&state)?;
+        self.apply(state);
+        Ok(())
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.state())
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        if !saved.children().is_empty() || !saved.blobs().is_empty() {
+            return Err("X-Processor Pro serial checkpoint has unexpected parts".into());
+        }
+        self.check(&saved.decode(self.name())?)
+    }
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let state = saved.decode(self.name())?;
+        self.apply(state);
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
+}
+
+/// Mutable state of a discovery port; the idle line is wiring and checked.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PortState {
+    registers: Vec<u32>,
+    peer: Option<Vec<u8>>,
+    frames: Option<FramePeer>,
+    clock: Option<ClockState>,
+    idle: bool,
+}
+impl DiscoveryPort {
+    fn state(&self) -> PortState {
+        PortState {
+            registers: self.registers.clone(),
+            peer: self.peer.clone(),
+            frames: self.frames.clone(),
+            clock: self.clock.clone(),
+            idle: self.idle,
+        }
+    }
+    fn check(&self, state: &PortState) -> Result<(), String> {
+        if state.idle != self.idle {
             return Err("X-Processor Pro serial idle line checkpoint differs".into());
         }
-        if clock.as_ref().map(|c| &c.clock) != self.clock.as_ref().map(|c| &c.clock) {
+        if state.clock.as_ref().map(|c| &c.clock) != self.clock.as_ref().map(|c| &c.clock) {
             return Err("X-Processor Pro serial clock checkpoint differs".into());
         }
-        if registers.len() != self.registers.len()
-            || peer.as_ref().map(Vec::len) != self.peer.as_ref().map(Vec::len)
-            || frames.is_some() != self.frames.is_some()
-            || frames.as_ref().is_some_and(|f| {
+        if state.registers.len() != self.registers.len()
+            || state.peer.as_ref().map(Vec::len) != self.peer.as_ref().map(Vec::len)
+            || state.frames.is_some() != self.frames.is_some()
+            || state.frames.as_ref().is_some_and(|f| {
                 f.frame.len() > FRAME_BYTES || f.registers.keys().any(|r| r & 1 != 0)
             })
         {
             return Err("X-Processor Pro serial checkpoint size differs".into());
         }
-        self.registers = registers;
-        self.peer = peer;
-        self.clock = clock;
-        self.frames = frames;
         Ok(())
+    }
+    fn apply(&mut self, state: PortState) {
+        self.registers = state.registers;
+        self.peer = state.peer;
+        self.clock = state.clock;
+        self.frames = state.frames;
     }
 }
 

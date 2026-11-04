@@ -137,7 +137,9 @@ fn invalid_architecture_and_aliases_fail_import_without_changing_the_receiver() 
     let original = state(&cpu);
     for corrupt in 0..7 {
         let mut document: Document<Architecture> = decode(&original).unwrap();
-        let Architecture::CortexR5f(saved) = &mut document.architecture;
+        let Architecture::CortexR5f(saved) = &mut document.architecture else {
+            unreachable!()
+        };
         match corrupt {
             0 => document.schema = 2,
             1 => saved.identity[0] ^= 1,

@@ -8,7 +8,6 @@ pub mod commands;
 pub mod gamma;
 pub mod geometry;
 pub mod init;
-pub mod raster;
 pub mod regs;
 pub mod render;
 pub mod stream;

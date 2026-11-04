@@ -96,6 +96,21 @@ pub struct ConfigurationCheck {
     derive(tsify::Tsify)
 )]
 pub enum BulkSource {
+    /// A stock diagnostic query publishes an E1 source directly in its reply.
+    /// `data_offset` reserves the leading bytes that are not part of the
+    /// mapped window; E1 offsets remain relative to `base`.
+    DirectQuery {
+        /// Diagnostic query tag.
+        tag: u32,
+        /// Source base returned in the first query result field.
+        base: u64,
+        /// First source offset that belongs to the mapped data window.
+        data_offset: u32,
+        /// Accepted query capacities, including any reserved leading bytes.
+        capacities: Vec<u32>,
+        /// Offsets wrap modulo 2^32 rather than only counting upward.
+        wrapping: bool,
+    },
     /// A stock diagnostic query sets the source to `base`; offsets are
     /// relative to it. The callback slot, `callback_offset` bytes into the
     /// table that `callback_table` points to, must hold `stock_callback`.
@@ -273,6 +288,28 @@ impl FirmwareBulk {
             return fail("empty window");
         }
         match &self.source {
+            BulkSource::DirectQuery {
+                base,
+                data_offset,
+                capacities,
+                ..
+            } => {
+                if capacities.is_empty()
+                    || capacities.contains(&0)
+                    || capacities.iter().any(|capacity| {
+                        u64::from(*capacity) <= u64::from(*data_offset)
+                            || base.checked_add(u64::from(*capacity)).is_none_or(|end| end > 1u64 << 32)
+                    })
+                    || !capacities.iter().any(|capacity| {
+                        let first = base.checked_add(u64::from(*data_offset));
+                        let end = base.checked_add(u64::from(*capacity));
+                        matches!((first, end, self.window.end()), (Some(first), Some(end), Some(window_end))
+                            if self.window.address >= first && window_end <= end)
+                    })
+                {
+                    return fail("direct query capacities do not contain the mapped window");
+                }
+            }
             BulkSource::Query { capacities, .. }
                 if capacities.is_empty() || capacities.contains(&0) =>
             {

@@ -468,3 +468,42 @@ fn bus_reset_rearms_the_not_ready_report() {
     nak(&mut d, &mut b);
     assert_eq!(d.reg(0xc40c), 4);
 }
+#[test]
+fn exact_checkpoint_carries_pending_host_packets_and_resumes_identically() {
+    let (mut d, mut b) = ready(0x1000);
+    endpoint(&mut d, &mut b, 2, 8);
+    trb(&mut b, 0x2000, 0x3000, 12, 1);
+    start(&mut d, &mut b, 2, 0x2000);
+    d.transaction(b.now, 2, false, Some(b"abcdefgh".to_vec()))
+        .unwrap();
+    d.transaction(b.now, 2, false, Some(b"ijkl".to_vec()))
+        .unwrap();
+    let deadline = b.now + 4;
+    let before = d.fingerprint().unwrap();
+    let saved = d.checkpoint().unwrap();
+    let (board, hour) = (b.clone(), d.save());
+    tick(&mut d, &mut b, deadline);
+    let (after, after_ram, after_irq) = (d.fingerprint().unwrap(), b.ram.clone(), b.irq);
+    assert_ne!(after, before);
+    d.restore_checkpoint(&saved).unwrap();
+    assert_eq!(d.fingerprint().unwrap(), before);
+    assert_eq!(d.save(), hour);
+    // A device built fresh from the typed snapshot continues the same way.
+    let mut fresh = Dwc3::new(config()).unwrap();
+    fresh.restore_checkpoint(&saved).unwrap();
+    let mut replay = board;
+    tick(&mut fresh, &mut replay, deadline);
+    assert_eq!(
+        (fresh.fingerprint().unwrap(), replay.ram, replay.irq),
+        (after, after_ram, after_irq)
+    );
+    // Another speed is other wiring.
+    let mut other = config();
+    other.speed = 4;
+    assert!(
+        Dwc3::new(other)
+            .unwrap()
+            .validate_checkpoint(&saved)
+            .is_err()
+    );
+}

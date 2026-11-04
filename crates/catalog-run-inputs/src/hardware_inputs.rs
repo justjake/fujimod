@@ -1261,6 +1261,28 @@ pub struct LiveViewImage {
     /// post-ISP display source). Statistics stay with `zone_statistics`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host_image: Option<LiveViewHostImage>,
+    /// Uniform scene developed through the film law and white balance of the
+    /// still development's color unit, instead of the fixed `ycbcr` pair.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub film: Option<LiveViewFilm>,
+}
+
+/// Declared pre-film scene of a live-view output unit. The firmware
+/// reprograms the color unit 0xfff47000 (film matrix, curves, white-balance
+/// gains) for every live-view frame, so the unit develops this scene with the
+/// words it holds when the frame completes.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetLiveViewFilm"))]
+pub struct LiveViewFilm {
+    /// Declared basis.
+    pub basis: String,
+    /// 14-bit linear light of every pixel at the reference white balance.
+    pub linear_rgb: [u16; 3],
+    /// (R, G, B) gains the firmware programs at which the scene renders
+    /// neutral.
+    pub white_balance_reference: [u32; 3],
 }
 
 /// Host RGB image of a live-view output unit: an asset holding rows of red,

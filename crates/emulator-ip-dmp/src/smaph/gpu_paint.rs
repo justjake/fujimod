@@ -633,13 +633,12 @@ mod tests {
                     continue;
                 }
                 let source = if let Some(texture) = texture {
-                    texture.sample(x, y).unwrap()
+                    packed(texture.sample(x, y).unwrap(), regs, gamma, order).unwrap()
                 } else if let Some(gradient) = gradient {
-                    gradient.sample(x, y)
+                    packed(gradient.sample(x, y), regs, gamma, order).unwrap()
                 } else {
                     solid
                 };
-                let source = packed(source, regs, gamma, order).unwrap();
                 let pixel = blend_pixel(
                     source,
                     destination,
@@ -706,13 +705,12 @@ mod tests {
             let row = if flip { extent[1] - 1 - y } else { y };
             let offset = pixel_index(x, row, extent[0], tiled) * 4;
             let source = if let Some(texture) = texture {
-                texture.sample(x, y).unwrap()
+                packed(texture.sample(x, y).unwrap(), regs, gamma, order).unwrap()
             } else if let Some(gradient) = gradient {
-                gradient.sample(x, y)
+                packed(gradient.sample(x, y), regs, gamma, order).unwrap()
             } else {
                 solid
             };
-            let source = packed(source, regs, gamma, order).unwrap();
             eprintln!(
                 "paint mismatch pixel=({x},{y}) channel={} coverage={} source={source:?} texture={:?} destination={:?} gpu={:?} cpu={:?} blend={blend} order={order:#x}",
                 byte % 4,
@@ -1071,5 +1069,77 @@ mod tests {
                 &deltas,
             );
         }
+    }
+
+    // A resident target pads output rows to 256 bytes; coverage rows stay
+    // bounding-box wide, so a 47-pixel box needs its own coverage stride.
+    #[test]
+    fn resident_tiled_source_over_paints_match_cpu() {
+        if !require_gpu() {
+            return;
+        }
+        let extent = [64, 64];
+        let bounds = [3, 50, 5, 41];
+        let regs = regs(false, false);
+        let gamma = gamma();
+        let contours = vec![vec![
+            [3.5, 5.25],
+            [49.75, 6.5],
+            [44.125, 40.5],
+            [6.5, 38.75],
+        ]];
+        let coverage = gpu_coverage(&contours, bounds, 4, true);
+        let scissors = [[4, 6, 40, 30], [20, 10, 50, 41]];
+        let mut expected = target(0x2545f491, 64, 64);
+        let context = fujimod_emulator_gpu::context().unwrap();
+        let key = fujimod_emulator_gpu::SurfaceKey {
+            guest_address: 0x44ad000,
+            format: fujimod_emulator_gpu::SurfaceFormat::Rgba8,
+            extent: fujimod_emulator_gpu::SurfaceExtent {
+                width: 64,
+                height: 64,
+            },
+            layout: fujimod_emulator_gpu::SurfaceLayout::Morton8x8,
+        };
+        let surface = context.get_or_create_target(key, Some(&expected)).unwrap();
+        for solid in [[255, 0, 0, 0], [255, 15, 15, 15], [255, 10, 10, 10]] {
+            let painted = cpu_paint(
+                &coverage, bounds, extent, &expected, 4, &regs, &gamma, 0x101, true, false,
+                &scissors, solid, 1, None, None,
+            );
+            for y in 5..41 {
+                for x in 3..50 {
+                    let index = pixel_index(x, y, 64, true) * 4;
+                    expected[index..index + 4]
+                        .copy_from_slice(&painted[((y - 5) * 47 + x - 3) * 4..][..4]);
+                }
+            }
+            super::paint_resident(
+                &surface,
+                &coverage,
+                bounds,
+                extent,
+                &expected,
+                4,
+                &regs,
+                &gamma,
+                0x101,
+                true,
+                false,
+                &scissors,
+                solid,
+                1,
+                None,
+                None,
+                &[],
+            )
+            .unwrap();
+        }
+        let actual = context.readback(key).unwrap().bytes;
+        let mismatch = actual.iter().zip(&expected).position(|(a, e)| a != e);
+        assert!(
+            mismatch.is_none(),
+            "resident paint differs at byte {mismatch:?}"
+        );
     }
 }

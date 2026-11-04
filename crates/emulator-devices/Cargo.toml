@@ -11,6 +11,7 @@ doctest = false
 name = "fujimod_emulator_devices"
 
 [dependencies]
+fujimod-framebuffer.workspace = true
 sha2 = "0.10"
 serde_json = "1"
 serde = { version = "1", features = ["derive", "rc"] }

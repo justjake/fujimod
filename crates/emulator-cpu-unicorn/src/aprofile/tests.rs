@@ -36,7 +36,8 @@ fn run(cpu: &Core, begin: u64, budget: usize) -> Exit {
 #[test]
 fn interactive_policy_is_forwarded_and_keeps_exact_instruction_limits() {
     let cpu = cpu();
-    cpu.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+    cpu.set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
     code(&cpu, &[0x91000400, 0x17ffffff]);
     assert!(matches!(run(&cpu, 0x1000, 1), Exit::Stopped));
     assert_eq!(cpu.instruction_progress(), Some(1));
@@ -338,4 +339,100 @@ fn completed_store_observers_see_ram_and_can_stop_before_the_next_entry() {
     cpu.remove_hook(hook).unwrap();
     run(&cpu, 0x100c, 1);
     assert_eq!(value(&cpu, Register::X(0)), 43);
+}
+
+#[test]
+fn armv7a_checkpoint_reports_its_backings_fingerprints_and_imports_into_a_fresh_core() {
+    let library = crate::test_support::library();
+    let open = || {
+        let raw = library.open(Model::CortexA7, 1 << 20).unwrap();
+        let cpu = Core::new(raw, Memory::default()).unwrap();
+        cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+        cpu
+    };
+    let set = |cpu: &Core, n: usize, value: u32| {
+        cpu.write_register(arm::CORE[n], &value.to_le_bytes())
+            .unwrap()
+    };
+    let cpu = open();
+    assert_eq!(
+        cpu.checkpoint_backings()
+            .unwrap()
+            .iter()
+            .map(|b| b.1)
+            .collect::<Vec<_>>(),
+        [0x4000]
+    );
+    set(&cpu, 3, 0x1234);
+    cpu.set_interrupt(Interrupt::Irq, true).unwrap();
+    let fingerprint = cpu.fingerprint().unwrap();
+    assert_eq!(cpu.fingerprint().unwrap(), fingerprint);
+    let saved = cpu.snapshot(None).unwrap();
+    let bytes = saved.export().unwrap();
+    set(&cpu, 3, 0x9999);
+    cpu.set_interrupt(Interrupt::Irq, false).unwrap();
+    assert_ne!(cpu.fingerprint().unwrap(), fingerprint);
+    cpu.restore(&*saved).unwrap();
+    assert_eq!(cpu.fingerprint().unwrap(), fingerprint);
+    // A fresh processor adopts the exported state, pending IRQ included.
+    let fresh = open();
+    assert_ne!(fresh.fingerprint().unwrap(), fingerprint);
+    let imported = fresh.import_snapshot(&bytes).unwrap();
+    fresh.restore(&*imported).unwrap();
+    assert_eq!(fresh.fingerprint().unwrap(), fingerprint);
+    assert!(fresh.import_snapshot(&bytes[..bytes.len() - 1]).is_err());
+}
+
+#[test]
+fn high_code_retains_coherence_after_host_and_guest_writes() {
+    let cpu = cpu();
+    let high = 0x1_0000_0000u64;
+    cpu.map_zeroed(high, 0x4000, 7).unwrap();
+    let set = |word: u32| cpu.write_memory(high, &word.to_le_bytes()).unwrap();
+    set(0xd2800020); // mov x0,#1
+    run(&cpu, high, 1);
+    assert_eq!(value(&cpu, Register::X(0)), 1);
+    set(0xd2800040); // mov x0,#2
+    run(&cpu, high, 1);
+    assert_eq!(value(&cpu, Register::X(0)), 2);
+    code(&cpu, &[0xb9000022]); // str w2,[x1]
+    cpu.write_register(Register::X(1), &high.to_le_bytes())
+        .unwrap();
+    cpu.write_register(Register::X(2), &0xd2800060u64.to_le_bytes())
+        .unwrap();
+    run(&cpu, 0x1000, 1);
+    run(&cpu, high, 1);
+    assert_eq!(value(&cpu, Register::X(0)), 3);
+}
+
+#[test]
+fn high_code_aliases_keep_shared_backing_dependencies() {
+    use fujimod_emulator_cpu::memory::Backing;
+    let memory = Memory::default();
+    let backing = Backing::aligned_zeros(0x4000, 4096).unwrap();
+    let raw = crate::test_support::library()
+        .open(Model::ArmV8A, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, memory).unwrap();
+    let high = 0x1_0000_0000u64;
+    for address in [0x1000, high] {
+        unsafe {
+            cpu.map_physical(
+                address,
+                high,
+                0x4000,
+                7,
+                NonNull::new(backing.as_ptr()).unwrap(),
+            )
+            .unwrap()
+        }
+    }
+    cpu.write_memory(0x1000, &0xd2800020u32.to_le_bytes())
+        .unwrap();
+    run(&cpu, high, 1);
+    assert_eq!(value(&cpu, Register::X(0)), 1);
+    cpu.write_memory(0x1000, &0xd2800040u32.to_le_bytes())
+        .unwrap();
+    run(&cpu, high, 1);
+    assert_eq!(value(&cpu, Register::X(0)), 2);
 }

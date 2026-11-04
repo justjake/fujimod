@@ -32,8 +32,13 @@ fujimod-workspace-hack.workspace = true
 [dev-dependencies]
 serde_json.workspace = true
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+async-net = "2"
+async-tungstenite = { version = "0.35", features = ["smol-runtime"] }
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 nusb = { workspace = true, features = ["smol"] }
+serde_json.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 nusb.workspace = true

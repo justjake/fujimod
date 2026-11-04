@@ -206,6 +206,9 @@ impl Device for BootController {
         let (_, state): (Options, Value) = saved.decode(self.name())?;
         self.restore(&state)
     }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State =
             serde_json::from_value(value["state"].clone()).map_err(|e| e.to_string())?;

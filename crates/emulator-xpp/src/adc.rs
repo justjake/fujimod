@@ -150,6 +150,14 @@ impl Device for Converter {
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.check(&state)?;
+        self.state = state;
+        Ok(())
+    }
+    fujimod_emulator_devices::checkpoint_state!(state: State, Self::check);
+}
+impl Converter {
+    fn check(&self, state: &State) -> Result<(), String> {
         if state.deadline.is_some()
             != (state.control & (START | CONTINUOUS) == START && state.power_down == 0)
         {
@@ -163,7 +171,6 @@ impl Device for Converter {
         {
             return Err("Invalid X-Processor Pro ADC checkpoint input".into());
         }
-        self.state = state;
         Ok(())
     }
 }

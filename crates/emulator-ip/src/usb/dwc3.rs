@@ -704,6 +704,43 @@ impl Device for Dwc3 {
     }
     fn restore(&mut self, value: &serde_json::Value) -> Result<(), String> {
         let saved: Saved = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.check(&saved)?;
+        self.state = saved.state;
+        Ok(())
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &Saved {
+                config: self.config,
+                state: self.state.clone(),
+            },
+        )
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        if !saved.children().is_empty() || !saved.blobs().is_empty() {
+            return Err("DWC3 checkpoint has unexpected parts".into());
+        }
+        self.check(&saved.decode(self.name())?)
+    }
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let saved: Saved = saved.decode(self.name())?;
+        self.state = saved.state;
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<serde_json::Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
+}
+impl Dwc3 {
+    fn check(&self, saved: &Saved) -> Result<(), String> {
         let state = &saved.state;
         let reg = |offset| state.registers.get(&offset).copied().unwrap_or(0);
         let ring_size = reg(0xc408) & 0xffff;
@@ -813,7 +850,6 @@ impl Device for Dwc3 {
         {
             return Err("Invalid DWC3 checkpoint or changed physical wiring".into());
         }
-        self.state = saved.state;
         Ok(())
     }
 }

@@ -31,7 +31,7 @@ pub struct Session {
         BTreeMap<
             (String, usize, bool),
             fujimod_recording::cache::CaptureCache<
-                Option<std::sync::Arc<fujimod_emulator_devices::exr2::scanout_frame::Frame>>,
+                Option<std::sync::Arc<fujimod_framebuffer::frame::Frame>>,
             >,
         >,
     >,

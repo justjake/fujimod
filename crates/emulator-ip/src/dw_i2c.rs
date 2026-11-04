@@ -85,9 +85,25 @@ pub trait Bus: Send + 'static {
     fn stop(&mut self);
     fn save(&self) -> Value;
     fn restore(&mut self, value: &Value) -> Result<(), String>;
+    /// Complete typed target state; targets without one refuse.
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        Err("DesignWare I2C bus has no exact checkpoint implementation".into())
+    }
+    fn validate_checkpoint(
+        &self,
+        _: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        Err("DesignWare I2C bus has no exact checkpoint implementation".into())
+    }
+    fn restore_checkpoint(
+        &mut self,
+        _: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        Err("DesignWare I2C bus has no exact checkpoint implementation".into())
+    }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Options {
     pub base: u64,
     pub irq: u32,
@@ -414,6 +430,49 @@ impl<B: Bus> Device for Controller<B> {
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value["controller"].clone())
             .map_err(|e| format!("invalid DesignWare I2C checkpoint: {e}"))?;
+        self.check(&state)?;
+        self.bus.restore(&value["bus"])?;
+        self.state = state;
+        Ok(())
+    }
+    /// The attached targets are the child.
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &(&self.options, &self.state),
+        )?
+        .with_children(vec![self.bus.checkpoint()?]))
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        if saved.children().len() != 1 || !saved.blobs().is_empty() {
+            return Err("DesignWare I2C checkpoint parts differ".into());
+        }
+        let (options, state): (Options, State) = saved.decode(self.name())?;
+        if options != self.options {
+            return Err("DesignWare I2C checkpoint wiring differs".into());
+        }
+        self.check(&state)?;
+        self.bus.validate_checkpoint(&saved.children()[0])
+    }
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let (_, state): (Options, State) = saved.decode(self.name())?;
+        self.bus.restore_checkpoint(&saved.children()[0])?;
+        self.state = state;
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
+}
+impl<B: Bus> Controller<B> {
+    fn check(&self, state: &State) -> Result<(), String> {
         if state.deadline.is_some() == state.tx.is_empty()
             || state.tx.len() > self.options.fifo_depth
             || state.rx.len() > self.options.fifo_depth
@@ -421,8 +480,6 @@ impl<B: Bus> Device for Controller<B> {
         {
             return Err("DesignWare I2C checkpoint FIFOs or deadline are inconsistent".into());
         }
-        self.bus.restore(&value["bus"])?;
-        self.state = state;
         Ok(())
     }
 }

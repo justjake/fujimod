@@ -11,7 +11,7 @@
 use fujimod_emulator_devices::parts::micron_nor;
 use fujimod_emulator_devices::{Cx, Device, Record, Value as Field};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
@@ -258,6 +258,11 @@ impl Aperture {
         self.contents.lock().unwrap().clone()
     }
     fn restore_audit(&self, audit: ReadAudit) -> Result<(), String> {
+        self.check_audit(&audit)?;
+        *self.reads.lock().unwrap() = audit;
+        Ok(())
+    }
+    fn check_audit(&self, audit: &ReadAudit) -> Result<(), String> {
         let mut previous = None;
         let mut unique = 0u64;
         for &(start, end) in &audit.ranges {
@@ -270,10 +275,14 @@ impl Aperture {
         if unique > audit.bytes || (audit.ranges.is_empty() && audit.bytes != 0) {
             return Err("Invalid X-Processor Pro flash read count".into());
         }
-        *self.reads.lock().unwrap() = audit;
         Ok(())
     }
     fn restore_contents(&self, contents: Contents) -> Result<(), String> {
+        self.check_contents(&contents)?;
+        *self.contents.lock().unwrap() = contents;
+        Ok(())
+    }
+    fn check_contents(&self, contents: &Contents) -> Result<(), String> {
         let armed_ok = contents.armed.is_none_or(|(lo, hi, page)| {
             lo < hi && hi <= self.size && page.is_power_of_two() && page <= GRANULE
         });
@@ -294,7 +303,6 @@ impl Aperture {
         {
             return Err("Invalid X-Processor Pro flash contents".into());
         }
-        *self.contents.lock().unwrap() = contents;
         Ok(())
     }
 }
@@ -662,42 +670,83 @@ impl Device for FlashController {
         !self.aperture.contains(address, size as usize)
     }
     fn save(&self) -> Value {
-        json!({ "options": self.options,"registers": self.registers, "aperture_reads": self.aperture.read_audit(),
-            "aperture_contents": self.aperture.contents(), "array_write": self.array_write,
-            "nor":self.nor,"pending":self.pending,"received":self.received })
+        serde_json::to_value(self.snapshot()).unwrap_or(Value::Null)
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
-        let options: Options =
-            serde_json::from_value(value["options"].clone()).map_err(|e| e.to_string())?;
-        if self.options != options {
+        let saved: Snapshot = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.check(&saved)?;
+        self.apply(saved)
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.snapshot())
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        if !saved.children().is_empty() || !saved.blobs().is_empty() {
+            return Err("Serial-flash checkpoint has unexpected parts".into());
+        }
+        self.check(&saved.decode(self.name())?)
+    }
+    /// The aperture is shared with the PL330 source: its audit and contents
+    /// are restored in place.
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        self.apply(saved.decode(self.name())?)
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
+}
+
+/// Everything the controller and its aperture can change.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Snapshot {
+    options: Options,
+    registers: [u32; (REGISTERS / 4) as usize],
+    aperture_reads: ReadAudit,
+    #[serde(default)]
+    aperture_contents: Contents,
+    #[serde(default)]
+    array_write: Option<(u8, ArrayWrite)>,
+    nor: BTreeMap<u8, micron_nor::Registers>,
+    pending: Option<Transaction>,
+    received: Option<u8>,
+}
+impl FlashController {
+    fn snapshot(&self) -> Snapshot {
+        Snapshot {
+            options: self.options.clone(),
+            registers: self.registers,
+            aperture_reads: self.aperture.read_audit(),
+            aperture_contents: self.aperture.contents(),
+            array_write: self.array_write.clone(),
+            nor: self.nor.clone(),
+            pending: self.pending.clone(),
+            received: self.received,
+        }
+    }
+    fn check(&self, saved: &Snapshot) -> Result<(), String> {
+        if self.options != saved.options {
             return Err("Serial-flash controller checkpoint wiring differs".into());
         }
-        let registers: [u32; (REGISTERS / 4) as usize] =
-            serde_json::from_value(value["registers"].clone()).map_err(|e| e.to_string())?;
-        let audit =
-            serde_json::from_value(value["aperture_reads"].clone()).map_err(|e| e.to_string())?;
-        let contents: Contents = match value.get("aperture_contents") {
-            Some(contents) => {
-                serde_json::from_value(contents.clone()).map_err(|e| e.to_string())?
-            }
-            None => Contents::default(),
-        };
-        let array_write: Option<(u8, ArrayWrite)> = match value.get("array_write") {
-            Some(write) => serde_json::from_value(write.clone()).map_err(|e| e.to_string())?,
-            None => None,
-        };
-        let nor: BTreeMap<u8, micron_nor::Registers> =
-            serde_json::from_value(value["nor"].clone()).map_err(|e| e.to_string())?;
+        let (nor, pending, received, array_write) = (
+            &saved.nor,
+            &saved.pending,
+            saved.received,
+            &saved.array_write,
+        );
         if self.nor.keys().ne(nor.keys()) {
             return Err("Serial-flash checkpoint register devices differ".into());
         }
-        for (chip_select, saved) in &nor {
+        for (chip_select, saved) in nor {
             self.nor[chip_select].validate_restore(saved)?;
         }
-        let pending: Option<Transaction> =
-            serde_json::from_value(value["pending"].clone()).map_err(|e| e.to_string())?;
-        let received: Option<u8> =
-            serde_json::from_value(value["received"].clone()).map_err(|e| e.to_string())?;
         if pending.as_ref().is_some_and(|p| {
             p.transmit.len() > 1
                 || p.receive > 1
@@ -723,15 +772,20 @@ impl Device for FlashController {
         {
             return Err("Invalid serial-flash pending transaction".into());
         }
-        self.aperture.restore_audit(audit)?;
-        self.aperture.restore_contents(contents)?;
-        self.registers = registers;
-        self.asserted =
-            self.options.irq.is_some() && registers[0x24 / 4] & !registers[0x28 / 4] & 0x3f != 0;
-        self.nor = nor;
-        self.pending = pending;
-        self.received = received;
-        self.array_write = array_write;
+        self.aperture.check_audit(&saved.aperture_reads)?;
+        self.aperture.check_contents(&saved.aperture_contents)?;
+        Ok(())
+    }
+    fn apply(&mut self, saved: Snapshot) -> Result<(), String> {
+        self.aperture.restore_audit(saved.aperture_reads)?;
+        self.aperture.restore_contents(saved.aperture_contents)?;
+        self.registers = saved.registers;
+        self.asserted = self.options.irq.is_some()
+            && saved.registers[0x24 / 4] & !saved.registers[0x28 / 4] & 0x3f != 0;
+        self.nor = saved.nor;
+        self.pending = saved.pending;
+        self.received = saved.received;
+        self.array_write = saved.array_write;
         Ok(())
     }
 }
@@ -740,6 +794,7 @@ impl Device for FlashController {
 mod tests {
     use super::*;
     use fujimod_emulator_devices::test_host::{TestHost, read, write};
+    use serde_json::json;
 
     #[test]
     fn command_chip_select_requires_its_own_attached_register_device() {
@@ -1099,5 +1154,48 @@ mod tests {
         let mut bad = saved;
         bad["array_write"][1]["offset"] = json!(0x04000000);
         assert!(resumed.restore(&bad).is_err());
+    }
+
+    #[test]
+    fn checkpoint_resumes_a_transaction_and_keeps_the_shared_aperture_audit() {
+        use fujimod_emulator_devices::test_host::{advance_from_checkpoint, assert_exact_restore};
+        let base = 0x80000;
+        let controller = |aperture: Arc<Aperture>, transfer_ticks| {
+            let nor = micron_nor::Registers::new(micron_nor::Options {
+                enhanced_volatile_reset: 0xff,
+                write_ticks: 7,
+                identification: vec![],
+            })
+            .unwrap();
+            FlashController::new(
+                Options {
+                    base,
+                    transfer_ticks,
+                    irq: None,
+                    array: None,
+                },
+                aperture,
+                BTreeMap::from([(1, nor)]),
+            )
+            .unwrap()
+        };
+        let aperture = Arc::new(Aperture::new(0xf0000000, 0x1000, vec![0x5a; 16]).unwrap());
+        let mut d = controller(aperture.clone(), 2);
+        let mut h = TestHost::new();
+        write(&mut d, &mut h, base, 6);
+        write(&mut d, &mut h, base + 0x10, 0x18080);
+        write(&mut d, &mut h, base + 0x20, 1);
+        write(&mut d, &mut h, base + 0x1c, 1);
+        advance_from_checkpoint(&mut d, &mut h, 2);
+        assert_eq!(read(&mut d, &mut h, 0xf0000000), 0x5a5a5a5a);
+        let saved = assert_exact_restore(&mut d, |d| {
+            let mut h = TestHost::new();
+            read(d, &mut h, 0xf0000100);
+            write(d, &mut h, base + 0x04, 0x1234);
+        });
+        // The audit of bytes read lives in the shared aperture and returns to
+        // the checkpointed ranges in place.
+        assert_eq!(aperture.read_audit().ranges, [(0, 4)]);
+        assert!(controller(aperture, 3).validate_checkpoint(&saved).is_err());
     }
 }

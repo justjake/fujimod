@@ -37,3 +37,31 @@ fn native_pixmap_copy_preserves_words_flips_rows_and_keeps_pitch_padding() {
     }
     assert!(host.ram[0x2000..].iter().all(|b| *b == 0xa5));
 }
+#[test]
+fn exact_checkpoint_restores_streams_and_counters_and_refuses_pending_host_work() {
+    use fujimod_emulator_devices::test_host::{TestHost, assert_exact_restore, write};
+    let mut renderer = Renderer::new(0xff93c000, 92).unwrap();
+    let mut host = TestHost::new();
+    write(&mut renderer, &mut host, 0xff93c000 + 0xc00, 0x1000);
+    let saved = assert_exact_restore(&mut renderer, |d| {
+        let mut host = TestHost::new();
+        write(d, &mut host, 0xff93c000 + 0xc04, 0x3000);
+    });
+    renderer.state.lock().unwrap().next_host_request = 7;
+    let counted = renderer.checkpoint().unwrap();
+    renderer.state.lock().unwrap().next_host_request = 0;
+    renderer.restore_checkpoint(&counted).unwrap();
+    assert_eq!(renderer.state.lock().unwrap().next_host_request, 7);
+    renderer.state.lock().unwrap().host_request = Some(PendingHostRequest {
+        id: 1,
+        payload: vec![],
+        published: false,
+    });
+    assert!(renderer.checkpoint().is_err());
+    assert!(
+        Renderer::new(0xff93c000, 92)
+            .unwrap()
+            .restore_checkpoint(&saved)
+            .is_ok()
+    );
+}

@@ -2,7 +2,10 @@
 //! Memory is always read-only. Only the SD subtree delegates mutations.
 #[cfg(target_os = "macos")]
 pub mod bridge;
+pub mod display;
+mod display_tree;
 mod flash;
+use display_tree::DISPLAY;
 #[cfg(target_os = "macos")]
 pub mod fskit;
 mod service;
@@ -21,6 +24,7 @@ pub const SD: u64 = 3;
 pub const MEMORY: u64 = 4;
 pub const REGIONS: u64 = 5;
 pub const FLASH: u64 = 6;
+pub const UNLOAD: u64 = 7;
 pub const IO_BYTES: usize = fujimod_usb::operations::card::MAX_REQUEST_BYTES as usize;
 pub const MEMORY_IO_BYTES: usize = 64 << 20;
 pub type Result<T> = std::result::Result<T, i32>;
@@ -29,6 +33,15 @@ pub type Result<T> = std::result::Result<T, i32>;
 pub trait Device: Send {
     fn shutdown(&mut self) -> Result<()> {
         self.synchronize()
+    }
+    fn unload_helper(&mut self) -> Result<()> {
+        Ok(())
+    }
+    fn display_outputs(&self) -> Vec<u32> {
+        vec![]
+    }
+    fn display_images(&mut self, _output: u32) -> Result<Vec<display::Image>> {
+        Err(libc::ENOTSUP)
     }
     fn has_card(&self) -> bool;
     fn list(&mut self, path: &str) -> Result<Vec<DirectoryEntry>>;
@@ -69,6 +82,7 @@ struct Listing {
 }
 
 pub struct CameraFs<D> {
+    display: display_tree::Tree,
     device: D,
     nodes: BTreeMap<u64, Node>,
     paths: BTreeMap<String, u64>,
@@ -80,6 +94,18 @@ pub struct CameraFs<D> {
 }
 
 impl<D: Device> CameraFs<D> {
+    pub fn open(&mut self, id: u64) -> Result<()> {
+        self.node(id)?;
+        self.display.open(&mut self.device, id)
+    }
+    pub fn close(&mut self, id: u64) -> Result<()> {
+        self.display.close(id);
+        self.synchronize()
+    }
+    pub fn reclaim(&mut self, id: u64) -> Result<()> {
+        self.display.reclaim(id);
+        Ok(())
+    }
     pub fn shutdown(&mut self) -> Result<()> {
         self.device.shutdown()
     }
@@ -100,6 +126,7 @@ impl<D: Device> CameraFs<D> {
         let mut nodes = BTreeMap::new();
         for (id, name, directory, writable, size, path) in [
             (ROOT, "", true, false, 0, None),
+            (UNLOAD, "unload-helper", false, true, 0, None),
             (SD, "sd", true, true, 0, Some("A:\\".to_owned())),
             (MEMORY, "memory", false, false, 1u64 << 32, None),
             (
@@ -144,25 +171,33 @@ impl<D: Device> CameraFs<D> {
                 },
             );
         }
+        let display = display_tree::Tree::new(device.display_outputs());
         Ok(Self {
+            display,
             device,
             nodes,
             paths: BTreeMap::new(),
             listings: BTreeMap::new(),
             regions,
             regions_json,
-            next_inode: 7,
+            next_inode: 9,
             generation: 1,
         })
     }
 
     pub fn node(&self, id: u64) -> Result<Node> {
-        self.nodes.get(&id).cloned().ok_or(libc::ESTALE)
+        self.display
+            .node(id)
+            .or_else(|| self.nodes.get(&id).cloned())
+            .ok_or(libc::ESTALE)
     }
 
     pub fn metadata(&mut self, id: u64) -> Result<Node> {
         let node = self.node(id)?;
-        if id > FLASH {
+        if self.display.contains(id) {
+            return Ok(node);
+        }
+        if id > UNLOAD {
             let (_, entries) = self.directory(node.parent, false)?;
             return entries.into_iter().find(|n| n.id == id).ok_or(libc::ESTALE);
         }
@@ -208,12 +243,15 @@ impl<D: Device> CameraFs<D> {
     }
 
     pub fn directory(&mut self, id: u64, continuation: bool) -> Result<(u64, Vec<Node>)> {
+        if self.display.contains(id) {
+            return self.display.directory(&mut self.device, id, continuation);
+        }
         if id == ROOT {
             return Ok((
                 1,
-                [SD, MEMORY, FLASH, REGIONS]
+                [SD, MEMORY, FLASH, REGIONS, UNLOAD, DISPLAY]
                     .into_iter()
-                    .filter(|id| self.nodes.contains_key(id))
+                    .filter(|id| self.nodes.contains_key(id) || self.display.contains(*id))
                     .map(|i| self.node(i))
                     .collect::<Result<_>>()?,
             ));
@@ -328,6 +366,9 @@ impl<D: Device> CameraFs<D> {
         {
             return Err(libc::EINVAL);
         }
+        if self.display.contains(id) {
+            return self.display.read(id, offset, size);
+        }
         if id == REGIONS {
             return Ok(self.regions_json[offset as usize..offset as usize + size].to_vec());
         }
@@ -360,6 +401,13 @@ impl<D: Device> CameraFs<D> {
 
     pub fn write(&mut self, id: u64, offset: u64, data: &[u8]) -> Result<usize> {
         let node = self.node(id)?;
+        if id == UNLOAD {
+            if offset != 0 || data != b"unload\n" {
+                return Err(libc::EINVAL);
+            }
+            self.device.unload_helper()?;
+            return Ok(data.len());
+        }
         if !node.writable {
             return Err(libc::EROFS);
         }
@@ -427,6 +475,13 @@ impl<D: Device> CameraFs<D> {
 
     pub fn truncate(&mut self, id: u64, size: u64) -> Result<Node> {
         let node = self.node(id)?;
+        if id == UNLOAD {
+            return if size == 0 {
+                Ok(node)
+            } else {
+                Err(libc::EINVAL)
+            };
+        }
         if !node.writable {
             return Err(libc::EROFS);
         }

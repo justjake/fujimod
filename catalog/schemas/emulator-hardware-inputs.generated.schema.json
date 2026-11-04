@@ -1847,6 +1847,45 @@
       ],
       "type": "object"
     },
+    "ResetLiveViewFilm": {
+      "additionalProperties": false,
+      "description": "Declared pre-film scene of a live-view output unit. The firmware\nreprograms the color unit 0xfff47000 (film matrix, curves, white-balance\ngains) for every live-view frame, so the unit develops this scene with the\nwords it holds when the frame completes.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "linear_rgb": {
+          "description": "14-bit linear light of every pixel at the reference white balance.",
+          "items": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "white_balance_reference": {
+          "description": "(R, G, B) gains the firmware programs at which the scene renders\nneutral.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "linear_rgb",
+        "white_balance_reference"
+      ],
+      "type": "object"
+    },
     "ResetLiveViewHostImage": {
       "additionalProperties": false,
       "description": "Host RGB image of a live-view output unit: an asset holding rows of red,\ngreen and blue bytes, sampled into the programmed buffer at each frame.",
@@ -1892,6 +1931,17 @@
         "basis": {
           "description": "Declared basis.",
           "type": "string"
+        },
+        "film": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetLiveViewFilm"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Uniform scene developed through the film law and white balance of the\nstill development's color unit, instead of the fixed `ycbcr` pair."
         },
         "host_image": {
           "anyOf": [

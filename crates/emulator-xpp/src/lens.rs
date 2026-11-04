@@ -462,12 +462,53 @@ impl Device for LensPort {
             serde_json::from_value(value["link"].clone()).map_err(|e| e.to_string())?;
         let line: Line =
             serde_json::from_value(value["line"].clone()).map_err(|e| e.to_string())?;
-        if line.poll_at % self.timing.poll != 0 || link.page_size > 1 << 15 {
-            return Err("Invalid lens checkpoint".into());
-        }
+        self.check(&link, &line)?;
         self.port.restore(&value["port"])?;
         *self.link.lock().map_err(|_| "Lens link poisoned")? = link;
         self.line = line;
+        Ok(())
+    }
+    /// The port is a child; the link shared with the PL330 source is restored
+    /// in place.
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        let link = self.link.lock().map_err(|_| "Lens link poisoned")?;
+        Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &(&*link, &self.line),
+        )?
+        .with_children(vec![self.port.checkpoint()?]))
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        if saved.children().len() != 1 || !saved.blobs().is_empty() {
+            return Err("Lens checkpoint parts differ".into());
+        }
+        let (link, line): (Link, Line) = saved.decode(self.name())?;
+        self.check(&link, &line)?;
+        self.port.validate_checkpoint(&saved.children()[0])
+    }
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let (link, line): (Link, Line) = saved.decode(self.name())?;
+        self.port.restore_checkpoint(&saved.children()[0])?;
+        *self.link.lock().map_err(|_| "Lens link poisoned")? = link;
+        self.line = line;
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
+}
+impl LensPort {
+    fn check(&self, link: &Link, line: &Line) -> Result<(), String> {
+        if line.poll_at % self.timing.poll != 0 || link.page_size > 1 << 15 {
+            return Err("Invalid lens checkpoint".into());
+        }
         Ok(())
     }
 }
@@ -618,5 +659,28 @@ mod tests {
         advance(&mut lens, &mut h, 1160);
         assert!(pins.lock().unwrap().input(14, 1));
         assert_eq!(lens.line.drives, 1);
+    }
+
+    #[test]
+    fn checkpoint_restores_the_link_shared_with_the_dma_source_in_place() {
+        use fujimod_emulator_devices::test_host::assert_exact_restore;
+        let (mut lens, _) = lens();
+        let mut h = TestHost::new();
+        write(&mut lens, &mut h, BASE + ENABLE, 1);
+        assert_eq!(transfer(&mut lens, &mut h, seal(0x20 << 6)), 0);
+        assert_eq!(transfer(&mut lens, &mut h, 0x0800_8832), 0x0800_8832);
+        let link = data(&lens);
+        let saved = assert_exact_restore(&mut lens, |d| {
+            let mut h = TestHost::new();
+            write(d, &mut h, BASE + ENABLE, 1);
+            advance(d, &mut h, 5000);
+        });
+        // The source handle still reaches the restored link.
+        assert!(Arc::ptr_eq(&link.link, &lens.link));
+        let (other, _) = self::lens();
+        other.validate_checkpoint(&saved).unwrap();
+        let mut slower = self::lens().0;
+        slower.timing.poll = 7;
+        assert!(slower.validate_checkpoint(&saved).is_err());
     }
 }

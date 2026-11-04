@@ -65,7 +65,10 @@ impl Payload {
         )?;
         require(
             flash.device.kind == "raw-nand"
-                && flash.reader.nand.is_some()
+                && flash
+                    .reader
+                    .as_ref()
+                    .is_some_and(|reader| reader.nand.is_some())
                 && flash.transport.as_deref() == Some("exr2-query-heap"),
             "Unsupported EXR II flash transport",
         )?;
@@ -120,7 +123,9 @@ impl Payload {
             )?;
         }
         require(
-            self.control_sha256.len() == 64 && self.checks.iter().all(|c| c.sha256.len() == 64),
+            self.control_sha256.len() == 64
+                && self.control_sha256 == flash.control.sha256
+                && self.checks.iter().all(|c| c.sha256.len() == 64),
             "Invalid execution hash",
         )?;
         for c in &self.checks {
@@ -141,11 +146,16 @@ impl Payload {
             size: 4,
         })?;
         for address in [
-            flash.reader.nand.as_ref().expect("validated NAND ABI").lock,
             flash
                 .reader
-                .nand
                 .as_ref()
+                .and_then(|reader| reader.nand.as_ref())
+                .expect("validated NAND ABI")
+                .lock,
+            flash
+                .reader
+                .as_ref()
+                .and_then(|reader| reader.nand.as_ref())
                 .expect("validated NAND ABI")
                 .unlock,
         ] {
@@ -572,8 +582,8 @@ async fn execute(
                 nand_read_stats: Some(nand_read_stats),
                 uncorrectable_granularity_bytes: flash
                     .reader
-                    .nand
                     .as_ref()
+                    .and_then(|reader| reader.nand.as_ref())
                     .map_or(0, |n| n.page_bytes * n.max_pages_per_call),
             })
         }
@@ -656,11 +666,12 @@ async fn read_chunk(
     controller_mode: u32,
 ) -> bulk::Result<Vec<u8>> {
     let (offset, size) = (target.address, target.size);
-    let nand = flash.reader.nand.as_ref().expect("validated NAND ABI");
+    let stock_reader = flash.reader.as_ref().expect("validated stock reader");
+    let nand = stock_reader.nand.as_ref().expect("validated NAND ABI");
     let stock = flash
         .code_ranges
         .iter()
-        .find(|r| r.name == flash.reader.symbol)
+        .find(|r| r.name == stock_reader.symbol)
         .expect("validated reader")
         .address;
     let request = (base + REQUEST) | bulk.code_alias;

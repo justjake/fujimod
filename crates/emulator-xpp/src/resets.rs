@@ -229,25 +229,63 @@ impl Device for Gates {
         }
     }
     fn save(&self) -> Value {
-        serde_json::to_value(State {
-            words: self.words.clone(),
-            pulses: std::array::from_fn(|channel| self.sd[channel].count()),
-            lines: self.lines.levels(),
-        })
-        .unwrap_or(Value::Null)
+        serde_json::to_value(self.state()).unwrap_or(Value::Null)
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        if state.words.keys().any(|offset| !self.known(*offset)) {
+        self.check(&state)?;
+        self.apply(state);
+        Ok(())
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.state())
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        if !saved.children().is_empty() || !saved.blobs().is_empty() {
+            return Err("Reset/gate checkpoint has unexpected parts".into());
+        }
+        self.check(&saved.decode(self.name())?)
+    }
+    /// The shared line levels and reset counters are restored in place.
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let state = saved.decode(self.name())?;
+        self.apply(state);
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
+}
+impl Gates {
+    fn state(&self) -> State {
+        State {
+            words: self.words.clone(),
+            pulses: std::array::from_fn(|channel| self.sd[channel].count()),
+            lines: self.lines.levels(),
+        }
+    }
+    fn check(&self, state: &State) -> Result<(), String> {
+        if state.words.keys().any(|offset| !self.known(*offset))
+            || u64::from(state.lines) >> LINES != 0
+        {
             return Err("Invalid reset/gate checkpoint".into());
         }
+        Ok(())
+    }
+    fn apply(&mut self, state: State) {
         let polarity = state.words.get(&POLARITY).copied().unwrap_or(0);
         self.lines.restore(polarity, state.lines);
         self.words = state.words;
         for (line, count) in self.sd.iter().zip(state.pulses) {
             line.set(count);
         }
-        Ok(())
     }
 }
 

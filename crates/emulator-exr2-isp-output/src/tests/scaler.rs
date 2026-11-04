@@ -149,6 +149,66 @@ fn centered_phases_place_a_rectangle_without_touching_canvas_padding() {
     write(&mut d, &mut h, 0xfff4704c, 0x20000000);
     let mut cx = h.cx();
     d.write(&mut cx, 0xfff47004, 4, 1);
-    assert!(cx.refusal().unwrap().contains("escapes source"));
+    assert!(cx.refusal().unwrap().contains("misses source"));
     assert!(d.next_deadline(4).is_none());
+}
+
+#[test]
+fn centered_scale_replicates_edges_in_aligned_destination_tails() {
+    let mut host = TestHost::new();
+    for y in 0..30 {
+        for x in (0..40).step_by(2) {
+            let at = 0x8000 + (y * 40 + x) * 2;
+            host.ram[at..at + 4].copy_from_slice(&[
+                (x + 2 * y) as u8,
+                (x + 1 + 2 * y) as u8,
+                (64 + y) as u8,
+                (96 + x / 2) as u8,
+            ]);
+        }
+    }
+    host.ram[0x9000..0x9400].fill(0xa5);
+    let mut scaler = Scaler::new(
+        fujimod_emulator_imaging::exr2_isp::options::scaler::Options {
+            completion_ticks: 4,
+        },
+        Irq { core: 0, line: 67 },
+    )
+    .unwrap();
+    for (offset, value) in [
+        (0x10, 0x8000),
+        (0x14, 40),
+        (0x18, 30 << 16 | 40),
+        (0x20, 0x9000),
+        (0x24, 32),
+        (0x28, 16 << 16 | 24),
+        (0x40, 0x1ffff),
+        (0x54, 0x1c924),
+        (0x60, 15 << 16 | 20),
+        (0x64, 7 << 16 | 10),
+        (0x7c, 0x1000),
+        (4, 1),
+    ] {
+        write(&mut scaler, &mut host, 0xfff47000 + offset, value);
+    }
+    assert_eq!(scaler.next_deadline(0), Some(4));
+    advance(&mut scaler, &mut host, 4);
+    // The ramp independently fixes the four corner colors. Both luma lanes
+    // and the shared chroma pair replicate the same source edge.
+    for (row, pair, expected) in [
+        (0, 0, [5, 7, 67, 96]),
+        (0, 11, [44, 44, 67, 115]),
+        (15, 0, [58, 60, 93, 96]),
+        (15, 11, [97, 97, 93, 115]),
+    ] {
+        let at = 0x9000 + row * 64 + pair * 4;
+        assert_eq!(&host.ram[at..at + 4], expected);
+    }
+    for row in 0..16 {
+        assert_eq!(
+            &host.ram[0x9000 + row * 64 + 48..0x9000 + (row + 1) * 64],
+            &[0xa5; 16]
+        );
+    }
+    assert_eq!(host.irqs, [(0, 67)]);
 }

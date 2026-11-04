@@ -60,11 +60,14 @@ impl SerialChannel {
             || options.transports.is_empty()
             || options.transports.len() > 16
             || options.selection.is_empty()
-            || options.selection.len() > 2
+            || options.selection.len() > 3
         {
             return Err(
                 "serial channel requires explicit transport, selection, and clock wiring".into(),
             );
+        }
+        if options.base == 0xfff84080 && options.queue != Queue::Single {
+            return Err("SPI2 supports only single shifts".into());
         }
         for (i, t) in options.transports.iter().enumerate() {
             if t.control & 1 != 0

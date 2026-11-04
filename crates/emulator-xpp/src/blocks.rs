@@ -136,6 +136,11 @@ enum Picture {
     Scene,
     /// A host RGB image: width, height and rows of red, green, blue bytes.
     Host(u64, u64, Arc<[u8]>),
+    /// One 14-bit linear (R, G, B) developed through the film law and white
+    /// balance of the color unit's programmed words, with the packed pair
+    /// written while the unit is still unprogrammed. A unit caught half
+    /// reprogrammed completes no frame.
+    Film([u16; 3], [u8; 4]),
 }
 /// Virtual scene size: its normalized coordinates.
 const SCENE_WIDTH: u64 = 1024;
@@ -426,6 +431,27 @@ impl Block {
         let [y, cb, cr] = ycbcr;
         self.with_picture(lines, Picture::Uniform([y, y, cb, cr]))
     }
+    /// A uniform scene, given as 14-bit linear light at the `reference` white
+    /// balance, developed at each frame with the film law and white balance of
+    /// the color unit's published `words` (the live-view pipeline reprograms
+    /// the unit every frame). Until the firmware programs it, `unprogrammed`
+    /// (Y, Cb, Cr) is written.
+    pub fn with_live_view_film(
+        mut self,
+        lines: u32,
+        linear: [u16; 3],
+        unprogrammed: [u8; 3],
+        words: Published,
+        reference: [u32; 3],
+    ) -> Result<Self, String> {
+        if self.work.is_some() || reference.contains(&0) || linear.iter().any(|&v| v > 16383) {
+            return Err("Invalid X-Processor Pro live-view film".into());
+        }
+        let [y, cb, cr] = unprogrammed;
+        self = self.with_picture(lines, Picture::Film(linear, [y, y, cb, cr]))?;
+        self.color = Some((words, reference));
+        Ok(self)
+    }
     /// The declared virtual scene written at each frame, over `lines` lines.
     pub fn with_live_view_scene(self, lines: u32) -> Result<Self, String> {
         self.with_picture(lines, Picture::Scene)
@@ -472,6 +498,27 @@ impl Block {
         let (width, lines) = (u64::from(width), u64::from(*lines));
         let image = match picture {
             Picture::Uniform(pair) => Ok(pair.repeat((width / 2 * lines) as usize)),
+            Picture::Film(linear, unprogrammed) => {
+                let pair = match &self.color {
+                    Some((words, reference)) if !words.lock().unwrap().is_empty() => {
+                        let words = words.lock().unwrap();
+                        let developed = crate::development::film(&words).and_then(|film| {
+                            let factors = crate::development::white_balance(&words, *reference)?;
+                            let level =
+                                |c: usize| crate::development::balanced(linear[c], factors[c]);
+                            Ok(film.develop([level(0), level(1), level(2)]))
+                        });
+                        match developed {
+                            Ok(pixel) => fujimod_emulator_imaging::film::Film::pack(pixel, pixel),
+                            // A unit caught between two words of its reprogramming
+                            // (unequal curve copies) completes no frame.
+                            Err(_) => return,
+                        }
+                    }
+                    _ => *unprogrammed,
+                };
+                Ok(pair.repeat((width / 2 * lines) as usize))
+            }
             Picture::Scene => {
                 let scene = fujimod_virtual_scene::Scene {
                     width: SCENE_WIDTH,
@@ -654,6 +701,40 @@ impl Device for Block {
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.check(&state)?;
+        self.state = state;
+        self.publish();
+        Ok(())
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.state)
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        if !saved.children().is_empty() || !saved.blobs().is_empty() {
+            return Err("Register block checkpoint has unexpected parts".into());
+        }
+        self.check(&saved.decode(self.name())?)
+    }
+    /// The published words are shared with the color unit's reader and are
+    /// refreshed in place from the restored register file.
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        self.state = saved.decode(self.name())?;
+        self.publish();
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
+}
+impl Block {
+    fn check(&self, state: &State) -> Result<(), String> {
         let started = self.frames.is_some_and(|f| {
             let (offset, mask) = f.start;
             state.words.get(&offset).is_some_and(|w| w & mask != 0)
@@ -678,8 +759,6 @@ impl Device for Block {
         {
             return Err("Invalid register block checkpoint".into());
         }
-        self.state = state;
-        self.publish();
         Ok(())
     }
 }
@@ -847,6 +926,89 @@ mod tests {
         let mut cx = h.cx();
         unit.advance(&mut cx);
         assert_eq!(cx.refusal(), Some("Unsupported live-view line width"));
+    }
+
+    #[test]
+    fn a_live_view_film_unit_develops_its_scene_with_the_color_units_words() {
+        use crate::development::tests::provia;
+        use fujimod_emulator_devices::test_host::advance;
+        let frames = Frames {
+            start: (0xc8, 1 << 28),
+            stopped: (0xd8, 0x100),
+            irq: 108,
+            period: 10,
+        };
+        let block = || Block::new(BASE, 0x200, vec![(0, 1)], Some(frames)).unwrap();
+        let reference = [1138, 604, 1096];
+        let words = Published::default();
+        // The color unit's words with the gains of the reference white balance.
+        let program = |matrix: Option<[u32; 6]>, gains: [u32; 3]| {
+            let mut all = provia();
+            for (i, word) in matrix.into_iter().flatten().enumerate() {
+                all.insert(0x300 + 4 * i as u64, word);
+            }
+            all.insert(0x100, gains[0] | gains[1] << 16);
+            all.insert(0x104, gains[2]);
+            *words.lock().unwrap() = all;
+        };
+        assert!(
+            block()
+                .with_live_view_film(
+                    3,
+                    [1015, 764, 577],
+                    [16, 128, 128],
+                    words.clone(),
+                    [0, 1, 1]
+                )
+                .is_err()
+        );
+        assert!(
+            block()
+                .with_live_view_film(3, [20000, 0, 0], [16, 128, 128], words.clone(), reference)
+                .is_err()
+        );
+        let mut unit = block()
+            .with_live_view_film(
+                3,
+                [1015, 764, 577],
+                [16, 128, 128],
+                words.clone(),
+                reference,
+            )
+            .unwrap();
+        let mut h = TestHost::new();
+        write(&mut unit, &mut h, BASE + BUFFER, 0x1000);
+        write(&mut unit, &mut h, BASE + WIDTH, 4);
+        write(&mut unit, &mut h, BASE + 0xc8, 1 << 28);
+        // Until the firmware programs the color unit the declared pair is written.
+        advance(&mut unit, &mut h, 10);
+        assert_eq!(h.ram[0x1000..0x1004], [16, 16, 128, 128]);
+        let mut frame = |unit: &mut Block, h: &mut TestHost, now| {
+            h.ram[0x1000..0x1100].fill(0);
+            advance(unit, h, now);
+            h.ram[0x1000..0x1004].to_vec()
+        };
+        program(None, reference);
+        let provia_frame = frame(&mut unit, &mut h, 20);
+        // PROVIA at the reference white balance gives the measured wall.
+        assert_eq!(provia_frame, [73, 73, 114, 138]);
+        // The same words give the same frame; the whole line is one pair.
+        assert_eq!(frame(&mut unit, &mut h, 30), provia_frame);
+        assert_eq!(h.ram[0x1004..0x1008], provia_frame[..]);
+        // Another film matrix and another white balance each change it.
+        let velvia = [0x1f71040b, 0x84, 0x04b61fb6, 0x1f94, 0x1f84002c, 0x450];
+        program(Some(velvia), reference);
+        let velvia_frame = frame(&mut unit, &mut h, 40);
+        assert_ne!(velvia_frame, provia_frame);
+        program(None, [3917, 604, 2776]);
+        let warm_frame = frame(&mut unit, &mut h, 50);
+        assert_ne!(warm_frame, provia_frame);
+        assert_ne!(warm_frame, velvia_frame);
+        // Unequal curve copies, as when the unit is caught half reprogrammed,
+        // complete no frame.
+        program(None, reference);
+        words.lock().unwrap().insert(0x440, 0);
+        assert_eq!(frame(&mut unit, &mut h, 60), [0; 4]);
     }
 
     #[test]

@@ -13,18 +13,20 @@ impl Reader {
         let artifact: Artifact =
             serde_json::from_slice(&fs::read(path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
-        if artifact.image.is_empty()
-            || artifact.image.contains(['/', '\\'])
-            || matches!(artifact.image.as_str(), "." | "..")
-        {
-            return Err("Flash image must be beside the reader metadata".into());
-        }
-        let image = fs::read(
-            path.parent()
-                .ok_or("Reader directory is missing")?
-                .join(&artifact.image),
-        )
-        .map_err(|e| e.to_string())?;
+        let image = match artifact.image.as_deref() {
+            Some(name) => {
+                if name.is_empty() || name.contains(['/', '\\']) || matches!(name, "." | "..") {
+                    return Err("Flash image must be beside the reader metadata".into());
+                }
+                fs::read(
+                    path.parent()
+                        .ok_or("Reader directory is missing")?
+                        .join(name),
+                )
+                .map_err(|e| e.to_string())?
+            }
+            None => Vec::new(),
+        };
         let facts = selected
             .flash
             .as_ref()

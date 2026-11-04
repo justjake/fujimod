@@ -3988,6 +3988,61 @@
                         "steps_per_mm": 267.0
                       }
                     }
+                  },
+                  {
+                    "options": {
+                      "base": 4294459520,
+                      "transports": [
+                        {
+                          "control": 224,
+                          "configuration": 6,
+                          "bits": 16,
+                          "receive": true
+                        }
+                      ],
+                      "selection": [
+                        {
+                          "pin": {
+                            "port": 12,
+                            "pin": 3
+                          },
+                          "high": false
+                        },
+                        {
+                          "pin": {
+                            "port": 11,
+                            "pin": 3
+                          },
+                          "high": true
+                        },
+                        {
+                          "pin": {
+                            "port": 13,
+                            "pin": 9
+                          },
+                          "high": true
+                        }
+                      ],
+                      "transfer_ticks": 4,
+                      "queue": "single"
+                    },
+                    "gpio": "serial_gpio",
+                    "endpoint": {
+                      "kind": "registers",
+                      "options": {
+                        "registers": [
+                          [
+                            96,
+                            0
+                          ]
+                        ],
+                        "readable": true,
+                        "status_registers": [
+                          96
+                        ],
+                        "clock": null
+                      }
+                    }
                   }
                 ]
               }

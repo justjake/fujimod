@@ -54,6 +54,8 @@ struct Execution {
     index: RefCell<observers::Index>,
     next: Cell<usize>,
     devices: RefCell<BTreeMap<u64, (usize, HookId)>>,
+    write_hook: Cell<Option<HookId>>,
+    wide_code_watch: Cell<bool>,
     stores: RefCell<Vec<(Access, u64, i32, i64)>>,
 }
 pub struct Core {
@@ -106,6 +108,8 @@ impl Core {
             index: RefCell::new(observers::Index::default()),
             next: Cell::new(1),
             devices: RefCell::new(BTreeMap::new()),
+            write_hook: Cell::new(None),
+            wide_code_watch: Cell::new(false),
             stores: RefCell::new(vec![]),
         });
         let owner: Rc<dyn CodeOwner> = e.clone();
@@ -139,6 +143,7 @@ impl Core {
                 data,
             })?;
             e.cpu.hook_watched(hook, true)?;
+            e.write_hook.set(Some(hook));
             if a32 {
                 e.cpu.install_hook(Hook::Exception {
                     callback: exception,
@@ -413,7 +418,22 @@ impl Execution {
 }
 impl CodeOwner for Execution {
     fn watch_code(&self, address: u64, bytes: u64) -> Result<(), String> {
-        self.cpu.watch_stores(address, bytes)
+        if self.wide_code_watch.get() {
+            return Ok(());
+        }
+        if address.checked_add(bytes).is_none_or(|end| end > 1 << 32) {
+            // The optimized native watch bitmap covers 32-bit physical pages.
+            // Keep full-width code coherent by observing every write once a
+            // high page is translated; do not truncate or omit that dependency.
+            self.cpu.hook_watched(
+                self.write_hook.get().ok_or("missing code-write hook")?,
+                false,
+            )?;
+            self.wide_code_watch.set(true);
+            Ok(())
+        } else {
+            self.cpu.watch_stores(address, bytes)
+        }
     }
     fn invalidate_code_page(&self, _address: u64) -> Result<(), String> {
         self.cpu.invalidate_code(None)

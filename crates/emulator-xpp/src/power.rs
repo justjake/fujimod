@@ -152,6 +152,15 @@ impl Device for Control {
         self.state = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         Ok(())
     }
+    fujimod_emulator_devices::checkpoint_state!(state: State, Self::check);
+}
+impl Control {
+    fn check(&self, state: &State) -> Result<(), String> {
+        if state.due.is_some() && self.settle_ticks.is_none() {
+            return Err("Invalid X-Processor Pro power control checkpoint".into());
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

@@ -12,6 +12,8 @@ test = false
 doctest = false
 
 [dependencies]
+fujimod-framebuffer-exr2.workspace = true
+fujimod-framebuffer.workspace = true
 fujimod-emulator-imaging.workspace = true
 fujimod-python-base = { path = "../base" }
 fujimod-emulator-devices.workspace = true

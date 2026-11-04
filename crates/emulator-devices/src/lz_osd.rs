@@ -28,6 +28,7 @@ struct Lz {
     page: u32,
     literal: u8,
     match_first: Option<u8>,
+    #[serde(with = "crate::checkpoint::bytes")]
     history: Vec<u8>,
 }
 impl Lz {
@@ -93,7 +94,9 @@ struct State {
 struct Conversion {
     primary: u64,
     secondary: u64,
+    #[serde(with = "crate::checkpoint::bytes")]
     pixels: Vec<u8>,
+    #[serde(with = "crate::checkpoint::bytes")]
     header: Vec<u8>,
     due: u64,
 }
@@ -366,5 +369,46 @@ impl Device for Decompressor {
         self.state = serde_json::from_value(state.clone())
             .map_err(|e| format!("invalid decompressor checkpoint: {e}"))?;
         Ok(())
+    }
+    // The codec and the shared high-address words are wiring: their owners
+    // restore them.
+    crate::checkpoint_state!(state: State, Self::check);
+}
+impl Decompressor {
+    fn check(&self, state: &State) -> Result<(), String> {
+        if state.lz.history.len() > 2048
+            || state.pending.is_some() && self.codec.is_none()
+            || state.lz.header.is_none() && (state.lz.consumed != 0 || state.lz.produced != 0)
+        {
+            return Err("Invalid decompressor checkpoint".into());
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_host::{TestHost, assert_exact_restore, write};
+
+    #[test]
+    fn checkpoint_restores_stream_setup_and_rejects_other_wiring() {
+        let high = Arc::new(Mutex::new([0; 2]));
+        let mut engine = Decompressor::new(0x80000, 140, high.clone(), None);
+        let mut host = TestHost::new();
+        write(&mut engine, &mut host, 0x80000 + 0x20, 0x94001400);
+        let saved = assert_exact_restore(&mut engine, |d| {
+            let mut host = TestHost::new();
+            d.write(&mut host.cx(), 0x80000 + 0x20, 4, 0x84000400);
+            d.write(&mut host.cx(), 0x80000 + 0x14, 4, 0x1234);
+        });
+        let mut fresh = Decompressor::new(0x80000, 140, high, None);
+        fresh.restore_checkpoint(&saved).unwrap();
+        assert_eq!(fresh.fingerprint().unwrap(), engine.fingerprint().unwrap());
+        assert!(
+            fresh
+                .validate_checkpoint(&saved.clone().with_blobs(vec![[1u8].as_slice().into()]))
+                .is_err()
+        );
     }
 }

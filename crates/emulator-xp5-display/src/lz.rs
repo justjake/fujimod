@@ -1,6 +1,6 @@
 //! XP5 DMA high-address registers and an explicitly selected OSD transport.
 //! The register-level engine is shared in `crate::lz_osd`.
-use crate::osd as codec;
+use fujimod_framebuffer_xp5::emulator_codec as codec;
 use fujimod_emulator_devices::{Cx, Device};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};

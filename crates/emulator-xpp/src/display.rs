@@ -42,7 +42,6 @@
 //! writes. This is the same output controller with a timed completion law.
 use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_devices::{Cx, Device};
-use fujimod_emulator_graphics::raster::{self, PixelOrder, Plane};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -114,19 +113,38 @@ impl Device for FrameClock {
         self.next = next;
         Ok(())
     }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.next)
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        if !saved.children().is_empty() || !saved.blobs().is_empty() {
+            return Err("Display frame checkpoint has unexpected parts".into());
+        }
+        let next: u64 = saved.decode(self.name())?;
+        if next == 0 || next % self.period != 0 {
+            return Err("Invalid display frame checkpoint".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        self.next = saved.decode(self.name())?;
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
 }
 
-const CONTROL: u64 = 0x000;
-const VIDEO_ENABLE: u32 = 1 << 2;
-const VIDEO_FORMAT: u64 = 0x010;
-const PACKED_422: u32 = 0x333;
-const OUTPUT_SIZE: u64 = 0x014;
-const VIDEO_SIZE: u64 = 0x02c;
-const VIDEO_BUFFER: u64 = 0x030;
-const LAYER_ENABLE: u64 = 0x200;
-const LAYER_ORIGIN: u64 = 0x210;
-const LAYER_SIZE: u64 = 0x220;
-const LAYER_BUFFER: u64 = 0x230;
+use fujimod_framebuffer_xpp::{CONTROL, VIDEO_ENABLE, LAYER_ENABLE, LAYER_BUFFER};
+#[cfg(test)]
+use fujimod_framebuffer_xpp::{VIDEO_FORMAT, PACKED_422, OUTPUT_SIZE, VIDEO_SIZE, VIDEO_BUFFER, LAYER_ORIGIN, LAYER_SIZE};
 
 /// Host output index and capture period of a scanned-out display output.
 #[derive(Clone, Copy, Debug)]
@@ -217,82 +235,8 @@ impl Output {
     fn word(&self, offset: u64) -> u32 {
         self.words.get(&offset).copied().unwrap_or(0)
     }
-    /// `(width, height)` of a size word, or `None` for unsupported bits.
-    fn extent(word: u32) -> Option<(u32, u32)> {
-        (word & 0xf000_f000 == 0).then_some(((word >> 16) + 1, (word & 0xfff) + 1))
-    }
-    /// Composite the video layer and the enabled OSD layers; `Ok(None)` when
-    /// no layer is enabled.
-    fn compose(&self, cx: &mut Cx<'_>) -> Result<Option<(u32, u32, Vec<u8>, u64)>, ()> {
-        let enable = self.word(LAYER_ENABLE);
-        let video = self.word(CONTROL) & VIDEO_ENABLE != 0;
-        if enable & !0xf != 0 {
-            return Err(());
-        }
-        if enable == 0 && !video {
-            return Ok(None);
-        }
-        let (width, height) = Self::extent(self.word(OUTPUT_SIZE)).ok_or(())?;
-        let mut rgba = vec![0; width as usize * height as usize * 4];
-        for pixel in rgba.chunks_exact_mut(4) {
-            pixel[3] = 255;
-        }
-        let mut top = 0;
-        if video {
-            let (w, h) = Self::extent(self.word(VIDEO_SIZE)).ok_or(())?;
-            let buffer = u64::from(self.word(VIDEO_BUFFER));
-            if self.word(VIDEO_FORMAT) != PACKED_422
-                || w > width
-                || h > height
-                || w & 1 != 0
-                || buffer & 3 != 0
-            {
-                return Err(());
-            }
-            let plane = Plane {
-                address: buffer,
-                stride: w * 2,
-                source_x: 0,
-                source_y: 0,
-                source_width: w,
-                source_height: h,
-                sampling: None,
-                work_x: 0,
-                work_y: 0,
-                work_width: w,
-                work_height: h,
-                order: PixelOrder::YyCbCr,
-            };
-            raster::composite(|a, n| cx.ram_bytes(a, n), plane, width, height, &mut rgba)
-                .map_err(|_| ())?;
-            for pixel in rgba.chunks_exact_mut(4) {
-                pixel.swap(0, 2);
-            }
-            top = buffer;
-        }
-        for layer in (0..4).filter(|n| enable & 1 << n != 0) {
-            let at = |offset: u64| offset + 4 * layer as u64;
-            let (w, h) = Self::extent(self.word(at(LAYER_SIZE))).ok_or(())?;
-            let buffer = u64::from(self.word(at(LAYER_BUFFER)));
-            if self.word(at(LAYER_ORIGIN)) != 0 || w > width || h > height || buffer & 3 != 0 {
-                return Err(());
-            }
-            let pixels = cx
-                .ram_bytes(buffer, w as usize * h as usize * 4)
-                .map_err(|_| ())?;
-            for (y, row) in pixels.chunks_exact(w as usize * 4).enumerate() {
-                let line = &mut rgba[y * width as usize * 4..][..w as usize * 4];
-                for (out, src) in line.chunks_exact_mut(4).zip(row.chunks_exact(4)) {
-                    let keep = 255 - u32::from(src[3]);
-                    for n in 0..3 {
-                        let value = u32::from(src[n]) + (u32::from(out[n]) * keep + 127) / 255;
-                        out[n] = value.min(255) as u8;
-                    }
-                }
-            }
-            top = buffer;
-        }
-        Ok(Some((width, height, rgba, top)))
+    fn compose(&self,cx:&mut Cx<'_>)->Result<Option<(u32,u32,Vec<u8>,u64)>,()> {
+        fujimod_framebuffer_xpp::Decoder{words:&self.words}.compose(|a,n|cx.ram_bytes(a,n))
     }
     fn scan(&mut self, cx: &mut Cx<'_>, scanout: Scanout) {
         let (width, height, rgba, source) = match self.compose(cx) {
@@ -442,36 +386,104 @@ impl Device for Output {
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let rows: Vec<(u64, u32)> = serde_json::from_value(value["words"].clone())
             .map_err(|e| format!("Invalid display output checkpoint: {e}"))?;
-        if rows
+        fn field<T: serde::de::DeserializeOwned>(value: &Value, name: &str) -> Result<T, String> {
+            serde_json::from_value(value[name].clone())
+                .map_err(|e| format!("Invalid display output checkpoint: {e}"))
+        }
+        let state = OutputState {
+            words: rows.into_iter().collect(),
+            capture: if self.scanout.is_some() {
+                field(value, "scanout")?
+            } else {
+                Capture::default()
+            },
+            handshake: if self.handshake_ticks.is_some() {
+                field(value, "handshake")?
+            } else {
+                Handshake::default()
+            },
+        };
+        self.check(&state)?;
+        self.apply(state);
+        Ok(())
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &OutputState {
+                words: self.words.clone(),
+                capture: self.capture.clone(),
+                handshake: self.handshake.clone(),
+            },
+        )
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        if !saved.children().is_empty() || !saved.blobs().is_empty() {
+            return Err("Display output checkpoint has unexpected parts".into());
+        }
+        self.check(&saved.decode(self.name())?)
+    }
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let state = saved.decode(self.name())?;
+        self.apply(state);
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
+}
+
+/// Mutable display output state: words, capture clock and handshake.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OutputState {
+    words: BTreeMap<u64, u32>,
+    capture: Capture,
+    handshake: Handshake,
+}
+impl Output {
+    fn check(&self, state: &OutputState) -> Result<(), String> {
+        if state
+            .words
             .iter()
             .any(|(offset, v)| offset & 3 != 0 || *offset >= self.size || *v == 0)
         {
             return Err("Invalid display output checkpoint".into());
         }
-        let capture = match self.scanout {
+        match self.scanout {
             Some(scanout) => {
-                let capture: Capture = serde_json::from_value(value["scanout"].clone())
-                    .map_err(|e| format!("Invalid display output checkpoint: {e}"))?;
-                if capture.next == 0 || capture.next % scanout.period != 0 {
+                if state.capture.next == 0 || state.capture.next % scanout.period != 0 {
                     return Err("Invalid display output checkpoint".into());
                 }
-                capture
             }
-            None => Capture::default(),
-        };
-        self.handshake = if self.handshake_ticks.is_some() {
-            let state: Handshake =
-                serde_json::from_value(value["handshake"].clone()).map_err(|e| e.to_string())?;
-            if state.status && state.due.is_some() {
-                return Err("Invalid display handshake checkpoint".into());
+            None => {
+                if state.capture.next != 0
+                    || state.capture.sequence != 0
+                    || state.capture.hash.is_some()
+                {
+                    return Err("Invalid display output checkpoint".into());
+                }
             }
-            state
-        } else {
-            Handshake::default()
-        };
-        self.words = rows.into_iter().collect();
-        self.capture = capture;
+        }
+        if state.handshake.status && state.handshake.due.is_some()
+            || self.handshake_ticks.is_none()
+                && (state.handshake.status || state.handshake.due.is_some())
+        {
+            return Err("Invalid display handshake checkpoint".into());
+        }
         Ok(())
+    }
+    fn apply(&mut self, state: OutputState) {
+        self.words = state.words;
+        self.capture = state.capture;
+        self.handshake = state.handshake;
     }
 }
 

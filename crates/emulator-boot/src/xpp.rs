@@ -412,6 +412,18 @@ fn nodes(
         if let Some(image) = image.filter(|image| image.unit == block.base) {
             model["live_view_image"] =
                 json!({ "lines": image.lines, "ycbcr": image.ycbcr, "scene": image.scene });
+            if let Some(film) = &image.film {
+                if development.is_none_or(|d| d.color.is_none())
+                    || image.scene.is_some()
+                    || image.host_image.is_some()
+                {
+                    return Err("a live-view film needs the still color unit and no scene".into());
+                }
+                model["live_view_image"]["film"] = json!({
+                    "linear_rgb": film.linear_rgb,
+                    "white_balance_reference": film.white_balance_reference,
+                });
+            }
             if let Some(host) = &image.host_image {
                 model["live_view_image"]["host_image"] = json!({
                     "width": host.width, "height": host.height,
@@ -1000,6 +1012,67 @@ mod tests {
     }
 
     #[test]
+    fn a_live_view_film_reaches_its_unit_and_needs_the_still_color_unit() {
+        let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
+        let maps = soc_profile(&resolved)
+            .unwrap()
+            .register_maps
+            .as_ref()
+            .unwrap();
+        let selection = &resolved.reference;
+        let banks = ram_banks(&selection.soc.memory_regions);
+        let reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let unit = reset.live_view_image.as_ref().unwrap().unit;
+        let (starts, assets) = (starts(), assets());
+        let built = |reset: &HardwareReset| {
+            let inputs = Inputs {
+                starts: &starts,
+                sub_cpu_registers: &[],
+                assets: &assets,
+                sensor_image: None,
+            };
+            nodes(
+                maps,
+                reset,
+                selection.body.dram_bytes.unwrap(),
+                &banks,
+                &inputs,
+            )
+        };
+        let find = |nodes: &[Value]| {
+            nodes
+                .iter()
+                .map(|node| node["model"].clone())
+                .find(|model| model["base"] == unit)
+                .unwrap()
+        };
+        // The X-T20 declares its wall as film light developed with the color unit.
+        let film = reset
+            .live_view_image
+            .as_ref()
+            .unwrap()
+            .film
+            .clone()
+            .unwrap();
+        assert_eq!(film.linear_rgb, [1015, 764, 577]);
+        let block = find(&built(&reset).unwrap());
+        assert_eq!(
+            block["live_view_image"]["film"],
+            json!({"linear_rgb": [1015, 764, 577], "white_balance_reference": [1138, 604, 1096]})
+        );
+        let mut without = reset.clone();
+        without.still_development.as_mut().unwrap().color = None;
+        assert!(built(&without).is_err());
+        let mut scene = reset.clone();
+        scene.live_view_image.as_mut().unwrap().scene =
+            Some("declared-rgb-bars-ramp-moving-square-bt601-limited-v1".into());
+        assert_eq!(
+            built(&scene).err().unwrap(),
+            "a live-view film needs the still color unit and no scene"
+        );
+    }
+
+    #[test]
     fn a_live_view_host_image_is_checked_and_passed_to_its_unit() {
         use fujimod_catalog_run_inputs::hardware_inputs::LiveViewHostImage;
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
@@ -1013,6 +1086,7 @@ mod tests {
         let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
         let image = reset.live_view_image.as_mut().unwrap();
         let unit = image.unit;
+        image.film = None;
         image.host_image = Some(LiveViewHostImage {
             asset: "host".into(),
             basis: "test".into(),
@@ -1178,6 +1252,7 @@ mod tests {
             .as_ref()
             .unwrap();
         let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        reset.live_view_image.as_mut().unwrap().film = None;
         reset.still_development = Some(StillDevelopment {
             basis: "test".into(),
             profile: "declared".into(),

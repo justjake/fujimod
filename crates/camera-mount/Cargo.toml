@@ -8,6 +8,11 @@ publish.workspace = true
 description = "Camera SD files, read-only live memory and internal storage as a mounted filesystem"
 
 [dependencies]
+fujimod-framebuffer-xp5.workspace = true
+fujimod-framebuffer-xp4.workspace = true
+fujimod-framebuffer-xpp.workspace = true
+fujimod-framebuffer-exr2.workspace = true
+fujimod-framebuffer.workspace = true
 fujimod-usb.workspace = true
 fujimod-catalog.workspace = true
 fujimod-catalog-bulk.workspace = true
@@ -19,6 +24,19 @@ serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 sha2.workspace = true
 libc = "0.2"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+async-net = "2"
+async-lock = "3"
+async-tungstenite = { version = "0.35", features = ["smol-runtime"] }
+futures-util = { version = "0.3", features = ["sink"] }
+fujimod-usb-proxy = { path = "../usb-proxy" }
+nusb = { workspace = true, features = ["smol"] }
+
+[[bin]]
+name = "fujimod-usb-agent"
+path = "src/agent.rs"
+
 
 [target.'cfg(target_os = "macos")'.dependencies]
 fskit-rs = "=0.2.0"

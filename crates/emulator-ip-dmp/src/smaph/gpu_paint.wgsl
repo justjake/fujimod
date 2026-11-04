@@ -383,7 +383,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         let rect = vec4<u32>(data[offset], data[offset + 1u], data[offset + 2u], data[offset + 3u]);
         inside_scissor = inside_scissor || (x >= rect.x && x < rect.z && y >= rect.y && y < rect.w);
     }
-    let covered = coverage[output_index];
+    let covered = coverage[id.y * params[2] + id.x];
     if !inside_scissor || covered == 0u {
         output[output_index] = destination_word;
         return;
@@ -391,10 +391,9 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
     var source = unpack_color(params[16]);
     if params[15] == 1u {
-        source = texture_color(x, y);
+        source = packed_color(texture_color(x, y));
     } else if params[15] == 2u {
-        source = gradient_color(x, y);
+        source = packed_color(gradient_color(x, y));
     }
-    source = packed_color(source);
     output[output_index] = blend_pixel(pack_color(source), destination_word, covered);
 }

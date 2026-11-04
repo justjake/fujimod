@@ -178,10 +178,17 @@ impl Device for Shutter {
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.check(&state)?;
+        self.state = state;
+        Ok(())
+    }
+    fujimod_emulator_devices::checkpoint_state!(state: State, Self::check);
+}
+impl Shutter {
+    fn check(&self, state: &State) -> Result<(), String> {
         if state.poll_at % self.timing.poll != 0 {
             return Err("Invalid shutter checkpoint".into());
         }
-        self.state = state;
         Ok(())
     }
 }
@@ -242,5 +249,37 @@ mod tests {
         write(&mut gpio, &mut h, GPIO + 0x4c, 0x3_0001);
         advance(&mut shutter, &mut h, 61);
         assert_eq!((sensors(&pins), shutter.state.steps), ((true, true), 2));
+    }
+
+    #[test]
+    fn checkpoint_resumes_a_turning_motor_with_its_pending_step() {
+        use fujimod_emulator_devices::test_host::{advance_from_checkpoint, assert_exact_restore};
+        let pins = Pins::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 << 2, 0, 0, 0, 0, 0]);
+        let mut gpio = Gpio::new(GPIO, pins.clone()).unwrap();
+        let wiring = || Wiring {
+            mode: (1, 3),
+            motor: (0, 1),
+            sensors: vec![(0, 3), (10, 2)],
+            line: 3,
+        };
+        let positions = vec![vec![false, true], vec![false, false], vec![true, true]];
+        let mut shutter = Shutter::new(
+            wiring(),
+            Timing { step: 30, poll: 1 },
+            positions.clone(),
+            pins.clone(),
+        )
+        .unwrap();
+        let mut h = TestHost::new();
+        write(&mut gpio, &mut h, GPIO + 0x4c, 0x3_0001);
+        write(&mut gpio, &mut h, GPIO + 0x4c, 0xc_0000);
+        advance(&mut shutter, &mut h, 1);
+        advance_from_checkpoint(&mut shutter, &mut h, 31);
+        let saved = assert_exact_restore(&mut shutter, |d| {
+            let mut h = TestHost::new();
+            advance(d, &mut h, 90);
+        });
+        let slower = Shutter::new(wiring(), Timing { step: 30, poll: 7 }, positions, pins).unwrap();
+        assert!(slower.validate_checkpoint(&saved).is_err());
     }
 }

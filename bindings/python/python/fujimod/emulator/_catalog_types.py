@@ -4,19 +4,35 @@ from __future__ import annotations
 from typing import Literal, Never, NotRequired, Required, TypedDict
 
 
+type AdcCondition = AdcConditionVariant0 | AdcConditionVariant1
+
+
+class AdcConditionVariant0(TypedDict, total=False):
+    kind: Required[Literal["rows_inactive"]]
+    rows: Required[list[int]]
+
+
+class AdcConditionVariant1(TypedDict, total=False):
+    kind: Required[Literal["self_active"]]
+
+
 type AdcInterval = AdcIntervalVariant0 | AdcIntervalVariant1
 
 
 class AdcIntervalVariant0(TypedDict, total=False):
     kind: Required[Literal["literal"]]
     lower: Required[int]
+    unless: NotRequired[list[AdcInterval]]
     upper: Required[int]
+    when: NotRequired[AdcCondition | None]
 
 
 class AdcIntervalVariant1(TypedDict, total=False):
     kind: Required[Literal["configuration_u16"]]
     lower: Required[int]
+    unless: NotRequired[list[AdcInterval]]
     upper: Required[int]
+    when: NotRequired[AdcCondition | None]
 
 
 class AdditionalUiModes(TypedDict, total=False):
@@ -475,6 +491,11 @@ class CompanionMailbox(TypedDict, total=False):
     reply: Required[int]
     request: Required[int]
     status: Required[int]
+
+
+class ConfigurationCheck(TypedDict, total=False):
+    offset: Required[int]
+    value: Required[int]
 
 
 type ConfigurationLocation = (
@@ -1529,6 +1550,7 @@ FirmwareBulk = TypedDict(
         "schema": Required["int"],
         "scopes": Required["list[CaptureScope]"],
         "source": Required["BulkSource"],
+        "upload": NotRequired["Upload | None"],
         "window": Required["BulkRange"],
     },
     total=False,
@@ -1545,6 +1567,7 @@ FirmwareCard = TypedDict(
         "mechanism": Required["Mechanism"],
         "product": Required["str"],
         "schema": Required["int"],
+        "service": NotRequired["QueryService | None"],
     },
     total=False,
 )
@@ -1717,6 +1740,7 @@ FirmwareFlash = TypedDict(
         "code_ranges": Required["list[FlashCodeRange]"],
         "control": Required["FlashControl"],
         "device": Required["FlashDevice"],
+        "e1_window": NotRequired["FlashRange | None"],
         "firmware_id": Required["str"],
         "id": Required["str"],
         "reader": Required["FlashReader"],
@@ -3981,6 +4005,19 @@ class PulseInterface(TypedDict, total=False):
     timer_channels: Required[list[int]]
 
 
+class QueryService(TypedDict, total=False):
+    allocate: Required[int]
+    barrier: Required[int]
+    cache_clean: Required[int]
+    checks: Required[list[CodeCheck]]
+    configuration_pointer: Required[int]
+    functions: Required[list[int]]
+    instruction_barrier: Required[int]
+    instruction_invalidate: Required[int]
+    release: Required[int]
+    worker_slots: Required[int]
+
+
 class QuickGrid(TypedDict, total=False):
     columns: Required[int]
     menu_code: Required[int]
@@ -5379,6 +5416,16 @@ class UpdateRange(TypedDict, total=False):
     address: Required[int]
     sha256: Required[str]
     size: Required[int]
+
+
+class Upload(TypedDict, total=False):
+    address_alignment: Required[int]
+    capacity_address: Required[int]
+    code_checks: Required[list[CodeCheck]]
+    configuration_checks: Required[list[ConfigurationCheck]]
+    piece_bytes: Required[int]
+    pointer: Required[int]
+    pointer_bytes: Required[int]
 
 
 type VideoEncoderBackend = Literal["videotoolbox", "software"]

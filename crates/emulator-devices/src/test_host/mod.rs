@@ -126,6 +126,34 @@ pub fn advance_from_checkpoint(d: &mut dyn Device, h: &mut TestHost, now: u64) {
     assert_eq!(d.fingerprint().unwrap(), after_state);
 }
 
+/// A device checkpoint restores exactly: `mutate` changes the device, the
+/// restore brings back the same fingerprint and typed bytes, and a typed
+/// snapshot survives its envelope. Returns the saved state so a test can check
+/// that differently wired devices refuse it.
+pub fn assert_exact_restore(
+    d: &mut dyn Device,
+    mutate: impl FnOnce(&mut dyn Device),
+) -> crate::checkpoint::Checkpoint {
+    let before = d.fingerprint().unwrap();
+    let saved = d.checkpoint().unwrap();
+    assert_eq!(d.checkpoint().unwrap().fingerprint(), saved.fingerprint());
+    mutate(d);
+    assert_ne!(
+        d.fingerprint().unwrap(),
+        before,
+        "the mutation changed nothing"
+    );
+    d.validate_checkpoint(&saved).unwrap();
+    d.restore_checkpoint(&saved).unwrap();
+    assert_eq!(d.fingerprint().unwrap(), before);
+    assert_eq!(d.checkpoint().unwrap().fingerprint(), saved.fingerprint());
+    let envelope = crate::checkpoint::Checkpoint::encode("envelope", &saved).unwrap();
+    let decoded: crate::checkpoint::Checkpoint = envelope.decode("envelope").unwrap();
+    d.restore_checkpoint(&decoded).unwrap();
+    assert_eq!(d.fingerprint().unwrap(), before);
+    saved
+}
+
 /// Film registers for a neutral matrix, linear tone and unit chroma.
 pub fn film_words() -> Vec<u32> {
     let mut r = vec![0; 1024];

@@ -6,6 +6,8 @@ pub fn system_register(name: &str) -> Result<super::arm::SystemRegister, String>
     let n = name.to_ascii_uppercase();
     let v = match n.as_str() {
         "MIDR_EL1" => 0xc000,
+        "CURRENTEL" => 0xc212,
+        "CNTFRQ_EL0" => 0xdf00,
         "MPIDR_EL1" => 0xc005,
         "SCTLR_EL1" => 0xc080,
         "CPACR_EL1" => 0xc082,

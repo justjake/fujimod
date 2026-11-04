@@ -1638,6 +1638,7 @@ impl State {
             return Ok(result);
         }
         self.memory_access = value.is_some();
+        self.timeline.synchronize(core)?;
         let result = self.with_host(cpus, |bus, host| {
             bus.access(host, core, pc, address, size, value)
         });

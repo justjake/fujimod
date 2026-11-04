@@ -12,6 +12,7 @@ test = false
 doctest = false
 
 [dependencies]
+fujimod-framebuffer-xp4.workspace = true
 fujimod-emulator.workspace = true
 fujimod-emulator-cpu.workspace = true
 fujimod-emulator-cpu-unicorn.workspace = true

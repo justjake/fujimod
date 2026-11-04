@@ -31,6 +31,7 @@ struct Camera {
     failure: Option<&'static str>,
     mutations: usize,
     cache_calls: usize,
+    reject_update: bool,
 }
 impl Camera {
     fn read(&self, a: u32, n: usize) -> Vec<u8> {
@@ -68,11 +69,21 @@ impl Camera {
         let size = request >> 8;
         let path = self.text(0x40200);
         let mut count = 0;
+        let mut status = 0;
         match op {
             1 | 5 => {
                 assert!(self.files.contains_key(&path));
+                if op == 5 && self.reject_update {
+                    status = 5;
+                } else {
+                    self.opened = Some((path, 0));
+                    self.put(0x4011c, 16)
+                }
+            }
+            9 => {
+                self.files.insert(path.clone(), vec![]);
                 self.opened = Some((path, 0));
-                self.put(0x4011c, 16)
+                self.put(0x4011c, 16);
             }
             2 => {
                 let (name, offset) = self.opened.clone().unwrap();
@@ -92,9 +103,14 @@ impl Camera {
                 let (name, offset) = self.opened.clone().unwrap();
                 let raw = self.read(0x41000, size as usize);
                 let data = self.files.get_mut(&name).unwrap();
+                data.resize(data.len().max(offset + size as usize), 0);
                 data[offset..offset + size as usize].copy_from_slice(&raw);
                 self.opened = Some((name, offset + size as usize));
                 count = size;
+            }
+            11 => {
+                let offset = self.word(0x41000) as usize;
+                self.opened.as_mut().unwrap().1 = offset;
             }
             7 => {
                 assert!(self.opened.is_none());
@@ -137,8 +153,8 @@ impl Camera {
             _ => panic!("Unexpected mailbox operation {op}"),
         }
         self.put(0x40104, 0);
-        self.put(0x40108, 2);
-        self.put(0x4010c, 0);
+        self.put(0x40108, if status == 0 { 2 } else { 3 });
+        self.put(0x4010c, status);
         self.put(0x40110, count);
         self.put(0x40114, self.word(0x40114).wrapping_add(1));
     }
@@ -526,6 +542,62 @@ fn owned_range_read_is_one_operation_and_preserves_eof_and_closed_handles() {
             assert!(camera.lock().unwrap().opened.is_none());
         }
         assert_eq!(camera.lock().unwrap().word(0x40114), 2);
+    })
+}
+
+#[test]
+fn refused_update_recreates_only_a_confirmed_empty_file() {
+    block_on(async {
+        for initial in [vec![], vec![7, 8]] {
+            let camera = camera();
+            {
+                let mut c = camera.lock().unwrap();
+                c.files.insert("A:\\NEW.BIN".into(), initial.clone());
+                c.reject_update = true;
+                c.write(
+                    0x40000,
+                    &words(&[
+                        0x314c4946, 3, 123, 0x40100, 0x40104, 0x40108, 0x4010c, 0x40110, 0x40200,
+                        0x41000, 0x40114, 0x40118, 0x4011c, 0x40120, 1, 0,
+                    ]),
+                );
+                c.put(0x40100, 64);
+                c.put(0x4011c, u32::MAX);
+            }
+            let mut p = profile();
+            p.mechanism = Mechanism::Mailbox {
+                search_address: 0x40000,
+                search_bytes: 0x4000,
+                address_alias: 0,
+                build: Some(123),
+            };
+            let mut session = peer_session(Endpoint(camera.clone()), 8192, None)
+                .await
+                .unwrap();
+            let result = execute(
+                &mut session,
+                limits(),
+                &p,
+                Request::WriteAt {
+                    path: "A:\\NEW.BIN".into(),
+                    offset: 0,
+                    data: vec![4, 5, 6],
+                },
+            )
+            .await;
+            assert_eq!(result.is_ok(), initial.is_empty());
+            let c = camera.lock().unwrap();
+            assert_eq!(
+                c.files["A:\\NEW.BIN"],
+                if initial.is_empty() {
+                    vec![4, 5, 6]
+                } else {
+                    initial
+                }
+            );
+            assert_eq!(c.files["A:\\OLD.BIN"], vec![1, 2]);
+            assert!(c.opened.is_none());
+        }
     })
 }
 fn restored(c: &Camera) {

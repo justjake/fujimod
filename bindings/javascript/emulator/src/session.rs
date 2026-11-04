@@ -9,7 +9,7 @@ use fujimod_emulator::board::{
 use fujimod_emulator_cpu::{Model, Register, arm, timeline::Ratio};
 use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, graphics::scanout::Frame, parts::{controls::Source, pins::DriveInput}};
 use fujimod_emulator_parts_controls::resistor_keys::{Key, Options as ResistorKeysOptions, ResistorKeys};
-use fujimod_emulator_graphics::raster::PixelOrder;
+use fujimod_framebuffer::raster::PixelOrder;
 use fujimod_emulator_xp5_board::board;
 use fujimod_emulator_xp5_display::display;
 use serde::Deserialize;

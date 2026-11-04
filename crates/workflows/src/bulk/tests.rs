@@ -422,6 +422,7 @@ fn preserving_reads_support_every_source_family_and_restore_without_pattern_writ
                     steps.extend(read(0x1200, &selected));
                     (0x1200, original, selected, 0x1000)
                 }
+                BulkSource::DirectQuery { .. } => panic!("direct query handled separately"),
                 BulkSource::Pattern { .. } | BulkSource::PatternZeroBase { .. } => {
                     let wide = matches!(camera.source, BulkSource::PatternZeroBase { .. });
                     let original = if wide {

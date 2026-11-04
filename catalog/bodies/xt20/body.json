@@ -17,6 +17,17 @@
       "id": "flash-storage",
       "kind": "control",
       "signals": []
+    },
+    {
+      "id": "controls-adc-4",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 4,
+          "threshold": null
+        }
+      ]
     }
   ],
   "parts": [

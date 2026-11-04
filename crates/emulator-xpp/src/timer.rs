@@ -43,6 +43,13 @@ impl TickTimers {
     }
     pub fn restore(&mut self, value: &serde_json::Value) -> Result<(), String> {
         let state: Self = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.check(&state)?;
+        *self = state;
+        Ok(())
+    }
+    /// Whether `state` is a possible state of these timers: same interrupt
+    /// wiring, channel shape and enable/deadline agreement.
+    pub fn check(&self, state: &Self) -> Result<(), String> {
         if state.irqs != self.irqs
             || state.counters.len() != CHANNELS
             || state.configuration.len() != CHANNELS
@@ -51,7 +58,6 @@ impl TickTimers {
         {
             return Err("Invalid X-Processor Pro timer checkpoint".into());
         }
-        *self = state;
         Ok(())
     }
     pub fn next_event_tick(&self, _now: u64) -> Option<u64> {

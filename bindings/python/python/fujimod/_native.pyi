@@ -164,6 +164,15 @@ class emulator:
         def driver_advance(
             self, /, tick: SupportsIndex, quantum: SupportsIndex
         ) -> None: ...
+        def call_aarch64(
+            self,
+            /,
+            options: str,
+            callback: Callable[
+                [int, list[int], list[tuple[int, bytes]]],
+                tuple[int, list[tuple[int, bytes]]],
+            ] | None = ...,
+        ) -> str: ...
         def driver_begin(
             self, /, options: str, transaction_limit: SupportsIndex
         ) -> None: ...

@@ -202,12 +202,26 @@ fn first_start_key(
             key_id
         ));
     };
-    let [AdcInterval::ConfigurationU16 { lower, upper }] = intervals.as_slice() else {
+    let [
+        AdcInterval::ConfigurationU16 {
+            lower,
+            upper,
+            when: None,
+            unless,
+        },
+    ] = intervals.as_slice()
+    else {
         return Err(format!(
             "firmware key {} requires one ADC calibration interval",
             key_id
         ));
     };
+    if !unless.is_empty() {
+        return Err(format!(
+            "firmware key {} has a conditional ADC calibration interval",
+            key_id
+        ));
+    }
     let connection = resolved
         .reference
         .body

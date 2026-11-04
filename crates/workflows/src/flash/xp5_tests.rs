@@ -88,15 +88,16 @@ fn fixture() -> (FirmwareBulk, FirmwareFlash, Payload, Vec<u8>) {
             address: 0xf0000000,
             size: 8192,
         },
+        e1_window: None,
         update_image: FlashUpdateImage {
             dat_offset: 0,
             xor: 255,
         },
-        reader: FlashReader {
+        reader: Some(FlashReader {
             symbol: "flash_read".into(),
             alignment: 64,
             nand: None,
-        },
+        }),
         transport: Some("xp5-cmd-callback".into()),
         code_ranges: vec![FlashCodeRange {
             name: "flash_read".into(),
@@ -112,6 +113,7 @@ fn fixture() -> (FirmwareBulk, FirmwareFlash, Payload, Vec<u8>) {
         control: FlashControl {
             offset: 0,
             size: 64,
+            sha256: bulk::hex(&sha256_bytes(&[5; 64])),
         },
     };
     let mut image = vec![0; 0x1100];
@@ -388,6 +390,102 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
         assert_eq!(script.remaining(), 0);
         assert_eq!(session.state(), SessionState::Ready);
     }
+}
+
+#[test]
+fn matching_control_reads_mapped_flash_in_registered_e1_capacity_chunks() {
+    let (mut bulk, mut flash, mut payload, mut image) = fixture();
+    let capacity: u32 = 0x1_0000;
+    let control = vec![5; 0x8000];
+    let first = vec![6; capacity as usize];
+    let second = vec![7; capacity as usize];
+    let control_sha256 = bulk::hex(&sha256_bytes(&control));
+    if let BulkSource::PatternZeroBase {
+        capacity: ref mut registered_capacity,
+        ..
+    } = bulk.source
+    {
+        *registered_capacity = capacity;
+    } else {
+        unreachable!("XP5 sample uses the zero-base E1 source");
+    }
+    flash.device = FlashDevice {
+        kind: "serial-nor".into(),
+        jedec_id: Some("2c5b1b".into()),
+        part: Some("Test NOR".into()),
+    };
+    flash.window = FlashRange {
+        address: 0xf0000000,
+        size: 0x08000000,
+    };
+    flash.e1_window = Some(FlashRange {
+        address: 0xf0000000,
+        size: 0x08000000,
+    });
+    flash.control = FlashControl {
+        offset: 0x000c0000,
+        size: control.len() as u64,
+        sha256: control_sha256.clone(),
+    };
+    payload.control_sha256 = control_sha256;
+    payload.update_size = 0x00200000;
+    payload.capacity = 0x10000;
+    payload.buffer_capacity = 0x8000;
+    payload.transport.registered_scratch.size = u64::from(capacity);
+    let buffer = payload.buffer;
+    payload
+        .mutable
+        .iter_mut()
+        .find(|range| range.address == buffer)
+        .unwrap()
+        .size = u64::from(payload.buffer_capacity);
+    image.resize(payload.capacity as usize, 0);
+    payload.sha256 = bulk::hex(&sha256_bytes(&image));
+    payload.validate(&flash, &bulk, &image).unwrap();
+
+    let original = [7u8; 12];
+    let selected = words(&[0, 0, capacity]);
+    let mut steps = info(4, "X-M5");
+    steps.extend(info(8, "2.06"));
+    steps.extend(cfg(163, 1, false));
+    steps.extend(cfg(247, 0, false));
+    steps.extend(cfg(247, 1, true));
+    steps.extend(cfg(247, 1, false));
+    steps.extend(memory_read(0x1300, &words(&[0x100000, 0, capacity])));
+    steps.extend(memory_read(0x1900, &0x2000u64.to_le_bytes()));
+    steps.extend(crate::bulk::tests::qualified());
+    steps.extend(memory_read(0x1300, &words(&[0x100000, 0, capacity])));
+    steps.extend(memory_read(0x1400, &original));
+    steps.extend(write(0x1400, &selected));
+    steps.extend(memory_read(0x1400, &selected));
+    steps.extend(memory_read(0x1000, b"stoc"));
+    steps.extend(data(0x1000, b"stoc"));
+    steps.extend(data(0xf00c0000, &control));
+    steps.extend(data(0xf0100000, &first));
+    steps.extend(data(0xf0110000, &second));
+    steps.extend(memory_read(0x1400, &selected));
+    steps.extend(write(0x1400, &original));
+    steps.extend(memory_read(0x1400, &original));
+    steps.extend(cfg(163, 1, false));
+    steps.extend(cfg(247, 1, false));
+    steps.extend(cfg(247, 0, true));
+    steps.extend(cfg(247, 0, false));
+
+    let (mut session, script) = opened(steps);
+    let bytes = block_on(crate::flash::read_range(
+        &mut session,
+        &bulk,
+        &flash,
+        &crate::flash::Payload::Xp5Command(payload),
+        &image,
+        limits(),
+        0x00100000,
+        (capacity * 2) as u32,
+    ))
+    .unwrap();
+    assert_eq!(bytes, [first, second].concat());
+    assert_eq!(script.remaining(), 0);
+    assert_eq!(session.state(), SessionState::Ready);
 }
 
 #[test]

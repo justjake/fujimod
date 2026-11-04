@@ -1,5 +1,10 @@
 [workspace]
 members = [
+  "crates/framebuffer-xp5",
+  "crates/framebuffer-xp4",
+  "crates/framebuffer-xpp",
+  "crates/framebuffer-exr2",
+  "crates/framebuffer",
   "crates/corpus",
   "crates/virtual-scene",
   "crates/recording",
@@ -123,6 +128,11 @@ repository = "https://github.com/justjake/fujimod"
 publish = false
 
 [workspace.dependencies]
+fujimod-framebuffer-xp5 = { path = "crates/framebuffer-xp5", version = "0.1.0" }
+fujimod-framebuffer-xp4 = { path = "crates/framebuffer-xp4", version = "0.1.0" }
+fujimod-framebuffer-xpp = { path = "crates/framebuffer-xpp", version = "0.1.0" }
+fujimod-framebuffer-exr2 = { path = "crates/framebuffer-exr2", version = "0.1.0" }
+fujimod-framebuffer = { path = "crates/framebuffer", version = "0.1.0" }
 fujimod-remote = { path = "crates/remote", version = "0.1.0" }
 fujimod-recording = { path = "crates/recording", version = "0.1.0" }
 fujimod-catalog = { path = "crates/catalog", version = "0.1.0" }

@@ -4,6 +4,8 @@
 //! execution bound. This harness does not inspect firmware identity or alter
 //! device behavior.
 
+pub mod checked;
+
 use super::super::{Board, observation::InstructionPoints};
 use fujimod_emulator_cpu::{Model, Register};
 
@@ -46,12 +48,7 @@ fn validate(options: &Options) -> std::result::Result<(), String> {
     Ok(())
 }
 
-fn run(
-    board: &mut Board,
-    points: &mut InstructionPoints,
-    options: &Options,
-    start: u64,
-) -> std::result::Result<Stop, String> {
+fn initialize(board: &mut Board, options: &Options) -> std::result::Result<(), String> {
     board.harness_select_core(options.core)?;
     for index in 0..30 {
         board.write_register(
@@ -71,6 +68,17 @@ fn run(
         board.write_register(options.core, Register::Sp, stack_pointer)?;
     }
     board.write_register(options.core, Register::Pc, options.entry)?;
+
+    Ok(())
+}
+
+fn run(
+    board: &mut Board,
+    points: &mut InstructionPoints,
+    options: &Options,
+    start: u64,
+) -> std::result::Result<Stop, String> {
+    initialize(board, options)?;
 
     loop {
         if points.event().is_some() {

@@ -1,9 +1,9 @@
 //! Declared grayscale and signed-chroma composition laws. Rasterization is
 //! limited to the implemented rectangle shapes.
-use fujimod_emulator_devices::exr2::scanout_frame::Frame;
-use super::scanout::{Pipe, RectangleComposition};
-use fujimod_emulator_devices::exr2::scanout_frame::State as S;
-use fujimod_emulator_devices::record::Result;
+use crate::{Pipe, RectangleComposition};
+use fujimod_framebuffer::Result;
+use fujimod_framebuffer::frame::Frame;
+use fujimod_framebuffer::frame::State as S;
 use sha2::{Digest, Sha256};
 
 pub const PROFILE: &str = "xm1-150-declared-luma-rectangle-overlay-unmeasured";
@@ -41,8 +41,16 @@ pub fn decode(pipe: &Pipe, selected: Option<RectangleComposition>) -> Result<Vec
         if enabled & (1 << bit) == 0 {
             continue;
         }
-        let shift = if auxiliary { 24 + ordinal * 2 } else { index * 2 };
-        let start_offset = if auxiliary { 0x10c + ordinal * 8 } else { 0x11c + index * 8 };
+        let shift = if auxiliary {
+            24 + ordinal * 2
+        } else {
+            index * 2
+        };
+        let start_offset = if auxiliary {
+            0x10c + ordinal * 8
+        } else {
+            0x11c + index * 8
+        };
         let color_slot = r.get_or_zero(0x174) >> shift & 3;
         let width_slot = r.get_or_zero(0x188) >> shift & 3;
         let color_offset = 0x178 + color_slot * 4;
@@ -77,10 +85,12 @@ pub fn decode(pipe: &Pipe, selected: Option<RectangleComposition>) -> Result<Vec
                 let cr = f64::from((color >> 16) as u8 as i8);
                 let (kr, kb) = (0.299, 0.114);
                 let kg = 1.0 - kr - kb;
-                [y + 2.0 * (1.0 - kr) * cr,
-                 y - 2.0 * kb * (1.0 - kb) / kg * cb - 2.0 * kr * (1.0 - kr) / kg * cr,
-                 y + 2.0 * (1.0 - kb) * cb]
-                    .map(|v| v.round_ties_even().clamp(0.0, 255.0) as u8)
+                [
+                    y + 2.0 * (1.0 - kr) * cr,
+                    y - 2.0 * kb * (1.0 - kb) / kg * cb - 2.0 * kr * (1.0 - kr) / kg * cr,
+                    y + 2.0 * (1.0 - kb) * cb,
+                ]
+                .map(|v| v.round_ties_even().clamp(0.0, 255.0) as u8)
             }
             _ => return Err("Unresolved rectangle color encoding".into()),
         };
@@ -91,7 +101,9 @@ pub fn decode(pipe: &Pipe, selected: Option<RectangleComposition>) -> Result<Vec
             }
             let inset = r.get_or_zero(offset);
             Some((inset >> 16, inset & 0x7ff))
-        } else { None };
+        } else {
+            None
+        };
         let rectangle = Rectangle {
             index,
             left: start >> 16,
@@ -131,10 +143,13 @@ pub fn compose(frame: &mut Frame, rectangles: &[Rectangle], diagnostic_hashes: b
         "plane_sha256",
         frame.state.get("frame_sha256").unwrap().clone(),
     );
-    frame.state.set("rectangle_profile", S::str(match rectangles[0].composition {
-        RectangleComposition::DeclaredLuma => PROFILE,
-        RectangleComposition::SignedYCbCr => SIGNED_YCBCR_PROFILE,
-    }));
+    frame.state.set(
+        "rectangle_profile",
+        S::str(match rectangles[0].composition {
+            RectangleComposition::DeclaredLuma => PROFILE,
+            RectangleComposition::SignedYCbCr => SIGNED_YCBCR_PROFILE,
+        }),
+    );
     let mut digest = diagnostic_hashes.then(Sha256::new);
     if let Some(digest) = &mut digest {
         digest.update(&frame.raw);
@@ -180,7 +195,10 @@ pub fn compose(frame: &mut Frame, rectangles: &[Rectangle], diagnostic_hashes: b
         }
         if r.composition == RectangleComposition::SignedYCbCr {
             rectangle_metadata.push(("color_word", S::Int(r.color.into())));
-            rectangle_metadata.push(("rgb", S::List(r.rgb.iter().map(|v| S::Int((*v).into())).collect())));
+            rectangle_metadata.push((
+                "rgb",
+                S::List(r.rgb.iter().map(|v| S::Int((*v).into())).collect()),
+            ));
         }
         metadata.push(S::dict(rectangle_metadata));
         if r.opacity == 0 {
@@ -199,11 +217,15 @@ pub fn compose(frame: &mut Frame, rectangles: &[Rectangle], diagnostic_hashes: b
                         let vertical = x - left < r.thickness || right - 1 - x < r.thickness;
                         let x_corner = x - left < inset_x || right - 1 - x < inset_x;
                         let y_corner = y - top < inset_y || bottom - 1 - y < inset_y;
-                        if !(horizontal && x_corner || vertical && y_corner) { continue; }
+                        if !(horizontal && x_corner || vertical && y_corner) {
+                            continue;
+                        }
                         let start = (y as usize * frame.width + x as usize) * 3;
                         for (value, color) in rgb[start..start + 3].iter_mut().zip(r.rgb) {
                             *value = ((u32::from(*value) * (128 - r.opacity)
-                                + u32::from(color) * r.opacity + 64) / 128) as u8;
+                                + u32::from(color) * r.opacity
+                                + 64)
+                                / 128) as u8;
                         }
                     }
                 }
@@ -226,7 +248,9 @@ pub fn compose(frame: &mut Frame, rectangles: &[Rectangle], diagnostic_hashes: b
                     for pixel in span.chunks_exact_mut(3) {
                         for (value, color) in pixel.iter_mut().zip(r.rgb) {
                             *value = ((u32::from(*value) * (128 - r.opacity)
-                                + u32::from(color) * r.opacity + 64) / 128) as u8;
+                                + u32::from(color) * r.opacity
+                                + 64)
+                                / 128) as u8;
                         }
                     }
                 }

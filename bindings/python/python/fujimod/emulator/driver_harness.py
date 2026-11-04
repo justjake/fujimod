@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable, Iterable, Sequence
-from typing import Literal, TypedDict, TypeGuard
+from typing import TYPE_CHECKING, Literal, TypedDict, TypeGuard
 
 from . import registers as regs
 from .harness_inputs import HarnessInputs
@@ -19,6 +19,9 @@ from .harness_memory import MemoryLayout
 from .processor import Processor
 from .registers import CPSR, LR, NAMES, PC, R0, SP
 from .symbols import SymbolLookup
+
+if TYPE_CHECKING:
+    from .aarch64_harness import Aarch64DriverHarness, Aarch64Inputs
 
 STACK_BELOW = 0x1000
 STACK_ABOVE = 64
@@ -239,7 +242,38 @@ class DriverHarness:
     scratch/stack reservations and symbol lookup are caller inputs. Fixtures,
     patches, payloads and callee substitutions remain explicit in every result.
     The board owns device construction and uses the common native Session.
+    Aarch64Inputs selects the separate checked AArch64 implementation; it does
+    not inherit this ARM32 register, exception or instrumentation policy.
     """
+
+    def __new__(
+        cls,
+        inputs: HarnessInputs | Aarch64Inputs | None = None,
+        *,
+        ram_fixture: Iterable[Span] | None = None,
+        patches: Iterable[Span] = (),
+        quantum: int = 1000,
+        **kwargs: object,
+    ) -> DriverHarness | Aarch64DriverHarness:
+        if cls is DriverHarness:
+            from .aarch64_harness import Aarch64DriverHarness, Aarch64Inputs
+
+            if isinstance(inputs, Aarch64Inputs):
+                if ram_fixture is None:
+                    raise TypeError("AArch64 caller requires an explicit ram_fixture")
+                if kwargs:
+                    raise TypeError(
+                        "Unsupported AArch64 caller options: " + ", ".join(kwargs)
+                    )
+                return Aarch64DriverHarness(
+                    inputs,
+                    ram_fixture=(
+                        (address, bytes(data)) for address, data in ram_fixture
+                    ),
+                    patches=((address, bytes(data)) for address, data in patches),
+                    quantum=quantum,
+                )
+        return object.__new__(cls)
 
     def __init__(
         self,

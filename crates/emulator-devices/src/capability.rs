@@ -1,6 +1,6 @@
 //! What sessions and bindings do with devices, without naming their models. A model implements
 //! a capability trait and returns itself from the matching `Device` accessor.
-use crate::exr2::scanout_frame::Frame;
+use fujimod_framebuffer::frame::Frame;
 use crate::parts::sd_card::faults::{DataFault, DataFaultEvent};
 use crate::parts::{nand::Nand, sd_card::Card, touch_input::ContactInput};
 use crate::{Cx, Device};

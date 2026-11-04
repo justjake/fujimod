@@ -156,13 +156,23 @@ impl Device for Generator {
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.check(&state)?;
+        self.state = state;
+        Ok(())
+    }
+    fujimod_emulator_devices::checkpoint_state!(state: State, Self::check);
+}
+impl Generator {
+    fn check(&self, state: &State) -> Result<(), String> {
         if state.next == 0
             || state.next % self.period != 0
             || state.words.keys().any(|o| o & 3 != 0 || *o > LAST_WORD)
+            || (0..SOURCES.len()).any(|source| {
+                state.lines[source] && !self.frame_lines.iter().any(|(s, _)| *s == source)
+            })
         {
             return Err("Invalid frame sync checkpoint".into());
         }
-        self.state = state;
         Ok(())
     }
 }
