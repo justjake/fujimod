@@ -15,10 +15,19 @@ const LOCKED: u32 = 1 << 24;
 pub struct Options {
     pub settle_ticks: u64,
     pub reset_ready: bool,
-    /// Byte offsets of the PLL enable/lock registers.
+    /// Byte offsets of the PLL enable/lock registers; +34 unless declared.
+    #[serde(default = "exr_plls")]
     pub plls: Vec<u32>,
-    /// Byte offsets of the plain read/write latch registers.
+    /// Byte offsets of the plain read/write latch registers; +00..+38 and
+    /// +84 except the PLL unless declared.
+    #[serde(default = "exr_latches")]
     pub latches: Vec<u32>,
+}
+fn exr_plls() -> Vec<u32> {
+    vec![0x34]
+}
+fn exr_latches() -> Vec<u32> {
+    (0..=0x38).step_by(4).filter(|&o| o != 0x34).chain([0x84]).collect()
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -180,17 +189,11 @@ mod tests {
     use crate::test_host::{TestHost, advance, read, write};
     #[test]
     fn pll_locks_only_at_the_enabled_register_deadline_and_inspection_is_passive() {
-        // The register layout this model fixed before the offsets were declared.
-        let mut model = Clocks::new(Options {
-            settle_ticks: 17,
-            reset_ready: true,
-            plls: vec![0x34],
-            latches: (0..=0x38)
-                .step_by(4)
-                .filter(|&o| o != 0x34)
-                .chain([0x84])
-                .collect(),
-        })
+        // The default register layout.
+        let mut model = Clocks::new(
+            serde_json::from_value(serde_json::json!({"settle_ticks": 17, "reset_ready": true}))
+                .unwrap(),
+        )
         .unwrap();
         let mut host = TestHost::new();
         host.now = 100;

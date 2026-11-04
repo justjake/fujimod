@@ -24,11 +24,21 @@ const STATUS: usize = 0x24 / 4;
 const CONTROL: usize = 0x28 / 4;
 const CONFIG: usize = 0x2c / 4;
 
-#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
-    /// The physical IRQ line this engine is wired to.
+    /// The physical IRQ line this engine is wired to; the X70's 0x5B unless
+    /// declared.
+    #[serde(default = "x70_irq")]
     pub irq: u32,
+}
+impl Default for Options {
+    fn default() -> Self {
+        Self { irq: x70_irq() }
+    }
+}
+const fn x70_irq() -> u32 {
+    0x5b
 }
 
 pub struct Wiring {

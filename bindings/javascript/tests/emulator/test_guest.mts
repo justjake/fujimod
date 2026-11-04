@@ -275,7 +275,7 @@ function configuration(
         { base: 0xfff02000, size: 64 },
         { base: 0xfff02300, size: 4 },
       ],
-      model: { kind: 'memory-dma', options: { irq: 0x5b }, base: 0xfff02000, routes: 'routing' },
+      model: { kind: 'memory-dma', options: {}, base: 0xfff02000, routes: 'routing' },
     });
   }
   return config;

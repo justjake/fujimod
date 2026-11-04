@@ -317,7 +317,7 @@ fn loader_engines_are_native_nodes_with_exact_apertures_and_irq_wiring() {
         "memory",
         0xfff02000,
         0x40,
-        json!({"kind":"memory-dma","options":{"irq":91},"base":0xfff02000u64,"routes":"routing"}),
+        json!({"kind":"memory-dma","options":{},"base":0xfff02000u64,"routes":"routing"}),
     );
     memory["windows"]
         .as_array_mut()
