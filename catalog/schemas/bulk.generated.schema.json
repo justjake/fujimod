@@ -51,6 +51,56 @@
       "oneOf": [
         {
           "additionalProperties": false,
+          "description": "A stock diagnostic query publishes an E1 source directly in its reply.\n`data_offset` reserves the leading bytes that are not part of the\nmapped window; E1 offsets remain relative to `base`.",
+          "properties": {
+            "base": {
+              "description": "Source base returned in the first query result field.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "capacities": {
+              "description": "Accepted query capacities, including any reserved leading bytes.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "data_offset": {
+              "description": "First source offset that belongs to the mapped data window.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "mechanism": {
+              "const": "direct_query",
+              "type": "string"
+            },
+            "tag": {
+              "description": "Diagnostic query tag.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "wrapping": {
+              "description": "Offsets wrap modulo 2^32 rather than only counting upward.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "mechanism",
+            "tag",
+            "base",
+            "data_offset",
+            "capacities",
+            "wrapping"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "A stock diagnostic query sets the source to `base`; offsets are\nrelative to it. The callback slot, `callback_offset` bytes into the\ntable that `callback_table` points to, must hold `stock_callback`.",
           "properties": {
             "base": {

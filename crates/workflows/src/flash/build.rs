@@ -1,6 +1,7 @@
 //! Offline preparation and staging of compiled stock-reader payloads.
 use super::{Artifact, CodeCheck, MappedPayload, Payload, Range, Transport, WordCheck};
-use fujimod_catalog::{ReferenceCatalog, ResolvedSelection};
+use fujimod_catalog::{ReferenceCatalog, ResolvedSelection, capture::FirmwareFlash};
+use fujimod_catalog_bulk::FirmwareBulk;
 use fujimod_firmware::{extent, invert, sha256};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -181,6 +182,9 @@ pub fn prepare(input: &Selection, selected: &ResolvedSelection) -> Result<(Artif
     }
     let flash = selected.flash.as_ref().ok_or("no catalog flash fact")?;
     let bulk = selected.bulk.as_ref().ok_or("no catalog bulk fact")?;
+    if flash.transport.as_deref() == Some("xpp-cmd-callback") {
+        return prepare_xpp(input, selected, flash, bulk);
+    }
     check(
         flash.transport.as_deref() == Some("xp5-cmd-callback"),
         "unsupported reader transport",
@@ -430,6 +434,256 @@ pub fn prepare(input: &Selection, selected: &ResolvedSelection) -> Result<(Artif
     Ok((
         Artifact {
             payload: Payload::Xp5Command(payload),
+            image: Some("flash-reader.bin".into()),
+        },
+        image,
+    ))
+}
+
+fn prepare_xpp(
+    input: &Selection,
+    selected: &ResolvedSelection,
+    flash: &FirmwareFlash,
+    bulk: &FirmwareBulk,
+) -> Result<(Artifact, Vec<u8>)> {
+    check(
+        bulk.window.size <= u64::from(u32::MAX)
+            && matches!(
+                bulk.source,
+                fujimod_catalog_bulk::BulkSource::DirectQuery { .. }
+            ),
+        "XPP flash reading requires a bounded direct-query bulk window",
+    )?;
+    let update_identity = selected
+        .firmware
+        .update
+        .as_ref()
+        .ok_or("no update identity")?;
+    let update = fs::read(&input.update)?;
+    check(
+        update.len() as u64 == update_identity.size && sha256(&update) == update_identity.sha256,
+        "update identity differs",
+    )?;
+    let inverted = invert(&update);
+    let profile = document(&input.callback)?;
+    check(
+        profile["schema"] == "xpp-cmd-callback-v1"
+            && profile["firmware_id"] == selected.firmware.id
+            && profile["firmware_sha256"] == update_identity.sha256,
+        "XPP callback profile/source mismatch",
+    )?;
+    let callback = &profile["callback"];
+    let callback_address = num(callback, "address")?;
+    let callback_original = u32::try_from(num(callback, "original")?)?;
+    check(
+        callback_address.is_multiple_of(4)
+            && callback_original != 0
+            && callback_original.is_multiple_of(4),
+        "XPP callback slot or original pointer is invalid",
+    )?;
+    let map = document(&input.load_map)?;
+    check(
+        map["format_version"] == 2
+            && map["firmware_id"] == selected.firmware.id
+            && map["firmware_sha256"] == update_identity.sha256,
+        "load-map identity differs",
+    )?;
+    let units = sources(&map, &inverted)?;
+    check(
+        units.iter().any(|unit| {
+            callback_address >= unit.bss
+                && callback_address
+                    .checked_add(4)
+                    .is_some_and(|end| end <= unit.bss + unit.bss_size)
+        }),
+        "XPP callback slot is not in resident BSS",
+    )?;
+    let callback_body = get(callback, "body")?;
+    let callback_check = CodeCheck {
+        address: num(callback_body, "address")?,
+        size: num(callback_body, "size")?,
+        sha256: String::new(),
+    };
+    let callback_check = CodeCheck {
+        sha256: sha256(source(&units, callback_check.address, callback_check.size)?),
+        ..callback_check
+    };
+
+    let manifest = document(&input.manifest)?;
+    check(
+        manifest["target"] == selected.firmware.id
+            && manifest["firmware_sha256"] == update_identity.sha256
+            && manifest["mode"] == "runtime"
+            && list(&manifest, "regions")?.len() == 1
+            && list(&manifest, "words")?.is_empty()
+            && list(&manifest, "overrides")?.is_empty()
+            && list(&manifest, "inits")?.is_empty(),
+        "unsupported XPP payload build or identity",
+    )?;
+    let regions = list(&manifest, "regions")?;
+    let region = &regions[0];
+    let file = text(region, "file")?;
+    check(
+        Path::new(file).components().count() == 1
+            && !matches!(file, "." | "..")
+            && !Path::new(file).is_absolute(),
+        "XPP payload image must be beside its manifest",
+    )?;
+    let image = fs::read(
+        input
+            .manifest
+            .parent()
+            .ok_or("XPP manifest directory")?
+            .join(file),
+    )?;
+    check(
+        image.len() as u64 == num(region, "size")? && sha256(&image) == text(region, "sha256")?,
+        "compiled XPP image identity differs",
+    )?;
+    let base = num(region, "address")?;
+    let capacity = num(&manifest["region"], "size")?;
+    check(
+        num(&manifest["region"], "address")? == base
+            && image.len() as u64 <= capacity
+            && capacity <= 0x10000,
+        "compiled XPP region differs from its selected target",
+    )?;
+    let alias = num(&profile, "uncached_alias")?;
+    check(
+        alias != 0 && alias.is_multiple_of(0x1000),
+        "XPP callback profile has an invalid uncached alias",
+    )?;
+    let menu_reference = get(&manifest, "menu_manifest")?;
+    let menu_file = text(menu_reference, "file")?;
+    check(
+        Path::new(menu_file).components().count() == 1
+            && !matches!(menu_file, "." | "..")
+            && !Path::new(menu_file).is_absolute(),
+        "XPP linked-symbol map must be beside its manifest",
+    )?;
+    let menu_bytes = fs::read(
+        input
+            .manifest
+            .parent()
+            .ok_or("XPP manifest directory")?
+            .join(menu_file),
+    )?;
+    check(
+        sha256(&menu_bytes) == text(menu_reference, "sha256")?,
+        "XPP linked-symbol map identity differs",
+    )?;
+    let menu_manifest: Value = serde_json::from_slice(&menu_bytes)?;
+    check(
+        menu_manifest["firmware_id"] == selected.firmware.id
+            && menu_manifest["firmware_sha256"] == update_identity.sha256,
+        "XPP linked-symbol map firmware identity differs",
+    )?;
+    let linked_symbols = get(&menu_manifest, "symbols")?;
+    let entry_symbol = get(linked_symbols, "flash_reader")?;
+    let entry = num(entry_symbol, "address")?;
+    let entry_size = num(entry_symbol, "size")?;
+    check(
+        entry >= base
+            && entry_size > 0
+            && entry
+                .checked_add(entry_size)
+                .is_some_and(|end| end <= base + image.len() as u64),
+        "XPP reader entrypoint exceeds the linked image",
+    )?;
+    let shared_symbol = |name: &str, expected_size: u64| -> Result<(u64, u64)> {
+        let symbol = get(linked_symbols, name)?;
+        let address = num(symbol, "address")?;
+        let size = num(symbol, "size")?;
+        let load_address = address
+            .checked_sub(alias)
+            .ok_or_else(|| format!("{name} is not in the firmware's uncached alias"))?;
+        check(
+            size == expected_size
+                && load_address >= base
+                && load_address
+                    .checked_add(size)
+                    .is_some_and(|end| end <= base + image.len() as u64),
+            "XPP shared ABI object differs from the linked image",
+        )?;
+        Ok((address, load_address))
+    };
+    let (request, request_load) = shared_symbol("flash_reader_request", 16)?;
+    let (result, result_load) = shared_symbol("flash_reader_result", 24)?;
+    let mutable = vec![
+        Range {
+            address: request_load,
+            size: 16,
+        },
+        Range {
+            address: result_load,
+            size: 24,
+        },
+    ];
+    let reader = flash
+        .reader
+        .as_ref()
+        .ok_or("XPP flash reader contract is missing")?;
+    check(
+        reader.symbol == "flash_read_wait"
+            && reader.alignment != 0
+            && super::xpp::READ_ALIGNMENT.is_multiple_of(u64::from(reader.alignment))
+            && bulk.window.size <= u64::from(u32::MAX),
+        "XPP stock reader or E1 window differs",
+    )?;
+    let stock_reader = num(get(linked_symbols, &reader.symbol)?, "address")?;
+    check(
+        flash
+            .code_ranges
+            .iter()
+            .any(|range| range.name == reader.symbol && range.address == stock_reader),
+        "XPP stock reader import differs from the catalog",
+    )?;
+    let checks = flash
+        .code_ranges
+        .iter()
+        .map(|range| {
+            Ok(CodeCheck {
+                address: range.address,
+                size: range.size,
+                sha256: sha256(source(&units, range.address, range.size)?),
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    check(flash.update_image.xor == 255, "unsupported XPP update XOR")?;
+    let update_size = (inverted.len() as u64)
+        .checked_sub(flash.update_image.dat_offset)
+        .ok_or("invalid XPP update origin")?
+        .min(flash.window.size);
+    let update_bytes = extent(&inverted, flash.update_image.dat_offset, update_size)?;
+    let control = extent(update_bytes, flash.control.offset, flash.control.size)?;
+    let payload = super::xpp::Payload {
+        schema: 1,
+        firmware_id: selected.firmware.id.clone(),
+        firmware_sha256: update_identity.sha256.clone(),
+        address: base,
+        capacity,
+        sha256: sha256(&image),
+        uncached_alias: alias,
+        entry,
+        request,
+        result,
+        buffer_capacity: u32::try_from(bulk.window.size)?,
+        stock_reader,
+        stock_reader_symbol: reader.symbol.clone(),
+        mutable,
+        transport: super::xpp::Callback {
+            address: callback_address,
+            original: callback_original,
+            checks: vec![callback_check],
+        },
+        checks,
+        control_sha256: sha256(control),
+        update_size,
+    };
+    payload.validate(flash, bulk, &image)?;
+    Ok((
+        Artifact {
+            payload: Payload::XppCommand(payload),
             image: Some("flash-reader.bin".into()),
         },
         image,

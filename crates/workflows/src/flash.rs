@@ -2,6 +2,7 @@
 pub mod exr2;
 mod mapped;
 mod xp5;
+mod xpp;
 pub use crate::callback::{CodeCheck, Range, Transport, WordCheck};
 use crate::{Limits, bulk};
 use fujimod_catalog::capture::FirmwareFlash;
@@ -33,6 +34,7 @@ pub struct Callbacks<'a> {
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum Payload {
     MappedE1(MappedPayload),
+    XppCommand(xpp::Payload),
     Xp5Command(xp5::Payload),
     Exr2Query(exr2::Payload),
 }
@@ -47,6 +49,7 @@ impl Payload {
     pub fn firmware_id(&self) -> &str {
         match self {
             Self::MappedE1(p) => &p.firmware_id,
+            Self::XppCommand(p) => &p.firmware_id,
             Self::Xp5Command(p) => &p.firmware_id,
             Self::Exr2Query(p) => &p.firmware_id,
         }
@@ -54,6 +57,7 @@ impl Payload {
     pub fn buffer_capacity(&self) -> u32 {
         match self {
             Self::MappedE1(_) => 0,
+            Self::XppCommand(p) => p.buffer_capacity,
             Self::Xp5Command(p) => p.buffer_capacity,
             Self::Exr2Query(_) => CAPTURE_CHUNK_BYTES,
         }
@@ -61,6 +65,7 @@ impl Payload {
     pub fn firmware_sha256(&self) -> &str {
         match self {
             Self::MappedE1(p) => &p.firmware_sha256,
+            Self::XppCommand(p) => &p.firmware_sha256,
             Self::Xp5Command(p) => &p.firmware_sha256,
             Self::Exr2Query(p) => &p.firmware_sha256,
         }
@@ -73,6 +78,7 @@ impl Payload {
     ) -> bulk::Result<()> {
         match self {
             Self::MappedE1(p) => p.validate(flash, bulk, image),
+            Self::XppCommand(p) => p.validate(flash, bulk, image),
             Self::Xp5Command(p) => p.validate(flash, bulk, image),
             Self::Exr2Query(p) => p.validate(flash, bulk, image),
         }
@@ -207,6 +213,19 @@ pub async fn backup(
             )
             .await
         }
+        Payload::XppCommand(p) => {
+            xpp::read(
+                session,
+                bulk,
+                flash,
+                p,
+                image,
+                limits,
+                Selection::Whole,
+                callbacks,
+            )
+            .await
+        }
         Payload::Xp5Command(p) => {
             xp5::read(
                 session,
@@ -258,7 +277,10 @@ pub async fn read_range(
     offset: u64,
     size: u32,
 ) -> bulk::Result<Vec<u8>> {
-    let target = enclosing(flash, offset, size)?;
+    let target = match payload {
+        Payload::XppCommand(_) => enclosing_alignment(flash, offset, size, xpp::READ_ALIGNMENT)?,
+        _ => enclosing(flash, offset, size)?,
+    };
     payload.validate(flash, bulk, image)?;
     let mut data = vec![0; size as usize];
     let mut spans = std::collections::BTreeMap::<u64, u64>::new();
@@ -293,6 +315,19 @@ pub async fn read_range(
     let report = match payload {
         Payload::MappedE1(_) => {
             mapped::read(session, bulk, flash, limits, target, &mut callbacks).await?
+        }
+        Payload::XppCommand(p) => {
+            xpp::read(
+                session,
+                bulk,
+                flash,
+                p,
+                image,
+                limits,
+                Selection::Range(target),
+                &mut callbacks,
+            )
+            .await?
         }
         Payload::Xp5Command(p) => {
             xp5::read(
@@ -334,6 +369,15 @@ pub async fn read_range(
 
 fn enclosing(flash: &FirmwareFlash, offset: u64, size: u32) -> bulk::Result<BulkRange> {
     let alignment = u64::from(flash.reader.as_ref().map_or(1, |reader| reader.alignment));
+    enclosing_alignment(flash, offset, size, alignment)
+}
+
+fn enclosing_alignment(
+    flash: &FirmwareFlash,
+    offset: u64,
+    size: u32,
+    alignment: u64,
+) -> bulk::Result<BulkRange> {
     let end = offset
         .checked_add(u64::from(size))
         .ok_or_else(|| bulk::BulkError::Check("Flash range overflow".into()))?;
