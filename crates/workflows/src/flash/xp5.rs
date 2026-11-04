@@ -162,7 +162,11 @@ impl Payload {
             !overlaps(self.address, self.capacity, self.transport.callback, 8),
             "Executable reservation overlaps callback",
         )?;
-        let alignment = u64::from(flash.reader.alignment);
+        let reader = flash
+            .reader
+            .as_ref()
+            .ok_or_else(|| BulkError::Check("XP5 stock flash reader is absent".into()))?;
+        let alignment = u64::from(reader.alignment);
         require(
             self.buffer.is_multiple_of(alignment)
                 && self.buffer_capacity != 0
@@ -174,11 +178,11 @@ impl Payload {
             "Flash buffer or update control geometry differs",
         )?;
         require(
-            self.stock_reader_symbol == flash.reader.symbol
+            self.stock_reader_symbol == reader.symbol
                 && flash
                     .code_ranges
                     .iter()
-                    .any(|c| c.name == flash.reader.symbol && c.address == self.stock_reader),
+                    .any(|c| c.name == reader.symbol && c.address == self.stock_reader),
             "Payload does not call the catalog stock reader",
         )?;
         for c in &flash.code_ranges {
@@ -191,6 +195,7 @@ impl Payload {
         }
         require(
             valid_hash(&self.control_sha256)
+                && self.control_sha256 == flash.control.sha256
                 && self
                     .checks
                     .iter()
@@ -497,7 +502,7 @@ async fn read_mapped(
     target: BulkRange,
     callbacks: &mut super::Callbacks<'_>,
 ) -> bulk::Result<Backup> {
-    let alignment = u64::from(flash.reader.alignment);
+    let alignment = u64::from(flash.reader.as_ref().map_or(1, |reader| reader.alignment));
     let capacity = reader
         .capacity()
         .min(reader.access.session.max_reply_bytes().get());

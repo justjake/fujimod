@@ -187,6 +187,9 @@ pub fn flash<L: Lookup>(
     image_origin: u64,
     control_offset: u64,
 ) -> Result<Value> {
+    if processor == "xp4" {
+        return xp4_flash(index, firmware, image_origin);
+    }
     if processor != "xp5" {
         return Err(format!(
             "{processor}: flash reader contract is not implemented"
@@ -415,6 +418,341 @@ pub fn flash<L: Lookup>(
     Ok(
         json!({"device":device,"window":{"address":0xf0000000u64,"size":0x8000000},"e1_window":{"address":0xf0000000u64,"size":0x8000000},"update_image":{"dat_offset":image_origin,"xor":255},"reader":{"symbol":"flash_read","alignment":64},"transport":"xp5-cmd-callback","code_ranges":ranges,"state_checks":checks,"control":{"offset":control_offset,"size":32768}}),
     )
+}
+
+/// Locate the XP4 mapped-flash branch used by firmware readers and direct E1
+/// capture. The first checked firmware establishes the instruction grammar;
+/// each address and state input is recovered from its indexed routines.
+fn xp4_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<Value> {
+    if firmware != "xs10-311" {
+        return Err(format!(
+            "{firmware}: XP4 mapped flash has not been located for this firmware"
+        ));
+    }
+    const PREFIX: [u32; 4] = [0xe92d_4ff0, 0xe28d_b020, 0xe24d_d01c, 0xe1a0_7003];
+    const CHECKED: [(usize, u32); 36] = [
+        (6, 0xe5d3_3000),
+        (7, 0xe353_0001),
+        (9, 0xe1a0_4000),
+        (10, 0xe1a0_8001),
+        (11, 0xe1a0_5002),
+        (12, 0xe300_317e),
+        (13, 0xe150_0003),
+        (16, 0xe1a0_0884),
+        (18, 0xe1a0_6000),
+        (19, 0xe1a0_8888),
+        (20, 0xe358_0802),
+        (22, 0xe3a0_4802),
+        (23, 0xe1a0_a004),
+        (24, 0xe3a0_9000),
+        (25, 0xe50b_5034),
+        (26, 0xe50b_6030),
+        (27, 0xe50b_a02c),
+        (28, 0xe3a0_3001),
+        (29, 0xe54b_3028),
+        (30, 0xe54b_9027),
+        (31, 0xe24b_0034),
+        (33, 0xe250_3000),
+        (34, 0xe50b_3038),
+        (36, 0xe285_5802),
+        (37, 0xe286_6802),
+        (38, 0xe357_0000),
+        (40, 0xe1a0_0004),
+        (41, 0xe12f_ff37),
+        (42, 0xe284_4802),
+        (43, 0xe158_0004),
+        (45, 0xe51b_0038),
+        (46, 0xe24b_d020),
+        (47, 0xe8bd_8ff0),
+        // These compare the requested block count with the checked boundary,
+        // select the byte-offset translator, and invoke the stock reader.
+        (15, 0xeb00_0000),
+        (17, 0xeb00_0000),
+        (32, 0xeb00_0000),
+    ];
+    let units = index
+        .units(firmware, Some("main"))
+        .map_err(|e| e.to_string())?;
+    let mut matches = Vec::new();
+    for unit in &units {
+        if unit.layout.architecture != Architecture::Arm32 {
+            continue;
+        }
+        for region in &unit.regions {
+            for (offset, bytes) in region
+                .bytes
+                .windows(PREFIX.len() * 4)
+                .enumerate()
+                .step_by(4)
+            {
+                if bytes
+                    .chunks_exact(4)
+                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .ne(PREFIX)
+                {
+                    continue;
+                }
+                let address = region.address + offset as u64;
+                let Ok(routine) = (Locator {
+                    index,
+                    firmware,
+                    unit: "main".into(),
+                })
+                .routine(address) else {
+                    continue;
+                };
+                if routine.header.ranges.len() != 1
+                    || routine.header.ranges[0] != (address, address + 0xe4)
+                    || routine.code.len() != 57
+                {
+                    continue;
+                }
+                let Some(code) = index
+                    .read(firmware, "main", address, 0xe4)
+                    .map_err(|e| e.to_string())?
+                else {
+                    continue;
+                };
+                let words: Vec<_> = code
+                    .chunks_exact(4)
+                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .collect();
+                if !CHECKED.iter().all(|&(i, expected)| {
+                    let actual = words[i];
+                    if expected & 0x0fff_ffff == 0x0b00_0000 {
+                        actual & 0x0f00_0000 == 0x0b00_0000
+                    } else {
+                        actual == expected
+                    }
+                }) {
+                    continue;
+                }
+                let Ok(enabled) = arm_mov_pair(words[4], words[5]) else {
+                    continue;
+                };
+                let (Ok(translator), Ok(stock_reader), Ok(cache)) = (
+                    arm_branch_target(address + 68, words[17]),
+                    arm_branch_target(address + 128, words[32]),
+                    arm_branch_target(address + 60, words[15]),
+                ) else {
+                    continue;
+                };
+                let translator_routine = (Locator {
+                    index,
+                    firmware,
+                    unit: "main".into(),
+                })
+                .routine(translator)?;
+                let translated = index
+                    .read(firmware, "main", translator, 24)
+                    .map_err(|e| e.to_string())?
+                    .ok_or("unmapped XP4 flash address translator")?;
+                let translated: Vec<u32> = translated
+                    .chunks_exact(4)
+                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .collect();
+                if translated
+                    != [
+                        0xe52d_b004,
+                        0xe28d_b000,
+                        0xe280_020f,
+                        0xe28b_d000,
+                        0xe49d_b004,
+                        0xe12f_ff1e,
+                    ]
+                    || translator_routine.header.ranges != [(translator, translator + 24)]
+                {
+                    continue;
+                }
+                let reader_routine = (Locator {
+                    index,
+                    firmware,
+                    unit: "main".into(),
+                })
+                .routine(stock_reader)?;
+                let reader_bytes = index
+                    .read(
+                        firmware,
+                        "main",
+                        stock_reader,
+                        (reader_routine.header.ranges[0].1 - stock_reader) as usize,
+                    )
+                    .map_err(|e| e.to_string())?
+                    .ok_or("unmapped XP4 stock flash reader")?;
+                let reader_words: Vec<u32> = reader_bytes
+                    .chunks_exact(4)
+                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .collect();
+                let initialized = reader_words
+                    .windows(4)
+                    .any(|w| w == [0xe309_3940, 0xe340_3181, 0xe306_2555, 0xe347_2766]);
+                let aperture_bound = reader_routine
+                    .code
+                    .iter()
+                    .any(|i| i.mnemonic == "cmp" && i.operands == "r2, #0xf4000000");
+                if !initialized || !aperture_bound {
+                    continue;
+                }
+                let cache_routine = (Locator {
+                    index,
+                    firmware,
+                    unit: "main".into(),
+                })
+                .routine(cache)?;
+                let byte_reader = locate_xp4_byte_reader(index, firmware, translator)?;
+                matches.push((
+                    enabled,
+                    routine,
+                    translator_routine,
+                    reader_routine,
+                    cache_routine,
+                    byte_reader,
+                ));
+            }
+        }
+    }
+    if matches.len() != 1 {
+        return Err(format!(
+            "{firmware}: {} XP4 flash reader candidates",
+            matches.len()
+        ));
+    }
+    let (enabled, indexed_routine, translator_routine, reader_routine, cache_routine, byte_reader) =
+        matches.pop().unwrap();
+    let origin = u64::from(image_origin);
+    if origin != 0x274 {
+        return Err("XP4 update origin differs from its registered DAT bias".into());
+    }
+    let ranges = vec![
+        indexed_routine.span("indexed firmware reader"),
+        reader_routine.span("stock flash reader"),
+        translator_routine.span("flash aperture translation"),
+        cache_routine.span("flash destination cache maintenance"),
+        byte_reader.span("byte-offset firmware reader"),
+    ];
+    Ok(json!({
+        "device":{"kind":"serial-nor"},
+        "window":{"address":0xf0000000u64,"size":0x4000000u64},
+        "e1_window":{"address":0xf0000000u64,"size":0x4000000u64},
+        "update_image":{"dat_offset":origin,"xor":255},
+        "transport":null,
+        "code_ranges":ranges,
+        "state_checks":[
+            {"name":"flash firmware reader enabled","address":enabled,"size":1,"value":1},
+            {"name":"flash driver initialized","address":0x01819940u64,"size":4,"value":0x77666555u32}
+        ],
+        "control":{"offset":0,"size":32768}
+    }))
+}
+
+fn arm_mov_pair(low: u32, high: u32) -> Result<u64> {
+    let immediate = |word: u32, opcode: u32| -> Result<u16> {
+        if word & 0x0ff0_0000 != opcode {
+            return Err("XP4 flash address is not built by MOVW/MOVT".into());
+        }
+        let rd = (word >> 12) & 0xf;
+        let imm = (((word >> 16) & 0xf) << 12) | (word & 0xfff);
+        if rd != 3 {
+            return Err("XP4 flash address uses another register".into());
+        }
+        Ok(imm as u16)
+    };
+    let low = immediate(low, 0x0300_0000)?;
+    let high = immediate(high, 0x0340_0000)?;
+    Ok(u64::from(low) | (u64::from(high) << 16))
+}
+
+fn arm_branch_target(site: u64, word: u32) -> Result<u64> {
+    if word & 0x0f00_0000 != 0x0b00_0000 {
+        return Err("XP4 flash reader call is not BL".into());
+    }
+    let raw = (word & 0x00ff_ffff) << 2;
+    let displacement = ((raw << 6) as i32) >> 6;
+    site.checked_add(8)
+        .and_then(|pc| pc.checked_add_signed(i64::from(displacement)))
+        .ok_or_else(|| "XP4 flash call target overflow".into())
+}
+
+fn locate_xp4_byte_reader<L: Lookup>(
+    index: &L,
+    firmware: &str,
+    translator: u64,
+) -> Result<Routine> {
+    let prefix = [0xe92d_4830u32, 0xe28d_b00c, 0xe1a0_5002, 0xe1a0_4001];
+    let units = index
+        .units(firmware, Some("main"))
+        .map_err(|e| e.to_string())?;
+    let mut matches = Vec::new();
+    for unit in units {
+        for region in &unit.regions {
+            for (offset, bytes) in region.bytes.windows(16).enumerate().step_by(4) {
+                if offset < 16 {
+                    continue;
+                }
+                if bytes
+                    .chunks_exact(4)
+                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .ne(prefix)
+                {
+                    continue;
+                }
+                let address = region.address + offset as u64 - 16;
+                let Ok(routine) = (Locator {
+                    index,
+                    firmware,
+                    unit: "main".into(),
+                })
+                .routine(address) else {
+                    continue;
+                };
+                if routine.header.ranges.len() != 1
+                    || routine.header.ranges[0] != (address, address + 68)
+                    || routine.code.len() != 17
+                {
+                    continue;
+                }
+                let Some(code) = index
+                    .read(firmware, "main", address, 68)
+                    .map_err(|e| e.to_string())?
+                else {
+                    continue;
+                };
+                let words: Vec<_> = code
+                    .chunks_exact(4)
+                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .collect();
+                if words[2] != 0xe150_0003
+                    || words[9..13] != [0xe3a0_3001, 0xe1a0_2005, 0xe1a0_1000, 0xe1a0_0004]
+                    || words[14..] != [0xe8bd_8830, 0xe3e0_001d, 0xe12f_ff1e]
+                    || arm_branch_target(address + 32, words[8]).ok() != Some(translator)
+                {
+                    continue;
+                }
+                let Ok(byte_reader) = arm_mov_pair(words[0], words[1]) else {
+                    continue;
+                };
+                if byte_reader.checked_add(1) != Some(0x02fe_0000) {
+                    continue;
+                }
+                let Ok(byte_stock_reader) = arm_branch_target(address + 52, words[13]) else {
+                    continue;
+                };
+                let low_reader = (Locator {
+                    index,
+                    firmware,
+                    unit: "main".into(),
+                })
+                .routine(byte_stock_reader)?;
+                if low_reader.header.ranges.len() != 1
+                    || low_reader.header.ranges[0].1 - low_reader.header.ranges[0].0 != 52
+                {
+                    continue;
+                }
+                matches.push(routine);
+            }
+        }
+    }
+    one(matches, "XP4 byte-offset flash reader")
 }
 
 /// Match the mapped loader against the decoded linear update image. The origin

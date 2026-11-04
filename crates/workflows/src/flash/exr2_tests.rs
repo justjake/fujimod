@@ -231,7 +231,7 @@ fn reader_metadata_rejects_corrupt_code_unbounded_ranges_and_unsupported_geometr
         barrier: 0x1010,
         instruction_barrier: 0x1014,
         checks,
-        control_sha256: "d".repeat(64),
+        control_sha256: flash.control.sha256.clone(),
         update_size: flash.window.size,
     };
     p.validate(&flash, &bulk, &image).unwrap();
@@ -249,7 +249,14 @@ fn reader_metadata_rejects_corrupt_code_unbounded_ranges_and_unsupported_geometr
     invalid.checks[0].address = u64::MAX;
     assert!(invalid.validate(&flash, &bulk, &image).is_err());
     let mut invalid = flash.clone();
-    invalid.reader.nand.as_mut().unwrap().controller_mode = 1;
+    invalid
+        .reader
+        .as_mut()
+        .unwrap()
+        .nand
+        .as_mut()
+        .unwrap()
+        .controller_mode = 1;
     assert!(p.validate(&invalid, &bulk, &image).is_err());
 }
 

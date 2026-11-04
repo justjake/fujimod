@@ -93,11 +93,11 @@ fn fixture() -> (FirmwareBulk, FirmwareFlash, Payload, Vec<u8>) {
             dat_offset: 0,
             xor: 255,
         },
-        reader: FlashReader {
+        reader: Some(FlashReader {
             symbol: "flash_read".into(),
             alignment: 64,
             nand: None,
-        },
+        }),
         transport: Some("xp5-cmd-callback".into()),
         code_ranges: vec![FlashCodeRange {
             name: "flash_read".into(),
@@ -113,6 +113,7 @@ fn fixture() -> (FirmwareBulk, FirmwareFlash, Payload, Vec<u8>) {
         control: FlashControl {
             offset: 0,
             size: 64,
+            sha256: bulk::hex(&sha256_bytes(&[5; 64])),
         },
     };
     let mut image = vec![0; 0x1100];

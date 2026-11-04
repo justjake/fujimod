@@ -34,8 +34,9 @@ pub struct FirmwareFlash {
     pub e1_window: Option<FlashRange>,
     /// Update packaging that supplies comparison bytes.
     pub update_image: FlashUpdateImage,
-    /// Stock reader ABI and alignment.
-    pub reader: FlashReader,
+    /// Stock reader ABI and alignment, absent for a mapped-E1-only contract.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reader: Option<FlashReader>,
     /// Processor-specific payload transport, absent when unresolved.
     pub transport: Option<String>,
     /// Stock instruction spans checked before running the reader.
@@ -193,6 +194,8 @@ pub struct FlashControl {
     pub offset: u64,
     /// Length in bytes.
     pub size: u64,
+    /// SHA-256 of the same bytes in the decoded update image.
+    pub sha256: String,
 }
 
 /// Safely readable regions captured as camera state.
@@ -282,6 +285,8 @@ impl FirmwareFlash {
             }
         }
         let raw_nand = self.device.kind == "raw-nand";
+        let mapped_only =
+            self.e1_window.is_some() && self.reader.is_none() && self.transport.is_none();
         if !matches!(
             self.device.kind.as_str(),
             "serial-nand" | "serial-nor" | "raw-nand"
@@ -295,19 +300,25 @@ impl FirmwareFlash {
             .part
             .as_ref()
             .is_some_and(|part| part.is_empty())
-            || (!raw_nand && (self.device.jedec_id.is_none() || self.device.part.is_none()))
-            || self.reader.symbol.is_empty()
-            || !self.reader.alignment.is_power_of_two()
-            || self.code_ranges.is_empty()
-            || self.state_checks.is_empty()
+            || (!raw_nand
+                && !mapped_only
+                && (self.device.jedec_id.is_none() || self.device.part.is_none()))
+            || self.reader.as_ref().is_some_and(|reader| {
+                reader.symbol.is_empty() || !reader.alignment.is_power_of_two()
+            })
+            || (!mapped_only && self.reader.is_none())
+            || (!mapped_only && self.code_ranges.is_empty())
+            || (!mapped_only && self.state_checks.is_empty())
             || self
                 .transport
                 .as_ref()
                 .is_some_and(|transport| transport.is_empty())
+            || mapped_only && self.device.kind != "serial-nor"
         {
             return Err("invalid flash device or reader contract".into());
         }
-        match (&self.reader.nand, raw_nand) {
+        let nand_reader = self.reader.as_ref().and_then(|reader| reader.nand.as_ref());
+        match (nand_reader, raw_nand) {
             (Some(nand), true) => {
                 if self.window.address != 0
                     || !matches!(
@@ -320,7 +331,7 @@ impl FirmwareFlash {
                     || nand.timeout_ms == 0
                     || nand.max_pages_per_call == 0
                     || nand.max_pages_per_call > nand.pages_per_block
-                    || self.reader.alignment != nand.page_bytes
+                    || self.reader.as_ref().map(|reader| reader.alignment) != Some(nand.page_bytes)
                     || ![nand.lock, nand.unlock]
                         .iter()
                         .all(|address| self.code_ranges.iter().any(|r| r.address == *address))
@@ -331,7 +342,7 @@ impl FirmwareFlash {
             (None, false) => {}
             _ => return Err("NAND reader ABI and device kind differ".into()),
         }
-        let alignment = u64::from(self.reader.alignment);
+        let alignment = u64::from(self.reader.as_ref().map_or(1, |reader| reader.alignment));
         if self.e1_window.as_ref().is_some_and(|e1| {
             !e1.address.is_multiple_of(alignment) || !e1.size.is_multiple_of(alignment)
         }) || !self.window.address.is_multiple_of(alignment)
@@ -339,6 +350,7 @@ impl FirmwareFlash {
             || !self.control.offset.is_multiple_of(alignment)
             || !self.control.size.is_multiple_of(alignment)
             || self.control.size == 0
+            || !valid_sha256(&self.control.sha256)
             || self
                 .control
                 .offset
@@ -361,7 +373,11 @@ impl FirmwareFlash {
                 return Err("repeated or empty flash code role".into());
             }
         }
-        if !names.contains(&self.reader.symbol) {
+        if self
+            .reader
+            .as_ref()
+            .is_some_and(|reader| !names.contains(&reader.symbol))
+        {
             return Err("stock reader is not checked".into());
         }
         for check in &self.state_checks {
@@ -375,6 +391,10 @@ impl FirmwareFlash {
         }
         Ok(())
     }
+}
+
+fn valid_sha256(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 impl FirmwareState {
     /// Validate unique, nonoverlapping ranges and address arithmetic.

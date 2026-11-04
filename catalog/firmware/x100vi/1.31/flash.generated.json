@@ -72,6 +72,7 @@
   ],
   "control": {
     "offset": 786432,
-    "size": 32768
+    "size": 32768,
+    "sha256": "1782d9b477f5a760702a0d35a440d4fb8317ebddb3090ebb45d17dace99411bb"
   }
 }
