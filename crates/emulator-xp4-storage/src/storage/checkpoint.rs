@@ -182,6 +182,9 @@ struct DmaState {
 }
 impl DmaController {
     pub(super) fn restore_state(&mut self, value: &Value) -> Result<(), String> {
+        if self.receiver.is_some() || value["transmit_receiver_connected"] == true {
+            return Err("Connected transmit receiver checkpoint restore is not supported".into());
+        }
         let state: DmaState = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         let standalone = self.port.is_none();
         let mode_matches = if standalone {
