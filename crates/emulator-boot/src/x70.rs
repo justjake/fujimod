@@ -1076,6 +1076,39 @@ fn apply_body_facts(
                 .lens
                 .as_ref()
                 .ok_or("X70 body has no lens attachment")?;
+            // The MCU also has a status-read path through SPI2, with the lens
+            // deselected. Keep it separate from the lens's transmit-only format.
+            let mcu = selection
+                .body
+                .microcontroller
+                .as_ref()
+                .ok_or("X70 body has no MCU attachment")?;
+            let PartModel::Microcontroller {
+                status_register: Some(status),
+                ..
+            } = &part(selection, &mcu.part_id)?.model
+            else {
+                return Err("X70 MCU has no serial status register".into());
+            };
+            let mut status_selection = gpio_selection(selection, &mcu.select_connection_id)?;
+            for mut idle in gpio_selection(selection, &lens.route.select_connection_id)? {
+                let high = idle["high"].as_bool().ok_or("invalid lens select level")?;
+                idle["high"] = json!(!high);
+                status_selection.push(idle);
+            }
+            let base = recipe["routes"][0]["options"]["base"].clone();
+            recipe["routes"]
+                .as_array_mut()
+                .ok_or("X70 SPI2 has no routes")?
+                .push(json!({
+                    "options": {"base":base,
+                        "transports":[{"control":224,"configuration":6,"bits":16,"receive":true}],
+                        "selection":status_selection,"transfer_ticks":4,"queue":"single"},
+                    "gpio":"serial_gpio",
+                    "endpoint":{"kind":"registers","options":{
+                        "registers":[[*status,0]],"readable":true,
+                        "status_registers":[*status],"clock":null}}
+                }));
             if lens.route.endpoint_id != lens.part_id {
                 return Err("X70 lens route endpoint differs from installed part".into());
             }
