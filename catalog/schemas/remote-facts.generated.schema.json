@@ -104,8 +104,7 @@
             },
             "lower": {
               "description": "Byte offset of the inclusive lower sample value.",
-              "format": "uint16",
-              "maximum": 65535,
+              "format": "uint32",
               "minimum": 0,
               "type": "integer"
             },
@@ -118,8 +117,7 @@
             },
             "upper": {
               "description": "Byte offset of the inclusive upper sample value.",
-              "format": "uint16",
-              "maximum": 65535,
+              "format": "uint32",
               "minimum": 0,
               "type": "integer"
             },
@@ -143,6 +141,25 @@
           "type": "object"
         }
       ]
+    },
+    "AdcTerm": {
+      "additionalProperties": false,
+      "description": "One ADC connection and the band required by a compound callback.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection carrying this sample.",
+          "type": "string"
+        },
+        "interval": {
+          "$ref": "#/$defs/AdcInterval",
+          "description": "Unconditional interval tested on this sample."
+        }
+      },
+      "required": [
+        "connection_id",
+        "interval"
+      ],
+      "type": "object"
     },
     "AddressIdentity": {
       "additionalProperties": false,
@@ -1663,6 +1680,42 @@
     "ElectricalInput": {
       "description": "Located electrical meaning, separate from scanner table operands.",
       "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A callback whose Boolean result is the conjunction of several ADC bands.",
+          "properties": {
+            "callback": {
+              "description": "Located callback evaluating all terms.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "expected_result": {
+              "description": "Callback result interpreted as an active input.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "adc_conjunction",
+              "type": "string"
+            },
+            "terms": {
+              "description": "Every term must hold for the callback to return one.",
+              "items": {
+                "$ref": "#/$defs/AdcTerm"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "terms",
+            "callback",
+            "expected_result"
+          ],
+          "type": "object"
+        },
         {
           "additionalProperties": false,
           "description": "Analog input interpreted using located sample bands or calibration offsets.",

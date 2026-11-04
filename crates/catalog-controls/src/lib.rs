@@ -558,6 +558,15 @@ pub struct LocatedScannerRecord {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub enum ElectricalInput {
+    /// A callback whose Boolean result is the conjunction of several ADC bands.
+    AdcConjunction {
+        /// Every term must hold for the callback to return one.
+        terms: Vec<AdcTerm>,
+        /// Located callback evaluating all terms.
+        callback: u64,
+        /// Callback result interpreted as an active input.
+        expected_result: u32,
+    },
     /// Analog input interpreted using located sample bands or calibration offsets.
     Adc {
         /// Body connection carrying this analog input.
@@ -619,6 +628,50 @@ pub enum ElectricalInput {
     },
 }
 
+/// One ADC connection and the band required by a compound callback.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct AdcTerm {
+    /// Body connection carrying this sample.
+    pub connection_id: String,
+    /// Unconditional interval tested on this sample.
+    pub interval: AdcInterval,
+}
+
+impl ElectricalInput {
+    fn validate_conjunction(&self) -> Result<(), String> {
+        if let Self::AdcConjunction {
+            terms,
+            callback,
+            expected_result,
+        } = self
+        {
+            let mut seen = BTreeSet::new();
+            if !(2..=12).contains(&terms.len())
+                || *callback == 0
+                || callback % 4 != 0
+                || *expected_result > 1
+                || terms.iter().any(|term| {
+                    term.connection_id.is_empty()
+                        || !seen.insert(&term.connection_id)
+                        || !term.interval.bounds_valid()
+                        || term.interval.condition().is_some()
+                        || !term.interval.exclusions().is_empty()
+                })
+            {
+                return Err("invalid ADC conjunction".into());
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Bounds of one accepted analog interval.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -645,9 +698,9 @@ pub enum AdcInterval {
     /// Byte offsets of little-endian u16 bounds in the loaded configuration.
     ConfigurationU16 {
         /// Byte offset of the inclusive lower sample value.
-        lower: u16,
+        lower: u32,
         /// Byte offset of the inclusive upper sample value.
-        upper: u16,
+        upper: u32,
         /// Scanner state the firmware requires before the interval counts, when present.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         when: Option<AdcCondition>,
@@ -675,7 +728,7 @@ impl AdcInterval {
     fn bounds_valid(&self) -> bool {
         match self {
             Self::Literal { lower, upper, .. } => lower <= upper,
-            Self::ConfigurationU16 { lower, upper, .. } => *lower != u16::MAX && *upper != u16::MAX,
+            Self::ConfigurationU16 { lower, upper, .. } => *lower != u32::MAX && *upper != u32::MAX,
         }
     }
 }
@@ -1406,30 +1459,36 @@ impl FirmwareControlIds {
                 ));
             }
             if let Some(electrical) = &input.electrical {
-                let connection_id = match electrical {
+                let connection_ids: Vec<&String> = match electrical {
                     ElectricalInput::Adc { connection_id, .. }
                     | ElectricalInput::Gpio { connection_id, .. }
-                    | ElectricalInput::GpioQuadrature { connection_id, .. } => connection_id,
+                    | ElectricalInput::GpioQuadrature { connection_id, .. } => vec![connection_id],
                     ElectricalInput::GpioFixedCycle { connection_id, .. }
-                    | ElectricalInput::SerialStatus { connection_id, .. } => connection_id,
+                    | ElectricalInput::SerialStatus { connection_id, .. } => vec![connection_id],
+                    ElectricalInput::AdcConjunction { terms, .. } => {
+                        terms.iter().map(|term| &term.connection_id).collect()
+                    }
                 };
-                if !connections.contains(connection_id.as_str()) {
-                    return Err(format!(
-                        "input {} has unknown electrical connection {connection_id}",
-                        input.id
-                    ));
-                }
-                if let InputTarget::Control { control_id } = &input.target
-                    && !physical
-                        .control(control_id)?
-                        .control
-                        .connection_ids
-                        .contains(connection_id)
-                {
-                    return Err(format!(
-                        "input {} uses a connection not assigned to {control_id}",
-                        input.id
-                    ));
+                electrical.validate_conjunction()?;
+                for connection_id in connection_ids {
+                    if !connections.contains(connection_id.as_str()) {
+                        return Err(format!(
+                            "input {} has unknown electrical connection {connection_id}",
+                            input.id
+                        ));
+                    }
+                    if let InputTarget::Control { control_id } = &input.target
+                        && !physical
+                            .control(control_id)?
+                            .control
+                            .connection_ids
+                            .contains(connection_id)
+                    {
+                        return Err(format!(
+                            "input {} uses a connection not assigned to {control_id}",
+                            input.id
+                        ));
+                    }
                 }
                 if let ElectricalInput::GpioFixedCycle { cycle_sign, .. } = electrical
                     && !matches!(cycle_sign, -1 | 1)
@@ -1507,6 +1566,7 @@ impl FirmwareControlIds {
                 if matches!(
                     electrical,
                     ElectricalInput::Adc { .. }
+                        | ElectricalInput::AdcConjunction { .. }
                         | ElectricalInput::Gpio { .. }
                         | ElectricalInput::SerialStatus { .. }
                 ) && input.scanner.is_none()
@@ -1751,6 +1811,73 @@ mod tests {
                 json!({"kind":"literal","lower":0,"upper":65536})
             )
             .is_err()
+        );
+    }
+
+    #[test]
+    fn compound_adc_preserves_wide_configuration_offsets() {
+        let value = json!({"kind":"adc_conjunction","callback":4096,"expected_result":1,
+            "terms":[{"connection_id":"vertical","interval":{"kind":"configuration_u16","lower":72506,"upper":72504}},
+                     {"connection_id":"press","interval":{"kind":"literal","lower":100,"upper":200}}]});
+        let input: ElectricalInput = serde_json::from_value(value.clone()).unwrap();
+        input.validate_conjunction().unwrap();
+        assert_eq!(serde_json::to_value(input).unwrap(), value);
+        for changed in [
+            json!({"kind":"adc_conjunction","callback":4096,"expected_result":2,"terms":value["terms"]}),
+            json!({"kind":"adc_conjunction","callback":4096,"expected_result":1,"terms":[value["terms"][0].clone()]}),
+            json!({"kind":"adc_conjunction","callback":4096,"expected_result":1,"terms":[value["terms"][0].clone(),value["terms"][0].clone()]}),
+        ] {
+            let input: ElectricalInput = serde_json::from_value(changed).unwrap();
+            assert!(input.validate_conjunction().is_err());
+        }
+        let overflow: AdcInterval = serde_json::from_value(
+            json!({"kind":"configuration_u16","lower":4294967295u32,"upper":1}),
+        )
+        .unwrap();
+        assert!(!overflow.bounds_valid());
+    }
+
+    #[test]
+    fn compound_adc_checks_every_connection_and_scanner_witness() {
+        let (mut physical, mut firmware) = fixture();
+        let compound = json!({"kind":"adc_conjunction","callback":4096,"expected_result":1,
+            "terms":[{"connection_id":"contact","interval":{"kind":"literal","lower":1,"upper":2}},
+                     {"connection_id":"second","interval":{"kind":"configuration_u16","lower":72506,"upper":72504}}]});
+        firmware
+            .inputs
+            .iter_mut()
+            .find(|i| i.id == "input-movie")
+            .unwrap()
+            .electrical = Some(serde_json::from_value(compound).unwrap());
+        assert!(
+            firmware
+                .validate(&physical, &BTreeSet::from(["contact"]))
+                .is_err()
+        );
+        assert!(
+            firmware
+                .validate(&physical, &BTreeSet::from(["contact", "second"]))
+                .is_err()
+        );
+        physical
+            .controls
+            .get_mut("movie")
+            .unwrap()
+            .connection_ids
+            .push("second".into());
+        firmware
+            .validate(&physical, &BTreeSet::from(["contact", "second"]))
+            .unwrap();
+        firmware
+            .inputs
+            .iter_mut()
+            .find(|i| i.id == "input-movie")
+            .unwrap()
+            .scanner = None;
+        assert!(
+            firmware
+                .validate(&physical, &BTreeSet::from(["contact", "second"]))
+                .is_err()
         );
     }
 

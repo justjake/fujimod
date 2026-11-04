@@ -35,6 +35,11 @@ class AdcIntervalVariant1(TypedDict, total=False):
     when: NotRequired[AdcCondition | None]
 
 
+class AdcTerm(TypedDict, total=False):
+    connection_id: Required[str]
+    interval: Required[AdcInterval]
+
+
 class AdditionalUiModes(TypedDict, total=False):
     play: Required[int]
     setup_play: Required[int]
@@ -1458,10 +1463,18 @@ type ElectricalInput = (
     | ElectricalInputVariant2
     | ElectricalInputVariant3
     | ElectricalInputVariant4
+    | ElectricalInputVariant5
 )
 
 
 class ElectricalInputVariant0(TypedDict, total=False):
+    callback: Required[int]
+    expected_result: Required[int]
+    kind: Required[Literal["adc_conjunction"]]
+    terms: Required[list[AdcTerm]]
+
+
+class ElectricalInputVariant1(TypedDict, total=False):
     callback: NotRequired[int | None]
     connection_id: Required[str]
     expected_result: NotRequired[int | None]
@@ -1469,14 +1482,14 @@ class ElectricalInputVariant0(TypedDict, total=False):
     kind: Required[Literal["adc"]]
 
 
-class ElectricalInputVariant1(TypedDict, total=False):
+class ElectricalInputVariant2(TypedDict, total=False):
     connection_id: Required[str]
     expected_level: Required[bool]
     kind: Required[Literal["gpio"]]
     scanner: Required[GpioScanner]
 
 
-class ElectricalInputVariant2(TypedDict, total=False):
+class ElectricalInputVariant3(TypedDict, total=False):
     connection_id: Required[str]
     decoder_event: Required[int]
     guard: Required[int]
@@ -1487,13 +1500,13 @@ class ElectricalInputVariant2(TypedDict, total=False):
     transitions: Required[list[int]]
 
 
-class ElectricalInputVariant3(TypedDict, total=False):
+class ElectricalInputVariant4(TypedDict, total=False):
     connection_id: Required[str]
     cycle_sign: Required[int]
     kind: Required[Literal["gpio_fixed_cycle"]]
 
 
-class ElectricalInputVariant4(TypedDict, total=False):
+class ElectricalInputVariant5(TypedDict, total=False):
     active_value: Required[int]
     connection_id: Required[str]
     endpoint: Required[int]
