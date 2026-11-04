@@ -723,8 +723,8 @@ fn xpp_initialized_marker(reader: &Routine) -> Result<u64> {
 /// capture. The first checked firmware establishes the instruction grammar;
 /// each address and state input is recovered from its indexed routines.
 fn xp4_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<Value> {
-    if firmware == "xt3-511" {
-        return xp4_xt3_flash(index, firmware, image_origin);
+    if matches!(firmware, "xt3-511" | "xt30-201") {
+        return xp4_packet_flash(index, firmware, image_origin);
     }
     if firmware != "xs10-311" {
         return Err(format!(
@@ -948,57 +948,64 @@ fn xp4_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<
 }
 
 /// Locate X-T3 5.11's mapped XP4 flash reader and its initialized-state guard.
-fn xp4_xt3_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<Value> {
-    const HIGH_LEVEL_READER: u64 = 0x01074fb8;
-    const DMA_READER: u64 = 0x0107536c;
-    const DMA_TRANSFER: u64 = 0x01074df8;
-    const INITIALIZER: u64 = 0x01075808;
-    const CACHE_SYNC: u64 = 0x010763cc;
+fn xp4_packet_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<Value> {
+    let (
+        command,
+        reader_address,
+        transfer_address,
+        initializer_address,
+        prepare_address,
+        state_address,
+        initializer_bytes,
+    ) = match firmware {
+        "xt3-511" => (
+            0x01074fb8, 0x0107536c, 0x01074df8, 0x01075808, 0x010763cc, 0x0155a69c, 0x128,
+        ),
+        "xt30-201" => (
+            0x0106f1ec, 0x0106f5a0, 0x0106f02c, 0x0106fa3c, 0x010706fc, 0x01503894, 0x138,
+        ),
+        _ => return Err("unsupported XP4 packet flash layout".into()),
+    };
     const HIGH_LEVEL_BYTES: u64 = 0x3b4;
     const DMA_READER_BYTES: u64 = 0x304;
     const DMA_TRANSFER_BYTES: u64 = 0x144;
-    const INITIALIZER_BYTES: u64 = 0x128;
 
     let locator = Locator {
         index,
         firmware,
         unit: "main".into(),
     };
-    let high_level = locator.routine(HIGH_LEVEL_READER)?;
-    let reader = locator.routine(DMA_READER)?;
-    let transfer = locator.routine(DMA_TRANSFER)?;
-    let initializer = locator.routine(INITIALIZER)?;
-    let cache_sync = locator.routine(CACHE_SYNC)?;
+    let high_level = locator.routine(command)?;
+    let reader = locator.routine(reader_address)?;
+    let transfer = locator.routine(transfer_address)?;
+    let initializer = locator.routine(initializer_address)?;
+    let preparation = locator.routine(prepare_address)?;
     let exact_span =
         |routine: &Routine, start: u64, size: u64| routine.header.ranges == [(start, start + size)];
-    if !exact_span(&high_level, HIGH_LEVEL_READER, HIGH_LEVEL_BYTES)
-        || !exact_span(&reader, DMA_READER, DMA_READER_BYTES)
-        || !exact_span(&transfer, DMA_TRANSFER, DMA_TRANSFER_BYTES)
-        || !exact_span(&initializer, INITIALIZER, INITIALIZER_BYTES)
+    if !exact_span(&high_level, command, HIGH_LEVEL_BYTES)
+        || !exact_span(&reader, reader_address, DMA_READER_BYTES)
+        || !exact_span(&transfer, transfer_address, DMA_TRANSFER_BYTES)
+        || !exact_span(&initializer, initializer_address, initializer_bytes)
         || !reader.has("cmp", "r2, #0xf4000000")
     {
-        return Err("X-T3 flash reader boundaries or aperture check changed".into());
+        return Err("XP4 packet flash boundaries or aperture check changed".into());
     }
 
     let reader_bytes = index
-        .read(firmware, "main", DMA_READER, DMA_READER_BYTES as usize)
+        .read(firmware, "main", reader_address, DMA_READER_BYTES as usize)
         .map_err(|error| error.to_string())?
-        .ok_or("unmapped X-T3 flash reader")?;
+        .ok_or("unmapped XP4 packet flash reader")?;
     let words: Vec<u32> = reader_bytes
         .chunks_exact(4)
         .map(|bytes| u32::from_le_bytes(bytes.try_into().unwrap()))
         .collect();
-    if words.len() != 193
-        || words[0] != 0xe92d_4ff0
-        || arm_mov_pair_for(words[26], words[27], 3)? != 0x0155_a69c
-        || arm_mov_pair_for(words[28], words[29], 2)? != 0x7766_6555
-        || arm_branch_target(DMA_READER + 0x170, words[92])? != DMA_TRANSFER
-        || arm_branch_target(DMA_READER + 0x110, words[68])? != CACHE_SYNC
-    {
-        return Err("X-T3 flash reader state or transfer path changed".into());
-    }
-
-    let state_address = arm_mov_pair_for(words[26], words[27], 3)?;
+    verify_xp4_packet_reader(
+        &words,
+        reader_address,
+        state_address,
+        transfer_address,
+        prepare_address,
+    )?;
     let references = index
         .referrers(firmware, Some("main"), state_address)
         .map_err(|error| error.to_string())?;
@@ -1008,21 +1015,21 @@ fn xp4_xt3_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Res
         let function = index
             .entry(function_id)
             .map_err(|error| error.to_string())?
-            .ok_or("missing X-T3 flash state reference")?;
+            .ok_or("missing XP4 flash state reference")?;
         match (function.function.key.address, reference.kind.as_str()) {
-            (DMA_READER, "READ") => reader_checks_state = true,
-            (INITIALIZER, "WRITE") => initializer_sets_state = true,
+            (address, "READ") if address == reader_address => reader_checks_state = true,
+            (address, "WRITE") if address == initializer_address => initializer_sets_state = true,
             _ => {}
         }
     }
     if !reader_checks_state || !initializer_sets_state {
         return Err(
-            "X-T3 flash initialized marker is not tied to its reader and initializer".into(),
+            "XP4 flash initialized marker is not tied to its reader and initializer".into(),
         );
     }
 
     if image_origin != 0x274 {
-        return Err("X-T3 update origin differs from its registered DAT bias".into());
+        return Err("XP4 packet flash update origin differs from its registered DAT bias".into());
     }
     Ok(json!({
         "device":{"kind":"serial-nor"},
@@ -1031,17 +1038,42 @@ fn xp4_xt3_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Res
         "update_image":{"dat_offset":image_origin,"xor":255},
         "transport":null,
         "code_ranges":[
-            high_level.span("firmware flash reader"),
+            high_level.span("flash command routine"),
             reader.span("stock flash reader"),
             transfer.span("flash DMA transfer"),
             initializer.span("flash controller initialization"),
-            cache_sync.span("flash destination cache maintenance")
+            preparation.span("flash read preparation")
         ],
         "state_checks":[
             {"name":"flash driver initialized","address":state_address,"size":4,"value":0x77666555u32}
         ],
         "control":{"offset":0,"size":32768}
     }))
+}
+
+fn verify_xp4_packet_reader(
+    words: &[u32],
+    reader_address: u64,
+    state_address: u64,
+    transfer_address: u64,
+    prepare_address: u64,
+) -> Result<()> {
+    if words.len() != 193
+        || words[..8]
+            != [
+                0xe92d4ff0, 0xe28db020, 0xe24dd01c, 0xe5905000, 0xe5904004, 0xe5906008, 0xe5d0700c,
+                0xe5d0a00d,
+            ]
+        || words[56] != 0xe352033d
+        || arm_mov_pair_for(words[26], words[27], 3)? != state_address
+        || arm_mov_pair_for(words[28], words[29], 2)? != 0x7766_6555
+        || arm_branch_target(reader_address + 0x170, words[92])? != transfer_address
+        || arm_branch_target(reader_address + 0x110, words[68])? != prepare_address
+    {
+        return Err("XP4 flash packet, state or transfer path changed".into());
+    }
+
+    Ok(())
 }
 
 fn arm_mov_pair(low: u32, high: u32) -> Result<u64> {
@@ -1197,6 +1229,47 @@ mod tests {
     use super::*;
     use crate::{Boundary, Index, Region, UnitInput, UnitLayout};
 
+    #[test]
+    fn packet_reader_rejects_changed_roles_state_and_calls() {
+        // Self-authored instruction fields at a synthetic address. Unchecked
+        // words are zero; this tests the verifier, not routine discovery.
+        let mut words = vec![0; 193];
+        words[..8].copy_from_slice(&[
+            0xe92d4ff0, 0xe28db020, 0xe24dd01c, 0xe5905000, 0xe5904004, 0xe5906008, 0xe5d0700c,
+            0xe5d0a00d,
+        ]);
+        words[26] = 0xe3003000; // MOVW r3, #0
+        words[27] = 0xe3403002; // MOVT r3, #2
+        words[28] = 0xe3062555;
+        words[29] = 0xe3472766;
+        words[56] = 0xe352033d;
+        let branch = |site: u64, target: u64| {
+            0xeb000000 | (((target as i64 - site as i64 - 8) / 4) as u32 & 0xffffff)
+        };
+        words[68] = branch(0x1110, 0x3000);
+        words[92] = branch(0x1170, 0x4000);
+        let verify =
+            |words: &[u32]| verify_xp4_packet_reader(words, 0x1000, 0x20000, 0x4000, 0x3000);
+        assert!(verify(&words).is_ok());
+        for (offset, value) in [
+            (3, 0xe5905004),
+            (4, 0xe5904000),
+            (7, 0xe5d0a00c),
+            (26, 0xe3002000),
+            (27, 0xe3403003),
+            (28, 0xe3062554),
+            (56, 0xe352033c),
+            (68, 0xea000000),
+            (92, branch(0x1170, 0x4004)),
+        ] {
+            let mut changed = words.clone();
+            changed[offset] = value;
+            assert!(verify(&changed).is_err(), "accepted changed word {offset}");
+        }
+        assert!(verify(&words[..192]).is_err());
+        assert!(verify_xp4_packet_reader(&words, 0x1004, 0x20000, 0x4000, 0x3000).is_err());
+    }
+
     fn candidates(second: u32) -> Index {
         let mut index = Index::new();
         // Two self-authored MOV-immediate/RET routines with the same nominated
@@ -1266,3 +1339,4 @@ mod tests {
         );
     }
 }
+
