@@ -225,7 +225,7 @@ fn timeout_irq_waits_for_error_status_and_signal_enables() {
 }
 
 #[test]
-fn removed_media_refuses_commands_and_reinsertion_restores_normal_cmd8() {
+fn removed_media_times_out_commands_and_reinsertion_restores_normal_cmd8() {
     let (mut host, contacts, mut ram) = host(Protocol::Sdhc, InitializationFault::None);
     setup(&mut host, &mut ram, Protocol::Sdhc);
     contacts.set(false, false);
@@ -234,8 +234,10 @@ fn removed_media_refuses_commands_and_reinsertion_restores_normal_cmd8() {
     write(&mut host, &mut ram, 8, 4, 0x1aa);
     let mut cx = ram.cx();
     host.write(&mut cx, BASE + 12, 4, 0x081a0000);
-    assert!(cx.refusal().is_some());
+    assert_eq!(cx.refusal(), None);
     assert!(!host.busy());
+    assert_eq!(read(&mut host, &mut ram, 0x30, 2), 0x8000);
+    assert_eq!(read(&mut host, &mut ram, 0x32, 2), 1);
     assert_eq!(host.next_deadline(ram.now), None);
     contacts.set(true, false);
     command(&mut host, &mut ram, 0x081a0000, 0x1aa);
@@ -321,4 +323,16 @@ fn interface_enable_without_uhs2_mode_keeps_default_speed_commands_available() {
     enumerate(&mut host, &mut ram);
     assert_eq!(read(&mut host, &mut ram, 0x3e, 2), 0x100);
     assert_eq!(read(&mut host, &mut ram, 0x24, 4) >> 31, 0);
+}
+
+#[test]
+fn a_command_without_a_card_times_out_as_the_controller_reports_it() {
+    let (mut host, contacts, mut ram) = host(Protocol::Sdhc, InitializationFault::None);
+    contacts.set(false, false);
+    setup(&mut host, &mut ram, Protocol::Sdhc);
+    command(&mut host, &mut ram, 0x081a0000, 0x1aa);
+    assert!(!host.busy());
+    assert_eq!(read(&mut host, &mut ram, 0x30, 2), 0x8000);
+    assert_eq!(read(&mut host, &mut ram, 0x32, 2), 1);
+    assert_eq!(read(&mut host, &mut ram, 0x24, 4) & 0x10000, 0);
 }

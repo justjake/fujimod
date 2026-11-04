@@ -651,12 +651,8 @@ impl SdHost {
     }
     fn start(&mut self, cx: &mut Cx<'_>, word: u32) -> Result<(), String> {
         let rom = self.options.protocol == Protocol::Rom;
-        if self.busy()
-            || !self.contacts.present()
-            || self.regs.get(0x30) != 0
-            || self.regs.get(0x32) != 0
-        {
-            return Err("SD command requires present idle card and cleared status".into());
+        if self.busy() || self.regs.get(0x30) != 0 || self.regs.get(0x32) != 0 {
+            return Err("SD command requires idle controller and cleared status".into());
         }
         let clock = self.clocks.read(cx, self.options.base + 0x2c, 2);
         if clock & 7 != 7
@@ -667,6 +663,15 @@ impl SdHost {
         }
         if self.regs.get(0x3e) & 0x107 == 0x107 {
             return Err("SD command with UHS-II mode selected".into());
+        }
+        if !self.contacts.present() {
+            // No card answers the command: the controller reports a command
+            // timeout and the error interrupt at once. The timeout interval
+            // is not measured, so none is modeled.
+            self.regs
+                .set(0x32, self.regs.get(0x32) | COMMAND_TIMEOUT_ERROR);
+            self.regs.set(0x30, self.regs.get(0x30) | ERROR_INTERRUPT);
+            return self.signal(cx);
         }
         let argument = self.regs.word(8);
         let mut r = self.plan(word, argument)?;
