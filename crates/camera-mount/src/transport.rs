@@ -56,7 +56,9 @@ impl<'a> Transport<'a> {
     }
     fn capacity(&self) -> u32 {
         let capacity = match self.facts.map(|f| &f.source) {
-            Some(BulkSource::Query { capacities, .. }) => capacities
+            Some(
+                BulkSource::Query { capacities, .. } | BulkSource::DirectQuery { capacities, .. },
+            ) => capacities
                 .iter()
                 .copied()
                 .filter(|n| *n > 0)
@@ -371,6 +373,14 @@ mod tests {
         ]);
         let session = block_on(script.begin_session(65536, None)).unwrap();
         for source in [
+            BulkSource::DirectQuery {
+                tag: 128,
+                query_base: 0x1000,
+                base: 0x1000,
+                data_offset: 0,
+                capacities: vec![65536],
+                wrapping: true,
+            },
             BulkSource::Query {
                 tag: 128,
                 callback_table: 0x1000,

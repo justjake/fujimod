@@ -65,7 +65,7 @@ impl Display {
         for (format, source) in config.raw_formats.iter_mut().zip(self.raw_formats) {
             *format = source
                 .as_deref()
-                .map(fujimod_emulator_graphics::raster::PixelOrder::parse)
+                .map(fujimod_framebuffer::raster::PixelOrder::parse)
                 .transpose()?;
         }
         Ok((self.base, config))

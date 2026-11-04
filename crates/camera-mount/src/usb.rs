@@ -31,6 +31,7 @@ enum Operation {
     Memory(u32, u32),
     Flash(u64, u32),
     Sync,
+    Unload,
     Close,
 }
 enum Answer {
@@ -61,6 +62,77 @@ impl Sessions for Target {
         connection.set_tool("fujimod-mount".into());
         connection.begin_session(None).await
     }
+}
+async fn target(device_id: Option<String>) -> std::result::Result<Target, String> {
+    let mut devices = connection::discover(DeviceFilter::Diagnostic)
+        .await
+        .map_err(|e| e.to_string())?;
+    if let Some(id) = device_id {
+        devices.retain(|d| {
+            let ports: String = d.port_chain().iter().map(|p| format!("{p:02x}")).collect();
+            d.bus_id() == id
+                || format!("{}-{ports}", d.bus_id()) == id
+                || d.serial_number() == Some(id.as_str())
+        });
+    }
+    if devices.len() != 1 {
+        return Err(format!(
+            "Expected one selected debug camera, found {}",
+            devices.len()
+        ));
+    }
+    let device = devices.remove(0);
+    let interfaces = connection::interfaces(&device)
+        .await
+        .map_err(|e| e.to_string())?;
+    if interfaces.len() != 1 {
+        return Err(format!(
+            "Expected one debug interface, found {}",
+            interfaces.len()
+        ));
+    }
+    Ok(Target {
+        device,
+        interface: interfaces[0],
+    })
+}
+fn automatic_firmware(
+    device_id: Option<String>,
+    catalog: &ReferenceCatalog,
+) -> std::result::Result<String, String> {
+    block_on(async {
+        let mut target = target(device_id).await?;
+        let mut session = target.open().await.map_err(|e| e.to_string())?;
+        let identity = async {
+            let product = session.device_info(InfoSelector::Product).await?;
+            let version = session.device_info(InfoSelector::InternalVersion).await?;
+            Ok::<_, fujimod_usb::Error>((
+                product.text.trim().to_owned(),
+                version.text.trim().to_owned(),
+            ))
+        }
+        .await;
+        session.close().await.map_err(|e| e.to_string())?;
+        let (product, version) = identity.map_err(|e| e.to_string())?;
+        let mut ids = std::collections::BTreeSet::new();
+        for facts in catalog.bulk_profiles() {
+            if facts.product == product && facts.internal_version == version {
+                ids.insert(facts.firmware_id.clone());
+            }
+        }
+        for facts in catalog.card_profiles() {
+            if facts.product == product && facts.internal_version == version {
+                ids.insert(facts.firmware_id.clone());
+            }
+        }
+        if ids.len() != 1 {
+            return Err(format!(
+                "Expected one catalog firmware for {product} {version}, found {}",
+                ids.len()
+            ));
+        }
+        Ok(ids.into_iter().next().unwrap())
+    })
 }
 struct Client<F> {
     sessions: F,
@@ -123,7 +195,8 @@ impl<F: Sessions> Client<F> {
             self.release_lease().await?;
         }
         // Every write is committed and every handle closed before replying.
-        if matches!(op, Operation::Sync) || matches!(op, Operation::Close) && self.service.is_none()
+        if matches!(op, Operation::Sync)
+            || matches!(op, Operation::Close | Operation::Unload) && self.service.is_none()
         {
             return Ok(Answer::Done);
         }
@@ -316,11 +389,12 @@ impl<F: Sessions> Client<F> {
                     };
                     Ok(Answer::Bytes(data))
                 }
-                Operation::Close => {
+                Operation::Close | Operation::Unload => {
                     if let Some(service) = &self.service {
                         service.release(&mut session, self.limits).await?;
                     }
                     self.service = None;
+                    self.mailbox_hint = None;
                     Ok(Answer::Done)
                 }
                 Operation::Sync => unreachable!("handled without a session"),
@@ -369,6 +443,8 @@ impl<F: Sessions> Client<F> {
 }
 
 pub struct UsbDevice {
+    display: Option<crate::display::Profile>,
+    capture_regions: Vec<Region>,
     queue: SyncSender<Work>,
     worker: Option<JoinHandle<()>>,
     flash_bytes: Option<u64>,
@@ -377,14 +453,20 @@ pub struct UsbDevice {
 impl UsbDevice {
     /// Select descriptors and preflight one bounded transaction. Idle mounts
     /// hold no connection, ff80 session or file handle. An owned helper keeps
-    /// only its allocation until shutdown.
+    /// its allocation until idle cleanup.
     pub fn connect(
         firmware: String,
         device_id: Option<String>,
         limits: DebugMemoryLimits,
         flash_reader: Option<std::path::PathBuf>,
     ) -> std::result::Result<(Self, Vec<Region>), String> {
-        let selected = ReferenceCatalog::bundled()?.resolve_firmware(&firmware)?;
+        let catalog = ReferenceCatalog::bundled()?;
+        let firmware = if firmware == "auto" {
+            automatic_firmware(device_id.clone(), &catalog)?
+        } else {
+            firmware
+        };
+        let selected = catalog.resolve_firmware(&firmware)?;
         if let Some(capability) = &selected.card_files {
             capability.validate()?;
         }
@@ -404,9 +486,10 @@ impl UsbDevice {
                     .map(|facts| (facts.product.clone(), facts.internal_version.clone()))
             })
             .ok_or("Selected firmware has no located debug identity")?;
+        let display = crate::display::Profile::from_soc(&selected.soc, selected.body.dram_bytes);
         let capability = selected.card_files;
         let has_card = capability.is_some();
-        let regions = selected
+        let regions: Vec<Region> = selected
             .state
             .ok_or("Selected firmware has no readable memory map")?
             .regions
@@ -423,41 +506,7 @@ impl UsbDevice {
             .name("camera-mount-usb".into())
             .spawn(move || {
                 block_on(async {
-                    let target = async {
-                        let mut devices = connection::discover(DeviceFilter::Diagnostic)
-                            .await
-                            .map_err(|e| e.to_string())?;
-                        if let Some(id) = device_id {
-                            devices.retain(|d| {
-                                let ports: String =
-                                    d.port_chain().iter().map(|p| format!("{p:02x}")).collect();
-                                d.bus_id() == id
-                                    || format!("{}-{ports}", d.bus_id()) == id
-                                    || d.serial_number() == Some(id.as_str())
-                            });
-                        }
-                        if devices.len() != 1 {
-                            return Err(format!(
-                                "Expected one selected debug camera, found {}",
-                                devices.len()
-                            ));
-                        }
-                        let device = devices.remove(0);
-                        let interfaces = connection::interfaces(&device)
-                            .await
-                            .map_err(|e| e.to_string())?;
-                        if interfaces.len() != 1 {
-                            return Err(format!(
-                                "Expected one debug interface, found {}",
-                                interfaces.len()
-                            ));
-                        }
-                        Ok(Target {
-                            device,
-                            interface: interfaces[0],
-                        })
-                    }
-                    .await;
+                    let target = target(device_id).await;
                     let target = match target {
                         Ok(target) => target,
                         Err(error) => {
@@ -498,13 +547,20 @@ impl UsbDevice {
                     loop {
                         let pending = if client.lease.is_some() {
                             rx.recv_timeout(READ_IDLE)
+                        } else if client.service.is_some() && !client.fenced {
+                            rx.recv_timeout(Duration::from_secs(2))
                         } else {
                             rx.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected)
                         };
                         let (op, reply) = match pending {
                             Ok(work) => work,
                             Err(mpsc::RecvTimeoutError::Timeout) => {
-                                if let Err(error) = client.release_lease().await {
+                                let result = if client.lease.is_some() {
+                                    client.release_lease().await
+                                } else {
+                                    client.transaction(Operation::Unload).await.map(|_| ())
+                                };
+                                if let Err(error) = result {
                                     eprintln!("fujimod-mount: {error}");
                                 }
                                 continue;
@@ -528,6 +584,8 @@ impl UsbDevice {
         match ready_rx.recv().map_err(|e| e.to_string())? {
             Ok(()) => Ok((
                 Self {
+                    display,
+                    capture_regions: regions.clone(),
                     queue: tx,
                     worker: Some(worker),
                     flash_bytes,
@@ -575,9 +633,80 @@ fn report(error: fujimod_usb::Error) -> i32 {
     }
 }
 
+const MEMORY_CAPTURE_LIMIT: usize = 64 << 20;
 impl Device for UsbDevice {
+    fn display_outputs(&self) -> Vec<u32> {
+        self.display.as_ref().map_or_else(Vec::new, |p| p.outputs())
+    }
+    fn display_images(&mut self, output: u32) -> Result<Vec<crate::display::Image>> {
+        let profile = self.display.clone().ok_or(libc::ENOTSUP)?;
+        let regions = self.capture_regions.clone();
+        let mut cache: Option<(u64, Vec<u8>)> = None;
+        let result = profile.capture(output, |a, n| {
+            // The small register reads delimit attempts; never carry pixels across them.
+            if a >= 0xff000000 {
+                cache = None;
+            }
+            if let Some((base, bytes)) = &cache {
+                if a >= *base
+                    && a.checked_add(n as u64)
+                        .is_some_and(|end| end <= *base + bytes.len() as u64)
+                {
+                    let offset = (a - base) as usize;
+                    return Ok(bytes[offset..offset + n].to_vec());
+                }
+            }
+            let requested = n;
+            let n = if a < 0xff000000 && n < 262144 {
+                regions
+                    .iter()
+                    .find_map(|r| {
+                        let end = r.address.checked_add(r.size)?;
+                        (a >= r.address && a.checked_add(n as u64)? <= end)
+                            .then_some((end - a).min(262144) as usize)
+                    })
+                    .unwrap_or(n)
+            } else {
+                n
+            };
+            if n > MEMORY_CAPTURE_LIMIT {
+                return Err("Display memory read exceeds capture bounds".into());
+            }
+            let a = u32::try_from(a).map_err(|_| "Display address exceeds transport width")?;
+            let mut bytes = Vec::with_capacity(n);
+            while bytes.len() < n {
+                let count = (n - bytes.len()).min(64 << 20);
+                let address = a
+                    .checked_add(bytes.len() as u32)
+                    .ok_or("Display address overflow")?;
+                let part = self
+                    .memory(address, count as u32)
+                    .map_err(|e| format!("Display memory read: errno {e}"))?;
+                if part.len() != count {
+                    return Err("Short display memory read".into());
+                }
+                bytes.extend(part);
+            }
+            if n > requested {
+                let result = bytes[..requested].to_vec();
+                cache = Some((u64::from(a), bytes));
+                Ok(result)
+            } else {
+                Ok(bytes)
+            }
+        });
+        self.synchronize()?;
+        result.map_err(|error| {
+            eprintln!("fujimod-mount: {error}");
+            libc::EIO
+        })
+    }
+
     fn shutdown(&mut self) -> Result<()> {
         UsbDevice::shutdown(self)
+    }
+    fn unload_helper(&mut self) -> Result<()> {
+        self.request(Operation::Unload).map(|_| ())
     }
     fn has_card(&self) -> bool {
         self.has_card

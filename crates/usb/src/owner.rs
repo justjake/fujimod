@@ -553,6 +553,10 @@ impl DeviceOwner {
         if self.fenced() {
             return Err(error("USB completion unknown; reconnect the device"));
         }
+        if let Operation::OwnerStatus { message } = &op {
+            eprintln!("controller {controller} status: {message}");
+            return Ok(Completion::default());
+        }
         let (selection, iface) = self
             .state
             .lock()

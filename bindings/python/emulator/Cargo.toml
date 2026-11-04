@@ -12,6 +12,7 @@ test = false
 doctest = false
 
 [dependencies]
+fujimod-framebuffer.workspace = true
 fujimod-emulator-session.workspace = true
 fujimod-emulator-xpp.workspace = true
 fujimod-emulator-ip.workspace = true

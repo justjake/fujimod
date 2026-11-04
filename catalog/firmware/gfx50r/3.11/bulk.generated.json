@@ -1,0 +1,91 @@
+{
+  "$schema": "https://fujimod.com/schemas/bulk.generated.schema.json",
+  "schema": 1,
+  "id": "gfx50r-311-bulk",
+  "firmware_id": "gfx50r-311",
+  "product": "GFX 50R",
+  "internal_version": "1.50",
+  "code_alias": 0,
+  "source": {
+    "mechanism": "direct_query",
+    "tag": 307,
+    "query_base": 130932736,
+    "base": 130932736,
+    "data_offset": 32,
+    "capacities": [
+      524320
+    ],
+    "wrapping": false
+  },
+  "window": {
+    "address": 130932768,
+    "size": 524288
+  },
+  "code_checks": [
+    {
+      "name": "FF80 diagnostic query",
+      "address": 25978472,
+      "size": 612,
+      "sha256": "f41d5fd7ff451039ac36eda2b70decd302bd8c71ed103bfe241a71fcdf071dbb"
+    },
+    {
+      "name": "diagnostic source wrapper",
+      "address": 27197732,
+      "size": 16,
+      "sha256": "e29bdf871bb15946500e3e4dcd279dc633939035240fab885f6607a854a6acc5"
+    },
+    {
+      "name": "transfer source setup",
+      "address": 13820872,
+      "size": 64,
+      "sha256": "16796219e85d6554f881927d29a40fcc54c23266f91127d0f30695a377adc1e7"
+    },
+    {
+      "name": "transfer source publish",
+      "address": 13811912,
+      "size": 28,
+      "sha256": "9ccfb6848230456f6a6ec1e2cb67c351e2a62c6f967456d456239ef6fa9a0dfd"
+    },
+    {
+      "name": "transfer source commit",
+      "address": 13811804,
+      "size": 108,
+      "sha256": "d4b9992940905480170d0ed953dfbe70acbbbfd8bcc4540d23a264bb980ab7c1"
+    }
+  ],
+  "probes": [
+    {
+      "address": 130932768,
+      "size": 128
+    },
+    {
+      "address": 131456928,
+      "size": 128
+    }
+  ],
+  "mapped_probe": null,
+  "scopes": [
+    {
+      "name": "quick",
+      "basis": "Leading 4 KiB of the located E1 transfer buffer.",
+      "ranges": [
+        {
+          "name": "transfer-buffer",
+          "address": 130932768,
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "full",
+      "basis": "The complete E1 transfer buffer published by the stock diagnostic query.",
+      "ranges": [
+        {
+          "name": "transfer-buffer",
+          "address": 130932768,
+          "size": 524288
+        }
+      ]
+    }
+  ]
+}

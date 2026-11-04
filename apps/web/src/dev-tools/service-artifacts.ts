@@ -37,7 +37,8 @@ export async function flashReader(firmwareId: string) {
   const url = new URL(firmware.flash_reader, document.baseURI);
   const metadata = await fetch(url);
   if (!metadata.ok) throw Error('Could not load the flash reader metadata.');
-  const artifact = (await metadata.json()) as { payload: unknown; image: string };
+  const artifact = (await metadata.json()) as { payload: unknown; image?: string };
+  if (artifact.image === undefined) return [JSON.stringify(artifact.payload), new Uint8Array()] as const;
   if (!/^[a-zA-Z0-9_-]+\.bin$/.test(artifact.image)) throw Error('Invalid flash reader artifact.');
   const image = await fetch(new URL(artifact.image, url));
   if (!image.ok) throw Error('Could not load the flash reader image.');

@@ -261,7 +261,9 @@ impl<'a> Qualified<'a> {
         let mut access = Access { session, limits };
         check_code(&mut access, bulk).await?;
         let mut source = match bulk.source {
-            BulkSource::Query { .. } => Source::prepare(&mut access, bulk).await?,
+            BulkSource::Query { .. } | BulkSource::DirectQuery { .. } => {
+                Source::prepare(&mut access, bulk).await?
+            }
             _ => Source::borrow(&mut access, bulk).await?,
         };
         if let Some(alignment) = alignment {
@@ -278,6 +280,9 @@ impl<'a> Qualified<'a> {
     }
     pub(crate) async fn read(&mut self, target: BulkRange) -> Result<Vec<u8>> {
         self.source.bulk(&mut self.access, target).await
+    }
+    pub(crate) fn capacity(&self) -> u32 {
+        self.source.window.capacity().get()
     }
     pub(crate) async fn read_progress(
         &mut self,
@@ -396,6 +401,7 @@ impl Source {
     async fn borrow(access: &mut Access<'_>, bulk: &FirmwareBulk) -> Result<Self> {
         let aperture = memory_range(bulk.window)?;
         let (state, original, selected, capacity) = match &bulk.source {
+            BulkSource::DirectQuery { .. } => return Self::prepare(access, bulk).await,
             BulkSource::Query { source_state, .. } => {
                 // The callback and diagnostic dispatcher use the cacheable
                 // publication cell. Borrow and restore that same view; writing
@@ -475,6 +481,45 @@ impl Source {
         let nonzero = |n: u32| NonZeroU32::new(n).ok_or(fujimod_usb::Error::InvalidLength);
         let aperture = memory_range(bulk.window)?;
         match bulk.source {
+            BulkSource::DirectQuery {
+                tag,
+                query_base,
+                base,
+                data_offset,
+                ref capacities,
+                wrapping,
+            } => {
+                let reply = access
+                    .session
+                    .diagnostic_query(DiagnosticTag::Research(tag))
+                    .await?;
+                require(
+                    reply.status == CommandStatus::Success,
+                    "Bulk source query refused",
+                )?;
+                let capacity = reply.fields[1];
+                require(
+                    u64::from(reply.fields[0]) == query_base
+                        && capacities.contains(&capacity)
+                        && data_offset < capacity,
+                    "Bulk source or capacity differs from the located facts",
+                )?;
+                let mode = if wrapping {
+                    OffsetMode::Wrapping
+                } else {
+                    OffsetMode::Checked
+                };
+                Ok(Self {
+                    window: DataWindow::new(
+                        Address(address(base)?),
+                        aperture,
+                        nonzero(capacity)?,
+                        mode,
+                    )?,
+                    overwritten: None,
+                    saved: None,
+                })
+            }
             BulkSource::Query {
                 tag,
                 callback_table,

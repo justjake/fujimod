@@ -21,9 +21,7 @@
 //! `(width - 1) << 16 | (height - 1)`. The firmware writes no pitch; the
 //! camera's OSD buffers (0x354d000, 0x384d000) are 720 x 480 premultiplied
 //! RGBA words with a 2880-byte pitch, so rows are packed. Layers compose in
-//! index order over the video layer, or over black without it. An enabled
-//! video path whose size and buffer are both still zero has no plane to read
-//! and composes over black the same way.
+//! index order over the video layer, or over black without it.
 //!
 //! The same routine copies the video layer's words: shadow +0x10 to the
 //! format at +0x010, +0x3c to the size at +0x02c and +0x40 to the buffer at
@@ -44,7 +42,6 @@
 //! writes. This is the same output controller with a timed completion law.
 use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_devices::{Cx, Device};
-use fujimod_emulator_graphics::raster::{self, PixelOrder, Plane};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -145,17 +142,9 @@ impl Device for FrameClock {
     }
 }
 
-const CONTROL: u64 = 0x000;
-const VIDEO_ENABLE: u32 = 1 << 2;
-const VIDEO_FORMAT: u64 = 0x010;
-const PACKED_422: u32 = 0x333;
-const OUTPUT_SIZE: u64 = 0x014;
-const VIDEO_SIZE: u64 = 0x02c;
-const VIDEO_BUFFER: u64 = 0x030;
-const LAYER_ENABLE: u64 = 0x200;
-const LAYER_ORIGIN: u64 = 0x210;
-const LAYER_SIZE: u64 = 0x220;
-const LAYER_BUFFER: u64 = 0x230;
+use fujimod_framebuffer_xpp::{CONTROL, VIDEO_ENABLE, LAYER_ENABLE, LAYER_BUFFER};
+#[cfg(test)]
+use fujimod_framebuffer_xpp::{VIDEO_FORMAT, PACKED_422, OUTPUT_SIZE, VIDEO_SIZE, VIDEO_BUFFER, LAYER_ORIGIN, LAYER_SIZE};
 
 /// Host output index and capture period of a scanned-out display output.
 #[derive(Clone, Copy, Debug)]
@@ -246,90 +235,8 @@ impl Output {
     fn word(&self, offset: u64) -> u32 {
         self.words.get(&offset).copied().unwrap_or(0)
     }
-    /// `(width, height)` of a size word, or `None` for unsupported bits.
-    fn extent(word: u32) -> Option<(u32, u32)> {
-        (word & 0xf000_f000 == 0).then_some(((word >> 16) + 1, (word & 0xfff) + 1))
-    }
-    /// Composite the video layer and the enabled OSD layers; `Ok(None)` when
-    /// no layer is enabled.
-    fn compose(&self, cx: &mut Cx<'_>) -> Result<Option<(u32, u32, Vec<u8>, u64)>, ()> {
-        let enable = self.word(LAYER_ENABLE);
-        let video = self.word(CONTROL) & VIDEO_ENABLE != 0;
-        if enable & !0xf != 0 {
-            return Err(());
-        }
-        if enable == 0 && !video {
-            return Ok(None);
-        }
-        let (width, height) = Self::extent(self.word(OUTPUT_SIZE)).ok_or(())?;
-        let mut rgba = vec![0; width as usize * height as usize * 4];
-        for pixel in rgba.chunks_exact_mut(4) {
-            pixel[3] = 255;
-        }
-        let mut top = 0;
-        if video {
-            let (w, h) = Self::extent(self.word(VIDEO_SIZE)).ok_or(())?;
-            let buffer = u64::from(self.word(VIDEO_BUFFER));
-            // The video path can be on with no plane committed: the X-T20's
-            // update page switches bit 2 of +0x000 on while +0x02c and +0x030
-            // both stay zero, and the layers then compose over black. A plane
-            // with only one of them set is still refused.
-            let committed = self.word(VIDEO_SIZE) != 0 || buffer != 0;
-            if committed
-                && (self.word(VIDEO_FORMAT) != PACKED_422
-                    || w > width
-                    || h > height
-                    || w & 1 != 0
-                    || buffer & 3 != 0)
-            {
-                return Err(());
-            }
-            if committed {
-                let plane = Plane {
-                    address: buffer,
-                    stride: w * 2,
-                    source_x: 0,
-                    source_y: 0,
-                    source_width: w,
-                    source_height: h,
-                    sampling: None,
-                    work_x: 0,
-                    work_y: 0,
-                    work_width: w,
-                    work_height: h,
-                    order: PixelOrder::YyCbCr,
-                };
-                raster::composite(|a, n| cx.ram_bytes(a, n), plane, width, height, &mut rgba)
-                    .map_err(|_| ())?;
-                for pixel in rgba.chunks_exact_mut(4) {
-                    pixel.swap(0, 2);
-                }
-                top = buffer;
-            }
-        }
-        for layer in (0..4).filter(|n| enable & 1 << n != 0) {
-            let at = |offset: u64| offset + 4 * layer as u64;
-            let (w, h) = Self::extent(self.word(at(LAYER_SIZE))).ok_or(())?;
-            let buffer = u64::from(self.word(at(LAYER_BUFFER)));
-            if self.word(at(LAYER_ORIGIN)) != 0 || w > width || h > height || buffer & 3 != 0 {
-                return Err(());
-            }
-            let pixels = cx
-                .ram_bytes(buffer, w as usize * h as usize * 4)
-                .map_err(|_| ())?;
-            for (y, row) in pixels.chunks_exact(w as usize * 4).enumerate() {
-                let line = &mut rgba[y * width as usize * 4..][..w as usize * 4];
-                for (out, src) in line.chunks_exact_mut(4).zip(row.chunks_exact(4)) {
-                    let keep = 255 - u32::from(src[3]);
-                    for n in 0..3 {
-                        let value = u32::from(src[n]) + (u32::from(out[n]) * keep + 127) / 255;
-                        out[n] = value.min(255) as u8;
-                    }
-                }
-            }
-            top = buffer;
-        }
-        Ok(Some((width, height, rgba, top)))
+    fn compose(&self,cx:&mut Cx<'_>)->Result<Option<(u32,u32,Vec<u8>,u64)>,()> {
+        fujimod_framebuffer_xpp::Decoder{words:&self.words}.compose(|a,n|cx.ram_bytes(a,n))
     }
     fn scan(&mut self, cx: &mut Cx<'_>, scanout: Scanout) {
         let (width, height, rgba, source) = match self.compose(cx) {

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://fujimod.com/schemas/bulk.generated.schema.json",
+  "schema": 1,
+  "id": "xt20-211-bulk",
+  "firmware_id": "xt20-211",
+  "product": "X-T20",
+  "internal_version": "1.46",
+  "code_alias": 0,
+  "source": {
+    "mechanism": "direct_query",
+    "tag": 307,
+    "query_base": 0,
+    "base": 83894272,
+    "data_offset": 32,
+    "capacities": [
+      524320
+    ],
+    "wrapping": false
+  },
+  "window": {
+    "address": 83894304,
+    "size": 524288
+  },
+  "code_checks": [
+    {
+      "name": "FF80 diagnostic query",
+      "address": 22546340,
+      "size": 612,
+      "sha256": "cc641753e15286ff60dbe17df89e5b25807c4de158440ff7a0ca7872a2661d03"
+    },
+    {
+      "name": "diagnostic source wrapper",
+      "address": 23670668,
+      "size": 16,
+      "sha256": "5b69dca55a0e2dcb87a8d4b9be48397d277f54bfb924bd689883ff3b5a18a379"
+    },
+    {
+      "name": "transfer source setup",
+      "address": 13476492,
+      "size": 64,
+      "sha256": "fde1530fbb29456bfd683693828baf36ae7fc7899a5461f42e578fa664a3acfc"
+    },
+    {
+      "name": "transfer source publish",
+      "address": 13467504,
+      "size": 28,
+      "sha256": "9ccfb6848230456f6a6ec1e2cb67c351e2a62c6f967456d456239ef6fa9a0dfd"
+    },
+    {
+      "name": "transfer source commit",
+      "address": 13467396,
+      "size": 108,
+      "sha256": "b6c6565a16fdfe7e41b4e1ab1ba46899e93fef5f977f0a3bcac27d9a859422d8"
+    }
+  ],
+  "probes": [
+    {
+      "address": 83894304,
+      "size": 128
+    },
+    {
+      "address": 84418464,
+      "size": 128
+    }
+  ],
+  "mapped_probe": null,
+  "scopes": [
+    {
+      "name": "quick",
+      "basis": "Leading 4 KiB of the located E1 transfer buffer.",
+      "ranges": [
+        {
+          "name": "transfer-buffer",
+          "address": 83894304,
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "full",
+      "basis": "The complete E1 transfer buffer published by the stock diagnostic query.",
+      "ranges": [
+        {
+          "name": "transfer-buffer",
+          "address": 83894304,
+          "size": 524288
+        }
+      ]
+    }
+  ]
+}

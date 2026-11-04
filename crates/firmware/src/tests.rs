@@ -191,7 +191,7 @@ fn bounded_overlay_tables() {
 }
 #[test]
 fn outer_headers_and_signed_trailer() {
-    for (kind, size) in [(4, 0x25c), (6, 0x27c), (8, 0x2bc)] {
+    for (kind, size) in [(4, 0x25c), (5, 0x268), (6, 0x27c), (8, 0x2bc)] {
         let mut data = vec![0; size];
         put(&mut data, 0, &[kind]);
         put(&mut data, 0x204, &[1, 0x23]);

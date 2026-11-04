@@ -7,7 +7,6 @@ pub mod exr2_isp;
 pub mod film;
 pub mod frame;
 pub mod optics;
-pub mod packed_color;
 pub mod radiometric;
 pub mod scene;
 pub mod timing;

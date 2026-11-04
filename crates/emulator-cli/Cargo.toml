@@ -18,6 +18,7 @@ path = "src/bin/fujimod-emulator-worker.rs"
 test = false
 
 [dependencies]
+fujimod-framebuffer.workspace = true
 fujimod-emulator-models = { path = "../../crates/emulator-models" }
 fujimod-emulator-xp5-board = { path = "../../crates/emulator-xp5-board" }
 fujimod-emulator-xp5-io = { path = "../../crates/emulator-xp5-io" }

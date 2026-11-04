@@ -1,0 +1,13 @@
+[package]
+name = "fujimod-framebuffer"
+description = "Read-only display pixels, register snapshots and BMP encoding"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true

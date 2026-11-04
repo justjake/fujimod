@@ -1,5 +1,5 @@
 use super::*;
-use crate::device::Observation;
+use crate::Observation;
 
 fn model(width: u32, height: u32, pipe: usize) -> Compositor {
     let mut model = Compositor {
@@ -17,11 +17,8 @@ fn model(width: u32, height: u32, pipe: usize) -> Compositor {
 }
 
 fn put(model: &mut Compositor, pipe: usize, offset: u64, value: u32) {
-    let mut actions = vec![];
-    model
-        .write(0, BASES[pipe] + offset, 4, value, &mut actions)
-        .unwrap();
-    assert!(actions.is_empty());
+    model.pipes[pipe].regs.insert(offset as u32, value);
+    model.pipes[pipe].written.insert(offset as u32);
 }
 
 fn window(

@@ -35,19 +35,20 @@ fn position_key(bus: &str, ports: &[u8]) -> String {
     format!("{bus}-{ports}")
 }
 
+mod source;
+use source::Source;
+
 struct Shared {
-    exporter: Exporter,
-    owner: Arc<DeviceOwner>,
+    source: Source,
     hooks: OwnerHooks,
     link_key: String,
     battery: Mutex<Option<(String, Instant)>>,
 }
 impl Shared {
     fn status(&self) -> DeviceStatus {
-        let state = self.owner.status();
-        let reason = if !state.present {
+        let reason = if !self.source.present() {
             Some("unplugged".to_owned())
-        } else if state.fenced {
+        } else if self.source.fenced() {
             Some("not responding".to_owned())
         } else {
             None
@@ -63,7 +64,7 @@ impl Shared {
         }
     }
     fn device_id(&self) -> &str {
-        &self.owner.descriptor.id
+        &self.source.descriptor().id
     }
 }
 
@@ -79,6 +80,19 @@ pub async fn serve(
     hooks: OwnerHooks,
 ) -> crate::Result<()> {
     let link = Ticket::from_url(&ticket.link)?.ok_or_else(|| error("invalid share link"))?;
+    let selector = selector.or_else(|| std::env::var("FUJIMOD_USB_DEVICE").ok());
+    if let Some(source) = Source::configured_proxy(selector.as_deref()).await? {
+        return serve_room(
+            ticket,
+            Arc::new(Shared {
+                source,
+                hooks,
+                link_key: link.key,
+                battery: Mutex::new(None),
+            }),
+        )
+        .await;
+    }
     let owners = Arc::new(DeviceOwners::default());
     let mut watch = nusb::watch_devices()?;
     let registry = owners.clone();
@@ -102,7 +116,6 @@ pub async fn serve(
             })
         })
         .map_err(error)?;
-    let selector = selector.or_else(|| std::env::var("FUJIMOD_USB_DEVICE").ok());
     let info = loop {
         let cameras: Vec<_> = nusb::list_devices()
             .await?
@@ -137,12 +150,15 @@ pub async fn serve(
     let owner = owners.get(info).await?;
     owner.share()?;
     let shared = Arc::new(Shared {
-        exporter: Exporter::new([owner.clone()]),
-        owner,
+        source: Source::native(owner),
         hooks,
         link_key: link.key,
         battery: Mutex::new(None),
     });
+    serve_room(ticket, shared).await
+}
+
+async fn serve_room(ticket: OwnerTicket, shared: Arc<Shared>) -> crate::Result<()> {
     loop {
         let room = match HostRoom::join(&ticket.link, &ticket.owner_key, CandidatePolicy::Any).await
         {
@@ -187,7 +203,7 @@ async fn session(shared: Arc<Shared>, id: String, mut peer: PeerSocket) {
         (Ok(()), None) => "connection lost without goodbye".into(),
     };
     log(format!("controller {id} disconnected: {reason}"));
-    if shared.exporter.abandon(&id) {
+    if shared.source.abandon(&id) {
         log(format!(
             "controller {id} disconnected while USB was claimed; completion unknown"
         ));
@@ -291,7 +307,7 @@ async fn execute(shared: &Shared, id: &str, message: Message) -> Completion {
     match op {
         Operation::Probe => return Completion::default(),
         Operation::List => {
-            let mut descriptor = shared.owner.descriptor.clone();
+            let mut descriptor = shared.source.descriptor().clone();
             descriptor.status = Some(shared.status());
             return Completion {
                 devices: vec![descriptor],
@@ -303,12 +319,12 @@ async fn execute(shared: &Shared, id: &str, message: Message) -> Completion {
     if device != shared.device_id() {
         return failed("Unknown shared device");
     }
-    if !shared.owner.status().present {
+    if !shared.source.present() {
         return failed("Shared camera offline: unplugged");
     }
     match op {
         Operation::OwnerStatus { message } | Operation::OwnerAttention { message } => {
-            if !shared.exporter.owns(id, device) {
+            if !shared.source.owns(id, device) {
                 return failed("Shared camera is not claimed");
             }
             if message.is_empty() || message.len() > 512 {
@@ -338,17 +354,7 @@ async fn execute(shared: &Shared, id: &str, message: Message) -> Completion {
         }
         _ => (),
     }
-    let bytes = match message.encode() {
-        Ok(bytes) => bytes,
-        Err(failure) => return failed(failure.0),
-    };
-    match shared.exporter.handle(id, &bytes).await {
-        Ok(reply) => match Message::decode(&reply) {
-            Ok(Message::Result { completion, .. }) => completion,
-            _ => failed("Invalid exporter reply"),
-        },
-        Err(failure) => failed(failure.to_string()),
-    }
+    shared.source.execute(id, message).await
 }
 
 #[cfg(test)]

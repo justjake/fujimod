@@ -38,6 +38,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "sha256": {
+          "description": "SHA-256 of the same bytes in the decoded update image.",
+          "type": "string"
+        },
         "size": {
           "description": "Length in bytes.",
           "format": "uint64",
@@ -47,7 +51,8 @@
       },
       "required": [
         "offset",
-        "size"
+        "size",
+        "sha256"
       ],
       "type": "object"
     },
@@ -283,6 +288,17 @@
       "$ref": "#/$defs/FlashDevice",
       "description": "Installed device, checked against the stock driver."
     },
+    "e1_window": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FlashRange"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "CPU-mapped portion that the firmware's E1 source may read directly.\nPresent only when the flash locator establishes a memory aperture;\nlive E1 reads still qualify it against the update-backed control bytes."
+    },
     "firmware_id": {
       "description": "Firmware whose bytes establish this contract.",
       "type": "string"
@@ -292,8 +308,15 @@
       "type": "string"
     },
     "reader": {
-      "$ref": "#/$defs/FlashReader",
-      "description": "Stock reader ABI and alignment."
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FlashReader"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Stock reader ABI and alignment, absent for a mapped-E1-only contract."
     },
     "schema": {
       "description": "Document version.",
@@ -332,7 +355,6 @@
     "device",
     "window",
     "update_image",
-    "reader",
     "code_ranges",
     "state_checks",
     "control"

@@ -14,7 +14,7 @@ pub fn decode_display_rgb<'py>(
 ) -> PyResult<Bound<'py, PyBytes>> {
     let bytes = py
         .detach(|| {
-            fujimod_emulator_imaging::packed_color::decode(
+            fujimod_framebuffer::packed_color::decode(
                 data, width, height, stride, packing, matrix,
             )
         })

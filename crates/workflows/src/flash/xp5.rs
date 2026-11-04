@@ -162,7 +162,11 @@ impl Payload {
             !overlaps(self.address, self.capacity, self.transport.callback, 8),
             "Executable reservation overlaps callback",
         )?;
-        let alignment = u64::from(flash.reader.alignment);
+        let reader = flash
+            .reader
+            .as_ref()
+            .ok_or_else(|| BulkError::Check("XP5 stock flash reader is absent".into()))?;
+        let alignment = u64::from(reader.alignment);
         require(
             self.buffer.is_multiple_of(alignment)
                 && self.buffer_capacity != 0
@@ -174,11 +178,11 @@ impl Payload {
             "Flash buffer or update control geometry differs",
         )?;
         require(
-            self.stock_reader_symbol == flash.reader.symbol
+            self.stock_reader_symbol == reader.symbol
                 && flash
                     .code_ranges
                     .iter()
-                    .any(|c| c.name == flash.reader.symbol && c.address == self.stock_reader),
+                    .any(|c| c.name == reader.symbol && c.address == self.stock_reader),
             "Payload does not call the catalog stock reader",
         )?;
         for c in &flash.code_ranges {
@@ -191,6 +195,7 @@ impl Payload {
         }
         require(
             valid_hash(&self.control_sha256)
+                && self.control_sha256 == flash.control.sha256
                 && self
                     .checks
                     .iter()
@@ -268,17 +273,21 @@ pub(crate) async fn read(
     // registered diagnostic scratch, even when the bulk catalog only has a
     // bounded scouting window. No other addresses are inferred from capacity.
     let mut extended = bulk.clone();
-    let start = bulk
+    let mut start = bulk
         .window
         .address
         .min(payload.address)
         .min(payload.transport.registered_scratch.address);
-    let end = (bulk.window.address + bulk.window.size)
+    let mut end = (bulk.window.address + bulk.window.size)
         .max(payload.address + payload.capacity)
         .max(
             payload.transport.registered_scratch.address
                 + payload.transport.registered_scratch.size,
         );
+    if let Some(window) = &flash.e1_window {
+        start = start.min(window.address);
+        end = end.max(window.address + window.size);
+    }
     extended.window = BulkRange {
         address: start,
         size: end - start,
@@ -366,16 +375,33 @@ pub(crate) async fn read(
             "Diagnostic scratch overlaps protected state or code",
         )?;
         let mut reader = Qualified::prepare_preserving(access.session, bulk, limits).await?;
-        let outcome = execute(
-            &mut reader,
-            flash,
-            payload,
-            image,
-            limits,
-            target,
-            callbacks,
-        )
-        .await;
+        let outcome = if flash.e1_window.is_some() {
+            if mapped_control_matches(&mut reader, flash, payload).await? {
+                read_mapped(&mut reader, flash, target, callbacks).await
+            } else {
+                execute(
+                    &mut reader,
+                    flash,
+                    payload,
+                    image,
+                    limits,
+                    target,
+                    callbacks,
+                )
+                .await
+            }
+        } else {
+            execute(
+                &mut reader,
+                flash,
+                payload,
+                image,
+                limits,
+                target,
+                callbacks,
+            )
+            .await
+        };
         let restored = reader.restore().await;
         bulk::finish(outcome, restored)
     }
@@ -424,6 +450,97 @@ pub(crate) async fn read(
         session.invalidate_completion();
     }
     bulk::finish(outcome, cleanup)
+}
+
+fn mapped_range(flash: &FirmwareFlash, offset: u64, size: u64) -> bulk::Result<BulkRange> {
+    let aperture = flash
+        .e1_window
+        .as_ref()
+        .ok_or_else(|| BulkError::Check("Direct E1 flash window is absent".into()))?;
+    let address = flash
+        .window
+        .address
+        .checked_add(offset)
+        .ok_or_else(|| BulkError::Check("Direct E1 flash address overflow".into()))?;
+    let end = address
+        .checked_add(size)
+        .ok_or_else(|| BulkError::Check("Direct E1 flash range overflow".into()))?;
+    let aperture_end = aperture
+        .address
+        .checked_add(aperture.size)
+        .ok_or_else(|| BulkError::Check("Direct E1 aperture overflow".into()))?;
+    require(
+        size != 0 && address >= aperture.address && end <= aperture_end,
+        "Flash range is outside the direct E1 window",
+    )?;
+    let range = BulkRange { address, size };
+    bulk::memory_range(range)?;
+    Ok(range)
+}
+
+/// Try the update-backed control extent first. A completed E1 mismatch or
+/// refusal selects the stock-reader path; unknown USB completion stops here.
+async fn mapped_control_matches(
+    reader: &mut Qualified<'_>,
+    flash: &FirmwareFlash,
+    payload: &Payload,
+) -> bulk::Result<bool> {
+    let range = mapped_range(flash, flash.control.offset, flash.control.size)?;
+    match reader.read(range).await {
+        Ok(bytes) => Ok(bulk::hex(&sha256_bytes(&bytes)) == payload.control_sha256),
+        Err(_error) if reader.access.session.state() == SessionState::Ready => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+/// Capture mapped NOR through E1 after the control bytes match the update.
+/// Each caller-owned chunk is bounded by the live registration and aligned to
+/// the stock reader's source alignment.
+async fn read_mapped(
+    reader: &mut Qualified<'_>,
+    flash: &FirmwareFlash,
+    target: BulkRange,
+    callbacks: &mut super::Callbacks<'_>,
+) -> bulk::Result<Backup> {
+    let alignment = u64::from(flash.reader.as_ref().map_or(1, |reader| reader.alignment));
+    let capacity = reader
+        .capacity()
+        .min(reader.access.session.max_reply_bytes().get());
+    let piece = u64::from(capacity) / alignment * alignment;
+    require(
+        piece != 0,
+        "Direct E1 flash capacity is below reader alignment",
+    )?;
+    let end = target
+        .address
+        .checked_add(target.size)
+        .ok_or_else(|| BulkError::Check("Flash range overflow".into()))?;
+    let mut digest = OrderedDigest::default();
+    let mut done = 0;
+    let mut offset = target.address;
+    while offset < end {
+        let size = piece.min(end - offset);
+        let range = mapped_range(flash, offset, size)?;
+        let bytes = reader.read(range).await?;
+        require(
+            bytes.len() as u64 == size,
+            "Direct E1 flash read returned another length",
+        )?;
+        digest.push(offset - target.address, &bytes);
+        (callbacks.chunk)(offset, bytes).map_err(BulkError::Check)?;
+        done += size;
+        (callbacks.progress)(done, target.size).map_err(BulkError::Check)?;
+        offset += size;
+    }
+    let sha256 = digest.finish(target.size)?;
+    Ok(Backup {
+        device: flash.device.clone(),
+        size: target.size,
+        sha256,
+        uncorrectable_page_offsets: Vec::new(),
+        uncorrectable_granularity_bytes: 0,
+        nand_read_stats: None,
+    })
 }
 
 async fn execute(

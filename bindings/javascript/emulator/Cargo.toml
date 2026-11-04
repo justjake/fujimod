@@ -12,6 +12,7 @@ name = "fujimod_emulator_javascript"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+fujimod-framebuffer.workspace = true
 fujimod-emulator-session.workspace = true
 fujimod-emulator-exr2-resources.workspace = true
 fujimod-emulator-models.workspace = true

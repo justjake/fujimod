@@ -540,6 +540,7 @@ pub fn outer_header(source: &[u8]) -> Result<OuterHeader<'_>> {
     let kind = word(source, 0)?;
     let payload_offset = match kind {
         4 => 0x25c,
+        5 => 0x268,
         6 => 0x27c,
         8 => 0x2bc,
         _ => {

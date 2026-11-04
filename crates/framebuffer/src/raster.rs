@@ -64,7 +64,7 @@ pub struct Snapshot {
     rows: Vec<Vec<u8>>,
 }
 pub fn capture(
-    read: impl Fn(u64, usize) -> Result<Vec<u8>, String>,
+    mut read: impl FnMut(u64, usize) -> Result<Vec<u8>, String>,
     p: Plane,
     width: u32,
     height: u32,
@@ -155,7 +155,7 @@ pub fn composite_snapshot(
     Ok(())
 }
 pub fn composite(
-    read: impl Fn(u64, usize) -> Result<Vec<u8>, String>,
+    read: impl FnMut(u64, usize) -> Result<Vec<u8>, String>,
     plane: Plane,
     width: u32,
     height: u32,

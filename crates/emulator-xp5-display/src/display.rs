@@ -1,10 +1,10 @@
 //! Two XP5 LCDC register banks. Guest pixel clocks and timing counts drive
 //! physical phase interrupts and DMA scanout; host publication is separate.
 //! Register behavior and sampling limits are explicit in the scanout model.
-use crate::osd;
+
 use fujimod_emulator_devices::xp5::panel_clocks::Clocks;
 use fujimod_emulator_devices::{Cx, Device};
-use fujimod_emulator_graphics::raster::{self, PixelOrder, Plane};
+use fujimod_framebuffer::raster::{self, PixelOrder};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::Digest;
@@ -148,193 +148,10 @@ impl Display {
         })
     }
     fn scanout(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
-        let enables = self.r(8);
-        // Bit24 through context+95b is output control,
-        // separate from the six plane-enable bits below.
-        if enables & !0x01111111 != 0 {
-            return Err("unresolved display plane-enable bits".into());
-        }
-        // Commit packs OSD0/1 into bits20/16; picture groups use12/8/4/0.
-        let mut planes = Vec::new();
-        // The output publishes four picture groups from the three source
-        // descriptors (some output modes split a source into two groups).
-        // Consume packed422 payload only through the programmed DMA address.
-        for (n, a) in if self.bank == 0 {
-            [0x370, 0x3c0, 0x410, 0x460]
-        } else {
-            [0x370, 0x3b8, 0x3fc, 0x440]
-        }
-        .into_iter()
-        .enumerate()
-        {
-            if enables & (1 << [12, 8, 4, 0][n]) == 0 {
-                continue;
-            }
-            if self.r(a) > 7
-                || self.r(a + 8) != 0
-                || self.r(a + 12) != 0
-                || self.r(a + 0x10) != 0
-                || self.r(a + 0x14) > 0xfffff
-                || self.r(a + 0x2c) != 0
-            {
-                return Err("unsupported picture address/packing/fractional phase".into());
-            }
-            for (offset, mask) in [
-                (0x18, 0x3fff),
-                (0x1c, 0x1fff),
-                (0x20, 0x1fff),
-                (0x24, 0x7fff),
-                (0x28, 0x7fff),
-            ] {
-                if self.r(a + offset) & !(mask | mask << 16) != 0 {
-                    return Err("unresolved picture geometry control bits".into());
-                }
-            }
-            let xy = |v: u32, m: u32| (v & m, (v >> 16) & m);
-            let (source_width, source_height) = xy(self.r(a + 0x18), 0x3fff);
-            let (wx, wy) = xy(self.r(a + 0x1c), 0x1fff);
-            let (ww, wh) = xy(self.r(a + 0x20), 0x1fff);
-            let (qx, qy) = xy(self.r(a + 0x24), 0x7fff);
-            if ww == 0 || wh == 0 {
-                continue;
-            }
-            // Picture groups use the same dimensions/work/Q12 layout as OSD.
-            // +28 crop origins are in half-pixel units. Fractional phases
-            // remain unsupported; observed zero phases use nearest sampling.
-            let (crop_x, crop_y) = xy(self.r(a + 0x28), 0x7fff);
-            if qx == 0 || qy == 0 || (crop_x | crop_y) & 1 != 0 {
-                return Err("picture sampling/crop origin invalid".into());
-            }
-            let (sx, sy) = (crop_x / 2, crop_y / 2);
-            let sw = ((ww - 1) * qx / 4096) + 1;
-            let sh = ((wh - 1) * qy / 4096) + 1;
-            if sx + sw > source_width || sy + sh > source_height {
-                return Err("picture source rectangle exceeds programmed dimensions".into());
-            }
-            let address = ((self.r(a) & 7) as u64) << 32 | self.r(a + 4) as u64;
-            planes.push(Plane {
-                address,
-                stride: self.r(a + 0x14) & 0xfffff,
-                source_x: sx,
-                source_y: sy,
-                source_width: sw,
-                source_height: sh,
-                sampling: Some([qx, qy]),
-                work_x: wx,
-                work_y: wy,
-                work_width: ww,
-                work_height: wh,
-                order: PixelOrder::YyCbCr,
-            });
-        }
-        for n in 0..2 {
-            if enables & (1 << [20, 16][n]) == 0 {
-                continue;
-            }
-            let a = if n == 0 {
-                if self.bank == 0 { 0x50 } else { 0x58 }
-            } else if self.bank == 0 {
-                0x1e0
-            } else {
-                0x1e4
-            };
-            let ctrl = self.r(a + 0x10);
-            let format = ((ctrl >> 16) & 3) as usize;
-            let raw_order = self.formats[format];
-            let allowed = if raw_order.is_some() {
-                0x30000
-            } else {
-                0x30101
-            };
-            if ctrl & !allowed != 0 {
-                return Err(format!("OSD control bits unresolved: {ctrl:#x}"));
-            }
-            if self.r(a) > 7 || self.r(a + 8) > 7 || self.r(a + 0x14) > 0xfffff {
-                return Err("OSD address-high/stride control bits unresolved".into());
-            }
-            for (offset, mask) in [
-                (0x18, 0x3fff),
-                (0x1c, 0x1fff),
-                (0x20, 0x1fff),
-                (0x24, 0x7fff),
-            ] {
-                if self.r(a + offset) & !(mask | mask << 16) != 0 {
-                    return Err(format!(
-                        "OSD geometry control bits unresolved at {:#x}",
-                        a + offset
-                    ));
-                }
-            }
-            let xy = |v: u32, mask: u32| (v & mask, (v >> 16) & mask);
-            let (mut sx, mut sy) = xy(self.r(a + 0x18), 0x3fff);
-            let (wx, wy) = xy(self.r(a + 0x1c), 0x1fff);
-            let (ww, wh) = xy(self.r(a + 0x20), 0x1fff);
-            let (mut sw, mut sh) = xy(self.r(a + 0x24), 0x7fff);
-            if ww == 0 || wh == 0 {
-                continue;
-            }
-            let address = ((self.r(a) & 7) as u64) << 32 | self.r(a + 4) as u64;
-            let mut sampling = None;
-            let (order, stride) = if let Some(order) = raw_order {
-                (order, self.r(a + 0x14) & 0xfffff)
-            } else {
-                if !matches!(format, 0 | 3) {
-                    return Err(format!(
-                        "unsupported OSD private transport control {ctrl:#x}"
-                    ));
-                }
-                let secondary = ((self.r(a + 8) & 7) as u64) << 32 | self.r(a + 12) as u64;
-                let header = cx.ram_bytes(secondary, osd::HEADER_BYTES)?;
-                // Newly allocated planes can be enabled before the first
-                // converter completion. They have no published image yet.
-                if header.iter().all(|b| *b == 0) {
-                    continue;
-                }
-                if ctrl & 1 == 0 {
-                    return Err("OSD private plane requires converter control bit0".into());
-                }
-                let publication = osd::decode(&header)?;
-                if publication.primary != address {
-                    // Register writes may select the new primary before its
-                    // secondary. A valid publication for the previous pair
-                    // does not publish pixels for this pair.
-                    cx.log(&format!("display bank{} unpublished OSD pair primary={address:#x} secondary={secondary:#x} published_primary={:#x}",self.bank,publication.primary));
-                    continue;
-                }
-                let h = publication.geometry;
-                // A descriptor publishes its dimensions at+18,
-                // Q12 sampling ratios at+24. Work dimensions can
-                // crop the padded pixmap (LCD900 versus source912).
-                let (source_width, source_height) = (sx, sy);
-                let (qx, qy) = (sw, sh);
-                if qx == 0 || qy == 0 || source_width > h.width || source_height > h.height {
-                    return Err("OSD source dimensions/sampling ratios invalid".into());
-                }
-                sx = 0;
-                sy = 0;
-                sw = ((ww - 1) * qx / 4096) + 1;
-                sh = ((wh - 1) * qy / 4096) + 1;
-                sampling = Some([qx, qy]);
-                if sx + sw > h.width || sy + sh > h.height {
-                    return Err("OSD source rectangle exceeds converted pixmap".into());
-                }
-                (PixelOrder::Bgra, h.stride)
-            };
-            planes.push(Plane {
-                address,
-                stride,
-                source_x: sx,
-                source_y: sy,
-                source_width: sw,
-                source_height: sh,
-                sampling,
-                work_x: wx,
-                work_y: wy,
-                work_width: ww,
-                work_height: wh,
-                order,
-            });
-        }
+        let decoder=fujimod_framebuffer_xp5::Decoder{bank:self.bank,regs:&self.state.regs,
+            formats:self.formats.map(|p|p.map_or(fujimod_framebuffer_xp5::Encoding::EmulatorConverted,fujimod_framebuffer_xp5::Encoding::Linear))};
+        let (planes,messages)=decoder.planes(|a,n|cx.ram_bytes(a,n))?;
+        for message in messages {cx.log(&message);}
         let work_width = planes
             .iter()
             .map(|p| p.work_x + p.work_width)
@@ -982,7 +799,7 @@ mod tests {
         let next = (1 << 32) + 160;
         h.ram[128..144].copy_from_slice(&[0, 0, 255, 255].repeat(4));
         h.ram[160..176].copy_from_slice(&[255; 16]);
-        let header = osd::encode(primary, 2, 2, &h.ram[128..144]).unwrap();
+        let header = fujimod_framebuffer_xp5::emulator_codec::encode(primary, 2, 2, &h.ram[128..144]).unwrap();
         h.ram[80..112].copy_from_slice(&header);
         for (o, v) in [
             (8, 1 << 20),
@@ -1002,7 +819,7 @@ mod tests {
         write(&mut d, &mut h, base + a + 4, 160);
         d.scanout(&mut Cx::new(&mut h, 0, 0, 0)).unwrap();
         assert_eq!(h.frames.len(), 1);
-        let header = osd::encode(next, 2, 2, &h.ram[160..176]).unwrap();
+        let header = fujimod_framebuffer_xp5::emulator_codec::encode(next, 2, 2, &h.ram[160..176]).unwrap();
         h.ram[80..112].copy_from_slice(&header);
         d.scanout(&mut Cx::new(&mut h, 0, 0, 0)).unwrap();
         assert_eq!(h.frames.len(), 2);

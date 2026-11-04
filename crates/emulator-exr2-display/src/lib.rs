@@ -8,8 +8,6 @@ pub mod device;
 pub mod formatter;
 #[cfg(test)]
 mod pixel_tests;
-mod rectangles;
-pub mod scanout;
 pub mod timing;
 pub use device::Scanout;
 pub use formatter::Formatter;

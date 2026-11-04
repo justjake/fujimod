@@ -1,0 +1,97 @@
+{
+  "$schema": "https://fujimod.com/schemas/bulk.generated.schema.json",
+  "schema": 1,
+  "id": "x100f-212-bulk",
+  "firmware_id": "x100f-212",
+  "product": "X100F",
+  "internal_version": "1.68",
+  "code_alias": 0,
+  "source": {
+    "mechanism": "direct_query",
+    "tag": 307,
+    "query_base": 83894272,
+    "base": 83894272,
+    "data_offset": 32,
+    "capacities": [
+      524320
+    ],
+    "wrapping": false
+  },
+  "window": {
+    "address": 83894304,
+    "size": 524288
+  },
+  "code_checks": [
+    {
+      "name": "FF80 diagnostic query",
+      "address": 22299720,
+      "size": 612,
+      "sha256": "741aef94e2a2908fa669959091ddafb7fa23496de9f392d2e565681f282ddbd9"
+    },
+    {
+      "name": "diagnostic source wrapper",
+      "address": 23392016,
+      "size": 16,
+      "sha256": "adea76ffecf4d99b055966171e3358150e15d1881ee119bcf2d6d870ed7e0464"
+    },
+    {
+      "name": "transfer source setup",
+      "address": 13379480,
+      "size": 64,
+      "sha256": "e719f17413189fec5787e22226dc922edc9d3b3f91266e18cb8529d58fc698e7"
+    },
+    {
+      "name": "transfer source publish",
+      "address": 13370584,
+      "size": 28,
+      "sha256": "9ccfb6848230456f6a6ec1e2cb67c351e2a62c6f967456d456239ef6fa9a0dfd"
+    },
+    {
+      "name": "transfer source commit",
+      "address": 13370476,
+      "size": 108,
+      "sha256": "1a50265b802588587b2b69f5ad18fe9f872d5a90f3ef8dff1945c5ea39772e9c"
+    },
+    {
+      "name": "flash aperture translation",
+      "address": 12901120,
+      "size": 24,
+      "sha256": "19b12700745992335b4807b6e8569d8503aa5d37357548dc83ac7ff4912c1f2b"
+    }
+  ],
+  "probes": [
+    {
+      "address": 83894304,
+      "size": 128
+    },
+    {
+      "address": 84418464,
+      "size": 128
+    }
+  ],
+  "mapped_probe": null,
+  "scopes": [
+    {
+      "name": "quick",
+      "basis": "Leading 4 KiB of the located E1 transfer buffer.",
+      "ranges": [
+        {
+          "name": "transfer-buffer",
+          "address": 83894304,
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "full",
+      "basis": "The complete E1 transfer buffer published by the stock diagnostic query.",
+      "ranges": [
+        {
+          "name": "transfer-buffer",
+          "address": 83894304,
+          "size": 524288
+        }
+      ]
+    }
+  ]
+}

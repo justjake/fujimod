@@ -1,7 +1,15 @@
-use fujimod_emulator_devices::record::Result;
-use fujimod_emulator_devices::{Record, Value, WordMap};
+use fujimod_framebuffer::Registers;
+use fujimod_framebuffer::Result;
 use serde::Serialize;
 use std::collections::BTreeSet;
+pub fn register_ranges(output: usize) -> std::result::Result<Vec<(u64, usize)>, String> {
+    let b = *BASES.get(output).ok_or("Unknown EXR II output")?;
+    Ok(if output == 0 {
+        vec![(b, 0x18), (b + 0x1c, 0xe8), (b + 0x108, 0x94)]
+    } else {
+        vec![(b, 0x104), (b + 0x108, 0x94)]
+    })
+}
 pub const BASES: [u64; 2] = [0xfff6b000, 0xfff6e000];
 pub const BLACK: &str = "declared-black-canvas-unmeasured";
 pub const WHITE: &str = "declared-white-canvas-unmeasured";
@@ -85,13 +93,15 @@ pub enum RectangleComposition {
 impl RectangleComposition {
     pub fn from_name(name: &str) -> Option<Self> {
         match name {
-            super::rectangles::PROFILE => Some(Self::DeclaredLuma),
-            super::rectangles::SIGNED_YCBCR_PROFILE => Some(Self::SignedYCbCr),
+            crate::rectangles::PROFILE => Some(Self::DeclaredLuma),
+            crate::rectangles::SIGNED_YCBCR_PROFILE => Some(Self::SignedYCbCr),
             _ => None,
         }
     }
 }
-pub const MAIN_REQUIRED: [u32; 11] = [0, 0x10, 0x1c, 0x20, 0x24, 0x28, 0x2c, 0x30, 0xd4, 0xd8, 0xdc];
+pub const MAIN_REQUIRED: [u32; 11] = [
+    0, 0x10, 0x1c, 0x20, 0x24, 0x28, 0x2c, 0x30, 0xd4, 0xd8, 0xdc,
+];
 pub fn address(address: u64, size: u32) -> Result<(usize, u32)> {
     for (i, b) in BASES.iter().enumerate() {
         if (*b..*b + 0x1000).contains(&address) {
@@ -113,7 +123,7 @@ pub fn address(address: u64, size: u32) -> Result<(usize, u32)> {
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Pipe {
-    pub regs: WordMap,
+    pub regs: Registers,
     pub written: BTreeSet<u32>,
     pub generation: i64,
     pub reset_completions: i64,
@@ -129,72 +139,13 @@ pub struct Compositor {
     pub ram_bytes: i64,
     pub max_pixels: i64,
 }
-/// Reset completion tokens: bit0 is the pipe, bit1 the requesting CPU,
-/// and the remaining bits the generation. Core indices are 0 and 1.
-pub fn reset_token(pipe: usize, generation: i64, cpu: i64) -> u64 {
-    (generation as u64) << 2 | ((cpu as u64) & 1) << 1 | pipe as u64
-}
-pub fn reset_fields(token: u64) -> (usize, i64, i64) {
-    (
-        (token & 1) as usize,
-        (token >> 2) as i64,
-        ((token >> 1) & 1) as i64,
-    )
-}
 impl Compositor {
     pub fn read(&self, a: u64, size: u32) -> Result<u32> {
         let (i, o) = address(a, size)?;
         Ok(self.pipes[i].regs.get_or_zero(o))
     }
-    /// Guest writes return their record and two-tick reset deadline in order.
-    pub fn write(
-        &mut self,
-        cpu: i64,
-        a: u64,
-        size: u32,
-        v: u32,
-        actions: &mut Vec<fujimod_emulator_devices::Action>,
-    ) -> Result<()> {
-        let (i, o) = address(a, size)?;
-        let p = &mut self.pipes[i];
-        let old = p.regs.get_or_zero(o);
-        p.regs.insert(o, v);
-        p.written.insert(o);
-        if o == 0 && old & 0x10000 != 0 && v & 0x10000 == 0 {
-            // Clearing bit 16 starts reset. No other bit is made ready;
-            // existing configuration is retained (reset behavior is unmeasured).
-            p.generation += 1;
-            actions.push(fujimod_emulator_devices::Action::Log(Record::new(
-                "Image-engine reset start",
-                [("instance", Value::int(i as i64)), ("cpu", Value::int(cpu))],
-            )));
-            actions.push(fujimod_emulator_devices::Action::Schedule {
-                delay: 2,
-                token: reset_token(i, p.generation, cpu),
-            });
-        }
-        Ok(())
-    }
-    pub fn complete(
-        &mut self,
-        token: u64,
-        _now: i64,
-        actions: &mut Vec<fujimod_emulator_devices::Action>,
-    ) {
-        let (i, generation, cpu) = reset_fields(token);
-        let p = &mut self.pipes[i];
-        if generation == p.generation {
-            p.regs.insert(0, p.regs.get_or_zero(0) | 0x10000);
-            p.reset_completions += 1;
-            actions.push(fujimod_emulator_devices::Action::Log(Record::new(
-                "Image-engine reset complete",
-                [("instance", Value::int(i as i64)), ("cpu", Value::int(cpu))],
-            )));
-        }
-    }
 }
-
-use fujimod_emulator_devices::exr2::scanout_frame::{Frame, State as S, sha256};
+use fujimod_framebuffer::frame::{Frame, State as S, sha256};
 /// The board RAM callback and screenshot-only color/image encoders. The
 /// Host inspection never writes RAM here (`write_bytes` is accepted but unused).
 pub trait ScanoutHost {
@@ -216,7 +167,6 @@ pub trait ScanoutHost {
         matrix: &str,
     ) -> Result<Vec<u8>>;
     fn encode_png(&mut self, rgb: &[u8], width: usize, height: usize) -> Result<Option<Vec<u8>>>;
-    fn record(&mut self, r: Record) -> Result<()>;
 }
 
 fn frame_hash(host: &dyn ScanoutHost, bytes: &[u8]) -> S {
@@ -256,7 +206,7 @@ struct Channel {
 }
 
 #[cfg(test)]
-#[path = "scanout_tests.rs"]
+#[path = "tests.rs"]
 mod tests;
 impl Channel {
     fn state(&self) -> S {
@@ -463,7 +413,8 @@ impl Compositor {
         let clip_w = ((clip_size >> 16) & 0xfff) as usize + 1;
         let clip_h = (clip_size & 0xfff) as usize + 1;
         if (clip_origin | clip_size) & 0xf000f000 != 0
-            || clip_x + clip_w > cw || clip_y + clip_h > ch
+            || clip_x + clip_w > cw
+            || clip_y + clip_h > ch
         {
             return Err("Video clipping rectangle exceeds the display canvas".into());
         }
@@ -570,10 +521,15 @@ impl Compositor {
             ("padding_pixels", S::Int(padding as i64)),
             ("packing", S::str(&self.packing)),
             ("matrix", S::str(&self.matrix)),
-            ("clip_rectangle", S::dict(vec![
-                ("x", S::Int(clip_x as i64)), ("y", S::Int(clip_y as i64)),
-                ("width", S::Int(clip_w as i64)), ("height", S::Int(clip_h as i64)),
-            ])),
+            (
+                "clip_rectangle",
+                S::dict(vec![
+                    ("x", S::Int(clip_x as i64)),
+                    ("y", S::Int(clip_y as i64)),
+                    ("width", S::Int(clip_w as i64)),
+                    ("height", S::Int(clip_h as i64)),
+                ]),
+            ),
             ("frame_sha256", frame_hash(host, &raw)),
             (
                 "png_sha256",
@@ -621,8 +577,8 @@ impl Compositor {
         let Some(mut frame) = self.plane_frame(i, cpu, pixels, host)? else {
             return Ok(None);
         };
-        let rectangles = super::rectangles::decode(&self.pipes[i], self.rectangle_composition)?;
-        super::rectangles::compose(&mut frame, &rectangles, host.diagnostic_hashes());
+        let rectangles = crate::rectangles::decode(&self.pipes[i], self.rectangle_composition)?;
+        crate::rectangles::compose(&mut frame, &rectangles, host.diagnostic_hashes());
         if let Some(rgb) = &frame.rgb {
             if let Some(png) = host.encode_png(rgb, frame.width, frame.height)? {
                 frame.state.set("png_sha256", frame_hash(host, &png));
@@ -945,3 +901,7 @@ impl Compositor {
         }))
     }
 }
+
+mod observation;
+mod rectangles;
+pub use observation::Observation;
