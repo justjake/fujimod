@@ -76,6 +76,19 @@ fn one<'a>(items: &'a [Value], key: &str, name: &str) -> Result<&'a Value> {
     Ok(matches[0])
 }
 
+fn linked_symbol_address(symbol: &Value) -> Result<u64> {
+    let address = num(symbol, "address")?;
+    // Fixed-address A32 payload maps may omit load_address; their linked
+    // address is the address where the runtime image is loaded.
+    if let Some(load_address) = symbol.get("load_address") {
+        check(
+            number(load_address)? == address,
+            "linked symbol address differs from its load address",
+        )?;
+    }
+    Ok(address)
+}
+
 struct Source {
     address: u64,
     bytes: Vec<u8>,
@@ -587,14 +600,12 @@ fn prepare_xpp(
     )?;
     let abi_symbol = |name: &str, expected_size: u64| -> Result<u64> {
         let symbol = get(linked_symbols, name)?;
-        let address = num(symbol, "address")?;
-        let load_address = num(symbol, "load_address")?;
+        let address = linked_symbol_address(symbol)?;
         let size = num(symbol, "size")?;
         check(
             size == expected_size
-                && address == load_address
-                && load_address >= base
-                && load_address
+                && address >= base
+                && address
                     .checked_add(size)
                     .is_some_and(|end| end <= base + image.len() as u64),
             "XPP ABI object must use its loaded RAM address and fit in the image",
