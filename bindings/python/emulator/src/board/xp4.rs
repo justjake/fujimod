@@ -29,7 +29,7 @@ impl Xp4 {
             Ok(())
         })
     }
-    #[pyo3(signature=(executable, readable, writable, return_address, store_limit=1<<20, core=0))]
+    #[pyo3(signature=(executable, readable, writable, return_address, store_limit=1<<20, core=0, device_policy=None))]
     fn driver_guard_begin(
         &self,
         py: Python<'_>,
@@ -39,6 +39,7 @@ impl Xp4 {
         return_address: u64,
         store_limit: usize,
         core: usize,
+        device_policy: Option<String>,
     ) -> PyResult<()> {
         self.with(py, |s| {
             s.driver_guard_begin(
@@ -48,6 +49,7 @@ impl Xp4 {
                 return_address,
                 store_limit,
                 core,
+                device_policy,
             )
         })
     }

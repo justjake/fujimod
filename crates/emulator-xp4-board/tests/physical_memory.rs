@@ -73,6 +73,7 @@ fn guarded_high_rom_call_records_its_sparse_sram_store() {
             0x8000,
             8,
             0,
+            None,
         )
         .unwrap();
     session.run(0, 16).unwrap();
@@ -103,6 +104,7 @@ fn guarded_return_sentinel_requires_executable_backing() {
             0xfff10000,
             8,
             0,
+            None,
         );
         if permissions == 3 {
             assert!(

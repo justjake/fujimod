@@ -1317,6 +1317,9 @@ impl Devices {
     pub fn owns(&self, address: u64, size: u32) -> bool {
         self.owner(address, size).is_some()
     }
+    pub fn guard_windows(&self) -> Vec<(u64, u64)> {
+        self.windows.iter().map(|&(lo, hi, _)| (lo, hi)).collect()
+    }
     pub fn access(
         &mut self,
         c: &Cluster,

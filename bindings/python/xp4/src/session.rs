@@ -31,8 +31,8 @@ impl Xp4Session {
     ) -> PyResult<Self> {
         let definition: Definition = serde_json::from_str(definition)
             .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
-        let inner =
-            Session::new(definition, storage_image, card_files).map_err(fujimod_python_base::error)?;
+        let inner = Session::new(definition, storage_image, card_files)
+            .map_err(fujimod_python_base::error)?;
         let handler = Rc::new(RefCell::new(None::<Py<PyAny>>));
         let observer = handler.clone();
         inner.set_instruction_observer(Some(Rc::new(move |core, address| {
@@ -89,6 +89,7 @@ impl Xp4Session {
             return_address: u64,
             store_limit: usize,
             core: usize,
+            device_policy: Option<String>,
         ) -> ()
     );
     pub fn driver_guard_end(&self) {
@@ -208,10 +209,7 @@ impl Xp4Session {
     pub fn state<'py>(&self, py: Python<'py>, observations: bool) -> PyResult<Bound<'py, PyDict>> {
         observation::state(py, self.inner.state(observations))
     }
-    pub fn frontier(
-        &self,
-        by_count: bool,
-    ) -> Vec<fujimod_python_base::discovery::FrontierEntry> {
+    pub fn frontier(&self, by_count: bool) -> Vec<fujimod_python_base::discovery::FrontierEntry> {
         self.inner
             .frontier(by_count)
             .into_iter()
@@ -256,6 +254,7 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
         return_address: u64,
         store_limit: usize,
         core: usize,
+        device_policy: Option<String>,
     ) -> PyResult<()> {
         Xp4Session::driver_guard_begin(
             self,
@@ -265,6 +264,7 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
             return_address,
             store_limit,
             core,
+            device_policy,
         )
     }
     fn instruction_points(&self, core: usize, addresses: Vec<u64>) -> PyResult<()> {

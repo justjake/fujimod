@@ -3,6 +3,24 @@
 type Span = (u64, u64);
 type Store = (usize, u64, u64, u32, u64);
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MmioAccess {
+    pub start: u64,
+    pub end: u64,
+    pub width: u32,
+    pub read: bool,
+    pub write: bool,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DevicePolicy {
+    pub mmio: Vec<MmioAccess>,
+    pub model_readable: Vec<Span>,
+    pub model_writable: Vec<Span>,
+}
+
 pub struct Guard {
     pub core: usize,
     executable: Vec<Span>,
@@ -14,6 +32,9 @@ pub struct Guard {
     model_readable: Vec<Span>,
     model_writable: Vec<Span>,
     model_writes: Vec<(u64, u64)>, // (address, byte count), not half-open spans
+    physical_backing: Vec<Span>,
+    mmio: Vec<MmioAccess>,
+    mmio_accesses: Vec<(u64, u32, bool)>,
     pub returned: bool,
     pub failure: Option<String>,
     accepted: u64,
@@ -146,6 +167,9 @@ impl Guard {
             model_readable: Vec::new(),
             model_writable: Vec::new(),
             model_writes: Vec::new(),
+            physical_backing,
+            mmio: Vec::new(),
+            mmio_accesses: Vec::new(),
             returned: false,
             failure: None,
             accepted: 0,
@@ -156,6 +180,82 @@ impl Guard {
         self.returned || self.failure.is_some()
     }
 
+    /// Select CPU device access before execution, bounded by actual model windows.
+    pub fn with_mmio(
+        mut self,
+        mut policy: Vec<MmioAccess>,
+        windows: Vec<Span>,
+    ) -> Result<Self, String> {
+        if self.accepted != 0
+            || self.stopped()
+            || !self.mmio_accesses.is_empty()
+            || !self.model_writes.is_empty()
+        {
+            return Err("MMIO policy must be selected before guarded execution".into());
+        }
+        let windows = spans(windows, &[(0, 1 << 32)])?;
+        policy.sort_by_key(|entry| entry.start);
+        if policy.len() > 4096
+            || policy.iter().any(|entry| {
+                !matches!(entry.width, 1 | 2 | 4)
+                    || entry.start >= entry.end
+                    || entry.start % u64::from(entry.width.max(1)) != 0
+                    || entry.end % u64::from(entry.width.max(1)) != 0
+                    || (!entry.read && !entry.write)
+                    || !contains(&windows, entry.start, entry.end - entry.start)
+                    || self
+                        .physical_backing
+                        .iter()
+                        .any(|&(lo, hi)| entry.start < hi && lo < entry.end)
+            })
+            || policy.windows(2).any(|pair| pair[0].end > pair[1].start)
+        {
+            return Err(
+                "MMIO policy requires disjoint aligned model-owned ranges outside RAM".into(),
+            );
+        }
+        self.mmio = policy;
+        Ok(self)
+    }
+
+    fn mmio_permits(&self, address: u64, size: u64, write: bool) -> bool {
+        self.mmio.iter().any(|entry| {
+            size == u64::from(entry.width)
+                && address % size == 0
+                && contains(&[(entry.start, entry.end)], address, size)
+                && if write { entry.write } else { entry.read }
+        })
+    }
+
+    /// Called before a modeled read can consume data or a write can alter state.
+    pub fn mmio_access(
+        &mut self,
+        core: usize,
+        address: u64,
+        size: u32,
+        write: bool,
+    ) -> Result<(), String> {
+        if self.stopped() {
+            return Err("Driver guard MMIO access after stop".into());
+        }
+        let error = if core != self.core || !self.mmio_permits(address, u64::from(size), write) {
+            Some(format!(
+                "Driver guard rejected MMIO {} at {address:#x} size={size}",
+                if write { "write" } else { "read" }
+            ))
+        } else if self.mmio_accesses.len() >= self.store_limit {
+            Some("Driver guard MMIO record bound reached before dispatch".into())
+        } else {
+            None
+        };
+        if let Some(error) = error {
+            self.failure = Some(error.clone());
+            return Err(error);
+        }
+        self.mmio_accesses.push((address, size, write));
+        Ok(())
+    }
+
     /// Narrow device-initiated memory to subsets of the caller's RAM policy.
     /// This does not admit CPU MMIO or attach/enable any device model.
     pub fn with_model_memory(
@@ -163,7 +263,11 @@ impl Guard {
         readable: Vec<Span>,
         writable: Vec<Span>,
     ) -> Result<Self, String> {
-        if self.accepted != 0 || self.stopped() || !self.model_writes.is_empty() {
+        if self.accepted != 0
+            || self.stopped()
+            || !self.model_writes.is_empty()
+            || !self.mmio_accesses.is_empty()
+        {
             return Err("Model memory policy must be selected before guarded execution".into());
         }
         self.model_readable = spans(readable, &self.readable)?;
@@ -444,13 +548,17 @@ impl Guard {
         if stores > self.store_limit - self.stores.len() {
             return Err("Driver guard store record bound reached before instruction".into());
         }
+        let plain_single = accesses.len() == 1
+            && (matches!((word >> 25) & 7, 2 | 3) || word & 0x0e0000f0 == 0x000000b0);
         for (address, size, write) in accesses {
             let allowed = if write {
                 &self.writable
             } else {
                 &self.readable
             };
-            if !contains(allowed, address, size) {
+            if !contains(allowed, address, size)
+                && !(plain_single && self.mmio_permits(address, size, write))
+            {
                 return Err(format!(
                     "Driver guard rejected {} at {address:#x} size={size} pc={pc:#x}",
                     if write { "write" } else { "read" }
@@ -477,10 +585,19 @@ impl Guard {
             model_readable: self.model_readable.clone(),
             model_writable: self.model_writable.clone(),
             model_writes: self.model_writes.clone(),
+            mmio: self.mmio.clone(),
+            mmio_accesses: self.mmio_accesses.clone(),
             returned: self.returned,
             failure: self.failure.clone(),
             accepted_instructions: self.accepted,
-            scope: "MMU-off little-endian A32 integer routine; explicit RAM ranges; no devices",
+            scope: if self.mmio.is_empty()
+                && self.model_readable.is_empty()
+                && self.model_writable.is_empty()
+            {
+                "MMU-off little-endian A32 integer routine; explicit RAM ranges; no device access"
+            } else {
+                "MMU-off little-endian A32 integer routine; explicit RAM and device policies"
+            },
         }
     }
 }
@@ -497,6 +614,8 @@ pub struct Snapshot {
     pub model_readable: Vec<(u64, u64)>,
     pub model_writable: Vec<(u64, u64)>,
     pub model_writes: Vec<(u64, u64)>,
+    pub mmio: Vec<MmioAccess>,
+    pub mmio_accesses: Vec<(u64, u32, bool)>,
     pub returned: bool,
     pub failure: Option<String>,
     pub accepted_instructions: u64,
@@ -541,6 +660,187 @@ mod tests {
                 .with_model_memory(vec![], vec![(0x3000, 0x3005)])
                 .is_err()
         );
+    }
+
+    fn mmio_policy() -> MmioAccess {
+        MmioAccess {
+            start: 0xfffd8000,
+            end: 0xfffd8004,
+            width: 4,
+            read: true,
+            write: true,
+        }
+    }
+
+    fn mmio_guard() -> Guard {
+        guard()
+            .with_mmio(vec![mmio_policy()], vec![(0xfffd8000, 0xfffd8100)])
+            .unwrap()
+    }
+
+    #[test]
+    fn mmio_policy_rejects_ram_holes_overlap_width_and_unowned_ranges() {
+        let mut invalid = Vec::new();
+        for width in [0, 3, 8] {
+            invalid.push(MmioAccess {
+                width,
+                ..mmio_policy()
+            });
+        }
+        invalid.push(MmioAccess {
+            start: 0xfffd8001,
+            ..mmio_policy()
+        });
+        invalid.push(MmioAccess {
+            end: 0xfffd8003,
+            ..mmio_policy()
+        });
+        invalid.push(MmioAccess {
+            read: false,
+            write: false,
+            ..mmio_policy()
+        });
+        invalid.push(MmioAccess {
+            start: 0xfffd8100,
+            end: 0xfffd8104,
+            ..mmio_policy()
+        });
+        invalid.push(MmioAccess {
+            start: 0x2000,
+            end: 0x2004,
+            ..mmio_policy()
+        });
+        for entry in invalid {
+            assert!(
+                guard()
+                    .with_mmio(
+                        vec![entry],
+                        vec![(0x2000, 0x2004), (0xfffd8000, 0xfffd8100)]
+                    )
+                    .is_err()
+            );
+        }
+        assert!(
+            guard()
+                .with_mmio(
+                    vec![mmio_policy(), mmio_policy()],
+                    vec![(0xfffd8000, 0xfffd8100)]
+                )
+                .is_err()
+        );
+        assert!(
+            guard()
+                .with_mmio(vec![mmio_policy()], vec![(0, 1u64 << 33)])
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn single_mmio_is_preflighted_but_exclusives_and_multi_accesses_are_not_admitted() {
+        let reg = |_| Ok(0xfffd8000);
+        assert!(guard().preflight(0x1000, 0xe5901000, 0xd3, reg).is_err());
+        assert!(
+            mmio_guard()
+                .preflight(0x1000, 0xe5901000, 0xd3, reg)
+                .is_ok()
+        );
+        assert!(
+            mmio_guard()
+                .preflight(0x1000, 0xe5801000, 0xd3, reg)
+                .is_ok()
+        );
+        for word in [0xe5d01000, 0xe1932f9f, 0xe1832f91, 0xe8900006] {
+            assert!(mmio_guard().preflight(0x1000, word, 0xd3, reg).is_err());
+        }
+        let mut multiple = guard()
+            .with_mmio(
+                vec![MmioAccess {
+                    end: 0xfffd8010,
+                    ..mmio_policy()
+                }],
+                vec![(0xfffd8000, 0xfffd8100)],
+            )
+            .unwrap();
+        assert!(multiple.preflight(0x1000, 0xe8900006, 0xd3, reg).is_err());
+        for (width, words) in [
+            (1u32, [0xe5d01000, 0xe5c01000]),
+            (2, [0xe1d010b0, 0xe1c010b0]),
+        ] {
+            for word in words {
+                let mut narrow = guard()
+                    .with_mmio(
+                        vec![MmioAccess {
+                            end: 0xfffd8000 + u64::from(width),
+                            width,
+                            ..mmio_policy()
+                        }],
+                        vec![(0xfffd8000, 0xfffd8100)],
+                    )
+                    .unwrap();
+                assert!(narrow.preflight(0x1000, word, 0xd3, reg).is_ok());
+                assert!(mmio_guard().preflight(0x1000, word, 0xd3, reg).is_err());
+            }
+        }
+        let mut readonly = guard()
+            .with_mmio(
+                vec![MmioAccess {
+                    write: false,
+                    ..mmio_policy()
+                }],
+                vec![(0xfffd8000, 0xfffd8100)],
+            )
+            .unwrap();
+        assert!(readonly.preflight(0x1000, 0xe5801000, 0xd3, reg).is_err());
+    }
+
+    #[test]
+    fn mmio_dispatch_checks_direction_width_core_extent_and_sticky_denial() {
+        let mut allowed = mmio_guard();
+        allowed.mmio_access(0, 0xfffd8000, 4, false).unwrap();
+        allowed.mmio_access(0, 0xfffd8000, 4, true).unwrap();
+        assert_eq!(
+            allowed.snapshot().mmio_accesses,
+            vec![(0xfffd8000, 4, false), (0xfffd8000, 4, true)]
+        );
+        for (core, address, width) in [
+            (1, 0xfffd8000, 4),
+            (0, 0xfffd8000, 0),
+            (0, 0xfffd8000, 1),
+            (0, 0xfffd8001, 4),
+            (0, 0xfffd8004, 4),
+            (0, u64::MAX, 4),
+        ] {
+            let mut denied = mmio_guard();
+            assert!(denied.mmio_access(core, address, width, false).is_err());
+            assert!(denied.snapshot().mmio_accesses.is_empty());
+            assert!(denied.mmio_access(0, 0xfffd8000, 4, true).is_err());
+        }
+        let mut writeonly = guard()
+            .with_mmio(
+                vec![MmioAccess {
+                    read: false,
+                    ..mmio_policy()
+                }],
+                vec![(0xfffd8000, 0xfffd8100)],
+            )
+            .unwrap();
+        assert!(writeonly.mmio_access(0, 0xfffd8000, 4, false).is_err());
+    }
+
+    #[test]
+    fn mmio_records_are_bounded_and_policies_cannot_change_after_access() {
+        let mut bounded = mmio_guard();
+        for _ in 0..16 {
+            bounded.mmio_access(0, 0xfffd8000, 4, false).unwrap();
+        }
+        assert!(bounded.mmio_access(0, 0xfffd8000, 4, false).is_err());
+        assert_eq!(bounded.snapshot().mmio_accesses.len(), 16);
+        let mut used = mmio_guard();
+        used.mmio_access(0, 0xfffd8000, 4, true).unwrap();
+        assert!(used.with_model_memory(vec![], vec![]).is_err());
+        let mut returned = mmio_guard();
+        returned.fetch(0, 0x4000, 4).unwrap();
+        assert!(returned.mmio_access(0, 0xfffd8000, 4, false).is_err());
     }
 
     #[test]
