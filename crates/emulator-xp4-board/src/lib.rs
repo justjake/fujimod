@@ -1576,7 +1576,7 @@ impl Session {
             }
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .io_groups(base);
+                .io_groups(base)?;
         }
         if let Some((base, irq)) = decompressor {
             // The same engine sits at 0xfff79000 on XP4 and at 0xfff80000 on

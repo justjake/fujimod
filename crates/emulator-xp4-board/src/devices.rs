@@ -636,12 +636,17 @@ impl Devices {
             outputs: BTreeMap::new(),
         }
     }
-    pub fn io_groups(&mut self, base: u64) {
+    pub fn io_groups(&mut self, base: u64) -> Result<(), String> {
+        let end = base.checked_add(0xa0).ok_or("Invalid XP4 IO-group extent")?;
+        if self.windows.iter().any(|&(lo, hi, _)| base < hi && lo < end) {
+            return Err("Overlapping XP4 IO-group window".into());
+        }
         let id = self.models.len();
         self.models.push(Some(Box::new(
             fujimod_emulator_devices::keyed_io::KeyedIoGroup::new(base),
         )));
-        self.windows.push((base, base + 0xa0, id));
+        self.windows.push((base, end, id));
+        Ok(())
     }
     pub fn decompressor(&mut self, base: u64, irq: u32) {
         let id = self.models.len();
@@ -1540,5 +1545,23 @@ impl Cluster {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod io_group_admission_tests {
+    use super::*;
+    #[test]
+    fn overflow_and_duplicate_windows_refuse_before_mutating_devices() {
+        let mut devices=Devices::empty();
+        let before=(devices.models.len(),devices.windows.clone(),devices.snapshots());
+        assert!(devices.io_groups(u64::MAX-0x9f).is_err());
+        assert_eq!((devices.models.len(),devices.windows.clone(),devices.snapshots()),before);
+        devices.io_groups(0xfff42000).unwrap();
+        let before=(devices.models.len(),devices.windows.clone(),devices.snapshots());
+        for base in [0xfff42000,0xfff41fff,0xfff4209f] {
+            assert!(devices.io_groups(base).is_err());
+            assert_eq!((devices.models.len(),devices.windows.clone(),devices.snapshots()),before);
+        }
     }
 }
