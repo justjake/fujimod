@@ -1405,16 +1405,22 @@ dependencies = [
 name = "fujimod-camera-mount"
 version = "0.1.0"
 dependencies = [
+ "async-lock",
+ "async-net",
  "async-trait",
+ "async-tungstenite",
  "fskit-rs",
  "fujimod-catalog",
  "fujimod-catalog-bulk",
  "fujimod-catalog-card",
  "fujimod-usb",
+ "fujimod-usb-proxy",
  "fujimod-workflows",
  "fujimod-workspace-hack",
  "futures-lite",
+ "futures-util",
  "libc",
+ "nusb",
  "plist",
  "serde",
  "serde_json",
@@ -2930,6 +2936,8 @@ version = "0.1.0"
 dependencies = [
  "async-channel",
  "async-lock",
+ "async-net",
+ "async-tungstenite",
  "fujimod-catalog-card",
  "fujimod-usb-proxy",
  "fujimod-workspace-hack",

@@ -11,6 +11,8 @@
   a prepared reader artifact is supplied. Offsets are logical storage bytes;
   NAND readers return corrected main-area bytes.
 - `regions.json`: the readable ranges, with names, addresses and sizes.
+- `unload-helper`: write `unload\n` to release the owned SD helper explicitly.
+  The next SD operation reloads it.
 
 There is no `debug/` wrapper. Memory reads are live, not a snapshot. The adapter
 requests that FSKit inhibit kernel offloaded I/O; applications should use
@@ -43,6 +45,26 @@ mkdir -p /tmp/fuji
 cargo run -p fujimod-camera-mount --bin fujimod-mount -- \
   --firmware x100v-301 /tmp/fuji
 ```
+
+Use `--firmware auto` to select the catalog entry matching the connected
+camera's product and internal version. Selection fails if the identity is ambiguous
+or has no published capability.
+
+For multiple local processes, `fujimod-usb-agent BUS-PORTS READY-JSON` opens one
+physical camera and publishes a loopback USB proxy endpoint in `READY-JSON`.
+Set `FUJIMOD_USB_PROXY_TOKEN` to a random secret before starting it. The ready
+file contains `url` and `token`; controllers use those as `FUJIMOD_USB_PROXY_URL`
+and `FUJIMOD_USB_PROXY_TOKEN`. The agent uses the existing USB owner, exporter,
+and pipeline, queues session opens, and preserves uncertain-completion fences.
+A mount and other controllers can use that endpoint concurrently. Each complete
+session owns the camera until close; no mount suspension around other tools is needed.
+`fujimod-share-owner serve` also honors the proxy environment, so sharing tools
+can forward this same owner rather than opening physical USB again. Set
+`FUJIMOD_USB_AGENT_READY` to the ready file for long-lived forwarding processes;
+they reread it before each new controller session when an agent is replaced.
+The agent exits on USB departure, including a quick camera restart. Its supervisor
+starts a fresh agent and mount for the returning camera, so helper pointers from
+an earlier boot are never reused. Stop the mount before stopping its agent.
 
 Add `--flash-reader /path/to/reader.json` (or set `FUJIMOD_FLASH_READER`) to
 expose internal storage. The metadata and separate image are the prepared
@@ -84,7 +106,9 @@ and storage costs while diagnosing the OS adapter.
 ## Architecture and performance
 
 The namespace and policy live in Rust independently of the platform adapter.
-The worker holds device descriptors and any owned file-helper allocation while idle.
+The worker holds device descriptors while idle. After two seconds without requests,
+it frees the entire helper allocation, including its transfer buffer (up to 8 MiB).
+The next SD operation reloads it. No helper code or buffer remains allocated when idle.
 Writes, small control operations and flash reads use one ff80 session per
 operation. Consecutive SD and memory reads of at least 64 KiB may reuse one
 qualified session. A burst stops at 64 MiB or two seconds between operations;
@@ -92,7 +116,7 @@ an in-flight bounded operation completes before release. The worker restores
 publication state and closes ff80 after 20 ms without another read. It blocks
 without polling after releasing the lease. File handles close before each reply,
 and writes are committed before replying. Synchronization flushes a pending
-read lease. Unmount releases the helper allocation and reports cleanup errors.
+read lease. Unmount releases any remaining helper allocation and reports cleanup errors.
 Flash reads yield the file helper allocation first, then recreate it on the next
 SD operation. Other tools can acquire ff80 between bursts and while idle.
 

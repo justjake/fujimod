@@ -20,6 +20,19 @@ serde_json.workspace = true
 sha2.workspace = true
 libc = "0.2"
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+async-net = "2"
+async-lock = "3"
+async-tungstenite = { version = "0.35", features = ["smol-runtime"] }
+futures-util = { version = "0.3", features = ["sink"] }
+fujimod-usb-proxy = { path = "../usb-proxy" }
+nusb = { workspace = true, features = ["smol"] }
+
+[[bin]]
+name = "fujimod-usb-agent"
+path = "src/agent.rs"
+
+
 [target.'cfg(target_os = "macos")'.dependencies]
 fskit-rs = "=0.2.0"
 plist = "1"

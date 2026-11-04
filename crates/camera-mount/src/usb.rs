@@ -31,6 +31,7 @@ enum Operation {
     Memory(u32, u32),
     Flash(u64, u32),
     Sync,
+    Unload,
     Close,
 }
 enum Answer {
@@ -61,6 +62,77 @@ impl Sessions for Target {
         connection.set_tool("fujimod-mount".into());
         connection.begin_session(None).await
     }
+}
+async fn target(device_id: Option<String>) -> std::result::Result<Target, String> {
+    let mut devices = connection::discover(DeviceFilter::Diagnostic)
+        .await
+        .map_err(|e| e.to_string())?;
+    if let Some(id) = device_id {
+        devices.retain(|d| {
+            let ports: String = d.port_chain().iter().map(|p| format!("{p:02x}")).collect();
+            d.bus_id() == id
+                || format!("{}-{ports}", d.bus_id()) == id
+                || d.serial_number() == Some(id.as_str())
+        });
+    }
+    if devices.len() != 1 {
+        return Err(format!(
+            "Expected one selected debug camera, found {}",
+            devices.len()
+        ));
+    }
+    let device = devices.remove(0);
+    let interfaces = connection::interfaces(&device)
+        .await
+        .map_err(|e| e.to_string())?;
+    if interfaces.len() != 1 {
+        return Err(format!(
+            "Expected one debug interface, found {}",
+            interfaces.len()
+        ));
+    }
+    Ok(Target {
+        device,
+        interface: interfaces[0],
+    })
+}
+fn automatic_firmware(
+    device_id: Option<String>,
+    catalog: &ReferenceCatalog,
+) -> std::result::Result<String, String> {
+    block_on(async {
+        let mut target = target(device_id).await?;
+        let mut session = target.open().await.map_err(|e| e.to_string())?;
+        let identity = async {
+            let product = session.device_info(InfoSelector::Product).await?;
+            let version = session.device_info(InfoSelector::InternalVersion).await?;
+            Ok::<_, fujimod_usb::Error>((
+                product.text.trim().to_owned(),
+                version.text.trim().to_owned(),
+            ))
+        }
+        .await;
+        session.close().await.map_err(|e| e.to_string())?;
+        let (product, version) = identity.map_err(|e| e.to_string())?;
+        let mut ids = std::collections::BTreeSet::new();
+        for facts in catalog.bulk_profiles() {
+            if facts.product == product && facts.internal_version == version {
+                ids.insert(facts.firmware_id.clone());
+            }
+        }
+        for facts in catalog.card_profiles() {
+            if facts.product == product && facts.internal_version == version {
+                ids.insert(facts.firmware_id.clone());
+            }
+        }
+        if ids.len() != 1 {
+            return Err(format!(
+                "Expected one catalog firmware for {product} {version}, found {}",
+                ids.len()
+            ));
+        }
+        Ok(ids.into_iter().next().unwrap())
+    })
 }
 struct Client<F> {
     sessions: F,
@@ -123,7 +195,8 @@ impl<F: Sessions> Client<F> {
             self.release_lease().await?;
         }
         // Every write is committed and every handle closed before replying.
-        if matches!(op, Operation::Sync) || matches!(op, Operation::Close) && self.service.is_none()
+        if matches!(op, Operation::Sync)
+            || matches!(op, Operation::Close | Operation::Unload) && self.service.is_none()
         {
             return Ok(Answer::Done);
         }
@@ -316,11 +389,12 @@ impl<F: Sessions> Client<F> {
                     };
                     Ok(Answer::Bytes(data))
                 }
-                Operation::Close => {
+                Operation::Close | Operation::Unload => {
                     if let Some(service) = &self.service {
                         service.release(&mut session, self.limits).await?;
                     }
                     self.service = None;
+                    self.mailbox_hint = None;
                     Ok(Answer::Done)
                 }
                 Operation::Sync => unreachable!("handled without a session"),
@@ -377,14 +451,20 @@ pub struct UsbDevice {
 impl UsbDevice {
     /// Select descriptors and preflight one bounded transaction. Idle mounts
     /// hold no connection, ff80 session or file handle. An owned helper keeps
-    /// only its allocation until shutdown.
+    /// its allocation until idle cleanup.
     pub fn connect(
         firmware: String,
         device_id: Option<String>,
         limits: DebugMemoryLimits,
         flash_reader: Option<std::path::PathBuf>,
     ) -> std::result::Result<(Self, Vec<Region>), String> {
-        let selected = ReferenceCatalog::bundled()?.resolve_firmware(&firmware)?;
+        let catalog = ReferenceCatalog::bundled()?;
+        let firmware = if firmware == "auto" {
+            automatic_firmware(device_id.clone(), &catalog)?
+        } else {
+            firmware
+        };
+        let selected = catalog.resolve_firmware(&firmware)?;
         if let Some(capability) = &selected.card_files {
             capability.validate()?;
         }
@@ -423,41 +503,7 @@ impl UsbDevice {
             .name("camera-mount-usb".into())
             .spawn(move || {
                 block_on(async {
-                    let target = async {
-                        let mut devices = connection::discover(DeviceFilter::Diagnostic)
-                            .await
-                            .map_err(|e| e.to_string())?;
-                        if let Some(id) = device_id {
-                            devices.retain(|d| {
-                                let ports: String =
-                                    d.port_chain().iter().map(|p| format!("{p:02x}")).collect();
-                                d.bus_id() == id
-                                    || format!("{}-{ports}", d.bus_id()) == id
-                                    || d.serial_number() == Some(id.as_str())
-                            });
-                        }
-                        if devices.len() != 1 {
-                            return Err(format!(
-                                "Expected one selected debug camera, found {}",
-                                devices.len()
-                            ));
-                        }
-                        let device = devices.remove(0);
-                        let interfaces = connection::interfaces(&device)
-                            .await
-                            .map_err(|e| e.to_string())?;
-                        if interfaces.len() != 1 {
-                            return Err(format!(
-                                "Expected one debug interface, found {}",
-                                interfaces.len()
-                            ));
-                        }
-                        Ok(Target {
-                            device,
-                            interface: interfaces[0],
-                        })
-                    }
-                    .await;
+                    let target = target(device_id).await;
                     let target = match target {
                         Ok(target) => target,
                         Err(error) => {
@@ -498,13 +544,20 @@ impl UsbDevice {
                     loop {
                         let pending = if client.lease.is_some() {
                             rx.recv_timeout(READ_IDLE)
+                        } else if client.service.is_some() && !client.fenced {
+                            rx.recv_timeout(Duration::from_secs(2))
                         } else {
                             rx.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected)
                         };
                         let (op, reply) = match pending {
                             Ok(work) => work,
                             Err(mpsc::RecvTimeoutError::Timeout) => {
-                                if let Err(error) = client.release_lease().await {
+                                let result = if client.lease.is_some() {
+                                    client.release_lease().await
+                                } else {
+                                    client.transaction(Operation::Unload).await.map(|_| ())
+                                };
+                                if let Err(error) = result {
                                     eprintln!("fujimod-mount: {error}");
                                 }
                                 continue;
@@ -578,6 +631,9 @@ fn report(error: fujimod_usb::Error) -> i32 {
 impl Device for UsbDevice {
     fn shutdown(&mut self) -> Result<()> {
         UsbDevice::shutdown(self)
+    }
+    fn unload_helper(&mut self) -> Result<()> {
+        self.request(Operation::Unload).map(|_| ())
     }
     fn has_card(&self) -> bool {
         self.has_card

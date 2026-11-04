@@ -453,3 +453,19 @@ fn memory_access_does_not_require_a_card_service() {
         assert_eq!(script.remaining(), 0);
     });
 }
+
+#[test]
+fn unloading_an_absent_helper_never_acquires_usb() {
+    block_on(async {
+        let mut client = client(vec![]);
+        client.transaction(Operation::Unload).await.unwrap();
+        client.transaction(Operation::Unload).await.unwrap();
+        assert_eq!(client.sessions.opens.load(Ordering::SeqCst), 0);
+        client.fenced = true;
+        assert!(matches!(
+            client.transaction(Operation::Unload).await,
+            Err(fujimod_usb::Error::CompletionUnknown)
+        ));
+        assert_eq!(client.sessions.opens.load(Ordering::SeqCst), 0);
+    });
+}

@@ -12,6 +12,10 @@ struct State {
 #[derive(Clone, Default)]
 struct TestDevice(Arc<Mutex<State>>);
 impl Device for TestDevice {
+    fn unload_helper(&mut self) -> Result<()> {
+        self.0.lock().unwrap().calls.push(("unload".into(), 0, 0));
+        Ok(())
+    }
     fn has_card(&self) -> bool {
         true
     }
@@ -138,7 +142,7 @@ fn filesystem() -> (CameraFs<TestDevice>, TestDevice) {
 }
 
 #[test]
-fn namespace_is_flat_memory_is_live_and_every_mutation_is_refused() {
+fn namespace_is_flat_and_live_memory_mutations_are_refused() {
     let (mut fs, device) = filesystem();
     assert_eq!(
         fs.directory(ROOT, false)
@@ -147,7 +151,7 @@ fn namespace_is_flat_memory_is_live_and_every_mutation_is_refused() {
             .iter()
             .map(|n| n.name.as_str())
             .collect::<Vec<_>>(),
-        ["sd", "memory", "flash", "regions.json"]
+        ["sd", "memory", "flash", "regions.json", "unload-helper"]
     );
     assert_eq!(fs.node(MEMORY).unwrap().size, 1 << 32);
     assert_eq!(fs.read(MEMORY, 0x1000, 3).unwrap(), [1, 1, 1]);
@@ -309,4 +313,28 @@ fn fat_short_aliases_can_be_listed_traversed_and_read() {
     assert!(folder.directory);
     let file = fs.lookup(folder.id, "FILE~1.JPG").unwrap();
     assert_eq!(fs.read(file.id, 0, 5).unwrap(), b"photo");
+}
+
+#[test]
+fn unload_control_is_repeatable_and_rejects_other_writes() {
+    let (mut fs, device) = filesystem();
+    assert_eq!(fs.lookup(ROOT, "unload-helper").unwrap().id, UNLOAD);
+    assert_eq!(fs.truncate(UNLOAD, 0).unwrap().size, 0);
+    assert_eq!(fs.truncate(UNLOAD, 1).unwrap_err(), libc::EINVAL);
+    assert_eq!(fs.write(UNLOAD, 1, b"unload\n"), Err(libc::EINVAL));
+    assert_eq!(fs.write(UNLOAD, 0, b"wrong"), Err(libc::EINVAL));
+    assert_eq!(fs.write(UNLOAD, 0, b"unload\n"), Ok(7));
+    assert_eq!(fs.write(UNLOAD, 0, b"unload\n"), Ok(7));
+    assert_eq!(
+        device
+            .0
+            .lock()
+            .unwrap()
+            .calls
+            .iter()
+            .filter(|c| c.0 == "unload")
+            .count(),
+        2
+    );
+    assert!(fs.read(UNLOAD, 0, 1).unwrap().is_empty());
 }

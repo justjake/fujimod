@@ -21,6 +21,7 @@ pub const SD: u64 = 3;
 pub const MEMORY: u64 = 4;
 pub const REGIONS: u64 = 5;
 pub const FLASH: u64 = 6;
+pub const UNLOAD: u64 = 7;
 pub const IO_BYTES: usize = fujimod_usb::operations::card::MAX_REQUEST_BYTES as usize;
 pub const MEMORY_IO_BYTES: usize = 64 << 20;
 pub type Result<T> = std::result::Result<T, i32>;
@@ -29,6 +30,9 @@ pub type Result<T> = std::result::Result<T, i32>;
 pub trait Device: Send {
     fn shutdown(&mut self) -> Result<()> {
         self.synchronize()
+    }
+    fn unload_helper(&mut self) -> Result<()> {
+        Ok(())
     }
     fn has_card(&self) -> bool;
     fn list(&mut self, path: &str) -> Result<Vec<DirectoryEntry>>;
@@ -100,6 +104,7 @@ impl<D: Device> CameraFs<D> {
         let mut nodes = BTreeMap::new();
         for (id, name, directory, writable, size, path) in [
             (ROOT, "", true, false, 0, None),
+            (UNLOAD, "unload-helper", false, true, 0, None),
             (SD, "sd", true, true, 0, Some("A:\\".to_owned())),
             (MEMORY, "memory", false, false, 1u64 << 32, None),
             (
@@ -151,7 +156,7 @@ impl<D: Device> CameraFs<D> {
             listings: BTreeMap::new(),
             regions,
             regions_json,
-            next_inode: 7,
+            next_inode: 8,
             generation: 1,
         })
     }
@@ -162,7 +167,7 @@ impl<D: Device> CameraFs<D> {
 
     pub fn metadata(&mut self, id: u64) -> Result<Node> {
         let node = self.node(id)?;
-        if id > FLASH {
+        if id > UNLOAD {
             let (_, entries) = self.directory(node.parent, false)?;
             return entries.into_iter().find(|n| n.id == id).ok_or(libc::ESTALE);
         }
@@ -211,7 +216,7 @@ impl<D: Device> CameraFs<D> {
         if id == ROOT {
             return Ok((
                 1,
-                [SD, MEMORY, FLASH, REGIONS]
+                [SD, MEMORY, FLASH, REGIONS, UNLOAD]
                     .into_iter()
                     .filter(|id| self.nodes.contains_key(id))
                     .map(|i| self.node(i))
@@ -360,6 +365,13 @@ impl<D: Device> CameraFs<D> {
 
     pub fn write(&mut self, id: u64, offset: u64, data: &[u8]) -> Result<usize> {
         let node = self.node(id)?;
+        if id == UNLOAD {
+            if offset != 0 || data != b"unload\n" {
+                return Err(libc::EINVAL);
+            }
+            self.device.unload_helper()?;
+            return Ok(data.len());
+        }
         if !node.writable {
             return Err(libc::EROFS);
         }
@@ -427,6 +439,13 @@ impl<D: Device> CameraFs<D> {
 
     pub fn truncate(&mut self, id: u64, size: u64) -> Result<Node> {
         let node = self.node(id)?;
+        if id == UNLOAD {
+            return if size == 0 {
+                Ok(node)
+            } else {
+                Err(libc::EINVAL)
+            };
+        }
         if !node.writable {
             return Err(libc::EROFS);
         }
