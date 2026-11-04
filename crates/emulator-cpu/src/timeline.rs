@@ -145,6 +145,13 @@ impl Timeline {
             }
         }
     }
+    /// A device access stalls a lagging processor up to the frontier, so
+    /// device time never moves backward and its later entries elapse it.
+    pub fn synchronize(&mut self, core: usize) -> Result<(), String> {
+        self.lag(core)?;
+        self.lags[core] = 0;
+        Ok(())
+    }
     /// One processor's own position, for its architectural counters.
     pub fn processor_clock(&self, core: usize) -> Result<crate::Clock, String> {
         let (numerator, denominator) = self.ratio.parts();
@@ -465,6 +472,22 @@ mod tests {
         t.park(|core| core == 0);
         assert_eq!(t.lags(), [0, 0]);
         assert_eq!(t.processor_clock(1).unwrap().now, 20);
+    }
+    #[test]
+    fn a_device_access_moves_a_lagging_processor_to_the_frontier() {
+        let rate = Ratio::new(1, 1).unwrap();
+        let both = |_| true;
+        // GFX 50R: core 1 ran a slice ahead; core 0 writes a one-tick flash
+        // command, then issues the next one 140 entries later.
+        let mut t = Timeline::new(rate, 2).unwrap();
+        t.advance_processor(1, 1000, both).unwrap();
+        assert_eq!((t.now(), t.lags()), (1000, &[1000, 0][..]));
+        t.synchronize(0).unwrap();
+        let due = t.now() + 1;
+        t.advance_processor(0, 140, both).unwrap();
+        assert!(t.now() >= due);
+        assert_eq!(t.lags(), [0, 140]);
+        assert!(t.synchronize(2).is_err());
     }
     #[test]
     fn processor_budgets_stop_the_frontier_at_deadlines_and_caps() {
