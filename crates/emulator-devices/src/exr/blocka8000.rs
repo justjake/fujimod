@@ -1,4 +1,8 @@
-//! Register-only EXR Processor Pro block at 0xFFFA8000. Bit 24 starts and bit 25 stops a channel; bit 26 reads as ready after either. The block is unidentified; the completion interrupt the firmware also waits for is not raised.
+//! Register-only EXR Processor Pro block at 0xFFFA8000. Bit 24 starts and bit 25 stops a channel; bit 26 reads as ready after either. The block is unidentified.
+//! A start on the +04 channel also raises the declared completion interrupt after the declared delay: start-up
+//! 0x7a085c writes the start, then registers its handler on IRQ index 0x42 and waits for it with a 100-tick timeout.
+//! The +00 channel (loader 0x44dc) is polled and raises nothing.
+use crate::bus::InterruptLine;
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -7,27 +11,36 @@ pub const BASE: u64 = 0xfffa8000;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Options {}
+pub struct Options {
+    /// Interrupt raised after a +04 start; none when absent.
+    pub start_irq: Option<InterruptLine>,
+    /// Ticks from a +04 start to its interrupt.
+    pub start_ticks: u64,
+}
 
 #[derive(Serialize, Deserialize)]
 struct State {
     control: [u32; 2],
     ready: [bool; 2],
     words: [u32; 2],
+    start_due: Option<u64>,
 }
 
 /// One unclassified start/stop/ready register block.
 pub struct Blocka8000 {
+    options: Options,
     state: State,
 }
 
 impl Blocka8000 {
-    pub fn new(_options: Options) -> Self {
+    pub fn new(options: Options) -> Self {
         Self {
+            options,
             state: State {
                 control: [0; 2],
                 ready: [false; 2],
                 words: [0; 2],
+                start_due: None,
             },
         }
     }
@@ -81,11 +94,43 @@ impl Device for Blocka8000 {
         match offset {
             0 | 4 => {
                 let channel = (offset / 4) as usize;
+                let starting = value & 1 << 24 != 0 && self.state.control[channel] & 1 << 24 == 0;
                 self.state.control[channel] = value;
                 self.state.ready[channel] = value & (1 << 24 | 1 << 25) != 0;
+                if channel == 1 && starting && self.options.start_irq.is_some() {
+                    let Some(due) = cx.now().checked_add(self.options.start_ticks) else {
+                        cx.fail("0xfffa8000 start interrupt deadline overflow");
+                        return;
+                    };
+                    self.state.start_due = Some(due);
+                }
             }
             _ => self.state.words[(offset / 4 - 0x10) as usize] = value,
         }
+    }
+
+    fn next_deadline(&self, _now: u64) -> Option<u64> {
+        self.state.start_due
+    }
+
+    fn advance(&mut self, cx: &mut Cx<'_>) {
+        if !self.state.start_due.is_some_and(|due| due <= cx.now()) {
+            return;
+        }
+        self.state.start_due = None;
+        match self.options.start_irq {
+            Some(InterruptLine::Core { core, line }) => {
+                if let Err(error) = cx.raise_irq(core, line) {
+                    cx.fail(error);
+                }
+            }
+            Some(InterruptLine::Shared(line)) => cx.set_irq(line, true),
+            None => (),
+        }
+    }
+
+    fn event(&mut self, cx: &mut Cx<'_>, _: u64) {
+        self.advance(cx);
     }
 
     fn save(&self) -> Value {
@@ -201,5 +246,30 @@ mod tests {
                 .restore(&json!({"state":{"control":"bad"}}))
                 .is_err()
         );
+    }
+}
+
+#[cfg(test)]
+mod start_irq_tests {
+    use super::*;
+    use crate::test_host::{TestHost, advance, write};
+
+    #[test]
+    fn a_plus_04_start_raises_the_declared_interrupt_after_its_delay() {
+        let mut model = Blocka8000::new(Options {
+            start_irq: Some(InterruptLine::Core { core: 0, line: 0x48 }),
+            start_ticks: 10,
+        });
+        let mut host = TestHost::new();
+        host.now = 5;
+        write(&mut model, &mut host, BASE, 1 << 24);
+        assert_eq!(model.next_deadline(host.now), None);
+        write(&mut model, &mut host, BASE + 4, 1 << 24);
+        assert_eq!(model.next_deadline(host.now), Some(15));
+        advance(&mut model, &mut host, 14);
+        assert!(host.irqs.is_empty());
+        advance(&mut model, &mut host, 15);
+        assert_eq!(host.irqs, [(0, 0x48)]);
+        assert_eq!(model.next_deadline(host.now), None);
     }
 }

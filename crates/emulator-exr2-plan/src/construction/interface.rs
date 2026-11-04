@@ -175,16 +175,21 @@ fn blocka8000(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
 }
 
 fn exr_display_pipe(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
-    let Model::ExrDisplayPipe { options, irq } = model else {
+    let Model::ExrDisplayPipe {
+        options,
+        irq,
+        layer_irq,
+    } = model
+    else {
         return Err("constructor called for another model kind".into());
     };
-    if let Some(irq) = irq {
+    for irq in [irq, layer_irq].into_iter().flatten() {
         line(irq)?;
     }
     Ok(Built::Device(Box::new(
         fujimod_emulator_devices::exr::display_pipe::DisplayPipe::new(
             options,
-            fujimod_emulator_devices::exr::display_pipe::Wiring { irq },
+            fujimod_emulator_devices::exr::display_pipe::Wiring { irq, layer_irq },
         )?,
     )))
 }

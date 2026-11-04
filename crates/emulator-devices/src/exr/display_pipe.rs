@@ -3,10 +3,16 @@
 //! and 0xFFF27000. Each block latches 64 words.
 //!
 //! Layer +0x00 bit 16 is a self-completing reset (driver 0x88a0e8). Output
-//! +0x00 bit 16 runs the timing; +0x28 bit 1 is the frame level: it alternates
-//! between active (0) and blank (1) while running, raising the IRQ on every
-//! edge, and reads 1 while stopped (0x889d78 stops the pipe and waits for it;
-//! handler 0x887b60 re-arms on the opposite edge). Update +0x00 bit 28 is a
+//! +0x00 bit 8 runs the timing and bit 16 enables the output: the mode change
+//! 0x891e40 clears bit 16 (0x889d78, which then waits for the blank level) and
+//! registers a frame callback (0x88be60), so frames continue with bit 16 clear,
+//! and 0x8886f0 compares the register with its RAM copy apart from bit 8.
+//! +0x28 bit 1 is the frame level: it alternates between active (0) and blank
+//! (1) while running, raising the IRQ on every edge, and reads 1 while stopped
+//! (handler 0x887b60 re-arms on the opposite edge). The layer interrupt is
+//! raised on every blank entry while running: pipe 1's layer handler 0x88b7dc
+//! (registered on IRQ index 10 by 0x88bf78) applies the layer registers from
+//! their RAM copy, so a layer update latches at vertical blank. Update +0x00 bit 28 is a
 //! request that clears at the next blank entry while running, or after the
 //! reset time while stopped (0x88e62c). The camera's register shadow at
 //! 0xa436ec holds layer +0x00 = 0x10100 and a 640x480 window for pipe 1.
@@ -18,7 +24,7 @@ use serde::{Deserialize, Serialize};
 const BLOCK: u64 = 0x1000;
 const WORDS: usize = 64;
 const RESET: u32 = 1 << 16;
-const RUN: u32 = 1 << 16;
+const RUN: u32 = 1 << 8;
 const FRAME_LEVEL: u32 = 1 << 1;
 const STATUS: usize = 0x28 / 4;
 const REQUEST: u32 = 1 << 28;
@@ -34,7 +40,10 @@ pub struct Options {
 }
 
 pub struct Wiring {
+    /// Frame-level edges.
     pub irq: Option<InterruptLine>,
+    /// Blank entry, for layer updates.
+    pub layer_irq: Option<InterruptLine>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -57,6 +66,7 @@ struct State {
 pub struct DisplayPipe {
     options: Options,
     irq: Option<InterruptLine>,
+    layer_irq: Option<InterruptLine>,
     state: State,
 }
 
@@ -74,6 +84,7 @@ impl DisplayPipe {
         Ok(Self {
             options,
             irq: wiring.irq,
+            layer_irq: wiring.layer_irq,
             state: State {
                 layer: [0; WORDS],
                 output: [0; WORDS],
@@ -123,11 +134,9 @@ impl DisplayPipe {
             }
             edges += 1;
             self.state.blank = !self.state.blank;
-            if let Some(line) = self.irq {
-                match line {
-                    InterruptLine::Core { core, line } => cx.raise_irq(core, line)?,
-                    InterruptLine::Shared(line) => cx.set_irq(line, true),
-                }
+            raise(cx, self.irq)?;
+            if self.state.blank {
+                raise(cx, self.layer_irq)?;
             }
             if self.state.blank && self.state.update_at_frame {
                 self.state.update[0] &= !REQUEST;
@@ -181,6 +190,17 @@ impl DisplayPipe {
             (_, w) => self.state.update[w] = value,
         }
         Ok(())
+    }
+}
+
+fn raise(cx: &mut Cx<'_>, line: Option<InterruptLine>) -> Result<(), String> {
+    match line {
+        Some(InterruptLine::Core { core, line }) => cx.raise_irq(core, line),
+        Some(InterruptLine::Shared(line)) => {
+            cx.set_irq(line, true);
+            Ok(())
+        }
+        None => Ok(()),
     }
 }
 
@@ -278,6 +298,7 @@ mod tests {
             },
             Wiring {
                 irq: Some(InterruptLine::Core { core: 0, line: 42 }),
+                layer_irq: Some(InterruptLine::Core { core: 0, line: 43 }),
             },
         )
         .unwrap()
@@ -308,15 +329,18 @@ mod tests {
         let mut host = TestHost::new();
         assert_eq!(read(&mut model, &mut host, BASE + 0x1028) & 2, 2);
         write(&mut model, &mut host, BASE + 0x1000, 0x1_0000);
+        assert_eq!(read(&mut model, &mut host, BASE + 0x1028) & 2, 2);
+        assert_eq!(model.next_deadline(host.now), None);
+        write(&mut model, &mut host, BASE + 0x1000, 0x100);
         assert_eq!(read(&mut model, &mut host, BASE + 0x1028) & 2, 0);
         advance(&mut model, &mut host, 99);
         assert!(host.irqs.is_empty());
         advance(&mut model, &mut host, 100);
         assert_eq!(read(&mut model, &mut host, BASE + 0x1028) & 2, 2);
-        assert_eq!(host.irqs, [(0, 42)]);
+        assert_eq!(host.irqs, [(0, 42), (0, 43)]);
         advance(&mut model, &mut host, 120);
         assert_eq!(read(&mut model, &mut host, BASE + 0x1028) & 2, 0);
-        assert_eq!(host.irqs, [(0, 42), (0, 42)]);
+        assert_eq!(host.irqs, [(0, 42), (0, 43), (0, 42)]);
         write(&mut model, &mut host, BASE + 0x1000, 0);
         assert_eq!(read(&mut model, &mut host, BASE + 0x1028) & 2, 2);
         assert_eq!(model.next_deadline(host.now), None);
@@ -330,7 +354,7 @@ mod tests {
         assert_eq!(read(&mut model, &mut host, BASE + 0x2000), REQUEST as u64);
         advance(&mut model, &mut host, 10);
         assert_eq!(read(&mut model, &mut host, BASE + 0x2000), 0);
-        write(&mut model, &mut host, BASE + 0x1000, 0x1_0000);
+        write(&mut model, &mut host, BASE + 0x1000, 0x100);
         write(&mut model, &mut host, BASE + 0x2000, REQUEST);
         advance(&mut model, &mut host, 109);
         assert_eq!(read(&mut model, &mut host, BASE + 0x2000), REQUEST as u64);
@@ -340,7 +364,10 @@ mod tests {
 
     #[test]
     fn options_are_validated() {
-        let wiring = || Wiring { irq: None };
+        let wiring = || Wiring {
+            irq: None,
+            layer_irq: None,
+        };
         let options = Options {
             base: BASE,
             reset_ticks: 10,

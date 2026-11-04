@@ -340,6 +340,7 @@ pub enum Model {
     ExrDisplayPipe {
         options: fujimod_emulator_devices::exr::display_pipe::Options,
         irq: Option<InterruptLine>,
+        layer_irq: Option<InterruptLine>,
     },
     Companion {
         options: serde_json::Value,
