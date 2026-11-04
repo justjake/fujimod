@@ -859,6 +859,15 @@ impl DmaController {
             let request = ((mux >> ((n % 2) * 8)) & 63) as u8;
             self.receiver.as_ref().ok_or("Missing transmit receiver")?.lock().map_err(|_| "Transmit receiver lock poisoned")?
                 .accept(completed_at, dst as u32, request, &data)?;
+            for (index, word) in data.chunks_exact(4).enumerate() {
+                cx.record(Record::new("XP4 discovery transmit receiver accepted word", [
+                    ("destination", Field::int(dst)),
+                    ("request", Field::int(u64::from(request))),
+                    ("index", Field::int(index as u64)),
+                    ("value", Field::int(u64::from(u32::from_le_bytes(word.try_into().unwrap())))),
+                ]));
+            }
+
         } else if program {
             let mut port = self.port.as_ref().ok_or("Standalone DMA cannot program serial flash")?.lock().unwrap();
             if c.regs[0x20 / 4] & 4 == 0
