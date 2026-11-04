@@ -9,6 +9,7 @@ pub const CONTROL: u64 = 0xff70f03c;
 pub const VALUE: u64 = 0xff701240;
 pub const REQUEST: u64 = 0xff701280;
 pub const PROFILE: &str = "experimental-source-functional-v1";
+pub const BOOLEAN_WRITE_PORT: u64 = 0xfff4a400;
 
 pub const A_WORDS: [(u64, u32); 16] = [
     (0xff70f000, 0x00000007),
@@ -60,6 +61,18 @@ pub struct Graphics {
     pub initial_value: u32,
     pub completion_ticks: u64,
 }
+/// Optional boolean write acceptance. Physical effects, reset and readback
+/// semantics are unknown; this option supplies none.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BooleanWritePort {
+    pub enabled: bool,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BooleanWriteState {
+    last_write: Option<u32>,
+}
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -73,10 +86,13 @@ pub struct Config {
     pub configuration_requests: Option<crate::configuration_request::Inputs>,
     #[serde(default)]
     pub selection_special: Option<crate::selection_special::Inputs>,
+    #[serde(default)]
+    pub boolean_write_fff4a400: Option<BooleanWritePort>,
 }
 impl Config {
     fn validate(&self) -> Result<(), String> {
         if self.profile != PROFILE || self.control_f03c_reset & !0x7ff != 0
+            || self.boolean_write_fff4a400.as_ref().is_some_and(|port| !port.enabled)
             || self.graphics.as_ref().is_some_and(|g| g.initial_value & !0x1ff != 0 || g.completion_ticks == 0)
         {
             return Err("Invalid experimental XP4 functional system-control input".into());
@@ -124,6 +140,8 @@ pub struct SystemControl {
     configuration_state: Option<crate::configuration_request::ConfigurationRequests>,
     #[serde(default)]
     selection_state: Option<crate::selection_special::SelectionSpecial>,
+    #[serde(default)]
+    boolean_write_state: Option<BooleanWriteState>,
     staged: u32,
     applied: u32,
     value_written: bool,
@@ -142,7 +160,9 @@ impl SystemControl {
             .map(crate::configuration_request::ConfigurationRequests::new).transpose()?;
         let selection_state = config.selection_special.clone()
             .map(crate::selection_special::SelectionSpecial::new).transpose()?;
-        Ok(Self { control: config.control_f03c_reset, retained_banks, configuration_state, selection_state, config, staged: initial,
+        let boolean_write_state = config.boolean_write_fff4a400.as_ref()
+            .map(|_| BooleanWriteState { last_write: None });
+        Ok(Self { control: config.control_f03c_reset, retained_banks, configuration_state, selection_state, boolean_write_state, config, staged: initial,
             applied: initial, value_written: false, pending: None, generation: 0, admitted: false })
     }
     pub fn windows(&self) -> Vec<(u64, u64)> {
@@ -152,6 +172,7 @@ impl SystemControl {
         }
         if let Some(model) = &self.configuration_state { spans.extend(model.windows()); }
         if let Some(model) = &self.selection_state { spans.extend(model.windows()); }
+        if self.boolean_write_state.is_some() { spans.push((BOOLEAN_WRITE_PORT, BOOLEAN_WRITE_PORT + 4)); }
         if self.config.graphics.is_some() { spans.extend([(VALUE, VALUE + 4), (REQUEST, REQUEST + 4)]); }
         spans
     }
@@ -164,6 +185,7 @@ impl SystemControl {
     }
     fn known(&self, address: u64, size: u8) -> bool {
         size == 4 && (address == CONTROL || self.request_word(address).is_some()
+            || address == BOOLEAN_WRITE_PORT && self.boolean_write_state.is_some()
             || self.selection_state.as_ref().is_some_and(|model| model.owns(address, size))
             || self.configuration_state.as_ref().is_some_and(|model| model.owns(address, size)) || self.config.graphics.is_some() && matches!(address, VALUE | REQUEST))
     }
@@ -173,6 +195,7 @@ impl SystemControl {
                 ("profile", Field::constant(PROFILE)),
                 ("reset_control", Field::int(self.config.control_f03c_reset)),
                 ("graphics_enabled", Field::int(u32::from(self.config.graphics.is_some()))),
+                ("boolean_write_fff4a400_enabled", Field::int(u32::from(self.boolean_write_state.is_some()))),
                 ("initial_graphics_value", Field::int(self.config.graphics.as_ref().map_or(0, |g| g.initial_value))),
                 ("completion_ticks_unmeasured", Field::int(self.config.graphics.as_ref().map_or(0, |g| g.completion_ticks))),
                 ("law", Field::constant("Retained control; optional delayed command-2 acknowledgment; no physical clock/reset claim")),
@@ -194,6 +217,7 @@ impl SystemControl {
 impl Device for SystemControl {
     fn name(&self) -> &'static str { "xp4-functional-system-control" }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
+        if address == BOOLEAN_WRITE_PORT { cx.unmodeled(); return 0; }
         if !self.known(address, size) { cx.unmodeled(); return 0; }
         self.admit(cx);
         if let Some(model) = &mut self.configuration_state {
@@ -211,6 +235,16 @@ impl Device for SystemControl {
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
         if !self.known(address, size) { cx.unmodeled(); return; }
         if value > u32::MAX as u64 { cx.fail("XP4 functional control requires a 32-bit value"); return; }
+        if address == BOOLEAN_WRITE_PORT {
+            if value > 1 { cx.fail("XP4 fff4a400 write port accepts only boolean values"); return; }
+            self.admit(cx);
+            self.boolean_write_state.as_mut().unwrap().last_write = Some(value as u32);
+            cx.record(Record::new("XP4 experimental fff4a400 boolean write; physical effects unknown", [
+                ("address", Field::int(address)), ("value", Field::int(value)),
+                ("law", Field::constant("Accepted write only; no reset, readback, readiness, release, clock, IRQ or DMA effects")),
+            ]));
+            return;
+        }
         if let Some(model) = &mut self.configuration_state {
             if model.owns(address, size) { model.write(cx, address, size, value); return; }
         }
@@ -285,6 +319,12 @@ impl Device for SystemControl {
             (Some(model), Some(inputs)) => model.validate_state(inputs).is_ok(),
             _ => false,
         };
+        let boolean_write_valid = match (&state.boolean_write_state, &state.config.boolean_write_fff4a400) {
+            (None, None) => true,
+            (Some(port), Some(_)) => port.last_write.is_none_or(|value| value <= 1)
+                && (port.last_write.is_none() || state.admitted),
+            _ => false,
+        };
         let configuration_valid = match (&state.configuration_state, &state.config.configuration_requests) {
             (None, None) => true,
             (Some(model), Some(inputs)) => model.validate_state(inputs).is_ok(),
@@ -298,7 +338,7 @@ impl Device for SystemControl {
         };
         let no_graphics = state.config.graphics.is_none();
         let initial = state.config.graphics.as_ref().map_or(0, |g| g.initial_value);
-        if !selection_valid || !configuration_valid || !banks_valid || (!state.value_written && (state.staged != initial || state.applied != initial || state.generation != 0))
+        if !boolean_write_valid || !selection_valid || !configuration_valid || !banks_valid || (!state.value_written && (state.staged != initial || state.applied != initial || state.generation != 0))
             || (state.generation == 0 && state.applied != initial)
             || state.config != self.config || state.control & !0x7ff != 0 || state.staged & !0x1ff != 0 || state.applied & !0x1ff != 0
             || no_graphics && (state.staged != 0 || state.applied != 0 || state.value_written || state.pending.is_some() || state.generation != 0)
@@ -325,7 +365,7 @@ mod tests {
         fn record(&mut self, r: Record) { self.records.push(r); }
     }
     fn config(ticks: Option<u64>) -> Config {
-        Config { profile: PROFILE.into(), control_f03c_reset: 7, retained_request_banks: None, configuration_requests: None, selection_special: None,
+        Config { profile: PROFILE.into(), control_f03c_reset: 7, retained_request_banks: None, configuration_requests: None, selection_special: None, boolean_write_fff4a400: None,
             graphics: ticks.map(|completion_ticks| Graphics { initial_value: 0, completion_ticks }) }
     }
     fn write(d: &mut SystemControl, c: &mut Clock, address: u64, size: u8, value: u64) -> Result<(), String> {
@@ -335,6 +375,111 @@ mod tests {
     fn read(d: &mut SystemControl, c: &mut Clock, address: u64, size: u8) -> Result<u64, String> {
         let mut cx = Cx::new(c, 0, 0, 0); let v = d.read(&mut cx, address, size);
         cx.take_refusal().map_or(Ok(v), Err)
+    }
+    fn boolean_config() -> Config {
+        let mut inputs = config(None);
+        inputs.boolean_write_fff4a400 = Some(BooleanWritePort { enabled: true });
+        inputs
+    }
+    #[test]
+    fn boolean_write_port_has_no_reset_or_readback_and_records_both_values() {
+        let mut d = SystemControl::new(boolean_config()).unwrap();
+        let mut c = Clock::default();
+        assert!(d.windows().contains(&(BOOLEAN_WRITE_PORT, BOOLEAN_WRITE_PORT + 4)));
+        assert_eq!(d.save()["boolean_write_state"]["last_write"], Value::Null);
+        for value in [1, 0, 0, 1] {
+            write(&mut d, &mut c, BOOLEAN_WRITE_PORT, 4, value).unwrap();
+            assert_eq!(d.save()["boolean_write_state"]["last_write"], json!(value));
+            assert_eq!(d.control, 7);
+            assert_eq!(d.next_deadline(c.now), None);
+        }
+        assert_eq!(c.records.len(), 5); // One admission plus four stores.
+        assert!(c.events.is_empty());
+        let before = d.save();
+        let records = c.records.len();
+        assert!(read(&mut d, &mut c, BOOLEAN_WRITE_PORT, 4).is_err());
+        assert_eq!(d.save(), before);
+        assert_eq!(c.records.len(), records);
+    }
+    #[test]
+    fn boolean_write_port_refuses_before_state_or_admission_mutation() {
+        let mut d = SystemControl::new(boolean_config()).unwrap();
+        let mut c = Clock::default();
+        let before = d.save();
+        for (address, size, value) in [(BOOLEAN_WRITE_PORT, 4, 2),
+            (BOOLEAN_WRITE_PORT, 4, 0x100), (BOOLEAN_WRITE_PORT, 4, u64::MAX),
+            (BOOLEAN_WRITE_PORT, 1, 1), (BOOLEAN_WRITE_PORT, 2, 1),
+            (BOOLEAN_WRITE_PORT, 8, 1), (BOOLEAN_WRITE_PORT + 1, 4, 1),
+            (BOOLEAN_WRITE_PORT - 4, 4, 1), (BOOLEAN_WRITE_PORT + 4, 4, 1)] {
+            assert!(write(&mut d, &mut c, address, size, value).is_err());
+            assert_eq!(d.save(), before);
+            assert!(c.records.is_empty() && c.events.is_empty());
+        }
+        for size in [1, 2, 4, 8] {
+            assert!(read(&mut d, &mut c, BOOLEAN_WRITE_PORT, size).is_err());
+            assert_eq!(d.save(), before);
+            assert!(c.records.is_empty());
+        }
+        let mut strict = SystemControl::new(config(None)).unwrap();
+        assert!(!strict.windows().contains(&(BOOLEAN_WRITE_PORT, BOOLEAN_WRITE_PORT + 4)));
+        assert!(write(&mut strict, &mut c, BOOLEAN_WRITE_PORT, 4, 1).is_err());
+        assert!(c.records.is_empty());
+    }
+    #[test]
+    fn boolean_write_port_checkpoint_binds_presence_inputs_and_boolean_value() {
+        let mut d = SystemControl::new(boolean_config()).unwrap();
+        let initial = d.save();
+        d.restore(&initial).unwrap();
+        write(&mut d, &mut Clock::default(), BOOLEAN_WRITE_PORT, 4, 1).unwrap();
+        let written = d.save();
+        let mut other = SystemControl::new(boolean_config()).unwrap();
+        other.restore(&written).unwrap();
+        assert_eq!(other.save(), written);
+        for value in [json!(2), json!(-1), json!(true), json!("1")] {
+            let mut bad = written.clone();
+            bad["boolean_write_state"]["last_write"] = value;
+            assert!(other.restore(&bad).is_err());
+            assert_eq!(other.save(), written);
+        }
+        for path in ["boolean_write_state", "config"] {
+            let mut bad = written.clone();
+            if path == "config" { bad["config"]["boolean_write_fff4a400"] = Value::Null; }
+            else { bad[path] = Value::Null; }
+            assert!(other.restore(&bad).is_err());
+            assert_eq!(other.save(), written);
+        }
+        let mut bad = written.clone(); bad["admitted"] = json!(false);
+        assert!(other.restore(&bad).is_err());
+        let mut strict = SystemControl::new(config(None)).unwrap();
+        let before = strict.save();
+        assert!(strict.restore(&written).is_err());
+        assert_eq!(strict.save(), before);
+        assert!(d.restore(&before).is_err());
+        for port in [json!(true), json!({}), json!({"enabled": 1}),
+            json!({"enabled": true, "initial_value": 0})] {
+            let mut bad = serde_json::to_value(config(None)).unwrap();
+            bad["boolean_write_fff4a400"] = port;
+            assert!(serde_json::from_value::<Config>(bad).is_err());
+        }
+        let mut disabled = boolean_config();
+        disabled.boolean_write_fff4a400.as_mut().unwrap().enabled = false;
+        assert!(SystemControl::new(disabled).is_err());
+    }
+    #[test]
+    fn boolean_write_port_is_independent_of_core_pc_and_time() {
+        let mut states = Vec::new();
+        for (core, pc, now) in [(0, 0x1234, 0), (3, 0x5678, 12345)] {
+            let mut d = SystemControl::new(boolean_config()).unwrap();
+            let mut c = Clock { now, ..Default::default() };
+            for value in [1, 0, 1] {
+                let mut cx = Cx::new(&mut c, core, pc, 0);
+                d.write(&mut cx, BOOLEAN_WRITE_PORT, 4, value);
+                assert!(cx.take_refusal().is_none());
+            }
+            assert!(c.events.is_empty());
+            states.push(d.save());
+        }
+        assert_eq!(states[0], states[1]);
     }
     #[test]
     fn idle_event_is_a_noop() {

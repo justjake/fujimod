@@ -110,3 +110,33 @@ fn base_parameter_family_reuses_request_ownership_and_rejects_all_added_window_o
     v["xp4_functional_system_control"] = cfg;
     assert!(Session::new(serde_json::from_value(v).unwrap(), None, vec![]).is_err());
 }
+
+#[test]
+fn boolean_write_port_is_optional_exact_and_separate_from_dma_mux() {
+    let mut v = input();
+    v["xp4_functional_system_control"] = config();
+    let strict = Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).unwrap();
+    let state: Value = serde_json::from_str(&strict.device_state_json()["xp4-functional-system-control"]).unwrap();
+    assert!(state["boolean_write_state"].is_null());
+    // Absent port does not conflict with a separately declared owner.
+    v["control_requests"] = json!([[0xfff4a400u64, 8]]);
+    assert!(Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).is_ok());
+    v["xp4_functional_system_control"]["boolean_write_fff4a400"] = json!({"enabled": true});
+    let error = Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).err().unwrap();
+    assert!(error.contains("Overlapping"), "{error}");
+    for address in [0xfff4a3fcu64, 0xfff4a404] {
+        v["control_requests"] = json!([[address, 8]]);
+        assert!(Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).is_ok());
+    }
+    v["control_requests"] = json!([]);
+    v["storage_jedec"] = json!(0x20);
+    v["storage_geometry"] = json!([65536, 256, 100, 10]);
+    v["storage_irq"] = json!(37);
+    v["storage_dma_routes"] = json!((207u32..223).collect::<Vec<_>>());
+    let session = Session::new(serde_json::from_value(v.clone()).unwrap(), Some(vec![]), vec![]).unwrap();
+    let state: Value = serde_json::from_str(&session.device_state_json()["xp4-functional-system-control"]).unwrap();
+    assert_eq!(state["boolean_write_state"], json!({"last_write": null}));
+    assert!(session.device_state_json().contains_key("xp4-dma"));
+    v["xp4_functional_system_control"]["boolean_write_fff4a400"] = json!({"enabled": false});
+    assert!(Session::new(serde_json::from_value(v).unwrap(), None, vec![]).is_err());
+}
