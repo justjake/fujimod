@@ -424,6 +424,9 @@ pub fn flash<L: Lookup>(
 /// capture. The first checked firmware establishes the instruction grammar;
 /// each address and state input is recovered from its indexed routines.
 fn xp4_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<Value> {
+    if firmware == "xt3-511" {
+        return xp4_xt3_flash(index, firmware, image_origin);
+    }
     if firmware != "xs10-311" {
         return Err(format!(
             "{firmware}: XP4 mapped flash has not been located for this firmware"
@@ -645,14 +648,115 @@ fn xp4_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<
     }))
 }
 
+/// Locate X-T3 5.11's mapped XP4 flash reader and its initialized-state guard.
+fn xp4_xt3_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<Value> {
+    const HIGH_LEVEL_READER: u64 = 0x01074fb8;
+    const DMA_READER: u64 = 0x0107536c;
+    const DMA_TRANSFER: u64 = 0x01074df8;
+    const INITIALIZER: u64 = 0x01075808;
+    const CACHE_SYNC: u64 = 0x010763cc;
+    const HIGH_LEVEL_BYTES: u64 = 0x3b4;
+    const DMA_READER_BYTES: u64 = 0x304;
+    const DMA_TRANSFER_BYTES: u64 = 0x144;
+    const INITIALIZER_BYTES: u64 = 0x128;
+
+    let locator = Locator {
+        index,
+        firmware,
+        unit: "main".into(),
+    };
+    let high_level = locator.routine(HIGH_LEVEL_READER)?;
+    let reader = locator.routine(DMA_READER)?;
+    let transfer = locator.routine(DMA_TRANSFER)?;
+    let initializer = locator.routine(INITIALIZER)?;
+    let cache_sync = locator.routine(CACHE_SYNC)?;
+    let exact_span =
+        |routine: &Routine, start: u64, size: u64| routine.header.ranges == [(start, start + size)];
+    if !exact_span(&high_level, HIGH_LEVEL_READER, HIGH_LEVEL_BYTES)
+        || !exact_span(&reader, DMA_READER, DMA_READER_BYTES)
+        || !exact_span(&transfer, DMA_TRANSFER, DMA_TRANSFER_BYTES)
+        || !exact_span(&initializer, INITIALIZER, INITIALIZER_BYTES)
+        || !reader.has("cmp", "r2, #0xf4000000")
+    {
+        return Err("X-T3 flash reader boundaries or aperture check changed".into());
+    }
+
+    let reader_bytes = index
+        .read(firmware, "main", DMA_READER, DMA_READER_BYTES as usize)
+        .map_err(|error| error.to_string())?
+        .ok_or("unmapped X-T3 flash reader")?;
+    let words: Vec<u32> = reader_bytes
+        .chunks_exact(4)
+        .map(|bytes| u32::from_le_bytes(bytes.try_into().unwrap()))
+        .collect();
+    if words.len() != 193
+        || words[0] != 0xe92d_4ff0
+        || arm_mov_pair_for(words[26], words[27], 3)? != 0x0155_a69c
+        || arm_mov_pair_for(words[28], words[29], 2)? != 0x7766_6555
+        || arm_branch_target(DMA_READER + 0x170, words[92])? != DMA_TRANSFER
+        || arm_branch_target(DMA_READER + 0x110, words[68])? != CACHE_SYNC
+    {
+        return Err("X-T3 flash reader state or transfer path changed".into());
+    }
+
+    let state_address = arm_mov_pair_for(words[26], words[27], 3)?;
+    let references = index
+        .referrers(firmware, Some("main"), state_address)
+        .map_err(|error| error.to_string())?;
+    let mut reader_checks_state = false;
+    let mut initializer_sets_state = false;
+    for (function_id, reference) in references {
+        let function = index
+            .entry(function_id)
+            .map_err(|error| error.to_string())?
+            .ok_or("missing X-T3 flash state reference")?;
+        match (function.function.key.address, reference.kind.as_str()) {
+            (DMA_READER, "READ") => reader_checks_state = true,
+            (INITIALIZER, "WRITE") => initializer_sets_state = true,
+            _ => {}
+        }
+    }
+    if !reader_checks_state || !initializer_sets_state {
+        return Err(
+            "X-T3 flash initialized marker is not tied to its reader and initializer".into(),
+        );
+    }
+
+    if image_origin != 0x274 {
+        return Err("X-T3 update origin differs from its registered DAT bias".into());
+    }
+    Ok(json!({
+        "device":{"kind":"serial-nor"},
+        "window":{"address":0xf0000000u64,"size":0x4000000u64},
+        "e1_window":{"address":0xf0000000u64,"size":0x4000000u64},
+        "update_image":{"dat_offset":image_origin,"xor":255},
+        "transport":null,
+        "code_ranges":[
+            high_level.span("firmware flash reader"),
+            reader.span("stock flash reader"),
+            transfer.span("flash DMA transfer"),
+            initializer.span("flash controller initialization"),
+            cache_sync.span("flash destination cache maintenance")
+        ],
+        "state_checks":[
+            {"name":"flash driver initialized","address":state_address,"size":4,"value":0x77666555u32}
+        ],
+        "control":{"offset":0,"size":32768}
+    }))
+}
+
 fn arm_mov_pair(low: u32, high: u32) -> Result<u64> {
+    arm_mov_pair_for(low, high, 3)
+}
+
+fn arm_mov_pair_for(low: u32, high: u32, register: u32) -> Result<u64> {
     let immediate = |word: u32, opcode: u32| -> Result<u16> {
         if word & 0x0ff0_0000 != opcode {
             return Err("XP4 flash address is not built by MOVW/MOVT".into());
         }
         let rd = (word >> 12) & 0xf;
         let imm = (((word >> 16) & 0xf) << 12) | (word & 0xfff);
-        if rd != 3 {
+        if rd != register {
             return Err("XP4 flash address uses another register".into());
         }
         Ok(imm as u16)
