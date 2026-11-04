@@ -8,7 +8,7 @@
 //! registers a frame callback (0x88be60), so frames continue with bit 16 clear,
 //! and 0x8886f0 compares the register with its RAM copy apart from bit 8.
 //! +0x28 bit 1 is the frame level: it alternates between active (0) and blank
-//! (1) while running, raising the IRQ on every edge, and reads 1 while stopped
+//! (1) while running, driving the frame-level interrupt high while blank, and reads 1 while stopped
 //! (handler 0x887b60 re-arms on the opposite edge). The layer interrupt is
 //! raised on every blank entry while running: pipe 1's layer handler 0x88b7dc
 //! (registered on IRQ index 10 by 0x88bf78) applies the layer registers from
@@ -134,7 +134,7 @@ impl DisplayPipe {
             }
             edges += 1;
             self.state.blank = !self.state.blank;
-            raise(cx, self.irq)?;
+            drive(cx, self.irq, self.state.blank)?;
             if self.state.blank {
                 raise(cx, self.layer_irq)?;
             }
@@ -152,7 +152,8 @@ impl DisplayPipe {
         Ok(())
     }
 
-    fn put(&mut self, now: u64, block: usize, word: usize, value: u32) -> Result<(), String> {
+    fn put(&mut self, cx: &mut Cx<'_>, block: usize, word: usize, value: u32) -> Result<(), String> {
+        let now = cx.now();
         match (block, word) {
             (0, 0) => {
                 self.state.layer_due = if value & RESET == 0 {
@@ -167,9 +168,11 @@ impl DisplayPipe {
                 let runs = value & RUN != 0;
                 if !was && runs {
                     self.state.blank = false;
+                    drive(cx, self.irq, false)?;
                     self.state.frame_due = Some(self.after(now, self.options.active_ticks)?);
                 } else if was && !runs {
                     self.state.blank = true;
+                    drive(cx, self.irq, true)?;
                     self.state.frame_due = None;
                 }
                 self.state.output[0] = value;
@@ -190,6 +193,18 @@ impl DisplayPipe {
             (_, w) => self.state.update[w] = value,
         }
         Ok(())
+    }
+}
+
+/// Drive the frame-level output: high while blank.
+fn drive(cx: &mut Cx<'_>, line: Option<InterruptLine>, high: bool) -> Result<(), String> {
+    match line {
+        Some(InterruptLine::Core { core, line }) => cx.set_core_irq(core, line, high),
+        Some(InterruptLine::Shared(line)) => {
+            cx.set_irq(line, high);
+            Ok(())
+        }
+        None => Ok(()),
     }
 }
 
@@ -235,7 +250,7 @@ impl Device for DisplayPipe {
             cx.fail("EXR display-pipe word exceeds 32 bits");
             return;
         };
-        if let Err(error) = self.put(cx.now(), block, word, value) {
+        if let Err(error) = self.put(cx, block, word, value) {
             cx.fail(error);
         }
     }
@@ -327,22 +342,28 @@ mod tests {
     fn output_frame_level_alternates_and_raises_the_irq() {
         let mut model = pipe();
         let mut host = TestHost::new();
+        let level = |host: &TestHost| host.levels.get(&(0, 42)).copied();
         assert_eq!(read(&mut model, &mut host, BASE + 0x1028) & 2, 2);
         write(&mut model, &mut host, BASE + 0x1000, 0x1_0000);
         assert_eq!(read(&mut model, &mut host, BASE + 0x1028) & 2, 2);
         assert_eq!(model.next_deadline(host.now), None);
         write(&mut model, &mut host, BASE + 0x1000, 0x100);
         assert_eq!(read(&mut model, &mut host, BASE + 0x1028) & 2, 0);
+        assert_eq!(level(&host), Some(false));
         advance(&mut model, &mut host, 99);
         assert!(host.irqs.is_empty());
         advance(&mut model, &mut host, 100);
         assert_eq!(read(&mut model, &mut host, BASE + 0x1028) & 2, 2);
+        assert_eq!(level(&host), Some(true));
+        // The test host records a raised level as an IRQ; line 43 is the layer pulse.
         assert_eq!(host.irqs, [(0, 42), (0, 43)]);
         advance(&mut model, &mut host, 120);
         assert_eq!(read(&mut model, &mut host, BASE + 0x1028) & 2, 0);
-        assert_eq!(host.irqs, [(0, 42), (0, 43), (0, 42)]);
+        assert_eq!(level(&host), Some(false));
+        assert_eq!(host.irqs, [(0, 42), (0, 43)]);
         write(&mut model, &mut host, BASE + 0x1000, 0);
         assert_eq!(read(&mut model, &mut host, BASE + 0x1028) & 2, 2);
+        assert_eq!(level(&host), Some(true));
         assert_eq!(model.next_deadline(host.now), None);
     }
 

@@ -34,6 +34,7 @@ fn setup() -> (XMountLens, gpio::Gpio, irq::InterruptController, TestHost) {
         irq::Options {
             arbitration: irq::Arbitration::ActiveBitmap,
             edge_latch: irq::EdgeLatch::Always,
+            level_edges: irq::LevelEdges::Ignored,
         },
         irq::Wiring {
             base: 0x1000,

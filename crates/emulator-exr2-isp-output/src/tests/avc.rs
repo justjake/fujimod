@@ -165,6 +165,7 @@ fn partial_status_ack_holds_the_controller_level_through_clear_and_eoi() {
         irq::Options {
             arbitration: irq::Arbitration::ActiveBitmap,
             edge_latch: irq::EdgeLatch::Always,
+            level_edges: irq::LevelEdges::Ignored,
         },
         irq::Wiring {
             base: 0x1000,

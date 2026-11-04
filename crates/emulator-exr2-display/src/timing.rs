@@ -868,6 +868,7 @@ mod native_tests {
             irq::Options {
                 arbitration: irq::Arbitration::ActiveBitmap,
                 edge_latch: irq::EdgeLatch::Always,
+                level_edges: irq::LevelEdges::Ignored,
             },
             irq::Wiring {
                 base: 0xfffb4000,

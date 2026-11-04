@@ -33,18 +33,37 @@ pub enum EdgeLatch {
     Enabled,
 }
 
+/// How a level input on an edge-configured line (`source_config` bit set) is read.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LevelEdges {
+    /// The level is pending while high, whatever the line's configuration.
+    #[default]
+    Ignored,
+    /// The line latches the level's transitions selected by its two-bit `0x140`
+    /// mode (bit 0 rising, bit 1 falling) and its level is not pending. The EXR
+    /// Processor Pro kernel arms line 0x2a with mode 1 for IRQ index 6 (frame
+    /// handler 0x887b60 waiting for the blank level), so the line must fire on
+    /// that transition only.
+    Configured,
+}
+
 #[derive(Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
     pub arbitration: Arbitration,
     #[serde(default)]
     pub edge_latch: EdgeLatch,
+    #[serde(default)]
+    pub level_edges: LevelEdges,
 }
 
 #[derive(Default)]
 struct Pins {
     edges: [AtomicU32; 4],
     levels: [AtomicU32; 4],
+    rises: [AtomicU32; 4],
+    falls: [AtomicU32; 4],
     changed: AtomicBool,
     irq: AtomicBool,
     enabled: [AtomicU32; 4],
@@ -112,6 +131,8 @@ impl Inputs {
             self.0.levels[group].fetch_and(!bit, Ordering::Relaxed)
         };
         if (previous & bit != 0) != high {
+            let transitions = if high { &self.0.rises } else { &self.0.falls };
+            transitions[group].fetch_or(bit, Ordering::Relaxed);
             self.0.changed.store(true, Ordering::Relaxed);
         }
         Ok(())
@@ -220,6 +241,10 @@ struct Saved {
     registers: State,
     edges: [u32; 4],
     levels: [u32; 4],
+    #[serde(default)]
+    rises: [u32; 4],
+    #[serde(default)]
+    falls: [u32; 4],
     changed: bool,
     software: Vec<bool>,
 }
@@ -228,6 +253,7 @@ pub struct InterruptController {
     base: u64,
     arbitration: Arbitration,
     edge_latch: EdgeLatch,
+    level_edges: LevelEdges,
     inputs: Inputs,
     enables: Option<Box<dyn EnableOutput>>,
     software: Vec<SoftwareOutput>,
@@ -261,6 +287,7 @@ impl InterruptController {
             base: wiring.base,
             arbitration: options.arbitration,
             edge_latch: options.edge_latch,
+            level_edges: options.level_edges,
             inputs: wiring.inputs,
             enables: wiring.enables,
             software: wiring.software,
@@ -475,8 +502,9 @@ impl InterruptController {
                 }
                 self.state.active.pop();
                 for group in 0..4 {
-                    self.state.pending[group] |=
-                        self.inputs.0.levels[group].load(Ordering::Relaxed);
+                    self.state.pending[group] |= self.inputs.0.levels[group]
+                        .load(Ordering::Relaxed)
+                        & !self.level_edge_lines(group);
                 }
             }
             0x400..=0x5fc => self.state.vectors[((offset - 0x400) / 4) as usize] = Some(value),
@@ -506,12 +534,32 @@ impl InterruptController {
 }
 
 impl InterruptController {
+    /// Lines whose level inputs are read as configured transitions.
+    fn level_edge_lines(&self, group: usize) -> u32 {
+        match self.level_edges {
+            LevelEdges::Ignored => 0,
+            LevelEdges::Configured => self.state.source_config[group],
+        }
+    }
+    /// Rising and falling masks of one group from the two-bit `0x140` modes.
+    fn transition_masks(&self, group: usize) -> (u32, u32) {
+        let (mut rising, mut falling) = (0, 0);
+        for bit in 0..32 {
+            let line = group * 32 + bit;
+            let mode = self.state.configuration140[line / 16] >> (line % 16 * 2) & 3;
+            rising |= (mode & 1) << bit;
+            falling |= (mode >> 1 & 1) << bit;
+        }
+        (rising, falling)
+    }
     fn capture_state(&self) -> Saved {
         Saved {
             arbitration: self.arbitration,
             registers: self.state.clone(),
             edges: std::array::from_fn(|i| self.inputs.0.edges[i].load(Ordering::Relaxed)),
             levels: std::array::from_fn(|i| self.inputs.0.levels[i].load(Ordering::Relaxed)),
+            rises: std::array::from_fn(|i| self.inputs.0.rises[i].load(Ordering::Relaxed)),
+            falls: std::array::from_fn(|i| self.inputs.0.falls[i].load(Ordering::Relaxed)),
             changed: self.inputs.0.changed.load(Ordering::Relaxed),
             software: self.software.iter().map(|s| s.pulse.asserted()).collect(),
         }
@@ -554,6 +602,8 @@ impl InterruptController {
         for group in 0..4 {
             self.inputs.0.edges[group].store(saved.edges[group], Ordering::Relaxed);
             self.inputs.0.levels[group].store(saved.levels[group], Ordering::Relaxed);
+            self.inputs.0.rises[group].store(saved.rises[group], Ordering::Relaxed);
+            self.inputs.0.falls[group].store(saved.falls[group], Ordering::Relaxed);
         }
         self.inputs
             .0
@@ -631,12 +681,17 @@ impl Device for InterruptController {
     fn advance(&mut self, cx: &mut Cx<'_>) {
         if self.inputs.0.changed.swap(false, Ordering::Relaxed) {
             for group in 0..4 {
-                let mut edges = self.inputs.0.edges[group].swap(0, Ordering::Relaxed);
+                let rises = self.inputs.0.rises[group].swap(0, Ordering::Relaxed);
+                let falls = self.inputs.0.falls[group].swap(0, Ordering::Relaxed);
+                let edge_lines = self.level_edge_lines(group);
+                let (rising, falling) = self.transition_masks(group);
+                let mut edges = self.inputs.0.edges[group].swap(0, Ordering::Relaxed)
+                    | (rises & rising | falls & falling) & edge_lines;
                 if self.edge_latch == EdgeLatch::Enabled {
                     edges &= self.state.enabled[group];
                 }
                 self.state.pending[group] |=
-                    edges | self.inputs.0.levels[group].load(Ordering::Relaxed);
+                    edges | self.inputs.0.levels[group].load(Ordering::Relaxed) & !edge_lines;
             }
             self.publish(cx);
         }
@@ -685,6 +740,7 @@ mod tests {
                 Options {
                     arbitration,
                     edge_latch: EdgeLatch::Always,
+                    level_edges: LevelEdges::Ignored,
                 },
                 Wiring {
                     base: 0x1000,
@@ -856,6 +912,7 @@ mod edge_latch_tests {
             Options {
                 arbitration: Arbitration::ActiveBitmap,
                 edge_latch,
+                level_edges: LevelEdges::Configured,
             },
             Wiring {
                 base: 0x1000,
@@ -885,5 +942,27 @@ mod edge_latch_tests {
             inputs.pulse(42).unwrap();
             assert_eq!(pending(&mut d, &mut host), 1 << 10);
         }
+    }
+
+    #[test]
+    fn a_configured_edge_line_latches_only_its_selected_level_transition() {
+        let (mut d, inputs) = controller(EdgeLatch::Enabled);
+        let mut host = TestHost::new();
+        // Line 42: edge-configured (0x104 bit 10), mode 1 (rising) at 0x148 bits 20..21, enabled.
+        assert!(d.write_register(0x104, 1 << 10).is_ok());
+        assert!(d.write_register(0x148, 1 << 20).is_ok());
+        assert!(d.write_register(0x84, 1 << 10).is_ok());
+        inputs.level(42, true).unwrap();
+        assert_eq!(pending(&mut d, &mut host), 1 << 10);
+        assert!(d.write_register(0xe4, 1 << 10).is_ok());
+        assert_eq!(pending(&mut d, &mut host), 0);
+        inputs.level(42, false).unwrap();
+        assert_eq!(pending(&mut d, &mut host), 0);
+        // Mode 2 (falling).
+        assert!(d.write_register(0x148, 2 << 20).is_ok());
+        inputs.level(42, true).unwrap();
+        assert_eq!(pending(&mut d, &mut host), 0);
+        inputs.level(42, false).unwrap();
+        assert_eq!(pending(&mut d, &mut host), 1 << 10);
     }
 }
