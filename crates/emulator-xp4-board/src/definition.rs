@@ -157,6 +157,9 @@ pub struct Definition {
     pub temperature: Option<(i32, u64)>,
     #[serde(default)]
     pub power_spi: Option<(u64, bool, usize, usize, bool, BTreeMap<u8, u16>, u64)>,
+    /// Optional exact uninterpreted output; requires the power SPI peer.
+    #[serde(default)]
+    pub power_spi_command_output: Option<fujimod_emulator_xp4_io::power_serial::ExactCommandOutput>,
     #[serde(default)]
     pub checksum_power_spi: Option<(
         u64,

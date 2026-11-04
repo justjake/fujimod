@@ -1022,6 +1022,7 @@ impl Session {
             gpio_base,
             temperature,
             power_spi,
+            power_spi_command_output,
             checksum_power_spi,
             imaging,
             movdc,
@@ -1052,6 +1053,9 @@ impl Session {
         }
         if !discovery && cbar.is_none() {
             return Err("Strict ARMv7-A requires an explicit CBAR reset input".to_owned());
+        }
+        if power_spi_command_output.is_some() && power_spi.is_none() {
+            return Err("Command output requires power SPI peer".into());
         }
         if !discovery
             && power_spi
@@ -1476,7 +1480,7 @@ impl Session {
         if let Some((base, idle, port, pin, high, inputs, rtc_ticks)) = power_spi {
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .power_spi(base, idle, port, pin, high, inputs, rtc_ticks)?;
+                .power_spi(base, idle, port, pin, high, inputs, rtc_ticks, power_spi_command_output)?;
         }
         if let Some((
             base,
