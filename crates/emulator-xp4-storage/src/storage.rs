@@ -110,8 +110,9 @@ impl Nor {
         if size == 0 {
             return Err("Empty NOR mutation".into());
         }
+        let deadline = now.checked_add(ticks).ok_or("NOR mutation deadline overflow")?;
         self.write_enable = false;
-        self.pending = Some((now + ticks, mutation));
+        self.pending = Some((deadline, mutation));
         Ok(())
     }
     fn complete(&mut self, cx: &mut Cx<'_>) {
@@ -1505,6 +1506,91 @@ mod tests {
             vec![0xa5; 32]
         );
         (flash.save(), dma.save(), h.records)
+    }
+    #[test]
+    fn program_fifo_checkpoint_uses_arrival_time_and_resumes_the_accepted_stream() {
+        let make = || {
+            let p = port(vec![255; 8192], 0x20, Geometry {
+                erase_bytes: 4096, page_bytes: 256, erase_ticks: 20, page_ticks: 12,
+            }).unwrap();
+            (p.clone(), SerialFlashController::new(p, 37))
+        };
+        let (p, mut flash) = make();
+        let mut dma = DmaController::new(p.clone(), std::array::from_fn(|n| 207 + n as u32));
+        let mut h = ram_host();
+        write(&mut flash, &mut h, 0, CONTROLLER + 0x90, 0x06000001, 0);
+        h.now = 108;
+        event(&mut flash, &mut h, 0, 1);
+        h.now = 120;
+        for (o, v) in [(0x14, 0x1000), (0x18, FLASH + 0x1004), (0x10, 31),
+            (0x1c, 0x30f00), (0x20, 0x30f04), (0x24, 0), (0x28, 0x10201011)] {
+            write(&mut dma, &mut h, 1, DMA + o, v, 0);
+        }
+        write(&mut dma, &mut h, 1, 0xfff4a500, 0x12c2b, 0);
+        for (o, v) in [(0x20, 0x202), (0x78, FLASH + 0x1004), (0x7c, 32), (0x70, 1)] {
+            write(&mut flash, &mut h, 0, CONTROLLER + o, v, 0);
+        }
+        h.now = 128;
+        event(&mut flash, &mut h, 0, 4);
+        dma.advance(&mut Cx::new(&mut h, 0, 0, 1));
+        h.now = 146;
+        event(&mut dma, &mut h, 1, 0);
+        let saved = flash.save();
+        assert_eq!(saved["program_fifo"][0], json!(146));
+        let (resumed_port, mut resumed) = make();
+        resumed.restore(&saved).unwrap();
+        assert_eq!(resumed.save(), saved);
+        for model in [&mut flash, &mut resumed] {
+            model.advance(&mut Cx::new(&mut h, 0, 0, 0));
+            assert_eq!(model.next_deadline(h.now), Some(158));
+        }
+        h.now = 158;
+        for model in [&mut flash, &mut resumed] {
+            model.advance(&mut Cx::new(&mut h, 0, 0, 0));
+        }
+        assert_eq!(resumed.save(), flash.save());
+        assert_eq!(resumed_port.lock().unwrap().nor.read(FLASH + 0x1004, 32).unwrap(),
+            h.ram[0x1000..0x1020]);
+
+        // Every malformed FIFO must be rejected before changing the target.
+        let mut negatives = Vec::new();
+        for (field, value) in [("write", json!(false)), ("accepted", json!(false)),
+            ("accepted_at", json!(147)), ("size", json!(31)),
+            ("address", json!(FLASH + 255))] {
+            let mut invalid = saved.clone();
+            invalid["stream"][field] = value;
+            negatives.push(invalid);
+        }
+        let mut invalid = saved.clone();
+        invalid["stream"] = Value::Null;
+        negatives.push(invalid);
+        let mut invalid = saved.clone();
+        invalid["nor"]["write_enable"] = json!(false);
+        negatives.push(invalid);
+        let mut invalid = saved.clone();
+        invalid["program_fifo"][1] = json!([]);
+        negatives.push(invalid);
+        let mut invalid = saved.clone();
+        invalid["program_fifo"][0] = json!(u64::MAX);
+        negatives.push(invalid);
+        for invalid in negatives {
+            let before = resumed.save();
+            assert!(resumed.restore(&invalid).is_err());
+            assert_eq!(resumed.save(), before);
+        }
+    }
+    #[test]
+    fn nor_deadline_overflow_preserves_write_enable_and_pending_state() {
+        let mut nor = Nor::new(vec![255; 4096], 0x20, Geometry {
+            erase_bytes: 4096, page_bytes: 256, erase_ticks: 20, page_ticks: 12,
+        }).unwrap();
+        nor.write_enable = true;
+        for mutation in [Mutation::Erase { address: FLASH, size: 4096 },
+            Mutation::Program { address: FLASH + 4, bytes: vec![0xa5; 32] }] {
+            let before = nor.snapshot();
+            assert!(nor.begin(u64::MAX, mutation).is_err());
+            assert_eq!(nor.snapshot(), before);
+        }
     }
     #[test]
     fn peer_acceptance_dma_and_array_program_keep_their_deadlines_when_delivered_late() {

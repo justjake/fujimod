@@ -106,6 +106,7 @@ impl SerialFlashController {
             .registers
             .try_into()
             .map_err(|_| "Invalid XP4 flash register count")?;
+        let geometry = self.port.lock().unwrap().nor.geometry;
         if state.irq != self.irq
             || state.jedec != state.nor.jedec
             || state
@@ -118,7 +119,25 @@ impl SerialFlashController {
             || state
                 .program_fifo
                 .as_ref()
-                .is_some_and(|(a, b)| !extent(*a, b.len()))
+                .is_some_and(|(arrived, bytes)| {
+                    // The FIFO retains its DMA arrival tick, not an address.
+                    // Its destination belongs to the accepted write stream.
+                    bytes.is_empty()
+                        || arrived.checked_add(geometry.page_ticks).is_none()
+                        || state.nor.pending.is_some()
+                        || !state.nor.write_enable
+                        || !state.stream.as_ref().is_some_and(|request| {
+                            request.write
+                                && request.accepted
+                                && request.accepted_at <= *arrived
+                                && request.size == bytes.len()
+                                && extent(request.address, bytes.len())
+                                && request.address.wrapping_sub(FLASH) as usize
+                                    % geometry.page_bytes
+                                    + bytes.len()
+                                    <= geometry.page_bytes
+                        })
+                })
         {
             return Err("Invalid XP4 serial-flash checkpoint or route".into());
         }
