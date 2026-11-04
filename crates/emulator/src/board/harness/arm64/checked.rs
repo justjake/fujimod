@@ -321,7 +321,9 @@ impl Guard {
             || word & 0x7e00_0000 == 0x3400_0000
             || word & 0x7e00_0000 == 0x3600_0000
             || matches!(word & 0xffff_fc1f, 0xd61f_0000 | 0xd63f_0000 | 0xd65f_0000);
-        if word == 0xd503_201f || integer || branch {
+        // DSB SY is an ordering point in this single-core, bus-free routine:
+        // admitted RAM stores complete synchronously before the next entry.
+        if matches!(word, 0xd503_201f | 0xd503_3f9f) || integer || branch {
             return Ok(());
         }
         Err(format!("Unsupported instruction {word:#010x} at {pc:#x}"))
@@ -780,6 +782,22 @@ mod tests {
         assert_eq!(r.instructions, 2);
     }
     #[test]
+    fn dsb_sy_retires_between_checked_store_and_load() {
+        // STR X0,[X1]; DSB SY; LDR X2,[X1]; RET.
+        let mut b = board(&[0xf9000020, 0xd5033f9f, 0xf9400022, 0xd65f03c0]);
+        let mut o = options();
+        o.arguments = vec![0x1234_5678_9abc_def0, 0x4000];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.instructions, 4);
+        assert_eq!(r.registers["x2"], 0x1234_5678_9abc_def0);
+        assert_eq!(r.stores.len(), 1);
+        assert_eq!((r.stores[0].pc, r.stores[0].address), (0x1000, 0x4000));
+        let mut bytes = [0; 8];
+        b.read_memory(0, 0x4000, &mut bytes).unwrap();
+        assert_eq!(bytes, 0x1234_5678_9abc_def0u64.to_le_bytes());
+    }
+    #[test]
     fn denied_pair_has_no_partial_store_or_retired_instruction() {
         let mut b = board(&[0xa9000820, 0xd65f03c0]);
         let mut o = options();
@@ -869,7 +887,9 @@ mod tests {
             (0xd5380000, false),
             (0xd538001f, true),
             (0xd5181000, true),
-            (0xd5033f9f, true),
+            (0xd5033b9f, true), // DSB ISH remains outside this policy.
+            (0xd5033fbf, true), // DMB SY remains outside this policy.
+            (0xd5033fdf, true), // ISB remains outside this policy.
         ] {
             let mut b = board(&[word, 0xd65f03c0]);
             let mut o = options();
