@@ -21,10 +21,21 @@ pub struct Options {
     pub max_transfer_bytes: u32,
     pub ticks_per_byte: u64,
     pub minimum_ticks: u64,
-    /// Completion IRQ line.
+    /// Completion IRQ line; the X70's 0x5C unless declared.
+    #[serde(default = "x70_irq")]
     pub irq: u32,
-    /// Peripheral request select (control bits 2:0) of each bank's transmit FIFO.
+    /// Peripheral request select (control bits 2:0) of each bank's transmit
+    /// FIFO; the X70's request 1 for both banks unless declared.
+    #[serde(default = "x70_requests")]
     pub requests: [u32; 2],
+}
+
+const fn x70_irq() -> u32 {
+    0x5c
+}
+
+const fn x70_requests() -> [u32; 2] {
+    [1, 1]
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
