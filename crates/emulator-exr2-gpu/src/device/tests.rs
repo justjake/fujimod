@@ -65,6 +65,7 @@ fn setup_with_options(options: Options) -> (VectorGpu, Ram, [irq::InterruptContr
         irq::InterruptController::new(
             irq::Options {
                 arbitration: irq::Arbitration::Unique,
+                edge_latch: irq::EdgeLatch::Always,
             },
             irq::Wiring {
                 base: 0xfffb3000 + c as u64 * 4096,

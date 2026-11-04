@@ -1019,6 +1019,7 @@ mod tests {
             let mut controller = InterruptController::new(
                 IrqOptions {
                     arbitration: Arbitration::ActiveBitmap,
+                    edge_latch: fujimod_emulator_devices::exr2::irq::EdgeLatch::Always,
                 },
                 IrqWiring {
                     base,

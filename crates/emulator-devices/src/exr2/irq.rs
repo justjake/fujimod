@@ -19,10 +19,26 @@ pub enum Arbitration {
     ActiveBitmap,
 }
 
+/// Whether an input edge on a disabled line is latched as pending.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum EdgeLatch {
+    /// Edges latch whether or not the line is enabled.
+    #[default]
+    Always,
+    /// Edges on a disabled line are dropped. The EXR Processor Pro frame-level
+    /// handler 0x887b60 is attached for the next frame edge (0x887888) and
+    /// runs its queued callback only if it fires at that edge; an edge latched
+    /// before the attach would fire it at once.
+    Enabled,
+}
+
 #[derive(Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
     pub arbitration: Arbitration,
+    #[serde(default)]
+    pub edge_latch: EdgeLatch,
 }
 
 #[derive(Default)]
@@ -211,6 +227,7 @@ struct Saved {
 pub struct InterruptController {
     base: u64,
     arbitration: Arbitration,
+    edge_latch: EdgeLatch,
     inputs: Inputs,
     enables: Option<Box<dyn EnableOutput>>,
     software: Vec<SoftwareOutput>,
@@ -243,6 +260,7 @@ impl InterruptController {
         let controller = Self {
             base: wiring.base,
             arbitration: options.arbitration,
+            edge_latch: options.edge_latch,
             inputs: wiring.inputs,
             enables: wiring.enables,
             software: wiring.software,
@@ -613,8 +631,12 @@ impl Device for InterruptController {
     fn advance(&mut self, cx: &mut Cx<'_>) {
         if self.inputs.0.changed.swap(false, Ordering::Relaxed) {
             for group in 0..4 {
-                self.state.pending[group] |= self.inputs.0.edges[group].swap(0, Ordering::Relaxed)
-                    | self.inputs.0.levels[group].load(Ordering::Relaxed);
+                let mut edges = self.inputs.0.edges[group].swap(0, Ordering::Relaxed);
+                if self.edge_latch == EdgeLatch::Enabled {
+                    edges &= self.state.enabled[group];
+                }
+                self.state.pending[group] |=
+                    edges | self.inputs.0.levels[group].load(Ordering::Relaxed);
             }
             self.publish(cx);
         }
@@ -660,7 +682,10 @@ mod tests {
         let inputs = Inputs::default();
         (
             InterruptController::new(
-                Options { arbitration },
+                Options {
+                    arbitration,
+                    edge_latch: EdgeLatch::Always,
+                },
                 Wiring {
                     base: 0x1000,
                     inputs: inputs.clone(),
@@ -817,5 +842,48 @@ mod tests {
         corrupt["registers"]["priorities"] = serde_json::json!([]);
         assert!(d.restore(&corrupt).is_err());
         assert_eq!(saved, d.save());
+    }
+}
+
+#[cfg(test)]
+mod edge_latch_tests {
+    use super::*;
+    use crate::test_host::TestHost;
+
+    fn controller(edge_latch: EdgeLatch) -> (InterruptController, Inputs) {
+        let inputs = Inputs::default();
+        let controller = InterruptController::new(
+            Options {
+                arbitration: Arbitration::ActiveBitmap,
+                edge_latch,
+            },
+            Wiring {
+                base: 0x1000,
+                inputs: inputs.clone(),
+                enables: None,
+                software: vec![],
+            },
+        )
+        .unwrap();
+        (controller, inputs)
+    }
+
+    fn pending(d: &mut InterruptController, host: &mut TestHost) -> u32 {
+        let mut cx = host.cx();
+        d.advance(&mut cx);
+        d.state.pending[1]
+    }
+
+    #[test]
+    fn an_edge_on_a_disabled_line_is_dropped_only_when_declared() {
+        for (latch, expected) in [(EdgeLatch::Always, 1 << 10), (EdgeLatch::Enabled, 0)] {
+            let (mut d, inputs) = controller(latch);
+            let mut host = TestHost::new();
+            inputs.pulse(42).unwrap();
+            assert_eq!(pending(&mut d, &mut host), expected);
+            assert!(d.write_register(0x84, 1 << 10).is_ok());
+            inputs.pulse(42).unwrap();
+            assert_eq!(pending(&mut d, &mut host), 1 << 10);
+        }
     }
 }

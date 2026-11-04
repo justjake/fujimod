@@ -33,6 +33,7 @@ fn setup() -> (XMountLens, gpio::Gpio, irq::InterruptController, TestHost) {
     let controller = irq::InterruptController::new(
         irq::Options {
             arbitration: irq::Arbitration::ActiveBitmap,
+            edge_latch: irq::EdgeLatch::Always,
         },
         irq::Wiring {
             base: 0x1000,

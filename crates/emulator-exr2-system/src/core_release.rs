@@ -118,6 +118,7 @@ mod tests {
             irq::InterruptController::new(
                 irq::Options {
                     arbitration: irq::Arbitration::Unique,
+                    edge_latch: irq::EdgeLatch::Always,
                 },
                 irq::Wiring {
                     base: 0x1000,

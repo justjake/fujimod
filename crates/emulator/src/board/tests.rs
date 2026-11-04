@@ -93,6 +93,7 @@ fn build_rprofile_with_inputs(
         let controller = irq::InterruptController::new(
             irq::Options {
                 arbitration: irq::Arbitration::Unique,
+                edge_latch: irq::EdgeLatch::Always,
             },
             irq::Wiring {
                 base: 0xfffb3000,
@@ -580,6 +581,7 @@ fn per_core_irq_board_with_backend(counted: bool) -> (Board, Arc<Mutex<Vec<u64>>
         let mut controller = InterruptController::new(
             Options {
                 arbitration: Arbitration::ActiveBitmap,
+                edge_latch: fujimod_emulator_devices::exr2::irq::EdgeLatch::Always,
             },
             Wiring {
                 base,

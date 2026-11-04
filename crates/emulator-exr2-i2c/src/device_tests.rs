@@ -55,6 +55,7 @@ fn controllers(
         irq::InterruptController::new(
             irq::Options {
                 arbitration: irq::Arbitration::Unique,
+                edge_latch: irq::EdgeLatch::Always,
             },
             irq::Wiring {
                 base: 0xfffb3000 + core as u64 * 0x1000,

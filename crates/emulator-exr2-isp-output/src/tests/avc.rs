@@ -164,6 +164,7 @@ fn partial_status_ack_holds_the_controller_level_through_clear_and_eoi() {
     let mut controller = irq::InterruptController::new(
         irq::Options {
             arbitration: irq::Arbitration::ActiveBitmap,
+            edge_latch: irq::EdgeLatch::Always,
         },
         irq::Wiring {
             base: 0x1000,
