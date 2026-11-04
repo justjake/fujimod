@@ -30,6 +30,29 @@ fn spi2_menu_status_read_keeps_the_lens_deselected_and_delivers_the_reply() {
         .unwrap()
         .to_json()["devices"]
         .clone();
+    let body: serde_json::Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../catalog/bodies/x70/body.json"
+    )))
+    .unwrap();
+    fn status_route(value: &serde_json::Value) -> Option<&serde_json::Value> {
+        match value {
+            serde_json::Value::Object(object) => {
+                if object.get("name").and_then(serde_json::Value::as_str) == Some("lens_serial") {
+                    return value.get("model")?.get("routes")?.get(1);
+                }
+                object.values().find_map(status_route)
+            }
+            serde_json::Value::Array(values) => values.iter().find_map(status_route),
+            _ => None,
+        }
+    }
+    assert_eq!(
+        status_route(&document),
+        status_route(&body),
+        "catalog and boot status routes must agree"
+    );
+    assert!(status_route(&document).is_some());
     let shift = |configuration: u64, mcu_selected: bool, lens_selected: bool, status: u8| {
         let mut document = document.clone();
         document["nodes"].as_array_mut().unwrap().retain(|node| {
@@ -111,8 +134,10 @@ fn spi2_menu_status_read_keeps_the_lens_deselected_and_delivers_the_reply() {
         (6, true, true),
         (6, false, false),
     ] {
-        assert!(shift(configuration, mcu, lens, 0)
-            .unwrap_err()
-            .contains("no attached SPI route"));
+        assert!(
+            shift(configuration, mcu, lens, 0)
+                .unwrap_err()
+                .contains("no attached SPI route")
+        );
     }
 }
