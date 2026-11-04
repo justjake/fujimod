@@ -27,7 +27,7 @@ impl Decoder<'_> {
         self.words.get(&o).copied().unwrap_or(0)
     }
     /// `(width, height)` of a size word, or `None` for unsupported bits.
-    fn extent(word: u32) -> Option<(u32, u32)> {
+    pub fn extent(word: u32) -> Option<(u32, u32)> {
         (word & 0xf000_f000 == 0).then_some(((word >> 16) + 1, (word & 0xfff) + 1))
     }
     /// Composite the video layer and the enabled OSD layers; `Ok(None)` when
