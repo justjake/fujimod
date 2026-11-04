@@ -8,10 +8,28 @@ struct State {
     lists: usize,
     fail_write: bool,
     memory_reads: u8,
+    display_enabled: bool,
+    display_reads: u8,
 }
 #[derive(Clone, Default)]
 struct TestDevice(Arc<Mutex<State>>);
 impl Device for TestDevice {
+    fn display_outputs(&self) -> Vec<u32> {
+        if self.0.lock().unwrap().display_enabled {
+            vec![1]
+        } else {
+            vec![]
+        }
+    }
+    fn display_images(&mut self, _output: u32) -> Result<Vec<display::Image>> {
+        let mut s = self.0.lock().unwrap();
+        s.display_reads += 1;
+        Ok(vec![display::Image {
+            name: "frame.bmp".into(),
+            bytes: fujimod_framebuffer::bmp(1, 1, &[s.display_reads, 0, 0, 255]).unwrap(),
+        }])
+    }
+
     fn unload_helper(&mut self) -> Result<()> {
         self.0.lock().unwrap().calls.push(("unload".into(), 0, 0));
         Ok(())
@@ -337,4 +355,37 @@ fn unload_control_is_repeatable_and_rejects_other_writes() {
         2
     );
     assert!(fs.read(UNLOAD, 0, 1).unwrap().is_empty());
+}
+
+#[test]
+fn display_files_are_read_only_and_chunk_reads_share_one_open_snapshot() {
+    let device = TestDevice::default();
+    device.0.lock().unwrap().display_enabled = true;
+    let mut fs = CameraFs::new(device.clone(), vec![]).unwrap();
+    let display = fs.lookup(ROOT, "display").unwrap();
+    let output = fs.lookup(display.id, "1").unwrap();
+    let image = fs.lookup(output.id, "frame.bmp").unwrap();
+    assert_eq!(image.size, 126);
+    assert_eq!(fs.write(image.id, 0, b"x"), Err(libc::EROFS));
+    fs.open(image.id).unwrap();
+    let bytes = fs.read(image.id, 0, 126).unwrap();
+    fs.open(image.id).unwrap();
+    assert_eq!(fs.read(image.id, 122, 4).unwrap(), bytes[122..]);
+    fs.close(image.id).unwrap();
+    assert_eq!(fs.read(image.id, 122, 4).unwrap(), bytes[122..]);
+    fs.close(image.id).unwrap();
+    fs.open(image.id).unwrap();
+    assert_ne!(fs.read(image.id, 122, 4).unwrap(), bytes[122..]);
+    fs.close(image.id).unwrap();
+    fs.reclaim(image.id).unwrap();
+    assert_eq!(fs.node(image.id).unwrap_err(), libc::ESTALE);
+    assert!(
+        device
+            .0
+            .lock()
+            .unwrap()
+            .calls
+            .iter()
+            .all(|(name, _, _)| !name.starts_with("write"))
+    );
 }

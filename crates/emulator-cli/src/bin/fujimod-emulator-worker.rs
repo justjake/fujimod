@@ -257,7 +257,7 @@ impl Scanout {
         for (slot, format) in config.raw_formats.iter_mut().zip(self.raw_formats) {
             *slot = format
                 .as_deref()
-                .map(fujimod_emulator_graphics::raster::PixelOrder::parse)
+                .map(fujimod_framebuffer::raster::PixelOrder::parse)
                 .transpose()?;
         }
         Ok((self.base, config))

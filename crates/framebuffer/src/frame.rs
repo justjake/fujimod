@@ -55,7 +55,7 @@ impl State {
             Self::Str(s) => s.clone().into(),
             Self::Bytes(v) => serde_json::json!(v),
             Self::List(v) => J::Array(v.iter().map(Self::json).collect()),
-            Self::Dict(v) => J::Object(v.iter().map(|(k,v)|(k.clone(),v.json())).collect()),
+            Self::Dict(v) => J::Object(v.iter().map(|(k, v)| (k.clone(), v.json())).collect()),
         }
     }
 }

@@ -443,6 +443,8 @@ impl<F: Sessions> Client<F> {
 }
 
 pub struct UsbDevice {
+    display: Option<crate::display::Profile>,
+    capture_regions: Vec<Region>,
     queue: SyncSender<Work>,
     worker: Option<JoinHandle<()>>,
     flash_bytes: Option<u64>,
@@ -484,9 +486,10 @@ impl UsbDevice {
                     .map(|facts| (facts.product.clone(), facts.internal_version.clone()))
             })
             .ok_or("Selected firmware has no located debug identity")?;
+        let display = crate::display::Profile::from_soc(&selected.soc, selected.body.dram_bytes);
         let capability = selected.card_files;
         let has_card = capability.is_some();
-        let regions = selected
+        let regions: Vec<Region> = selected
             .state
             .ok_or("Selected firmware has no readable memory map")?
             .regions
@@ -581,6 +584,8 @@ impl UsbDevice {
         match ready_rx.recv().map_err(|e| e.to_string())? {
             Ok(()) => Ok((
                 Self {
+                    display,
+                    capture_regions: regions.clone(),
                     queue: tx,
                     worker: Some(worker),
                     flash_bytes,
@@ -628,7 +633,75 @@ fn report(error: fujimod_usb::Error) -> i32 {
     }
 }
 
+const MEMORY_CAPTURE_LIMIT: usize = 64 << 20;
 impl Device for UsbDevice {
+    fn display_outputs(&self) -> Vec<u32> {
+        self.display.as_ref().map_or_else(Vec::new, |p| p.outputs())
+    }
+    fn display_images(&mut self, output: u32) -> Result<Vec<crate::display::Image>> {
+        let profile = self.display.clone().ok_or(libc::ENOTSUP)?;
+        let regions = self.capture_regions.clone();
+        let mut cache: Option<(u64, Vec<u8>)> = None;
+        let result = profile.capture(output, |a, n| {
+            // The small register reads delimit attempts; never carry pixels across them.
+            if a >= 0xff000000 {
+                cache = None;
+            }
+            if let Some((base, bytes)) = &cache {
+                if a >= *base
+                    && a.checked_add(n as u64)
+                        .is_some_and(|end| end <= *base + bytes.len() as u64)
+                {
+                    let offset = (a - base) as usize;
+                    return Ok(bytes[offset..offset + n].to_vec());
+                }
+            }
+            let requested = n;
+            let n = if a < 0xff000000 && n < 262144 {
+                regions
+                    .iter()
+                    .find_map(|r| {
+                        let end = r.address.checked_add(r.size)?;
+                        (a >= r.address && a.checked_add(n as u64)? <= end)
+                            .then_some((end - a).min(262144) as usize)
+                    })
+                    .unwrap_or(n)
+            } else {
+                n
+            };
+            if n > MEMORY_CAPTURE_LIMIT {
+                return Err("Display memory read exceeds capture bounds".into());
+            }
+            let a = u32::try_from(a).map_err(|_| "Display address exceeds transport width")?;
+            let mut bytes = Vec::with_capacity(n);
+            while bytes.len() < n {
+                let count = (n - bytes.len()).min(64 << 20);
+                let address = a
+                    .checked_add(bytes.len() as u32)
+                    .ok_or("Display address overflow")?;
+                let part = self
+                    .memory(address, count as u32)
+                    .map_err(|e| format!("Display memory read: errno {e}"))?;
+                if part.len() != count {
+                    return Err("Short display memory read".into());
+                }
+                bytes.extend(part);
+            }
+            if n > requested {
+                let result = bytes[..requested].to_vec();
+                cache = Some((u64::from(a), bytes));
+                Ok(result)
+            } else {
+                Ok(bytes)
+            }
+        });
+        self.synchronize()?;
+        result.map_err(|error| {
+            eprintln!("fujimod-mount: {error}");
+            libc::EIO
+        })
+    }
+
     fn shutdown(&mut self) -> Result<()> {
         UsbDevice::shutdown(self)
     }

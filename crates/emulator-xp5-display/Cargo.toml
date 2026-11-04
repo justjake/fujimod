@@ -11,6 +11,8 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+fujimod-framebuffer-xp5.workspace = true
+fujimod-framebuffer.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-graphics.workspace = true
 fujimod-emulator-xp5-io.workspace = true

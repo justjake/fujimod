@@ -1,7 +1,8 @@
 //! Offline rendering of explicit captured register banks, without CPU execution
 //! or peripheral adapters. The memory reader belongs only to this host query.
 use fujimod_emulator_devices::Device;
-use fujimod_emulator_exr2_display::{Scanout, device::Observation};
+use fujimod_emulator_exr2_display::Scanout;
+use fujimod_framebuffer_exr2::Observation;
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict},

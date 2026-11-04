@@ -10,6 +10,14 @@
 - `flash`: a read-only file spanning the selected internal-storage window when
   a prepared reader artifact is supplied. Offsets are logical storage bytes;
   NAND readers return corrected main-area bytes.
+- `display/<output>/frame.bmp`: a flattened image when all active contributions
+  can be reconstructed by the selected processor decoder.
+- `display/<output>/layer/*.bmp`: individually rendered hardware groups/channels,
+  positioned on the output canvas over black. Names use register-group offsets
+  and channel numbers on EXR II/XPP, and enable-bit indices on XP4/XP5. They do
+  not infer application roles. Layer images retain the decoder's composition
+  behavior; they are not raw pixel-buffer dumps.
+- `display/<output>/state.json`: the sampled controller registers.
 - `regions.json`: the readable ranges, with names, addresses and sizes.
 - `unload-helper`: write `unload\n` to release the owned SD helper explicitly.
   The next SD operation reloads it.
@@ -170,6 +178,33 @@ macOS 15 hosts. The established [fuser](https://github.com/cberner/fuser) crate
 is another option through [macFUSE 5’s FSKit backend](https://github.com/macfuse/macfuse/wiki/FUSE-Backends);
 it requires macFUSE’s libraries at build time and its extension at runtime. The bridge adds IPC and copies; actual throughput needs to be
 measured on a camera before choosing further batching or a direct host.
+
+## Display snapshots
+
+Framebuffer interpretation lives in the processor-specific
+[framebuffer crates](../framebuffer/README.md), shared with the emulator display
+devices. The resolved SoC selects the decoder. Body DRAM bounds and declared
+pixel transports remain catalog inputs; firmware-specific shadow pointers are
+not used. Current supported output selections are EXR II banks 0/1, XPP bank 1,
+XP4 bank 1, and XP5 banks 0/1. Hardware output indices are preserved.
+
+Captures read controller registers, render the addressed memory, and reread the
+registers. A changed configuration retries at most three times. This checks
+configuration stability, not atomicity of pixels being updated in place. A failed
+memory read ends the capture. Unsupported full compositions omit `frame.bmp`
+while supported individual layers remain available. Disabled outputs expose
+only their state. XP5 converted planes remain unavailable on physical cameras;
+the emulator-specific converter encoding is never selected by this reader.
+The current memory transport accepts 32-bit addresses; an addressed plane beyond
+that range returns an I/O error.
+
+Images are uncompressed, top-down 32-bit BMP files. An open image retains one
+snapshot through reads and seeks. Simultaneous opens of the same FSKit item share
+that snapshot; after the last close, opening it again captures a fresh image.
+Directory capture results are cached for 250 ms. Captured images use at most
+128 MiB of host storage, released when FSKit reclaims their items. Capture closes
+its pending USB read burst before returning. No camera hooks or writes are added
+by the framebuffer decoder.
 
 ## Checks
 

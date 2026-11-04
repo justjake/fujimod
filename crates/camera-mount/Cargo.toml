@@ -8,6 +8,11 @@ publish.workspace = true
 description = "Camera SD files, read-only live memory and internal storage as a mounted filesystem"
 
 [dependencies]
+fujimod-framebuffer-xp5.workspace = true
+fujimod-framebuffer-xp4.workspace = true
+fujimod-framebuffer-xpp.workspace = true
+fujimod-framebuffer-exr2.workspace = true
+fujimod-framebuffer.workspace = true
 fujimod-usb.workspace = true
 fujimod-catalog.workspace = true
 fujimod-catalog-bulk.workspace = true

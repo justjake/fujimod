@@ -3,7 +3,8 @@
 //! phase routes. The input pixel clock and phase law are explicit functional
 //! assumptions, not measured silicon timing. No guest software is inspected.
 use fujimod_emulator_devices::{Cx, Device, graphics::scanout::Frame};
-use fujimod_emulator_graphics::raster::{self, PixelOrder, Plane};
+use fujimod_framebuffer::raster::{PixelOrder, Plane};
+use fujimod_framebuffer_xp4::{Picture, Video};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -16,16 +17,6 @@ struct State {
     frames: u64,
     sequence: u64,
     image_hash: Option<[u8; 32]>,
-}
-/// Selected by the processor graph; no implicit pixel-format fallback.
-#[derive(Clone, Copy)]
-pub enum Picture {
-    Bgra8888Straight,
-}
-/// Explicit linear video transport; hardware packing is not inferred from RAM.
-#[derive(Clone, Copy)]
-pub enum Video {
-    YyCbCr422,
 }
 pub struct Lcdc {
     base: u64,
@@ -126,118 +117,17 @@ impl Lcdc {
             }),
         )
     }
-    fn pair(&self, offset: usize, mask: u32) -> Result<(u32, u32), String> {
-        let word = self.r(offset);
-        if word & !(mask | mask << 16) != 0 {
-            return Err("Unsupported XP4 LCDC geometry bits".into());
-        }
-        Ok((word & mask, word >> 16))
-    }
-    fn plane(&self, video: bool, width: u32, height: u32) -> Result<Plane, String> {
-        let (address, stride, geometry, order) = if video {
-            if self.video.is_none() || self.r(0x164) > 3 || self.r(0x16c) & !0xfff != 0 {
-                return Err("Unsupported XP4 LCDC video transport/address/packing".into());
-            }
-            // 010ed130 writes descriptor+1ea (pitch in pixels) /4 to +16c.
-            // This selected packed422 transport therefore consumes 8 bytes
-            // per pitch unit, unlike the raw BGRA plane's pixel pitch at+50.
-            (
-                ((u64::from(self.r(0x164))) << 32) | u64::from(self.r(0x168)),
-                (self.r(0x16c) & 0xfff) * 8,
-                0x170,
-                PixelOrder::YyCbCr,
-            )
-        } else {
-            let source = (u64::from(self.r(0x40)) << 32) | u64::from(self.r(0x44));
-            let alternate = (u64::from(self.r(0x48)) << 32) | u64::from(self.r(0x4c));
-            if self.picture.is_none() || self.r(0x40) > 3 || source != alternate {
-                return Err("Unsupported XP4 LCDC alternate picture selection".into());
-            }
-            if self.r(0x50) & !0xfff != 0x10000 {
-                return Err("Unsupported XP4 LCDC raw picture mode".into());
-            }
-            (source, (self.r(0x50) & 0xfff) * 4, 0x54, PixelOrder::Bgra)
-        };
-        if self.r(geometry + 0x10) != 0 || self.r(geometry + 0x14) != 0 {
-            return Err("Unsupported XP4 LCDC picture crop or fractional phase".into());
-        }
-        let (sw, sh) = self.pair(geometry, 0xfff)?;
-        let (x, y) = self.pair(geometry + 4, 0x1fff)?;
-        let (w, h) = self.pair(geometry + 8, 0xfff)?;
-        let (dx, dy) = self.pair(geometry + 12, 0x7fff)?;
-        if sw == 0
-            || sh == 0
-            || w == 0
-            || h == 0
-            || dx == 0
-            || dy == 0
-            || address == 0
-            || address & 3 != 0
-            || x + w > width
-            || y + h > height
-            || ((w - 1) * dx >> 12) >= sw
-            || ((h - 1) * dy >> 12) >= sh
-        {
-            return Err("Invalid XP4 LCDC picture geometry/address".into());
-        }
-        Ok(Plane {
-            address,
-            stride,
-            source_x: 0,
-            source_y: 0,
-            source_width: sw,
-            source_height: sh,
-            sampling: Some([dx, dy]),
-            work_x: x,
-            work_y: y,
-            work_width: w,
-            work_height: h,
-            order,
-        })
-    }
     fn capture(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
         if self.picture.is_none() && self.video.is_none() {
             return Ok(());
         }
-        let enable = self.r(8);
-        if enable & !0x11010 != 0 {
-            return Err("Unsupported XP4 LCDC active layer selection".into());
-        }
-        // 010ed130 maps context+e0 bit4 to the video group at+164.
-        // +8 bit16 is output control; it does not enable the group at+130.
-        let width = self.r(0x14) & 0x3fff;
-        let height = self.r(0x20) & 0x1fff;
-        if width as u64 * height as u64 > 16_777_216 {
-            return Err("XP4 LCDC output exceeds capture bounds".into());
-        }
-        let mut planes = Vec::new();
-        for (bit, video) in [(4, true), (12, false)] {
-            if enable & (1 << bit) != 0 {
-                planes.push(self.plane(video, width, height)?);
-            }
-        }
-        let Some(top) = planes.last() else {
-            return self.status(cx, false, 0, None, &[]);
-        };
-        let source = top.address;
-        let format = if top.order == PixelOrder::YyCbCr {
-            "yycbcr422"
-        } else {
-            "bgra8888-straight"
-        };
-        let mut rgba = vec![0; width as usize * height as usize * 4];
-        for pixel in rgba.chunks_exact_mut(4) {
-            pixel[3] = 255;
-        }
-        for plane in planes.iter().copied() {
-            raster::composite(
-                |address, count| cx.ram_bytes(address, count),
-                plane,
-                width,
-                height,
-                &mut rgba,
-            )?;
-        }
+        let Some(output)=fujimod_framebuffer_xp4::decode(&self.state.regs,self.picture,self.video)? else {return self.status(cx,false,0,None,&[])};
+        let (width,height)=(output.width,output.height);
+        let planes:Vec<_>=output.layers.iter().map(|layer|layer.plane).collect();
+        let top=planes.last().unwrap();
+        let source=top.address;
+        let format=if top.order==PixelOrder::YyCbCr{"yycbcr422"}else{"bgra8888-straight"};
+        let rgba=output.render(|a,n|cx.ram_bytes(a,n))?;
         let mut digest = Sha256::new();
         digest.update(width.to_le_bytes());
         digest.update(height.to_le_bytes());

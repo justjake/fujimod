@@ -1,7 +1,7 @@
 //! Native scanout registers and reset deadlines. Host rendering is observational.
-use super::scanout::{self, BackdropProfile, Compositor, GraphicsProfile, RectangleComposition, ScanoutHost};
-use fujimod_emulator_devices::exr2::scanout_frame::Frame;
-use fujimod_emulator_devices::{Action, Cx, Device, Record};
+use fujimod_framebuffer_exr2::{self as scanout, Observation, BackdropProfile, Compositor, GraphicsProfile, RectangleComposition, ScanoutHost};
+use fujimod_framebuffer::frame::Frame;
+use fujimod_emulator_devices::{Action, Cx, Device, Record, Value as EventValue};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -127,9 +127,9 @@ impl Scanout {
                         cx.fail("scanout reset deadline overflow");
                         return;
                     };
-                    let pipe = scanout::reset_fields(token).0;
+                    let pipe = reset_fields(token).0;
                     self.deadlines
-                        .retain(|t, _| scanout::reset_fields(*t).0 != pipe);
+                        .retain(|t, _| reset_fields(*t).0 != pipe);
                     self.deadlines.insert(token, due);
                 }
                 _ => cx.fail("unsupported scanout device effect"),
@@ -142,8 +142,8 @@ impl Scanout {
         if saved.deadlines.len() > 2
             || saved.deadlines.iter().any(|(token, due)| {
                 *due > i64::MAX as u64
-                    || scanout::reset_fields(*token).1
-                        != saved.pipes[scanout::reset_fields(*token).0].generation
+                    || reset_fields(*token).1
+                        != saved.pipes[reset_fields(*token).0].generation
             })
             || saved.pipes.iter().enumerate().any(|(i, p)| {
                 p.generation < 0
@@ -226,8 +226,7 @@ impl Device for Scanout {
         }
         let mut actions = Vec::new();
         if let Err(e) =
-            self.compositor
-                .write(cx.cpu as i64, address, size.into(), value, &mut actions)
+            write_registers(&mut self.compositor, cx.cpu as i64, address, size.into(), value, &mut actions)
         {
             cx.fail(e.0);
             return;
@@ -249,8 +248,7 @@ impl Device for Scanout {
             }
             self.deadlines.remove(&token);
             let mut actions = Vec::new();
-            self.compositor
-                .complete(token, cx.now() as i64, &mut actions);
+            complete(&mut self.compositor, token, cx.now() as i64, &mut actions);
             self.actions(cx, actions);
         }
     }
@@ -273,53 +271,6 @@ impl Device for Scanout {
 }
 
 /// The host supplies only addressed memory. Color conversion stays in Rust.
-pub struct Observation<'a> {
-    pub read: &'a mut dyn FnMut(u64, usize) -> Result<Vec<u8>, String>,
-    pub diagnostic_hashes: bool,
-}
-impl ScanoutHost for Observation<'_> {
-    fn diagnostic_hashes(&self) -> bool {
-        self.diagnostic_hashes
-    }
-    fn read_bytes(
-        &mut self,
-        address: u64,
-        count: usize,
-        _cpu: i64,
-    ) -> fujimod_emulator_devices::record::Result<Vec<u8>> {
-        (self.read)(address, count).map_err(Into::into)
-    }
-    fn render_rgb(
-        &mut self,
-        raw: &[u8],
-        width: usize,
-        height: usize,
-        stride: usize,
-        packing: &str,
-        matrix: &str,
-    ) -> fujimod_emulator_devices::record::Result<Vec<u8>> {
-        fujimod_emulator_imaging::packed_color::decode(
-            raw,
-            width as u64,
-            height as u64,
-            stride as u64,
-            packing,
-            matrix,
-        )
-        .map_err(Into::into)
-    }
-    fn encode_png(
-        &mut self,
-        _rgb: &[u8],
-        _width: usize,
-        _height: usize,
-    ) -> fujimod_emulator_devices::record::Result<Option<Vec<u8>>> {
-        Ok(None)
-    }
-    fn record(&mut self, _record: Record) -> fujimod_emulator_devices::record::Result<()> {
-        Err("host scanout observation cannot emit device effects".into())
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -655,7 +606,7 @@ impl fujimod_emulator_devices::capability::ScanoutSource for Scanout {
         pixels: bool,
         read: &mut dyn FnMut(u64, usize) -> std::result::Result<Vec<u8>, String>,
         diagnostic_hashes: bool,
-    ) -> std::result::Result<Option<fujimod_emulator_devices::exr2::scanout_frame::Frame>, String> {
+    ) -> std::result::Result<Option<fujimod_framebuffer::frame::Frame>, String> {
         Scanout::frame(self, instance, pixels, &mut Observation { read, diagnostic_hashes })
     }
     fn main_frame(
@@ -664,7 +615,66 @@ impl fujimod_emulator_devices::capability::ScanoutSource for Scanout {
         pixels: bool,
         read: &mut dyn FnMut(u64, usize) -> std::result::Result<Vec<u8>, String>,
         diagnostic_hashes: bool,
-    ) -> std::result::Result<Option<fujimod_emulator_devices::exr2::scanout_frame::Frame>, String> {
+    ) -> std::result::Result<Option<fujimod_framebuffer::frame::Frame>, String> {
         Scanout::main_frame(self, instance, pixels, &mut Observation { read, diagnostic_hashes })
     }
 }
+
+/// Reset completion tokens: bit0 is the pipe, bit1 the requesting CPU,
+/// and the remaining bits the generation. Core indices are 0 and 1.
+pub fn reset_token(pipe: usize, generation: i64, cpu: i64) -> u64 {
+    (generation as u64) << 2 | ((cpu as u64) & 1) << 1 | pipe as u64
+}
+pub fn reset_fields(token: u64) -> (usize, i64, i64) {
+    (
+        (token & 1) as usize,
+        (token >> 2) as i64,
+        ((token >> 1) & 1) as i64,
+    )
+}
+    /// Guest writes return their record and two-tick reset deadline in order.
+fn write_registers(
+        compositor: &mut Compositor,
+        cpu: i64,
+        a: u64,
+        size: u32,
+        v: u32,
+        actions: &mut Vec<fujimod_emulator_devices::Action>,
+    ) -> fujimod_framebuffer::Result<()> {
+        let (i, o) = scanout::address(a, size)?;
+        let p = &mut compositor.pipes[i];
+        let old = p.regs.get_or_zero(o);
+        p.regs.insert(o, v);
+        p.written.insert(o);
+        if o == 0 && old & 0x10000 != 0 && v & 0x10000 == 0 {
+            // Clearing bit 16 starts reset. No other bit is made ready;
+            // existing configuration is retained (reset behavior is unmeasured).
+            p.generation += 1;
+            actions.push(fujimod_emulator_devices::Action::Log(Record::new(
+                "Image-engine reset start",
+                [("instance", EventValue::int(i as i64)), ("cpu", EventValue::int(cpu))],
+            )));
+            actions.push(fujimod_emulator_devices::Action::Schedule {
+                delay: 2,
+                token: reset_token(i, p.generation, cpu),
+            });
+        }
+        Ok(())
+    }
+fn complete(
+        compositor: &mut Compositor,
+        token: u64,
+        _now: i64,
+        actions: &mut Vec<fujimod_emulator_devices::Action>,
+    ) {
+        let (i, generation, cpu) = reset_fields(token);
+        let p = &mut compositor.pipes[i];
+        if generation == p.generation {
+            p.regs.insert(0, p.regs.get_or_zero(0) | 0x10000);
+            p.reset_completions += 1;
+            actions.push(fujimod_emulator_devices::Action::Log(Record::new(
+                "Image-engine reset complete",
+                [("instance", EventValue::int(i as i64)), ("cpu", EventValue::int(cpu))],
+            )));
+        }
+    }
