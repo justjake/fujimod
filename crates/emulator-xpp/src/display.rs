@@ -114,6 +114,33 @@ impl Device for FrameClock {
         self.next = next;
         Ok(())
     }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.next)
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        if !saved.children().is_empty() || !saved.blobs().is_empty() {
+            return Err("Display frame checkpoint has unexpected parts".into());
+        }
+        let next: u64 = saved.decode(self.name())?;
+        if next == 0 || next % self.period != 0 {
+            return Err("Invalid display frame checkpoint".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        self.next = saved.decode(self.name())?;
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
 }
 
 const CONTROL: u64 = 0x000;
@@ -442,36 +469,104 @@ impl Device for Output {
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let rows: Vec<(u64, u32)> = serde_json::from_value(value["words"].clone())
             .map_err(|e| format!("Invalid display output checkpoint: {e}"))?;
-        if rows
+        fn field<T: serde::de::DeserializeOwned>(value: &Value, name: &str) -> Result<T, String> {
+            serde_json::from_value(value[name].clone())
+                .map_err(|e| format!("Invalid display output checkpoint: {e}"))
+        }
+        let state = OutputState {
+            words: rows.into_iter().collect(),
+            capture: if self.scanout.is_some() {
+                field(value, "scanout")?
+            } else {
+                Capture::default()
+            },
+            handshake: if self.handshake_ticks.is_some() {
+                field(value, "handshake")?
+            } else {
+                Handshake::default()
+            },
+        };
+        self.check(&state)?;
+        self.apply(state);
+        Ok(())
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &OutputState {
+                words: self.words.clone(),
+                capture: self.capture.clone(),
+                handshake: self.handshake.clone(),
+            },
+        )
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        if !saved.children().is_empty() || !saved.blobs().is_empty() {
+            return Err("Display output checkpoint has unexpected parts".into());
+        }
+        self.check(&saved.decode(self.name())?)
+    }
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let state = saved.decode(self.name())?;
+        self.apply(state);
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
+}
+
+/// Mutable display output state: words, capture clock and handshake.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OutputState {
+    words: BTreeMap<u64, u32>,
+    capture: Capture,
+    handshake: Handshake,
+}
+impl Output {
+    fn check(&self, state: &OutputState) -> Result<(), String> {
+        if state
+            .words
             .iter()
             .any(|(offset, v)| offset & 3 != 0 || *offset >= self.size || *v == 0)
         {
             return Err("Invalid display output checkpoint".into());
         }
-        let capture = match self.scanout {
+        match self.scanout {
             Some(scanout) => {
-                let capture: Capture = serde_json::from_value(value["scanout"].clone())
-                    .map_err(|e| format!("Invalid display output checkpoint: {e}"))?;
-                if capture.next == 0 || capture.next % scanout.period != 0 {
+                if state.capture.next == 0 || state.capture.next % scanout.period != 0 {
                     return Err("Invalid display output checkpoint".into());
                 }
-                capture
             }
-            None => Capture::default(),
-        };
-        self.handshake = if self.handshake_ticks.is_some() {
-            let state: Handshake =
-                serde_json::from_value(value["handshake"].clone()).map_err(|e| e.to_string())?;
-            if state.status && state.due.is_some() {
-                return Err("Invalid display handshake checkpoint".into());
+            None => {
+                if state.capture.next != 0
+                    || state.capture.sequence != 0
+                    || state.capture.hash.is_some()
+                {
+                    return Err("Invalid display output checkpoint".into());
+                }
             }
-            state
-        } else {
-            Handshake::default()
-        };
-        self.words = rows.into_iter().collect();
-        self.capture = capture;
+        }
+        if state.handshake.status && state.handshake.due.is_some()
+            || self.handshake_ticks.is_none()
+                && (state.handshake.status || state.handshake.due.is_some())
+        {
+            return Err("Invalid display handshake checkpoint".into());
+        }
         Ok(())
+    }
+    fn apply(&mut self, state: OutputState) {
+        self.words = state.words;
+        self.capture = state.capture;
+        self.handshake = state.handshake;
     }
 }
 

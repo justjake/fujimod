@@ -1184,6 +1184,15 @@
         ]
       }
     },
+    "function_buttons": {
+      "store": "main",
+      "offset": 351,
+      "values": {
+        "function_0_image_size": [
+          4
+        ]
+      }
+    },
     "white_balance": {
       "store": "main",
       "offset": 500,

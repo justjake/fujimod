@@ -5,6 +5,8 @@ pub mod adc;
 pub mod blocks;
 pub mod board;
 pub mod boot;
+#[cfg(test)]
+mod checkpoint_tests;
 pub mod clocks;
 pub mod development;
 pub mod display;

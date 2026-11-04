@@ -208,6 +208,14 @@ impl Device for Engine {
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.check(&state)?;
+        self.state = state;
+        Ok(())
+    }
+    fujimod_emulator_devices::checkpoint_state!(state: State, Self::check);
+}
+impl Engine {
+    fn check(&self, state: &State) -> Result<(), String> {
         let started = state.words.get(&CONTROL).is_some_and(|w| w & START != 0);
         if started != state.due.is_some()
             || state.due.is_some_and(|at| at % self.period != 0)
@@ -215,7 +223,6 @@ impl Device for Engine {
         {
             return Err("Invalid statistics engine checkpoint".into());
         }
-        self.state = state;
         Ok(())
     }
 }

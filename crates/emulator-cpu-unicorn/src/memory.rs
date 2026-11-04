@@ -367,6 +367,16 @@ impl Memory {
         let len = s.views.len();
         s.views.reserve(capacity.saturating_sub(len));
     }
+    /// The backings declared for `core`: external mutable memory a whole-board
+    /// keyframe must own. Aliases of one backing appear once per alias.
+    pub(crate) fn backings(&self, core: usize) -> Vec<(std::ptr::NonNull<u8>, usize)> {
+        self.state()
+            .bindings
+            .iter()
+            .filter(|v| v.core == core)
+            .filter_map(|v| Some((std::ptr::NonNull::new(v.pointer as *mut u8)?, v.bytes)))
+            .collect()
+    }
     pub(crate) fn undeclare(&self, core: usize, address: u64, bytes: usize) {
         Self::remove_range(&mut self.state().bindings, core, address, bytes);
     }

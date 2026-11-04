@@ -155,12 +155,39 @@ impl Bus for Parts {
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone())
             .map_err(|e| format!("invalid I2C parts checkpoint: {e}"))?;
+        self.check(&state)?;
+        self.state = state;
+        Ok(())
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode("xpp-i2c-parts", &self.state)
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        if !saved.children().is_empty() || !saved.blobs().is_empty() {
+            return Err("I2C parts checkpoint has unexpected parts".into());
+        }
+        self.check(&saved.decode("xpp-i2c-parts")?)
+    }
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        self.state = saved.decode("xpp-i2c-parts")?;
+        Ok(())
+    }
+}
+impl Parts {
+    fn check(&self, state: &State) -> Result<(), String> {
         if state.registers.len() != self.parts.len()
             || state.active.is_some_and(|i| i >= self.parts.len())
+            || state.transfers.len() > KEPT_TRANSFERS
         {
             return Err("I2C parts checkpoint differs from the declared parts".into());
         }
-        self.state = state;
         Ok(())
     }
 }

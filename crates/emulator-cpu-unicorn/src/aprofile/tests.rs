@@ -339,3 +339,45 @@ fn completed_store_observers_see_ram_and_can_stop_before_the_next_entry() {
     run(&cpu, 0x100c, 1);
     assert_eq!(value(&cpu, Register::X(0)), 43);
 }
+
+#[test]
+fn armv7a_checkpoint_reports_its_backings_fingerprints_and_imports_into_a_fresh_core() {
+    let library = crate::test_support::library();
+    let open = || {
+        let raw = library.open(Model::CortexA7, 1 << 20).unwrap();
+        let cpu = Core::new(raw, Memory::default()).unwrap();
+        cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+        cpu
+    };
+    let set = |cpu: &Core, n: usize, value: u32| {
+        cpu.write_register(arm::CORE[n], &value.to_le_bytes())
+            .unwrap()
+    };
+    let cpu = open();
+    assert_eq!(
+        cpu.checkpoint_backings()
+            .unwrap()
+            .iter()
+            .map(|b| b.1)
+            .collect::<Vec<_>>(),
+        [0x4000]
+    );
+    set(&cpu, 3, 0x1234);
+    cpu.set_interrupt(Interrupt::Irq, true).unwrap();
+    let fingerprint = cpu.fingerprint().unwrap();
+    assert_eq!(cpu.fingerprint().unwrap(), fingerprint);
+    let saved = cpu.snapshot(None).unwrap();
+    let bytes = saved.export().unwrap();
+    set(&cpu, 3, 0x9999);
+    cpu.set_interrupt(Interrupt::Irq, false).unwrap();
+    assert_ne!(cpu.fingerprint().unwrap(), fingerprint);
+    cpu.restore(&*saved).unwrap();
+    assert_eq!(cpu.fingerprint().unwrap(), fingerprint);
+    // A fresh processor adopts the exported state, pending IRQ included.
+    let fresh = open();
+    assert_ne!(fresh.fingerprint().unwrap(), fingerprint);
+    let imported = fresh.import_snapshot(&bytes).unwrap();
+    fresh.restore(&*imported).unwrap();
+    assert_eq!(fresh.fingerprint().unwrap(), fingerprint);
+    assert!(fresh.import_snapshot(&bytes[..bytes.len() - 1]).is_err());
+}

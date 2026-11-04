@@ -5,8 +5,8 @@
   "model": "X-T20",
   "version": "2.11",
   "facts": {
-    "located": 24,
-    "total": 24
+    "located": 30,
+    "total": 30
   },
   "boot_rom": null,
   "tracks": [
@@ -52,6 +52,11 @@
         {
           "id": "restart-facts",
           "title": "USB restart request located",
+          "result": "not-run"
+        },
+        {
+          "id": "card-files",
+          "title": "Optional card file access located",
           "result": "not-run"
         },
         {
@@ -248,8 +253,8 @@
       "result": "not-run"
     },
     "playback-picture": {
-      "result": "partial",
-      "passed": 2,
+      "result": "pass",
+      "passed": 3,
       "total": 3
     },
     "playback-movie": {
@@ -259,7 +264,7 @@
       "result": "not-run"
     },
     "sd": {
-      "result": "pass",
+      "result": "stale",
       "passed": 2,
       "total": 2
     },

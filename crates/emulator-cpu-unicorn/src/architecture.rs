@@ -42,7 +42,7 @@ impl Context {
     }
 }
 impl Core {
-    fn cp15(
+    pub(crate) fn cp15(
         &self,
         selector: (u32, u32, u32, u32),
         secure: u32,

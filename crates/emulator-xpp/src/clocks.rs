@@ -193,6 +193,9 @@ impl Device for ClockControl {
         self.state = state;
         Ok(())
     }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
 }
 #[cfg(test)]
 mod tests {

@@ -75,10 +75,17 @@ impl Device for KeyLines {
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.check(&state)?;
+        self.state = state;
+        Ok(())
+    }
+    fujimod_emulator_devices::checkpoint_state!(state: State, Self::check);
+}
+impl KeyLines {
+    fn check(&self, state: &State) -> Result<(), String> {
         if state.poll_at % self.poll != 0 {
             return Err("Invalid key lines checkpoint".into());
         }
-        self.state = state;
         Ok(())
     }
 }

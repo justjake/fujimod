@@ -1964,6 +1964,47 @@ impl Device for Renderer {
         *self.state.lock().unwrap() = state;
         Ok(())
     }
+    /// Complete engine and stream state plus the host-request counters that
+    /// the diagnostic encoding skips. A request waiting for its host result
+    /// is outside a checkpoint: the host owns the other half of it.
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        let state = self.state.lock().map_err(|_| "DMP state poisoned")?;
+        if state.host_request.is_some() {
+            return Err("DMP checkpoint requires no pending host request".into());
+        }
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &(&*state, state.next_host_request, state.gpu_lists),
+        )
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        if !saved.children().is_empty() || !saved.blobs().is_empty() {
+            return Err("DMP checkpoint has unexpected parts".into());
+        }
+        let (state, _, _): (State, u64, u64) = saved.decode(self.name())?;
+        if state.pending.is_some() != state.deadline.is_some() || state.command_ack > 3 {
+            return Err("Invalid DMP pending DMA/checkpoint state".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let (mut state, next_host_request, gpu_lists): (State, u64, u64) =
+            saved.decode(self.name())?;
+        state.next_host_request = next_host_request;
+        state.gpu_lists = gpu_lists;
+        *self.state.lock().map_err(|_| "DMP state poisoned")? = state;
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
     fn next_deadline(&self, _: u64) -> Option<u64> {
         self.state.lock().unwrap().deadline
     }

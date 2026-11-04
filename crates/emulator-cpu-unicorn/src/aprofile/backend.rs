@@ -19,6 +19,9 @@ impl Snapshot for Saved {
     fn as_any(&self) -> &dyn Any {
         self
     }
+    fn export(&self) -> Result<Vec<u8>, String> {
+        crate::durable::encode(&(self.raw.export()?, self.irq, self.fiq))
+    }
 }
 impl Cpu for Core {
     forward! {
@@ -324,6 +327,38 @@ impl Cpu for Core {
             e.prepare_code_write()?;
         }
         Ok(())
+    }
+    /// Every mapped backing is external: the processor snapshot holds
+    /// registers only, and the board refuses any backing it does not own.
+    fn checkpoint_backings(&self) -> Result<Vec<(NonNull<u8>, usize)>, String> {
+        Ok(self.execution.memory.backings(self.execution.id.get()))
+    }
+    /// The architectural state in its durable encoding, pending interrupt
+    /// inputs and the identity of the mapped backings' geometry.
+    fn fingerprint(&self) -> Result<serde_json::Value, String> {
+        use sha2::{Digest, Sha256};
+        let e = &self.execution;
+        let saved = self.snapshot(None)?;
+        let architecture = saved.export()?;
+        let mut maps = e
+            .memory
+            .backings(e.id.get())
+            .into_iter()
+            .map(|(_, bytes)| bytes)
+            .collect::<Vec<_>>();
+        maps.sort_unstable();
+        Ok(serde_json::json!({
+            "architecture": {"bytes":architecture.len(),"sha256":format!("{:x}",Sha256::digest(&architecture))},
+            "backings": maps,
+        }))
+    }
+    fn import_snapshot(&self, bytes: &[u8]) -> Result<Box<dyn Snapshot>, String> {
+        let (raw, irq, fiq): (Vec<u8>, bool, bool) = crate::durable::decode(bytes)?;
+        Ok(Box::new(Saved {
+            raw: self.execution.cpu.import_snapshot(&raw)?,
+            irq,
+            fiq,
+        }))
     }
     fn snapshot(&self, previous: Option<&dyn Snapshot>) -> Result<Box<dyn Snapshot>, String> {
         let e = &self.execution;

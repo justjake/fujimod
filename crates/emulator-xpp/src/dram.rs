@@ -118,6 +118,19 @@ impl Device for Controller {
         self.state = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         Ok(())
     }
+    fujimod_emulator_devices::checkpoint_state!(state: State, Self::check);
+}
+impl Controller {
+    /// Programmed words exist only where the startup law allows them, and a
+    /// pending startup needs a controller that performs one.
+    fn check(&self, state: &State) -> Result<(), String> {
+        if state.words.keys().any(|&o| !self.startup_word(o))
+            || state.due.is_some() && self.settle_ticks.is_none()
+        {
+            return Err("Invalid X-Processor Pro DRAM controller checkpoint".into());
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

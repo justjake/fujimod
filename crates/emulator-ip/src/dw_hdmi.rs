@@ -84,10 +84,17 @@ impl Device for Transmitter {
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.check(&state)?;
+        self.state = state;
+        Ok(())
+    }
+    fujimod_emulator_devices::checkpoint_state!(state: State, Self::check);
+}
+impl Transmitter {
+    fn check(&self, state: &State) -> Result<(), String> {
         if state.registers.keys().any(|r| !Self::stored(*r)) {
             return Err("Invalid DesignWare HDMI TX checkpoint".into());
         }
-        self.state = state;
         Ok(())
     }
 }
@@ -120,5 +127,25 @@ mod tests {
         let mut cx = h.cx();
         hdmi.read(&mut cx, BASE, 4);
         assert!(cx.is_unmodeled());
+    }
+
+    #[test]
+    fn checkpoint_restores_stored_registers_exactly() {
+        use fujimod_emulator_devices::test_host::assert_exact_restore;
+        let mut hdmi = Transmitter::new(BASE).unwrap();
+        let mut h = TestHost::new();
+        write(&mut hdmi, &mut h, BASE + 0x7fc, 3);
+        let saved = assert_exact_restore(&mut hdmi, |d| {
+            let mut h = TestHost::new();
+            write(d, &mut h, BASE + 0xc018, 0xf2);
+        });
+        assert_eq!(read(&mut hdmi, &mut h, BASE + 0x7fc), 3);
+        assert_eq!(read(&mut hdmi, &mut h, BASE + 0xc018), 0);
+        assert!(
+            Transmitter::new(BASE)
+                .unwrap()
+                .restore_checkpoint(&saved)
+                .is_ok()
+        );
     }
 }

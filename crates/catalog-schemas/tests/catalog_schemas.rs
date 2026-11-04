@@ -43,7 +43,11 @@ fn reference_and_run_configuration_documents_validate_generated_schemas() {
         catalog.join("generation.generated.json"),
     ];
     for layer in ["soc", "parts", "bodies", "firmware", "progress"] {
-        files.extend(json_files(&catalog.join(layer)));
+        files.extend(json_files(&catalog.join(layer)).into_iter().filter(|path| {
+            // Publishing overrides have a separate web type contract.
+            layer != "progress"
+                || path.file_name().is_some_and(|name| name == "progress.generated.json")
+        }));
     }
     files.extend(json_files(&package.join("../../configurations/emulator")));
 

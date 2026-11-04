@@ -454,7 +454,12 @@
       "unit": 4294270976,
       "lines": 480,
       "ycbcr": [73, 114, 138],
-      "basis": "Measured, uniform scene: X-T20 2.11 REC live view of the evenly lit wall (s2, 2026-10-29), the same capture as zone_statistics. Live-view output unit 1 (0xfff56000) holds the buffer address at +0xc0 and the line width at +0xc4 (0x2d0 = 720 pixels); on the XP4 board the firmware moves +0xc0 through 0xa7d6000 + 0x180000*k (k < 4) between frames and the display output scans out the buffer finished last. The camera's four buffers hold 720x480 packed 4:2:2 (Y0 Y1 Cb Cr, stride 1440): mean Y 73 (sd 26: texture and vignetting), Cb 114, Cr 138 in every buffer; with the lens cap on (s1) Y is 0 and Cb/Cr 128, so the range is full. Declared uniform: every pixel holds the means. The image the camera keeps below line 480 is not written."
+      "basis": "Measured, uniform scene: X-T20 2.11 REC live view of the evenly lit wall (s2, 2026-10-29), the same capture as zone_statistics. Live-view output unit 1 (0xfff56000) holds the buffer address at +0xc0 and the line width at +0xc4 (0x2d0 = 720 pixels); on the XP4 board the firmware moves +0xc0 through 0xa7d6000 + 0x180000*k (k < 4) between frames and the display output scans out the buffer finished last. The camera's four buffers hold 720x480 packed 4:2:2 (Y0 Y1 Cb Cr, stride 1440): mean Y 73 (sd 26: texture and vignetting), Cb 114, Cr 138 in every buffer; with the lens cap on (s1) Y is 0 and Cb/Cr 128, so the range is full. Declared uniform: every pixel holds the means. The image the camera keeps below line 480 is not written.",
+      "film": {
+        "basis": "Declared, inverted from the measurement above. X-T20 2.11's MAIN pipeline reprograms the color unit 0xfff47000 from its parameter structure (0x1a52198) before every live-view frame (caller 0x156ade0, every 880000 ticks; the copies at 0xfffac000 and 0xfffa9000 receive no writes in REC), so the live-view image is developed with the words the unit holds. The scene is the 14-bit linear light (R, G, B) that the PROVIA film words the firmware programs by default turn into the measured Y 73, Cb 114, Cr 138 at the live AUTO white balance the firmware converges to for the declared zone statistics (gains 1138, 604, 1096). Another film simulation or white balance changes the image from there; the camera's film, white balance and live gains at the measurement were not recorded, so this inversion is declared, not measured.",
+        "linear_rgb": [1015, 764, 577],
+        "white_balance_reference": [1138, 604, 1096]
+      }
     },
     "sensor_frame": {
       "profile": "xpp-declared-virtual-scene-linear-srgb-xtrans-u16-v1",

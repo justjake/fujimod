@@ -352,17 +352,50 @@ impl Device for Control {
         self.readout_due
     }
     fn save(&self) -> Value {
-        serde_json::to_value(State {
+        serde_json::to_value(self.state()).unwrap_or(Value::Null)
+    }
+    fn restore(&mut self, value: &Value) -> Result<(), String> {
+        let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.check(&state)?;
+        self.apply(state);
+        Ok(())
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.state())
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        if !saved.children().is_empty() || !saved.blobs().is_empty() {
+            return Err("Imaging control checkpoint has unexpected parts".into());
+        }
+        self.check(&saved.decode(self.name())?)
+    }
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let state = saved.decode(self.name())?;
+        self.apply(state);
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
+}
+impl Control {
+    fn state(&self) -> State {
+        State {
             words: self.words.clone(),
             chip: self.chip.iter().map(|(k, v)| (*k, *v)).collect(),
             received: self.received,
             readout_due: self.readout_due,
             readout_status: self.readout_status,
-        })
-        .unwrap_or(Value::Null)
+        }
     }
-    fn restore(&mut self, value: &Value) -> Result<(), String> {
-        let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+    fn check(&self, state: &State) -> Result<(), String> {
         if state
             .words
             .iter()
@@ -373,12 +406,14 @@ impl Device for Control {
         {
             return Err("Invalid imaging control checkpoint".into());
         }
+        Ok(())
+    }
+    fn apply(&mut self, state: State) {
         self.words = state.words;
         self.chip = state.chip.into_iter().collect();
         self.received = state.received;
         self.readout_due = state.readout_due;
         self.readout_status = state.readout_status;
-        Ok(())
     }
 }
 

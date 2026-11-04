@@ -275,6 +275,20 @@ impl Device for Controller {
     fn restore(&mut self, _: &Value) -> Result<(), String> {
         Err("SD wrapper restoration requires its full checkpoint".into())
     }
+    fn fingerprint(&self) -> Result<Value, String> {
+        // The host fingerprints its card by content; the wrapper adds its
+        // own words without encoding the medium a second time.
+        let wrapper = fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &(
+                &self.options,
+                self.reset_due,
+                &self.vendor,
+                self.reset.as_ref().map(|r| r.1),
+            ),
+        )?;
+        Ok(json!({"wrapper":wrapper.fingerprint(),"host":self.host.fingerprint()?}))
+    }
 }
 
 #[cfg(test)]
@@ -420,5 +434,34 @@ mod tests {
         gates.restore(&gates_saved).unwrap();
         d.restore_checkpoint(&saved).unwrap();
         assert_eq!(half(&mut d, &mut h, 0x3e, None), 0x107);
+    }
+
+    #[test]
+    fn fingerprint_includes_the_host_and_wrapper_words() {
+        use fujimod_emulator_devices::Device;
+        let controller = || {
+            let card = Card::new(CardOptions {
+                sectors: 0x800000,
+                max_dirty_sectors: 4,
+            })
+            .unwrap();
+            let options = Options {
+                base: 0x80000,
+                register_offset: 0x100,
+                transfer_ticks: 10,
+                clock_ticks: 2,
+                reset_ticks: 3,
+                rca: 1,
+                ram_bytes: 0x10000,
+                high_speed: false,
+                ram_banks: vec![],
+            };
+            Controller::new(options, card, Contacts::new(true, false), None).unwrap()
+        };
+        let mut a = controller();
+        let b = controller();
+        assert_eq!(a.fingerprint().unwrap(), b.fingerprint().unwrap());
+        a.vendor.insert(0x10, 1);
+        assert_ne!(a.fingerprint().unwrap(), b.fingerprint().unwrap());
     }
 }

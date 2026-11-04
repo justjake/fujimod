@@ -404,7 +404,55 @@ impl Device for Pl330 {
         self.debug = serde_json::from_value(field("debug")).map_err(e)?;
         Ok(())
     }
+    /// Thread programs, enables and events. The sources are wiring; a store
+    /// window's own state belongs to its owner.
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &(
+                &self.irq_routes,
+                self.timing,
+                &self.threads,
+                self.inten,
+                self.events,
+                self.debug,
+            ),
+        )
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        if !saved.children().is_empty() || !saved.blobs().is_empty() {
+            return Err("PL330 checkpoint has unexpected parts".into());
+        }
+        let (routes, timing, threads, _, _, _): SavedState = saved.decode(self.name())?;
+        if routes != self.irq_routes || timing != self.timing {
+            return Err("PL330 checkpoint wiring or timing differs".into());
+        }
+        if threads.iter().any(|t| t.running != t.due.is_some()) {
+            return Err("PL330 checkpoint thread run state disagrees with its deadline".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let (_, _, threads, inten, events, debug): SavedState = saved.decode(self.name())?;
+        self.threads = threads;
+        self.inten = inten;
+        self.events = events;
+        self.debug = debug;
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
 }
+
+type SavedState = (Vec<u32>, Throughput, [Thread; CHANNELS], u32, u32, [u32; 2]);
 
 #[cfg(test)]
 mod tests {
@@ -637,5 +685,38 @@ mod tests {
         let bytes: Vec<u8> = stores.into_iter().flat_map(|(_, b)| b).collect();
         assert_eq!(bytes, b"lens");
         assert_eq!(h.irqs, vec![(208, true)]);
+    }
+
+    #[test]
+    fn checkpoint_restores_threads_and_refuses_other_timing() {
+        use fujimod_emulator_devices::test_host::{TestHost, assert_exact_restore, write};
+        let timing = Throughput {
+            setup_ticks: 4,
+            bytes_per_tick: 8,
+        };
+        let mut dma = Pl330::new(BASE, vec![40, 41], vec![], timing).unwrap();
+        let mut host = TestHost::new();
+        write(&mut dma, &mut host, BASE + 0x20, 3);
+        let saved = assert_exact_restore(&mut dma, |d| {
+            let mut host = TestHost::new();
+            write(d, &mut host, BASE + 0xd08, 0x1234);
+            write(d, &mut host, BASE + 0x20, 0);
+        });
+        let other = Throughput {
+            setup_ticks: 5,
+            ..timing
+        };
+        assert!(
+            Pl330::new(BASE, vec![40, 41], vec![], other)
+                .unwrap()
+                .validate_checkpoint(&saved)
+                .is_err()
+        );
+        assert!(
+            Pl330::new(BASE, vec![40], vec![], timing)
+                .unwrap()
+                .restore_checkpoint(&saved)
+                .is_err()
+        );
     }
 }

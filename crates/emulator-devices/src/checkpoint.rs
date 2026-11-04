@@ -56,6 +56,30 @@ impl Checkpoint {
             + self.blobs.iter().map(|b| b.len()).sum::<usize>()
             + self.children.iter().map(Self::bytes).sum::<usize>()
     }
+    /// Content identity of the complete typed state: kind, encoded bytes,
+    /// blobs and children, with no host address or allocation identity.
+    pub fn fingerprint(&self) -> serde_json::Value {
+        use sha2::{Digest, Sha256};
+        let mut hash = Sha256::new();
+        fn visit(hash: &mut Sha256, state: &Checkpoint) {
+            let section = |hash: &mut Sha256, bytes: &[u8]| {
+                hash.update((bytes.len() as u64).to_le_bytes());
+                hash.update(bytes);
+            };
+            section(hash, state.kind.as_bytes());
+            section(hash, &state.bytes);
+            hash.update((state.blobs.len() as u64).to_le_bytes());
+            for blob in &state.blobs {
+                section(hash, blob);
+            }
+            hash.update((state.children.len() as u64).to_le_bytes());
+            for child in &state.children {
+                visit(hash, child);
+            }
+        }
+        visit(&mut hash, self);
+        serde_json::json!({"kind":self.kind,"bytes":self.bytes(),"sha256":format!("{:x}", hash.finalize())})
+    }
     pub fn share_unchanged(&mut self, previous: &Self) {
         if self.kind == previous.kind && self.bytes == previous.bytes {
             self.bytes = previous.bytes.clone();
@@ -102,6 +126,41 @@ macro_rules! checkpoint_fields {
             $( self.$field = $field; )+
             $( let mut blobs = saved.blobs().iter(); $(self.$blob = blobs.next().unwrap().clone();)+ )?
             Ok(())
+        }
+    };
+}
+
+/// Exact checkpoint, validation, restore and fingerprint of a device whose
+/// mutable state is one serde value held in a field. `$check` is
+/// `fn(&Self, &$state) -> Result<(), String>` and validates the saved state
+/// against the device's wiring and invariants; restore assigns the field only
+/// after it passes. The fingerprint is the content identity of the same state.
+#[macro_export]
+macro_rules! checkpoint_state {
+    ($field:ident : $state:ty, $check:path) => {
+        fn checkpoint(&self) -> std::result::Result<$crate::checkpoint::Checkpoint, String> {
+            $crate::checkpoint::Checkpoint::encode(self.name(), &self.$field)
+        }
+        fn validate_checkpoint(
+            &self,
+            saved: &$crate::checkpoint::Checkpoint,
+        ) -> std::result::Result<(), String> {
+            if !saved.children().is_empty() || !saved.blobs().is_empty() {
+                return Err(format!("{} snapshot has unexpected parts", self.name()));
+            }
+            let state: $state = saved.decode(self.name())?;
+            $check(self, &state)
+        }
+        fn restore_checkpoint(
+            &mut self,
+            saved: &$crate::checkpoint::Checkpoint,
+        ) -> std::result::Result<(), String> {
+            self.validate_checkpoint(saved)?;
+            self.$field = saved.decode(self.name())?;
+            Ok(())
+        }
+        fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
+            Ok(self.checkpoint()?.fingerprint())
         }
     };
 }
@@ -307,5 +366,62 @@ mod tests {
         assert!(!output.ready());
         advance(&mut clock, &mut host, 5);
         assert!(output.ready());
+    }
+
+    #[test]
+    fn state_macro_restores_after_validation_and_fingerprints_content() {
+        use crate::{Cx, Device};
+        #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+        struct State {
+            value: u32,
+        }
+        struct Probe {
+            limit: u32,
+            state: State,
+        }
+        impl Probe {
+            fn check(&self, state: &State) -> Result<(), String> {
+                (state.value <= self.limit)
+                    .then_some(())
+                    .ok_or_else(|| "over the limit".into())
+            }
+        }
+        impl Device for Probe {
+            fn name(&self) -> &'static str {
+                "probe"
+            }
+            fn read(&mut self, _: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+                self.state.value.into()
+            }
+            fn write(&mut self, _: &mut Cx<'_>, _: u64, _: u8, value: u64) {
+                self.state.value = value as u32;
+            }
+            crate::checkpoint_state!(state: State, Self::check);
+        }
+        let mut probe = Probe {
+            limit: 9,
+            state: State { value: 5 },
+        };
+        let saved = crate::test_host::assert_exact_restore(&mut probe, |d| {
+            let mut host = crate::test_host::TestHost::new();
+            d.write(&mut host.cx(), 0, 4, 7);
+        });
+        assert_eq!(probe.state.value, 5);
+        let narrower = Probe {
+            limit: 4,
+            state: State::default(),
+        };
+        assert!(narrower.validate_checkpoint(&saved).is_err());
+        let mut other = Probe {
+            limit: 9,
+            state: State::default(),
+        };
+        other.restore_checkpoint(&saved).unwrap();
+        assert_eq!(other.fingerprint().unwrap(), probe.fingerprint().unwrap());
+        assert!(
+            other
+                .validate_checkpoint(&saved.clone().with_children(vec![saved.clone()]))
+                .is_err()
+        );
     }
 }

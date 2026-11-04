@@ -94,6 +94,11 @@ fn color_offset(x70: u64) -> Option<u64> {
     }
 }
 
+/// A 14-bit linear level scaled by a Q12 white-balance factor.
+pub fn balanced(linear: u16, factor: u32) -> u16 {
+    (u64::from(linear) * u64::from(factor) >> 12).min(16383) as u16
+}
+
 /// The film law of the color unit's programmed words.
 pub fn film(words: &BTreeMap<u64, u32>) -> Result<Film, String> {
     let word = |o: u64| words.get(&o).copied().unwrap_or(0);
@@ -232,8 +237,8 @@ pub fn develop(
     // White-balanced 14-bit linear level.
     let factors = film.map_or([1 << 12; 3], |(_, factors)| factors);
     let level = |c: usize, s: u16| {
-        let linear = u64::from(u32::from(s).saturating_sub(black) * 16383 / (white - black));
-        (linear * u64::from(factors[c]) >> 12).min(16383) as u16
+        let linear = (u32::from(s).saturating_sub(black) * 16383 / (white - black)) as u16;
+        balanced(linear, factors[c])
     };
     let mut pixels = film.map(|(film, _)| FilmPixels::new(film));
     let pairs = width.div_ceil(2);
@@ -345,7 +350,7 @@ pub fn resample(source: &[u8], s: Scale) -> Result<Vec<Vec<u8>>, String> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     #[test]
@@ -446,7 +451,7 @@ mod tests {
     }
 
     /// Color-unit words of an emulated X-T20 2.11 PROVIA shot (bootemu).
-    fn provia() -> BTreeMap<u64, u32> {
+    pub(crate) fn provia() -> BTreeMap<u64, u32> {
         let mut words = BTreeMap::new();
         let groups: [(u64, &[u32]); 6] = [
             (

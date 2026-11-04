@@ -203,6 +203,14 @@ impl Device for Encoder {
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.check(&state)?;
+        self.state = state;
+        Ok(())
+    }
+    fujimod_emulator_devices::checkpoint_state!(state: State, Self::check);
+}
+impl Encoder {
+    fn check(&self, state: &State) -> Result<(), String> {
         if state
             .words
             .iter()
@@ -213,7 +221,6 @@ impl Device for Encoder {
         {
             return Err("Invalid JPEG encoder checkpoint".into());
         }
-        self.state = state;
         Ok(())
     }
 }
@@ -403,6 +410,14 @@ impl Device for Decoder {
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: DecoderState =
             serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.check(&state)?;
+        self.state = state;
+        Ok(())
+    }
+    fujimod_emulator_devices::checkpoint_state!(state: DecoderState, Self::check);
+}
+impl Decoder {
+    fn check(&self, state: &DecoderState) -> Result<(), String> {
         if state
             .words
             .iter()
@@ -411,7 +426,6 @@ impl Device for Decoder {
         {
             return Err("Invalid JPEG decoder checkpoint".into());
         }
-        self.state = state;
         Ok(())
     }
 }
