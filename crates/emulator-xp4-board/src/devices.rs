@@ -395,13 +395,13 @@ impl Devices {
         let picture = match layout {
             None => None,
             Some("bgra8888-straight") => {
-                Some(fujimod_emulator_xp4_display::fujimod_framebuffer_xp4::Picture::Bgra8888Straight)
+                Some(fujimod_framebuffer_xp4::Picture::Bgra8888Straight)
             }
             _ => return Err("Unsupported XP4 LCDC picture layout".into()),
         };
         let video = match video_layout {
             None => None,
-            Some("yycbcr422") => Some(fujimod_emulator_xp4_display::fujimod_framebuffer_xp4::Video::YyCbCr422),
+            Some("yycbcr422") => Some(fujimod_framebuffer_xp4::Video::YyCbCr422),
             _ => return Err("Unsupported XP4 LCDC video layout".into()),
         };
         let model =
