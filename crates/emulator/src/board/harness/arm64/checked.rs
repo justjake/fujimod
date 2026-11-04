@@ -302,9 +302,9 @@ impl Guard {
             }
             return Ok(());
         }
-        // Admit integer arithmetic and ordinary branches only. System, trap,
-        // wait, authenticated branch, SIMD/SVE arithmetic and unknown families
-        // are explicitly outside the routine policy.
+        // Admit integer arithmetic, ordinary branches and selected register-only
+        // scalar FP operations. Memory, system, trap, wait, authenticated branch
+        // and other FP/SIMD families remain refused.
         let integer = word & 0x1f00_0000 == 0x1000_0000 // ADR/ADRP
             || matches!(word & 0x1f80_0000,
                 0x1100_0000 | 0x1200_0000 | 0x1280_0000 | 0x1300_0000 | 0x1380_0000)
@@ -321,9 +321,20 @@ impl Guard {
             || word & 0x7e00_0000 == 0x3400_0000
             || word & 0x7e00_0000 == 0x3600_0000
             || matches!(word & 0xffff_fc1f, 0xd61f_0000 | 0xd63f_0000 | 0xd65f_0000);
+        let scalar_fmov_immediate = word & 0xff20_1fe0 == 0x1e20_1000 && (word >> 22) & 3 <= 1; // S/D forms; half and reserved forms refuse.
+        let scalar_fp_math = ((word & 0xff20_fc00 == 0x1e20_0800 // FMUL S/D.
+            || word & 0xff20_0c00 == 0x1e20_0c00 // FCSEL S/D.
+            || word & 0xff20_fc1f == 0x1e20_2000) // FCMP S/D.
+            && (word >> 22) & 3 <= 1)
+            || word & 0xdfff_fc00 == 0x5ea1_b800; // FCVTZS/U scalar S to S.
         // DSB SY is an ordering point in this single-core, bus-free routine:
         // admitted RAM stores complete synchronously before the next entry.
-        if matches!(word, 0xd503_201f | 0xd503_3f9f) || integer || branch {
+        if matches!(word, 0xd503_201f | 0xd503_3f9f)
+            || integer
+            || branch
+            || scalar_fmov_immediate
+            || scalar_fp_math
+        {
             return Ok(());
         }
         Err(format!("Unsupported instruction {word:#010x} at {pc:#x}"))
@@ -796,6 +807,78 @@ mod tests {
         let mut bytes = [0; 8];
         b.read_memory(0, 0x4000, &mut bytes).unwrap();
         assert_eq!(bytes, 0x1234_5678_9abc_def0u64.to_le_bytes());
+    }
+    #[test]
+    fn scalar_fmov_immediate_retires_without_admitting_fadd() {
+        for (word, expected) in [
+            (0x1e2e_1008, 0x3f80_0000u64),        // FMOV S8,#1.0.
+            (0x1e6e_1008, 0x3ff0_0000_0000_0000), // FMOV D8,#1.0.
+        ] {
+            let mut b = board(&[word, 0xd65f_03c0]);
+            let r = checked_call(&mut b, options()).unwrap();
+            assert!(r.returned, "{word:#x}: {:?}", r.failure);
+            let mut vector = [0; 16];
+            b.cpu(0)
+                .unwrap()
+                .read_register(Register::V(8), &mut vector)
+                .unwrap();
+            assert_eq!(
+                u64::from_le_bytes(vector[..8].try_into().unwrap()),
+                expected
+            );
+        }
+        let mut b = board(&[0x1e20_2800, 0xd65f_03c0]); // FADD S0,S0,S0.
+        let r = checked_call(&mut b, options()).unwrap();
+        assert_eq!(r.instructions, 0);
+        assert!(r.failure.unwrap().contains("Unsupported instruction"));
+    }
+    #[test]
+    fn scalar_fp_register_math_and_round_toward_zero_are_checked() {
+        for conversion in [0x5ea1_b800, 0x7ea1_b800] {
+            // FMOV S8,#1; FMOV S0,#4; FMUL S0,S8,S0; FCVTZS/U S0,S0; RET.
+            let mut b = board(&[
+                0x1e2e_1008,
+                0x1e22_1000,
+                0x1e20_0900,
+                conversion,
+                0xd65f_03c0,
+            ]);
+            let mut o = options();
+            o.executable = vec![(0x1000, 0x1014)];
+            o.readable = vec![(0x1000, 0x1014), (0x4000, 0x4010), (0x8000, 0xa000)];
+            let r = checked_call(&mut b, o).unwrap();
+            assert!(r.returned, "{conversion:#x}: {:?}", r.failure);
+            let mut vector = [0; 16];
+            b.cpu(0)
+                .unwrap()
+                .read_register(Register::V(0), &mut vector)
+                .unwrap();
+            assert_eq!(u32::from_le_bytes(vector[..4].try_into().unwrap()), 4);
+        }
+        // FMOV S1,#1; FMOV S0,#4; FMOV S8,#2; FCMP S1,S0;
+        // FCSEL S8,S8,S0,HI; RET. HI is false, so S8 becomes 4.0.
+        let mut b = board(&[
+            0x1e2e_1001,
+            0x1e22_1000,
+            0x1e20_1008,
+            0x1e20_2020,
+            0x1e20_8d08,
+            0xd65f_03c0,
+        ]);
+        let mut o = options();
+        o.executable = vec![(0x1000, 0x1018)];
+        o.readable = vec![(0x1000, 0x1018), (0x4000, 0x4010), (0x8000, 0xa000)];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        let mut vector = [0; 16];
+        b.cpu(0)
+            .unwrap()
+            .read_register(Register::V(8), &mut vector)
+            .unwrap();
+        assert_eq!(
+            u32::from_le_bytes(vector[..4].try_into().unwrap()),
+            0x4080_0000
+        );
     }
     #[test]
     fn denied_pair_has_no_partial_store_or_retired_instruction() {
