@@ -433,9 +433,9 @@ fn xpp_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<
         unit: "main".into(),
     };
 
-    // X-T20 and X-H1 share this request-struct prologue and reader grammar.
-    // Match the instructions instead of carrying camera-specific addresses or
-    // hashes, then locate each dependency from its call relationship.
+    // XPP readers share this request-struct prologue, while clock setup and
+    // aperture bounds vary. Match instruction behavior instead of carrying
+    // camera addresses or hashes, then locate dependencies from call edges.
     const PREFIX: [u32; 8] = [
         0xe92d_4ff0,
         0xe28d_b020,
@@ -472,22 +472,28 @@ fn xpp_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<
                 let Ok(reader) = locator.routine(address) else {
                     continue;
                 };
+                let window_size = if reader.has("cmp", "r8, #0xf4000000") {
+                    0x4000000
+                } else if reader.has("cmn", "r8, #0x8000001") {
+                    0x8000000
+                } else {
+                    continue;
+                };
                 if reader.header.architecture == Architecture::Arm32
                     && reader.code.len() >= 200
-                    && reader.header.ranges.len() == 2
+                    && (1..=2).contains(&reader.header.ranges.len())
                     && reader.has("add", "r3, r4, #0x10000000")
                     && reader.has("cmn", "r3, #0xf8000001")
-                    && reader.has("cmp", "r8, #0xf4000000")
-                    && reader.has("mov", "r0, #0x15")
+                    && xpp_clock_vote(&reader)
                     && reader.has("movw", "r2, #0x6555")
                     && reader.has("movt", "r2, #0x7766")
                 {
-                    candidates.push(reader);
+                    candidates.push((reader, window_size));
                 }
             }
         }
     }
-    let reader = one(candidates, "X-Processor Pro stock flash reader")?;
+    let (reader, window_size) = one(candidates, "X-Processor Pro stock flash reader")?;
     let marker = xpp_initialized_marker(&reader)?;
 
     const WAIT_PREFIX: [u32; 10] = [
@@ -549,6 +555,44 @@ fn xpp_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<
             }
         }
     }
+    if wrapper_candidates.is_empty() {
+        for (id, reference) in index
+            .referrers(firmware, Some("main"), reader.header.key.address)
+            .map_err(|e| e.to_string())?
+        {
+            if !reference.kind.ends_with("CALL") {
+                continue;
+            }
+            let Some(entry) = index.entry(id).map_err(|e| e.to_string())? else {
+                continue;
+            };
+            let address = entry.function.key.address;
+            let Ok(wrapper) = locator.routine(address) else {
+                continue;
+            };
+            let calls_reader = wrapper.code.iter().any(|instruction| {
+                instruction.mnemonic == "bl"
+                    && number(instruction.operands.trim_start_matches('#')).ok()
+                        == Some(reader.header.key.address)
+            });
+            if wrapper.header.architecture == Architecture::Arm32
+                && wrapper.header.ranges == [(address, address + 52)]
+                && wrapper.code.len() == 13
+                && wrapper.code.first().is_some_and(|instruction| {
+                    instruction.mnemonic == "stmdb" && instruction.operands.contains("lr")
+                })
+                && wrapper.code.iter().any(|instruction| {
+                    instruction.mnemonic == "strb" && instruction.operands.starts_with("r3,")
+                })
+                && wrapper.code.iter().any(|instruction| {
+                    instruction.mnemonic == "mov" && instruction.operands == "r3, #0x1"
+                })
+                && calls_reader
+            {
+                wrapper_candidates.push(wrapper);
+            }
+        }
+    }
     let wait = one(
         wrapper_candidates,
         "X-Processor Pro flash-read wait wrapper",
@@ -605,7 +649,7 @@ fn xpp_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<
     })];
     Ok(json!({
         "device": {"kind":"serial-nor"},
-        "window": {"address":0xf0000000u64,"size":0x4000000u64},
+        "window": {"address":0xf0000000u64,"size":window_size},
         "update_image": {"dat_offset":image_origin,"xor":255},
         "reader": {"symbol":"flash_read_wait","alignment":4},
         "transport": "xpp-cmd-callback",
@@ -615,9 +659,22 @@ fn xpp_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<
     }))
 }
 
+fn xpp_clock_vote(routine: &Routine) -> bool {
+    routine.has("mov", "r0, #0x15")
+        || routine.code.windows(4).any(|instructions| {
+            instructions[0].mnemonic == "mov"
+                && instructions[0].operands == "r0, #0x0"
+                && instructions[1].mnemonic == "mov"
+                && instructions[1].operands == "r1, #0x3"
+                && instructions[2].mnemonic == "movt"
+                && instructions[2].operands == "r1, #0x15"
+                && instructions[3].mnemonic == "bl"
+        })
+}
+
 fn xpp_read_mode(routine: &Routine) -> bool {
     let code = &routine.code;
-    code.len() > 100
+    (code.len() > 100
         && code
             .get(4)
             .is_some_and(|i| arm_instruction_value(i, "cmp", "r0", 1))
@@ -627,7 +684,44 @@ fn xpp_read_mode(routine: &Routine) -> bool {
         && code.get(8).is_some_and(|i| i.mnemonic == "ldrls")
         && code
             .iter()
-            .any(|i| i.mnemonic == "bic" && i.operands.contains("0x80000000"))
+            .any(|i| i.mnemonic == "bic" && i.operands.contains("0x80000000")))
+        || xpp_register_table_read_mode(routine)
+}
+
+fn xpp_register_table_read_mode(routine: &Routine) -> bool {
+    let address_pair = |address: u64| {
+        routine.code.windows(2).any(|instructions| {
+            let immediate = |instruction: &Instruction| {
+                let (register, value) = instruction.operands.split_once(", ")?;
+                Some((register.to_string(), number(value.trim_start_matches('#')).ok()?))
+            };
+            let Some((low_register, low_value)) = immediate(&instructions[0]) else {
+                return false;
+            };
+            let Some((high_register, high_value)) = immediate(&instructions[1]) else {
+                return false;
+            };
+            matches!(instructions[0].mnemonic.as_str(), "mov" | "movw")
+                && instructions[1].mnemonic == "movt"
+                && low_register == high_register
+                && low_value == address
+                && high_value == 0xfff1
+        })
+    };
+    routine.code.len() > 100
+        && routine
+            .code
+            .iter()
+            .any(|instruction| arm_instruction_value(instruction, "cmp", "r0", 1))
+        && routine
+            .code
+            .iter()
+            .any(|instruction| arm_instruction_value(instruction, "cmp", "r1", 2))
+        && routine
+            .code
+            .iter()
+            .any(|instruction| arm_instruction_value(instruction, "cmp", "r1", 3))
+        && [0x4000, 0x4010, 0x4020].into_iter().all(address_pair)
 }
 
 fn arm_instruction_value(
