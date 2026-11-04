@@ -20,6 +20,8 @@ enum Pending {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct NorState {
+    #[serde(default)]
+    immutable_prefix: Option<usize>,
     jedec: u32,
     write_enable: bool,
     pending: Option<Pending>,
@@ -38,13 +40,15 @@ fn extent(address: u64, size: usize) -> bool {
 impl Nor {
     fn restore_state(&mut self, state: NorState) -> Result<(), String> {
         let g = self.geometry;
-        if state.jedec != self.jedec
+        if state.immutable_prefix != self.prefix.map(|p| p.bytes())
+            || state.jedec != self.jedec
             || state.erase_bytes != g.erase_bytes
             || state.page_bytes != g.page_bytes
             || state.erase_ticks != g.erase_ticks
             || state.page_ticks != g.page_ticks
             || state.overlay.iter().any(|(page, bytes)| {
-                *page >= FLASH_SIZE as usize / g.page_bytes || bytes.len() != g.page_bytes
+                *page >= FLASH_SIZE as usize / g.page_bytes
+                    || self.check_mutation(FLASH + (*page * g.page_bytes) as u64, bytes.len()).is_err() || bytes.len() != g.page_bytes
             })
             || state.pending.is_some() && state.write_enable
         {
@@ -59,6 +63,7 @@ impl Nor {
                 if ![4096, g.erase_bytes].contains(&size)
                     || address.wrapping_sub(FLASH) % size as u64 != 0
                     || !extent(address, size)
+                    || self.check_mutation(address, size).is_err()
                 {
                     return Err("Invalid pending XP4 NOR erase".into());
                 }
@@ -71,6 +76,7 @@ impl Nor {
             }) => {
                 if bytes.is_empty()
                     || !extent(address, bytes.len())
+                    || self.check_mutation(address, bytes.len()).is_err()
                     || address.wrapping_sub(FLASH) as usize % g.page_bytes + bytes.len()
                         > g.page_bytes
                 {
@@ -142,6 +148,10 @@ impl SerialFlashController {
             return Err("Invalid XP4 serial-flash checkpoint or route".into());
         }
         let mut port = self.port.lock().unwrap();
+        if state.next.is_some_and(|(_, token)| token == 1) {
+            port.nor.check_command(registers[0x90 / 4], registers[0x94 / 4])?;
+        }
+        if let Some(request) = &state.stream { if request.write { port.nor.check_mutation(request.address, request.size)?; } }
         port.nor.restore_state(state.nor)?;
         port.request = state.stream;
         port.program_data = state.program_fifo;
@@ -202,6 +212,12 @@ impl DmaController {
                 .any(|a| !(0xfff4a800..0xfff4a880).contains(a) || a & 3 != 0)
         {
             return Err("Invalid XP4 DMA checkpoint or routes".into());
+        }
+        if let Some(port) = &self.port {
+            let port = port.lock().unwrap();
+            for channel in &state.channels {
+                if channel.submitted { port.nor.check_mutation(u64::from(channel.regs[0x18 / 4]), channel.regs[0x10 / 4] as usize + 1)?; }
+            }
         }
         self.standalone_admitted = state.assumptions_recorded.unwrap_or(false);
         self.channels = state

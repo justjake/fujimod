@@ -7,6 +7,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 mod checkpoint;
+mod frozen;
+pub use frozen::{ImmutablePrefix, ImmutableView};
 
 pub const CONTROLLER: u64 = 0xfffd8000;
 pub const DMA: u64 = 0xfffe0000;
@@ -28,7 +30,8 @@ enum Mutation {
 /// External NOR contents and identity, supplied by the board. Uninitialized
 /// bytes are erased. No firmware structures or executable signatures enter it.
 pub struct Nor {
-    bytes: Vec<u8>,
+    bytes: frozen::Source,
+    prefix: Option<ImmutablePrefix>,
     pub jedec: u32,
     pub write_enable: bool,
     geometry: Geometry,
@@ -50,13 +53,38 @@ impl Nor {
             return Err("Invalid XP4 NOR input".into());
         }
         Ok(Self {
-            bytes,
+            bytes: frozen::Source::new(bytes)?,
+            prefix: None,
             jedec,
             write_enable: false,
             geometry,
             overlay: BTreeMap::new(),
             pending: None,
         })
+    }
+    pub fn with_immutable_prefix(mut self, prefix: ImmutablePrefix) -> Result<Self, String> {
+        if prefix.bytes() > self.bytes.len() || !prefix.bytes().is_multiple_of(self.geometry.page_bytes) {
+            return Err("Immutable NOR prefix exceeds source or page boundary".into());
+        }
+        self.prefix = Some(prefix);
+        Ok(self)
+    }
+    pub fn immutable_view(&self) -> Option<ImmutableView> {
+        self.prefix.map(|prefix| ImmutableView::new(self.bytes.clone(), prefix.bytes()))
+    }
+    fn check_mutation(&self, address: u64, size: usize) -> Result<(), String> {
+        if self.prefix.is_some_and(|p| size != 0 && address < FLASH + p.bytes() as u64
+            && address.checked_add(size as u64).is_none_or(|end| end > FLASH)) {
+            return Err("Mutation intersects immutable NOR prefix".into());
+        }
+        Ok(())
+    }
+    fn check_command(&self, command: u32, address: u32) -> Result<(), String> {
+        if self.prefix.is_none() { return Ok(()); }
+        let size = match (command >> 24) as u8 { 0xdc => self.geometry.erase_bytes, 0x21 => 4096, _ => return Ok(()) };
+        let offset = u64::from(address).checked_sub(FLASH).filter(|a| *a < FLASH_SIZE).ok_or("NOR erase outside aperture")?;
+        let address = FLASH + offset / size as u64 * size as u64;
+        self.check_mutation(address, size)
     }
     fn read(&self, address: u64, size: usize) -> Result<Vec<u8>, String> {
         let offset = address
@@ -72,7 +100,7 @@ impl Nor {
         let start = offset as usize;
         if start < self.bytes.len() {
             let n = size.min(self.bytes.len() - start);
-            out[..n].copy_from_slice(&self.bytes[start..start + n]);
+            out[..n].copy_from_slice(&self.bytes.as_slice()[start..start + n]);
         }
         let page = self.geometry.page_bytes;
         for (&index, bytes) in self
@@ -106,6 +134,7 @@ impl Nor {
                 (*address, bytes.len(), self.geometry.page_ticks)
             }
         };
+        self.check_mutation(address, size)?;
         self.read(address, size)?;
         if size == 0 {
             return Err("Empty NOR mutation".into());
@@ -119,6 +148,9 @@ impl Nor {
         if !self.pending.as_ref().is_some_and(|p| p.0 <= cx.now()) {
             return;
         }
+        let mutation = &self.pending.as_ref().unwrap().1;
+        let (address, size) = match mutation { Mutation::Erase { address, size } => (*address, *size), Mutation::Program { address, bytes } => (*address, bytes.len()) };
+        if let Err(e) = self.check_mutation(address, size) { cx.fail(e); return; }
         let (at, op) = self.pending.take().unwrap();
         let (address, size, name) = match op {
             Mutation::Erase { address, size } => {
@@ -128,7 +160,7 @@ impl Nor {
                     self.overlay.remove(&index);
                     if self
                         .bytes
-                        .get(index * page..((index + 1) * page).min(self.bytes.len()))
+                        .as_slice().get(index * page..((index + 1) * page).min(self.bytes.len()))
                         .is_some_and(|b| b.iter().any(|&v| v != 255))
                     {
                         self.overlay.insert(index, vec![255; page]);
@@ -175,7 +207,7 @@ impl Nor {
         json!({"jedec":self.jedec,"write_enable":self.write_enable,"pending":pending,
             "erase_bytes":self.geometry.erase_bytes,"page_bytes":self.geometry.page_bytes,
             "erase_ticks":self.geometry.erase_ticks,"page_ticks":self.geometry.page_ticks,
-            "overlay":self.overlay})
+            "overlay":self.overlay,"immutable_prefix":self.prefix.map(|p| p.bytes())})
     }
 }
 
@@ -194,6 +226,10 @@ pub struct Port {
     program_data: Option<(u64, Vec<u8>)>,
 }
 pub type Shared = Arc<Mutex<Port>>;
+pub fn port_from_nor(nor: Nor) -> Shared {
+    Arc::new(Mutex::new(Port { nor, request: None, program_data: None }))
+}
+impl Port { pub fn immutable_view(&self) -> Option<ImmutableView> { self.nor.immutable_view() } }
 pub fn port(bytes: Vec<u8>, jedec: u32, geometry: Geometry) -> Result<Shared, String> {
     Ok(Arc::new(Mutex::new(Port {
         nor: Nor::new(bytes, jedec, geometry)?,
@@ -289,6 +325,13 @@ impl SerialFlashController {
         }
         if !write {
             return Ok(self.regs[o / 4] as u64);
+        }
+        if o == 0x90 || o == 0x94 {
+            if (o == 0x90 && value & 1 != 0) || self.due.is_some_and(|(_, token)| token == 1) {
+                self.port.lock().unwrap().nor.check_command(
+                    if o == 0x90 { value } else { self.regs[0x90 / 4] },
+                    if o == 0x94 { value } else { self.regs[0x94 / 4] })?;
+            }
         }
         match o {
             0 => self.regs[0] = (value & !0x80000000) | (self.regs[0] & 0x80000000),
@@ -386,6 +429,7 @@ impl SerialFlashController {
                 if port.nor.pending.is_some() || !port.nor.write_enable || port.request.is_some() {
                     return Err("NOR stream program while busy or write-disabled".into());
                 }
+                port.nor.check_mutation(address, size)?;
                 port.nor.read(address, size)?;
                 port.request = Some(Request {
                     address,
@@ -438,6 +482,11 @@ impl Device for SerialFlashController {
     fn advance(&mut self, cx: &mut Cx<'_>) {
         let mut port = self.port.lock().unwrap();
         port.nor.complete(cx);
+        if port.program_data.is_some() {
+            if let Some(request) = &port.request {
+                if let Err(e) = port.nor.check_mutation(request.address, request.size) { cx.fail(e); return; }
+            }
+        }
         if let Some((arrived, bytes)) = port.program_data.take() {
             let Some(request) = port
                 .request
@@ -461,6 +510,9 @@ impl Device for SerialFlashController {
     fn event(&mut self, cx: &mut Cx<'_>, token: u64) {
         if !self.due.is_some_and(|(at, t)| at <= cx.now() && t == token) {
             return;
+        }
+        if token == 1 {
+            if let Err(e) = self.port.lock().unwrap().nor.check_command(self.regs[0x90 / 4], self.regs[0x94 / 4]) { cx.fail(e); return; }
         }
         let accepted_at = self.due.unwrap().0;
         self.due = None;
@@ -708,6 +760,12 @@ impl DmaController {
                 return Err("Invalid or overflowing standalone XP4 DMA submission".into());
             }
         }
+        if write && o == 0x28 && value & 0x10000001 == 0x10000001 {
+            if let Some(port) = &self.port {
+                let c = &self.channels[n];
+                port.lock().unwrap().nor.check_mutation(u64::from(c.regs[0x18 / 4]), c.regs[0x10 / 4] as usize + 1)?;
+            }
+        }
         self.admit(cx);
         let c = &mut self.channels[n];
         if !write {
@@ -751,6 +809,7 @@ impl DmaController {
         let src = u64::from(c.regs[0x14 / 4]);
         let dst = u64::from(c.regs[0x18 / 4]);
         let size = c.regs[0x10 / 4] as usize + 1;
+        if let Some(port) = &self.port { port.lock().unwrap().nor.check_mutation(dst, size)?; }
         let completed_at = c.due.unwrap();
         let program = (FLASH..FLASH + FLASH_SIZE).contains(&dst);
         if c.regs[0x20 / 4] & 4 != 0 && !program {
@@ -1443,7 +1502,7 @@ mod tests {
                 vec![0xf0; 32]
             );
         }
-        assert_eq!(p.lock().unwrap().nor.bytes, vec![0; 8192]); // Immutable supplied image.
+        assert_eq!(p.lock().unwrap().nor.bytes.as_slice(), vec![0; 8192]); // Immutable supplied image.
         assert_eq!(p.lock().unwrap().nor.status(), 0);
         (flash.save(), h.records)
     }
@@ -1713,6 +1772,99 @@ mod tests {
             results.push((dma.save(), host.ram, json!(host.records), host.events, host.irqs));
         }
         assert_eq!(results[0], results[1]);
+    }
+
+    fn protected_peer() -> Shared {
+        port_from_nor(Nor::new(vec![0xff; 8192], 0x20, Geometry {
+            erase_bytes: 4096, page_bytes: 256, erase_ticks: 20, page_ticks: 12,
+        }).unwrap().with_immutable_prefix(ImmutablePrefix::new(4096).unwrap()).unwrap())
+    }
+    #[test]
+    fn immutable_source_retains_identity_and_rejects_mutations() {
+        assert!(ImmutablePrefix::new(0).is_err());
+        assert!(ImmutablePrefix::new(1).is_err());
+        assert!(Nor::new(vec![255; 1024], 0x20, Geometry { erase_bytes:4096, page_bytes:256, erase_ticks:20, page_ticks:12 }).unwrap().with_immutable_prefix(ImmutablePrefix::new(4096).unwrap()).is_err());
+        let peer = protected_peer();
+        let view = peer.lock().unwrap().immutable_view().unwrap();
+        assert_eq!(view.as_ptr() as usize % 65536, 0);
+        let mut p = peer.lock().unwrap();
+        p.nor.write_enable = true;
+        let before = p.nor.snapshot();
+        assert!(p.nor.begin(0, Mutation::Program { address: FLASH + 4095, bytes: vec![0] }).is_err());
+        assert!(p.nor.begin(0, Mutation::Erase { address: FLASH, size: 4096 }).is_err());
+        assert!(p.nor.begin(0, Mutation::Program { address: FLASH + 4095, bytes: vec![0;2] }).is_err());
+        assert!(p.nor.begin(0, Mutation::Erase { address: FLASH, size: 8192 }).is_err());
+        assert_eq!(before, p.nor.snapshot());
+        assert_eq!(p.nor.read(FLASH, 4096).unwrap(), view.as_slice());
+        p.nor.begin(0, Mutation::Program { address: FLASH + 4096, bytes: vec![0xa5] }).unwrap();
+        let mut host = ram_host(); host.now = 12;
+        p.nor.complete(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(p.nor.read(FLASH + 4096, 1).unwrap(), vec![0xa5]);
+        p.nor.write_enable=true;
+        p.nor.begin(12, Mutation::Erase { address:FLASH+4096, size:4096 }).unwrap();
+        host.now=32; p.nor.complete(&mut Cx::new(&mut host,0,0,0));
+        assert_eq!(p.nor.read(FLASH+4096,1).unwrap(),vec![255]);
+        drop(p); drop(peer);
+        assert_eq!(view.as_slice(), vec![255;4096]);
+    }
+    #[test]
+    fn protected_command_stream_dma_and_restore_are_atomic() {
+        let peer = protected_peer();
+        let mut flash = SerialFlashController::new(peer.clone(), 37);
+        let mut host = ram_host();
+        flash.regs[0x94/4] = FLASH as u32;
+        let before = flash.save();
+        let effects=json!([host.events,host.irqs,host.records]);
+        assert!(flash.access(&mut Cx::new(&mut host,0,0,0), CONTROLLER+0x90,4,true,0x210b0001).is_err());
+        assert_eq!(flash.save(), before);
+        assert_eq!(json!([host.events,host.irqs,host.records]),effects);
+        flash.regs[0x94/4] = (FLASH+4096) as u32;
+        flash.access(&mut Cx::new(&mut host,0,0,0), CONTROLLER+0x90,4,true,0x210b0001).unwrap();
+        let before = flash.save();
+        let effects=json!([host.events,host.irqs,host.records]);
+        assert!(flash.access(&mut Cx::new(&mut host,0,0,0), CONTROLLER+0x94,4,true,FLASH as u32).is_err());
+        assert_eq!(flash.save(),before);
+        flash.restore(&before).unwrap(); assert_eq!(flash.save(),before);
+        for pending in [json!({"at":200,"erase_address":FLASH,"size":4096}), json!({"at":200,"program_address":FLASH,"bytes":[0]})] {
+            let mut bad=before.clone(); bad["nor"]["pending"]=pending; bad["nor"]["write_enable"]=json!(false);
+            assert!(flash.restore(&bad).is_err()); assert_eq!(flash.save(),before);
+        }
+        let mut bad=before.clone(); bad["nor"]["overlay"]=json!({"0": vec![0;256]});
+        assert!(flash.restore(&bad).is_err()); assert_eq!(flash.save(),before);
+        let mut bad=before.clone(); bad["registers"][0x94/4]=json!(FLASH);
+        assert!(flash.restore(&bad).is_err()); assert_eq!(flash.save(),before);
+        bad=before.clone(); bad["nor"]["immutable_prefix"]=json!(8192);
+        assert!(flash.restore(&bad).is_err()); assert_eq!(flash.save(),before);
+        bad=before.clone(); bad["stream"]=json!({"address":FLASH,"size":1,"write":true,"accepted":false,"accepted_at":0});
+        assert!(flash.restore(&bad).is_err()); assert_eq!(flash.save(),before);
+        let mut bad=before.clone(); bad["nor"]["immutable_prefix"]=Value::Null;
+        assert!(flash.restore(&bad).is_err()); assert_eq!(flash.save(),before);
+        let mut unprotected=SerialFlashController::new(port(vec![255;8192],0x20,Geometry { erase_bytes:4096,page_bytes:256,erase_ticks:20,page_ticks:12 }).unwrap(),37);
+        let unprotected_before=unprotected.save();
+        assert!(unprotected.restore(&before).is_err()); assert_eq!(unprotected.save(),unprotected_before);
+        for accepted in [false,true] {
+            let mut bad=before.clone(); bad["stream"]=json!({"address":FLASH,"size":1,"write":true,"accepted":accepted,"accepted_at":0});
+            bad["nor"]["write_enable"]=json!(true);
+            if accepted { bad["program_fifo"]=json!([100,[0]]); }
+            assert!(flash.restore(&bad).is_err()); assert_eq!(flash.save(),before);
+        }
+        assert_eq!(json!([host.events,host.irqs,host.records]),effects);
+        flash.due=None; flash.regs[0x20/4]=0x202;
+        flash.regs[0x78/4]=FLASH as u32; flash.regs[0x7c/4]=1;
+        peer.lock().unwrap().nor.write_enable=true;
+        let before=flash.save();
+        let effects=json!([host.events,host.irqs,host.records]);
+        assert!(flash.access(&mut Cx::new(&mut host,0,0,0),CONTROLLER+0x70,4,true,1).is_err());
+        assert_eq!(flash.save(),before);
+        assert_eq!(json!([host.events,host.irqs,host.records]),effects);
+        let mut dma=DmaController::new(peer, std::array::from_fn(|n|207+n as u32));
+        dma.channels[0].regs[0x18/4]=FLASH as u32;
+        let before=dma.save();
+        assert!(dma.access(&mut Cx::new(&mut host,0,0,0),DMA+0x28,4,true,0x10000001).is_err());
+        assert_eq!(dma.save(),before);
+        let mut bad=before.clone(); bad["channels"][0]["submitted"]=json!(true);
+        assert!(dma.restore(&bad).is_err()); assert_eq!(dma.save(),before);
+        assert_eq!(json!([host.events,host.irqs,host.records]),effects);
     }
 
 }
