@@ -11,6 +11,9 @@ pub struct Guard {
     return_address: u64,
     store_limit: usize,
     stores: Vec<Store>,
+    model_readable: Vec<Span>,
+    model_writable: Vec<Span>,
+    model_writes: Vec<(u64, u64)>, // (address, byte count), not half-open spans
     pub returned: bool,
     pub failure: Option<String>,
     accepted: u64,
@@ -140,6 +143,9 @@ impl Guard {
             return_address,
             store_limit,
             stores: Vec::new(),
+            model_readable: Vec::new(),
+            model_writable: Vec::new(),
+            model_writes: Vec::new(),
             returned: false,
             failure: None,
             accepted: 0,
@@ -148,6 +154,51 @@ impl Guard {
 
     pub fn stopped(&self) -> bool {
         self.returned || self.failure.is_some()
+    }
+
+    /// Narrow device-initiated memory to subsets of the caller's RAM policy.
+    /// This does not admit CPU MMIO or attach/enable any device model.
+    pub fn with_model_memory(
+        mut self,
+        readable: Vec<Span>,
+        writable: Vec<Span>,
+    ) -> Result<Self, String> {
+        if self.accepted != 0 || self.stopped() || !self.model_writes.is_empty() {
+            return Err("Model memory policy must be selected before guarded execution".into());
+        }
+        self.model_readable = spans(readable, &self.readable)?;
+        self.model_writable = spans(writable, &self.writable)?;
+        Ok(self)
+    }
+
+    /// Preflight a complete host-model transaction before touching RAM.
+    pub fn model_access(&mut self, address: u64, size: u64, write: bool) -> Result<(), String> {
+        if self.stopped() {
+            return Err("Driver guard model access after stop".into());
+        }
+        let policy = if write {
+            &self.model_writable
+        } else {
+            &self.model_readable
+        };
+        let error = if size == 0 || !contains(policy, address, size) {
+            Some(format!(
+                "Driver guard rejected model {} at {address:#x} size={size}",
+                if write { "write" } else { "read" }
+            ))
+        } else if write && self.model_writes.len() >= self.store_limit {
+            Some("Driver guard model write record bound reached before transaction".into())
+        } else {
+            None
+        };
+        if let Some(error) = error {
+            self.failure = Some(error.clone());
+            return Err(error);
+        }
+        if write {
+            self.model_writes.push((address, size));
+        }
+        Ok(())
     }
 
     pub fn fetch(&mut self, core: usize, address: u64, size: u32) -> Result<bool, String> {
@@ -423,6 +474,9 @@ impl Guard {
             return_address: self.return_address,
             store_limit: self.store_limit,
             stores: self.stores.clone(),
+            model_readable: self.model_readable.clone(),
+            model_writable: self.model_writable.clone(),
+            model_writes: self.model_writes.clone(),
             returned: self.returned,
             failure: self.failure.clone(),
             accepted_instructions: self.accepted,
@@ -440,6 +494,9 @@ pub struct Snapshot {
     pub return_address: u64,
     pub store_limit: usize,
     pub stores: Vec<(usize, u64, u64, u32, u64)>,
+    pub model_readable: Vec<(u64, u64)>,
+    pub model_writable: Vec<(u64, u64)>,
+    pub model_writes: Vec<(u64, u64)>,
     pub returned: bool,
     pub failure: Option<String>,
     pub accepted_instructions: u64,
@@ -461,6 +518,93 @@ mod tests {
             vec![(0, 0x5000)],
         )
         .unwrap()
+    }
+
+    #[test]
+    fn model_memory_is_denied_until_explicitly_narrowed() {
+        let mut isolated = guard();
+        assert!(isolated.model_access(0x3000, 4, true).is_err());
+        assert!(isolated.snapshot().model_writes.is_empty());
+        assert!(isolated.failure.is_some());
+        assert!(
+            guard()
+                .with_model_memory(vec![(0x2000, 0x2005)], vec![])
+                .is_err()
+        );
+        assert!(
+            guard()
+                .with_model_memory(vec![], vec![(0x1000, 0x1004)])
+                .is_err()
+        );
+        assert!(
+            guard()
+                .with_model_memory(vec![], vec![(0x3000, 0x3005)])
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn model_transactions_preserve_direction_extent_and_sticky_failure() {
+        let configured = || {
+            guard()
+                .with_model_memory(vec![(0x2000, 0x2004)], vec![(0x3000, 0x3004)])
+                .unwrap()
+        };
+        let mut admitted = configured();
+        admitted.model_access(0x2000, 4, false).unwrap();
+        admitted.model_access(0x3000, 4, true).unwrap();
+        assert_eq!(admitted.snapshot().model_writes, vec![(0x3000, 4)]);
+        assert!(admitted.snapshot().stores.is_empty());
+        for (address, size, write) in [
+            (0x3000, 4, false),
+            (0x2000, 4, true),
+            (0x3001, 4, true),
+            (0x3000, 0, true),
+            (0x3000, u64::MAX, true),
+        ] {
+            let mut denied = configured();
+            assert!(denied.model_access(address, size, write).is_err());
+            assert!(denied.snapshot().model_writes.is_empty());
+            assert!(denied.model_access(0x3000, 4, true).is_err());
+        }
+    }
+
+    #[test]
+    fn model_write_records_are_bounded_and_stop_at_return() {
+        let mut bounded = guard()
+            .with_model_memory(vec![], vec![(0x3000, 0x3004)])
+            .unwrap();
+        for _ in 0..16 {
+            bounded.model_access(0x3000, 4, true).unwrap();
+        }
+        assert!(bounded.model_access(0x3000, 4, true).is_err());
+        assert_eq!(bounded.snapshot().model_writes.len(), 16);
+        let mut returned = guard()
+            .with_model_memory(vec![], vec![(0x3000, 0x3004)])
+            .unwrap();
+        assert!(!returned.fetch(0, 0x4000, 4).unwrap());
+        assert!(returned.model_access(0x3000, 4, true).is_err());
+        assert!(returned.snapshot().model_writes.is_empty());
+    }
+
+    #[test]
+    fn model_policy_cannot_change_after_execution_or_failure() {
+        let mut running = guard();
+        running
+            .preflight(0x1000, 0xe1a00000, 0xd3, |_| Ok(0))
+            .unwrap();
+        assert!(
+            running
+                .with_model_memory(vec![], vec![(0x3000, 0x3004)])
+                .is_err()
+        );
+        let mut failed = guard();
+        assert!(failed.model_access(0x3000, 4, true).is_err());
+        assert!(
+            failed
+                .with_model_memory(vec![], vec![(0x3000, 0x3004)])
+                .is_err()
+        );
     }
 
     #[test]

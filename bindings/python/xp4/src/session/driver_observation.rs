@@ -11,6 +11,9 @@ pub(super) fn state<'py>(py: Python<'py>, saved: Snapshot) -> PyResult<Bound<'py
     out.set_item("return_address", saved.return_address)?;
     out.set_item("store_limit", saved.store_limit)?;
     out.set_item("stores", saved.stores)?;
+    out.set_item("model_readable", saved.model_readable)?;
+    out.set_item("model_writable", saved.model_writable)?;
+    out.set_item("model_writes", saved.model_writes)?;
     out.set_item("returned", saved.returned)?;
     out.set_item("failure", saved.failure)?;
     out.set_item("accepted_instructions", saved.accepted_instructions)?;

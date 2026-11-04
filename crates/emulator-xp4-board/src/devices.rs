@@ -97,6 +97,9 @@ impl Host for PhysicalHost<'_> {
     fn ram_read(&self, address: u64, out: &mut [u8]) -> Result<(), String> {
         let source = self.cluster.memory_pointer(address, out.len(), 1)?;
         unsafe {
+            if let Some(guard) = &mut (*self.cluster.state.get()).driver_guard {
+                guard.model_access(address, out.len() as u64, false)?;
+            }
             std::ptr::copy_nonoverlapping(source, out.as_mut_ptr(), out.len());
         }
         Ok(())
@@ -104,6 +107,9 @@ impl Host for PhysicalHost<'_> {
     fn ram_write(&mut self, address: u64, bytes: &[u8]) -> Result<(), String> {
         let target = self.cluster.memory_pointer(address, bytes.len(), 2)?;
         unsafe {
+            if let Some(guard) = &mut (*self.cluster.state.get()).driver_guard {
+                guard.model_access(address, bytes.len() as u64, true)?;
+            }
             std::ptr::copy_nonoverlapping(bytes.as_ptr(), target, bytes.len());
             let state = &mut *self.cluster.state.get();
             for monitor in &mut state.exclusive {
