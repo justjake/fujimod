@@ -2106,7 +2106,70 @@
           "upper": 1
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14190,
+            "upper": 14188,
+            "when": {
+              "kind": "rows_inactive",
+              "rows": [
+                18,
+                19,
+                20
+              ]
+            }
+          },
+          {
+            "kind": "configuration_u16",
+            "lower": 14210,
+            "upper": 14208,
+            "when": {
+              "kind": "rows_inactive",
+              "rows": [
+                18,
+                19,
+                20
+              ]
+            }
+          },
+          {
+            "kind": "literal",
+            "lower": 0,
+            "upper": 65535,
+            "when": {
+              "kind": "self_active"
+            },
+            "unless": [
+              {
+                "kind": "configuration_u16",
+                "lower": 14186,
+                "upper": 14184
+              },
+              {
+                "kind": "configuration_u16",
+                "lower": 14206,
+                "upper": 14204
+              },
+              {
+                "kind": "configuration_u16",
+                "lower": 14190,
+                "upper": 14188
+              },
+              {
+                "kind": "configuration_u16",
+                "lower": 14210,
+                "upper": 14208
+              }
+            ]
+          }
+        ],
+        "callback": 13158060,
+        "expected_result": 1
+      }
     },
     {
       "id": "row-18",
@@ -2126,7 +2189,70 @@
           "upper": 1
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14194,
+            "upper": 14192,
+            "when": {
+              "kind": "rows_inactive",
+              "rows": [
+                17,
+                19,
+                20
+              ]
+            }
+          },
+          {
+            "kind": "configuration_u16",
+            "lower": 14214,
+            "upper": 14212,
+            "when": {
+              "kind": "rows_inactive",
+              "rows": [
+                17,
+                19,
+                20
+              ]
+            }
+          },
+          {
+            "kind": "literal",
+            "lower": 0,
+            "upper": 65535,
+            "when": {
+              "kind": "self_active"
+            },
+            "unless": [
+              {
+                "kind": "configuration_u16",
+                "lower": 14186,
+                "upper": 14184
+              },
+              {
+                "kind": "configuration_u16",
+                "lower": 14206,
+                "upper": 14204
+              },
+              {
+                "kind": "configuration_u16",
+                "lower": 14194,
+                "upper": 14192
+              },
+              {
+                "kind": "configuration_u16",
+                "lower": 14214,
+                "upper": 14212
+              }
+            ]
+          }
+        ],
+        "callback": 13157820,
+        "expected_result": 1
+      }
     },
     {
       "id": "row-19",
@@ -2146,7 +2272,70 @@
           "upper": 1
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14198,
+            "upper": 14196,
+            "when": {
+              "kind": "rows_inactive",
+              "rows": [
+                17,
+                18,
+                20
+              ]
+            }
+          },
+          {
+            "kind": "configuration_u16",
+            "lower": 14218,
+            "upper": 14216,
+            "when": {
+              "kind": "rows_inactive",
+              "rows": [
+                17,
+                18,
+                20
+              ]
+            }
+          },
+          {
+            "kind": "literal",
+            "lower": 0,
+            "upper": 65535,
+            "when": {
+              "kind": "self_active"
+            },
+            "unless": [
+              {
+                "kind": "configuration_u16",
+                "lower": 14186,
+                "upper": 14184
+              },
+              {
+                "kind": "configuration_u16",
+                "lower": 14206,
+                "upper": 14204
+              },
+              {
+                "kind": "configuration_u16",
+                "lower": 14198,
+                "upper": 14196
+              },
+              {
+                "kind": "configuration_u16",
+                "lower": 14218,
+                "upper": 14216
+              }
+            ]
+          }
+        ],
+        "callback": 13157580,
+        "expected_result": 1
+      }
     },
     {
       "id": "row-20",
@@ -2166,7 +2355,70 @@
           "upper": 1
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14202,
+            "upper": 14200,
+            "when": {
+              "kind": "rows_inactive",
+              "rows": [
+                17,
+                18,
+                19
+              ]
+            }
+          },
+          {
+            "kind": "configuration_u16",
+            "lower": 14222,
+            "upper": 14220,
+            "when": {
+              "kind": "rows_inactive",
+              "rows": [
+                17,
+                18,
+                19
+              ]
+            }
+          },
+          {
+            "kind": "literal",
+            "lower": 0,
+            "upper": 65535,
+            "when": {
+              "kind": "self_active"
+            },
+            "unless": [
+              {
+                "kind": "configuration_u16",
+                "lower": 14186,
+                "upper": 14184
+              },
+              {
+                "kind": "configuration_u16",
+                "lower": 14206,
+                "upper": 14204
+              },
+              {
+                "kind": "configuration_u16",
+                "lower": 14202,
+                "upper": 14200
+              },
+              {
+                "kind": "configuration_u16",
+                "lower": 14222,
+                "upper": 14220
+              }
+            ]
+          }
+        ],
+        "callback": 13157340,
+        "expected_result": 1
+      }
     },
     {
       "id": "row-21",
@@ -2186,7 +2438,19 @@
           "upper": 14184
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14202,
+            "upper": 14184
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-22",
@@ -2206,7 +2470,19 @@
           "upper": 14204
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-4",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14222,
+            "upper": 14204
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-23",

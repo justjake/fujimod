@@ -245,7 +245,9 @@
       "manual_page": 7,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-4"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Switch between P/S/A/M manual modes and automatic mode.",
@@ -853,7 +855,9 @@
       "manual_page": 248,
       "face": "Fn1",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-4"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Drive settings.",
@@ -962,7 +966,9 @@
       "manual_page": 93,
       "face": "AE-L",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-4"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Lock exposure while pressed.",
@@ -983,7 +989,9 @@
       "manual_page": 9,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-4"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Rotate to adjust settings and focus-frame size or playback zoom; press to zoom the active focus point, use the assigned function (Focus Check by default), or press and hold to choose the manual-focus display.",
@@ -1017,7 +1025,9 @@
       "manual_page": 93,
       "face": "AF-L",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-4"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Lock focus while pressed.",

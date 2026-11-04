@@ -142,6 +142,16 @@
           "result": "pass"
         },
         {
+          "id": "camera-fast-memory",
+          "title": "Memory capture measured at 8 MiB/s or more",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-fast-flash",
+          "title": "Flash capture measured at 8 MiB/s or more",
+          "result": "not-run"
+        },
+        {
           "id": "camera-debug",
           "title": "Debug mode saved persistently",
           "result": "not-run"

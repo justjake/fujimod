@@ -1,5 +1,48 @@
 {
   "$defs": {
+    "AdcCondition": {
+      "description": "Scanner state a callback requires before an analog interval counts.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "No listed scanner row holds its stable pressed state.",
+          "properties": {
+            "kind": {
+              "const": "rows_inactive",
+              "type": "string"
+            },
+            "rows": {
+              "description": "Scanner row indices of the same table, excluding the input's own row.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "rows"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The input's own scanner row already holds its stable pressed state.",
+          "properties": {
+            "kind": {
+              "const": "self_active",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "AdcInterval": {
       "description": "Bounds of one accepted analog interval.",
       "oneOf": [
@@ -18,12 +61,30 @@
               "minimum": 0,
               "type": "integer"
             },
+            "unless": {
+              "description": "Unconditional intervals whose samples the firmware excludes from this one.",
+              "items": {
+                "$ref": "#/$defs/AdcInterval"
+              },
+              "type": "array"
+            },
             "upper": {
               "description": "Inclusive upper sample value.",
               "format": "uint16",
               "maximum": 65535,
               "minimum": 0,
               "type": "integer"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AdcCondition"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Scanner state the firmware requires before the interval counts, when present."
             }
           },
           "required": [
@@ -48,12 +109,30 @@
               "minimum": 0,
               "type": "integer"
             },
+            "unless": {
+              "description": "Unconditional intervals whose samples the firmware excludes from this one.",
+              "items": {
+                "$ref": "#/$defs/AdcInterval"
+              },
+              "type": "array"
+            },
             "upper": {
               "description": "Byte offset of the inclusive upper sample value.",
               "format": "uint16",
               "maximum": 65535,
               "minimum": 0,
               "type": "integer"
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AdcCondition"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Scanner state the firmware requires before the interval counts, when present."
             }
           },
           "required": [

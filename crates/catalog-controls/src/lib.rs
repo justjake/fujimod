@@ -635,6 +635,12 @@ pub enum AdcInterval {
         lower: u16,
         /// Inclusive upper sample value.
         upper: u16,
+        /// Scanner state the firmware requires before the interval counts, when present.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        when: Option<AdcCondition>,
+        /// Unconditional intervals whose samples the firmware excludes from this one.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        unless: Vec<AdcInterval>,
     },
     /// Byte offsets of little-endian u16 bounds in the loaded configuration.
     ConfigurationU16 {
@@ -642,7 +648,55 @@ pub enum AdcInterval {
         lower: u16,
         /// Byte offset of the inclusive upper sample value.
         upper: u16,
+        /// Scanner state the firmware requires before the interval counts, when present.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        when: Option<AdcCondition>,
+        /// Unconditional intervals whose samples the firmware excludes from this one.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        unless: Vec<AdcInterval>,
     },
+}
+
+impl AdcInterval {
+    /// Scanner state required before the interval counts.
+    pub fn condition(&self) -> Option<&AdcCondition> {
+        match self {
+            Self::Literal { when, .. } | Self::ConfigurationU16 { when, .. } => when.as_ref(),
+        }
+    }
+
+    /// Intervals excluded from this one.
+    pub fn exclusions(&self) -> &[AdcInterval] {
+        match self {
+            Self::Literal { unless, .. } | Self::ConfigurationU16 { unless, .. } => unless,
+        }
+    }
+
+    fn bounds_valid(&self) -> bool {
+        match self {
+            Self::Literal { lower, upper, .. } => lower <= upper,
+            Self::ConfigurationU16 { lower, upper, .. } => *lower != u16::MAX && *upper != u16::MAX,
+        }
+    }
+}
+
+/// Scanner state a callback requires before an analog interval counts.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum AdcCondition {
+    /// No listed scanner row holds its stable pressed state.
+    RowsInactive {
+        /// Scanner row indices of the same table, excluding the input's own row.
+        rows: Vec<u32>,
+    },
+    /// The input's own scanner row already holds its stable pressed state.
+    SelfActive,
 }
 
 /// Ownership of a generated input record without a control alias map.
@@ -1393,17 +1447,49 @@ impl FirmwareControlIds {
                 } = electrical
                     && (intervals.is_empty()
                         || callback.is_some() != expected_result.is_some()
-                        || intervals.iter().any(|interval| match interval {
-                            AdcInterval::Literal { lower, upper } => lower > upper,
-                            AdcInterval::ConfigurationU16 { lower, upper } => {
-                                *lower == u16::MAX || *upper == u16::MAX
-                            }
+                        || intervals.iter().any(|interval| {
+                            !interval.bounds_valid()
+                                || interval.exclusions().iter().any(|excluded| {
+                                    !excluded.bounds_valid()
+                                        || excluded.condition().is_some()
+                                        || !excluded.exclusions().is_empty()
+                                })
                         }))
                 {
                     return Err(format!(
                         "input {} has an invalid ADC interval or callback",
                         input.id
                     ));
+                }
+                if let ElectricalInput::Adc {
+                    intervals,
+                    callback,
+                    ..
+                } = electrical
+                {
+                    let own = input.scanner.as_ref().map(|scanner| scanner.index);
+                    for condition in intervals.iter().filter_map(AdcInterval::condition) {
+                        let valid = callback.is_some()
+                            && own.is_some()
+                            && match condition {
+                                AdcCondition::SelfActive => true,
+                                AdcCondition::RowsInactive { rows } => {
+                                    let mut seen = BTreeSet::new();
+                                    !rows.is_empty()
+                                        && rows.iter().all(|row| {
+                                            *row < self.scanner.count
+                                                && Some(*row) != own
+                                                && seen.insert(*row)
+                                        })
+                                }
+                            };
+                        if !valid {
+                            return Err(format!(
+                                "input {} has an invalid ADC scanner condition",
+                                input.id
+                            ));
+                        }
+                    }
                 }
                 if let ElectricalInput::SerialStatus {
                     register,
@@ -1666,6 +1752,90 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn adc_interval_conditions_round_trip_and_stay_optional() {
+        let value = json!({"kind":"literal","lower":0,"upper":65535,
+            "when":{"kind":"self_active"},
+            "unless":[{"kind":"configuration_u16","lower":14186,"upper":14184}]});
+        let interval: AdcInterval = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(interval.condition(), Some(&AdcCondition::SelfActive));
+        assert_eq!(interval.exclusions().len(), 1);
+        assert_eq!(serde_json::to_value(interval).unwrap(), value);
+        let rows = json!({"kind":"configuration_u16","lower":1,"upper":2,
+            "when":{"kind":"rows_inactive","rows":[3,4]}});
+        let interval: AdcInterval = serde_json::from_value(rows).unwrap();
+        assert_eq!(
+            interval.condition(),
+            Some(&AdcCondition::RowsInactive { rows: vec![3, 4] })
+        );
+        assert!(
+            serde_json::from_value::<AdcInterval>(
+                json!({"kind":"literal","lower":1,"upper":2,"when":{"kind":"held"}})
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn adc_conditions_name_other_rows_of_a_callback_predicate() {
+        let check = |electrical: Value| {
+            let (physical, mut firmware) = fixture();
+            firmware.scanner.count = 3;
+            for index in [1, 2] {
+                let input = firmware
+                    .inputs
+                    .iter_mut()
+                    .find(|input| input.event == index)
+                    .unwrap();
+                input.scanner = Some(serde_json::from_value(json!({"index":index,
+                    "witness":{"physical_key":index,"input_kind":"kind_2","source":11,"lower":0,"upper":0}}))
+                    .unwrap());
+            }
+            let movie = firmware
+                .inputs
+                .iter_mut()
+                .find(|input| input.id == "input-movie")
+                .unwrap();
+            movie.electrical = Some(serde_json::from_value(electrical).unwrap());
+            firmware.validate(&physical, &BTreeSet::from(["contact"]))
+        };
+        let adc = |intervals: Value, callback: Value| {
+            json!({"kind":"adc","connection_id":"contact","intervals":intervals,
+                "callback":callback,"expected_result":if callback.is_null() {Value::Null} else {json!(1)}})
+        };
+        let press = |rows: Value| {
+            json!({"kind":"configuration_u16","lower":10,"upper":12,
+                "when":{"kind":"rows_inactive","rows":rows}})
+        };
+        let hold = |unless: Value| json!({"kind":"literal","lower":0,"upper":65535,"when":{"kind":"self_active"},"unless":unless});
+        let release =
+            json!([{"kind":"configuration_u16","lower":20,"upper":22}, press(json!([1]))]);
+        check(adc(
+            json!([press(json!([1, 2])), hold(json!([]))]),
+            json!(4096),
+        ))
+        .unwrap();
+        assert!(
+            check(adc(
+                json!([hold(
+                    json!([{"kind":"configuration_u16","lower":20,"upper":22}])
+                )]),
+                json!(4096)
+            ))
+            .is_ok()
+        );
+        for invalid in [
+            adc(json!([press(json!([0]))]), json!(4096)),
+            adc(json!([press(json!([3]))]), json!(4096)),
+            adc(json!([press(json!([1, 1]))]), json!(4096)),
+            adc(json!([press(json!([]))]), json!(4096)),
+            adc(json!([press(json!([1]))]), Value::Null),
+            adc(json!([hold(release)]), json!(4096)),
+        ] {
+            assert!(check(invalid).unwrap_err().contains("invalid ADC"));
+        }
     }
 
     #[test]
