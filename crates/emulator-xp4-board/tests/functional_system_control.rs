@@ -140,3 +140,22 @@ fn boolean_write_port_is_optional_exact_and_separate_from_dma_mux() {
     v["xp4_functional_system_control"]["boolean_write_fff4a400"] = json!({"enabled": false});
     assert!(Session::new(serde_json::from_value(v).unwrap(), None, vec![]).is_err());
 }
+
+#[test]
+fn serial_clock_port_owns_only_its_explicit_word_and_rejects_overlap() {
+    let mut v = input(); v["xp4_functional_system_control"] = config();
+    v["control_requests"] = json!([[0xfff48700u64, 8]]);
+    assert!(Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).is_ok());
+    v["xp4_functional_system_control"]["serial_clock_select_fff48700"] = json!({"enabled":true});
+    let error = Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).err().unwrap();
+    assert!(error.contains("Overlapping"), "{error}");
+    for address in [0xfff486fcu64, 0xfff48704] {
+        v["control_requests"] = json!([[address, 8]]);
+        let session = Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).unwrap();
+        let state: Value = serde_json::from_str(&session.device_state_json()["xp4-functional-system-control"]).unwrap();
+        assert_eq!(state["serial_clock_state"], json!({"last_write":null}));
+        assert!(state["boolean_write_state"].is_null());
+    }
+    v["xp4_functional_system_control"]["serial_clock_select_fff48700"] = json!({"enabled":false});
+    assert!(Session::new(serde_json::from_value(v).unwrap(), None, vec![]).is_err());
+}

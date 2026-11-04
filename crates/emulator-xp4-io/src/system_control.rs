@@ -10,6 +10,11 @@ pub const VALUE: u64 = 0xff701240;
 pub const REQUEST: u64 = 0xff701280;
 pub const PROFILE: &str = "experimental-source-functional-v1";
 pub const BOOLEAN_WRITE_PORT: u64 = 0xfff4a400;
+pub const SERIAL_CLOCK_SELECT: u64 = 0xfff48700;
+/// A single two-bit selector lane, or zero. No frequency/readback law.
+fn serial_clock_word(value: u32) -> bool {
+    (0..6).any(|lane| value & !(3u32 << (lane * 2)) == 0)
+}
 
 pub const A_WORDS: [(u64, u32); 16] = [
     (0xff70f000, 0x00000007),
@@ -61,16 +66,16 @@ pub struct Graphics {
     pub initial_value: u32,
     pub completion_ticks: u64,
 }
-/// Optional boolean write acceptance. Physical effects, reset and readback
+/// Optional write-port acceptance. Physical effects, reset and readback
 /// semantics are unknown; this option supplies none.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct BooleanWritePort {
+pub struct WritePortEnable {
     pub enabled: bool,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct BooleanWriteState {
+struct WriteOnlyState {
     last_write: Option<u32>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -87,12 +92,15 @@ pub struct Config {
     #[serde(default)]
     pub selection_special: Option<crate::selection_special::Inputs>,
     #[serde(default)]
-    pub boolean_write_fff4a400: Option<BooleanWritePort>,
+    pub boolean_write_fff4a400: Option<WritePortEnable>,
+    #[serde(default)]
+    pub serial_clock_select_fff48700: Option<WritePortEnable>,
 }
 impl Config {
     fn validate(&self) -> Result<(), String> {
         if self.profile != PROFILE || self.control_f03c_reset & !0x7ff != 0
             || self.boolean_write_fff4a400.as_ref().is_some_and(|port| !port.enabled)
+            || self.serial_clock_select_fff48700.as_ref().is_some_and(|port| !port.enabled)
             || self.graphics.as_ref().is_some_and(|g| g.initial_value & !0x1ff != 0 || g.completion_ticks == 0)
         {
             return Err("Invalid experimental XP4 functional system-control input".into());
@@ -141,7 +149,9 @@ pub struct SystemControl {
     #[serde(default)]
     selection_state: Option<crate::selection_special::SelectionSpecial>,
     #[serde(default)]
-    boolean_write_state: Option<BooleanWriteState>,
+    boolean_write_state: Option<WriteOnlyState>,
+    #[serde(default)]
+    serial_clock_state: Option<WriteOnlyState>,
     staged: u32,
     applied: u32,
     value_written: bool,
@@ -161,8 +171,10 @@ impl SystemControl {
         let selection_state = config.selection_special.clone()
             .map(crate::selection_special::SelectionSpecial::new).transpose()?;
         let boolean_write_state = config.boolean_write_fff4a400.as_ref()
-            .map(|_| BooleanWriteState { last_write: None });
-        Ok(Self { control: config.control_f03c_reset, retained_banks, configuration_state, selection_state, boolean_write_state, config, staged: initial,
+            .map(|_| WriteOnlyState { last_write: None });
+        let serial_clock_state = config.serial_clock_select_fff48700.as_ref()
+            .map(|_| WriteOnlyState { last_write: None });
+        Ok(Self { control: config.control_f03c_reset, retained_banks, configuration_state, selection_state, boolean_write_state, serial_clock_state, config, staged: initial,
             applied: initial, value_written: false, pending: None, generation: 0, admitted: false })
     }
     pub fn windows(&self) -> Vec<(u64, u64)> {
@@ -173,6 +185,7 @@ impl SystemControl {
         if let Some(model) = &self.configuration_state { spans.extend(model.windows()); }
         if let Some(model) = &self.selection_state { spans.extend(model.windows()); }
         if self.boolean_write_state.is_some() { spans.push((BOOLEAN_WRITE_PORT, BOOLEAN_WRITE_PORT + 4)); }
+        if self.serial_clock_state.is_some() { spans.push((SERIAL_CLOCK_SELECT, SERIAL_CLOCK_SELECT + 4)); }
         if self.config.graphics.is_some() { spans.extend([(VALUE, VALUE + 4), (REQUEST, REQUEST + 4)]); }
         spans
     }
@@ -186,6 +199,7 @@ impl SystemControl {
     fn known(&self, address: u64, size: u8) -> bool {
         size == 4 && (address == CONTROL || self.request_word(address).is_some()
             || address == BOOLEAN_WRITE_PORT && self.boolean_write_state.is_some()
+            || address == SERIAL_CLOCK_SELECT && self.serial_clock_state.is_some()
             || self.selection_state.as_ref().is_some_and(|model| model.owns(address, size))
             || self.configuration_state.as_ref().is_some_and(|model| model.owns(address, size)) || self.config.graphics.is_some() && matches!(address, VALUE | REQUEST))
     }
@@ -217,7 +231,7 @@ impl SystemControl {
 impl Device for SystemControl {
     fn name(&self) -> &'static str { "xp4-functional-system-control" }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
-        if address == BOOLEAN_WRITE_PORT { cx.unmodeled(); return 0; }
+        if matches!(address, BOOLEAN_WRITE_PORT | SERIAL_CLOCK_SELECT) { cx.unmodeled(); return 0; }
         if !self.known(address, size) { cx.unmodeled(); return 0; }
         self.admit(cx);
         if let Some(model) = &mut self.configuration_state {
@@ -235,6 +249,16 @@ impl Device for SystemControl {
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
         if !self.known(address, size) { cx.unmodeled(); return; }
         if value > u32::MAX as u64 { cx.fail("XP4 functional control requires a 32-bit value"); return; }
+        if address == SERIAL_CLOCK_SELECT {
+            if !serial_clock_word(value as u32) { cx.fail("XP4 serial clock write requires one two-bit selector lane"); return; }
+            self.admit(cx);
+            self.serial_clock_state.as_mut().unwrap().last_write = Some(value as u32);
+            cx.record(Record::new("XP4 experimental serial clock selection write; physical effects unknown", [
+                ("address", Field::int(address)), ("value", Field::int(value)),
+                ("law", Field::constant("Accepted write only; no reset, readback, frequency, scheduling, IRQ or DMA effects")),
+            ]));
+            return;
+        }
         if address == BOOLEAN_WRITE_PORT {
             if value > 1 { cx.fail("XP4 fff4a400 write port accepts only boolean values"); return; }
             self.admit(cx);
@@ -325,6 +349,12 @@ impl Device for SystemControl {
                 && (port.last_write.is_none() || state.admitted),
             _ => false,
         };
+        let serial_clock_valid = match (&state.serial_clock_state, &state.config.serial_clock_select_fff48700) {
+            (None, None) => true,
+            (Some(port), Some(_)) => port.last_write.is_none_or(serial_clock_word)
+                && (port.last_write.is_none() || state.admitted),
+            _ => false,
+        };
         let configuration_valid = match (&state.configuration_state, &state.config.configuration_requests) {
             (None, None) => true,
             (Some(model), Some(inputs)) => model.validate_state(inputs).is_ok(),
@@ -338,7 +368,7 @@ impl Device for SystemControl {
         };
         let no_graphics = state.config.graphics.is_none();
         let initial = state.config.graphics.as_ref().map_or(0, |g| g.initial_value);
-        if !boolean_write_valid || !selection_valid || !configuration_valid || !banks_valid || (!state.value_written && (state.staged != initial || state.applied != initial || state.generation != 0))
+        if !serial_clock_valid || !boolean_write_valid || !selection_valid || !configuration_valid || !banks_valid || (!state.value_written && (state.staged != initial || state.applied != initial || state.generation != 0))
             || (state.generation == 0 && state.applied != initial)
             || state.config != self.config || state.control & !0x7ff != 0 || state.staged & !0x1ff != 0 || state.applied & !0x1ff != 0
             || no_graphics && (state.staged != 0 || state.applied != 0 || state.value_written || state.pending.is_some() || state.generation != 0)
@@ -365,7 +395,7 @@ mod tests {
         fn record(&mut self, r: Record) { self.records.push(r); }
     }
     fn config(ticks: Option<u64>) -> Config {
-        Config { profile: PROFILE.into(), control_f03c_reset: 7, retained_request_banks: None, configuration_requests: None, selection_special: None, boolean_write_fff4a400: None,
+        Config { profile: PROFILE.into(), control_f03c_reset: 7, retained_request_banks: None, configuration_requests: None, selection_special: None, boolean_write_fff4a400: None, serial_clock_select_fff48700: None,
             graphics: ticks.map(|completion_ticks| Graphics { initial_value: 0, completion_ticks }) }
     }
     fn write(d: &mut SystemControl, c: &mut Clock, address: u64, size: u8, value: u64) -> Result<(), String> {
@@ -378,7 +408,7 @@ mod tests {
     }
     fn boolean_config() -> Config {
         let mut inputs = config(None);
-        inputs.boolean_write_fff4a400 = Some(BooleanWritePort { enabled: true });
+        inputs.boolean_write_fff4a400 = Some(WritePortEnable { enabled: true });
         inputs
     }
     #[test]
@@ -478,6 +508,96 @@ mod tests {
             }
             assert!(c.events.is_empty());
             states.push(d.save());
+        }
+        assert_eq!(states[0], states[1]);
+    }
+    fn serial_clock_config() -> Config {
+        let mut c = config(None);
+        c.serial_clock_select_fff48700 = Some(WritePortEnable { enabled: true });
+        c
+    }
+    #[test]
+    fn serial_clock_accepts_only_one_selector_lane_and_never_reads_back() {
+        let mut d = SystemControl::new(serial_clock_config()).unwrap();
+        let mut c = Clock::default();
+        assert_eq!(d.save()["serial_clock_state"]["last_write"], Value::Null);
+        let mut admitted = 0;
+        for value in 0..4096u64 {
+            let valid = (0..6).any(|lane| value & !(3u64 << (lane * 2)) == 0);
+            let before = d.save(); let records = c.records.len();
+            let result = write(&mut d, &mut c, SERIAL_CLOCK_SELECT, 4, value);
+            assert_eq!(result.is_ok(), valid, "value {value:x}");
+            if valid {
+                admitted += 1;
+                assert_eq!(d.save()["serial_clock_state"]["last_write"], json!(value));
+            } else { assert_eq!(d.save(), before); assert_eq!(c.records.len(), records); }
+        }
+        assert_eq!(admitted, 19);
+        assert!(c.events.is_empty());
+        let before = d.save(); let records = c.records.len();
+        assert!(read(&mut d, &mut c, SERIAL_CLOCK_SELECT, 4).is_err());
+        assert_eq!(d.save(), before); assert_eq!(c.records.len(), records);
+        assert_eq!(d.next_deadline(c.now), None);
+    }
+    #[test]
+    fn serial_clock_refuses_invalid_access_before_admission_or_state_changes() {
+        let mut d = SystemControl::new(serial_clock_config()).unwrap();
+        let mut c = Clock::default(); let before = d.save();
+        for (address, size, value) in [(SERIAL_CLOCK_SELECT, 4, 0x1000),
+            (SERIAL_CLOCK_SELECT, 4, u64::MAX), (SERIAL_CLOCK_SELECT, 4, 5),
+            (SERIAL_CLOCK_SELECT, 1, 4), (SERIAL_CLOCK_SELECT, 2, 4),
+            (SERIAL_CLOCK_SELECT, 8, 4), (SERIAL_CLOCK_SELECT + 1, 4, 4),
+            (SERIAL_CLOCK_SELECT - 4, 4, 4), (SERIAL_CLOCK_SELECT + 4, 4, 4)] {
+            assert!(write(&mut d, &mut c, address, size, value).is_err());
+            assert_eq!(d.save(), before); assert!(c.records.is_empty() && c.events.is_empty());
+        }
+        for size in [1, 2, 4, 8] {
+            assert!(read(&mut d, &mut c, SERIAL_CLOCK_SELECT, size).is_err());
+            assert_eq!(d.save(), before); assert!(c.records.is_empty());
+        }
+        let mut strict = SystemControl::new(config(None)).unwrap();
+        assert!(!strict.windows().contains(&(SERIAL_CLOCK_SELECT, SERIAL_CLOCK_SELECT + 4)));
+        assert!(write(&mut strict, &mut c, SERIAL_CLOCK_SELECT, 4, 4).is_err());
+    }
+    #[test]
+    fn serial_clock_checkpoint_requires_exact_inputs_presence_and_single_lane() {
+        let mut d = SystemControl::new(serial_clock_config()).unwrap();
+        d.restore(&d.save()).unwrap();
+        write(&mut d, &mut Clock::default(), SERIAL_CLOCK_SELECT, 4, 4).unwrap();
+        let state = d.save();
+        let mut restored = SystemControl::new(serial_clock_config()).unwrap();
+        restored.restore(&state).unwrap(); assert_eq!(restored.save(), state);
+        for value in [json!(5), json!(4096), json!(-1), json!(true)] {
+            let mut bad = state.clone(); bad["serial_clock_state"]["last_write"] = value;
+            assert!(restored.restore(&bad).is_err()); assert_eq!(restored.save(), state);
+        }
+        for key in ["serial_clock_state", "config", "admitted"] {
+            let mut bad = state.clone();
+            match key {
+                "config" => bad["config"]["serial_clock_select_fff48700"] = Value::Null,
+                "admitted" => bad["admitted"] = json!(false),
+                _ => bad[key] = Value::Null,
+            }
+            assert!(restored.restore(&bad).is_err()); assert_eq!(restored.save(), state);
+        }
+        let mut strict = SystemControl::new(config(None)).unwrap();
+        assert!(strict.restore(&state).is_err()); assert!(d.restore(&strict.save()).is_err());
+        let mut disabled = serial_clock_config();
+        disabled.serial_clock_select_fff48700.as_mut().unwrap().enabled = false;
+        assert!(SystemControl::new(disabled).is_err());
+    }
+    #[test]
+    fn serial_clock_writes_do_not_depend_on_core_pc_or_time() {
+        let mut states = Vec::new();
+        for (core, pc, now) in [(0, 0x1234, 0), (3, 0x5678, 9876)] {
+            let mut d = SystemControl::new(serial_clock_config()).unwrap();
+            let mut c = Clock { now, ..Default::default() };
+            for value in [4, 0, 0xc00] {
+                let mut cx = Cx::new(&mut c, core, pc, 0);
+                d.write(&mut cx, SERIAL_CLOCK_SELECT, 4, value);
+                assert!(cx.take_refusal().is_none());
+            }
+            assert!(c.events.is_empty()); states.push(d.save());
         }
         assert_eq!(states[0], states[1]);
     }
