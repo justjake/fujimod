@@ -17,3 +17,5 @@ pub mod configuration_request;
 pub mod selection_special;
 
 pub mod base_parameter;
+
+pub mod i2c;
