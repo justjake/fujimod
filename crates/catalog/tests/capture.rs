@@ -77,7 +77,7 @@ fn parallel_nand_requires_the_corrected_main_page_contract() {
         assert!(flash.device.jedec_id.is_none());
         assert_eq!(flash.transport.as_deref(), Some("exr2-query-heap"));
         assert_eq!((flash.window.address, flash.window.size), (0, 0x8000000));
-        let nand = flash.reader.nand.as_ref().unwrap();
+        let nand = flash.reader.as_ref().unwrap().nand.as_ref().unwrap();
         assert_eq!(
             (
                 nand.page_bytes,
@@ -97,10 +97,31 @@ fn parallel_nand_requires_the_corrected_main_page_contract() {
             )
         );
         let mut invalid = flash.clone();
-        invalid.reader.nand.as_mut().unwrap().controller_mode = 1;
+        invalid
+            .reader
+            .as_mut()
+            .unwrap()
+            .nand
+            .as_mut()
+            .unwrap()
+            .controller_mode = 1;
         assert!(invalid.validate().is_err());
-        invalid.reader.nand.as_mut().unwrap().controller_mode = 0;
-        invalid.reader.nand.as_mut().unwrap().max_pages_per_call = 65;
+        invalid
+            .reader
+            .as_mut()
+            .unwrap()
+            .nand
+            .as_mut()
+            .unwrap()
+            .controller_mode = 0;
+        invalid
+            .reader
+            .as_mut()
+            .unwrap()
+            .nand
+            .as_mut()
+            .unwrap()
+            .max_pages_per_call = 65;
         assert!(invalid.validate().is_err());
     }
     for firmware in ["x100s-121", "x20-103"] {
@@ -109,7 +130,7 @@ fn parallel_nand_requires_the_corrected_main_page_contract() {
         assert_eq!(flash.device.kind, "raw-nand");
         assert_eq!((flash.window.address, flash.window.size), (0, 0x4000000));
         assert_eq!(flash.code_ranges.len(), 16);
-        let nand = flash.reader.nand.as_ref().unwrap();
+        let nand = flash.reader.as_ref().unwrap().nand.as_ref().unwrap();
         assert_eq!(
             (
                 nand.page_bytes,
@@ -122,10 +143,11 @@ fn parallel_nand_requires_the_corrected_main_page_contract() {
         assert_eq!(flash.transport.as_deref(), Some("exr2-query-heap"));
         for (page, pages) in [(512, 64), (2048, 32), (1024, 32)] {
             let mut invalid = flash.clone();
-            let nand = invalid.reader.nand.as_mut().unwrap();
+            let reader = invalid.reader.as_mut().unwrap();
+            let nand = reader.nand.as_mut().unwrap();
             nand.page_bytes = page;
             nand.pages_per_block = pages;
-            invalid.reader.alignment = page;
+            reader.alignment = page;
             assert!(invalid.validate().is_err());
         }
     }

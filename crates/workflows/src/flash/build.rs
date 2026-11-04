@@ -1,5 +1,5 @@
 //! Offline preparation and staging of compiled stock-reader payloads.
-use super::{Artifact, CodeCheck, Payload, Range, Transport, WordCheck};
+use super::{Artifact, CodeCheck, MappedPayload, Payload, Range, Transport, WordCheck};
 use fujimod_catalog::{ReferenceCatalog, ResolvedSelection};
 use fujimod_firmware::{extent, invert, sha256};
 use serde::Deserialize;
@@ -323,6 +323,10 @@ pub fn prepare(input: &Selection, selected: &ResolvedSelection) -> Result<(Artif
         size: 4,
         value: 7,
     });
+    let stock_reader = flash
+        .reader
+        .as_ref()
+        .ok_or("stock flash reader is absent")?;
     let entry = symbol(&manifest, "flash_reader", None, base, image.len() as u64)?;
     check(
         num(
@@ -334,7 +338,7 @@ pub fn prepare(input: &Selection, selected: &ResolvedSelection) -> Result<(Artif
     let stock = one(
         list(&manifest, "stock_symbols")?,
         "name",
-        &flash.reader.symbol,
+        &stock_reader.symbol,
     )?;
     check(
         flash.update_image.dat_offset <= inverted.len() as u64,
@@ -402,7 +406,7 @@ pub fn prepare(input: &Selection, selected: &ResolvedSelection) -> Result<(Artif
             "size",
         )?)?,
         stock_reader: num(stock, "address")?,
-        stock_reader_symbol: flash.reader.symbol.clone(),
+        stock_reader_symbol: stock_reader.symbol.clone(),
         mutable,
         transport: Transport {
             callback,
@@ -426,7 +430,7 @@ pub fn prepare(input: &Selection, selected: &ResolvedSelection) -> Result<(Artif
     Ok((
         Artifact {
             payload: Payload::Xp5Command(payload),
-            image: "flash-reader.bin".into(),
+            image: Some("flash-reader.bin".into()),
         },
         image,
     ))
@@ -606,7 +610,7 @@ fn prepare_exr2(input: &Selection, selected: &ResolvedSelection) -> Result<(Arti
     Ok((
         Artifact {
             payload: Payload::Exr2Query(payload),
-            image: "flash-reader.bin".into(),
+            image: Some("flash-reader.bin".into()),
         },
         image,
     ))
@@ -621,15 +625,61 @@ pub fn stage(recipe: &Stage) -> Result<()> {
         .ok_or("runtime firmware list")?;
     for input in &recipe.selections {
         let selected = catalog.resolve_firmware(&input.firmware_id)?;
-        check(!input.command.is_empty(), "compiler command is empty")?;
-        let status = Command::new(&input.command[0])
-            .args(&input.command[1..])
-            .status()?;
-        check(status.success(), "reader compilation failed")?;
-        let (artifact, image) = prepare(input, &selected)?;
+        let (artifact, image) = if input.command.is_empty() {
+            let flash = selected
+                .flash
+                .as_ref()
+                .ok_or("mapped firmware has no flash contract")?;
+            let bulk = selected
+                .bulk
+                .as_ref()
+                .ok_or("mapped firmware has no bulk contract")?;
+            let update = selected
+                .firmware
+                .update
+                .as_ref()
+                .ok_or("mapped firmware has no update identity")?;
+            let update_bytes = fs::read(&input.update)?;
+            check(
+                update_bytes.len() as u64 == update.size && sha256(&update_bytes) == update.sha256,
+                "update identity differs",
+            )?;
+            check(
+                flash.update_image.xor == 255,
+                "unsupported mapped update XOR",
+            )?;
+            let decoded = invert(&update_bytes);
+            let control = extent(
+                &decoded,
+                flash.update_image.dat_offset + flash.control.offset,
+                flash.control.size,
+            )?;
+            check(
+                sha256(control) == flash.control.sha256,
+                "mapped flash control differs from the update",
+            )?;
+            let artifact = Artifact {
+                payload: Payload::MappedE1(MappedPayload {
+                    schema: 1,
+                    firmware_id: selected.firmware.id.clone(),
+                    firmware_sha256: update.sha256.clone(),
+                }),
+                image: None,
+            };
+            artifact.payload.validate(flash, bulk, &[])?;
+            (artifact, Vec::new())
+        } else {
+            let status = Command::new(&input.command[0])
+                .args(&input.command[1..])
+                .status()?;
+            check(status.success(), "reader compilation failed")?;
+            prepare(input, &selected)?
+        };
         let directory = recipe.runtime.join(&input.firmware_id);
         fs::create_dir_all(&directory)?;
-        fs::write(directory.join(&artifact.image), &image)?;
+        if let Some(name) = &artifact.image {
+            fs::write(directory.join(name), &image)?;
+        }
         let mut metadata = serde_json::to_vec_pretty(&artifact)?;
         metadata.push(b'\n');
         fs::write(directory.join("flash-reader.json"), metadata)?;
@@ -645,11 +695,15 @@ pub fn stage(recipe: &Stage) -> Result<()> {
         )?;
         entry["body"] = json!(selected.body.id);
         entry["flash_reader"] = json!(format!("runtime/{}/flash-reader.json", input.firmware_id));
-        println!(
-            "{}: staged {}-byte flash reader",
-            input.firmware_id,
-            image.len()
-        );
+        if artifact.image.is_some() {
+            println!(
+                "{}: staged {}-byte flash reader",
+                input.firmware_id,
+                image.len()
+            );
+        } else {
+            println!("{}: staged mapped-E1 flash metadata", input.firmware_id);
+        }
     }
     let temporary = path.with_extension("json.tmp");
     let mut bytes = serde_json::to_vec_pretty(&runtime)?;

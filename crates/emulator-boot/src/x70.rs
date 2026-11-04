@@ -1090,25 +1090,30 @@ fn apply_body_facts(
             else {
                 return Err("X70 MCU has no serial status register".into());
             };
-            let mut status_selection = gpio_selection(selection, &mcu.select_connection_id)?;
-            for mut idle in gpio_selection(selection, &lens.route.select_connection_id)? {
-                let high = idle["high"].as_bool().ok_or("invalid lens select level")?;
-                idle["high"] = json!(!high);
-                status_selection.push(idle);
+            let attached = part(selection, &lens.part_id)?
+                .attachment
+                .as_ref()
+                .and_then(|attachment| attachment.serial_routes.as_ref())
+                .ok_or("X70 lens assembly has no serial attachments")?;
+            let status_routes: Vec<_> = attached
+                .iter()
+                .filter(|route| route.endpoint_part_id == mcu.part_id)
+                .collect();
+            if status_routes.len() != 1 {
+                return Err("X70 lens assembly requires one MCU status route".into());
             }
-            let base = recipe["routes"][0]["options"]["base"].clone();
-            recipe["routes"]
-                .as_array_mut()
-                .ok_or("X70 SPI2 has no routes")?
-                .push(json!({
-                    "options": {"base":base,
-                        "transports":[{"control":224,"configuration":6,"bits":16,"receive":true}],
-                        "selection":status_selection,"transfer_ticks":4,"queue":"single"},
-                    "gpio":"serial_gpio",
-                    "endpoint":{"kind":"registers","options":{
-                        "registers":[[*status,0]],"readable":true,
-                        "status_registers":[*status],"clock":null}}
-                }));
+            let route = status_routes[0];
+            if recipe["routes"][0]["options"]["base"] != json!(route.controller_address) {
+                return Err("X70 MCU status route names another controller".into());
+            }
+            recipe["routes"].as_array_mut().ok_or("X70 SPI2 has no routes")?.push(json!({
+                "options":{"base":route.controller_address,"transports":route.formats,
+                    "selection":route.selection,"transfer_ticks":route.transfer_ticks,"queue":route.queue},
+                "gpio":"serial_gpio",
+                "endpoint":{"kind":"registers","options":{
+                    "registers":[[*status,0]],"readable":true,
+                    "status_registers":[*status],"clock":null}}
+            }));
             if lens.route.endpoint_id != lens.part_id {
                 return Err("X70 lens route endpoint differs from installed part".into());
             }

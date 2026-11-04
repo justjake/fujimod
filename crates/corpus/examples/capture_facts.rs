@@ -9,6 +9,7 @@ struct Input {
     firmware_id: String,
     processor: String,
     jedec_id: Option<u32>,
+    flash_dat_bias: Option<u64>,
     update_path: Option<String>,
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -27,6 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     &input.processor,
                     input.jedec_id,
                     &bytes,
+                    input.flash_dat_bias,
                 )
             });
         let rom = locators::boot_rom(&input.processor);

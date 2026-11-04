@@ -1740,6 +1740,7 @@ FirmwareFlash = TypedDict(
         "code_ranges": Required["list[FlashCodeRange]"],
         "control": Required["FlashControl"],
         "device": Required["FlashDevice"],
+        "e1_window": NotRequired["FlashRange | None"],
         "firmware_id": Required["str"],
         "id": Required["str"],
         "reader": Required["FlashReader"],

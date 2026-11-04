@@ -1,5 +1,6 @@
 //! Whole-flash backup through processor-specific stock readers and owned RAM.
 pub mod exr2;
+mod mapped;
 mod xp5;
 pub use crate::callback::{CodeCheck, Range, Transport, WordCheck};
 use crate::{Limits, bulk};
@@ -31,24 +32,35 @@ pub struct Callbacks<'a> {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum Payload {
+    MappedE1(MappedPayload),
     Xp5Command(xp5::Payload),
     Exr2Query(exr2::Payload),
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MappedPayload {
+    pub schema: u32,
+    pub firmware_id: String,
+    pub firmware_sha256: String,
 }
 impl Payload {
     pub fn firmware_id(&self) -> &str {
         match self {
+            Self::MappedE1(p) => &p.firmware_id,
             Self::Xp5Command(p) => &p.firmware_id,
             Self::Exr2Query(p) => &p.firmware_id,
         }
     }
     pub fn buffer_capacity(&self) -> u32 {
         match self {
+            Self::MappedE1(_) => 0,
             Self::Xp5Command(p) => p.buffer_capacity,
             Self::Exr2Query(_) => CAPTURE_CHUNK_BYTES,
         }
     }
     pub fn firmware_sha256(&self) -> &str {
         match self {
+            Self::MappedE1(p) => &p.firmware_sha256,
             Self::Xp5Command(p) => &p.firmware_sha256,
             Self::Exr2Query(p) => &p.firmware_sha256,
         }
@@ -60,9 +72,36 @@ impl Payload {
         image: &[u8],
     ) -> bulk::Result<()> {
         match self {
+            Self::MappedE1(p) => p.validate(flash, bulk, image),
             Self::Xp5Command(p) => p.validate(flash, bulk, image),
             Self::Exr2Query(p) => p.validate(flash, bulk, image),
         }
+    }
+}
+impl MappedPayload {
+    fn validate(
+        &self,
+        flash: &FirmwareFlash,
+        bulk: &FirmwareBulk,
+        image: &[u8],
+    ) -> bulk::Result<()> {
+        flash.validate().map_err(bulk::BulkError::Check)?;
+        let mapped_only = flash.e1_window.is_some()
+            && flash.reader.is_none()
+            && flash.transport.is_none()
+            && flash.device.kind == "serial-nor";
+        if self.schema != 1
+            || self.firmware_id != flash.firmware_id
+            || self.firmware_id != bulk.firmware_id
+            || !valid_hash(&self.firmware_sha256)
+            || !image.is_empty()
+            || !mapped_only
+        {
+            return Err(bulk::BulkError::Check(
+                "Mapped-E1 flash metadata differs from the selected firmware".into(),
+            ));
+        }
+        Ok(())
     }
 }
 /// Whole-device backups retain their recorded qualification sequence. File
@@ -153,6 +192,21 @@ pub async fn backup(
     callbacks: &mut Callbacks<'_>,
 ) -> bulk::Result<Backup> {
     match payload {
+        Payload::MappedE1(_) => {
+            payload.validate(flash, bulk, image)?;
+            mapped::read(
+                session,
+                bulk,
+                flash,
+                limits,
+                BulkRange {
+                    address: 0,
+                    size: flash.window.size,
+                },
+                callbacks,
+            )
+            .await
+        }
         Payload::Xp5Command(p) => {
             xp5::read(
                 session,
@@ -187,7 +241,8 @@ pub async fn backup(
 #[serde(deny_unknown_fields)]
 pub struct Artifact {
     pub payload: Payload,
-    pub image: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
 }
 
 /// Read only the pages containing the requested logical storage bytes. The
@@ -236,6 +291,9 @@ pub async fn read_range(
         progress: &mut progress,
     };
     let report = match payload {
+        Payload::MappedE1(_) => {
+            mapped::read(session, bulk, flash, limits, target, &mut callbacks).await?
+        }
         Payload::Xp5Command(p) => {
             xp5::read(
                 session,
@@ -275,7 +333,7 @@ pub async fn read_range(
 }
 
 fn enclosing(flash: &FirmwareFlash, offset: u64, size: u32) -> bulk::Result<BulkRange> {
-    let alignment = u64::from(flash.reader.alignment);
+    let alignment = u64::from(flash.reader.as_ref().map_or(1, |reader| reader.alignment));
     let end = offset
         .checked_add(u64::from(size))
         .ok_or_else(|| bulk::BulkError::Check("Flash range overflow".into()))?;
@@ -294,6 +352,10 @@ fn enclosing(flash: &FirmwareFlash, offset: u64, size: u32) -> bulk::Result<Bulk
         address: first,
         size: last - first,
     })
+}
+
+fn valid_hash(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 pub(super) fn read_pieces(

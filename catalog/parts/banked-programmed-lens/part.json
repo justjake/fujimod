@@ -183,6 +183,43 @@
         "transfer_ticks": 4,
         "queue": "single",
         "endpoint_part_id": "banked-programmed-lens"
+      },
+      {
+        "controller_address": 4294459520,
+        "formats": [
+          {
+            "control": 224,
+            "configuration": 6,
+            "bits": 16,
+            "receive": true
+          }
+        ],
+        "selection": [
+          {
+            "pin": {
+              "port": 12,
+              "pin": 3
+            },
+            "high": false
+          },
+          {
+            "pin": {
+              "port": 11,
+              "pin": 3
+            },
+            "high": true
+          },
+          {
+            "pin": {
+              "port": 13,
+              "pin": 9
+            },
+            "high": true
+          }
+        ],
+        "transfer_ticks": 4,
+        "queue": "single",
+        "endpoint_part_id": "mcu-interface"
       }
     ]
   }
