@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod blocka8000;
 pub mod clocks;
+pub mod command_gpu;
 pub mod display_pipe;
 
 /// The boot memory-interface command/status protocol has no qualified model.

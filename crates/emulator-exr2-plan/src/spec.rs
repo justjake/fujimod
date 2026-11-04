@@ -336,6 +336,10 @@ pub enum Model {
     Blocka8000 {
         options: fujimod_emulator_devices::exr::blocka8000::Options,
     },
+    #[serde(rename = "exr-command-gpu")]
+    ExrCommandGpu {
+        options: fujimod_emulator_devices::exr::command_gpu::Options,
+    },
     #[serde(rename = "exr-display-pipe")]
     ExrDisplayPipe {
         options: fujimod_emulator_devices::exr::display_pipe::Options,
@@ -526,6 +530,7 @@ impl Model {
             Model::I2cMotorBridge { .. } => "i2c-motor-bridge",
             Model::Block86000 { .. } => "block86000",
             Model::Blocka8000 { .. } => "blocka8000",
+            Model::ExrCommandGpu { .. } => "exr-command-gpu",
             Model::ExrDisplayPipe { .. } => "exr-display-pipe",
             Model::Companion { .. } => "companion",
             Model::Fe80Processing { .. } => "fe80-processing",
