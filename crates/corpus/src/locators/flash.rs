@@ -190,6 +190,9 @@ pub fn flash<L: Lookup>(
     if processor == "xp4" {
         return xp4_flash(index, firmware, image_origin);
     }
+    if processor == "xpp" {
+        return xpp_xt20_flash(index, firmware, image_origin);
+    }
     if processor != "xp5" {
         return Err(format!(
             "{processor}: flash reader contract is not implemented"
@@ -418,6 +421,109 @@ pub fn flash<L: Lookup>(
     Ok(
         json!({"device":device,"window":{"address":0xf0000000u64,"size":0x8000000},"e1_window":{"address":0xf0000000u64,"size":0x8000000},"update_image":{"dat_offset":image_origin,"xor":255},"reader":{"symbol":"flash_read","alignment":64},"transport":"xp5-cmd-callback","code_ranges":ranges,"state_checks":checks,"control":{"offset":control_offset,"size":32768}}),
     )
+}
+
+/// Locate the X-T20 X-Processor Pro stock reader and its large-transfer path.
+/// The installed chip is established as a 64 MiB NOR by its partition table;
+/// its manufacturer and JEDEC identity are not established by this reader.
+fn xpp_xt20_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<Value> {
+    if firmware != "xt20-211" {
+        return Err(format!(
+            "{firmware}: X-Processor Pro flash reader has not been located"
+        ));
+    }
+    let locator = Locator {
+        index,
+        firmware,
+        unit: "main".into(),
+    };
+    let reader = locator.routine(0x00c51274)?;
+    if reader.header.architecture != Architecture::Arm32
+        || reader.header.ranges != [(0x00c51274, 0x00c51300), (0x00c51318, 0x00c51644)]
+    {
+        return Err("X-T20 flash reader extent differs".into());
+    }
+    for (address, size, expected) in [
+        (
+            0x00c51274,
+            0x8c,
+            "e68c1d3c43d148ed44b8defb14f53575a21538e63c7b1ae359aba45803dc61b0",
+        ),
+        (
+            0x00c51318,
+            0x32c,
+            "ddcd4b6c1c77953c0edd05e605549dd2a41afa7dee3372a858be1e4533d060f5",
+        ),
+    ] {
+        let bytes = index
+            .read(firmware, "main", address, size)
+            .map_err(|e| e.to_string())?
+            .ok_or("unmapped X-T20 flash reader")?;
+        if fujimod_firmware::sha256(&bytes) != expected {
+            return Err("X-T20 flash reader bytes differ".into());
+        }
+    }
+    let wait = locator.routine(0x00c51644)?;
+    if wait.header.architecture != Architecture::Arm32
+        || wait.header.ranges != [(0x00c51644, 0x00c51678)]
+    {
+        return Err("X-T20 flash wait wrapper extent differs".into());
+    }
+    let wait_bytes = index
+        .read(firmware, "main", 0x00c51644, 0x34)
+        .map_err(|e| e.to_string())?
+        .ok_or("unmapped X-T20 flash wait wrapper")?;
+    if fujimod_firmware::sha256(&wait_bytes)
+        != "7bed84cdf68e0bf645cacad59e225a20ff11f78c720332de636df0145932d5f9"
+    {
+        return Err("X-T20 flash wait wrapper bytes differ".into());
+    }
+    let callees = locator.calls(&reader)?;
+    if !callees.iter().any(|r| r.header.key.address == 0x00c50ab8)
+        || !callees.iter().any(|r| r.header.key.address == 0x00c52344)
+    {
+        return Err("X-T20 reader lost its PL330 or read-mode call".into());
+    }
+    let dma = locator.routine(0x00c50ab8)?;
+    let mode = locator.routine(0x00c52344)?;
+    if !reader
+        .code
+        .iter()
+        .any(|i| i.mnemonic == "cmp" && i.operands.contains("#0xf4000000"))
+        || !reader
+            .code
+            .iter()
+            .any(|i| i.mnemonic == "mov" && i.operands.contains("#0x7a"))
+        || !reader
+            .code
+            .iter()
+            .any(|i| i.mnemonic == "movt" && i.operands.contains("#0x7766"))
+    {
+        return Err("X-T20 reader lacks bank, lock or initialized-state checks".into());
+    }
+    let ranges = [
+        reader.span("flash_read"),
+        wait.span("flash_read_wait"),
+        dma.span("flash PL330 transfer"),
+        mode.span("flash read-mode selector"),
+    ];
+    let code_ranges: Vec<Value> = ranges.into_iter().collect();
+    let checks = vec![json!({
+        "name": "flash driver initialized",
+        "address": 0x00fd6228u64,
+        "size": 4,
+        "value": 0x77666555u32
+    })];
+    Ok(json!({
+        "device": {"kind":"serial-nor"},
+        "window": {"address":0xf0000000u64,"size":0x4000000u64},
+        "update_image": {"dat_offset":image_origin,"xor":255},
+        "reader": {"symbol":"flash_read_wait","alignment":4},
+        "transport": "xpp-cmd-callback",
+        "code_ranges":code_ranges,
+        "state_checks":checks,
+        "control": {"offset":0,"size":32768}
+    }))
 }
 
 /// Locate the XP4 mapped-flash branch used by firmware readers and direct E1

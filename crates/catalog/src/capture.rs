@@ -23,7 +23,7 @@ pub struct FirmwareFlash {
     pub id: String,
     /// Firmware whose bytes establish this contract.
     pub firmware_id: String,
-    /// Installed device, checked against the stock driver.
+    /// Installed device type and any identity established by the stock driver.
     pub device: FlashDevice,
     /// Reader source span: CPU aperture or physical NAND byte offsets.
     pub window: FlashRange,
@@ -287,6 +287,10 @@ impl FirmwareFlash {
         let raw_nand = self.device.kind == "raw-nand";
         let mapped_only =
             self.e1_window.is_some() && self.reader.is_none() && self.transport.is_none();
+        let xpp_identity_unresolved = self.device.kind == "serial-nor"
+            && self.device.jedec_id.is_none()
+            && self.device.part.is_none()
+            && self.transport.as_deref() == Some("xpp-cmd-callback");
         if !matches!(
             self.device.kind.as_str(),
             "serial-nand" | "serial-nor" | "raw-nand"
@@ -302,6 +306,7 @@ impl FirmwareFlash {
             .is_some_and(|part| part.is_empty())
             || (!raw_nand
                 && !mapped_only
+                && !xpp_identity_unresolved
                 && (self.device.jedec_id.is_none() || self.device.part.is_none()))
             || self.reader.as_ref().is_some_and(|reader| {
                 reader.symbol.is_empty() || !reader.alignment.is_power_of_two()

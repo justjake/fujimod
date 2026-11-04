@@ -13,7 +13,7 @@ pub fn flash_update<L: Lookup>(
     source: &[u8],
     flash_dat_bias: Option<u64>,
 ) -> Result<Value, String> {
-    if !matches!(processor, "xp4" | "xp5" | "exr2") {
+    if !matches!(processor, "xp4" | "xp5" | "xpp" | "exr2") {
         return Err(format!(
             "{processor}: flash reader contract is not implemented"
         ));
@@ -25,8 +25,8 @@ pub fn flash_update<L: Lookup>(
     let mut value = if processor == "exr2" {
         let control = exr2_control(&bytes[container_origin as usize..])?;
         exr2_flash(index, firmware, container_origin, control)?
-    } else if processor == "xp4" {
-        let bias = flash_dat_bias.ok_or("XP4 flash locator requires its registered DAT bias")?;
+    } else if matches!(processor, "xp4" | "xpp") {
+        let bias = flash_dat_bias.ok_or("flash locator requires its registered DAT bias")?;
         flash(index, firmware, processor, jedec_id, bias, 0)?
     } else {
         let (origin, control) = image_offsets(index, firmware, &bytes, container_origin)?;
