@@ -160,5 +160,9 @@ fn late_phase_records_identify_bus_inputs_and_declared_completion_time() {
     write(&mut m,&mut h,4,0x52);complete(&mut m,&mut h);
     let r=h.records.last().unwrap();assert_eq!(field(r,"master_ack"),Some(&Field::Bool(false)));assert_eq!(field(r,"data"),Some(&Field::int(0xa5)));assert_eq!(field(r,"address7"),Some(&Field::int(0x30)));
     read(&mut m,&mut h,16);write(&mut m,&mut h,4,0x42);complete(&mut m,&mut h);
-    assert_eq!(field(h.records.last().unwrap(),"operation"),Some(&Field::constant("stop")));
+    let stop=h.records.last().unwrap();
+    assert_eq!(field(stop,"operation"),Some(&Field::constant("stop")));
+    assert_eq!(field(stop,"base"),Some(&Field::int(BASE)));
+    assert_eq!(field(stop,"deadline"),Some(&Field::int(h.now)));
+    assert_eq!(field(stop,"direction"),None);
 }

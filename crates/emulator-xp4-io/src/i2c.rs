@@ -315,7 +315,6 @@ impl Device for ByteI2c {
             }
             Operation::Stop=>{
                 fields.push(("operation",Field::constant("stop")));
-                if s.phase!=Phase::Idle { fields.push(("direction",Field::constant(if s.bsr&8!=0 {"write"}else{"read"}))); }
                 s.phase=Phase::Idle;s.bsr=0;s.transport.stop();s.rx_ready=false;}
         }
         cx.at_tick(p.deadline,|cx|cx.record(Record::new("Byte I2C virtual phase completed",fields)));

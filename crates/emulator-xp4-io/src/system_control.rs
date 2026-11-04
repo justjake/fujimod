@@ -10,6 +10,7 @@ pub const VALUE: u64 = 0xff701240;
 pub const REQUEST: u64 = 0xff701280;
 pub const PROFILE: &str = "experimental-source-functional-v1";
 pub const BOOLEAN_WRITE_PORT: u64 = 0xfff4a400;
+pub const READ_WORD_FFF48004: u64 = 0xfff48004;
 pub const SERIAL_CLOCK_SELECT: u64 = 0xfff48700;
 /// A single two-bit selector lane, or zero. No frequency/readback law.
 fn serial_clock_word(value: u32) -> bool {
@@ -78,9 +79,15 @@ pub struct WritePortEnable {
 struct WriteOnlyState {
     last_write: Option<u32>,
 }
+/// Explicit external word. Hardware meaning and reset value are unknown.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReadOnlyWordInput { pub value: u32 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    #[serde(default)]
+    pub read_word_fff48004: Option<ReadOnlyWordInput>,
     pub profile: String,
     pub control_f03c_reset: u32,
     #[serde(default)]
@@ -179,6 +186,7 @@ impl SystemControl {
     }
     pub fn windows(&self) -> Vec<(u64, u64)> {
         let mut spans = vec![(CONTROL, CONTROL + 4)];
+        if self.config.read_word_fff48004.is_some() { spans.push((READ_WORD_FFF48004, READ_WORD_FFF48004 + 4)); }
         if self.retained_banks.is_some() {
             spans.extend(A_WORDS[..15].iter().chain(B_WORDS.iter()).map(|&(address, _)| (address, address + 4)));
         }
@@ -231,6 +239,12 @@ impl SystemControl {
 impl Device for SystemControl {
     fn name(&self) -> &'static str { "xp4-functional-system-control" }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
+        if address == READ_WORD_FFF48004 {
+            if size == 4 {
+                if let Some(input) = &self.config.read_word_fff48004 { return u64::from(input.value); }
+            }
+            cx.unmodeled(); return 0;
+        }
         if matches!(address, BOOLEAN_WRITE_PORT | SERIAL_CLOCK_SELECT) { cx.unmodeled(); return 0; }
         if !self.known(address, size) { cx.unmodeled(); return 0; }
         self.admit(cx);
@@ -395,7 +409,7 @@ mod tests {
         fn record(&mut self, r: Record) { self.records.push(r); }
     }
     fn config(ticks: Option<u64>) -> Config {
-        Config { profile: PROFILE.into(), control_f03c_reset: 7, retained_request_banks: None, configuration_requests: None, selection_special: None, boolean_write_fff4a400: None, serial_clock_select_fff48700: None,
+        Config { read_word_fff48004: None, profile: PROFILE.into(), control_f03c_reset: 7, retained_request_banks: None, configuration_requests: None, selection_special: None, boolean_write_fff4a400: None, serial_clock_select_fff48700: None,
             graphics: ticks.map(|completion_ticks| Graphics { initial_value: 0, completion_ticks }) }
     }
     fn write(d: &mut SystemControl, c: &mut Clock, address: u64, size: u8, value: u64) -> Result<(), String> {
@@ -405,6 +419,43 @@ mod tests {
     fn read(d: &mut SystemControl, c: &mut Clock, address: u64, size: u8) -> Result<u64, String> {
         let mut cx = Cx::new(c, 0, 0, 0); let v = d.read(&mut cx, address, size);
         cx.take_refusal().map_or(Ok(v), Err)
+    }
+    #[test]
+    fn explicit_read_word_is_immutable_and_context_independent() {
+        for value in [0, 0xa5a5_123f] {
+            let mut cfg = config(None); cfg.read_word_fff48004 = Some(ReadOnlyWordInput { value });
+            let mut d = SystemControl::new(cfg).unwrap(); let mut c = Clock::default();
+            let before = d.save();
+            for (core, pc) in [(0, 0), (3, 0x12345678)] {
+                let mut cx = Cx::new(&mut c, core, pc, 0);
+                assert_eq!(d.read(&mut cx, READ_WORD_FFF48004, 4), u64::from(value));
+                assert!(cx.take_refusal().is_none());
+            }
+            assert_eq!(d.save(), before); assert!(c.records.is_empty()); assert!(c.events.is_empty());
+            for size in [1, 2, 8] { assert!(read(&mut d, &mut c, READ_WORD_FFF48004, size).is_err()); }
+            assert!(read(&mut d, &mut c, READ_WORD_FFF48004 + 1, 4).is_err());
+            for size in [1, 2, 4, 8] { assert!(write(&mut d, &mut c, READ_WORD_FFF48004, size, 0).is_err()); }
+            assert_eq!(d.save(), before); assert!(c.records.is_empty()); assert!(c.events.is_empty());
+        }
+        let mut strict = SystemControl::new(config(None)).unwrap(); let mut c = Clock::default();
+        let before = strict.save();
+        assert!(read(&mut strict, &mut c, READ_WORD_FFF48004, 4).is_err());
+        assert!(!strict.windows().contains(&(READ_WORD_FFF48004, READ_WORD_FFF48004 + 4)));
+        assert_eq!(strict.save(), before); assert!(c.records.is_empty());
+    }
+    #[test]
+    fn read_word_checkpoint_binds_presence_and_value_atomically() {
+        let mut cfg = config(None); cfg.read_word_fff48004 = Some(ReadOnlyWordInput { value: 7 });
+        let mut d = SystemControl::new(cfg.clone()).unwrap(); let good = d.save();
+        d.restore(&good).unwrap();
+        for input in [None, Some(ReadOnlyWordInput { value: 8 })] {
+            let mut changed = cfg.clone(); changed.read_word_fff48004 = input;
+            let other = SystemControl::new(changed).unwrap().save();
+            assert!(d.restore(&other).is_err()); assert_eq!(d.save(), good);
+        }
+        let mut injected = good.clone(); injected["config"]["read_word_fff48004"]["value"] = json!(4294967296u64);
+        assert!(d.restore(&injected).is_err()); assert_eq!(d.save(), good);
+        assert!(serde_json::from_value::<ReadOnlyWordInput>(json!({})).is_err());
     }
     fn boolean_config() -> Config {
         let mut inputs = config(None);
