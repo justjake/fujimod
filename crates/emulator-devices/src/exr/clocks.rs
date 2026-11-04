@@ -1,5 +1,5 @@
-//! EXR clock mux/PLL latches; the PLL offset and the latch set are declared
-//! inputs. PLL enable/lock use virtual settling time.
+//! EXR clock mux/PLL latches; the PLL offsets and the latch set are declared
+//! inputs. Each PLL's enable bit 28 and lock bit 24 use virtual settling time.
 //! Frequencies and analog lock timing are unmeasured declared inputs.
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
@@ -15,8 +15,8 @@ const LOCKED: u32 = 1 << 24;
 pub struct Options {
     pub settle_ticks: u64,
     pub reset_ready: bool,
-    /// Byte offset of the PLL enable/lock register.
-    pub pll: u32,
+    /// Byte offsets of the PLL enable/lock registers.
+    pub plls: Vec<u32>,
     /// Byte offsets of the plain read/write latch registers.
     pub latches: Vec<u32>,
 }
@@ -24,12 +24,13 @@ pub struct Options {
 #[serde(deny_unknown_fields)]
 struct State {
     registers: Vec<u32>,
-    due: Option<u64>,
+    /// Lock deadline of each declared PLL, in declaration order.
+    due: Vec<Option<u64>>,
 }
 pub struct Clocks {
     options: Options,
-    /// Word index of the declared PLL register.
-    pll: usize,
+    /// Word indices of the declared PLL registers.
+    plls: Vec<usize>,
     /// Word indices of the declared latch registers.
     latches: Vec<usize>,
     state: State,
@@ -52,13 +53,20 @@ impl Clocks {
             }
             Ok(offset as usize / 4)
         }
-        let pll = word(options.pll, "PLL")?;
+        let mut plls = Vec::with_capacity(options.plls.len());
+        for &offset in &options.plls {
+            let pll = word(offset, "PLL")?;
+            if plls.contains(&pll) {
+                return Err(format!("EXR clock PLL offset {offset:#x} is repeated"));
+            }
+            plls.push(pll);
+        }
         let mut latches = Vec::with_capacity(options.latches.len());
         for &offset in &options.latches {
             let latch = word(offset, "latch")?;
-            if latch == pll {
+            if plls.contains(&latch) {
                 return Err(format!(
-                    "EXR clock latch offset {offset:#x} is the PLL register"
+                    "EXR clock latch offset {offset:#x} is a PLL register"
                 ));
             }
             if latches.contains(&latch) {
@@ -68,14 +76,12 @@ impl Clocks {
         }
         let mut registers = vec![0; WORDS];
         registers[READY as usize / 4] = u32::from(options.reset_ready) << 16;
+        let due = vec![None; plls.len()];
         Ok(Self {
             options,
-            pll,
+            plls,
             latches,
-            state: State {
-                registers,
-                due: None,
-            },
+            state: State { registers, due },
         })
     }
     fn index(&self, address: u64, size: u8) -> Option<usize> {
@@ -84,7 +90,9 @@ impl Clocks {
             return None;
         }
         let index = (offset / 4) as usize;
-        (index == self.pll || index == READY as usize / 4 || self.latches.contains(&index))
+        (self.plls.contains(&index)
+            || index == READY as usize / 4
+            || self.latches.contains(&index))
             .then_some(index)
     }
 }
@@ -115,7 +123,7 @@ impl Device for Clocks {
             cx.fail("EXR clock readiness is read-only");
             return;
         }
-        if index == self.pll {
+        if let Some(pll) = self.plls.iter().position(|&p| p == index) {
             let due = if word & ENABLE != 0 {
                 let Some(due) = cx.now().checked_add(self.options.settle_ticks) else {
                     cx.fail("EXR PLL deadline overflow");
@@ -126,18 +134,20 @@ impl Device for Clocks {
                 None
             };
             self.state.registers[index] = word & !LOCKED;
-            self.state.due = due;
+            self.state.due[pll] = due;
         } else {
             self.state.registers[index] = word;
         }
     }
     fn next_deadline(&self, _now: u64) -> Option<u64> {
-        self.state.due
+        self.state.due.iter().flatten().copied().min()
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
-        if self.state.due.is_some_and(|due| due <= cx.now()) {
-            self.state.registers[self.pll] |= LOCKED;
-            self.state.due = None;
+        for (pll, due) in self.plls.iter().zip(&mut self.state.due) {
+            if due.is_some_and(|due| due <= cx.now()) {
+                self.state.registers[*pll] |= LOCKED;
+                *due = None;
+            }
         }
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
@@ -153,7 +163,10 @@ impl Device for Clocks {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         if state.registers.len() != WORDS
             || state.registers[READY as usize / 4] != u32::from(self.options.reset_ready) << 16
-            || state.due.is_some() && state.registers[self.pll] & (ENABLE | LOCKED) != ENABLE
+            || state.due.len() != self.plls.len()
+            || self.plls.iter().zip(&state.due).any(|(&pll, due)| {
+                due.is_some() && state.registers[pll] & (ENABLE | LOCKED) != ENABLE
+            })
         {
             return Err("invalid EXR clock checkpoint".into());
         }
@@ -171,7 +184,7 @@ mod tests {
         let mut model = Clocks::new(Options {
             settle_ticks: 17,
             reset_ready: true,
-            pll: 0x34,
+            plls: vec![0x34],
             latches: (0..=0x38)
                 .step_by(4)
                 .filter(|&o| o != 0x34)
@@ -215,7 +228,7 @@ mod tests {
         let mut model = Clocks::new(Options {
             settle_ticks: 5,
             reset_ready: false,
-            pll: 0x40,
+            plls: vec![0x40, 0x48],
             latches: vec![0x0, 0x28, 0x58, 0x5c, 0x84],
         })
         .unwrap();
@@ -235,6 +248,14 @@ mod tests {
             read(&mut model, &mut host, BASE + 0x40),
             u64::from(ENABLE | LOCKED | 3)
         );
+        write(&mut model, &mut host, BASE + 0x48, ENABLE);
+        assert_eq!(read(&mut model, &mut host, BASE + 0x48), u64::from(ENABLE));
+        advance(&mut model, &mut host, 10);
+        assert_eq!(
+            read(&mut model, &mut host, BASE + 0x48),
+            u64::from(ENABLE | LOCKED)
+        );
+        assert_eq!(model.next_deadline(10), None);
         write(&mut model, &mut host, BASE + 0x58, 0x1234_5678);
         assert_eq!(read(&mut model, &mut host, BASE + 0x58), 0x1234_5678);
         write(&mut model, &mut host, BASE + 0x5c, 0x9abc_def0);
@@ -249,9 +270,18 @@ mod tests {
         let options = |pll: u32, latches: Vec<u32>| Options {
             settle_ticks: 5,
             reset_ready: false,
-            pll,
+            plls: vec![pll],
             latches,
         };
+        assert!(
+            Clocks::new(Options {
+                settle_ticks: 5,
+                reset_ready: false,
+                plls: vec![0x40, 0x40],
+                latches: vec![],
+            })
+            .is_err()
+        );
         assert!(Clocks::new(options(0x80, vec![])).is_err());
         assert!(Clocks::new(options(0x34, vec![0x80])).is_err());
         assert!(Clocks::new(options(0x34, vec![0x34])).is_err());
