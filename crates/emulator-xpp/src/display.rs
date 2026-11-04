@@ -21,7 +21,9 @@
 //! `(width - 1) << 16 | (height - 1)`. The firmware writes no pitch; the
 //! camera's OSD buffers (0x354d000, 0x384d000) are 720 x 480 premultiplied
 //! RGBA words with a 2880-byte pitch, so rows are packed. Layers compose in
-//! index order over the video layer, or over black without it.
+//! index order over the video layer, or over black without it. An enabled
+//! video path whose size and buffer are both still zero has no plane to read
+//! and composes over black the same way.
 //!
 //! The same routine copies the video layer's words: shadow +0x10 to the
 //! format at +0x010, +0x3c to the size at +0x02c and +0x40 to the buffer at
@@ -268,34 +270,42 @@ impl Output {
         if video {
             let (w, h) = Self::extent(self.word(VIDEO_SIZE)).ok_or(())?;
             let buffer = u64::from(self.word(VIDEO_BUFFER));
-            if self.word(VIDEO_FORMAT) != PACKED_422
-                || w > width
-                || h > height
-                || w & 1 != 0
-                || buffer & 3 != 0
+            // The video path can be on with no plane committed: the X-T20's
+            // update page switches bit 2 of +0x000 on while +0x02c and +0x030
+            // both stay zero, and the layers then compose over black. A plane
+            // with only one of them set is still refused.
+            let committed = self.word(VIDEO_SIZE) != 0 || buffer != 0;
+            if committed
+                && (self.word(VIDEO_FORMAT) != PACKED_422
+                    || w > width
+                    || h > height
+                    || w & 1 != 0
+                    || buffer & 3 != 0)
             {
                 return Err(());
             }
-            let plane = Plane {
-                address: buffer,
-                stride: w * 2,
-                source_x: 0,
-                source_y: 0,
-                source_width: w,
-                source_height: h,
-                sampling: None,
-                work_x: 0,
-                work_y: 0,
-                work_width: w,
-                work_height: h,
-                order: PixelOrder::YyCbCr,
-            };
-            raster::composite(|a, n| cx.ram_bytes(a, n), plane, width, height, &mut rgba)
-                .map_err(|_| ())?;
-            for pixel in rgba.chunks_exact_mut(4) {
-                pixel.swap(0, 2);
+            if committed {
+                let plane = Plane {
+                    address: buffer,
+                    stride: w * 2,
+                    source_x: 0,
+                    source_y: 0,
+                    source_width: w,
+                    source_height: h,
+                    sampling: None,
+                    work_x: 0,
+                    work_y: 0,
+                    work_width: w,
+                    work_height: h,
+                    order: PixelOrder::YyCbCr,
+                };
+                raster::composite(|a, n| cx.ram_bytes(a, n), plane, width, height, &mut rgba)
+                    .map_err(|_| ())?;
+                for pixel in rgba.chunks_exact_mut(4) {
+                    pixel.swap(0, 2);
+                }
+                top = buffer;
             }
-            top = buffer;
         }
         for layer in (0..4).filter(|n| enable & 1 << n != 0) {
             let at = |offset: u64| offset + 4 * layer as u64;
@@ -792,6 +802,51 @@ mod tests {
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         out.advance(&mut cx);
         assert!(cx.is_unmodeled());
+    }
+
+    #[test]
+    fn an_enabled_video_path_without_a_committed_plane_scans_the_osd_layers() {
+        const BASE: u64 = 0xfff64000;
+        let scanout = Some(Scanout {
+            output: 0,
+            period: 10,
+        });
+        let mut out = Output::new(BASE, 0x3000, &[], &[], scanout).unwrap();
+        let mut host = Screen {
+            ram: vec![0; 0x100],
+            ..Screen::default()
+        };
+        // One 2 x 1 opaque red OSD layer.
+        host.ram[0x40..0x48].copy_from_slice(&[255, 0, 0, 255, 0, 0, 0, 0]);
+        let write = |out: &mut Output, host: &mut Screen, offset: u64, value: u32| {
+            out.write(
+                &mut Cx::new(host, 0, 0, 0),
+                BASE + offset,
+                4,
+                u64::from(value),
+            );
+        };
+        // The update UI's commit: video on, size and buffer still zero.
+        for (offset, value) in [
+            (CONTROL, 0x101_0104),
+            (OUTPUT_SIZE, 0x1_0000),
+            (VIDEO_FORMAT, PACKED_422),
+            (VIDEO_SIZE, 0),
+            (VIDEO_BUFFER, 0),
+            (LAYER_ENABLE, 1),
+            (LAYER_SIZE, 0x1_0000),
+            (LAYER_BUFFER, 0x40),
+        ] {
+            write(&mut out, &mut host, offset, value);
+        }
+        host.now = 10;
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        out.advance(&mut cx);
+        assert!(!cx.is_unmodeled());
+        assert_eq!(
+            host.frames.last().unwrap().rgba,
+            [255, 0, 0, 255, 0, 0, 0, 255]
+        );
     }
 
     #[test]
