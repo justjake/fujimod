@@ -8,6 +8,14 @@ fn instruction_rate() -> (u64, u64) {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct StandaloneDma {
+    pub irq_routes: Vec<u32>,
+    pub reset_profile: String,
+    pub timing_profile: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Definition {
     pub ram_size: usize,
     pub cores: usize,
@@ -28,6 +36,9 @@ pub struct Definition {
     pub timer_routes: Vec<(usize, usize)>,
     #[serde(default)]
     pub storage_jedec: Option<u32>,
+    /// DMA-only connection with explicitly declared reset and timing hypotheses.
+    #[serde(default)]
+    pub standalone_dma: Option<StandaloneDma>,
     #[serde(default)]
     pub storage_dma_routes: Vec<u32>,
     #[serde(default)]

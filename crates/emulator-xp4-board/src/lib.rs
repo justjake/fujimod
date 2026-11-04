@@ -977,6 +977,7 @@ impl Session {
             timer_layout,
             timer_routes,
             storage_jedec,
+            standalone_dma,
             storage_dma_routes,
             spi_inputs,
             control_requests,
@@ -1138,6 +1139,9 @@ impl Session {
             }
             None => None,
         };
+        if standalone_dma.is_some() && (storage_jedec.is_some() || xpp_storage.is_some()) {
+            return Err("Standalone XP4 DMA cannot be combined with a storage controller".into());
+        }
         if storage_jedec.is_some() && xpp_storage.is_some() {
             return Err("XP4 and X-Processor Pro storage cannot be selected together".to_owned());
         }
@@ -1180,6 +1184,9 @@ impl Session {
             }
             None
         };
+        if let Some(input) = standalone_dma {
+            devices.get_or_insert_with(devices::Devices::empty).standalone_dma(input)?;
+        }
         let boot_wiring = xpp_boot.as_ref().map(|b| b.options.clone());
         if let Some(wiring) = &boot_wiring {
             if xpp_reset_gates != Some(wiring.selector_base)

@@ -136,6 +136,14 @@ impl SerialFlashController {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct DmaState {
+    #[serde(default)]
+    serial_flash_peer: Option<bool>,
+    #[serde(default)]
+    reset_profile: Option<String>,
+    #[serde(default)]
+    timing_profile: Option<String>,
+    #[serde(default)]
+    assumptions_recorded: Option<bool>,
     channels: Vec<Channel>,
     irq_routes: [u32; 16],
     request_mux: BTreeMap<u64, u32>,
@@ -146,11 +154,25 @@ struct DmaState {
 impl DmaController {
     pub(super) fn restore_state(&mut self, value: &Value) -> Result<(), String> {
         let state: DmaState = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        if state.irq_routes != self.routes
+        let standalone = self.port.is_none();
+        let mode_matches = if standalone {
+            state.serial_flash_peer == Some(false)
+                && state.reset_profile.as_deref() == Some(Self::STANDALONE_RESET)
+                && state.timing_profile.as_deref() == Some(Self::STANDALONE_TIMING)
+                && state.assumptions_recorded.is_some()
+        } else {
+            state.serial_flash_peer.unwrap_or(true) && state.reset_profile.is_none()
+                && state.timing_profile.is_none() && state.assumptions_recorded.is_none()
+        };
+        if !mode_matches || state.irq_routes != self.routes
             || state.channels.len() != 16
             || state.channels.iter().any(|c| {
                 c.due.is_some_and(|at| !c.submitted || at < c.submitted_at)
                     || c.submitted && u64::from(c.regs[4]) + 1 > FLASH_SIZE
+                    || standalone && c.submitted && (Self::needs_flash(c) || c.regs[0x24 / 4] != 0
+                        || c.regs[0x28 / 4] & 0x10000001 != 0x10000001
+                        || Self::standalone_deadline(c).is_none()
+                        || c.due.is_some_and(|at| Self::standalone_deadline(c) != Some(at)))
             })
             || state.request_mux.iter().any(|(a, v)| {
                 !(0xfff4a500..0xfff4a520).contains(a) || a & 3 != 0 || v & !0x3f3f != 0
@@ -162,6 +184,7 @@ impl DmaController {
         {
             return Err("Invalid XP4 DMA checkpoint or routes".into());
         }
+        self.standalone_admitted = state.assumptions_recorded.unwrap_or(false);
         self.channels = state
             .channels
             .try_into()

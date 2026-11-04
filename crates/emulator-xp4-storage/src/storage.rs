@@ -552,7 +552,8 @@ struct Channel {
     submitted_at: u64,
 }
 pub struct DmaController {
-    port: Shared,
+    port: Option<Shared>,
+    standalone_admitted: bool,
     channels: [Channel; 16],
     routes: [u32; 16],
     mux: BTreeMap<u64, u32>,
@@ -563,13 +564,49 @@ pub struct DmaController {
 impl DmaController {
     pub fn new(port: Shared, routes: [u32; 16]) -> Self {
         Self {
-            port,
+            port: Some(port), standalone_admitted: false,
             channels: Default::default(),
             routes,
             mux: BTreeMap::new(),
             mux_changed: [0; 16],
             request: BTreeMap::new(),
         }
+    }
+    pub const STANDALONE_RESET: &str = "experimental-zero-registers-v1";
+    pub const STANDALONE_TIMING: &str = "functional-16-setup-16-bytes-v1";
+    pub fn standalone(routes: [u32; 16], reset: &str, timing: &str) -> Result<Self, String> {
+        let unique: std::collections::BTreeSet<_> = routes.iter().copied().collect();
+        if reset != Self::STANDALONE_RESET || timing != Self::STANDALONE_TIMING
+            || unique.len() != 16 || routes.iter().any(|irq| !(32..512).contains(irq))
+        {
+            return Err("Invalid explicit standalone XP4 DMA profiles or IRQ routes".into());
+        }
+        Ok(Self { port: None, standalone_admitted: false, channels: Default::default(), routes,
+            mux: BTreeMap::new(), mux_changed: [0; 16], request: BTreeMap::new() })
+    }
+    fn admit(&mut self, cx: &mut Cx<'_>) {
+        if self.port.is_some() || self.standalone_admitted { return; }
+        cx.record(Record::new("XP4 standalone DMA experimental assumptions; no serial-flash peer", [
+            ("reset_profile", Field::constant(Self::STANDALONE_RESET)),
+            ("timing_profile", Field::constant(Self::STANDALONE_TIMING)),
+            ("law", Field::constant("Declared zero registers and 16+ceil(bytes/16) ticks; not measured hardware reset/timing")),
+        ]));
+        self.standalone_admitted = true;
+    }
+    fn needs_flash(c: &Channel) -> bool {
+        let count = u64::from(c.regs[0x10 / 4]) + 1;
+        let extent = |configuration: u32| if configuration & 4 != 0 {
+            1u64 << ((configuration >> 16) & 3)
+        } else { count };
+        let intersects = |address: u32, size: u64| {
+            let address = u64::from(address);
+            address < FLASH + FLASH_SIZE && address + size > FLASH
+        };
+        intersects(c.regs[0x14 / 4], extent(c.regs[0x1c / 4]))
+            || intersects(c.regs[0x18 / 4], extent(c.regs[0x20 / 4]))
+    }
+    fn standalone_deadline(c: &Channel) -> Option<u64> {
+        c.submitted_at.checked_add(16)?.checked_add((u64::from(c.regs[0x10 / 4]) + 1).div_ceil(16))
     }
     fn ready_time(&self, n: usize) -> Option<u64> {
         let c = &self.channels[n];
@@ -589,7 +626,8 @@ impl DmaController {
         if (mux >> ((n % 2) * 8)) & 63 != if write { 43 } else { 42 } {
             return None;
         }
-        self.port
+        if self.port.is_none() { return Some(c.submitted_at); }
+        self.port.as_ref()?
             .lock()
             .unwrap()
             .request
@@ -620,6 +658,7 @@ impl DmaController {
                     cx.unmodeled();
                     return Ok(0);
                 }
+                self.admit(cx);
                 let word = self.mux.entry(address).or_default();
                 // 107bb3c writes both selector fields but strobes only the
                 // selected channel's lane. The unstrobed neighbor stays live.
@@ -635,6 +674,7 @@ impl DmaController {
                     }
                 }
             }
+            if !write { self.admit(cx); }
             return Ok(u64::from(*self.mux.get(&address).unwrap_or(&0)));
         }
         if (0xfff4a800..0xfff4a880).contains(&address) {
@@ -655,6 +695,19 @@ impl DmaController {
             cx.unmodeled();
             return Ok(0);
         }
+        if self.port.is_none() && write && o == 0x28 && value & 0x10000001 == 0x10000001 {
+            let c = &self.channels[n];
+            if Self::needs_flash(c) {
+                return Err("Standalone XP4 DMA has no serial-flash peer for this descriptor".into());
+            }
+            let count = u64::from(c.regs[0x10 / 4]) + 1;
+            if c.submitted || count > FLASH_SIZE || c.regs[0x24 / 4] != 0
+                || cx.now().checked_add(16).and_then(|at| at.checked_add(count.div_ceil(16))).is_none()
+            {
+                return Err("Invalid or overflowing standalone XP4 DMA submission".into());
+            }
+        }
+        self.admit(cx);
         let c = &mut self.channels[n];
         if !write {
             return Ok(c.regs[o / 4] as u64);
@@ -703,7 +756,7 @@ impl DmaController {
             return Err("XP4 fixed-destination DMA is not modeled".into());
         }
         let data = if (FLASH..FLASH + FLASH_SIZE).contains(&src) {
-            let port = self.port.lock().unwrap();
+            let port = self.port.as_ref().ok_or("Standalone DMA cannot read serial flash")?.lock().unwrap();
             let r = port
                 .request
                 .as_ref()
@@ -727,7 +780,7 @@ impl DmaController {
             cx.ram_bytes(src, size)?
         };
         if program {
-            let mut port = self.port.lock().unwrap();
+            let mut port = self.port.as_ref().ok_or("Standalone DMA cannot program serial flash")?.lock().unwrap();
             if c.regs[0x20 / 4] & 4 == 0
                 || port.program_data.is_some()
                 || !port
@@ -742,7 +795,7 @@ impl DmaController {
             cx.ram_write(dst, &data)?;
         }
         if (FLASH..FLASH + FLASH_SIZE).contains(&src) {
-            self.port.lock().unwrap().request = None;
+            self.port.as_ref().ok_or("Standalone DMA has no serial-flash request")?.lock().unwrap().request = None;
         }
         if c.regs[0x1c / 4] & 4 == 0 {
             c.regs[0x14 / 4] = c.regs[0x14 / 4].wrapping_add(size as u32);
@@ -788,6 +841,9 @@ impl Device for DmaController {
         }
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
+        if self.port.is_none() && value > u32::MAX as u64 {
+            cx.fail("Standalone XP4 DMA requires a 32-bit value"); return;
+        }
         if let Err(e) = self.access(cx, address, size, true, value as u32) {
             cx.fail(e);
         }
@@ -803,6 +859,9 @@ impl Device for DmaController {
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         for n in 0..16 {
+            if self.port.is_none() && self.channels[n].submitted && Self::needs_flash(&self.channels[n]) {
+                cx.fail("Standalone XP4 DMA cannot wait for a missing serial-flash peer"); return;
+            }
             if let Some(started) = self.ready_time(n) {
                 let at =
                     started + 16 + (u64::from(self.channels[n].regs[0x10 / 4]) + 1).div_ceil(16);
@@ -823,7 +882,14 @@ impl Device for DmaController {
         }
     }
     fn save(&self) -> Value {
-        json!({"channels":self.channels.iter().map(|c|json!({"registers":c.regs.to_vec(),"next":c.due,"submitted":c.submitted,"submitted_at":c.submitted_at,"completed":c.completed})).collect::<Vec<_>>(),"irq_routes":self.routes,"request_mux":self.mux,"request_mux_changed":self.mux_changed,"request":self.request})
+        let mut state = json!({"channels":self.channels.iter().map(|c|json!({"registers":c.regs.to_vec(),"next":c.due,"submitted":c.submitted,"submitted_at":c.submitted_at,"completed":c.completed})).collect::<Vec<_>>(),"irq_routes":self.routes,"request_mux":self.mux,"request_mux_changed":self.mux_changed,"request":self.request});
+        if self.port.is_none() {
+            state["serial_flash_peer"] = json!(false);
+            state["reset_profile"] = json!(Self::STANDALONE_RESET);
+            state["timing_profile"] = json!(Self::STANDALONE_TIMING);
+            state["assumptions_recorded"] = json!(self.standalone_admitted);
+        }
+        state
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         self.restore_state(value)
@@ -1444,4 +1510,123 @@ mod tests {
     fn peer_acceptance_dma_and_array_program_keep_their_deadlines_when_delivered_late() {
         assert_eq!(program_timing(false), program_timing(true));
     }
+    fn standalone() -> DmaController {
+        DmaController::standalone(std::array::from_fn(|n| 207 + n as u32),
+            DmaController::STANDALONE_RESET, DmaController::STANDALONE_TIMING).unwrap()
+    }
+    fn ram_host() -> TestHost {
+        TestHost { now: 100, ram: (0..0x2000).map(|n| n as u8).collect(),
+            irqs: vec![], events: vec![], records: vec![] }
+    }
+    fn configure_ram(dma: &mut DmaController, host: &mut TestHost, src: u64, dst: u64, count: u64, source_config: u64) {
+        for (offset, value) in [(0x14, src), (0x18, dst), (0x10, count - 1), (0x1c, source_config), (0x20, 0), (0x24, 0)] {
+            write(dma, host, 0, DMA + offset, value, 0);
+        }
+    }
+    #[test]
+    fn standalone_original_sixteen_channel_initialization_has_no_transfer_or_irq() {
+        let mut dma = standalone(); let mut host = ram_host();
+        assert!(dma.port.is_none());
+        for channel in 0..16 {
+            let address = DMA + channel * 0x1000;
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            let value = dma.read(&mut cx, address, 4); assert_eq!(value, 0);
+            dma.write(&mut cx, address, 4, value | 0x10000000); assert!(cx.refusal().is_none());
+        }
+        assert!(dma.channels.iter().all(|c| c.regs[0] == 0x10000000 && !c.submitted && c.due.is_none()));
+        assert!(host.events.is_empty() && host.irqs.is_empty());
+        assert_eq!(dma.save()["serial_flash_peer"], false);
+        assert_eq!(dma.save()["reset_profile"], DmaController::STANDALONE_RESET);
+        assert!(host.records.iter().any(|r| serde_json::to_string(r).unwrap().contains("experimental assumptions")));
+    }
+    #[test]
+    fn standalone_ram_copy_and_fixed_source_fill_use_existing_timing_and_irq_ack() {
+        for fixed in [false, true] {
+            let mut dma = standalone(); let mut host = ram_host();
+            let count = if fixed { 20 } else { 32 };
+            let expected = if fixed { host.ram[0x100..0x104].iter().copied().cycle().take(count).collect::<Vec<_>>() }
+                else { host.ram[0x100..0x100 + count].to_vec() };
+            configure_ram(&mut dma, &mut host, 0x100, 0x300, count as u64, if fixed { 0x20004 } else { 0 });
+            write(&mut dma, &mut host, 0, DMA + 0x28, 0x10000001, 0);
+            dma.advance(&mut Cx::new(&mut host, 0, 0, 0));
+            assert_eq!(dma.next_deadline(100), Some(118));
+            let before = host.ram.clone(); host.now = 117; event(&mut dma, &mut host, 0, 0);
+            assert_eq!(host.ram, before); assert!(host.irqs.is_empty());
+            host.now = 118; event(&mut dma, &mut host, 0, 0);
+            assert_eq!(&host.ram[0x300..0x300 + count], &expected);
+            assert_eq!(host.irqs.last(), Some(&(207, true)));
+            write(&mut dma, &mut host, 0, DMA + 0x30, 0, 0);
+            assert_eq!(host.irqs.last(), Some(&(207, false))); assert_eq!(dma.channels[0].regs[0x30 / 4], 0);
+            assert_eq!(dma.channels[0].regs[0x14 / 4], if fixed { 0x100 } else { 0x120 });
+        }
+    }
+    #[test]
+    fn standalone_missing_flash_peer_rejects_start_before_any_mutation() {
+        for (src, dst, count, source_config) in [(FLASH, 0x300, 32, 0), (0x100, FLASH, 32, 0),
+            (FLASH - 8, 0x300, 32, 0), (0x100, FLASH - 8, 32, 0), (FLASH - 2, 0x300, 16, 0x20004)] {
+            let mut dma = standalone(); let mut host = ram_host();
+            configure_ram(&mut dma, &mut host, src, dst, count, source_config);
+            let before = dma.save(); let ram = host.ram.clone(); let records = host.records.len();
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            dma.write(&mut cx, DMA + 0x28, 4, 0x10000001); assert!(cx.take_refusal().unwrap().contains("no serial-flash peer"));
+            assert_eq!(dma.save(), before); assert_eq!(host.ram, ram); assert_eq!(host.records.len(), records);
+            assert!(host.events.is_empty() && host.irqs.is_empty());
+        }
+    }
+    #[test]
+    fn standalone_rejects_unknown_accesses_profiles_and_overflow_with_ram_bounds_intact() {
+        let routes = std::array::from_fn(|n| 207 + n as u32);
+        assert!(DmaController::standalone(routes, "default", DmaController::STANDALONE_TIMING).is_err());
+        assert!(DmaController::standalone(routes, DmaController::STANDALONE_RESET, "measured").is_err());
+        assert!(DmaController::standalone([207; 16], DmaController::STANDALONE_RESET, DmaController::STANDALONE_TIMING).is_err());
+        let mut dma = standalone(); let mut host = ram_host();
+        configure_ram(&mut dma, &mut host, 0x100, 0x300, 32, 0); let before = dma.save();
+        for (address, size, value) in [(DMA, 1, 0), (DMA, 2, 0), (DMA, 8, 0), (DMA + 4, 4, 0),
+            (DMA + 0x10000, 4, 0), (CONTROLLER, 4, 0), (FLASH, 4, 0), (DMA, 4, 1u64 << 32)] {
+            let mut cx = Cx::new(&mut host, 0, 0, 0); dma.write(&mut cx, address, size, value); assert!(cx.take_refusal().is_some());
+            assert_eq!(dma.save(), before);
+        }
+        host.now = u64::MAX;
+        let mut cx = Cx::new(&mut host, 0, 0, 0); dma.write(&mut cx, DMA + 0x28, 4, 0x10000001); assert!(cx.take_refusal().is_some());
+        assert_eq!(dma.save(), before);
+        let mut dma = standalone(); let mut host = ram_host();
+        configure_ram(&mut dma, &mut host, 0x1fff, 0x300, 32, 0);
+        write(&mut dma, &mut host, 0, DMA + 0x28, 0x10000001, 0); dma.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        let before_ram = host.ram.clone(); host.now = 118;
+        let mut cx = Cx::new(&mut host, 0, 0, 0); dma.event(&mut cx, 0); assert!(cx.take_refusal().is_some());
+        assert_eq!(host.ram, before_ram); assert!(host.irqs.is_empty());
+    }
+    #[test]
+    fn standalone_checkpoint_binds_peer_mode_and_rejects_pending_flash_before_restore() {
+        let mut dma = standalone(); let mut host = ram_host();
+        configure_ram(&mut dma, &mut host, 0x100, 0x300, 32, 0);
+        write(&mut dma, &mut host, 0, DMA + 0x28, 0x10000001, 0); dma.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        let good = dma.save(); let mut resumed = standalone(); resumed.restore(&good).unwrap(); assert_eq!(resumed.save(), good);
+        for (field, value) in [("serial_flash_peer", json!(true)), ("reset_profile", json!("other")), ("timing_profile", json!("other"))] {
+            let mut bad = good.clone(); bad[field] = value; assert!(resumed.restore(&bad).is_err()); assert_eq!(resumed.save(), good);
+        }
+        let mut bad = good.clone(); bad["channels"][0]["registers"][0x14 / 4] = json!(FLASH);
+        assert!(resumed.restore(&bad).is_err()); assert_eq!(resumed.save(), good);
+        let peer = port(vec![], 0, Geometry { erase_bytes: 4096, page_bytes: 256, erase_ticks: 8, page_ticks: 8 }).unwrap();
+        let mut coupled = DmaController::new(peer, std::array::from_fn(|n| 207 + n as u32));
+        let coupled_state = coupled.save(); assert!(coupled_state.get("serial_flash_peer").is_none());
+        assert!(resumed.restore(&coupled_state).is_err()); assert!(coupled.restore(&good).is_err());
+        host.now = 118; event(&mut dma, &mut host, 0, 0); event(&mut resumed, &mut host, 0, 0);
+        assert_eq!(dma.save(), resumed.save()); resumed.restore(&dma.save()).unwrap();
+    }
+    #[test]
+    fn standalone_ram_dma_is_independent_of_cpu_and_pc() {
+        let mut results = Vec::new();
+        for (cpu, pc) in [(0, 0), (3, 0xdead0000)] {
+            let mut dma = standalone(); let mut host = ram_host();
+            for (offset, value) in [(0x14, 0x100), (0x18, 0x300), (0x10, 31), (0x1c, 0), (0x20, 0), (0x24, 0), (0x28, 0x10000001)] {
+                let mut cx = Cx::new(&mut host, cpu, pc, 0); dma.write(&mut cx, DMA + offset, 4, value); assert!(cx.take_refusal().is_none());
+            }
+            dma.advance(&mut Cx::new(&mut host, cpu, pc, 0)); host.now = 118;
+            dma.event(&mut Cx::new(&mut host, cpu, pc, 0), 0);
+            results.push((dma.save(), host.ram, json!(host.records), host.events, host.irqs));
+        }
+        assert_eq!(results[0], results[1]);
+    }
+
 }

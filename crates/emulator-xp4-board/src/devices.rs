@@ -676,6 +676,19 @@ impl Devices {
         self.windows.push((base, base + 0x28, id));
         Ok(())
     }
+    pub fn standalone_dma(&mut self, input: super::definition::StandaloneDma) -> Result<(), String> {
+        let routes: [u32; 16] = input.irq_routes.try_into()
+            .map_err(|_| "Standalone XP4 DMA requires 16 explicit IRQ routes")?;
+        let model = DmaController::standalone(routes, &input.reset_profile, &input.timing_profile)?;
+        let windows = [(storage::DMA, storage::DMA + 0x10000), (0xfff4a500, 0xfff4a520)];
+        if windows.iter().any(|&(a, b)| self.windows.iter().any(|&(lo, hi, _)| a < hi && lo < b)) {
+            return Err("Overlapping standalone XP4 DMA window".into());
+        }
+        let id = self.models.len();
+        self.windows.extend(windows.into_iter().map(|(a, b)| (a, b, id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
     pub fn storage(
         jedec: u32,
         routes: Vec<u32>,
