@@ -69,3 +69,40 @@ fn spi2_reads_a_register_through_a_receive_transport() {
     // The reply lands in the channel RX register once the frame completes.
     assert_eq!(read(&mut device, &mut host, BASE + 0x18) & 0xff, 0x22);
 }
+
+#[test]
+fn channels_sit_on_the_four_stride_0x40_bases() {
+    let options = |base| Options {
+        base,
+        transports: vec![Transport {
+            control: 0xe0,
+            configuration: 0x30002,
+            bits: 16,
+            receive: false,
+        }],
+        selection: vec![Selection {
+            pin: Pin { port: 2, pin: 6 },
+            high: false,
+        }],
+        transfer_ticks: 4,
+        queue: Queue::Single,
+    };
+    let wiring = || Wiring {
+        pins: Box::new(TestPins),
+        endpoint: Box::new(
+            RegisterFile::new(RegisterOptions {
+                registers: vec![],
+                readable: false,
+                status_registers: vec![],
+                clock: None,
+            })
+            .unwrap(),
+        ),
+    };
+    for base in [0xfff84000, 0xfff84040, 0xfff84080, 0xfff840c0] {
+        assert!(SerialChannel::new(options(base), wiring()).is_ok());
+    }
+    for base in [0xfff84020, 0xfff84100] {
+        assert!(SerialChannel::new(options(base), wiring()).is_err());
+    }
+}
