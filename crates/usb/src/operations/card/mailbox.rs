@@ -104,6 +104,14 @@ impl Mailbox<'_> {
         Ok(values)
     }
     async fn command(&mut self, op: u32, size: u32) -> Result<u32> {
+        let (status, count) = self.command_status(op, size).await?;
+        require(
+            status == 0,
+            &format!("File-service operation {op} failed: {status:#x}"),
+        )?;
+        Ok(count)
+    }
+    async fn command_status(&mut self, op: u32, size: u32) -> Result<(u32, u32)> {
         require(size <= 0xffffff, "File-service argument too large")?;
         self.idle().await?;
         self.write(self.p[1], &words(&[op | size << 8])).await?;
@@ -138,10 +146,10 @@ impl Mailbox<'_> {
                 self.operations = self.operations.wrapping_add(1);
                 let status = snapshot[4];
                 require(
-                    state == 2 && status == 0,
-                    &format!("File-service operation {op} failed: {status:#x}"),
+                    state == 2 || state == 3,
+                    "Invalid file-service completion state",
                 )?;
-                return Ok(snapshot[5]);
+                return Ok((status, snapshot[5]));
             }
             if Instant::now() >= deadline {
                 self.host.session.invalidate_completion();
@@ -149,6 +157,26 @@ impl Mailbox<'_> {
             }
             futures_timer::Delay::new(Duration::from_millis(10)).await;
         }
+    }
+    async fn open_update(&mut self, path: &str) -> Result<()> {
+        let (status, _) = self.command_status(5, 0).await?;
+        if status == 0 {
+            return Ok(());
+        }
+        // Some append-mode implementations refuse an empty file with no tail
+        // cluster. A completed refusal leaves no handle. Verify its live size
+        // before using create mode, which must never erase existing contents.
+        if status == 5 && self.word(self.p[9]).await? == u32::MAX {
+            let entries = self.list(path).await?;
+            if entries.len() == 1 && entries[0].bytes == 0 {
+                self.path(path).await?;
+                self.command(9, 0).await?;
+                return Ok(());
+            }
+        }
+        Err(fail(&format!(
+            "File-service operation 5 failed: {status:#x}"
+        )))
     }
     async fn path(&mut self, p: &str) -> Result<()> {
         self.idle().await?;
@@ -251,7 +279,7 @@ impl Mailbox<'_> {
             Request::Shrink { path, size } => {
                 self.require_mount_abi()?;
                 self.path(&path).await?;
-                self.command(5, 0).await?;
+                self.open_update(&path).await?;
                 self.write(self.p[6], &size.to_le_bytes()).await?;
                 self.command(12, 0).await?;
                 Ok(Response::Done)
@@ -296,7 +324,7 @@ impl Mailbox<'_> {
             Request::WriteAt { path, offset, data } => {
                 self.require_mount_abi()?;
                 self.path(&path).await?;
-                self.command(5, 0).await?;
+                self.open_update(&path).await?;
                 self.seek(offset).await?;
                 self.source = Some(self.word(self.p[10]).await?);
                 self.host.put(self.address(self.p[10], 4)?, 0).await?;
@@ -350,7 +378,7 @@ impl Mailbox<'_> {
                     "This installed file service rewrites existing files of equal length",
                 )?;
                 self.path(&path).await?;
-                self.command(5, 0).await?;
+                self.open_update(&path).await?;
                 self.source = Some(self.word(self.p[10]).await?);
                 self.host.put(self.address(self.p[10], 4)?, 0).await?;
                 for chunk in data.chunks(self.capacity as usize) {
