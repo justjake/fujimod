@@ -648,13 +648,18 @@ impl Devices {
         self.windows.push((base, end, id));
         Ok(())
     }
-    pub fn decompressor(&mut self, base: u64, irq: u32) {
+    pub fn decompressor(&mut self, base: u64, irq: u32) -> Result<(), String> {
+        let end = base.checked_add(0x6c).ok_or("Invalid decompressor extent")?;
+        if self.windows.iter().any(|&(lo, hi, _)| base < hi && lo < end) {
+            return Err("Overlapping decompressor window".into());
+        }
         let id = self.models.len();
         let high = std::sync::Arc::new(std::sync::Mutex::new([0; 2]));
         self.models.push(Some(Box::new(
             fujimod_emulator_devices::lz_osd::Decompressor::new(base, irq, high, None),
         )));
-        self.windows.push((base, base + 0x6c, id));
+        self.windows.push((base, end, id));
+        Ok(())
     }
     pub fn spi(&mut self, base: u64, miso: bool) -> Result<(), String> {
         self.spi_input(base, Box::new(fujimod_emulator_xp4_io::spi::FixedPin(miso)))
@@ -1561,6 +1566,24 @@ mod io_group_admission_tests {
         let before=(devices.models.len(),devices.windows.clone(),devices.snapshots());
         for base in [0xfff42000,0xfff41fff,0xfff4209f] {
             assert!(devices.io_groups(base).is_err());
+            assert_eq!((devices.models.len(),devices.windows.clone(),devices.snapshots()),before);
+        }
+    }
+}
+
+#[cfg(test)]
+mod decompressor_admission_tests {
+    use super::*;
+    #[test]
+    fn overflow_and_overlap_refuse_before_mutation() {
+        let mut devices=Devices::empty();
+        let before=(devices.models.len(),devices.windows.clone(),devices.snapshots());
+        assert!(devices.decompressor(u64::MAX-0x6b,128).is_err());
+        assert_eq!((devices.models.len(),devices.windows.clone(),devices.snapshots()),before);
+        devices.decompressor(0xfff79000,128).unwrap();
+        let before=(devices.models.len(),devices.windows.clone(),devices.snapshots());
+        for base in [0xfff79000,0xfff78fff,0xfff7906b] {
+            assert!(devices.decompressor(base,128).is_err());
             assert_eq!((devices.models.len(),devices.windows.clone(),devices.snapshots()),before);
         }
     }

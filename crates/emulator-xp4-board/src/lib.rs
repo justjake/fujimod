@@ -1591,7 +1591,7 @@ impl Session {
             }
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .decompressor(base, irq);
+                .decompressor(base, irq)?;
         }
         let timer = timer_layout
             .map(|layout| timer::Timer::new(layout, &timer_routes))
