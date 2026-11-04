@@ -257,6 +257,7 @@
     "directory_context_bytes": 120,
     "directory_attribute_offset": 59,
     "directory_size_offset": 80,
+    "directory_size_bytes": 8,
     "chunk_bytes": 65536,
     "end_of_directory_status": 6
   }

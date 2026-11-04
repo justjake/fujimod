@@ -322,15 +322,16 @@ impl Sdk<'_, '_> {
                             .all(|b| b.is_ascii_graphic() && !b"\\/:".contains(b)),
                     "Invalid SDK directory name",
                 )?;
-                require(
-                    u32_at(&raw, self.p.directory_size_offset as usize + 4) == 0,
-                    "Directory file size exceeds 32 bits",
+                let bytes = directory_size(
+                    &raw,
+                    self.p.directory_size_offset as usize,
+                    self.p.directory_size_bytes,
                 )?;
                 entries.push(DirectoryEntry {
                     directory: attributes & 0x10 != 0,
                     read_only: attributes & 1 != 0,
                     name: String::from_utf8(name).map_err(|_| Error::InvalidToken)?,
-                    bytes: u32_at(&raw, self.p.directory_size_offset as usize),
+                    bytes,
                 });
             }
             self.host
@@ -552,7 +553,9 @@ pub(super) async fn prepare<'a, 'p>(mut host: Host<'a>, p: &'p StockSdk) -> Resu
         p.directory_context_bytes >= 48
             && p.directory_context_bytes <= 256
             && p.directory_attribute_offset < p.directory_context_bytes
-            && p.directory_size_offset + 8 <= p.directory_context_bytes,
+            && matches!(p.directory_size_bytes, 4 | 8)
+            && u64::from(p.directory_size_offset) + u64::from(p.directory_size_bytes)
+                <= u64::from(p.directory_context_bytes),
         "Invalid directory layout",
     )?;
     require(
@@ -634,5 +637,46 @@ pub(super) async fn execute(host: Host<'_>, p: &StockSdk, request: Request) -> R
                 .map(|e| e.to_string())
                 .unwrap_or_else(|| "Card transfer completed".into())
         ))),
+    }
+}
+
+fn directory_size(raw: &[u8], offset: usize, width: u32) -> Result<u32> {
+    require(matches!(width, 4 | 8), "Invalid directory size width")?;
+    require(
+        offset
+            .checked_add(width as usize)
+            .is_some_and(|end| end <= raw.len()),
+        "Truncated directory size field",
+    )?;
+    if width == 8 {
+        require(
+            u32_at(raw, offset + 4) == 0,
+            "Directory file size exceeds 32 bits",
+        )?;
+    }
+    Ok(u32_at(raw, offset))
+}
+
+#[cfg(test)]
+mod directory_size_tests {
+    use super::directory_size;
+
+    #[test]
+    fn allocation_word_is_not_part_of_a_four_byte_size() {
+        let raw = [42, 0, 0, 0, 0, 16, 0, 0];
+        assert_eq!(directory_size(&raw, 0, 4).unwrap(), 42);
+        assert!(directory_size(&raw, 0, 8).is_err());
+        assert_eq!(directory_size(&raw[..4], 0, 4).unwrap(), 42);
+    }
+
+    #[test]
+    fn eight_byte_sizes_and_bounds_remain_checked() {
+        assert_eq!(
+            directory_size(&[42, 0, 0, 0, 0, 0, 0, 0], 0, 8).unwrap(),
+            42
+        );
+        assert!(directory_size(&[0; 4], 0, 8).is_err());
+        assert!(directory_size(&[0; 8], 0, 3).is_err());
+        assert!(directory_size(&[0; 8], usize::MAX, 4).is_err());
     }
 }

@@ -286,7 +286,7 @@
     },
     "device": {
       "$ref": "#/$defs/FlashDevice",
-      "description": "Installed device, checked against the stock driver."
+      "description": "Installed device type and any identity established by the stock driver."
     },
     "e1_window": {
       "anyOf": [

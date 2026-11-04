@@ -7327,7 +7327,18 @@
         },
         "device": {
           "$ref": "#/$defs/FlashDevice",
-          "description": "Installed device, checked against the stock driver."
+          "description": "Installed device type and any identity established by the stock driver."
+        },
+        "e1_window": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FlashRange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "CPU-mapped portion that the firmware's E1 source may read directly.\nPresent only when the flash locator establishes a memory aperture;\nlive E1 reads still qualify it against the update-backed control bytes."
         },
         "firmware_id": {
           "description": "Firmware whose bytes establish this contract.",
@@ -7338,8 +7349,15 @@
           "type": "string"
         },
         "reader": {
-          "$ref": "#/$defs/FlashReader",
-          "description": "Stock reader ABI and alignment."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FlashReader"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Stock reader ABI and alignment, absent for a mapped-E1-only contract."
         },
         "schema": {
           "description": "Document version.",
@@ -7378,7 +7396,6 @@
         "device",
         "window",
         "update_image",
-        "reader",
         "code_ranges",
         "state_checks",
         "control"
@@ -9355,6 +9372,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "sha256": {
+          "description": "SHA-256 of the same bytes in the decoded update image.",
+          "type": "string"
+        },
         "size": {
           "description": "Length in bytes.",
           "format": "uint64",
@@ -9364,7 +9385,8 @@
       },
       "required": [
         "offset",
-        "size"
+        "size",
+        "sha256"
       ],
       "type": "object"
     },
@@ -15399,6 +15421,12 @@
               "minimum": 0,
               "type": "integer"
             },
+            "directory_size_bytes": {
+              "description": "Width of the checked SDK size field, independent of adjacent metadata.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
             "directory_size_offset": {
               "format": "uint32",
               "minimum": 0,
@@ -15590,6 +15618,7 @@
             "directory_context_bytes",
             "directory_attribute_offset",
             "directory_size_offset",
+            "directory_size_bytes",
             "chunk_bytes",
             "end_of_directory_status"
           ],

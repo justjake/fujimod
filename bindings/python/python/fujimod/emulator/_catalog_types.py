@@ -1743,7 +1743,7 @@ FirmwareFlash = TypedDict(
         "e1_window": NotRequired["FlashRange | None"],
         "firmware_id": Required["str"],
         "id": Required["str"],
-        "reader": Required["FlashReader"],
+        "reader": NotRequired["FlashReader | None"],
         "schema": Required["int"],
         "state_checks": Required["list[FlashStateCheck]"],
         "transport": NotRequired["str | None"],
@@ -2116,6 +2116,7 @@ class FlashCodeRange(TypedDict, total=False):
 
 class FlashControl(TypedDict, total=False):
     offset: Required[int]
+    sha256: Required[str]
     size: Required[int]
 
 
@@ -3243,6 +3244,7 @@ class MechanismVariant1(TypedDict, total=False):
     directory_context_bytes: Required[int]
     directory_first_code: Required[int]
     directory_next_code: Required[int]
+    directory_size_bytes: Required[int]
     directory_size_offset: Required[int]
     dispatcher: Required[int]
     drive_map: Required[int]

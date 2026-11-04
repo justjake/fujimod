@@ -6129,6 +6129,10 @@
           "status": "available",
           "errors": []
         },
+        "card-files": {
+          "status": "available",
+          "errors": []
+        },
         "controls": {
           "status": "unavailable",
           "errors": [
