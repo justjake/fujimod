@@ -327,9 +327,9 @@ impl Guard {
             || word & 0xff20_fc1f == 0x1e20_2000) // FCMP S/D.
             && (word >> 22) & 3 <= 1)
             || word & 0xdfff_fc00 == 0x5ea1_b800; // FCVTZS/U scalar S to S.
-        // DSB SY is an ordering point in this single-core, bus-free routine:
-        // admitted RAM stores complete synchronously before the next entry.
-        if matches!(word, 0xd503_201f | 0xd503_3f9f)
+        // DSB SY and DMB ISH are ordering points in this single-core, bus-free
+        // routine: admitted RAM stores complete before the next instruction.
+        if matches!(word, 0xd503_201f | 0xd503_3f9f | 0xd503_3bbf)
             || integer
             || branch
             || scalar_fmov_immediate
@@ -807,6 +807,19 @@ mod tests {
         let mut bytes = [0; 8];
         b.read_memory(0, 0x4000, &mut bytes).unwrap();
         assert_eq!(bytes, 0x1234_5678_9abc_def0u64.to_le_bytes());
+    }
+    #[test]
+    fn dmb_ish_retires_between_checked_store_and_load() {
+        // STR X0,[X1]; DMB ISH; LDR X2,[X1]; RET.
+        let mut b = board(&[0xf9000020, 0xd5033bbf, 0xf9400022, 0xd65f03c0]);
+        let mut o = options();
+        o.arguments = vec![0x1234_5678_9abc_def0, 0x4000];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.instructions, 4);
+        assert_eq!(r.registers["x2"], 0x1234_5678_9abc_def0);
+        assert_eq!(r.stores.len(), 1);
+        assert_eq!((r.stores[0].pc, r.stores[0].address), (0x1000, 0x4000));
     }
     #[test]
     fn scalar_fmov_immediate_retires_without_admitting_fadd() {
