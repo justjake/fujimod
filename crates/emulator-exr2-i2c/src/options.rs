@@ -136,7 +136,7 @@ impl Options {
                     || addresses.iter().any(|&a| a >= 128)
                     || addresses.iter().copied().collect::<BTreeSet<_>>().len() != addresses.len()
                     || model.profile == Some(Profile::RegisterStatus)
-                        && (status.is_empty() || topology.is_none())
+                        && (status.is_empty() && commands.is_empty() || topology.is_none())
                     || !commands.is_empty() && model.profile != Some(Profile::RegisterStatus)
                     || u16::from(prefix_high) != heartbeat_register >> 8
                     || sensor_fields.iter().any(|&f| f > 255)

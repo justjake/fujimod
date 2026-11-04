@@ -80,6 +80,17 @@ impl CommandRegisters {
         if payload.len() == 1 && self.commands.contains(&payload[0]) {
             return Ok(());
         }
+        if let [prefix] = payload {
+            // A register-pointer write: the next read transaction returns the
+            // declared frame for this register.
+            let register = self.register(*prefix)?;
+            if self.write_masks.get(register).is_some()
+                || self.read_frames.iter().any(|row| u32::from(row.0) == register)
+            {
+                return Ok(());
+            }
+            return fail("Command-register pointer selects an undeclared register");
+        }
         if payload.len() < 2 {
             return fail("Command-register write requires data or a standalone command");
         }
@@ -159,5 +170,35 @@ impl CommandRegisters {
             read_frames,
             commands,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn part() -> CommandRegisters {
+        CommandRegisters::new(Options {
+            address: 0x30,
+            prefix_mask: 0x80,
+            prefix_value: 0,
+            register_mask: 0x7f,
+            write_masks: [(0x20, 0xff)].into_iter().collect(),
+            read_frames: vec![(0x20, vec![0, 0, 0, 0x80])],
+            commands: vec![],
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn a_declared_register_pointer_is_accepted_alone() {
+        let part = part();
+        assert!(part.validate_write(&[0x20]).is_ok());
+        assert_eq!(part.read(&[0x20]).unwrap(), vec![0, 0, 0, 0x80]);
+    }
+
+    #[test]
+    fn an_undeclared_register_pointer_is_refused() {
+        assert!(part().validate_write(&[0x21]).is_err());
     }
 }
