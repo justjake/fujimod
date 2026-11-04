@@ -1,14 +1,15 @@
-//! Channel 1 DMA connected to the two serial-audio transmit FIFOs.
+//! A DMA channel connected to the two serial-audio transmit FIFOs.
 //!
 //! Opaque RAM bytes are latched when the enabled FIFO admits a descriptor,
-//! then consumed before IRQ 5C at a declared, unmeasured transfer deadline.
+//! then consumed before the declared completion IRQ at a declared, unmeasured
+//! transfer deadline. The channel register window and each bank's peripheral
+//! request select (control bits 2:0) are board inputs.
 //! Disabled transmitters have no polling timer. The owning audio register
 //! block and DMA channel share a device, so a guest format write wakes it.
 use super::SerialAudio;
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_devices::exr2::irq_routes::{Irq, IrqRoutes};
 use fujimod_emulator_parts_io::audio_sink::AudioSink;
-use fujimod_emulator_exr2_serial::dma::audio::BASE;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -20,6 +21,10 @@ pub struct Options {
     pub max_transfer_bytes: u32,
     pub ticks_per_byte: u64,
     pub minimum_ticks: u64,
+    /// Completion IRQ line.
+    pub irq: u32,
+    /// Peripheral request select (control bits 2:0) of each bank's transmit FIFO.
+    pub requests: [u32; 2],
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -40,12 +45,19 @@ struct State {
 }
 pub struct Transmitter {
     options: Options,
+    /// Base of the channel's 0x40-byte register window.
+    base: u64,
     state: State,
     audio: SerialAudio,
     routes: IrqRoutes,
 }
 impl Transmitter {
-    pub fn new(options: Options, sinks: [AudioSink; 2], routes: IrqRoutes) -> Result<Self, String> {
+    pub fn new(
+        options: Options,
+        base: u64,
+        sinks: [AudioSink; 2],
+        routes: IrqRoutes,
+    ) -> Result<Self, String> {
         if options.ram_bytes == 0
             || options.ram_bytes > 0x20000000
             || options.max_transfer_bytes == 0
@@ -55,15 +67,19 @@ impl Transmitter {
         {
             return Err("invalid serial-audio transmit DMA bounds or timing".into());
         }
+        if base & 0x3f != 0 || options.irq >= 128 || options.requests.iter().any(|r| *r > 7) {
+            return Err("invalid serial-audio transmit DMA window, IRQ or request select".into());
+        }
         Ok(Self {
             options,
+            base,
             state: State::default(),
             audio: SerialAudio::new(super::Options {}, sinks),
             routes,
         })
     }
-    fn offset(address: u64, size: u8) -> Option<u16> {
-        let o = address.checked_sub(BASE)?;
+    fn offset(&self, address: u64, size: u8) -> Option<u16> {
+        let o = address.checked_sub(self.base)?;
         (size == 4
             && matches!(
                 o,
@@ -74,9 +90,9 @@ impl Transmitter {
     fn word(&self, o: u16) -> u32 {
         self.state.registers.get(&o).copied().unwrap_or(0)
     }
-    pub(crate) fn configuration(value: u32) -> bool {
+    pub(crate) fn configuration(&self, value: u32) -> bool {
         value & !0x500ff007 == 0x00200010
-            && value & 7 == 1
+            && self.options.requests.contains(&(value & 7))
             && matches!(value >> 12 & 15, 0..=2)
             && value >> 16 & 15 == 2
     }
@@ -86,7 +102,13 @@ impl Transmitter {
         let destination = u64::from(self.word(o + 4));
         let bytes = self.word(o + 8);
         let physical = source & 0x3fffffff;
-        if !Self::configuration(self.word(0x2c))
+        let bank = match destination {
+            0xfffa0010 => 0,
+            0xfffa1010 => 1,
+            _ => return Err("unsupported serial-audio transmit descriptor".into()),
+        };
+        if !self.configuration(self.word(0x2c))
+            || self.word(0x2c) & 7 != self.options.requests[bank]
             || self.word(0x30) != 0
             || self.word(0x34) != 0
             || bytes == 0
@@ -94,7 +116,6 @@ impl Transmitter {
             || bytes & 1 != 0
             || source >= 0x60000000
             || physical + u64::from(bytes) > self.options.ram_bytes
-            || !matches!(destination, 0xfffa0010 | 0xfffa1010)
         {
             return Err("unsupported serial-audio transmit descriptor".into());
         }
@@ -140,7 +161,7 @@ impl Transmitter {
                 .now()
                 .checked_add(delay)
                 .ok_or("audio DMA deadline overflow")?;
-            let irq = self.routes.latch(0x5c)?;
+            let irq = self.routes.latch(self.options.irq)?;
             // Bit 28 hands off one staged alternate descriptor. Consuming
             // it prevents a repeat channel from replaying an unstaged buffer.
             if self.state.alternate {
@@ -167,17 +188,17 @@ impl Transmitter {
         let state: State =
             serde_json::from_value(value["dma"].clone()).map_err(|e| e.to_string())?;
         if state.registers.iter().any(|(&o, &v)| {
-            Self::offset(BASE + u64::from(o), 4).is_none()
+            self.offset(self.base + u64::from(o), 4).is_none()
                 || o == 0x24
                 || matches!(o, 0x30 | 0x34) && v != 0
-                || o == 0x2c && !Self::configuration(v)
+                || o == 0x2c && !self.configuration(v)
         }) || state.pending.is_some() && !state.active
             || state.pending.as_ref().is_some_and(|p| {
                 p.bytes.is_empty()
                     || p.bytes.len() > self.options.max_transfer_bytes as usize
                     || p.bytes.len() & 1 != 0
                     || p.irq.core >= 2
-                    || p.irq.line != 0x5c
+                    || p.irq.line != self.options.irq
                     || !matches!(p.destination, 0xfffa0010 | 0xfffa1010)
             })
         {
@@ -193,10 +214,10 @@ impl Device for Transmitter {
         "exr2-serial-audio-transmitter"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
-        if !(BASE..BASE + 0x40).contains(&address) {
+        if !(self.base..self.base + 0x40).contains(&address) {
             return self.audio.read(cx, address, size);
         }
-        let Some(o) = Self::offset(address, size) else {
+        let Some(o) = self.offset(address, size) else {
             cx.unmodeled();
             return 0;
         };
@@ -212,11 +233,11 @@ impl Device for Transmitter {
         self.word(o).into()
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
-        if !(BASE..BASE + 0x40).contains(&address) {
+        if !(self.base..self.base + 0x40).contains(&address) {
             self.audio.write(cx, address, size, value);
             return;
         }
-        let Some(o) = Self::offset(address, size) else {
+        let Some(o) = self.offset(address, size) else {
             cx.unmodeled();
             return;
         };
@@ -226,7 +247,7 @@ impl Device for Transmitter {
         };
         if o == 0x24
             || matches!(o, 0x30 | 0x34) && value != 0
-            || o == 0x2c && !Self::configuration(value)
+            || o == 0x2c && !self.configuration(value)
         {
             cx.fail(format!(
                 "unsupported serial-audio DMA register value {value:#x} at offset {o:#x}"
@@ -279,7 +300,7 @@ impl Device for Transmitter {
             .then(|| self.state.pending.as_ref().map_or(now, |p| p.due.max(now)))
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
-        Self::offset(address, size).is_some()
+        self.offset(address, size).is_some()
     }
     fn save(&self) -> Value {
         json!({"dma":self.state,"audio":self.audio.save()})
@@ -291,21 +312,21 @@ impl Device for Transmitter {
         Ok(())
     }
     fn fingerprint(&self) -> Result<Value, String> {
-        Ok(json!({"options":self.options,"state":self.save()}))
+        Ok(json!({"options":self.options,"base":self.base,"state":self.save()}))
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
-        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &(self.options, self.save()))
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &(self.options, self.base, self.save()))
     }
     fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
-        let (options, value): (Options, Value) = saved.decode(self.name())?;
-        if options != self.options {
+        let (options, base, value): (Options, u64, Value) = saved.decode(self.name())?;
+        if options != self.options || base != self.base {
             return Err("audio DMA snapshot configuration differs".into());
         }
         self.decode(&value).map(|_| ())
     }
     fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
-        let (_, value): (Options, Value) = saved.decode(self.name())?;
+        let (_, _, value): (Options, u64, Value) = saved.decode(self.name())?;
         self.restore(&value)
     }
 }
@@ -314,6 +335,7 @@ impl Device for Transmitter {
 mod tests {
     use super::*;
     use fujimod_emulator_devices::test_host::{TestHost, advance, read, write};
+    use fujimod_emulator_exr2_serial::dma::audio::BASE;
     fn setup() -> (Transmitter, TestHost) {
         let routes = IrqRoutes::default();
         routes.set(0x5c, Some(0)).unwrap();
@@ -322,9 +344,12 @@ mod tests {
             max_transfer_bytes: 1024,
             ticks_per_byte: 2,
             minimum_ticks: 3,
+            irq: 0x5c,
+            requests: [1, 1],
         };
         let mut d = Transmitter::new(
             options,
+            BASE,
             [
                 AudioSink::new(fujimod_emulator_parts_io::audio_sink::Options { connected: true }),
                 AudioSink::default(),
@@ -417,5 +442,50 @@ mod tests {
         assert!(cx.refusal().is_some());
         assert_eq!(d.audio.sink_bytes_received(0), Some(0));
         assert!(h.irqs.is_empty());
+    }
+    #[test]
+    fn declared_window_irq_and_bank_requests_select_the_channel() {
+        // EXR Processor Pro: channel 1 at FFF61040, bank 0 transmit on request 7.
+        const PRO: u64 = 0xfff61040;
+        let routes = IrqRoutes::default();
+        routes.set(0x44, Some(0)).unwrap();
+        let options = Options {
+            ram_bytes: 0x100000,
+            max_transfer_bytes: 1024,
+            ticks_per_byte: 2,
+            minimum_ticks: 3,
+            irq: 0x44,
+            requests: [7, 6],
+        };
+        let sinks = || {
+            [
+                AudioSink::new(fujimod_emulator_parts_io::audio_sink::Options { connected: true }),
+                AudioSink::default(),
+            ]
+        };
+        let mut d = Transmitter::new(options, PRO, sinks(), routes.clone()).unwrap();
+        let mut h = TestHost::new();
+        h.ram[0x1000..0x1004].copy_from_slice(&[1, 2, 3, 4]);
+        for (o, v) in [(0, 0x1000), (4, 0xfffa0010), (8, 4), (0x2c, 0x40221017), (0x28, 1)] {
+            write(&mut d, &mut h, PRO + o, v);
+        }
+        assert_eq!(read(&mut d, &mut h, PRO + 0x24), 5);
+        write(&mut d, &mut h, 0xfffa0008, 0x20001);
+        advance(&mut d, &mut h, 0);
+        advance(&mut d, &mut h, 8);
+        assert_eq!(h.irqs, [(0, 0x44)]);
+        assert_eq!(d.audio.sink_bytes_received(0), Some(4));
+        assert!(!d.pollable(BASE + 0x24, 4));
+
+        // Bank 1 is request 6: request 7 toward its FIFO refuses at START.
+        let mut d = Transmitter::new(options, PRO, sinks(), routes).unwrap();
+        for (o, v) in [(0, 0x1000), (4, 0xfffa1010), (8, 4), (0x2c, 0x40221017)] {
+            write(&mut d, &mut h, PRO + o, v);
+        }
+        let mut cx = h.cx();
+        d.write(&mut cx, PRO + 0x28, 4, 1);
+        assert!(cx.refusal().is_some());
+        assert!(Transmitter::new(Options { requests: [8, 6], ..options }, PRO, sinks(), IrqRoutes::default()).is_err());
+        assert!(Transmitter::new(options, PRO + 4, sinks(), IrqRoutes::default()).is_err());
     }
 }

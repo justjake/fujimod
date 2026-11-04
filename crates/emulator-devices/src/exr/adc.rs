@@ -1,7 +1,10 @@
-//! Register-only EXR Processor Pro block at 0xFFFA8000. Bit 24 starts and bit 25 stops a channel; bit 26 reads as ready after either. The block is unidentified.
-//! A start on the +04 channel also raises the declared completion interrupt after the declared delay: start-up
-//! 0x7a085c writes the start, then registers its handler on IRQ index 0x42 and waits for it with a 100-tick timeout.
-//! The +00 channel (loader 0x44dc) is polled and raises nothing.
+//! EXR Processor Pro analog-to-digital converter at 0xFFFA8000.
+//!
+//! +00 and +04 are two control words: bit 24 starts and bit 25 stops, and bit 26 reads as ready after either.
+//! A start on +04 also raises the declared completion interrupt after the declared delay: start-up 0x7a085c
+//! writes the start, then registers its handler on IRQ index 0x42 and waits for it with a 100-tick timeout.
+//! The +00 control (loader 0x44dc) is polled and raises nothing. +10 + 4n holds channel n's 10-bit result
+//! (0x7a07c0 masks it with 0x3ff); each channel samples a declared, constant external input level.
 use crate::bus::InterruptLine;
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
@@ -16,7 +19,12 @@ pub struct Options {
     pub start_irq: Option<InterruptLine>,
     /// Ticks from a +04 start to its interrupt.
     pub start_ticks: u64,
+    /// The 10-bit level each of the eight inputs converts to.
+    pub inputs: [u16; CHANNELS],
 }
+
+const CHANNELS: usize = 8;
+const RESULTS: u64 = 0x10;
 
 #[derive(Serialize, Deserialize)]
 struct State {
@@ -26,15 +34,18 @@ struct State {
     start_due: Option<u64>,
 }
 
-/// One unclassified start/stop/ready register block.
-pub struct Blocka8000 {
+/// The converter's control, result and data words.
+pub struct Adc {
     options: Options,
     state: State,
 }
 
-impl Blocka8000 {
-    pub fn new(options: Options) -> Self {
-        Self {
+impl Adc {
+    pub fn new(options: Options) -> Result<Self, String> {
+        if options.inputs.iter().any(|level| *level > 0x3ff) {
+            return Err("ADC input levels are 10-bit".into());
+        }
+        Ok(Self {
             options,
             state: State {
                 control: [0; 2],
@@ -42,7 +53,7 @@ impl Blocka8000 {
                 words: [0; 2],
                 start_due: None,
             },
-        }
+        })
     }
 
     fn offset(address: u64, size: u8) -> Option<u64> {
@@ -50,11 +61,12 @@ impl Blocka8000 {
             return None;
         }
         let offset = address - BASE;
-        matches!(offset, 0 | 4 | 0x40 | 0x44).then_some(offset)
+        (matches!(offset, 0 | 4 | 0x40 | 0x44) || (RESULTS..RESULTS + 4 * CHANNELS as u64).contains(&offset) && offset & 3 == 0)
+            .then_some(offset)
     }
 }
 
-impl Device for Blocka8000 {
+impl Device for Adc {
     crate::checkpoint_fields!(state: State);
 
     fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
@@ -62,7 +74,7 @@ impl Device for Blocka8000 {
     }
 
     fn name(&self) -> &'static str {
-        "exr-pro-block-a8000"
+        "exr-pro-adc"
     }
 
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
@@ -78,7 +90,8 @@ impl Device for Blocka8000 {
                         | u32::from(self.state.ready[channel]) << 26,
                 )
             }
-            _ => u64::from(self.state.words[(offset / 4 - 0x10) as usize]),
+            0x40 | 0x44 => u64::from(self.state.words[(offset / 4 - 0x10) as usize]),
+            _ => u64::from(self.options.inputs[((offset - RESULTS) / 4) as usize]),
         }
     }
 
@@ -88,7 +101,7 @@ impl Device for Blocka8000 {
             return;
         };
         let Ok(value) = u32::try_from(value) else {
-            cx.fail("0xfffa8000 block requires 32-bit register values");
+            cx.fail("ADC requires 32-bit register values");
             return;
         };
         match offset {
@@ -99,13 +112,14 @@ impl Device for Blocka8000 {
                 self.state.ready[channel] = value & (1 << 24 | 1 << 25) != 0;
                 if channel == 1 && starting && self.options.start_irq.is_some() {
                     let Some(due) = cx.now().checked_add(self.options.start_ticks) else {
-                        cx.fail("0xfffa8000 start interrupt deadline overflow");
+                        cx.fail("ADC start interrupt deadline overflow");
                         return;
                     };
                     self.state.start_due = Some(due);
                 }
             }
-            _ => self.state.words[(offset / 4 - 0x10) as usize] = value,
+            0x40 | 0x44 => self.state.words[(offset / 4 - 0x10) as usize] = value,
+            _ => cx.fail("ADC results are read-only"),
         }
     }
 
@@ -139,7 +153,7 @@ impl Device for Blocka8000 {
 
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value["state"].clone())
-            .map_err(|error| format!("invalid 0xfffa8000 state: {error}"))?;
+            .map_err(|error| format!("invalid ADC state: {error}"))?;
         self.state = state;
         Ok(())
     }
@@ -174,14 +188,14 @@ mod tests {
         fn record(&mut self, _: Record) {}
     }
 
-    fn read(model: &mut Blocka8000, offset: u64, size: u8) -> (u64, Option<String>) {
+    fn read(model: &mut Adc, offset: u64, size: u8) -> (u64, Option<String>) {
         let mut host = Clock;
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         let value = model.read(&mut cx, BASE + offset, size);
         (value, cx.take_refusal())
     }
 
-    fn write(model: &mut Blocka8000, offset: u64, size: u8, value: u64) -> Option<String> {
+    fn write(model: &mut Adc, offset: u64, size: u8, value: u64) -> Option<String> {
         let mut host = Clock;
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         model.write(&mut cx, BASE + offset, size, value);
@@ -190,7 +204,7 @@ mod tests {
 
     #[test]
     fn start_bit_sets_ready_within_the_control_word() {
-        let mut model = Blocka8000::new(Options::default());
+        let mut model = Adc::new(Options::default()).unwrap();
         assert_eq!(read(&mut model, 0, 4), (0, None));
         assert_eq!(write(&mut model, 0, 4, 0x0100_0000), None);
         let (value, refusal) = read(&mut model, 0, 4);
@@ -201,7 +215,7 @@ mod tests {
 
     #[test]
     fn ready_follows_start_or_stop_and_not_plain_configuration() {
-        let mut model = Blocka8000::new(Options::default());
+        let mut model = Adc::new(Options::default()).unwrap();
         assert_eq!(write(&mut model, 4, 4, 0x4000_0ff0), None);
         assert_eq!(read(&mut model, 4, 4).0 & 1 << 26, 0);
         assert_eq!(write(&mut model, 4, 4, 0x4000_0ff0 | 0x0200_0000), None);
@@ -211,7 +225,7 @@ mod tests {
 
     #[test]
     fn data_words_round_trip() {
-        let mut model = Blocka8000::new(Options::default());
+        let mut model = Adc::new(Options::default()).unwrap();
         assert_eq!(write(&mut model, 0x40, 4, 0x1234_5678), None);
         assert_eq!(write(&mut model, 0x44, 4, 0x9abc_def0), None);
         assert_eq!(read(&mut model, 0x40, 4), (0x1234_5678, None));
@@ -220,7 +234,7 @@ mod tests {
 
     #[test]
     fn unknown_or_misaligned_access_is_unmodeled() {
-        let mut model = Blocka8000::new(Options::default());
+        let mut model = Adc::new(Options::default()).unwrap();
         assert_eq!(read(&mut model, 8, 4).0, 0);
         assert_eq!(read(&mut model, 2, 2).0, 0);
         assert_eq!(read(&mut model, 0, 2).0, 0);
@@ -232,10 +246,10 @@ mod tests {
 
     #[test]
     fn checkpoint_round_trip_preserves_ready_bits() {
-        let mut model = Blocka8000::new(Options::default());
+        let mut model = Adc::new(Options::default()).unwrap();
         write(&mut model, 0, 4, 0x0100_0000);
         write(&mut model, 0x40, 4, 0x2aa);
-        let mut restored = Blocka8000::new(Options::default());
+        let mut restored = Adc::new(Options::default()).unwrap();
         restored.restore(&model.save()).unwrap();
         assert_eq!(restored.state.ready, [true, false]);
         assert_eq!(restored.state.control, [0x0100_0000, 0]);
@@ -256,10 +270,12 @@ mod start_irq_tests {
 
     #[test]
     fn a_plus_04_start_raises_the_declared_interrupt_after_its_delay() {
-        let mut model = Blocka8000::new(Options {
+        let mut model = Adc::new(Options {
             start_irq: Some(InterruptLine::Core { core: 0, line: 0x48 }),
             start_ticks: 10,
-        });
+            inputs: [0; CHANNELS],
+        })
+        .unwrap();
         let mut host = TestHost::new();
         host.now = 5;
         write(&mut model, &mut host, BASE, 1 << 24);
@@ -271,5 +287,30 @@ mod start_irq_tests {
         advance(&mut model, &mut host, 15);
         assert_eq!(host.irqs, [(0, 0x48)]);
         assert_eq!(model.next_deadline(host.now), None);
+    }
+}
+
+#[cfg(test)]
+mod result_tests {
+    use super::*;
+    use crate::test_host::{TestHost, read};
+
+    #[test]
+    fn results_report_the_declared_inputs_and_are_read_only() {
+        let inputs = [368, 715, 415, 63, 516, 646, 18, 839];
+        let mut model = Adc::new(Options { inputs, ..Options::default() }).unwrap();
+        let mut host = TestHost::new();
+        for (n, level) in inputs.iter().enumerate() {
+            assert_eq!(read(&mut model, &mut host, BASE + 0x10 + 4 * n as u64), u64::from(*level));
+        }
+        let saved = model.save();
+        let mut cx = host.cx();
+        model.write(&mut cx, BASE + 0x14, 4, 1);
+        assert!(cx.refusal().is_some());
+        assert_eq!(model.save(), saved);
+        let mut cx = host.cx();
+        model.read(&mut cx, BASE + 0x30, 4);
+        assert!(cx.is_unmodeled());
+        assert!(Adc::new(Options { inputs: [0x400, 0, 0, 0, 0, 0, 0, 0], ..Options::default() }).is_err());
     }
 }

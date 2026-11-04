@@ -4,7 +4,7 @@
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
 
-pub mod blocka8000;
+pub mod adc;
 pub mod clocks;
 pub mod command_gpu;
 pub mod display_pipe;
