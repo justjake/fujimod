@@ -16,6 +16,9 @@ pub struct CommandRegisters {
     pub registers: WordMap,
     pub read_frames: Vec<(u8, Vec<u8>)>,
     pub commands: Vec<u8>,
+    /// The register selected by the last accepted pointer write; a read
+    /// transaction without its own pointer returns this register's frame.
+    pub pointer: Option<u8>,
 }
 
 impl CommandRegisters {
@@ -40,6 +43,14 @@ impl CommandRegisters {
             .ok_or_else(|| {
                 fujimod_emulator_devices::Unsupported("Command-register read has no declared input frame".into())
             })
+    }
+
+    /// Frame of the register selected by the last pointer write.
+    pub fn read_pointer(&self) -> Result<Vec<u8>> {
+        match self.pointer {
+            Some(prefix) => self.read(&[prefix]),
+            None => fail("Command-register read has no selected register"),
+        }
     }
 
     pub fn validate_byte(&self, payload: &[u8], byte: u8) -> Result<()> {
@@ -102,10 +113,14 @@ impl CommandRegisters {
 
     pub fn complete_write(&mut self, payload: &[u8]) -> Result<()> {
         self.validate_write(payload)?;
-        if payload.len() == 1 {
+        if let [byte] = payload {
+            if !self.commands.contains(byte) {
+                self.pointer = Some(*byte);
+            }
             return Ok(());
         }
         let first = self.register(payload[0])?;
+        self.pointer = Some(payload[0]);
         for (index, byte) in payload[1..].iter().enumerate() {
             self.registers
                 .insert(first + index as u32, u32::from(*byte));
@@ -169,6 +184,7 @@ impl CommandRegisters {
             registers,
             read_frames,
             commands,
+            pointer: None,
         })
     }
 }
@@ -188,6 +204,14 @@ mod tests {
             commands: vec![],
         })
         .unwrap()
+    }
+
+    #[test]
+    fn a_read_without_its_own_pointer_returns_the_selected_frame() {
+        let mut part = part();
+        assert!(part.read_pointer().is_err());
+        part.complete_write(&[0x20]).unwrap();
+        assert_eq!(part.read_pointer().unwrap(), vec![0, 0, 0, 0x80]);
     }
 
     #[test]
