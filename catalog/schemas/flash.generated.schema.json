@@ -283,6 +283,17 @@
       "$ref": "#/$defs/FlashDevice",
       "description": "Installed device, checked against the stock driver."
     },
+    "e1_window": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FlashRange"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "CPU-mapped portion that the firmware's E1 source may read directly.\nPresent only when the flash locator establishes a memory aperture;\nlive E1 reads still qualify it against the update-backed control bytes."
+    },
     "firmware_id": {
       "description": "Firmware whose bytes establish this contract.",
       "type": "string"

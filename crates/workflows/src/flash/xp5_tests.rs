@@ -88,6 +88,7 @@ fn fixture() -> (FirmwareBulk, FirmwareFlash, Payload, Vec<u8>) {
             address: 0xf0000000,
             size: 8192,
         },
+        e1_window: None,
         update_image: FlashUpdateImage {
             dat_offset: 0,
             xor: 255,

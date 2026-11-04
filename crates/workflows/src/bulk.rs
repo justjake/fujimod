@@ -279,6 +279,9 @@ impl<'a> Qualified<'a> {
     pub(crate) async fn read(&mut self, target: BulkRange) -> Result<Vec<u8>> {
         self.source.bulk(&mut self.access, target).await
     }
+    pub(crate) fn capacity(&self) -> u32 {
+        self.source.window.capacity().get()
+    }
     pub(crate) async fn read_progress(
         &mut self,
         target: BulkRange,

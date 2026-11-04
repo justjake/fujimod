@@ -27,6 +27,11 @@ pub struct FirmwareFlash {
     pub device: FlashDevice,
     /// Reader source span: CPU aperture or physical NAND byte offsets.
     pub window: FlashRange,
+    /// CPU-mapped portion that the firmware's E1 source may read directly.
+    /// Present only when the flash locator establishes a memory aperture;
+    /// live E1 reads still qualify it against the update-backed control bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub e1_window: Option<FlashRange>,
     /// Update packaging that supplies comparison bytes.
     pub update_image: FlashUpdateImage,
     /// Stock reader ABI and alignment.
@@ -264,6 +269,18 @@ impl FirmwareFlash {
             &self.firmware_id,
         )?;
         extent(self.window.address, self.window.size)?;
+        if let Some(e1) = &self.e1_window {
+            extent(e1.address, e1.size)?;
+            let end = e1.address.checked_add(e1.size);
+            if e1.size == 0
+                || e1.address < self.window.address
+                || end.is_none_or(|end| {
+                    end > self.window.address + self.window.size || end > (1u64 << 32)
+                })
+            {
+                return Err("invalid direct E1 flash window".into());
+            }
+        }
         let raw_nand = self.device.kind == "raw-nand";
         if !matches!(
             self.device.kind.as_str(),
@@ -315,7 +332,9 @@ impl FirmwareFlash {
             _ => return Err("NAND reader ABI and device kind differ".into()),
         }
         let alignment = u64::from(self.reader.alignment);
-        if !self.window.address.is_multiple_of(alignment)
+        if self.e1_window.as_ref().is_some_and(|e1| {
+            !e1.address.is_multiple_of(alignment) || !e1.size.is_multiple_of(alignment)
+        }) || !self.window.address.is_multiple_of(alignment)
             || !self.window.size.is_multiple_of(alignment)
             || !self.control.offset.is_multiple_of(alignment)
             || !self.control.size.is_multiple_of(alignment)
@@ -327,6 +346,13 @@ impl FirmwareFlash {
                 .is_none_or(|end| end > self.window.size)
         {
             return Err("invalid flash control geometry".into());
+        }
+        if let Some(e1) = &self.e1_window {
+            let control_start = self.window.address + self.control.offset;
+            let control_end = control_start + self.control.size;
+            if control_start < e1.address || control_end > e1.address + e1.size {
+                return Err("flash control extent is outside the direct E1 window".into());
+            }
         }
         let mut names = BTreeSet::new();
         for range in &self.code_ranges {
