@@ -1,0 +1,1213 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "xt30-201-settings",
+  "firmware_id": "xt30-201",
+  "source": {
+    "flash_offset": 2490368,
+    "address": 15863808,
+    "size": 5833048,
+    "sha256": "4fdd7cff1699642b680337a9777b9548e77074eab5cbc9e7b90f1fe716891ff5"
+  },
+  "configuration": {
+    "flash_offset": 786432,
+    "bytes": 466944,
+    "sha256": "49685a0ad794c7c18a0ac9b7cf78939e942f3b228372aad51d92fc8aabd7f76b",
+    "basis": "Stock 0x0110d084 reads through 0x0110de2c from flash unit six."
+  },
+  "bank": null,
+  "defaults": null,
+  "fields": [],
+  "profile": {
+    "header": {
+      "address": 21268336,
+      "size": 16,
+      "sha256": "2e99e8c30aeb4434dcd0fe83deea0a22c5631b5aa35eeec16a45be91ddd44856"
+    },
+    "records": {
+      "main": {
+        "block": 1018,
+        "bytes": 32768,
+        "defaults": {
+          "address": 21665412,
+          "size": 31444,
+          "sha256": "2262fcac90b6011d90372518fb716901d05e36648fe10b20c08e1c8ef2015d36"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 31740,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Erased bytes after the journal sequence word."
+          },
+          {
+            "offset": 31736,
+            "bytes": [
+              2,
+              1
+            ],
+            "basis": "Stock writer 0x011124d0 stamps update version bytes here."
+          }
+        ]
+      },
+      "custom": {
+        "block": 992,
+        "bytes": 4096,
+        "defaults": {
+          "address": 21268352,
+          "size": 1792,
+          "sha256": "0540b36db9cf5b9f739e10c9d4088ebd665ddbc3ee2cffbe2b788df420f47506"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 3964,
+        "fields": [
+          {
+            "offset": 2,
+            "bytes": [
+              255,
+              255
+            ],
+            "basis": "Erased bytes after the journal sequence word."
+          },
+          {
+            "offset": 4,
+            "bytes": [
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              32,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "basis": "Explicit stock auxiliary reset 0x00ff3ac4: zero fill then default text copy."
+          }
+        ]
+      }
+    },
+    "derived_fields": [
+      {
+        "store": "main",
+        "offset": 712,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 533,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock main initializer 0x01112640; checked instruction bytes."
+      },
+      {
+        "store": "main",
+        "offset": 718,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 534,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock main initializer 0x01112640; checked instruction bytes."
+      },
+      {
+        "store": "main",
+        "offset": 710,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 523,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 0
+            },
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            },
+            {
+              "input": 4,
+              "output": 4
+            },
+            {
+              "input": 5,
+              "output": 5
+            },
+            {
+              "input": 6,
+              "output": 6
+            },
+            {
+              "input": 7,
+              "output": 7
+            },
+            {
+              "input": 8,
+              "output": 8
+            },
+            {
+              "input": 9,
+              "output": 9
+            },
+            {
+              "input": 10,
+              "output": 10
+            },
+            {
+              "input": 11,
+              "output": 11
+            },
+            {
+              "input": 12,
+              "output": 12
+            },
+            {
+              "input": 13,
+              "output": 13
+            },
+            {
+              "input": 14,
+              "output": 14
+            },
+            {
+              "input": 15,
+              "output": 15
+            },
+            {
+              "input": 16,
+              "output": 16
+            },
+            {
+              "input": 17,
+              "output": 17
+            },
+            {
+              "input": 18,
+              "output": 18
+            },
+            {
+              "input": 19,
+              "output": 19
+            },
+            {
+              "input": 20,
+              "output": 20
+            },
+            {
+              "input": 21,
+              "output": 21
+            },
+            {
+              "input": 22,
+              "output": 22
+            },
+            {
+              "input": 23,
+              "output": 23
+            },
+            {
+              "input": 24,
+              "output": 24
+            },
+            {
+              "input": 25,
+              "output": 25
+            },
+            {
+              "input": 26,
+              "output": 26
+            },
+            {
+              "input": 27,
+              "output": 27
+            },
+            {
+              "input": 28,
+              "output": 28
+            },
+            {
+              "input": 29,
+              "output": 29
+            },
+            {
+              "input": 30,
+              "output": 30
+            },
+            {
+              "input": 31,
+              "output": 31
+            },
+            {
+              "input": 32,
+              "output": 32
+            },
+            {
+              "input": 33,
+              "output": 33
+            },
+            {
+              "input": 34,
+              "output": 34
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock main initializer 0x01112640; checked instruction bytes."
+      },
+      {
+        "store": "main",
+        "offset": 1347,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 523,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 1
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock main initializer 0x01112640; checked instruction bytes."
+      },
+      {
+        "store": "main",
+        "offset": 901,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock main initializer 0x01112640; checked instruction bytes."
+      },
+      {
+        "store": "main",
+        "offset": 902,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock main initializer 0x01112640; checked instruction bytes."
+      },
+      {
+        "store": "main",
+        "offset": 903,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock main initializer 0x01112640; checked instruction bytes."
+      },
+      {
+        "store": "main",
+        "offset": 788,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 35427
+        },
+        "basis": "Stock main initializer 0x01112640; checked instruction bytes."
+      },
+      {
+        "store": "main",
+        "offset": 1425,
+        "bytes": 32,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 35394
+        },
+        "basis": "Stock main initializer 0x01112640; checked instruction bytes."
+      },
+      {
+        "store": "main",
+        "offset": 1421,
+        "bytes": 4,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 331
+        },
+        "basis": "Stock main initializer 0x01112640; checked instruction bytes."
+      },
+      {
+        "store": "main",
+        "offset": 1417,
+        "bytes": 4,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 339
+        },
+        "basis": "Stock main initializer 0x01112640; checked instruction bytes."
+      },
+      {
+        "store": "main",
+        "offset": 1457,
+        "bytes": 40,
+        "source": {
+          "kind": "fill",
+          "value": 0
+        },
+        "basis": "Stock main initializer 0x01112640; checked instruction bytes."
+      },
+      {
+        "store": "custom",
+        "offset": 300,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 301,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 302,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 556,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 557,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 558,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 812,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 813,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 814,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1068,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1069,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1070,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1324,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1325,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1326,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1580,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1581,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1582,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1836,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1837,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "custom",
+        "offset": 1838,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock custom initializer 0x01115258 applies these fields to seven pages."
+      },
+      {
+        "store": "main",
+        "offset": 31704,
+        "bytes": 32,
+        "source": {
+          "kind": "fill",
+          "value": 255
+        },
+        "basis": "Erased journal bytes outside stock profile data and reset fields."
+      },
+      {
+        "store": "main",
+        "offset": 31738,
+        "bytes": 2,
+        "source": {
+          "kind": "fill",
+          "value": 255
+        },
+        "basis": "Erased journal bytes outside stock profile data and reset fields."
+      },
+      {
+        "store": "custom",
+        "offset": 54,
+        "bytes": 206,
+        "source": {
+          "kind": "fill",
+          "value": 255
+        },
+        "basis": "Erased journal bytes outside stock profile data and reset fields."
+      },
+      {
+        "store": "custom",
+        "offset": 2052,
+        "bytes": 1912,
+        "source": {
+          "kind": "fill",
+          "value": 255
+        },
+        "basis": "Erased journal bytes outside stock profile data and reset fields."
+      }
+    ]
+  },
+  "settings": {
+    "language": {
+      "store": "main",
+      "offset": 710,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    },
+    "setup": {
+      "store": "header",
+      "offset": 12,
+      "values": {
+        "done": [
+          30
+        ]
+      }
+    }
+  },
+  "sections": []
+}
