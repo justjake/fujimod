@@ -9,8 +9,29 @@ use serde_json::{Value, json};
 const CONTROL: [u64; 5] = [0x30, 0x3c, 0x48, 0x54, 0x80];
 const LOCK: [u32; 5] = [2, 4, 16, 8, 1];
 const DIVIDER_BUSY: u64 = 0x68;
+const LOCK_STATUS: u64 = 0x6c;
+const NAME: &str = "xpp-clock-control";
+/// A PLL locks only while bit 26 is set and bit 27 is clear.
+const CONTROL_POWERED: u32 = 1 << 26;
+const CONTROL_LOCK_HELD: u32 = 1 << 27;
+/// Upper control-word bits are rejected unless a row explicitly permits them.
+const CONTROL_REJECTED: u32 = 0xf0000000;
+/// Control-word configuration fields 28..29: kept as opaque values on the fifth
+/// PLL row only, where the model has no behavior attached to them.
+const CONTROL_CONFIG: u32 = 0x30000000;
 fn word(offset: u64) -> bool {
     offset <= 0x64 || matches!(offset, 0x70 | 0x78 | 0x7c | 0x80)
+}
+/// Whether the fields of a control word are representable. Bits 30..31 are always
+/// refused; the configuration fields 28..29 are valid on the fifth PLL row only.
+/// Words outside the control offsets are not constrained.
+fn control_valid(offset: u64, value: u32) -> bool {
+    let allowed = match CONTROL.iter().position(|&control| control == offset) {
+        Some(index) if index + 1 == CONTROL.len() => CONTROL_CONFIG,
+        Some(_) => 0,
+        None => return true,
+    };
+    value & (CONTROL_REJECTED & !allowed) == 0
 }
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -39,14 +60,14 @@ impl ClockControl {
         }
         let mut words: std::collections::BTreeMap<u64, u32> = CONTROL
             .into_iter()
-            .map(|offset| (offset, 1 << 27))
+            .map(|offset| (offset, CONTROL_LOCK_HELD))
             .collect();
         let mut locked = 0;
         for &index in &options.running {
             if index >= CONTROL.len() || locked & LOCK[index] != 0 {
                 return Err("Invalid running PLL".into());
             }
-            words.insert(CONTROL[index], 1 << 26);
+            words.insert(CONTROL[index], CONTROL_POWERED);
             locked |= LOCK[index];
         }
         Ok(Self {
@@ -72,7 +93,7 @@ impl ClockControl {
         let offset = address
             .checked_sub(self.options.base)
             .ok_or("Clock register below bank")?;
-        if offset == 0x6c {
+        if offset == LOCK_STATUS {
             if value.is_some() {
                 return Err("PLL lock status is read-only".into());
             }
@@ -88,14 +109,17 @@ impl ClockControl {
             return Err(format!("Unsupported clock register {offset:#x}"));
         }
         if let Some(value) = value {
-            if CONTROL.contains(&offset) && value & 0xf0000000 != 0 {
+            let value = value as u32;
+            if !control_valid(offset, value) {
                 return Err("Unsupported PLL control bits".into());
             }
-            self.state.words.insert(offset, value as u32);
+            self.state.words.insert(offset, value);
             for (index, control) in CONTROL.into_iter().enumerate() {
                 if (control - 8..=control).contains(&offset) {
                     self.state.locked &= !LOCK[index];
-                    self.state.due[index] = if self.state.words[&control] & 0x0c000000 == 0x04000000
+                    self.state.due[index] = if self.state.words[&control]
+                        & (CONTROL_POWERED | CONTROL_LOCK_HELD)
+                        == CONTROL_POWERED
                     {
                         Some(
                             cx.now()
@@ -116,7 +140,7 @@ impl ClockControl {
 }
 impl Device for ClockControl {
     fn name(&self) -> &'static str {
-        "xpp-clock-control"
+        NAME
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         match self.transfer(cx, address, size, None) {
@@ -168,16 +192,14 @@ impl Device for ClockControl {
                 .iter()
                 .any(|control| !state.words.contains_key(control))
             || state.words.iter().any(|(&offset, &value)| {
-                offset & 3 != 0
-                    || !word(offset)
-                    || CONTROL.contains(&offset) && value & 0xf0000000 != 0
+                offset & 3 != 0 || !word(offset) || !control_valid(offset, value)
             })
         {
             return Err("Invalid clock checkpoint register shape".into());
         }
         for (index, control) in CONTROL.into_iter().enumerate() {
             if (state.due[index].is_some() || state.locked & LOCK[index] != 0)
-                && state.words[&control] & 0x0c000000 != 0x04000000
+                && state.words[&control] & (CONTROL_POWERED | CONTROL_LOCK_HELD) != CONTROL_POWERED
             {
                 return Err("Clock checkpoint locks disagree with power/enable controls".into());
             }
@@ -244,5 +266,108 @@ mod tests {
         assert_eq!(read(&mut d, &mut h, 0x1003c), 1 << 27);
         let saved = d.checkpoint().unwrap();
         d.restore_checkpoint(&saved).unwrap();
+    }
+    #[test]
+    fn fifth_pll_configuration_fields_roundtrip_and_keep_lock_delay() {
+        let mut d = ClockControl::new(Options {
+            base: 0x10000,
+            lock_ticks: 5,
+            running: vec![],
+        })
+        .unwrap();
+        let mut h = TestHost::new();
+        let fifth = 0x10000 + CONTROL[4];
+        for config in [0, 1 << 28, 1 << 29, 3 << 28] {
+            let pending = CONTROL_POWERED | config;
+            write(&mut d, &mut h, fifth, pending);
+            assert_eq!(read(&mut d, &mut h, fifth), u64::from(pending));
+            let saved = d.checkpoint().unwrap();
+            let at = h.now;
+            advance(&mut d, &mut h, at + 4);
+            assert_eq!(
+                read(&mut d, &mut h, 0x10000 + LOCK_STATUS) & u64::from(LOCK[4]),
+                0
+            );
+            d.restore_checkpoint(&saved).unwrap();
+            assert_eq!(read(&mut d, &mut h, fifth), u64::from(pending));
+            assert_eq!(
+                read(&mut d, &mut h, 0x10000 + LOCK_STATUS) & u64::from(LOCK[4]),
+                0
+            );
+            advance(&mut d, &mut h, at + 5);
+            assert_eq!(
+                read(&mut d, &mut h, 0x10000 + LOCK_STATUS) & u64::from(LOCK[4]),
+                u64::from(LOCK[4])
+            );
+            let held = CONTROL_LOCK_HELD | config;
+            write(&mut d, &mut h, fifth, held);
+            assert_eq!(read(&mut d, &mut h, fifth), u64::from(held));
+            assert_eq!(
+                read(&mut d, &mut h, 0x10000 + LOCK_STATUS) & u64::from(LOCK[4]),
+                0
+            );
+        }
+    }
+    #[test]
+    fn fifth_pll_refuses_unsupported_bits_and_other_rows_refuse_configuration_fields() {
+        let mut d = ClockControl::new(Options {
+            base: 0x10000,
+            lock_ticks: 5,
+            running: vec![],
+        })
+        .unwrap();
+        let mut h = TestHost::new();
+        let fifth = 0x10000 + CONTROL[4];
+        for bad in [1 << 30, 1 << 31, 3 << 30] {
+            let mut cx = h.cx();
+            d.write(&mut cx, fifth, 4, u64::from(CONTROL_POWERED | bad));
+            assert!(cx.refusal().is_some());
+            assert_eq!(read(&mut d, &mut h, fifth), u64::from(CONTROL_LOCK_HELD));
+        }
+        for index in 0..CONTROL.len() - 1 {
+            for bit in [1 << 28, 1 << 29, 1 << 30, 1 << 31] {
+                let mut cx = h.cx();
+                let at = 0x10000 + CONTROL[index];
+                d.write(&mut cx, at, 4, u64::from(CONTROL_POWERED | bit));
+                assert!(cx.refusal().is_some());
+                assert_eq!(read(&mut d, &mut h, at), u64::from(CONTROL_LOCK_HELD));
+            }
+        }
+    }
+    #[test]
+    fn checkpoint_refuses_unsupported_control_fields() {
+        let options = Options {
+            base: 0x10000,
+            lock_ticks: 5,
+            running: vec![],
+        };
+        let mut d = ClockControl::new(options.clone()).unwrap();
+        let encode = |offset: u64, value: u32| {
+            let mut state = State {
+                words: CONTROL
+                    .into_iter()
+                    .map(|control| (control, CONTROL_LOCK_HELD))
+                    .collect(),
+                locked: 0,
+                due: [None; 5],
+            };
+            state.words.insert(offset, value);
+            fujimod_emulator_devices::checkpoint::Checkpoint::encode(NAME, &(&options, &state))
+                .unwrap()
+        };
+        let fifth = CONTROL[4];
+        d.validate_checkpoint(&encode(fifth, CONTROL_POWERED | CONTROL_CONFIG))
+            .unwrap();
+        let bad = encode(fifth, CONTROL_POWERED | 1 << 30);
+        assert!(d.validate_checkpoint(&bad).is_err());
+        assert!(d.restore_checkpoint(&bad).is_err());
+        assert!(
+            d.validate_checkpoint(&encode(CONTROL[0], CONTROL_POWERED | CONTROL_CONFIG))
+                .is_err()
+        );
+        assert!(
+            d.validate_checkpoint(&encode(CONTROL[0], CONTROL_POWERED | 1 << 31))
+                .is_err()
+        );
     }
 }
