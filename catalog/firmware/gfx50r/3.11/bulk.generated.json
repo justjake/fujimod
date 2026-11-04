@@ -9,6 +9,7 @@
   "source": {
     "mechanism": "direct_query",
     "tag": 307,
+    "query_base": 130932736,
     "base": 130932736,
     "data_offset": 32,
     "capacities": [

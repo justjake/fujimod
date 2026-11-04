@@ -97,12 +97,14 @@ pub struct ConfigurationCheck {
 )]
 pub enum BulkSource {
     /// A stock diagnostic query publishes an E1 source directly in its reply.
-    /// `data_offset` reserves the leading bytes that are not part of the
-    /// mapped window; E1 offsets remain relative to `base`.
+    /// The returned query base may differ from the E1 offset origin. The
+    /// `data_offset` reserves leading bytes outside the mapped data window.
     DirectQuery {
         /// Diagnostic query tag.
         tag: u32,
-        /// Source base returned in the first query result field.
+        /// Expected value in the first query result field.
+        query_base: u64,
+        /// Base used to translate mapped addresses to E1 offsets.
         base: u64,
         /// First source offset that belongs to the mapped data window.
         data_offset: u32,
@@ -289,12 +291,14 @@ impl FirmwareBulk {
         }
         match &self.source {
             BulkSource::DirectQuery {
+                query_base,
                 base,
                 data_offset,
                 capacities,
                 ..
             } => {
-                if capacities.is_empty()
+                if *query_base > u64::from(u32::MAX)
+                    || capacities.is_empty()
                     || capacities.contains(&0)
                     || capacities.iter().any(|capacity| {
                         u64::from(*capacity) <= u64::from(*data_offset)

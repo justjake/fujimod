@@ -51,10 +51,10 @@
       "oneOf": [
         {
           "additionalProperties": false,
-          "description": "A stock diagnostic query publishes an E1 source directly in its reply.\n`data_offset` reserves the leading bytes that are not part of the\nmapped window; E1 offsets remain relative to `base`.",
+          "description": "A stock diagnostic query publishes an E1 source directly in its reply.\nThe returned query base may differ from the E1 offset origin. The\n`data_offset` reserves leading bytes outside the mapped data window.",
           "properties": {
             "base": {
-              "description": "Source base returned in the first query result field.",
+              "description": "Base used to translate mapped addresses to E1 offsets.",
               "format": "uint64",
               "minimum": 0,
               "type": "integer"
@@ -78,6 +78,12 @@
               "const": "direct_query",
               "type": "string"
             },
+            "query_base": {
+              "description": "Expected value in the first query result field.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
             "tag": {
               "description": "Diagnostic query tag.",
               "format": "uint32",
@@ -92,6 +98,7 @@
           "required": [
             "mechanism",
             "tag",
+            "query_base",
             "base",
             "data_offset",
             "capacities",

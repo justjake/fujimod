@@ -548,11 +548,6 @@ fn prepare_xpp(
             && capacity <= 0x10000,
         "compiled XPP region differs from its selected target",
     )?;
-    let alias = num(&profile, "uncached_alias")?;
-    check(
-        alias != 0 && alias.is_multiple_of(0x1000),
-        "XPP callback profile has an invalid uncached alias",
-    )?;
     let menu_reference = get(&manifest, "menu_manifest")?;
     let menu_file = text(menu_reference, "file")?;
     check(
@@ -590,32 +585,31 @@ fn prepare_xpp(
                 .is_some_and(|end| end <= base + image.len() as u64),
         "XPP reader entrypoint exceeds the linked image",
     )?;
-    let shared_symbol = |name: &str, expected_size: u64| -> Result<(u64, u64)> {
+    let abi_symbol = |name: &str, expected_size: u64| -> Result<u64> {
         let symbol = get(linked_symbols, name)?;
         let address = num(symbol, "address")?;
+        let load_address = num(symbol, "load_address")?;
         let size = num(symbol, "size")?;
-        let load_address = address
-            .checked_sub(alias)
-            .ok_or_else(|| format!("{name} is not in the firmware's uncached alias"))?;
         check(
             size == expected_size
+                && address == load_address
                 && load_address >= base
                 && load_address
                     .checked_add(size)
                     .is_some_and(|end| end <= base + image.len() as u64),
-            "XPP shared ABI object differs from the linked image",
+            "XPP ABI object must use its loaded RAM address and fit in the image",
         )?;
-        Ok((address, load_address))
+        Ok(address)
     };
-    let (request, request_load) = shared_symbol("flash_reader_request", 16)?;
-    let (result, result_load) = shared_symbol("flash_reader_result", 24)?;
+    let request = abi_symbol("flash_reader_request", 16)?;
+    let result = abi_symbol("flash_reader_result", 24)?;
     let mutable = vec![
         Range {
-            address: request_load,
+            address: request,
             size: 16,
         },
         Range {
-            address: result_load,
+            address: result,
             size: 24,
         },
     ];
@@ -663,7 +657,6 @@ fn prepare_xpp(
         address: base,
         capacity,
         sha256: sha256(&image),
-        uncached_alias: alias,
         entry,
         request,
         result,

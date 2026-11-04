@@ -34,7 +34,6 @@ pub struct Payload {
     pub address: u64,
     pub capacity: u64,
     pub sha256: String,
-    pub uncached_alias: u64,
     pub entry: u64,
     pub request: u64,
     pub result: u64,
@@ -106,31 +105,22 @@ impl Payload {
                 "Mutable XPP object exceeds payload",
             )?;
         }
-        let request_load = self
-            .request
-            .checked_sub(self.uncached_alias)
-            .ok_or_else(|| BulkError::Check("XPP request is not in the uncached alias".into()))?;
-        let result_load = self
-            .result
-            .checked_sub(self.uncached_alias)
-            .ok_or_else(|| BulkError::Check("XPP result is not in the uncached alias".into()))?;
         require(
             in_image(self.entry, 4)
                 && !mutable(self.entry, 4)
-                && self.uncached_alias != 0
-                && in_image(request_load, REQUEST_BYTES)
-                && mutable(request_load, REQUEST_BYTES)
-                && in_image(result_load, RESULT_BYTES)
-                && mutable(result_load, RESULT_BYTES),
+                && in_image(self.request, REQUEST_BYTES)
+                && mutable(self.request, REQUEST_BYTES)
+                && in_image(self.result, RESULT_BYTES)
+                && mutable(self.result, RESULT_BYTES),
             "XPP reader ABI exceeds payload or mutable objects",
         )?;
         let overlaps = |a: u64, size_a: u64, b: u64, size_b: u64| {
             a < b.saturating_add(size_b) && b < a.saturating_add(size_a)
         };
         require(
-            !overlaps(self.entry, 4, request_load, REQUEST_BYTES)
-                && !overlaps(self.entry, 4, result_load, RESULT_BYTES)
-                && !overlaps(request_load, REQUEST_BYTES, result_load, RESULT_BYTES)
+            !overlaps(self.entry, 4, self.request, REQUEST_BYTES)
+                && !overlaps(self.entry, 4, self.result, RESULT_BYTES)
+                && !overlaps(self.request, REQUEST_BYTES, self.result, RESULT_BYTES)
                 && !self
                     .mutable
                     .iter()

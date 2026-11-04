@@ -483,6 +483,7 @@ impl Source {
         match bulk.source {
             BulkSource::DirectQuery {
                 tag,
+                query_base,
                 base,
                 data_offset,
                 ref capacities,
@@ -498,7 +499,7 @@ impl Source {
                 )?;
                 let capacity = reply.fields[1];
                 require(
-                    u64::from(reply.fields[0]) == base
+                    u64::from(reply.fields[0]) == query_base
                         && capacities.contains(&capacity)
                         && data_offset < capacity,
                     "Bulk source or capacity differs from the located facts",

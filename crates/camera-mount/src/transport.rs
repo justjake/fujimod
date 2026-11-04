@@ -375,6 +375,7 @@ mod tests {
         for source in [
             BulkSource::DirectQuery {
                 tag: 128,
+                query_base: 0x1000,
                 base: 0x1000,
                 data_offset: 0,
                 capacities: vec![65536],

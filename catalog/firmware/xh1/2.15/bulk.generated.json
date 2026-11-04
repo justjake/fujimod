@@ -1,0 +1,97 @@
+{
+  "$schema": "https://fujimod.com/schemas/bulk.generated.schema.json",
+  "schema": 1,
+  "id": "xh1-215-bulk",
+  "firmware_id": "xh1-215",
+  "product": "X-H1",
+  "internal_version": "1.90",
+  "code_alias": 0,
+  "source": {
+    "mechanism": "direct_query",
+    "tag": 307,
+    "query_base": 110706688,
+    "base": 110706688,
+    "data_offset": 32,
+    "capacities": [
+      524320
+    ],
+    "wrapping": false
+  },
+  "window": {
+    "address": 110706720,
+    "size": 524288
+  },
+  "code_checks": [
+    {
+      "name": "FF80 diagnostic query",
+      "address": 24992916,
+      "size": 1036,
+      "sha256": "6e26381c968385725bfa709320ad4be5f722bb5fd315b43158bbe0dde86a9869"
+    },
+    {
+      "name": "diagnostic source wrapper",
+      "address": 26192312,
+      "size": 16,
+      "sha256": "233ddf0736a98dbc47463835b9027a22316916b5d1922237973225e3f525b713"
+    },
+    {
+      "name": "transfer source setup",
+      "address": 13789352,
+      "size": 64,
+      "sha256": "075f8cbaae97c3ef89b1e813792611062c2cce8fd694f36aa7b289e0c1cb96af"
+    },
+    {
+      "name": "transfer source publish",
+      "address": 13780360,
+      "size": 28,
+      "sha256": "9ccfb6848230456f6a6ec1e2cb67c351e2a62c6f967456d456239ef6fa9a0dfd"
+    },
+    {
+      "name": "transfer source commit",
+      "address": 13780252,
+      "size": 108,
+      "sha256": "e85aa9d4652647d4a9b5c7f077beae71b1fac7ee518d214c1852c0846458254a"
+    },
+    {
+      "name": "flash aperture translation",
+      "address": 13103384,
+      "size": 24,
+      "sha256": "19b12700745992335b4807b6e8569d8503aa5d37357548dc83ac7ff4912c1f2b"
+    }
+  ],
+  "probes": [
+    {
+      "address": 110706720,
+      "size": 128
+    },
+    {
+      "address": 111230976,
+      "size": 128
+    }
+  ],
+  "mapped_probe": null,
+  "scopes": [
+    {
+      "name": "quick",
+      "basis": "Leading 4 KiB of the located E1 transfer buffer.",
+      "ranges": [
+        {
+          "name": "transfer-buffer",
+          "address": 110706720,
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "name": "full",
+      "basis": "The complete E1 transfer buffer published by the stock diagnostic query.",
+      "ranges": [
+        {
+          "name": "transfer-buffer",
+          "address": 110706720,
+          "size": 524288
+        }
+      ]
+    }
+  ]
+}
