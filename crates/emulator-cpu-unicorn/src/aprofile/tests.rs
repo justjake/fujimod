@@ -36,7 +36,8 @@ fn run(cpu: &Core, begin: u64, budget: usize) -> Exit {
 #[test]
 fn interactive_policy_is_forwarded_and_keeps_exact_instruction_limits() {
     let cpu = cpu();
-    cpu.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+    cpu.set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
     code(&cpu, &[0x91000400, 0x17ffffff]);
     assert!(matches!(run(&cpu, 0x1000, 1), Exit::Stopped));
     assert_eq!(cpu.instruction_progress(), Some(1));
@@ -380,4 +381,58 @@ fn armv7a_checkpoint_reports_its_backings_fingerprints_and_imports_into_a_fresh_
     fresh.restore(&*imported).unwrap();
     assert_eq!(fresh.fingerprint().unwrap(), fingerprint);
     assert!(fresh.import_snapshot(&bytes[..bytes.len() - 1]).is_err());
+}
+
+#[test]
+fn high_code_retains_coherence_after_host_and_guest_writes() {
+    let cpu = cpu();
+    let high = 0x1_0000_0000u64;
+    cpu.map_zeroed(high, 0x4000, 7).unwrap();
+    let set = |word: u32| cpu.write_memory(high, &word.to_le_bytes()).unwrap();
+    set(0xd2800020); // mov x0,#1
+    run(&cpu, high, 1);
+    assert_eq!(value(&cpu, Register::X(0)), 1);
+    set(0xd2800040); // mov x0,#2
+    run(&cpu, high, 1);
+    assert_eq!(value(&cpu, Register::X(0)), 2);
+    code(&cpu, &[0xb9000022]); // str w2,[x1]
+    cpu.write_register(Register::X(1), &high.to_le_bytes())
+        .unwrap();
+    cpu.write_register(Register::X(2), &0xd2800060u64.to_le_bytes())
+        .unwrap();
+    run(&cpu, 0x1000, 1);
+    run(&cpu, high, 1);
+    assert_eq!(value(&cpu, Register::X(0)), 3);
+}
+
+#[test]
+fn high_code_aliases_keep_shared_backing_dependencies() {
+    use fujimod_emulator_cpu::memory::Backing;
+    let memory = Memory::default();
+    let backing = Backing::aligned_zeros(0x4000, 4096).unwrap();
+    let raw = crate::test_support::library()
+        .open(Model::ArmV8A, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, memory).unwrap();
+    let high = 0x1_0000_0000u64;
+    for address in [0x1000, high] {
+        unsafe {
+            cpu.map_physical(
+                address,
+                high,
+                0x4000,
+                7,
+                NonNull::new(backing.as_ptr()).unwrap(),
+            )
+            .unwrap()
+        }
+    }
+    cpu.write_memory(0x1000, &0xd2800020u32.to_le_bytes())
+        .unwrap();
+    run(&cpu, high, 1);
+    assert_eq!(value(&cpu, Register::X(0)), 1);
+    cpu.write_memory(0x1000, &0xd2800040u32.to_le_bytes())
+        .unwrap();
+    run(&cpu, high, 1);
+    assert_eq!(value(&cpu, Register::X(0)), 2);
 }

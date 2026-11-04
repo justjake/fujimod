@@ -511,6 +511,47 @@ impl Board {
             return Self::xpp_graph(graph, devices, assets, read_limit, mode, continue_refusals,
                 serde_json::json!({"execution":json::<serde_json::Value>(execution)?,"devices":json::<serde_json::Value>(devices)?}));
         }
+        if json::<serde_json::Value>(devices)?
+            .get("kind")
+            .and_then(serde_json::Value::as_str)
+            == Some("none")
+        {
+            if json::<serde_json::Value>(devices)? != serde_json::json!({"kind":"none"})
+                || !models.is_empty()
+                || json::<serde_json::Value>(scene)? != serde_json::json!({})
+                || !graph.peripherals.is_empty()
+                || !graph.decoders.is_empty()
+                || mode != Mode::Strict
+                || continue_refusals
+            {
+                return Err(PyValueError::new_err(
+                    "Device-free boards require strict RAM-only execution",
+                ));
+            }
+            let board = graph
+                .build(factory::Options::new(engine), Bus::new(Mode::Strict), None)
+                .map_err(error)?;
+            return Ok(Self {
+                driver: None,
+                memory_watch: None,
+                function_watch: None,
+                instruction_points: BTreeMap::new(),
+                backend: Some(Backend::Graph(fujimod_emulator_session::Session {
+                    definition: serde_json::json!({"execution":json::<serde_json::Value>(execution)?,"devices":{"kind":"none"}}),
+                    board,
+                    controls: None,
+                    contact_driver: None,
+                    nodes: BTreeMap::new(),
+                    contacts: BTreeMap::new(),
+                    recording_frames: Default::default(),
+                    resources: Default::default(),
+                })),
+                objects: BTreeMap::new(),
+                failures: Failures::default(),
+                read_limit,
+                last_continuation_stop: None,
+            });
+        }
         let plan = Plan::parse(devices.as_bytes()).map_err(error)?;
         plan.validate_reset_outputs(
             &graph
@@ -659,6 +700,35 @@ impl Board {
     fn usb_status(&self, name: &str) -> PyResult<String> {
         serde_json::to_string(&self.session()?.usb_status(name).map_err(error)?)
             .map_err(|e| error(e.to_string()))
+    }
+
+    #[pyo3(signature=(options, callback=None))]
+    fn call_aarch64(
+        &mut self,
+        py: Python<'_>,
+        options: &str,
+        callback: Option<Py<PyAny>>,
+    ) -> PyResult<String> {
+        if self.driver.is_some()
+            || self.function_watch.is_some()
+            || self.memory_watch.is_some()
+            || !self.instruction_points.is_empty()
+        {
+            return Err(PyValueError::new_err("isolated call is already active"));
+        }
+        if self.session()?.definition["devices"] != serde_json::json!({"kind":"none"}) {
+            return Err(PyValueError::new_err(
+                "Checked routines require a device-free board",
+            ));
+        }
+        let result=fujimod_emulator::board::harness::arm64::checked::checked_call_with(self.board_mut()?,json(options)?,|hit,snapshots| {
+            let callback=callback.as_ref().ok_or("Missing dynamic stub callback")?;
+            let snapshots=snapshots.iter().map(|(address,bytes)|(*address,PyBytes::new(py,bytes))).collect::<Vec<_>>();
+            callback.call1(py,(hit.address,hit.arguments.clone(),snapshots))
+                .and_then(|value|value.extract::<fujimod_emulator::board::harness::arm64::checked::StubResponse>(py))
+                .map_err(|error|format!("Stub callback failed: {error}"))
+        }).map_err(error)?;
+        serde_json::to_string(&result).map_err(|e| error(e.to_string()))
     }
 
     fn driver_begin(&mut self, options: &str, transaction_limit: usize) -> PyResult<()> {
