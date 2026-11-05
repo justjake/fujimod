@@ -1,0 +1,19 @@
+[package]
+name = "fujimod-release-manifest"
+description = "Writes OTA release manifests and content-addressed store files"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "fujimod-release-manifest"
+path = "src/main.rs"
+
+[dependencies]
+fujimod-workspace-hack.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true

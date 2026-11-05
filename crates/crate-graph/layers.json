@@ -112,6 +112,7 @@
       "fujimod-emulator-exr2-isp-testing",
       "fujimod-firmware",
       "fujimod-recording",
+      "fujimod-release-manifest",
       "fujimod-settings",
       "fujimod-usb",
       "fujimod-usb-app80",
