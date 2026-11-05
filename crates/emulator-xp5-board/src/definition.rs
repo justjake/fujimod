@@ -2,9 +2,14 @@
 use crate::{board, boot, session::Inputs};
 use fujimod_emulator::board::{InterruptMap, InterruptRegisters, aprofile, bus::Mode, factory};
 use fujimod_emulator_cpu::{Model, arm64};
-use fujimod_emulator_devices::{graph::DeviceWindow, parts::pins::DriveInput};
+use fujimod_emulator_devices::graph::DeviceWindow;
 use fujimod_emulator_ip_arm::gicv3::Gic;
-use fujimod_emulator_parts_controls::resistor_keys::{Options, ResistorKeys};
+use fujimod_emulator_parts_controls::{
+    absent::AbsentControls,
+    key_input::ControlsOptions,
+    ladder_keys,
+    resistor_keys,
+};
 use fujimod_emulator_xp5_display::display;
 use fujimod_emulator_xp5_io::mailbox;
 use fujimod_emulator_xp5_storage::flash_storage;
@@ -27,7 +32,14 @@ pub enum Definition {
     Xp5 {
         boot_entry: Entry,
         windows: Vec<DeviceWindow>,
-        controls: Options,
+        /// GPIO shutter and dial pads plus ADC-sampled keys (X100VI-style).
+        #[serde(default)]
+        controls: Option<resistor_keys::Options>,
+        /// Keys read as ADC ladder bands or power-controller register ladders.
+        /// At most one of `controls` and `ladder_keys` may be declared; with
+        /// neither the body has no key model and key edges are refused.
+        #[serde(default)]
+        ladder_keys: Option<ladder_keys::Options>,
         storage: Option<String>,
         #[serde(default)]
         sd: Vec<board::sd::MediaInputs>,
@@ -163,6 +175,7 @@ impl Definition {
             boot_entry: _,
             windows,
             controls,
+            ladder_keys,
             storage,
             sd,
             companion,
@@ -179,8 +192,14 @@ impl Definition {
             return Err("XP5 companion must name a declared M-profile processor".into());
         }
         let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
-        let driver: Arc<dyn DriveInput> = pins.clone();
-        let input = Arc::new(ResistorKeys::new(driver, controls.clone())?);
+        let controls = match (controls, ladder_keys) {
+            (Some(_), Some(_)) => {
+                return Err("XP5 definition declares both resistor keys and ladder keys".into());
+            }
+            (Some(options), None) => Some(ControlsOptions::ResistorKeys(options)),
+            (None, Some(options)) => Some(ControlsOptions::LadderKeys(options)),
+            (None, None) => None,
+        };
         let storage = storage
             .map(|name| {
                 let bytes = assets
@@ -191,7 +210,8 @@ impl Definition {
             .transpose()?;
         let resources = board::Resources {
             sd: board::sd::resolve(sd, assets)?,
-            controls: input,
+            // Replaced by the declared key model when the devices are assembled.
+            controls: Arc::new(AbsentControls),
             pins,
             storage,
             clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks::new(),
@@ -216,7 +236,7 @@ impl Definition {
             mode,
             processors: graph,
             windows,
-            controls: Some(controls),
+            controls,
             resources,
             engine,
             interrupts: interrupts.map(Interrupts::open).transpose()?,
@@ -296,6 +316,48 @@ mod tests {
         assert!(inputs.gpio_level(0, 7).unwrap());
         inputs.gpio(&mut session, 0, 7, false).unwrap();
         assert!(!inputs.gpio_level(0, 7).unwrap());
+    }
+
+    fn open(value: serde_json::Value) -> Result<(fujimod_emulator_session::Session, Inputs), String> {
+        let definition: Definition = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        definition.open(graph(), &BTreeMap::new(), factory::Engine::Unicorn, Mode::Strict, value)
+    }
+
+    // Synthetic ladder fixture: the band and sample are test inputs.
+    fn ladder_keys() -> serde_json::Value {
+        json!({"ladders":[{"wire":{"kind":"adc","channel":1},"levels":4096,
+            "rungs":[{"key":"Left","band_low":100,"band_high":200,"sample":150,"basis":"test fixture"}]}]})
+    }
+
+    #[test]
+    fn a_body_declares_exactly_one_key_model_and_undeclared_keys_are_refused() {
+        // Resistor keys: unchanged shape.
+        let (mut session, inputs) = open(specification()).unwrap();
+        assert!(inputs.key(&mut session, 0, crate::session::Key::Back, true).is_ok());
+
+        // Ladder keys replace the resistor-key model.
+        let mut ladder = specification();
+        ladder.as_object_mut().unwrap().remove("controls");
+        ladder["ladder_keys"] = ladder_keys();
+        let (mut session, inputs) = open(ladder.clone()).unwrap();
+        inputs.key(&mut session, 0, crate::session::Key::Left, true).unwrap();
+        for key in [crate::session::Key::Back, crate::session::Key::ShutterHalf] {
+            let error = inputs.key(&mut session, 0, key, true).unwrap_err();
+            assert!(error.contains("no declared ladder rung"), "{error}");
+        }
+
+        // Neither declared: no key model, every edge is refused.
+        let mut none = ladder.clone();
+        none.as_object_mut().unwrap().remove("ladder_keys");
+        let (mut session, inputs) = open(none).unwrap();
+        let error = inputs.key(&mut session, 0, crate::session::Key::Left, true).unwrap_err();
+        assert!(error.contains("no physical key model"), "{error}");
+
+        // Both declared: ambiguous, so the definition does not open.
+        let mut both = ladder;
+        both["controls"] = specification()["controls"].clone();
+        let error = open(both).err().unwrap();
+        assert!(error.contains("both resistor keys and ladder keys"), "{error}");
     }
 
     #[test]

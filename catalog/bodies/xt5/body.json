@@ -29,6 +29,17 @@
           "active_level": true
         }
       ]
+    },
+    {
+      "id": "thermal-0",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 0,
+          "threshold": null
+        }
+      ]
     }
   ],
   "parts": [
@@ -58,11 +69,11 @@
     ],
     "gpio_feedback": [],
     "keypad_samples": {},
-    "thermal_connection_ids": [],
+    "thermal_connection_ids": ["thermal-0"],
     "bus_drain": {
       "address": 1610612736,
       "processor_ids": ["core0", "core1", "core2", "core3"],
-      "basis": "The stock firmware drains the bus with a discarded read of the first address past its DRAM map, which ends at 0x60000000: Linux 256 MiB at 0x40000000 (supplied device tree, mem=256M) plus shared arenas up to 0x5ff00000+0x100000 in the firmware memory map."
+      "basis": "The stock firmware drains the bus with a discarded read of the first address past its DRAM map (Linux 256 MiB plus shared arenas, from the supplied Linux device tree and the firmware memory map)."
     },
     "profiles": {
       "xt5": {

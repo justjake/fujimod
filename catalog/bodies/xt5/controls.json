@@ -1195,5 +1195,174 @@
       },
       "positions": []
     }
-  }
+  },
+  "ladders": [
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 1
+      },
+      "levels": 4096,
+      "released": null,
+      "basis": "The firmware reads this ADC channel at 12-bit resolution. Bands come from the firmware's factory key-band table; a body with its own valid configuration store reads its own bands. No released level is established: it is this channel's idle sample, a property of the body.",
+      "rungs": [
+        {
+          "control_id": "delete_button",
+          "band_low": 0,
+          "band_high": 788,
+          "sample": 394,
+          "basis": "Band 0..788, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        },
+        {
+          "control_id": "view_mode_button",
+          "band_low": 2102,
+          "band_high": 2325,
+          "sample": 2213,
+          "basis": "Band 2102..2325, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        },
+        {
+          "control_id": "fn2_button",
+          "band_low": 3067,
+          "band_high": 3750,
+          "sample": 3408,
+          "basis": "Band 3067..3750, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 2
+      },
+      "levels": 4096,
+      "released": null,
+      "basis": "The firmware reads this ADC channel at 12-bit resolution. Bands come from the firmware's factory key-band table; a body with its own valid configuration store reads its own bands. No released level is established: it is this channel's idle sample, a property of the body.",
+      "rungs": [
+        {
+          "control_id": "quick_menu_button",
+          "band_low": 2102,
+          "band_high": 2325,
+          "sample": 2213,
+          "basis": "Band 2102..2325, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        },
+        {
+          "control_id": "fn1_button",
+          "band_low": 2618,
+          "band_high": 3066,
+          "sample": 2842,
+          "basis": "Band 2618..3066, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 14
+      },
+      "levels": 4096,
+      "released": null,
+      "basis": "The firmware reads this ADC channel at 12-bit resolution. Bands come from the firmware's factory key-band table; a body with its own valid configuration store reads its own bands. No released level is established: it is this channel's idle sample, a property of the body.",
+      "rungs": [
+        {
+          "control_id": "focus_stick.up",
+          "band_low": 1443,
+          "band_high": 1766,
+          "sample": 1604,
+          "basis": "Band 1443..1766, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.right",
+          "band_low": 2102,
+          "band_high": 2325,
+          "sample": 2213,
+          "basis": "Band 2102..2325, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.left",
+          "band_low": 2618,
+          "band_high": 3066,
+          "sample": 2842,
+          "basis": "Band 2618..3066, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.down",
+          "band_low": 3067,
+          "band_high": 3750,
+          "sample": 3408,
+          "basis": "Band 3067..3750, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "power_controller_register",
+        "register": 52
+      },
+      "levels": 1024,
+      "released": null,
+      "basis": "The firmware reads this power-controller register at 10-bit resolution. Bands come from the firmware's factory key-band table; a body with its own valid configuration store reads its own bands. No released value is established: nothing gives the register's value with no control held.",
+      "rungs": [
+        {
+          "control_id": "focus_stick",
+          "band_low": 0,
+          "band_high": 200,
+          "sample": 100,
+          "basis": "Band 0..200, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        },
+        {
+          "control_id": "menu_ok_button",
+          "band_low": 527,
+          "band_high": 582,
+          "sample": 554,
+          "basis": "Band 527..582, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        },
+        {
+          "control_id": "disp_back_bluetooth_button",
+          "band_low": 768,
+          "band_high": 933,
+          "sample": 850,
+          "basis": "Band 768..933, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "power_controller_register",
+        "register": 53
+      },
+      "levels": 1024,
+      "released": null,
+      "basis": "The firmware reads this power-controller register at 10-bit resolution. Bands come from the firmware's factory key-band table; a body with its own valid configuration store reads its own bands. No released value is established: nothing gives the register's value with no control held.",
+      "rungs": [
+        {
+          "control_id": "selector_up_button",
+          "band_low": 377,
+          "band_high": 420,
+          "sample": 398,
+          "basis": "Band 377..420, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        },
+        {
+          "control_id": "selector_right_button",
+          "band_low": 527,
+          "band_high": 582,
+          "sample": 554,
+          "basis": "Band 527..582, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        },
+        {
+          "control_id": "selector_left_button",
+          "band_low": 656,
+          "band_high": 767,
+          "sample": 711,
+          "basis": "Band 656..767, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        },
+        {
+          "control_id": "selector_down_button",
+          "band_low": 768,
+          "band_high": 933,
+          "sample": 850,
+          "basis": "Band 768..933, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        }
+      ]
+    }
+  ]
 }

@@ -288,11 +288,11 @@ pub fn flash<L: Lookup>(
             .collect(),
         "read dispatcher",
     )?;
-    let dma = one(
+    let (dma, dma_shape) = one(
         locator
             .calls(&dispatcher)?
             .into_iter()
-            .filter(|r| r.has("mov", "w0, #0x11") && r.has("str", "w0, [sp, #0x78]"))
+            .filter_map(|r| DmaShape::of(&r.code).map(|shape| (r, shape)))
             .collect(),
         "DMA reader",
     )?;
@@ -309,7 +309,7 @@ pub fn flash<L: Lookup>(
         reader.span("flash_read"),
         request.span("flash read request"),
         dispatcher.span("flash read dispatcher"),
-        dma.span("flash DMA read"),
+        dma.span(dma_shape.range_name()),
     ];
     let mut checks = vec![];
     let device = if nand {
@@ -392,9 +392,12 @@ pub fn flash<L: Lookup>(
         json!({"kind":"serial-nand","jedec_id":"efdc21","part":"Winbond W35N01JW"})
     } else {
         let id = jedec_id.ok_or("NOR installed JEDEC identity is not established")?;
-        let selector = locator.named("flash_select_supported_jedec_id", |r| {
-            r.has("add", "x3, x3, #0x20") && r.has("cmp", "w2, #5")
-        })?;
+        let is_selector = |r: &Routine| r.has("add", "x3, x3, #0x20") && r.has("cmp", "w2, #5");
+        let selector = if firmware_names_flash_read(index, firmware)? {
+            locator.named("flash_select_supported_jedec_id", is_selector)?
+        } else {
+            locator.small_routine(0x60, is_selector, "flash_select_supported_jedec_id")?
+        };
         let hits = index
             .select(
                 Some(firmware),
@@ -418,16 +421,27 @@ pub fn flash<L: Lookup>(
             .read(firmware, "main", table, 5 * 32)
             .map_err(|e| e.to_string())?
             .ok_or("unmapped JEDEC table")?;
-        if !bytes
+        let row = bytes
             .as_chunks::<32>()
             .0
             .iter()
-            .any(|b| u32::from_le_bytes(b[..4].try_into().unwrap()) == id)
-        {
-            return Err("installed NOR absent from driver JEDEC table".into());
-        }
-        if id != 0x2c5b1b {
-            return Err(format!("{id:06x}: part name is not established"));
+            .find(|b| u32::from_le_bytes(b[..4].try_into().unwrap()) == id)
+            .ok_or("installed NOR absent from driver JEDEC table")?;
+        let part =
+            nor_part_name(id).ok_or_else(|| format!("{id:06x}: part name is not established"))?;
+        if id == 0x20bb20 {
+            // The row's geometry record must agree with the datasheet that
+            // names this identity before the name is accepted.
+            let record = u64::from_le_bytes(row[8..16].try_into().unwrap());
+            let geometry = index
+                .read(firmware, "main", record, 0x2c)
+                .map_err(|e| e.to_string())?
+                .ok_or("unmapped JEDEC geometry record")?;
+            if !nor_geometry_matches(&geometry, 0x10000, 0x1000, 0x100) {
+                return Err(format!(
+                    "{id:06x}: driver geometry differs from the datasheet"
+                ));
+            }
         }
         ranges.push(cache.span("destination cache maintenance"));
         let calls = locator.calls(&request)?;
@@ -449,7 +463,7 @@ pub fn flash<L: Lookup>(
         )?;
         ranges.push(bank.span("flash bank selection"));
         ranges.push(tail.span("flash CPU tail copy"));
-        json!({"kind":"serial-nor","jedec_id":format!("{id:06x}"),"part":"Micron MT35XU01GBBA"})
+        json!({"kind":"serial-nor","jedec_id":format!("{id:06x}"),"part":part})
     };
     // NAND compares the controller parameter page; NOR compares the mapped
     // loader. These are control-read selection policies, not device extents.
@@ -460,6 +474,74 @@ pub fn flash<L: Lookup>(
     Ok(
         json!({"device":device,"window":{"address":0xf0000000u64,"size":0x8000000},"e1_window":{"address":0xf0000000u64,"size":0x8000000},"update_image":{"dat_offset":image_origin,"xor":255},"reader":{"symbol":"flash_read","alignment":64},"transport":"xp5-cmd-callback","code_ranges":ranges,"state_checks":checks,"control":{"offset":control_offset,"size":32768}}),
     )
+}
+
+/// How the stock aligned-middle reader submits its transfer. The shapes differ
+/// in instructions; the contract they feed (window, bounds, marker, bank
+/// selection, cache maintenance) is the same.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DmaShape {
+    /// Direct DMA with a completion poll: the controller id (`0x11`) is stored
+    /// to the request frame at `sp+0x78`.
+    DirectPoll,
+    /// Queued command: a `{1, source, destination, length}` frame is built at
+    /// `sp+0x70..0x88`, submitted through the controller handle for id `0x11`,
+    /// then the task waits on event mask `0x400`. Matched from instructions
+    /// only; no live read has confirmed a transfer through this shape.
+    QueuedCommand,
+}
+
+impl DmaShape {
+    fn of(code: &[Instruction]) -> Option<Self> {
+        let has = |m: &str, o: &str| code.iter().any(|i| i.mnemonic == m && i.operands == o);
+        if !has("mov", "w0, #0x11") {
+            return None;
+        }
+        if has("str", "w0, [sp, #0x78]") {
+            return Some(Self::DirectPoll);
+        }
+        [
+            ("str", "x19, [sp, #0x78]"),
+            ("str", "x20, [sp, #0x80]"),
+            ("str", "w23, [sp, #0x88]"),
+            ("str", "w0, [sp, #0x70]"),
+            ("mov", "w0, #0x400"),
+        ]
+        .into_iter()
+        .all(|(m, o)| has(m, o))
+        .then_some(Self::QueuedCommand)
+    }
+    /// Code-range role. The queued shape says so, so a consumer can tell that
+    /// its transfer has not been confirmed by a live read.
+    fn range_name(self) -> &'static str {
+        match self {
+            Self::DirectPoll => "flash DMA read",
+            Self::QueuedCommand => "flash queued DMA read (not live-verified)",
+        }
+    }
+}
+
+/// Part named by the supported-device table row for `id`, from the part's
+/// datasheet: Micron MT35XU01GBBA, and Micron MT25QU512ABB (datasheet Rev. F,
+/// Table 19 "Device ID Data": manufacturer 20h, type BBh = 1.8 V, capacity
+/// 20h = 512 Mb). Other table rows are not named.
+fn nor_part_name(id: u32) -> Option<&'static str> {
+    match id {
+        0x2c5b1b => Some("Micron MT35XU01GBBA"),
+        0x20bb20 => Some("Micron MT25QU512ABB"),
+        _ => None,
+    }
+}
+
+/// The geometry record of a supported-device row holds the sector, subsector
+/// and page sizes as words at +0x20, +0x24 and +0x28.
+fn nor_geometry_matches(record: &[u8], sector: u32, subsector: u32, page: u32) -> bool {
+    let word = |at: usize| {
+        record
+            .get(at..at + 4)
+            .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+    };
+    word(0x20) == Some(sector) && word(0x24) == Some(subsector) && word(0x28) == Some(page)
 }
 
 /// Locate the X-Processor Pro stock reader and its large-transfer helper from
@@ -1479,6 +1561,73 @@ mod tests {
             .unwrap();
         index
     }
+    fn code(lines: &[(&str, &str)]) -> Vec<Instruction> {
+        lines
+            .iter()
+            .map(|(m, o)| Instruction {
+                mnemonic: (*m).into(),
+                operands: (*o).into(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn dma_shapes_are_distinguished_by_frame_stores() {
+        let direct = code(&[
+            ("mov", "w0, #0x11"),
+            ("str", "w0, [sp, #0x78]"),
+            ("ret", ""),
+        ]);
+        assert_eq!(DmaShape::of(&direct), Some(DmaShape::DirectPoll));
+        let queued = [
+            ("mov", "w0, #0x11"),
+            ("str", "x19, [sp, #0x78]"),
+            ("str", "x20, [sp, #0x80]"),
+            ("str", "w23, [sp, #0x88]"),
+            ("mov", "w0, #1"),
+            ("str", "w0, [sp, #0x70]"),
+            ("mov", "w0, #0x400"),
+        ];
+        assert_eq!(
+            DmaShape::of(&code(&queued)),
+            Some(DmaShape::QueuedCommand)
+        );
+        assert_eq!(DmaShape::DirectPoll.range_name(), "flash DMA read");
+        assert!(
+            DmaShape::QueuedCommand
+                .range_name()
+                .contains("not live-verified")
+        );
+        // Every queued-frame instruction is required, and the controller id.
+        for skip in 0..queued.len() {
+            let mut partial = queued.to_vec();
+            partial.remove(skip);
+            let expected = matches!(skip, 4).then_some(DmaShape::QueuedCommand);
+            assert_eq!(DmaShape::of(&code(&partial)), expected, "without {skip}");
+        }
+        assert_eq!(
+            DmaShape::of(&code(&[("str", "x19, [sp, #0x78]")])),
+            None
+        );
+    }
+
+    #[test]
+    fn nor_names_and_geometry_come_from_the_table_row() {
+        assert_eq!(nor_part_name(0x2c5b1b), Some("Micron MT35XU01GBBA"));
+        assert_eq!(nor_part_name(0x20bb20), Some("Micron MT25QU512ABB"));
+        assert_eq!(nor_part_name(0x2c5b1a), None);
+        assert_eq!(nor_part_name(0xc2352a), None);
+        let mut record = vec![0u8; 0x2c];
+        record[0x20..0x24].copy_from_slice(&0x10000u32.to_le_bytes());
+        record[0x24..0x28].copy_from_slice(&0x1000u32.to_le_bytes());
+        record[0x28..0x2c].copy_from_slice(&0x100u32.to_le_bytes());
+        assert!(nor_geometry_matches(&record, 0x10000, 0x1000, 0x100));
+        assert!(!nor_geometry_matches(&record, 0x20000, 0x1000, 0x100));
+        assert!(!nor_geometry_matches(&record, 0x10000, 0x2000, 0x100));
+        assert!(!nor_geometry_matches(&record, 0x10000, 0x1000, 0x200));
+        assert!(!nor_geometry_matches(&record[..0x28], 0x10000, 0x1000, 0x100));
+    }
+
     #[test]
     fn nominations_are_verified_before_ambiguity_is_decided() {
         let index = candidates(2);

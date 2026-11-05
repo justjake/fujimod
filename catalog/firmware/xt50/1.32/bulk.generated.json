@@ -1,0 +1,201 @@
+{
+  "$schema": "https://fujimod.com/schemas/bulk.generated.schema.json",
+  "schema": 1,
+  "id": "xt50-132-bulk",
+  "firmware_id": "xt50-132",
+  "product": "X-T50",
+  "internal_version": "1.65",
+  "code_alias": 0,
+  "source": {
+    "mechanism": "pattern_zero_base",
+    "registered_buffer": 69236000,
+    "source_state": 75045592,
+    "configuration_pointer": 35330336,
+    "configuration_bytes": 9830400,
+    "system_mode_address": 43700544,
+    "capacity": 65536
+  },
+  "window": {
+    "address": 46321664,
+    "size": 22417408
+  },
+  "code_checks": [
+    {
+      "name": "bulk_2f6b8a4",
+      "address": 49723556,
+      "size": 180,
+      "sha256": "a92e2e4f88b479cccac256d803ccb5f3e3afa43ebdaf34bbf45edc389af9727f"
+    },
+    {
+      "name": "bulk_2f6c2d8",
+      "address": 49726168,
+      "size": 184,
+      "sha256": "7bd7630bf2008b535c732582433f40ad28f41b6865b7f6882f403acadfc7049d"
+    },
+    {
+      "name": "bulk_2f6d134",
+      "address": 49729844,
+      "size": 196,
+      "sha256": "a0892ae63a3e16c9a03325bd709bd30e6c573a1f8db6d53adf7fa822b7e6fb6a"
+    },
+    {
+      "name": "bulk_2f6c590",
+      "address": 49726864,
+      "size": 80,
+      "sha256": "7370491f30d55bc4c6ee8f01145cc91b93a79ffb68e902049f0425e65a203b9e"
+    },
+    {
+      "name": "bulk_2f6d3ec",
+      "address": 49730540,
+      "size": 388,
+      "sha256": "decb66009d43a2e32f8d3e0ab1b365ffdf005d78e58e59a1e9a27d3c8f050370"
+    },
+    {
+      "name": "bulk_2f6bbc4",
+      "address": 49724356,
+      "size": 36,
+      "sha256": "d84cb594b6917f6172a73179c8b78d01d459981d2db215af71b255dfdcdffa5d"
+    },
+    {
+      "name": "bulk_2f6bbe8",
+      "address": 49724392,
+      "size": 36,
+      "sha256": "6ad82f4c0c4380a3a90369f25b5f5e1e94a58a3ade0d16e2589f9b90e4907361"
+    },
+    {
+      "name": "bulk_2f6bba4",
+      "address": 49724324,
+      "size": 32,
+      "sha256": "d2653c02c4c4f50b3f302cea05c6b6a943b41a084e799fd5542caccc58b4b11f"
+    },
+    {
+      "name": "bulk_15e5810",
+      "address": 22960144,
+      "size": 12,
+      "sha256": "71cbf9063a19f311b70d522d3902431ef84a3aeeeb0d2738e1f20a98b079fa88"
+    },
+    {
+      "name": "bulk_3005cbc",
+      "address": 50355388,
+      "size": 224,
+      "sha256": "10cd1dcf332bdb11046d7a27233c90d003b252cbdbda7ecb0f0d91a28e29fbc8"
+    },
+    {
+      "name": "bulk_15840a8",
+      "address": 22560936,
+      "size": 40,
+      "sha256": "f55ab929e8a4ce6f9477224138a9cde724198f363f41bb364c1d1504bf55127b"
+    },
+    {
+      "name": "bulk_158428c",
+      "address": 22561420,
+      "size": 44,
+      "sha256": "400e06301fbaf7dbc5ba7b8ac96614d7822127bf8a9a9ca8274092230bbca22b"
+    },
+    {
+      "name": "bulk_158401c",
+      "address": 22560796,
+      "size": 84,
+      "sha256": "fe9855133eddcd30949477e34a705e7b9cd96fb002b2f2fbacb0acc068806c0e"
+    },
+    {
+      "name": "bulk_158a6c0",
+      "address": 22587072,
+      "size": 284,
+      "sha256": "4224221b117fb8bb936b7aed4b218401f2678538819470e7e9b57bea582204f0"
+    },
+    {
+      "name": "bulk_3141c94",
+      "address": 51649684,
+      "size": 56,
+      "sha256": "73b450c2dd21afd6a27e139780e8cbc85af2c35516f98f5b1b16e7a9cdc5585b"
+    },
+    {
+      "name": "bulk_1428d90",
+      "address": 21138832,
+      "size": 108,
+      "sha256": "244e7bbeecd21b2089117233d3515ae4350a2055ad089981664022bac306f0c3"
+    },
+    {
+      "name": "bulk_1428dfc",
+      "address": 21138940,
+      "size": 108,
+      "sha256": "302e1a1693ddfd27852b308d656ef607409bef5f8b009c1b18dea4fcadc28e07"
+    }
+  ],
+  "probes": [
+    {
+      "address": 49723556,
+      "size": 128
+    },
+    {
+      "address": 49726168,
+      "size": 128
+    }
+  ],
+  "mapped_probe": {
+    "name": "bulk_mapped_probe",
+    "address": 49721344,
+    "size": 4096,
+    "sha256": "2406bf3a73f40c884144253bdacf556b4e4f8df5cfa65ac90c3d1454ee5e4577"
+  },
+  "scopes": [
+    {
+      "name": "quick",
+      "basis": "Initialized firmware section containing the checked bulk probes; other RAM extents are not established.",
+      "ranges": [
+        {
+          "name": "firmware",
+          "address": 46321664,
+          "size": 22417408
+        }
+      ]
+    }
+  ],
+  "upload": {
+    "pointer": 69236000,
+    "pointer_bytes": 8,
+    "capacity_address": 69236008,
+    "configuration_checks": [],
+    "piece_bytes": 65536,
+    "address_alignment": 32,
+    "code_checks": [
+      {
+        "name": "bulk_upload_command",
+        "address": 49725452,
+        "size": 204,
+        "sha256": "d8c89482a359226f3bb0ad117fd38a55f0135df463352a985d310a72721ad3e8"
+      },
+      {
+        "name": "bulk_upload_data",
+        "address": 49725812,
+        "size": 152,
+        "sha256": "fa9c599612f8c9a60b19cf7f0d2f7c2aa1b73f470654b5498066046c6fe026fa"
+      },
+      {
+        "name": "bulk_upload_complete",
+        "address": 49723928,
+        "size": 284,
+        "sha256": "24e044cbe2ebadf2900b1d1b2102264ed17ade7f3f47be67098b527be2ed9737"
+      },
+      {
+        "name": "bulk_upload_setup",
+        "address": 49729624,
+        "size": 220,
+        "sha256": "75060bc77e74a4462f758774171cc80fea5903d90d7cdb3d86c9cdeb9e0b3a28"
+      },
+      {
+        "name": "bulk_upload_dispatch",
+        "address": 49730540,
+        "size": 388,
+        "sha256": "decb66009d43a2e32f8d3e0ab1b365ffdf005d78e58e59a1e9a27d3c8f050370"
+      },
+      {
+        "name": "bulk_upload_le32",
+        "address": 49724392,
+        "size": 36,
+        "sha256": "6ad82f4c0c4380a3a90369f25b5f5e1e94a58a3ade0d16e2589f9b90e4907361"
+      }
+    ]
+  }
+}

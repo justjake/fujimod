@@ -14,6 +14,7 @@ doctest = false
 fujimod-catalog.workspace = true
 fujimod-catalog-configuration.workspace = true
 fujimod-catalog-construction.workspace = true
+fujimod-catalog-controls.workspace = true
 fujimod-catalog-run-inputs.workspace = true
 fujimod-catalog-identity.workspace = true
 serde = { workspace = true, features = ["derive"] }

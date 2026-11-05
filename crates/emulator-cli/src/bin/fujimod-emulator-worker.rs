@@ -4,8 +4,8 @@ use fujimod_catalog_assets::Asset;
 use fujimod_emulator::board::{self, Board, InterruptMap, aprofile, bus::Bus, factory, mprofile};
 use fujimod_catalog_assets::files::{Files, Location};
 use fujimod_emulator_cpu::{self as cpu, Access, Model, Register};
-use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, parts::{controls::Source, pins::DriveInput}};
-use fujimod_emulator_parts_controls::resistor_keys::{Key, Options as ResistorKeysOptions, ResistorKeys};
+use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, parts::{controls::{Controls, Source}, pins::DriveInput}};
+use fujimod_emulator_parts_controls::key_input::{ControlsOptions, Key, KeyInput};
 use fujimod_emulator_xp5_board::board as xp5_board;
 use fujimod_emulator_xp5_display::display;
 use fujimod_emulator_xp5_storage::flash_storage;
@@ -215,11 +215,6 @@ struct Image {
     asset: String,
 }
 #[derive(Deserialize)]
-#[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
-enum ControlInput {
-    X100vi { resistor_keys: ResistorKeysOptions },
-}
-#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Companion {
     processor: usize,
@@ -268,7 +263,7 @@ impl Scanout {
 enum Devices {
     Xp5 {
         windows: Vec<DeviceWindow>,
-        controls: ControlInput,
+        controls: ControlsOptions,
         companion: Option<Companion>,
         storage: Option<String>,
         #[serde(default)]
@@ -404,7 +399,7 @@ fn hex(bytes: &[u8]) -> String {
 struct Worker {
     board: Board,
     quantum: usize,
-    input: Arc<ResistorKeys>,
+    input: Arc<dyn KeyInput>,
     input_source: usize,
     output_directory: PathBuf,
     archive: u64,
@@ -472,11 +467,7 @@ impl Worker {
             } => {
                 let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
                 let driver: Arc<dyn DriveInput> = pins.clone();
-                let input = Arc::new(match controls {
-                    ControlInput::X100vi { resistor_keys } => {
-                        ResistorKeys::new(driver, resistor_keys)?
-                    }
-                });
+                let input = controls.open(driver)?;
                 input.start(Duration::ZERO);
                 if companion.as_ref().is_some_and(|c| {
                     config
@@ -490,7 +481,7 @@ impl Worker {
                 }
                 let mut resources = xp5_board::Resources {
                     sd: xp5_board::sd::resolve(sd, &sd_assets)?,
-                    controls: input.clone(),
+                    controls: input.clone() as Arc<dyn Controls>,
                     pins,
                     clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks::new(),
                     companion: companion.map(|c| xp5_board::Companion {
@@ -520,7 +511,7 @@ impl Worker {
                 if !resources.displays.is_empty() {
                     return Err("unused scanout configuration".into());
                 }
-                let source = graph.attach(Box::new(Source::new(input.clone())));
+                let source = graph.attach(Box::new(Source::new(input.clone() as Arc<dyn Controls>)));
                 for window in windows
                     .iter()
                     .filter(|w| matches!(w.kind.as_str(), "gpio" | "gpio-port3"))

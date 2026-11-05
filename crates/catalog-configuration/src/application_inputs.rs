@@ -1,5 +1,6 @@
 //! Closed external inputs and scenes for application-profile camera runs.
 
+use fujimod_catalog_controls::LadderWire;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -33,6 +34,14 @@ pub struct ApplicationRunInputs {
     pub parts: Vec<ApplicationPartInput>,
     /// Functional device timing policy for this run, not measured silicon timing.
     pub timings: Vec<ApplicationTiming>,
+    /// Values the body's register ladders read while none of their controls
+    /// is held, for ladders whose body record declares none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(optional)
+    )]
+    pub ladders: Vec<ApplicationLadderInput>,
 }
 
 impl ApplicationRunInputs {
@@ -94,6 +103,18 @@ impl ApplicationRunInputs {
                 }
             }
         }
+        let mut wires = BTreeSet::new();
+        for ladder in &self.ladders {
+            if !wires.insert(ladder.wire) {
+                return Err(format!("application input repeats ladder {:?}", ladder.wire));
+            }
+            if ladder.basis.trim().is_empty() {
+                return Err(format!(
+                    "application ladder input {:?} needs a basis",
+                    ladder.wire
+                ));
+            }
+        }
         for timing in &self.timings {
             match timing {
                 ApplicationTiming::Delay {
@@ -144,6 +165,29 @@ impl ApplicationRunInputs {
         }
         Ok(())
     }
+}
+
+/// The value one body ladder reads while none of its controls is held.
+///
+/// A run input, not a body fact: it is supplied only where the body record
+/// has no established released value, and its basis says why the value holds
+/// no control. An ADC ladder's value is the ADC block input's sample.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct ApplicationLadderInput {
+    /// Wire of a ladder the body declares.
+    pub wire: LadderWire,
+    /// Value read on the wire with no control of the ladder held.
+    pub released: u16,
+    /// Why this value holds no control, and how far it is established.
+    pub basis: String,
 }
 
 /// External values supplied to one application-profile SoC block.

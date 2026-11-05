@@ -12,6 +12,7 @@ doctest = false
 
 [dependencies]
 fujimod-catalog-construction.workspace = true
+fujimod-catalog-controls.workspace = true
 fujimod-catalog-run-inputs.workspace = true
 fujimod-catalog-identity.workspace = true
 serde = { workspace = true, features = ["derive"] }
@@ -25,4 +26,4 @@ fujimod-workspace-hack.workspace = true
 
 [features]
 # JSON Schema derives, used only to generate and check the committed schemas.
-schema = ["fujimod-catalog-construction/schema", "fujimod-catalog-run-inputs/schema"]
+schema = ["fujimod-catalog-construction/schema", "fujimod-catalog-controls/schema", "fujimod-catalog-run-inputs/schema"]

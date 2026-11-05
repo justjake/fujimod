@@ -412,6 +412,7 @@ fn register_with_resources(
                     window.base,
                     resources.pins.clone(),
                     &window.options,
+                    resources.controls.clone(),
                 )?),
             )?;
         }

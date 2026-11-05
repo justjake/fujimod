@@ -7,8 +7,8 @@
     "interface": {
       "kind": "serial-nor-flash",
       "jedec_id": 2145056,
-      "erase_bytes": null,
-      "page_bytes": null
+      "erase_bytes": 65536,
+      "page_bytes": 256
     }
   }
 }

@@ -4,6 +4,9 @@
 //! the checked relationship; spelling is never used to translate vocabularies.
 
 pub mod facts;
+pub mod ladders;
+
+pub use crate::ladders::{ControlLadder, LadderRung, LadderWire};
 
 use crate::facts::{
     ControlInterface, DecodedTouch, GpioScanner, ManualReference, NativeKeyNames, ScannerReader,
@@ -64,6 +67,14 @@ pub struct PhysicalControls {
     pub boot: BTreeMap<BootMode, BootCombination>,
     /// Controls keyed by their canonical physical identities.
     pub controls: BTreeMap<String, PhysicalControl>,
+    /// Momentary controls read as bands of one ADC channel or power-controller
+    /// register; a control without an established band has no rung.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(optional)
+    )]
+    pub ladders: Vec<ControlLadder>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -1090,7 +1101,7 @@ impl PhysicalControls {
                 behavior.validate()?;
             }
         }
-        Ok(())
+        self.validate_ladders()
     }
 
     /// Resolve a declared action against checked firmware input facts.

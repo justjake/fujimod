@@ -1,8 +1,8 @@
 //! External XP5 controls and GPIO inputs of an opened XP5 session.
 use fujimod_emulator_session::Session;
 use fujimod_emulator_devices::xp5::pins::SharedPins;
-pub use fujimod_emulator_parts_controls::resistor_keys::Key;
-use fujimod_emulator_parts_controls::resistor_keys::ResistorKeys;
+pub use fujimod_emulator_parts_controls::key_input::Key;
+use fujimod_emulator_parts_controls::key_input::KeyInput;
 use std::time::Duration;
 
 /// External XP5 controls retained after device construction, for the session
@@ -10,7 +10,7 @@ use std::time::Duration;
 /// devices that consume them.
 pub struct Inputs {
     pins: SharedPins,
-    controls: Option<std::sync::Arc<ResistorKeys>>,
+    controls: Option<std::sync::Arc<dyn KeyInput>>,
     gpio_devices: Vec<usize>,
     control_source: usize,
 }
@@ -18,7 +18,7 @@ pub struct Inputs {
 impl Inputs {
     pub(crate) fn new(
         pins: SharedPins,
-        controls: Option<std::sync::Arc<ResistorKeys>>,
+        controls: Option<std::sync::Arc<dyn KeyInput>>,
         gpio_devices: Vec<usize>,
         control_source: usize,
     ) -> Self {

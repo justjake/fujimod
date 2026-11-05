@@ -236,6 +236,33 @@
       ],
       "type": "object"
     },
+    "ApplicationLadderInput": {
+      "additionalProperties": false,
+      "description": "The value one body ladder reads while none of its controls is held.\n\nA run input, not a body fact: it is supplied only where the body record\nhas no established released value, and its basis says why the value holds\nno control. An ADC ladder's value is the ADC block input's sample.",
+      "properties": {
+        "basis": {
+          "description": "Why this value holds no control, and how far it is established.",
+          "type": "string"
+        },
+        "released": {
+          "description": "Value read on the wire with no control of the ladder held.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "wire": {
+          "$ref": "#/$defs/LadderWire",
+          "description": "Wire of a ladder the body declares."
+        }
+      },
+      "required": [
+        "wire",
+        "released",
+        "basis"
+      ],
+      "type": "object"
+    },
     "ApplicationPartInput": {
       "description": "Initial values supplied to one installed serial endpoint.",
       "oneOf": [
@@ -626,6 +653,55 @@
         "body_profile_id"
       ],
       "type": "object"
+    },
+    "LadderWire": {
+      "description": "The sampled value a ladder is read from.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "One channel of the SoC's ADC.",
+          "properties": {
+            "channel": {
+              "description": "ADC channel number.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "adc",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "channel"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One register of the body's serial power controller.",
+          "properties": {
+            "kind": {
+              "const": "power_controller_register",
+              "type": "string"
+            },
+            "register": {
+              "description": "Register number.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "register"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "NativeBlock11000InputsControlMode": {
       "additionalProperties": false,
@@ -2484,6 +2560,13 @@
               "const": "xp4",
               "type": "string"
             },
+            "ladders": {
+              "description": "Values the body's register ladders read while none of their controls\nis held, for ladders whose body record declares none.",
+              "items": {
+                "$ref": "#/$defs/ApplicationLadderInput"
+              },
+              "type": "array"
+            },
             "parts": {
               "description": "Initial external values supplied to installed parts.",
               "items": {
@@ -2528,6 +2611,13 @@
             "kind": {
               "const": "xp5",
               "type": "string"
+            },
+            "ladders": {
+              "description": "Values the body's register ladders read while none of their controls\nis held, for ladders whose body record declares none.",
+              "items": {
+                "$ref": "#/$defs/ApplicationLadderInput"
+              },
+              "type": "array"
             },
             "parts": {
               "description": "Initial external values supplied to installed parts.",
