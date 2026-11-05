@@ -43,6 +43,54 @@ fn scaler_dma_padding_reset_and_unsupported_transform() {
 }
 
 #[test]
+fn unprogrammed_transform_copies_equal_geometry_and_refuses_scaling() {
+    let run = |dst_width: u32| {
+        let mut h = TestHost::new();
+        for (i, v) in h.ram[0x8000..0x8020].iter_mut().enumerate() {
+            *v = 16 + i as u8;
+        }
+        h.ram[0x9000..0x9020].fill(0xa5);
+        let mut d = Scaler::new(
+            fujimod_emulator_imaging::exr2_isp::options::scaler::Options {
+                completion_ticks: 4,
+            },
+            Irq { core: 0, line: 67 },
+        )
+        .unwrap();
+        for (o, v) in [
+            (0, 0),
+            (8, 1),
+            (0x10, 0x8000),
+            (0x14, 8),
+            (0x18, 2 << 16 | 8),
+            (0x20, 0x9000),
+            (0x24, dst_width),
+            (0x28, 2 << 16 | dst_width),
+            (0x2c, 0),
+            (0x70, 0),
+            (0x7c, 0x1301),
+            (0x80, 0xff),
+        ] {
+            write(&mut d, &mut h, 0xfff47000 + o, v);
+        }
+        let mut cx = h.cx();
+        d.write(&mut cx, 0xfff47004, 4, 3);
+        let refused = cx.refusal().is_some();
+        drop(cx);
+        if !refused {
+            advance(&mut d, &mut h, 4);
+        }
+        (refused, h)
+    };
+    let (refused, h) = run(8);
+    assert!(!refused);
+    assert_eq!(&h.ram[0x9000..0x9020], &h.ram[0x8000..0x8020]);
+    let (refused, h) = run(16);
+    assert!(refused);
+    assert_eq!(&h.ram[0x9000..0x9020], &[0xa5; 32]);
+}
+
+#[test]
 fn scaler_refuses_tags_outside_the_measured_identity_contract() {
     for (step, tag_offset) in [(98304, 0), (65536, 16)] {
         let mut host = TestHost::new();
