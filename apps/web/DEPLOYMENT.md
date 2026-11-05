@@ -73,13 +73,18 @@ token from the "Edit Cloudflare Workers" template, limited to the account in
 `production` environment, where required reviewers or a branch rule can gate it.
 A mod release never triggers or supplies a website deployment. The Worker
 selects the newest published GitHub release with `patches.json`, including
-prereleases, through unauthenticated API requests. `/releases/current` returns
+prereleases, through GitHub API requests. `/releases/current` returns
 `{tag, name, published_at, prerelease}` with a five-minute edge cache. The
-`RELEASES` KV namespace (`fujimod-releases`) holds the current release and
-every release file served. `/releases/current` answers from KV and refreshes it
+`RELEASES` KV namespace (`fujimod-releases`) holds the current release, every
+release file served, and the OTA manifest and store copies used when GitHub
+fails. `/releases/current` answers from KV and refreshes it
 from GitHub in the background; release files fall back to KV when GitHub fails.
 GitHub's unauthenticated limit is shared by every Worker on an egress address,
 so only the first lookup after creating the namespace waits on GitHub.
+Set the `GITHUB_TOKEN` Worker secret to authenticate these API lookups with a
+token; it increases the shared limit and is never sent to asset downloads.
+Set it once from `apps/web` with
+`node ../../scripts/cloudflare/wrangler.ts secret put GITHUB_TOKEN`.
 `/releases/<tag>/<file>` proxies GitHub asset bytes with a one-year edge cache.
 Only successful responses are cached; browser consumers still verify file sizes
 and SHA-256. Development and preview servers expose the same routes from
@@ -108,18 +113,42 @@ store file its manifest names. The Worker rejects a manifest whose `firmware`
 field differs from the requested firmware id. Requests never forward the
 client's authorization or cookie headers to GitHub.
 
-`latest.json` is fetched from GitHub on every request and sent with
-`Cache-Control: no-store`, so a published release reaches cameras immediately.
-Store files are immutable: the Worker caches their full bytes at the edge and
-in the `RELEASES` KV namespace, and serves stored bytes while GitHub fails.
+The current-release lookup and each firmware manifest are cached at the edge
+for five minutes and mirrored in KV. Camera requests inside that window answer
+without contacting GitHub; an origin error serves the last copy. Manifests go
+to cameras with `Cache-Control: no-store`. Their edge copies carry an internal
+fetch time and stay for a year, so they remain available during an outage. The
+`GITHUB_TOKEN` secret authenticates GitHub API lookups; store assets are
+downloaded without it.
 
-A single `bytes=` range is honored. The Worker forwards it to GitHub and relays
-a `206` with `Content-Range`, or slices a cached full copy; an unsatisfiable
-range answers `416` with `Content-Range: bytes */<size>`. Other range syntax
+Store files are immutable. On a cold cache the Worker fetches the whole asset
+once, never forwarding a client's `Range` header, then caches the bytes at the
+edge and in the `RELEASES` KV namespace and answers ranges from that copy.
+
+A single `bytes=` range is answered with `206` and `Content-Range`, or `416`
+with `Content-Range: bytes */<size>` when unsatisfiable. Other range syntax
 receives the whole file with `200`. `HEAD` answers with the same status and
 headers as `GET` and no body. The Worker follows GitHub's redirect to asset
 storage itself, so these routes answer directly over HTTPS without redirecting
 the camera.
+
+A published release becomes visible within five minutes. To publish
+immediately, purge the cached release lookup and each changed manifest by URL:
+
+```sh
+curl -sS -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"files":[
+    "https://fujimod.com/ota/release.json",
+    "https://fujimod.com/ota/x70-110/latest.json"
+  ]}'
+```
+
+`/ota/release.json` is the internal cache key for the current-release lookup
+and is not a public route. The Worker reads and writes these entries through
+the Cache API under those exact URLs, so a URL purge clears them in every data
+center.
 
 Verify both HTTPS hostnames, `/dev-tools/`, camera launch controls, an actual
 emulator boot, `/ota/timezone`, a release manifest, and feature media after
