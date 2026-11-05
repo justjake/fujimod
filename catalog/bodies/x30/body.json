@@ -629,6 +629,20 @@
               "rest_phase": 3
             },
             "counter": null
+          },
+          {
+            "name": "control_ring",
+            "adc": "adc",
+            "options": {
+              "outputs": {
+                "kind": "adc",
+                "channels": [6, 7],
+                "levels": [{"low": 250, "high": 750}, {"low": 250, "high": 750}]
+              },
+              "phase_ticks": 120000,
+              "rest_phase": 3
+            },
+            "counter": null
           }
         ],
         "attachments": {
@@ -1410,6 +1424,14 @@
           "pin": 6,
           "active_level": true
         }
+      ]
+    },
+    {
+      "id": "controls-encoder-adc-6-7",
+      "kind": "control",
+      "signals": [
+        {"kind": "adc", "channel": 6, "threshold": null},
+        {"kind": "adc", "channel": 7, "threshold": null}
       ]
     },
     {

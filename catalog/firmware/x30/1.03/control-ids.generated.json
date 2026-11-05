@@ -4538,9 +4538,10 @@
     {
       "id": "row-42",
       "event": 830,
-      "debug_key": "E-D-3.0",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 42,
@@ -4569,9 +4570,10 @@
     {
       "id": "row-43",
       "event": 829,
-      "debug_key": "E-D-2.7",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 43,
@@ -4600,9 +4602,10 @@
     {
       "id": "row-44",
       "event": 828,
-      "debug_key": "E-D-2.3",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 44,
@@ -4631,9 +4634,10 @@
     {
       "id": "row-45",
       "event": 827,
-      "debug_key": "E-D-2.0",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 45,
@@ -4664,7 +4668,8 @@
       "event": 826,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 46,
@@ -4695,7 +4700,8 @@
       "event": 825,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 47,
@@ -4724,9 +4730,10 @@
     {
       "id": "row-48",
       "event": 824,
-      "debug_key": "E-D-1.0",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 48,
@@ -4755,9 +4762,10 @@
     {
       "id": "row-49",
       "event": 823,
-      "debug_key": "E-D-0.7",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 49,
@@ -4786,9 +4794,10 @@
     {
       "id": "row-50",
       "event": 822,
-      "debug_key": "E-D-0.3",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 50,
@@ -4817,9 +4826,10 @@
     {
       "id": "row-51",
       "event": 821,
-      "debug_key": "E-D=0",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 51,
@@ -4848,9 +4858,10 @@
     {
       "id": "row-52",
       "event": 820,
-      "debug_key": "E-D+0.3",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 52,
@@ -4879,9 +4890,10 @@
     {
       "id": "row-53",
       "event": 819,
-      "debug_key": "E-D+0.7",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 53,
@@ -4910,9 +4922,10 @@
     {
       "id": "row-54",
       "event": 818,
-      "debug_key": "E-D+1.0",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 54,
@@ -4943,7 +4956,8 @@
       "event": 817,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 55,
@@ -4974,7 +4988,8 @@
       "event": 816,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 56,
@@ -5003,9 +5018,10 @@
     {
       "id": "row-57",
       "event": 815,
-      "debug_key": "E-D+2.0",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 57,
@@ -5034,9 +5050,10 @@
     {
       "id": "row-58",
       "event": 814,
-      "debug_key": "E-D+2.3",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 58,
@@ -5065,9 +5082,10 @@
     {
       "id": "row-59",
       "event": 813,
-      "debug_key": "E-D+2.7",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 59,
@@ -5096,9 +5114,10 @@
     {
       "id": "row-60",
       "event": 812,
-      "debug_key": "E-D+3.0",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 60,
@@ -5207,6 +5226,104 @@
       }
     },
     {
+      "id": "encoder-524",
+      "event": 524,
+      "debug_key": "CRING+",
+      "target": {
+        "kind": "control",
+        "control_id": "control_ring"
+      },
+      "scanner": null,
+      "electrical": {
+        "kind": "adc_transition",
+        "connection_id": "controls-encoder-adc-6-7",
+        "phase_map": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "transitions": [
+          0,
+          1,
+          2,
+          3,
+          2,
+          0,
+          3,
+          1,
+          1,
+          3,
+          0,
+          2,
+          3,
+          2,
+          1,
+          0
+        ],
+        "decoder_event": 1,
+        "calibration_offsets": {
+          "centers": [
+            15968,
+            15970
+          ],
+          "offset": 15972,
+          "hysteresis": 15974,
+          "edges_per_step": 15977,
+          "direction": 15978
+        }
+      }
+    },
+    {
+      "id": "encoder-525",
+      "event": 525,
+      "debug_key": "CRING-",
+      "target": {
+        "kind": "control",
+        "control_id": "control_ring"
+      },
+      "scanner": null,
+      "electrical": {
+        "kind": "adc_transition",
+        "connection_id": "controls-encoder-adc-6-7",
+        "phase_map": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "transitions": [
+          0,
+          1,
+          2,
+          3,
+          2,
+          0,
+          3,
+          1,
+          1,
+          3,
+          0,
+          2,
+          3,
+          2,
+          1,
+          0
+        ],
+        "decoder_event": 2,
+        "calibration_offsets": {
+          "centers": [
+            15968,
+            15970
+          ],
+          "offset": 15972,
+          "hysteresis": 15974,
+          "edges_per_step": 15977,
+          "direction": 15978
+        }
+      }
+    },
+    {
       "id": "debug-18",
       "event": 18,
       "debug_key": "TELE",
@@ -5246,28 +5363,6 @@
       "target": {
         "kind": "control",
         "control_id": "wifi_button"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-524",
-      "event": 524,
-      "debug_key": "CRING+",
-      "target": {
-        "kind": "control",
-        "control_id": "control_ring"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-525",
-      "event": 525,
-      "debug_key": "CRING-",
-      "target": {
-        "kind": "control",
-        "control_id": "control_ring"
       },
       "scanner": null,
       "electrical": null
