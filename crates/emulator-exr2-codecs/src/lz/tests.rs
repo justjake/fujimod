@@ -268,9 +268,11 @@ fn box_pyramid_preserves_packed_color_at_every_transfer_group_size() {
         pixels = actual.to_vec();
     }
     assert_eq!(pixels.len(), 40 * 30 * 2);
-    assert!(pixels
-        .chunks_exact(4)
-        .all(|pair| pair[2] != 0 && pair[3] != 0));
+    assert!(
+        pixels
+            .chunks_exact(4)
+            .all(|pair| pair[2] != 0 && pair[3] != 0)
+    );
 }
 fn configure_soft_focus_weighted_crop(d: &mut Decompressor, h: &mut Ram) {
     let values = [
@@ -562,9 +564,11 @@ fn weighted_scalar_half_resizes_with_exact_kernel_inside_source_row_padding() {
     tick(&mut d, &mut h, due).unwrap();
     for row in 0..120 {
         let destination = 0x102e0 + row * 1440;
-        assert!(h.bytes[destination..destination + 384]
-            .chunks_exact(2)
-            .all(|sample| sample == 100u16.to_le_bytes()));
+        assert!(
+            h.bytes[destination..destination + 384]
+                .chunks_exact(2)
+                .all(|sample| sample == 100u16.to_le_bytes())
+        );
         let source = &h.bytes[0x10000 + row * 1440..0x10000 + row * 1440 + 736];
         assert_eq!(source, &before[row * 1440..row * 1440 + 736]);
     }
@@ -917,9 +921,11 @@ fn byte_luma_pyramid_uses_owned_row_spans_and_original_source_latching() {
         assert!(h.irqs.is_empty());
         tick(&mut d, &mut h, due).unwrap();
         for y in 0..8 {
-            assert!(h.bytes[0x10000 + y * 128..0x10000 + y * 128 + source_bytes]
-                .iter()
-                .all(|&v| v == 255));
+            assert!(
+                h.bytes[0x10000 + y * 128..0x10000 + y * 128 + source_bytes]
+                    .iter()
+                    .all(|&v| v == 255)
+            );
             if y < 4 {
                 assert_eq!(&h.bytes[0x10040 + y * 128..0x10050 + y * 128], &[17; 16]);
             }
@@ -987,4 +993,56 @@ fn byte_luma_pyramid_refuses_other_kernels_and_overlapping_active_rows() {
         assert_eq!(h.writes, 0);
         assert!(h.irqs.is_empty());
     }
+}
+
+#[test]
+fn pyramid_pixel_cache_keys_active_source_bytes_and_preserves_cold_results() {
+    let (mut d, mut h, _) = setup();
+    reset(&mut d, &mut h);
+    configure_luma(
+        &mut d,
+        &mut h,
+        [
+            0x1010,
+            0x10000,
+            128,
+            8 << 16 | 32,
+            0x10040,
+            128,
+            4 << 16 | 16,
+            64,
+            0x42038,
+            0xa203640,
+            0x200040,
+            0x2000,
+        ],
+    );
+    d.source[..1024].fill(0xa5);
+    for y in 0..8 {
+        for x in 0..32 {
+            d.source[y * 128 + x / 2 * 4 + x % 2] = 17;
+        }
+    }
+    assert_eq!(d.raster().unwrap(), (16, 4, 128));
+    assert_eq!(d.pyramid_cache.len(), 1);
+    let expected = d.output[..64].to_vec();
+    // Neighboring output banks and padding do not change active input pixels.
+    for y in 0..8 {
+        d.source[y * 128 + 64..(y + 1) * 128].fill(0x36);
+    }
+    d.state.regs[0x10 / 4] = 0x20000;
+    d.state.regs[0x20 / 4] = 0x30000;
+    d.output[..64].fill(0);
+    d.raster().unwrap();
+    assert_eq!(d.output[..64], expected);
+    assert_eq!(d.pyramid_cache.len(), 1);
+    d.source[0] = 255;
+    d.raster().unwrap();
+    assert_ne!(d.output[..64], expected);
+    assert_eq!(d.pyramid_cache.len(), 2);
+    d.pyramid_cache.clear();
+    let changed = d.output[..64].to_vec();
+    d.raster().unwrap();
+    assert_eq!(d.output[..64], changed);
+    assert_eq!(d.pyramid_cache.len(), 1);
 }

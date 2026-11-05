@@ -8,9 +8,11 @@
 //! default resize mode awaits a result and has no manufactured completion.
 use fujimod_emulator_devices::exr2::irq;
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
-use fujimod_emulator_devices::{compression::method4::Stream, Cx, Device};
+use fujimod_emulator_devices::{Cx, Device, compression::method4::Stream};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::collections::VecDeque;
 
 pub const BASE: u64 = 0xfff43000;
 pub const IRQ: u32 = 0x45;
@@ -150,6 +152,10 @@ struct Saved {
     #[serde(with = "fujimod_emulator_devices::checkpoint::bytes")]
     source: Vec<u8>,
 }
+struct PyramidPixels {
+    key: [u8; 32],
+    pixels: Vec<u8>,
+}
 pub struct Decompressor {
     options: Options,
     base: u64,
@@ -159,6 +165,7 @@ pub struct Decompressor {
     output: Box<[u8]>,
     a: Box<[u16]>,
     b: Box<[u16]>,
+    pyramid_cache: VecDeque<PyramidPixels>,
 }
 impl Decompressor {
     pub fn new(options: Options, w: Wiring) -> Result<Self, String> {
@@ -181,6 +188,7 @@ impl Decompressor {
             output: vec![0; OUTPUT_BYTES].into_boxed_slice(),
             a: vec![0; SOURCE_SAMPLES].into_boxed_slice(),
             b: vec![0; SOURCE_SAMPLES].into_boxed_slice(),
+            pyramid_cache: VecDeque::new(),
         })
     }
     fn offset(&self, address: u64, size: u8) -> Option<usize> {
@@ -559,6 +567,31 @@ impl Decompressor {
         let (sp, pitch) = (self.r(0x14) as usize, self.r(0x24) as usize);
         let (sf, df) = (self.r(0x80) >> 12 & 3, self.r(0x80) >> 28 & 3);
         if let RasterKind::PyramidLuma { packed, smooth } = kind {
+            // Cache pure pixel results by active DMA bytes and arithmetic
+            // controls. Addresses, padding and program state cannot select a
+            // result. Cold checkpoint restores recompute the same pixels.
+            let mut digest = Sha256::new();
+            for word in [
+                sw as u64,
+                sh as u64,
+                w as u64,
+                h as u64,
+                packed as u64,
+                smooth as u64,
+            ] {
+                digest.update(word.to_le_bytes());
+            }
+            let active = sw * if packed { 2 } else { 1 };
+            for row in self.source[..sp * sh].chunks_exact(sp) {
+                digest.update(&row[..active]);
+            }
+            let key: [u8; 32] = digest.finalize().into();
+            if let Some(index) = self.pyramid_cache.iter().position(|entry| entry.key == key) {
+                let entry = self.pyramid_cache.remove(index).unwrap();
+                self.output[..w * h].copy_from_slice(&entry.pixels);
+                self.pyramid_cache.push_back(entry);
+                return Ok((w, h, pitch));
+            }
             fujimod_emulator_image_processing::pyramid::half_luma(
                 &self.source[..sp * sh],
                 fujimod_emulator_image_processing::pyramid::Raster {
@@ -570,6 +603,13 @@ impl Decompressor {
                 smooth,
                 &mut self.output[..w * h],
             )?;
+            if self.pyramid_cache.len() == 8 {
+                self.pyramid_cache.pop_front();
+            }
+            self.pyramid_cache.push_back(PyramidPixels {
+                key,
+                pixels: self.output[..w * h].to_vec(),
+            });
             return Ok((w, h, pitch));
         }
         if kind != RasterKind::BoxHalf {
@@ -724,7 +764,9 @@ impl Decompressor {
                 }
                 (0, 0, Phase::Acknowledged | Phase::Released) => self.state.resize = None,
                 _ => {
-                    return Err(format!("MOVRSZ active/configured shared-engine mutation is unsupported: register {o:#x} = {v:#x}"));
+                    return Err(format!(
+                        "MOVRSZ active/configured shared-engine mutation is unsupported: register {o:#x} = {v:#x}"
+                    ));
                 }
             }
         }

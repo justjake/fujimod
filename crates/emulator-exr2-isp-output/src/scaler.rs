@@ -66,13 +66,27 @@ fn centered_packed422(
             return Err("scaler centered span misses source raster".into());
         }
     }
+    // The common zero-shear transform separates into two axes. Cache those
+    // coordinates once per column/row, retaining identical Q16 sampling.
+    let axes = if transform[1] == 0 && transform[2] == 0 {
+        Some((
+            (0..dst.width).map(|x| fixed(x, 0)[0]).collect::<Vec<_>>(),
+            (0..dst.height).map(|y| fixed(0, y)[1]).collect::<Vec<_>>(),
+        ))
+    } else {
+        None
+    };
     for y in 0..dst.height {
         for x in (0..dst.width).step_by(2) {
             let at = (y * dst.width + x) * 2;
             for lane in 0..4 {
                 let channel = if lane < 2 { 0 } else { lane - 1 };
                 let index = if channel == 0 { x + lane } else { x };
-                let point = fixed(index, y);
+                let point = if let Some((xs, ys)) = &axes {
+                    [xs[index], ys[y]]
+                } else {
+                    fixed(index, y)
+                };
                 let mut fx = point[0].clamp(0, ((src.width - 1) as i64) << 16) as u64;
                 let fy = point[1].clamp(0, ((src.height - 1) as i64) << 16) as u64;
                 if channel != 0 {
