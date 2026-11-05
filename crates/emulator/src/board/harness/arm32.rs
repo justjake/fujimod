@@ -366,7 +366,11 @@ impl Guard {
             return Ok(());
         }
         if condition == 15 {
-            if matches!(word, 0xf57ff01f | 0xf57ff04f | 0xf57ff05f | 0xf57ff06f) {
+            // ARMv7 DMB/DSB have eight defined domain/access options. Keep
+            // reserved and ARMv8 load-only options outside this A32 guard.
+            let scoped_barrier = matches!(word & 0xfffffff0, 0xf57ff040 | 0xf57ff050)
+                && matches!(word & 15, 2 | 3 | 6 | 7 | 10 | 11 | 14 | 15);
+            if scoped_barrier || matches!(word, 0xf57ff01f | 0xf57ff06f) {
                 self.accepted += 1;
                 return Ok(());
             }
@@ -476,22 +480,23 @@ impl Guard {
             0 if word & 0x90 == 0x90 => {
                 let kind = (word >> 5) & 3;
                 if kind == 0 {
-                    let exclusive_load = word & 0x0ff00fff == 0x01900f9f;
-                    let exclusive_store = word & 0x0ff00ff0 == 0x01800f90;
+                    let exclusive_load = matches!(word & 0x0ff00fff, 0x01900f9f | 0x01f00f9f);
+                    let exclusive_store = matches!(word & 0x0ff00ff0, 0x01800f90 | 0x01e00f90);
                     if exclusive_load || exclusive_store {
+                        let width = if word & (1 << 22) != 0 { 2 } else { 4 };
                         let rd = ((word >> 12) & 15) as usize;
                         let rt = (word & 15) as usize;
                         let address = r(rn)?;
                         if rn == 15
                             || rd == 15
-                            || address & 3 != 0
+                            || address & (width - 1) != 0
                             || (exclusive_store && (rt == 15 || rd == rn || rd == rt))
                         {
-                            return Err("Driver guard invalid word-exclusive access".into());
+                            return Err("Driver guard invalid exclusive access".into());
                         }
                         // The CPU owns the exclusive monitor. This guard only
                         // admits the complete RAM access before execution.
-                        accesses.push((address as u64, 4, exclusive_store));
+                        accesses.push((address as u64, u64::from(width), exclusive_store));
                     } else if word & 0x0fc000f0 != 0x00000090
                         && word & 0x0f8000f0 != 0x00800090
                         && word & 0x0ff000f0 != 0x00600090
@@ -905,6 +910,68 @@ mod tests {
                 .with_model_memory(vec![], vec![(0x3000, 0x3004)])
                 .is_err()
         );
+    }
+
+    #[test]
+    fn armv7_scoped_barriers_do_not_admit_reserved_or_other_system_encodings() {
+        for opcode in [0xf57ff040, 0xf57ff050] {
+            for option in 0..16 {
+                let expected = matches!(option, 2 | 3 | 6 | 7 | 10 | 11 | 14 | 15);
+                assert_eq!(
+                    guard()
+                        .preflight(0x1000, opcode | option, 0xd3, |_| Ok(0))
+                        .is_ok(),
+                    expected,
+                    "barrier {:#010x}",
+                    opcode | option
+                );
+            }
+        }
+        for word in [0xf57ff01f, 0xf57ff06f] {
+            assert!(guard().preflight(0x1000, word, 0xd3, |_| Ok(0)).is_ok());
+        }
+        for word in [0xf57ff010, 0xf57ff03b, 0xf57ff06b, 0xf57ff07f, 0xfa000000] {
+            assert!(guard().preflight(0x1000, word, 0xd3, |_| Ok(0)).is_err());
+        }
+    }
+
+    #[test]
+    fn halfword_exclusives_check_width_alignment_and_keep_mmio_excluded() {
+        let reg = |address| move |_index| Ok(address);
+        for (word, address) in [(0xe1f32f9f, 0x2002), (0xe1e32f91, 0x3002)] {
+            assert!(guard().preflight(0x1000, word, 0xd3, reg(address)).is_ok());
+        }
+        for (word, address) in [
+            (0xe1f32f9f, 0x2003),
+            (0xe1e32f91, 0x3003),
+            (0xe1f32f9f, 0x2004),
+            (0xe1e32f91, 0x3004),
+            (0xe1e32f91, 0x2002),
+            (0xe1ff2f9f, 0x2000),
+            (0xe1f3ff9f, 0x2000),
+            (0xe1e33f91, 0x3000),
+            (0xe1e31f91, 0x3000),
+            (0xe1e32f9f, 0x3000),
+        ] {
+            assert!(guard().preflight(0x1000, word, 0xd3, reg(address)).is_err());
+        }
+        for word in [0xe1f32f9f, 0xe1e32f91] {
+            let mut narrow = guard()
+                .with_mmio(
+                    vec![MmioAccess {
+                        end: 0xfffd8002,
+                        width: 2,
+                        ..mmio_policy()
+                    }],
+                    vec![(0xfffd8000, 0xfffd8100)],
+                )
+                .unwrap();
+            assert!(
+                narrow
+                    .preflight(0x1000, word, 0xd3, reg(0xfffd8000))
+                    .is_err()
+            );
+        }
     }
 
     #[test]

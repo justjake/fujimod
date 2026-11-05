@@ -56,3 +56,34 @@ recovery and physical cache coherence remain to be qualified by callers. The
 model transfer does not measure physical timing or memory geometry. Hardware
 cache behavior and atomicity of a larger device operation composed of several
 separately guarded host writes do not follow from the single-write control.
+
+## ARMv7 barriers and halfword-exclusive callers
+
+**Verified (instruction source):** The
+[ARMv7-A/R architecture manual](https://documentation-service.arm.com/static/5f8daeb7f86e16515cdb8c4e),
+sections A8.8.43--44 and A8.8.79/A8.8.216, defines the DSB/DMB domain/access
+options and A32 LDREXH/STREXH encodings. The guard admits the eight defined
+ARMv7 DSB/DMB options, exact CLREX and ISB SY, and aligned RAM halfword
+exclusives. The CPU still executes these instructions and owns its exclusive
+monitor; preflight neither supplies a successful store nor replaces a barrier.
+
+**Verified (regression scope):** The X-T30 handle allocator reaches DMB ISH
+(`0xf57ff05b`) before its halfword sequence counter. New guard controls fail
+before the admission change and pass afterward. They cover all 16 option
+nibbles for both DMB and DSB, nearby rejected unconditional encodings, complete
+two-byte RAM bounds, halfword alignment, read/write direction and invalid
+exclusive register operands. Even a matching two-byte MMIO policy cannot
+admit halfword exclusives. All 15 A32 guard tests pass.
+
+**Verified (XP4 execution controls):** Software-emulated successful exclusive
+stores now enter the guard's CPU-store log, because their direct host copy
+bypasses the CPU memory hook. The `guarded_devices` test executes DMB ISH and
+halfword-exclusive instructions through bounded CPU redirects. Two successful
+stores record their PCs, widths and values and preserve the following canary.
+A one-store bound stops before the second write; STREXH without a preceding
+LDREXH fails without writing or recording a store. All four device integration
+tests and five physical-memory tests pass.
+
+**Unknown:** These admission controls do not establish firmware ownership,
+cross-core scheduling, physical memory ordering, or complete flash-reader
+initialization and recovery.
