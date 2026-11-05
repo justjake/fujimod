@@ -129,7 +129,7 @@
       ],
       "assignable": false,
       "default_function": "Navigates menus, views pictures, and selects quick-menu options; pressing its center zooms in on the active focus area.",
-      "role": null,
+      "role": "command_control",
       "mechanical": false,
       "behavior": {
         "kind": "dial",
