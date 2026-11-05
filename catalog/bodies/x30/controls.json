@@ -312,7 +312,7 @@
       "manual_page": 124,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": ["controls-contacts-3-6-3-7"],
       "assignable": false,
       "default_function": "Selects single AF, continuous AF, or manual focus.",
       "role": null,

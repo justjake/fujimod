@@ -1399,6 +1399,24 @@
       ]
     },
     {
+      "id": "controls-contacts-3-6-3-7",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 6,
+          "active_level": true
+        },
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 7,
+          "active_level": true
+        }
+      ]
+    },
+    {
       "id": "controls-gpio-3-2",
       "kind": "control",
       "signals": [

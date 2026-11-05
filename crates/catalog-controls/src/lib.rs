@@ -10,7 +10,7 @@ pub use crate::ladders::{ControlLadder, LadderRung, LadderWire};
 
 use crate::facts::{
     ControlInterface, DecodedTouch, GpioScanner, ManualReference, NativeKeyNames, ScannerReader,
-    ScannerRecordWitness, ScannerTable,
+    ScannerInputKind, ScannerRecordWitness, ScannerTable,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -599,6 +599,15 @@ pub enum ElectricalInput {
         expected_level: bool,
         /// Firmware interpretation of the contact.
         scanner: GpioScanner,
+    },
+    /// Conjunction of the ordered digital contacts in one body connection.
+    GpioContacts {
+        /// Body connection carrying all of the contacts, in predicate order.
+        connection_id: String,
+        /// Required logic level of each contact.
+        expected_levels: Vec<bool>,
+        /// Firmware callback evaluating the conjunction.
+        callback: u64,
     },
     /// Physical encoder interpreted by a located quadrature decoder.
     GpioQuadrature {
@@ -1473,6 +1482,7 @@ impl FirmwareControlIds {
                 let connection_ids: Vec<&String> = match electrical {
                     ElectricalInput::Adc { connection_id, .. }
                     | ElectricalInput::Gpio { connection_id, .. }
+                    | ElectricalInput::GpioContacts { connection_id, .. }
                     | ElectricalInput::GpioQuadrature { connection_id, .. } => vec![connection_id],
                     ElectricalInput::GpioFixedCycle { connection_id, .. }
                     | ElectricalInput::SerialStatus { connection_id, .. } => vec![connection_id],
@@ -1508,6 +1518,16 @@ impl FirmwareControlIds {
                         "input {} has an invalid encoder cycle sign",
                         input.id
                     ));
+                }
+                if let ElectricalInput::GpioContacts { expected_levels, callback, .. } = electrical
+                    && (!(2..=8).contains(&expected_levels.len())
+                        || *callback == 0
+                        || input.scanner.as_ref().is_none_or(|scanner|
+                            scanner.witness.input_kind != ScannerInputKind::Kind5
+                                || u64::from(scanner.witness.source) != *callback
+                                || scanner.witness.upper != 1))
+                {
+                    return Err(format!("input {} has an invalid GPIO conjunction", input.id));
                 }
                 if let ElectricalInput::Adc {
                     intervals,
@@ -1579,6 +1599,7 @@ impl FirmwareControlIds {
                     ElectricalInput::Adc { .. }
                         | ElectricalInput::AdcConjunction { .. }
                         | ElectricalInput::Gpio { .. }
+                        | ElectricalInput::GpioContacts { .. }
                         | ElectricalInput::SerialStatus { .. }
                 ) && input.scanner.is_none()
                 {
