@@ -2745,6 +2745,15 @@
           ],
           "type": "array"
         },
+        "tone": {
+          "description": "Base of the still tone unit's register block, whose matrix, curves and\nbrightness table the still development applies; widths, chroma, luma\nbands and white balance stay the color unit's.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "white_balance_reference": {
           "description": "Declared (R, G, B) white-balance gains at which the scene renders\nneutral; the color unit's programmed gains act by their ratio to it.",
           "items": {

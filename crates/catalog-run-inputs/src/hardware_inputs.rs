@@ -1081,6 +1081,11 @@ pub struct StillDevelopment {
     /// the development engine applies.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<u64>,
+    /// Base of the still tone unit's register block, whose matrix, curves and
+    /// brightness table the still development applies; widths, chroma, luma
+    /// bands and white balance stay the color unit's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tone: Option<u64>,
     /// Declared (R, G, B) white-balance gains at which the scene renders
     /// neutral; the color unit's programmed gains act by their ratio to it.
     #[serde(default, skip_serializing_if = "Option::is_none")]

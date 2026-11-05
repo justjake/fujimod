@@ -536,6 +536,12 @@ fn nodes(
                         None => development.white_balance_reference,
                     });
                 }
+                if let Some(tone) = development.tone {
+                    if development.color.is_none() {
+                        return Err("a still tone unit needs the still color unit".into());
+                    }
+                    law["tone"] = json!(tone);
+                }
                 Some(law)
             } else if block.base == development.resizer {
                 Some(json!({ "law": "resize", "profile": development.profile }))
@@ -1683,6 +1689,7 @@ mod tests {
             resizer: 0xfffc_3000,
             source_phase: (2, 2),
             color: None,
+            tone: None,
             white_balance_reference: None,
         });
         let (starts, assets) = (starts(), assets());
@@ -1717,7 +1724,22 @@ mod tests {
             .find(|node| node["model"]["base"] == 0xfff9_8000u64)
             .unwrap();
         assert_eq!(developer["model"]["work"]["color"], 0xfff4_7000u64);
+        reset.still_development.as_mut().unwrap().tone = Some(0xfffa_c000);
+        let nodes = super::nodes(maps, &reset, 0, &banks, &inputs).unwrap();
+        let developer = nodes
+            .iter()
+            .find(|node| node["model"]["base"] == 0xfff9_8000u64)
+            .unwrap();
+        assert_eq!(developer["model"]["work"]["tone"], 0xfffa_c000u64);
+        reset.still_development.as_mut().unwrap().color = None;
+        assert_eq!(
+            super::nodes(maps, &reset, 0, &banks, &inputs)
+                .err()
+                .unwrap(),
+            "a still tone unit needs the still color unit"
+        );
         reset.still_development.as_mut().unwrap().color = Some(0xfff4_8000);
+        reset.still_development.as_mut().unwrap().tone = None;
         assert!(super::nodes(maps, &reset, 0, &banks, &inputs).is_err());
         reset.still_development.as_mut().unwrap().color = None;
         reset.still_development.as_mut().unwrap().resizer = 0xfff7_f004;
