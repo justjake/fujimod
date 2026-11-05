@@ -3,6 +3,7 @@
 //! frame source, and the EXR II ISP parameter bank.
 pub mod analysis;
 pub mod parameters;
+pub mod pyramid;
 pub mod raw;
 pub mod resample;
 pub mod scene;

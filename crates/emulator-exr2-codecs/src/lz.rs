@@ -8,14 +8,14 @@
 //! default resize mode awaits a result and has no manufactured completion.
 use fujimod_emulator_devices::exr2::irq;
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
-use fujimod_emulator_devices::{Cx, Device, compression::method4::Stream};
+use fujimod_emulator_devices::{compression::method4::Stream, Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub const BASE: u64 = 0xfff43000;
 pub const IRQ: u32 = 0x45;
 const SOURCE_SAMPLES: usize = 1024 * 480;
-const SOURCE_BYTES: usize = SOURCE_SAMPLES * 2;
+const SOURCE_BYTES: usize = 32 << 20;
 const OUTPUT_BYTES: usize = 4 * 1024 * 1024;
 const ORDER: [usize; 12] = [
     8, 0x10, 0x14, 0x18, 0x20, 0x24, 0x28, 0x30, 0x34, 0x38, 0x3c, 0x80,
@@ -56,6 +56,7 @@ enum RasterKind {
     ScalarWeightedHalf,
     ScalarThresholdedHalf,
     LumaFilteredHalf,
+    PyramidLuma { packed: bool, smooth: bool },
 }
 
 #[derive(Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -185,7 +186,8 @@ impl Decompressor {
     fn offset(&self, address: u64, size: u8) -> Option<usize> {
         let o = usize::try_from(address.checked_sub(self.base)?).ok()?;
         (size == 4
-            && (ORDER.contains(&o) || matches!(o, 0 | 4 | 0x40 | 0x44 | 0x48 | 0x4c | 0x88 | 0x8c)))
+            && (ORDER.contains(&o)
+                || matches!(o, 0 | 4 | 0x40 | 0x44 | 0x48 | 0x4c | 0x84 | 0x88 | 0x8c)))
         .then_some(o)
     }
     fn r(&self, o: usize) -> u32 {
@@ -414,6 +416,37 @@ impl Decompressor {
         {
             return Ok(RasterKind::LumaFilteredHalf);
         }
+        // Phase-zero byte-luma half reduction. Restrict sample packing,
+        // normalized kernels, smoothing limit, and transfer block geometry.
+        let packed = matches!(r(8), 0x10 | 0x1010);
+        let smooth = r(8) == 0x1010;
+        let source_block = r(0x3c) & 1023;
+        let output_block = r(0x3c) >> 16;
+        if matches!(r(8), 0x10 | 0x1010 | 0x11)
+            && r(0x38) == 0x0a203640
+            && r(0x34) == if smooth { 0x00042038 } else { 0 }
+            && if smooth {
+                r(0x30) == 64
+            } else {
+                matches!(r(0x30), 0 | 64)
+            }
+            && matches!(r(0x80), 0x2000 | 0x10002000 | 0x20002000)
+            && output_block > 0
+            && output_block <= 256
+            && output_block % 16 == 0
+            && source_block == output_block * 2
+            && sw >= 16
+            && sh >= 2
+            && sw % 2 == 0
+            && sh % 2 == 0
+            && dw * 2 == sw
+            && dh * 2 == sh
+            && r(0x14) >= sw * if packed { 2 } else { 1 }
+            && r(0x24) >= dw
+            && (dw as usize) * (dh as usize) <= OUTPUT_BYTES
+        {
+            return Ok(RasterKind::PyramidLuma { packed, smooth });
+        }
         let registers = [0x08, 0x14, 0x18, 0x24, 0x28, 0x30, 0x34, 0x38, 0x3c, 0x80]
             .map(|offset| (offset, r(offset)));
         Err(format!(
@@ -438,22 +471,32 @@ impl Decompressor {
                 | RasterKind::ScalarWeightedHalf
                 | RasterKind::ScalarThresholdedHalf
                 | RasterKind::LumaFilteredHalf
+                | RasterKind::PyramidLuma { .. }
         ) {
             return Ok(true);
         }
-        let raster = |address, pitch, dimensions: u32| fujimod_emulator_imaging::exr2_isp::dma::Raster {
-            address,
-            pitch,
-            width: (dimensions & 8191) as usize,
-            height: (dimensions >> 16) as usize,
-        };
+        let raster =
+            |address, pitch, dimensions: u32| fujimod_emulator_imaging::exr2_isp::dma::Raster {
+                address,
+                pitch,
+                width: (dimensions & 8191) as usize,
+                height: (dimensions >> 16) as usize,
+            };
         let a = raster(source.start, regs[0x14 / 4] as usize, regs[0x18 / 4]);
         let b = raster(dest.start, regs[0x24 / 4] as usize, regs[0x28 / 4]);
         a.active_rows_overlap(
-            a.width * 2,
+            a.width
+                * if matches!(kind, RasterKind::PyramidLuma { packed: false, .. }) {
+                    1
+                } else {
+                    2
+                },
             b,
             b.width
-                * if kind == RasterKind::LumaFilteredHalf {
+                * if matches!(
+                    kind,
+                    RasterKind::LumaFilteredHalf | RasterKind::PyramidLuma { .. }
+                ) {
                     1
                 } else {
                     2
@@ -515,6 +558,20 @@ impl Decompressor {
         let (w, h) = (self.r(0x28) as usize & 8191, (self.r(0x28) >> 16) as usize);
         let (sp, pitch) = (self.r(0x14) as usize, self.r(0x24) as usize);
         let (sf, df) = (self.r(0x80) >> 12 & 3, self.r(0x80) >> 28 & 3);
+        if let RasterKind::PyramidLuma { packed, smooth } = kind {
+            fujimod_emulator_image_processing::pyramid::half_luma(
+                &self.source[..sp * sh],
+                fujimod_emulator_image_processing::pyramid::Raster {
+                    width: sw,
+                    height: sh,
+                    pitch: sp,
+                    packed,
+                },
+                smooth,
+                &mut self.output[..w * h],
+            )?;
+            return Ok((w, h, pitch));
+        }
         if kind != RasterKind::BoxHalf {
             let width = if kind == RasterKind::PackedFilter {
                 w
@@ -539,7 +596,7 @@ impl Decompressor {
                         (self.r(0x3c) >> 16) as usize & 1023,
                     ],
                 ),
-                RasterKind::BoxHalf => unreachable!(),
+                RasterKind::BoxHalf | RasterKind::PyramidLuma { .. } => unreachable!(),
             };
             use fujimod_emulator_image_processing::separable::Samples;
             let input = if sf == 0 && df == 0 {
@@ -586,9 +643,7 @@ impl Decompressor {
         // Every admitted box-pyramid descriptor has packed-422 controls.
         // Register 80's transfer-group sizes shrink with the raster; they
         // do not switch its samples to scalar16 at the smaller levels.
-        let get = |x: usize, y: usize| -> u32 {
-            self.source[y * sp + x / 2 * 4 + x % 2] as u32
-        };
+        let get = |x: usize, y: usize| -> u32 { self.source[y * sp + x / 2 * 4 + x % 2] as u32 };
         for y in 0..h {
             for x in 0..w {
                 let luma = (get(x * 2, y * 2)
@@ -616,8 +671,8 @@ impl Decompressor {
         Ok((w * 2, h, pitch))
     }
     fn write_word(&mut self, cx: &mut Cx<'_>, o: usize, v: u32) -> Result<(), String> {
-        if o == 0x4c {
-            return Err("decompressor output count is read-only".into());
+        if matches!(o, 0x4c | 0x84) {
+            return Err("decompressor output count and interrupt status are read-only".into());
         }
         if o == 0x88 {
             if v != u32::MAX && v & !0xf01 != 0 {
@@ -667,11 +722,9 @@ impl Decompressor {
                     self.set(o, v);
                     return Ok(());
                 }
-                (0, 0, Phase::Released) => self.state.resize = None,
+                (0, 0, Phase::Acknowledged | Phase::Released) => self.state.resize = None,
                 _ => {
-                    return Err(
-                        "MOVRSZ active/configured shared-engine mutation is unsupported".into(),
-                    );
+                    return Err(format!("MOVRSZ active/configured shared-engine mutation is unsupported: register {o:#x} = {v:#x}"));
                 }
             }
         }
@@ -696,7 +749,7 @@ impl Decompressor {
         if self.state.pending.is_some() {
             return Err("decompressor descriptor changed during DMA".into());
         }
-        if o == 0x8c && !matches!(v, 0 | 1) {
+        if o == 0x8c && !matches!(v, 0 | 1 | u32::MAX) {
             return Err("unsupported decompressor interrupt enable".into());
         }
         if o == 4 {
@@ -901,10 +954,16 @@ impl Device for Decompressor {
             },
         )
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_saved(&saved.decode(self.name())?)
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.apply_saved(saved.decode(self.name())?)
     }
     fn fingerprint(&self) -> Result<Value, String> {
@@ -926,7 +985,7 @@ impl Device for Decompressor {
             cx.fail("MOVRSZ output-count semantics are unsupported");
             return 0;
         }
-        self.r(o) as u64
+        self.r(if o == 0x84 { 0x88 } else { o }) as u64
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
         let Some(o) = self.offset(address, size) else {

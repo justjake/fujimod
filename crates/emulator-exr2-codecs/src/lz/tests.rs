@@ -268,11 +268,9 @@ fn box_pyramid_preserves_packed_color_at_every_transfer_group_size() {
         pixels = actual.to_vec();
     }
     assert_eq!(pixels.len(), 40 * 30 * 2);
-    assert!(
-        pixels
-            .chunks_exact(4)
-            .all(|pair| pair[2] != 0 && pair[3] != 0)
-    );
+    assert!(pixels
+        .chunks_exact(4)
+        .all(|pair| pair[2] != 0 && pair[3] != 0));
 }
 fn configure_soft_focus_weighted_crop(d: &mut Decompressor, h: &mut Ram) {
     let values = [
@@ -564,11 +562,9 @@ fn weighted_scalar_half_resizes_with_exact_kernel_inside_source_row_padding() {
     tick(&mut d, &mut h, due).unwrap();
     for row in 0..120 {
         let destination = 0x102e0 + row * 1440;
-        assert!(
-            h.bytes[destination..destination + 384]
-                .chunks_exact(2)
-                .all(|sample| sample == 100u16.to_le_bytes())
-        );
+        assert!(h.bytes[destination..destination + 384]
+            .chunks_exact(2)
+            .all(|sample| sample == 100u16.to_le_bytes()));
         let source = &h.bytes[0x10000 + row * 1440..0x10000 + row * 1440 + 736];
         assert_eq!(source, &before[row * 1440..row * 1440 + 736]);
     }
@@ -716,7 +712,8 @@ fn resize_checkpoint_rejects_inconsistent_descriptors_transactionally() {
     assert_eq!(other.fingerprint().unwrap(), d.fingerprint().unwrap());
     let mut corrupt: Saved = checkpoint.decode(d.name()).unwrap();
     corrupt.state.resize = None;
-    let corrupt = fujimod_emulator_devices::checkpoint::Checkpoint::encode(d.name(), &corrupt).unwrap();
+    let corrupt =
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(d.name(), &corrupt).unwrap();
     assert!(other.validate_checkpoint(&corrupt).is_err());
     assert!(other.restore_checkpoint(&corrupt).is_err());
     assert_eq!(other.save(), saved);
@@ -874,5 +871,120 @@ fn luma_conversion_rejects_unknown_packing_geometry_and_flags_without_dma() {
         assert_eq!((h.writes, d.r(0x88)), (0, 0));
         assert!(h.irqs.is_empty());
         assert!(h.bytes.iter().all(|&byte| byte == 0xcc));
+    }
+}
+
+#[test]
+fn byte_luma_pyramid_uses_owned_row_spans_and_original_source_latching() {
+    for (packing, source_bytes) in [(0x1010, 64usize), (0x11, 32usize)] {
+        let (mut d, mut h, mut c) = setup();
+        reset(&mut d, &mut h);
+        enabled(&mut c, &mut h, 0, true);
+        for y in 0..8 {
+            for x in 0..32 {
+                let offset = y * 128
+                    + if packing == 0x1010 {
+                        x / 2 * 4 + x % 2
+                    } else {
+                        x
+                    };
+                h.bytes[0x10000 + offset] = 17;
+            }
+        }
+        let original = h.bytes[0x10000..0x10400].to_vec();
+        let words = [
+            packing,
+            0x10000,
+            128,
+            8 << 16 | 32,
+            0x10040,
+            128,
+            4 << 16 | 16,
+            if packing == 0x1010 { 64 } else { 0 },
+            if packing == 0x1010 { 0x42038 } else { 0 },
+            0xa203640,
+            0x200040,
+            0x2000,
+        ];
+        configure_luma(&mut d, &mut h, words);
+        put(&mut d, &mut h, 4, 1).unwrap();
+        // Pixel changes after start cannot replace the latched input.
+        for y in 0..8 {
+            h.bytes[0x10000 + y * 128..0x10000 + y * 128 + source_bytes].fill(255);
+        }
+        let due = d.next_deadline(h.now).unwrap();
+        tick(&mut d, &mut h, due - 1).unwrap();
+        assert!(h.irqs.is_empty());
+        tick(&mut d, &mut h, due).unwrap();
+        for y in 0..8 {
+            assert!(h.bytes[0x10000 + y * 128..0x10000 + y * 128 + source_bytes]
+                .iter()
+                .all(|&v| v == 255));
+            if y < 4 {
+                assert_eq!(&h.bytes[0x10040 + y * 128..0x10050 + y * 128], &[17; 16]);
+            }
+            let begin = if y < 4 { 80 } else { source_bytes };
+            assert_eq!(
+                &h.bytes[0x10000 + y * 128 + begin..0x10000 + (y + 1) * 128],
+                &original[y * 128 + begin..(y + 1) * 128]
+            );
+        }
+        assert_eq!(h.writes, 4);
+        assert_eq!(h.irqs, [(0, IRQ)]);
+        assert_eq!(h.irq_writes, h.writes);
+        let mut cx = Cx::new(&mut h, 0, 0, 2);
+        assert_eq!(d.read(&mut cx, BASE + 0x84, 4), 1);
+        assert!(cx.take_refusal().is_none());
+        put(&mut d, &mut h, 0x88, 1).unwrap();
+        let mut cx = Cx::new(&mut h, 0, 0, 2);
+        assert_eq!(d.read(&mut cx, BASE + 0x84, 4), 0);
+        assert!(cx.take_refusal().is_none());
+        assert!(put(&mut d, &mut h, 0x84, 1).is_err());
+        // Completion acknowledgment permits reset before the outer engine
+        // lease releases its interrupt word. Neither step submits new work.
+        reset(&mut d, &mut h);
+        put(&mut d, &mut h, 0x8c, u32::MAX).unwrap();
+        assert_eq!(h.irqs, [(0, IRQ)]);
+        assert_eq!(h.writes, 4);
+    }
+}
+
+#[test]
+fn byte_luma_pyramid_refuses_other_kernels_and_overlapping_active_rows() {
+    for (index, value) in [
+        (8, 0x42039),
+        (9, 0xa203641),
+        (10, 0x200048),
+        (11, 0x3000),
+        (4, 0x10030),
+    ] {
+        let (mut d, mut h, mut c) = setup();
+        reset(&mut d, &mut h);
+        enabled(&mut c, &mut h, 0, true);
+        let mut words = [
+            0x1010,
+            0x10000,
+            128,
+            8 << 16 | 32,
+            0x10040,
+            128,
+            4 << 16 | 16,
+            64,
+            0x42038,
+            0xa203640,
+            0x200040,
+            0x2000,
+        ];
+        words[index] = value;
+        let configured = ORDER
+            .into_iter()
+            .zip(words)
+            .try_for_each(|(offset, value)| put(&mut d, &mut h, offset, value));
+        if configured.is_ok() {
+            put(&mut d, &mut h, 0x8c, 1).unwrap();
+            assert!(put(&mut d, &mut h, 4, 1).is_err());
+        }
+        assert_eq!(h.writes, 0);
+        assert!(h.irqs.is_empty());
     }
 }
