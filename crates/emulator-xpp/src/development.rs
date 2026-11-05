@@ -290,6 +290,11 @@ pub struct Scale {
 
 /// Output lines (`2 * out_width` bytes) of a box-filtered packed 4:2:2
 /// picture: each output pixel averages the source pixels its steps cover.
+/// Rows start every `stride` bytes and are `2 * width` bytes long; width and
+/// stride are separate registers, and X-T20 playback programs a width above
+/// the stride for pictures whose width is not a multiple of 20 (a 5008-wide
+/// still: width 5020 over a 5008-pixel stride; stock 4240x2384 too), so a
+/// row's last pixels are read from the start of the next row.
 pub fn resample(source: &[u8], s: Scale) -> Result<Vec<Vec<u8>>, String> {
     if s.width < 2
         || s.width & 1 != 0
@@ -297,7 +302,7 @@ pub fn resample(source: &[u8], s: Scale) -> Result<Vec<Vec<u8>>, String> {
         || s.out_width == 0
         || s.lines == 0
         || s.out_lines == 0
-        || s.stride < 2 * s.width
+        || s.stride == 0
         || source.len() < s.stride * (s.lines - 1) + 2 * s.width
     {
         return Err("Unsupported resizer geometry".into());
@@ -447,7 +452,7 @@ pub(crate) mod tests {
         .unwrap();
         // Y: (10 + 20 + 50 + 60) / 4 and (30 + 40 + 70 + 80) / 4; chroma of all four pixels each.
         assert_eq!(half, vec![vec![35, 55, 115, 215]]);
-        assert!(resample(&source, Scale { stride: 4, ..s }).is_err());
+        assert!(resample(&source, Scale { stride: 0, ..s }).is_err());
     }
 
     /// Color-unit words of an emulated X-T20 2.11 PROVIA shot (bootemu).
@@ -572,5 +577,24 @@ pub(crate) mod tests {
         assert!(out[6][2] > 140 && out[6][3] < 116, "{:?}", &out[6][..4]);
         words.remove(&0x104);
         assert!(white_balance(&words, reference).is_err());
+    }
+
+    #[test]
+    fn a_width_above_the_stride_reads_into_the_next_row() {
+        // Playback of a 5008-wide still declares 5020 pixels over a 5008-pixel
+        // stride; scaled down here: 6 pixels over a 4-pixel stride, 2 lines.
+        let s = Scale {
+            stride: 8,
+            lines: 2,
+            width: 6,
+            out_lines: 2,
+            out_width: 6,
+            step_x: 1.,
+            step_y: 1.,
+        };
+        let source: Vec<u8> = (0..20).collect();
+        let rows = resample(&source, s).unwrap();
+        assert_eq!(rows[0], (0..12).collect::<Vec<u8>>());
+        assert_eq!(rows[1], (8..20).collect::<Vec<u8>>());
     }
 }

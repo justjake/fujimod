@@ -7,8 +7,10 @@
 //! firmware writes the quantization tables word by word to +0x8c (32 words:
 //! luma then chroma, big-endian bytes in zigzag order), the restart interval
 //! in MCUs to +0x80, height << 16 | width to +0x44, the packed 4:2:2 source
-//! (Y0 Y1 Cb Cr) to +0x100, the destination to +0x10c and its size limit to
-//! +0x110, and starts a run with bit 0 of +0x00 (bit 8 resets; both read
+//! (Y0 Y1 Cb Cr) to +0x100, its line pitch in pixels to +0x130 (0xc6e788,
+//! a multiple of 8) and the window origin y << 16 | x to +0x12c (0xc6e6fc, x
+//! a multiple of 8; a run reads height lines of width pixels from there), the
+//! destination to +0x10c and its size limit to +0x110, and starts a run with bit 0 of +0x00 (bit 8 resets; both read
 //! clear). +0x24 bit 16 reads set (ready); a finished run sets bit 4, which
 //! writing 1 clears, and the level interrupt is high while it is set. The
 //! handler 0x1557390 reads the status and the stream size at +0x94. The
@@ -53,6 +55,8 @@ const SIZE: u64 = 0x44;
 const RESTART: u64 = 0x80;
 const TABLES: u64 = 0x8c;
 const STREAM: u64 = 0x94;
+const WINDOW_ORIGIN: u64 = 0x12c;
+const PITCH: u64 = 0x130;
 const SOURCE: u64 = 0x100;
 const DESTINATION: u64 = 0x10c;
 const LIMIT: u64 = 0x110;
@@ -92,6 +96,32 @@ impl Encoder {
     fn word(&self, offset: u64) -> u32 {
         self.state.words.get(&offset).copied().unwrap_or(0)
     }
+    /// The packed source window: `height` lines of `width` pixels from
+    /// (x, y) of a picture whose lines are `pitch` pixels apart (0 reads as
+    /// `width`).
+    fn source(&self, cx: &mut Cx<'_>, width: usize, height: usize) -> Result<Vec<u8>, String> {
+        let origin = self.word(WINDOW_ORIGIN);
+        let (x, y) = ((origin & 0xffff) as usize, (origin >> 16) as usize);
+        let pitch = match (self.word(PITCH) & 0xffff) as usize {
+            0 => width,
+            n => n,
+        };
+        let base = u64::from(self.word(SOURCE));
+        if pitch == width && x == 0 {
+            return cx.ram_bytes(base + (y * pitch * 2) as u64, width * height * 2);
+        }
+        if x + width > pitch {
+            return Err(format!(
+                "JPEG encoder window x {x} + width {width} exceeds the pitch {pitch}"
+            ));
+        }
+        let mut source = Vec::with_capacity(width * height * 2);
+        for line in 0..height {
+            let start = base + (((y + line) * pitch + x) * 2) as u64;
+            source.extend_from_slice(&cx.ram_bytes(start, width * 2)?);
+        }
+        Ok(source)
+    }
     fn encode(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
         let mut codec = Codec::default();
         codec.tables(&self.state.tables)?;
@@ -102,7 +132,7 @@ impl Encoder {
             0 => MAX_STREAM,
             n => n.min(MAX_STREAM),
         };
-        let source = cx.ram_bytes(self.word(SOURCE).into(), width * height * 2)?;
+        let source = self.source(cx, width, height)?;
         let mut body = Vec::new();
         codec.encode(&source, width, height, restart, &mut body, MAX_STREAM - 2)?;
         let mut stream = vec![0xff, 0xd8];
@@ -500,6 +530,52 @@ mod tests {
         h.ram_read(0x4000, &mut written).unwrap();
         assert_eq!(&written[..2], &[0xff, 0xd8]);
         assert!(written[64..].iter().all(|&b| b == 0));
+    }
+
+    fn encode_stream(source: &[u8], words: &[(u64, u32)]) -> Vec<u8> {
+        let mut encoder = Encoder::new(BASE, 134, 10).unwrap();
+        let mut h = TestHost::new();
+        for _ in 0..TABLE_WORDS {
+            write(&mut encoder, &mut h, BASE + TABLES, 0x0303_0303);
+        }
+        h.ram_write(0x1000, source).unwrap();
+        for &(offset, value) in words {
+            write(&mut encoder, &mut h, BASE + offset, value);
+        }
+        write(&mut encoder, &mut h, BASE + SOURCE, 0x1000);
+        write(&mut encoder, &mut h, BASE + DESTINATION, 0x20000);
+        write(&mut encoder, &mut h, BASE, START);
+        advance(&mut encoder, &mut h, 10);
+        let size = read(&mut encoder, &mut h, BASE + STREAM) as usize;
+        let mut stream = vec![0; size];
+        h.ram_read(0x20000, &mut stream).unwrap();
+        stream
+    }
+
+    #[test]
+    fn a_run_reads_the_window_at_the_origin_through_the_pitch() {
+        // 48x24 picture; the run encodes its 32x16 window at (8, 4).
+        let (pitch, x, y) = (48usize, 8usize, 4usize);
+        let picture: Vec<u8> = (0..pitch * 24 * 2).map(|i| (i * 31 % 241) as u8).collect();
+        let mut window = Vec::new();
+        for line in 0..16 {
+            let start = ((y + line) * pitch + x) * 2;
+            window.extend_from_slice(&picture[start..start + 32 * 2]);
+        }
+        let cropped = encode_stream(
+            &picture,
+            &[
+                (SIZE, 16 << 16 | 32),
+                (PITCH, pitch as u32),
+                (WINDOW_ORIGIN, (y << 16 | x) as u32),
+            ],
+        );
+        let packed = encode_stream(&window, &[(SIZE, 16 << 16 | 32), (PITCH, 32)]);
+        assert_eq!(cropped, packed);
+        assert_ne!(
+            cropped,
+            encode_stream(&picture, &[(SIZE, 16 << 16 | 32), (PITCH, pitch as u32)])
+        );
     }
 
     #[test]
