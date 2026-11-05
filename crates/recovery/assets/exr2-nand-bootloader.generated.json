@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "base": 98304,
+  "capacity": 4096,
+  "image_bytes": 556,
+  "entry": 0,
+  "config": 500,
+  "save": 548,
+  "command_table_save_bytes": 128
+}
