@@ -16,6 +16,14 @@ class AdcConditionVariant1(TypedDict, total=False):
     kind: Required[Literal["self_active"]]
 
 
+class AdcEncoderCalibration(TypedDict, total=False):
+    centers: Required[list[int]]
+    direction: Required[int]
+    edges_per_step: Required[int]
+    hysteresis: Required[int]
+    offset: Required[int]
+
+
 type AdcInterval = AdcIntervalVariant0 | AdcIntervalVariant1
 
 
@@ -1004,8 +1012,9 @@ class ConstructionModelVariant8(TypedDict, total=False):
 
 
 class ConstructionModelVariant9(TypedDict, total=False):
+    adc: NotRequired[str | None]
     counter: NotRequired[str | None]
-    gpio: Required[str]
+    gpio: NotRequired[str | None]
     kind: Required[Literal["encoder"]]
 
 
@@ -1529,6 +1538,7 @@ type ElectricalInput = (
     | ElectricalInputVariant5
     | ElectricalInputVariant6
     | ElectricalInputVariant7
+    | ElectricalInputVariant8
 )
 
 
@@ -1583,18 +1593,45 @@ class ElectricalInputVariant5(TypedDict, total=False):
 
 
 class ElectricalInputVariant6(TypedDict, total=False):
+    calibration_offsets: Required[AdcEncoderCalibration]
+    connection_id: Required[str]
+    decoder_event: Required[int]
+    kind: Required[Literal["adc_transition"]]
+    phase_map: Required[list[int]]
+    transitions: Required[list[int]]
+
+
+class ElectricalInputVariant7(TypedDict, total=False):
     connection_id: Required[str]
     cycle_sign: Required[int]
     kind: Required[Literal["gpio_fixed_cycle"]]
 
 
-class ElectricalInputVariant7(TypedDict, total=False):
+class ElectricalInputVariant8(TypedDict, total=False):
     active_value: Required[int]
     connection_id: Required[str]
     endpoint: Required[int]
     kind: Required[Literal["serial_status"]]
     mask: Required[int]
     register: Required[int]
+
+
+class EncoderLevels(TypedDict, total=False):
+    high: Required[int]
+    low: Required[int]
+
+
+type EncoderOutputs = EncoderOutputsVariant0 | EncoderOutputsVariant1
+
+
+class EncoderOutputsVariant0(TypedDict, total=False):
+    kind: Required[Literal["gpio"]]
+
+
+class EncoderOutputsVariant1(TypedDict, total=False):
+    channels: Required[list[int]]
+    kind: Required[Literal["adc"]]
+    levels: Required[list[EncoderLevels]]
 
 
 class EventTranslation(TypedDict, total=False):
@@ -2554,14 +2591,16 @@ class HardwareDramController(TypedDict, total=False):
 
 
 class HardwareEncoder(TypedDict, total=False):
+    adc: NotRequired[str | None]
     counter: NotRequired[str | None]
     name: Required[str]
     options: Required[HardwareEncoderTiming]
 
 
 class HardwareEncoderTiming(TypedDict, total=False):
+    outputs: NotRequired[EncoderOutputs | None]
     phase_ticks: Required[int]
-    pins: Required[list[PartAssemblyPin]]
+    pins: NotRequired[list[PartAssemblyPin] | None]
     rest_phase: Required[int]
 
 

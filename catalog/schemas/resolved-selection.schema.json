@@ -43,6 +43,60 @@
         }
       ]
     },
+    "AdcEncoderCalibration": {
+      "additionalProperties": false,
+      "description": "Configuration-byte offsets used by a calibrated analog phase decoder.",
+      "properties": {
+        "centers": {
+          "description": "Little-endian u16 center offsets, one for each channel.",
+          "items": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "direction": {
+          "description": "Byte selecting normal or reversed native direction.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "edges_per_step": {
+          "description": "Byte holding accepted edges per native direction event.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "hysteresis": {
+          "description": "Byte holding the Schmitt half-band width.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "description": "Little-endian signed u16 center adjustment offset.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "centers",
+        "offset",
+        "hysteresis",
+        "edges_per_step",
+        "direction"
+      ],
+      "type": "object"
+    },
     "AdcInterval": {
       "description": "Bounds of one accepted analog interval.",
       "oneOf": [
@@ -2880,6 +2934,13 @@
           "additionalProperties": false,
           "description": "encoder hardware.",
           "properties": {
+            "adc": {
+              "description": "Optional ADC output connection.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "counter": {
               "description": "counter.",
               "type": [
@@ -2888,8 +2949,11 @@
               ]
             },
             "gpio": {
-              "description": "gpio.",
-              "type": "string"
+              "description": "Optional GPIO output connection.",
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "kind": {
               "const": "encoder",
@@ -2897,8 +2961,7 @@
             }
           },
           "required": [
-            "kind",
-            "gpio"
+            "kind"
           ],
           "type": "object"
         },
@@ -6919,6 +6982,63 @@
         },
         {
           "additionalProperties": false,
+          "description": "Calibrated analog phase decoder with a native edge accumulator.",
+          "properties": {
+            "calibration_offsets": {
+              "$ref": "#/$defs/AdcEncoderCalibration",
+              "description": "Configuration offsets for thresholds, edge count, and direction."
+            },
+            "connection_id": {
+              "description": "Ordered body connection carrying the two analog channels.",
+              "type": "string"
+            },
+            "decoder_event": {
+              "description": "Decoder-local direction event, distinct from the UI event.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "adc_transition",
+              "type": "string"
+            },
+            "phase_map": {
+              "description": "Decoder phase mapping.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 4,
+              "minItems": 4,
+              "type": "array"
+            },
+            "transitions": {
+              "description": "Decoder transition values indexed by new phase, then old phase.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 16,
+              "minItems": 16,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "phase_map",
+            "transitions",
+            "decoder_event",
+            "calibration_offsets"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Physical encoder whose firmware counts whole phase cycles, one event per cycle.",
           "properties": {
             "connection_id": {
@@ -6988,6 +7108,80 @@
             "register",
             "mask",
             "active_value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "EncoderLevels": {
+      "additionalProperties": false,
+      "description": "Raw ADC codes for one encoder phase channel.",
+      "properties": {
+        "high": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "low": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "low",
+        "high"
+      ],
+      "type": "object"
+    },
+    "EncoderOutputs": {
+      "description": "Physical encoder output levels; channel order is high phase bit, low phase bit.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "gpio",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "channels": {
+              "items": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "kind": {
+              "const": "adc",
+              "type": "string"
+            },
+            "levels": {
+              "items": {
+                "$ref": "#/$defs/EncoderLevels"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "channels",
+            "levels"
           ],
           "type": "object"
         }
@@ -11825,6 +12019,13 @@
       "additionalProperties": false,
       "description": "Declared encoders facts.",
       "properties": {
+        "adc": {
+          "description": "ADC connection for an analog encoder.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "counter": {
           "description": "Declared counter.",
           "type": [
@@ -11851,6 +12052,17 @@
       "additionalProperties": false,
       "description": "Declared encoders options facts.",
       "properties": {
+        "outputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EncoderOutputs"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit output choice; absent means GPIO for existing bodies."
+        },
         "phase_ticks": {
           "description": "Declared phase ticks.",
           "format": "uint64",
@@ -11862,7 +12074,10 @@
           "items": {
             "$ref": "#/$defs/PartAssemblyPin"
           },
-          "type": "array"
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "rest_phase": {
           "description": "Declared rest phase.",
@@ -11873,7 +12088,6 @@
       },
       "required": [
         "phase_ticks",
-        "pins",
         "rest_phase"
       ],
       "type": "object"
