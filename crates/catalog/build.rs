@@ -57,6 +57,7 @@ fn main() {
             ("Body", "controls.json") => "PhysicalControls",
             ("Firmware", "control-ids.generated.json") => "ControlIds",
             ("Firmware", "first-start.generated.json") => "FirstStart",
+            ("Firmware", "ui-scene-names.generated.json") => "UiSceneNames",
             ("Firmware", "bulk.generated.json") => "Bulk",
             ("Firmware", "card-files.generated.json") => "CardFiles",
             ("Firmware", "restart.generated.json") => "Restart",

@@ -2526,6 +2526,9 @@ pub struct ResolvedSelection {
     /// Stock first-start menus, when located for this firmware.
     #[serde(default)]
     pub first_start: Option<crate::first_start::FirstStartMenu>,
+    /// Exact stock scene names and their firmware-specific IDs.
+    #[serde(default)]
+    pub ui_scene_names: Option<crate::ui_scene_names::UiSceneNames>,
     /// Stock diagnostic bulk reads, when located for this firmware.
     #[serde(default)]
     pub bulk: Option<fujimod_catalog_bulk::FirmwareBulk>,
@@ -2559,6 +2562,7 @@ pub struct ReferenceCatalog {
     /// Generated located inputs, keyed by firmware identity.
     control_ids: BTreeMap<String, serde_json::Value>,
     first_start: BTreeMap<String, crate::first_start::FirstStartMenu>,
+    ui_scene_names: BTreeMap<String, crate::ui_scene_names::UiSceneNames>,
     bulk: BTreeMap<String, fujimod_catalog_bulk::FirmwareBulk>,
     restart: BTreeMap<String, fujimod_catalog_restart::FirmwareRestart>,
     card_files: BTreeMap<String, fujimod_catalog_card::FirmwareCard>,
@@ -2659,6 +2663,7 @@ impl ReferenceCatalog {
             physical_controls: self.physical_controls.get(&body.id).cloned(),
             control_ids: self.control_ids.get(&firmware.id).cloned(),
             first_start: self.first_start.get(&firmware.id).cloned(),
+            ui_scene_names: self.ui_scene_names.get(&firmware.id).cloned(),
             bulk: self.bulk.get(&firmware.id).cloned(),
             restart: self.restart.get(&firmware.id).cloned(),
             card_files: self.card_files.get(&firmware.id).cloned(),
@@ -2711,6 +2716,11 @@ impl ReferenceCatalog {
         self.bulk.values()
     }
 
+    /// Exact stock scene names for a firmware, when its routine was located.
+    pub fn ui_scene_names(&self, firmware_id: &str) -> Option<&crate::ui_scene_names::UiSceneNames> {
+        self.ui_scene_names.get(firmware_id)
+    }
+
     /// Return the bulk profile for a firmware release.
     pub fn bulk(&self, firmware_id: &str) -> Option<&fujimod_catalog_bulk::FirmwareBulk> {
         self.bulk.get(firmware_id)
@@ -2744,6 +2754,11 @@ impl ReferenceCatalog {
         path: &Path,
     ) -> Result<(), String> {
         match kind {
+            ReferenceKind::UiSceneNames => {
+                let value: crate::ui_scene_names::UiSceneNames = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(&mut self.ui_scene_names, value.firmware_id.clone(), value, path)
+            }
             ReferenceKind::FirstStart => {
                 let value: crate::first_start::FirstStartMenu = decode(bytes, path)?;
                 value.validate()?;
@@ -2812,6 +2827,16 @@ impl ReferenceCatalog {
     }
 
     fn validate_controls(&self) -> Result<(), String> {
+        for (firmware_id, scenes) in &self.ui_scene_names {
+            let update = self.firmwares.get(firmware_id)
+                .and_then(|firmware| firmware.update.as_ref().map(|update| update.sha256.as_str()))
+                .or_else(|| self.firmware_versions.iter()
+                    .find(|release| &release.firmware_id == firmware_id)
+                    .map(|release| release.update_sha256.as_str()));
+            if update != Some(scenes.firmware_sha256.as_str()) {
+                return Err(format!("scene names differ from update identity {firmware_id}"));
+            }
+        }
         for firmware_id in self.first_start.keys() {
             if !self.firmwares.contains_key(firmware_id) {
                 return Err(format!(
@@ -3384,6 +3409,7 @@ enum ReferenceKind {
     PhysicalControls,
     ControlIds,
     FirstStart,
+    UiSceneNames,
     Bulk,
     CardFiles,
     Restart,
@@ -3406,6 +3432,7 @@ impl ReferenceKind {
             Some("firmware.json") => Ok(Self::Firmware),
             Some("control-ids.generated.json") => Ok(Self::ControlIds),
             Some("first-start.generated.json") => Ok(Self::FirstStart),
+            Some("ui-scene-names.generated.json") => Ok(Self::UiSceneNames),
             Some("bulk.generated.json") => Ok(Self::Bulk),
             Some("card-files.generated.json") => Ok(Self::CardFiles),
             Some("restart.generated.json") => Ok(Self::Restart),
@@ -3425,3 +3452,35 @@ fn bundled_documents() -> impl Iterator<Item = (ReferenceKind, &'static str, &'s
 
 #[cfg(test)]
 mod tests;
+
+
+#[cfg(test)]
+mod ui_scene_names_tests {
+    use super::*;
+
+    #[test]
+    fn loads_scene_document_and_checks_release_identity() {
+        let mut catalog = ReferenceCatalog::default();
+        let value = serde_json::json!({
+            "$schema": crate::ui_scene_names::UI_SCENE_NAMES_SCHEMA_URI,
+            "schema": 1,
+            "id": "example-100-ui-scene-names",
+            "firmware_id": "example-100",
+            "firmware_sha256": "a".repeat(64),
+            "ui_scene_names": {"UILIB_SUB_SCR_EXAMPLE": 7}
+        });
+        let bytes = serde_json::to_vec(&value).unwrap();
+        let path = Path::new("ui-scene-names.generated.json");
+        catalog.insert_document(ReferenceKind::of_firmware_file(path).unwrap(), &bytes, path).unwrap();
+        assert_eq!(catalog.ui_scene_names("example-100").unwrap().ui_scene_names["UILIB_SUB_SCR_EXAMPLE"], 7);
+        assert!(catalog.validate_controls().is_err());
+        catalog.firmware_versions.push(crate::firmware_versions::FirmwareVersion {
+            firmware_id: "example-100".into(), product: "EXAMPLE".into(), version: "1.00".into(),
+            internal_version: "1.00".into(), update_sha256: "a".repeat(64),
+            download_url: "https://example.com/firmware".into(), boot_rom: None,
+        });
+        catalog.validate_controls().unwrap();
+        catalog.firmware_versions[0].update_sha256 = "b".repeat(64);
+        assert!(catalog.validate_controls().is_err());
+    }
+}

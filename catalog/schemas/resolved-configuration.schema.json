@@ -20455,6 +20455,18 @@
           ],
           "default": null,
           "description": "Safely readable state regions, when established for this selection."
+        },
+        "ui_scene_names": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UiSceneNames"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Exact stock scene names and their firmware-specific IDs."
         }
       },
       "required": [
@@ -26029,6 +26041,48 @@
       "required": [
         "physical_key",
         "event"
+      ],
+      "type": "object"
+    },
+    "UiSceneNames": {
+      "additionalProperties": false,
+      "description": "Exact stock scene names and their firmware-specific numeric IDs.",
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "firmware_id": {
+          "type": "string"
+        },
+        "firmware_sha256": {
+          "description": "SHA-256 of the update from which the names were located and executed.",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "schema": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ui_scene_names": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Every name returned by the stock routine, without renaming or aliases.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "id",
+        "firmware_id",
+        "firmware_sha256",
+        "ui_scene_names"
       ],
       "type": "object"
     },

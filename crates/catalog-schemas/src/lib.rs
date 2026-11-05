@@ -89,6 +89,12 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
+        "ui-scene-names.generated.schema.json",
+        schema::<fujimod_catalog::ui_scene_names::UiSceneNames>(
+            fujimod_catalog::ui_scene_names::UI_SCENE_NAMES_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
         "first-start.generated.schema.json",
         schema::<fujimod_catalog::first_start::FirstStartMenu>(
             fujimod_catalog::first_start::FIRST_START_SCHEMA_URI,
