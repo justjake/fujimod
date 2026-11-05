@@ -1,4 +1,4 @@
-//! SPI1/2/3 channels at FFF84040/FFF84080/FFF840C0, stride 0x40. Offsets match
+//! SPI channels at FFF84000/FFF84040/FFF84080/FFF840C0, stride 0x40. Offsets match
 //! `spi`: busy +00, low-half W1C +0C, RX/TX levels +10/+14, RX/TX +18/+1C.
 //! A channel owns its endpoint. Only polled configurations are supported;
 //! IRQ/DMA configurations refuse. The shared controller owns route channel
@@ -55,7 +55,7 @@ pub struct SerialChannel {
 
 impl SerialChannel {
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
-        if !matches!(options.base, 0xfff84040 | 0xfff84080 | 0xfff840c0)
+        if !matches!(options.base, 0xfff84000 | 0xfff84040 | 0xfff84080 | 0xfff840c0)
             || options.transfer_ticks == 0
             || options.transports.is_empty()
             || options.transports.len() > 16
@@ -323,3 +323,7 @@ impl Device for SerialChannel {
         self.advance(cx);
     }
 }
+
+#[cfg(test)]
+#[path = "channel_tests.rs"]
+mod channel_tests;

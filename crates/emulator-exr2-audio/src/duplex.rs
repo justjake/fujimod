@@ -44,6 +44,7 @@ impl Duplex {
             receive: receive::Receiver::new(options.receive, routes.clone())?,
             transmit: transmit::Transmitter::new(
                 options.transmit,
+                BASE,
                 options
                     .sinks
                     .map(|connected| AudioSink::new(SinkOptions { connected })),
@@ -91,7 +92,7 @@ impl Device for Duplex {
         if address == BASE + 0x2c && size == 4 {
             let direction = if u32::try_from(value).is_ok_and(receive::Receiver::configuration) {
                 Some(Direction::Receive)
-            } else if u32::try_from(value).is_ok_and(transmit::Transmitter::configuration) {
+            } else if u32::try_from(value).is_ok_and(|v| self.transmit.configuration(v)) {
                 Some(Direction::Transmit)
             } else {
                 None
@@ -183,6 +184,8 @@ mod tests {
                     max_transfer_bytes: 1024,
                     ticks_per_byte: 2,
                     minimum_ticks: 3,
+                    irq: 0x5c,
+                    requests: [1, 1],
                 },
                 sinks: [true, false],
             },

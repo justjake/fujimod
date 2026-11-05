@@ -333,6 +333,19 @@ pub enum Model {
     Block86000 {
         options: pulse::block86000::Options,
     },
+    ExrAdc {
+        options: fujimod_emulator_devices::exr::adc::Options,
+    },
+    #[serde(rename = "exr-command-gpu")]
+    ExrCommandGpu {
+        options: fujimod_emulator_devices::exr::command_gpu::Options,
+    },
+    #[serde(rename = "exr-display-pipe")]
+    ExrDisplayPipe {
+        options: fujimod_emulator_devices::exr::display_pipe::Options,
+        irq: Option<InterruptLine>,
+        layer_irq: Option<InterruptLine>,
+    },
     Companion {
         options: serde_json::Value,
     },
@@ -516,6 +529,9 @@ impl Model {
             Model::Encoder { .. } => "encoder",
             Model::I2cMotorBridge { .. } => "i2c-motor-bridge",
             Model::Block86000 { .. } => "block86000",
+            Model::ExrAdc { .. } => "exr-adc",
+            Model::ExrCommandGpu { .. } => "exr-command-gpu",
+            Model::ExrDisplayPipe { .. } => "exr-display-pipe",
             Model::Companion { .. } => "companion",
             Model::Fe80Processing { .. } => "fe80-processing",
             Model::Formatter { .. } => "formatter",

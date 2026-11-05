@@ -11,6 +11,9 @@ pub fn register_interface_models(constructors: &mut Constructors) {
     constructors.add("gpio", gpio);
     constructors.add("exr2-pulse", pulse_unit);
     constructors.add("block86000", block86000);
+    constructors.add("exr-adc", exr_adc);
+    constructors.add("exr-command-gpu", exr_command_gpu);
+    constructors.add("exr-display-pipe", exr_display_pipe);
     constructors.add("hdmi-sink", hdmi_sink);
     constructors.add("exr-system-control", exr_system_control);
     constructors.add("exr-clocks", exr_clocks);
@@ -161,6 +164,44 @@ fn block86000(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
     Ok(Built::Device(Box::new(pulse::block86000::Block86000::new(
         options,
     ))))
+}
+
+fn exr_adc(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
+    let Model::ExrAdc { options } = model else {
+        return Err("constructor called for another model kind".into());
+    };
+    Ok(Built::Device(Box::new(
+        fujimod_emulator_devices::exr::adc::Adc::new(options)?,
+    )))
+}
+
+fn exr_command_gpu(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
+    let Model::ExrCommandGpu { options } = model else {
+        return Err("constructor called for another model kind".into());
+    };
+    Ok(Built::Device(Box::new(
+        fujimod_emulator_devices::exr::command_gpu::CommandGpu::new(options)?,
+    )))
+}
+
+fn exr_display_pipe(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
+    let Model::ExrDisplayPipe {
+        options,
+        irq,
+        layer_irq,
+    } = model
+    else {
+        return Err("constructor called for another model kind".into());
+    };
+    for irq in [irq, layer_irq].into_iter().flatten() {
+        line(irq)?;
+    }
+    Ok(Built::Device(Box::new(
+        fujimod_emulator_devices::exr::display_pipe::DisplayPipe::new(
+            options,
+            fujimod_emulator_devices::exr::display_pipe::Wiring { irq, layer_irq },
+        )?,
+    )))
 }
 
 fn hdmi_sink(builder: Builder<'_>, model: Model) -> Result<Built, String> {

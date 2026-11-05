@@ -94,13 +94,14 @@ fn serial_audio_transmitter(builder: Builder<'_>, model: Model) -> Result<Built,
     Ok(Built::Device({
         let options: crate::transmit::Options = decode(options)?;
         let sinks: [fujimod_emulator_parts_io::audio_sink::Options; 2] = decode(sinks)?;
+        // The channel window is the board's; the two audio banks are fixed.
         let expected = [
-            (dma::audio::BASE, 0x40),
             (crate::BASES[0], 0x1000),
             (crate::BASES[1], 0x1000),
         ];
-        if windows.len() != expected.len()
-            || windows
+        if windows.len() != 3
+            || windows[0].size != 0x40
+            || windows[1..]
                 .iter()
                 .zip(expected)
                 .any(|(w, (base, size))| w.base != base || w.size != size)
@@ -109,6 +110,7 @@ fn serial_audio_transmitter(builder: Builder<'_>, model: Model) -> Result<Built,
         }
         Box::new(crate::transmit::Transmitter::new(
             options,
+            windows[0].base,
             sinks.map(AudioSink::new),
             wire!(resources, id, routes, IrqRoutes),
         )?)

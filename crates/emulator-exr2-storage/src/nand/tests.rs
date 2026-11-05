@@ -34,9 +34,24 @@ impl Host for TestHost {
     }
     fn record(&mut self, _: Record) {}
 }
+const BASE: u64 = 0xfff52000;
+fn medium() -> Nand {
+    Nand::new(
+        fujimod_emulator_devices::parts::nand::Options {
+            bytes: 0x40000,
+            page_bytes: 2048,
+            pages_per_block: 64,
+            spare_bytes: 512,
+        },
+        Arc::from(vec![255; 4096]),
+        vec![],
+        BTreeMap::new(),
+    )
+    .unwrap()
+}
 fn model(small: bool) -> NandController {
     NandController::new(
-        Options { erase_ticks: 64 },
+        Options { erase_ticks: 64, base: BASE },
         Nand::new(
             fujimod_emulator_devices::parts::nand::Options {
                 bytes: 0x40000,
@@ -359,4 +374,17 @@ fn small_page_erase_decodes_packed_row_and_commits_only_its_32_page_block() {
         assert!(cx.refusal().is_some());
         assert_eq!(m.next_deadline(64), None);
     }
+}
+#[test]
+fn register_base_is_an_option_and_must_be_page_aligned() {
+    let mut m = NandController::new(Options { erase_ticks: 64, base: 0xfff46000 }, medium()).unwrap();
+    let mut h = TestHost::new();
+    let mut cx = h.cx();
+    m.write(&mut cx, 0xfff46000 + 0x10, 4, 0x1234);
+    assert_eq!(cx.refusal(), None);
+    let mut cx = h.cx();
+    assert_eq!(m.read(&mut cx, 0xfff46000 + 0x10, 4), 0x1234);
+    let mut cx = h.cx();
+    assert_eq!(m.read(&mut cx, BASE + 0x10, 4), 0);
+    assert!(NandController::new(Options { erase_ticks: 64, base: 0xfff46004 }, medium()).is_err());
 }

@@ -1069,6 +1069,30 @@ impl Registers {
                 self.regs.insert(4, value);
                 return Ok(());
             }
+            if self.phase == Phase::AwaitingAddress
+                && byte & 1 != 0
+                && self.parts.admitted(Some(byte >> 1))
+                && let Some(index) = self.parts.command_index(Some(byte >> 1))
+            {
+                // A read transaction with no pointer write of its own: the chip
+                // returns the frame of the register its last pointer selected.
+                let sample = self.parts.command_registers[index].read_pointer()?;
+                let finish = Finish::FrameAddress {
+                    target: byte >> 1,
+                    sample,
+                    kind: RxKind::CommandRegisters,
+                };
+                self.begin_shift(
+                    Op::AddressRead,
+                    4,
+                    Phase::ReadingData,
+                    finish,
+                    routes,
+                    actions,
+                )?;
+                self.regs.insert(4, value);
+                return Ok(());
+            }
             let sensor = matches!(
                 self.profile,
                 Some(

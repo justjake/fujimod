@@ -4,7 +4,10 @@
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
 
+pub mod adc;
 pub mod clocks;
+pub mod command_gpu;
+pub mod display_pipe;
 
 /// The boot memory-interface command/status protocol has no qualified model.
 /// Refuse before retaining a command or claiming calibration completed.

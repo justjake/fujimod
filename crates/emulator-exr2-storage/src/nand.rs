@@ -1,11 +1,10 @@
-//! NAND at FFF52000. Register-selected PIO/DMA and completion IRQ80 only.
+//! NAND controller (EXR II at FFF52000 by default; the register base is an option). Register-selected PIO/DMA and completion IRQ80 only.
 //! Data/OOB placement, clean ECC and virtual latency are declared inputs;
 //! opaque update bytes never select commands or authorize completion.
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_devices::parts::nand::Nand;
 use serde::{Deserialize, Serialize};
 
-const BASE: u64 = 0xfff52000;
 const OFFSETS: &[usize] = &[
     0, 4, 8, 0x10, 0x18, 0x1c, 0x20, 0x24, 0x28, 0x30, 0x40, 0x44, 0x48, 0x4c, 0x50, 0x54, 0x58,
     0x5c, 0x60, 0x70, 0x74, 0x78, 0x7c, 0x98, 0xc8, 0xe8, 0x804, 0x80c, 0x810, 0x820, 0x824, 0x828,
@@ -15,6 +14,11 @@ const OFFSETS: &[usize] = &[
 #[serde(deny_unknown_fields)]
 pub struct Options {
     pub erase_ticks: u64,
+    #[serde(default = "default_base")]
+    pub base: u64,
+}
+fn default_base() -> u64 {
+    0xfff52000
 }
 #[derive(Clone, Copy, Serialize, Deserialize)]
 enum Operation {
@@ -66,6 +70,9 @@ impl NandController {
     pub fn new(options: Options, medium: Nand) -> Result<Self, String> {
         if options.erase_ticks == 0 {
             return Err("NAND erase delay must be positive".into());
+        }
+        if options.base & 0xfff != 0 || options.base > u64::from(u32::MAX) {
+            return Err("NAND register base must be a 4 KiB aligned 32-bit address".into());
         }
         let mut regs = vec![0; 0x900 / 4].into_boxed_slice();
         for offset in [0x40, 0x44, 0x48, 0x4c] {
@@ -627,7 +634,7 @@ impl Device for NandController {
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         let Some(o) = address
-            .checked_sub(BASE)
+            .checked_sub(self.options.base)
             .and_then(|o| usize::try_from(o).ok())
         else {
             cx.unmodeled();
@@ -648,7 +655,7 @@ impl Device for NandController {
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
         let Some(o) = address
-            .checked_sub(BASE)
+            .checked_sub(self.options.base)
             .and_then(|o| usize::try_from(o).ok())
         else {
             cx.unmodeled();

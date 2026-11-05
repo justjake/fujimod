@@ -867,6 +867,8 @@ mod native_tests {
         let mut controller = irq::InterruptController::new(
             irq::Options {
                 arbitration: irq::Arbitration::ActiveBitmap,
+                edge_latch: irq::EdgeLatch::Always,
+                level_edges: irq::LevelEdges::Ignored,
             },
             irq::Wiring {
                 base: 0xfffb4000,
