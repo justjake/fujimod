@@ -36,9 +36,15 @@ export interface ReleaseStore {
   put(key: string, value: Uint8Array): Promise<unknown>;
 }
 const currentKey = 'current';
-const storeKey = (name: string) => `ota/store/${name}`;
-const releaseRefresh = 300_000;
-let releaseRefreshedAt = 0;
+const storeBytesKey = (name: string) => `ota/store/${name}`;
+const manifestBytesKey = (firmware: string) => `ota/manifest/${firmware}`;
+const site = 'https://fujimod.com';
+const releaseCacheUrl = `${site}/ota/release.json`;
+const manifestCacheUrl = (firmware: string) => `${site}/ota/${firmware}/latest.json`;
+const storeCacheUrl = (name: string) => `${site}/ota/store/${name}`;
+/** Camera update metadata is read from GitHub at most this often per edge. */
+const otaFresh = 300_000;
+const fetchedAtHeader = 'x-fujimod-fetched-at';
 class UpstreamError extends Error {
   readonly status: number;
   constructor(status: number) {
@@ -46,12 +52,18 @@ class UpstreamError extends Error {
     this.status = status;
   }
 }
-async function currentRelease(fetcher: typeof fetch): Promise<ReleaseInfo | undefined> {
+async function currentRelease(
+  fetcher: typeof fetch,
+  token?: string,
+): Promise<ReleaseInfo | undefined> {
   let newest: GitHubRelease | undefined;
+  const requestHeaders = token ? { ...headers, Authorization: `Bearer ${token}` } : headers;
   // GitHub orders by creation rather than publication time. Inspect every page,
   // including prereleases and releases published from older tags.
   for (let page = 1; ; page++) {
-    const response = await fetcher(`${api}?per_page=100&page=${page}`, { headers });
+    const response = await fetcher(`${api}?per_page=100&page=${page}`, {
+      headers: requestHeaders,
+    });
     if (!response.ok) throw new UpstreamError(response.status);
     const releases = (await response.json()) as GitHubRelease[];
     if (!Array.isArray(releases)) throw new UpstreamError(502);
@@ -86,8 +98,9 @@ async function saveChanged(store: ReleaseStore, key: string, value: Uint8Array) 
 async function refreshCurrent(
   store: ReleaseStore,
   fetcher: typeof fetch,
+  token?: string,
 ): Promise<Uint8Array<ArrayBuffer> | undefined> {
-  const release = await currentRelease(fetcher);
+  const release = await currentRelease(fetcher, token);
   if (!release) return undefined;
   const text = new TextEncoder().encode(JSON.stringify(release));
   await saveChanged(store, currentKey, text);
@@ -95,6 +108,40 @@ async function refreshCurrent(
 }
 function releaseAsset(tag: string, name: string) {
   return `${downloads}/${encodeURIComponent(tag)}/${encodeURIComponent(name)}`;
+}
+/** Stored OTA responses carry their fetch time. The edge keeps them for a
+ * year; code treats them as fresh for five minutes, so an origin outage still
+ * has a copy to answer with. */
+interface CachedBytes {
+  bytes: Uint8Array<ArrayBuffer>;
+  fetchedAt: number;
+}
+async function readCached(cache: ReleaseCache, url: string): Promise<CachedBytes | undefined> {
+  const response = await cache.match(new Request(url, { method: 'GET' }));
+  if (!response) return undefined;
+  return {
+    bytes: new Uint8Array(await response.arrayBuffer()),
+    fetchedAt: Number(response.headers.get(fetchedAtHeader)),
+  };
+}
+function edgeEntry(bytes: Uint8Array<ArrayBuffer>, contentType: string): Response {
+  return new Response(bytes, {
+    headers: {
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=31536000',
+      [fetchedAtHeader]: String(Date.now()),
+    },
+  });
+}
+function isFresh(entry: CachedBytes | undefined): boolean {
+  return entry !== undefined && Date.now() - entry.fetchedAt < otaFresh;
+}
+function releaseTag(bytes: Uint8Array<ArrayBuffer>): string | undefined {
+  try {
+    return validateReleaseInfo(JSON.parse(new TextDecoder().decode(bytes))).tag;
+  } catch {
+    return undefined;
+  }
 }
 function equalBytes(a: Uint8Array, b: Uint8Array) {
   return a.length === b.length && a.every((byte, index) => byte === b[index]);
@@ -118,6 +165,7 @@ export async function serveRelease(
   store: ReleaseStore,
   context: Context,
   fetcher: typeof fetch = fetch,
+  token?: string,
 ): Promise<Response> {
   const url = new URL(request.url),
     route = releaseRoute(url.pathname);
@@ -136,7 +184,7 @@ export async function serveRelease(
     if (route.kind === 'current') {
       // Answer from the stored copy and refresh it in the background; only the
       // first lookup after a deployment waits on GitHub.
-      const refresh = () => refreshCurrent(store, fetcher);
+      const refresh = () => refreshCurrent(store, fetcher, token);
       const known = await store.get(currentKey, 'arrayBuffer');
       if (known) {
         context.waitUntil(refresh().catch(() => undefined));
@@ -188,39 +236,50 @@ export async function serveRelease(
     );
   }
 }
-/** The current release's tag, from the stored copy while a background refresh
- * follows GitHub. The manifest and the store both live in that release. */
+/** The current release's tag. A five-minute edge copy answers camera requests;
+ * a KV copy covers an origin outage; only a cold cache calls GitHub's API. */
 async function currentTag(
+  cache: ReleaseCache,
   store: ReleaseStore,
   context: Context,
   fetcher: typeof fetch,
+  token?: string,
 ): Promise<string | undefined> {
-  const known = await store.get(currentKey, 'arrayBuffer');
-  if (known) {
-    try {
-      const info = validateReleaseInfo(JSON.parse(new TextDecoder().decode(known)));
-      // Update checks arrive more often than the release page is read, so
-      // follow GitHub at most every five minutes per isolate.
-      if (Date.now() - releaseRefreshedAt >= releaseRefresh) {
-        releaseRefreshedAt = Date.now();
-        context.waitUntil(refreshCurrent(store, fetcher).catch(() => undefined));
-      }
-      return info.tag;
-    } catch {
-      /* A damaged stored release is replaced below. */
-    }
+  const cached = await readCached(cache, releaseCacheUrl);
+  if (cached && isFresh(cached)) {
+    const tag = releaseTag(cached.bytes);
+    if (tag) return tag;
   }
-  const release = await currentRelease(fetcher);
-  if (!release) return undefined;
-  await saveChanged(store, currentKey, new TextEncoder().encode(JSON.stringify(release)));
-  return release.tag;
+  let stale = cached?.bytes;
+  if (!stale) {
+    const known = await store.get(currentKey, 'arrayBuffer');
+    if (known) stale = new Uint8Array(known);
+  }
+  try {
+    const release = await currentRelease(fetcher, token);
+    if (!release) return undefined;
+    const bytes = new TextEncoder().encode(JSON.stringify(release));
+    context.waitUntil(
+      cache.put(new Request(releaseCacheUrl), edgeEntry(bytes, 'application/json')),
+    );
+    context.waitUntil(saveChanged(store, currentKey, bytes));
+    return release.tag;
+  } catch (error) {
+    const tag = stale ? releaseTag(stale) : undefined;
+    if (stale && tag) {
+      context.waitUntil(
+        cache.put(new Request(releaseCacheUrl), edgeEntry(stale, 'application/json')),
+      );
+      return tag;
+    }
+    throw error;
+  }
 }
-async function fetchAsset(tag: string, name: string, fetcher: typeof fetch, range?: string | null) {
-  const requestHeaders: Record<string, string> = { 'User-Agent': 'fujimod-web' };
-  if (range) requestHeaders.Range = range;
-  return fetcher(releaseAsset(tag, name), { headers: requestHeaders, redirect: 'follow' }).catch(
-    () => undefined,
-  );
+function assetRequest(tag: string, name: string, fetcher: typeof fetch) {
+  return fetcher(releaseAsset(tag, name), {
+    headers: { 'User-Agent': 'fujimod-web' },
+    redirect: 'follow',
+  }).catch(() => undefined);
 }
 function storeHeaders(length: number) {
   const result = new Headers({
@@ -255,43 +314,7 @@ function storeResponse(
     headers: result,
   });
 }
-/** Relay a range the upstream answered itself; its body holds just that range. */
-function partialStoreResponse(
-  method: string,
-  bytes: Uint8Array<ArrayBuffer>,
-  upstream: Response,
-): Response {
-  const result = storeHeaders(bytes.length);
-  const contentRange = upstream.headers.get('Content-Range');
-  if (contentRange) result.set('Content-Range', contentRange);
-  return new Response(method === 'HEAD' ? null : bytes, { status: 206, headers: result });
-}
-async function serveManifest(
-  method: string,
-  firmware: string,
-  tag: string,
-  fetcher: typeof fetch,
-): Promise<Response> {
-  const upstream = await fetchAsset(tag, `${firmware}-latest.json`, fetcher);
-  if (!upstream?.ok)
-    return upstream?.status === 404
-      ? failure(404, 'No release manifest has been published for this firmware.')
-      : failure(502, 'Release upstream unavailable.');
-  const bytes = new Uint8Array(await upstream.arrayBuffer());
-  let manifest: unknown;
-  try {
-    manifest = JSON.parse(new TextDecoder().decode(bytes));
-  } catch {
-    return failure(502, 'The release manifest is not valid JSON.');
-  }
-  // The asset name carries the firmware id; the manifest must agree so a
-  // naming mistake never sends one camera another firmware's release.
-  if (
-    !manifest ||
-    typeof manifest !== 'object' ||
-    (manifest as { firmware?: unknown }).firmware !== firmware
-  )
-    return failure(404, 'No release manifest has been published for this firmware.');
+function manifestResponse(method: string, bytes: Uint8Array<ArrayBuffer>): Response {
   const result = new Headers({
     'Content-Type': 'application/json',
     'Content-Length': String(bytes.length),
@@ -301,48 +324,124 @@ async function serveManifest(
   for (const [name, value] of Object.entries(runtimeHeaders)) result.set(name, value);
   return new Response(method === 'HEAD' ? null : bytes, { headers: result });
 }
+function manifestProblem(
+  bytes: Uint8Array<ArrayBuffer>,
+  firmware: string,
+): 'invalid' | 'firmware' | undefined {
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return 'invalid';
+  }
+  if (
+    !manifest ||
+    typeof manifest !== 'object' ||
+    (manifest as { firmware?: unknown }).firmware !== firmware
+  )
+    return 'firmware';
+}
+async function serveManifest(
+  request: Request,
+  firmware: string,
+  cache: ReleaseCache,
+  store: ReleaseStore,
+  context: Context,
+  fetcher: typeof fetch,
+  token?: string,
+): Promise<Response> {
+  const key = manifestCacheUrl(firmware);
+  const cached = await readCached(cache, key);
+  if (cached && isFresh(cached)) return manifestResponse(request.method, cached.bytes);
+  let stale = cached?.bytes;
+  if (!stale) {
+    const known = await store.get(manifestBytesKey(firmware), 'arrayBuffer');
+    if (known) stale = new Uint8Array(known);
+  }
+  const fallback = () => {
+    if (!stale) return undefined;
+    context.waitUntil(cache.put(new Request(key), edgeEntry(stale, 'application/json')));
+    return manifestResponse(request.method, stale);
+  };
+  try {
+    const tag = await currentTag(cache, store, context, fetcher, token);
+    if (!tag) return fallback() ?? failure(404, 'No release has been published.');
+    const upstream = await assetRequest(tag, `${firmware}-latest.json`, fetcher);
+    if (upstream?.status !== 200)
+      return (
+        fallback() ??
+        (upstream?.status === 404
+          ? failure(404, 'No release manifest has been published for this firmware.')
+          : failure(502, 'Release upstream unavailable.'))
+      );
+    const bytes = new Uint8Array(await upstream.arrayBuffer());
+    const problem = manifestProblem(bytes, firmware);
+    if (problem)
+      return (
+        fallback() ??
+        (problem === 'invalid'
+          ? failure(502, 'The release manifest is not valid JSON.')
+          : failure(404, 'No release manifest has been published for this firmware.'))
+      );
+    context.waitUntil(cache.put(new Request(key), edgeEntry(bytes, 'application/json')));
+    context.waitUntil(saveChanged(store, manifestBytesKey(firmware), bytes));
+    return manifestResponse(request.method, bytes);
+  } catch (error) {
+    const response = fallback();
+    if (response) return response;
+    throw error;
+  }
+}
 async function serveStore(
   request: Request,
   cache: ReleaseCache,
   store: ReleaseStore,
   context: Context,
-  tag: string,
   name: string,
   fetcher: typeof fetch,
+  token?: string,
 ): Promise<Response> {
-  const url = new URL(request.url);
-  url.search = '';
-  const key = new Request(url, { method: 'GET' });
   const range = request.headers.get('Range');
-  const cached = await cache.match(key);
+  const key = storeCacheUrl(name);
+  const cached = await cache.match(new Request(key, { method: 'GET' }));
   if (cached)
     return storeResponse(request.method, new Uint8Array(await cached.arrayBuffer()), range);
-  const upstream = await fetchAsset(tag, name, fetcher, range);
-  if (upstream?.status === 416) {
-    const result = storeHeaders(0);
-    const contentRange = upstream.headers.get('Content-Range');
-    if (contentRange) result.set('Content-Range', contentRange);
-    result.set('Cache-Control', 'no-store');
-    return new Response(null, { status: 416, headers: result });
+  let problem: unknown;
+  let bytes: Uint8Array<ArrayBuffer> | undefined;
+  try {
+    const tag = await currentTag(cache, store, context, fetcher, token);
+    if (!tag) throw new UpstreamError(404);
+    const upstream = await assetRequest(tag, name, fetcher);
+    if (upstream?.status !== 200) throw new UpstreamError(upstream?.status === 404 ? 404 : 502);
+    bytes = new Uint8Array(await upstream.arrayBuffer());
+  } catch (error) {
+    problem = error;
   }
-  if (!upstream?.ok) {
-    const known = await store.get(storeKey(name), 'arrayBuffer');
-    if (known) return storeResponse(request.method, new Uint8Array(known), range);
-    return upstream?.status === 404
-      ? failure(404, 'Store file unavailable.')
-      : failure(502, 'Release upstream unavailable.');
+  if (bytes) {
+    context.waitUntil(
+      cache.put(
+        new Request(key),
+        new Response(bytes, {
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'Cache-Control': 'public, max-age=31536000, immutable',
+          },
+        }),
+      ),
+    );
+    context.waitUntil(saveChanged(store, storeBytesKey(name), bytes));
+    return storeResponse(request.method, bytes, range);
   }
-  const bytes = new Uint8Array(await upstream.arrayBuffer());
-  if (upstream.status === 206) return partialStoreResponse(request.method, bytes, upstream);
-  const full = new Response(bytes, {
-    headers: {
-      'Content-Type': 'application/octet-stream',
-      'Cache-Control': 'public, max-age=31536000, immutable',
-    },
-  });
-  context.waitUntil(cache.put(key, full));
-  context.waitUntil(saveChanged(store, storeKey(name), bytes));
-  return storeResponse(request.method, bytes, range);
+  const known = await store.get(storeBytesKey(name), 'arrayBuffer');
+  if (known) return storeResponse(request.method, new Uint8Array(known), range);
+  return failure(
+    problem instanceof UpstreamError && problem.status === 404 ? 404 : 502,
+    problem instanceof UpstreamError && [403, 429].includes(problem.status)
+      ? 'GitHub release rate limit reached. Try again later.'
+      : problem instanceof UpstreamError && problem.status === 404
+        ? 'Store file unavailable.'
+        : 'Release upstream unavailable.',
+  );
 }
 /** The camera's clock setup asks for the time zone of the request's location. */
 function serveTimezone(request: Request): Response {
@@ -362,16 +461,17 @@ function headOnly(request: Request, response: Response): Response {
   if (request.method !== 'HEAD' || !response.body) return response;
   return new Response(null, { status: response.status, headers: response.headers });
 }
-/** Serve `/ota/...` from the current GitHub release. Manifests are fetched on
- * every request; store files are immutable and cached by content name. */
+/** Serve `/ota/...` from the current GitHub release. Camera reads answer from
+ * a five-minute edge copy; store files are cached whole and sliced locally. */
 export async function serveOta(
   request: Request,
   cache: ReleaseCache,
   store: ReleaseStore,
   context: Context,
   fetcher: typeof fetch = fetch,
+  token?: string,
 ): Promise<Response> {
-  return headOnly(request, await serveOtaPath(request, cache, store, context, fetcher));
+  return headOnly(request, await serveOtaPath(request, cache, store, context, fetcher, token));
 }
 async function serveOtaPath(
   request: Request,
@@ -379,6 +479,7 @@ async function serveOtaPath(
   store: ReleaseStore,
   context: Context,
   fetcher: typeof fetch,
+  token?: string,
 ): Promise<Response> {
   const path = new URL(request.url).pathname;
   if (path === '/ota/timezone') return serveTimezone(request);
@@ -387,11 +488,9 @@ async function serveOtaPath(
     if (!route) return failure(404, 'OTA route not found.');
     if (request.method !== 'GET' && request.method !== 'HEAD') return methodNotAllowed();
     try {
-      const tag = await currentTag(store, context, fetcher);
-      if (!tag) return failure(404, 'No release has been published.');
       return route.kind === 'manifest'
-        ? await serveManifest(request.method, route.firmware, tag, fetcher)
-        : await serveStore(request, cache, store, context, tag, route.name, fetcher);
+        ? await serveManifest(request, route.firmware, cache, store, context, fetcher, token)
+        : await serveStore(request, cache, store, context, route.name, fetcher, token);
     } catch (error) {
       return failure(
         502,
@@ -406,14 +505,28 @@ async function serveOtaPath(
 export default {
   async fetch(
     request: Request,
-    env: { ASSETS: Assets; RELEASES: ReleaseStore },
+    env: { ASSETS: Assets; RELEASES: ReleaseStore; GITHUB_TOKEN?: string },
     context: Context,
   ): Promise<Response> {
     const path = new URL(request.url).pathname;
     if (path.startsWith('/releases/'))
-      return serveRelease(request, await caches.open('fujimod-releases'), env.RELEASES, context);
+      return serveRelease(
+        request,
+        await caches.open('fujimod-releases'),
+        env.RELEASES,
+        context,
+        fetch,
+        env.GITHUB_TOKEN,
+      );
     if (path.startsWith('/ota/'))
-      return serveOta(request, await caches.open('fujimod-ota'), env.RELEASES, context);
+      return serveOta(
+        request,
+        await caches.open('fujimod-ota'),
+        env.RELEASES,
+        context,
+        fetch,
+        env.GITHUB_TOKEN,
+      );
     return env.ASSETS.fetch(request);
   },
 };
