@@ -194,7 +194,25 @@ pub struct Block {
     /// The color unit's words, for the film law of a development job, and
     /// the declared reference white balance.
     color: Option<(Published, [u32; 3])>,
+    /// The published integration value and scene-light scale the film
+    /// picture's light follows.
+    film_exposure: Option<crate::statistics::Exposure>,
+    film_light: Option<crate::statistics::SceneLight>,
+    /// A host picture the film develops pixel by pixel: width, height, rows
+    /// of sRGB bytes.
+    film_picture: Option<(u64, u64, Arc<[u8]>)>,
+    /// The last developed picture and what it was developed from; derived
+    /// output only, never part of the block's state.
+    film_frame: Mutex<Option<FilmFrame>>,
     state: State,
+}
+/// One developed film picture and its inputs.
+struct FilmFrame {
+    words: BTreeMap<u64, u32>,
+    factor: u64,
+    width: u64,
+    lines: u64,
+    image: Vec<u8>,
 }
 impl Block {
     pub fn new(
@@ -231,6 +249,10 @@ impl Block {
             commands: Vec::new(),
             published: None,
             color: None,
+            film_exposure: None,
+            film_light: None,
+            film_picture: None,
+            film_frame: Mutex::new(None),
             state: State::default(),
         })
     }
@@ -453,6 +475,124 @@ impl Block {
         self.color = Some((words, reference));
         Ok(self)
     }
+    /// The declared film light follows the published integration value, as the
+    /// statistics scene's light does (`crate::statistics::Exposure`).
+    pub fn with_film_exposure(
+        mut self,
+        exposure: crate::statistics::Exposure,
+    ) -> Result<Self, String> {
+        if !matches!(self.image, Some((_, Picture::Film(..)))) || exposure.reference == 0 {
+            return Err("Invalid X-Processor Pro live-view film exposure".into());
+        }
+        self.film_exposure = Some(exposure);
+        Ok(self)
+    }
+    /// The declared film light follows a published scene-light scale
+    /// (`crate::statistics::SceneLight`).
+    pub fn with_film_scene_light(
+        mut self,
+        light: crate::statistics::SceneLight,
+    ) -> Result<Self, String> {
+        if !matches!(self.image, Some((_, Picture::Film(..)))) {
+            return Err("Invalid X-Processor Pro live-view film scene light".into());
+        }
+        self.film_light = Some(light);
+        Ok(self)
+    }
+    /// A host picture developed through the film law in place of the uniform
+    /// film light, scaled by the same exposure and scene light.
+    pub fn with_film_picture(
+        mut self,
+        width: u64,
+        height: u64,
+        rgb: Vec<u8>,
+    ) -> Result<Self, String> {
+        let scene = fujimod_virtual_scene::Scene {
+            width,
+            height,
+            frame: 0,
+        };
+        if !matches!(self.image, Some((_, Picture::Film(..))))
+            || fujimod_virtual_scene::validate_crop(scene, whole(scene)).is_err()
+            || width.checked_mul(height).and_then(|n| n.checked_mul(3)) != Some(rgb.len() as u64)
+        {
+            return Err("Invalid X-Processor Pro live-view film picture".into());
+        }
+        self.film_picture = Some((width, height, rgb.into()));
+        Ok(self)
+    }
+    /// The published exposure and scene-light factors applied to film light.
+    fn film_factor(&self) -> f64 {
+        let exposure = self.film_exposure.as_ref().map_or(1., |e| e.factor());
+        let light = self.film_light.as_ref().map_or(1., |l| l.factor());
+        exposure * light
+    }
+    /// The film picture developed with `words` at `width` x `lines`, reused
+    /// while the words, the light and the size are unchanged. `None` while
+    /// the unit is caught between two words of its reprogramming.
+    fn developed_picture(
+        &self,
+        words: &BTreeMap<u64, u32>,
+        reference: [u32; 3],
+        width: u64,
+        lines: u64,
+    ) -> Option<Result<Vec<u8>, fujimod_virtual_scene::SceneError>> {
+        let (w, h, rgb) = self.film_picture.as_ref()?;
+        let factor = self.film_factor();
+        let mut cached = self.film_frame.lock().unwrap();
+        if let Some(frame) = cached.as_ref().filter(|f| {
+            f.factor == factor.to_bits()
+                && f.width == width
+                && f.lines == lines
+                && &f.words == words
+        }) {
+            return Some(Ok(frame.image.clone()));
+        }
+        let film = crate::development::film(words).ok()?;
+        let balance = crate::development::white_balance(words, reference).ok()?;
+        let light: Vec<u16> = (0..=255u8)
+            .map(|v| {
+                (crate::statistics::linear(v) * 16383. * factor)
+                    .round()
+                    .clamp(0., 16383.) as u16
+            })
+            .collect();
+        let scene = fujimod_virtual_scene::Scene {
+            width: *w,
+            height: *h,
+            frame: 0,
+        };
+        let develop = |x: u64, y: u64| {
+            let i = ((y * w + x) * 3) as usize;
+            let level =
+                |c: usize| crate::development::balanced(light[usize::from(rgb[i + c])], balance[c]);
+            film.develop([level(0), level(1), level(2)])
+        };
+        let image = fujimod_virtual_scene::output_pairs(
+            scene,
+            whole(scene),
+            width,
+            lines,
+            None,
+            |x0, x1, y| fujimod_emulator_imaging::film::Film::pack(develop(x0, y), develop(x1, y)),
+        );
+        if let Ok(image) = &image {
+            *cached = Some(FilmFrame {
+                words: words.clone(),
+                factor: factor.to_bits(),
+                width,
+                lines,
+                image: image.clone(),
+            });
+        }
+        Some(image)
+    }
+    /// The declared film light scaled by the published factors, in the 14-bit
+    /// sensor range.
+    fn scaled_film_light(&self, linear: [u16; 3]) -> [u16; 3] {
+        let factor = self.film_factor();
+        linear.map(|value| (f64::from(value) * factor).round().clamp(0., 16383.) as u16)
+    }
     /// The declared virtual scene written at each frame, over `lines` lines.
     pub fn with_live_view_scene(self, lines: u32) -> Result<Self, String> {
         self.with_picture(lines, Picture::Scene)
@@ -499,7 +639,24 @@ impl Block {
         let (width, lines) = (u64::from(width), u64::from(*lines));
         let image = match picture {
             Picture::Uniform(pair) => Ok(pair.repeat((width / 2 * lines) as usize)),
+            Picture::Film(_, _)
+                if self.film_picture.is_some()
+                    && self
+                        .color
+                        .as_ref()
+                        .is_some_and(|(w, _)| !w.lock().unwrap().is_empty()) =>
+            {
+                let (words, reference) = self.color.as_ref().unwrap();
+                let words = words.lock().unwrap().clone();
+                match self.developed_picture(&words, *reference, width, lines) {
+                    Some(image) => image,
+                    // A unit caught between two words of its reprogramming
+                    // (unequal curve copies) completes no frame.
+                    None => return,
+                }
+            }
             Picture::Film(linear, unprogrammed) => {
+                let linear = self.scaled_film_light(*linear);
                 let pair = match &self.color {
                     Some((words, reference)) if !words.lock().unwrap().is_empty() => {
                         let words = words.lock().unwrap();
@@ -793,6 +950,20 @@ mod tests {
     }
 
     #[test]
+    fn x_t20_auto_mode_unit_reads_the_status_bits_its_driver_waits_for() {
+        // 0xfffd4000: 0x155d0ec polls +0x00 bit 0, 0x155d40c polls +0x088 bits 0 and 16.
+        let mut h = TestHost::new();
+        let mut pipeline =
+            Block::new(0xfffd4000, 0x1000, vec![(0, 1), (0x88, 1 << 16 | 1)], None).unwrap();
+        write(&mut pipeline, &mut h, 0xfffd4000, 0);
+        assert_eq!(read(&mut pipeline, &mut h, 0xfffd4000) & 1, 1);
+        assert_eq!(
+            read(&mut pipeline, &mut h, 0xfffd4088) & (1 << 16 | 1),
+            1 << 16 | 1
+        );
+    }
+
+    #[test]
     fn started_blocks_finish_a_frame_each_period() {
         use fujimod_emulator_devices::test_host::advance;
         let frames = Frames {
@@ -930,6 +1101,68 @@ mod tests {
     }
 
     #[test]
+    fn a_live_view_film_picture_is_developed_pixel_by_pixel() {
+        use crate::development::tests::provia;
+        use fujimod_emulator_devices::test_host::advance;
+        let frames = Frames {
+            start: (0xc8, 1 << 28),
+            stopped: (0xd8, 0x100),
+            irq: 108,
+            period: 10,
+        };
+        let reference = [1138, 604, 1096];
+        let words = Published::default();
+        let film = || {
+            Block::new(BASE, 0x200, vec![(0, 1)], Some(frames))
+                .unwrap()
+                .with_live_view_film(
+                    1,
+                    [1015, 764, 577],
+                    [16, 128, 128],
+                    words.clone(),
+                    reference,
+                )
+                .unwrap()
+        };
+        // Only a film unit takes a picture, and only one of its declared size.
+        assert!(
+            Block::new(BASE, 0x200, vec![(0, 1)], Some(frames))
+                .unwrap()
+                .with_film_picture(2, 1, vec![0; 6])
+                .is_err()
+        );
+        assert!(film().with_film_picture(2, 1, vec![0; 5]).is_err());
+        // A dark left half and a bright right half.
+        let mut unit = film()
+            .with_film_picture(2, 1, vec![20, 20, 20, 230, 230, 230])
+            .unwrap();
+        let mut h = TestHost::new();
+        write(&mut unit, &mut h, BASE + BUFFER, 0x1000);
+        write(&mut unit, &mut h, BASE + WIDTH, 4);
+        write(&mut unit, &mut h, BASE + 0xc8, 1 << 28);
+        advance(&mut unit, &mut h, 10);
+        // Unprogrammed, the declared pair.
+        assert_eq!(h.ram[0x1000..0x1008], [16, 16, 128, 128, 16, 16, 128, 128]);
+        let mut all = provia();
+        all.insert(0x100, reference[0] | reference[1] << 16);
+        all.insert(0x104, reference[2]);
+        *words.lock().unwrap() = all;
+        h.ram[0x1000..0x1008].fill(0);
+        advance(&mut unit, &mut h, 20);
+        let (dark, bright) = (h.ram[0x1000], h.ram[0x1004]);
+        assert!(dark < bright, "{dark} {bright}");
+        // A neutral picture stays near neutral at the reference white balance.
+        for c in [h.ram[0x1006], h.ram[0x1007]] {
+            assert!(c.abs_diff(128) <= 8, "{c}");
+        }
+        // The same inputs give the same frame.
+        let first = h.ram[0x1000..0x1008].to_vec();
+        h.ram[0x1000..0x1008].fill(0);
+        advance(&mut unit, &mut h, 30);
+        assert_eq!(h.ram[0x1000..0x1008], first[..]);
+    }
+
+    #[test]
     fn a_live_view_film_unit_develops_its_scene_with_the_color_units_words() {
         use crate::development::tests::provia;
         use fujimod_emulator_devices::test_host::advance;
@@ -1010,6 +1243,104 @@ mod tests {
         program(None, reference);
         words.lock().unwrap().insert(0x440, 0);
         assert_eq!(frame(&mut unit, &mut h, 60), [0; 4]);
+    }
+
+    #[test]
+    fn a_live_view_film_follows_the_published_exposure_and_scene_light() {
+        use crate::statistics::{Exposure, LIGHT_UNIT, SceneLight};
+        use fujimod_emulator_devices::test_host::advance;
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let frames = Frames {
+            start: (0xc8, 1 << 28),
+            stopped: (0xd8, 0x100),
+            irq: 108,
+            period: 10,
+        };
+        let reference = [1138, 604, 1096];
+        let words = Published::default();
+        let value = std::sync::Arc::new(AtomicU32::new(0));
+        let light = std::sync::Arc::new(AtomicU32::new(LIGHT_UNIT));
+        let block = || Block::new(BASE, 0x200, vec![(0, 1)], Some(frames)).unwrap();
+        let film = || {
+            block()
+                .with_live_view_film(
+                    3,
+                    [1015, 764, 577],
+                    [16, 128, 128],
+                    words.clone(),
+                    reference,
+                )
+                .unwrap()
+                .with_film_exposure(Exposure {
+                    value: value.clone(),
+                    reference: 1566,
+                })
+                .unwrap()
+                .with_film_scene_light(SceneLight {
+                    value: light.clone(),
+                })
+                .unwrap()
+        };
+        let mut unit = film();
+        // Not yet published: the declared light.
+        assert_eq!(
+            unit.scaled_film_light([1000, 2000, 16383]),
+            [1000, 2000, 16383]
+        );
+        // Twice the reference doubles it, clamped to the 14-bit range.
+        value.store(2 * 1566, Ordering::Relaxed);
+        assert_eq!(
+            unit.scaled_film_light([1000, 2000, 16383]),
+            [2000, 4000, 16383]
+        );
+        // The scene light is a second scale on the same light.
+        value.store(0, Ordering::Relaxed);
+        light.store(LIGHT_UNIT / 2, Ordering::Relaxed);
+        assert_eq!(
+            unit.scaled_film_light([1000, 2000, 16383]),
+            [500, 1000, 8192]
+        );
+        // The developed frame brightens with the exposure and keeps its
+        // declared light while the value is 0.
+        let mut all = crate::development::tests::provia();
+        all.insert(0x100, reference[0] | reference[1] << 16);
+        all.insert(0x104, reference[2]);
+        *words.lock().unwrap() = all;
+        let mut h = TestHost::new();
+        write(&mut unit, &mut h, BASE + BUFFER, 0x1000);
+        write(&mut unit, &mut h, BASE + WIDTH, 4);
+        write(&mut unit, &mut h, BASE + 0xc8, 1 << 28);
+        let frame = |unit: &mut Block, h: &mut TestHost, now| {
+            h.ram[0x1000..0x1100].fill(0);
+            advance(unit, h, now);
+            h.ram[0x1000]
+        };
+        light.store(LIGHT_UNIT, Ordering::Relaxed);
+        let declared = frame(&mut unit, &mut h, 10);
+        value.store(2 * 1566, Ordering::Relaxed);
+        let brighter = frame(&mut unit, &mut h, 20);
+        assert!(brighter > declared, "{brighter} vs {declared}");
+        value.store(0, Ordering::Relaxed);
+        assert_eq!(frame(&mut unit, &mut h, 30), declared);
+        // Only a film picture takes the two scales.
+        let plain = block().with_live_view_image(3, [73, 114, 138]).unwrap();
+        assert!(
+            plain
+                .with_film_exposure(Exposure {
+                    value: value.clone(),
+                    reference: 1566
+                })
+                .is_err()
+        );
+        assert!(
+            block()
+                .with_live_view_image(3, [73, 114, 138])
+                .unwrap()
+                .with_film_scene_light(SceneLight {
+                    value: light.clone()
+                })
+                .is_err()
+        );
     }
 
     #[test]

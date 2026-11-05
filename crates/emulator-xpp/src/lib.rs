@@ -11,6 +11,7 @@ pub mod clocks;
 pub mod development;
 pub mod display;
 pub mod dram;
+pub mod encoder;
 pub mod face;
 pub mod flash;
 pub mod i2c;

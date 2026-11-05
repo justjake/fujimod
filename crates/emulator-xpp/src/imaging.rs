@@ -2,10 +2,14 @@
 //!
 //! The X-T20 2.11 section-5 driver (0xc345b4..0xc34864) runs one command
 //! channel at +0x200: +0x208 configuration (bits 8..12 select the target),
-//! +0x20c/+0x210 address and length of a transmit frame in RAM, +0x204 bit 0
+//! +0x20c/+0x210 address and frame count of a transmit in RAM, +0x204 bit 0
 //! start/busy (polled by 0xc34824) and eight receive words at +0x21c whose
-//! bits 15:8 hold the reply byte (0xc347d8). Frames are
-//! `0x81 hi lo value` (write) and `0x82 hi lo` (read). The imaging-side chip
+//! bits 15:8 hold the reply byte (0xc347d8). A transmit is up to eight 8-byte
+//! frames, `0x81 hi lo value` (write) and `0x82 hi lo` (read), ended early by
+//! a frame whose first byte is 0: the only writer of +0x210 (0xc35254 from
+//! 0x16b76fc) always passes 8, and the section-6 table builder (0x17f67f4)
+//! fills the block with eight register frames (0x1d..0x24 in REC) or with
+//! five start-up frames followed by zero frames. The imaging-side chip
 //! is a register file per channel and select: a read returns the last value
 //! written there; the start-up writes a register and reads it back until it
 //! matches. What the chip does with the values is not modeled. Commands
@@ -68,8 +72,13 @@ const BUSY: u32 = 1;
 const CHANNELS: std::ops::Range<u64> = 0x240..0x240 + 6 * CHANNEL;
 const CHANNEL: u64 = 0x40;
 const RUN: u64 = 0x04;
-const MAX_FRAME: u32 = 16;
+/// Bytes of one register-bus frame.
+const FRAME_BYTES: usize = 8;
+/// Frames of one transmit (one per receive word).
+const MAX_FRAMES: u32 = 8;
 const WRITE: u8 = 0x81;
+/// Entries an opt-in register-bus log keeps (the newest; older ones drop).
+const MAX_LOGGED_FRAMES: usize = 1024;
 const READOUT_ENABLE: u64 = 0x1c;
 const READOUT_STATUS: u64 = 0x20;
 const READOUT_DONE: u32 = 1;
@@ -102,6 +111,23 @@ pub struct Readout {
 }
 const READ: u8 = 0x82;
 
+/// One register-bus frame the guest sent, recorded only by an opt-in log
+/// ([`Control::with_write_log`]). `sequence` counts every recorded frame; the
+/// log keeps the newest [`MAX_LOGGED_FRAMES`]. `pc` is the guest instruction
+/// that started the command channel and `tick` the board time; the device
+/// sees no registers, so the caller adds LR with an instruction point at `pc`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FrameRecord {
+    pub sequence: u64,
+    pub cpu: u8,
+    pub pc: u32,
+    pub tick: u64,
+    pub select: u8,
+    pub write: bool,
+    pub register: u16,
+    pub value: u8,
+}
+
 #[derive(Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct State {
@@ -130,6 +156,18 @@ pub struct Control {
     /// Host RGB image (width, height, rows of red, green and blue bytes)
     /// written instead of the virtual scene.
     sensor_image: Option<(u64, u64, std::sync::Arc<[u8]>)>,
+    /// Opt-in register-bus frame log (see [`FrameRecord`]).
+    write_log: Option<Vec<FrameRecord>>,
+    write_log_sequence: u64,
+    integration: Option<Integration>,
+}
+/// A chip register pair (low and high byte of one select) published as one
+/// integration value for another device.
+pub struct Integration {
+    pub select: u8,
+    pub low: u16,
+    pub high: u16,
+    pub value: std::sync::Arc<std::sync::atomic::AtomicU32>,
 }
 impl Control {
     pub fn new(base: u64) -> Result<Self, String> {
@@ -146,6 +184,9 @@ impl Control {
             readout_status: 0,
             sensor_frame: false,
             sensor_image: None,
+            write_log: None,
+            write_log_sequence: 0,
+            integration: None,
         })
     }
     /// A sensor readout unit at a channel offset.
@@ -185,6 +226,40 @@ impl Control {
         }
         self.sensor_image = Some((width, height, rgb.into()));
         Ok(self)
+    }
+    /// Record every register-bus frame (diagnostic only; off by default and
+    /// kept out of the checkpoint state).
+    pub fn with_write_log(mut self) -> Self {
+        self.write_log = Some(Vec::new());
+        self
+    }
+    /// Publish the chip register pair `integration` names into its value.
+    pub fn with_integration(mut self, integration: Integration) -> Result<Self, String> {
+        if integration.select > 0x1f || integration.low == integration.high {
+            return Err("Invalid X-Processor Pro imaging integration pair".into());
+        }
+        self.integration = Some(integration);
+        self.publish_integration();
+        Ok(self)
+    }
+    fn log(&mut self, cx: &Cx<'_>, select: u8, write: bool, register: u16, value: u8) {
+        let Some(log) = self.write_log.as_mut() else {
+            return;
+        };
+        self.write_log_sequence += 1;
+        if log.len() == MAX_LOGGED_FRAMES {
+            log.remove(0);
+        }
+        log.push(FrameRecord {
+            sequence: self.write_log_sequence,
+            cpu: u8::try_from(cx.cpu).unwrap_or(u8::MAX),
+            pc: u32::try_from(cx.pc).unwrap_or(u32::MAX),
+            tick: cx.now(),
+            select,
+            write,
+            register,
+            value,
+        });
     }
     /// Lines of the declared sensor frame into the programmed buffer.
     fn write_frame(&self, cx: &mut Cx<'_>, r: Readout) {
@@ -232,20 +307,38 @@ impl Control {
     }
     fn start(&mut self, cx: &mut Cx<'_>) {
         let select = (self.word(CONFIGURATION) >> 8 & 0x1f) as u8;
-        let len = self.word(LENGTH).clamp(1, MAX_FRAME) as usize;
-        let frame = match cx.ram_bytes(self.word(FRAME).into(), len) {
-            Ok(frame) => frame,
+        let frames = self.word(LENGTH).clamp(1, MAX_FRAMES) as usize;
+        let block = match cx.ram_bytes(self.word(FRAME).into(), frames * FRAME_BYTES) {
+            Ok(block) => block,
             Err(e) => return cx.fail(format!("Imaging bus frame read failed: {e}")),
         };
         let key = |frame: &[u8]| (select, u16::from_be_bytes([frame[1], frame[2]]));
-        match frame[0] {
-            WRITE if frame.len() >= 4 => {
-                self.chip.insert(key(&frame), frame[3]);
+        for (n, frame) in block.chunks(FRAME_BYTES).enumerate() {
+            match frame[0] {
+                0 if n > 0 => break,
+                WRITE => {
+                    self.chip.insert(key(frame), frame[3]);
+                    self.log(cx, select, true, key(frame).1, frame[3]);
+                }
+                READ => {
+                    self.received = self.chip.get(&key(frame)).copied().unwrap_or(0);
+                    self.log(cx, select, false, key(frame).1, self.received);
+                }
+                _ => return cx.unsupported("Unrecognized imaging bus frame"),
             }
-            READ if frame.len() >= 3 => {
-                self.received = self.chip.get(&key(&frame)).copied().unwrap_or(0);
-            }
-            _ => cx.unsupported("Unrecognized imaging bus frame"),
+        }
+        self.publish_integration();
+    }
+    /// The declared integration pair as one value (0 until both bytes were
+    /// written), shared with the statistics engine.
+    fn publish_integration(&self) {
+        if let Some(i) = &self.integration {
+            let byte = |register| self.chip.get(&(i.select, register)).copied();
+            let value = match (byte(i.low), byte(i.high)) {
+                (Some(low), Some(high)) => u32::from(high) << 8 | u32::from(low),
+                _ => 0,
+            };
+            i.value.store(value, std::sync::atomic::Ordering::Relaxed);
         }
     }
 }
@@ -354,6 +447,14 @@ impl Device for Control {
     fn save(&self) -> Value {
         serde_json::to_value(self.state()).unwrap_or(Value::Null)
     }
+    fn diagnostic_state(&self) -> Value {
+        let mut state = self.save();
+        if let Some(log) = &self.write_log {
+            state["write_log"] = serde_json::to_value(log).unwrap_or(Value::Null);
+            state["write_log_sequence"] = Value::from(self.write_log_sequence);
+        }
+        state
+    }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         self.check(&state)?;
@@ -414,6 +515,7 @@ impl Control {
         self.received = state.received;
         self.readout_due = state.readout_due;
         self.readout_status = state.readout_status;
+        self.publish_integration();
     }
 }
 
@@ -434,11 +536,11 @@ mod tests {
         h.ram_write(0x1010, &[READ, 0x01, 0x23]).unwrap();
         write(&mut control, &mut h, channel + 8, 0x1_0300);
         write(&mut control, &mut h, channel + 0xc, 0x1000);
-        write(&mut control, &mut h, channel + 0x10, 4);
+        write(&mut control, &mut h, channel + 0x10, 1);
         write(&mut control, &mut h, channel + 4, 1);
         assert_eq!(read(&mut control, &mut h, channel + 4), 0);
         write(&mut control, &mut h, channel + 0xc, 0x1010);
-        write(&mut control, &mut h, channel + 0x10, 3);
+        write(&mut control, &mut h, channel + 0x10, 1);
         write(&mut control, &mut h, channel + 4, 1);
         assert_eq!(read(&mut control, &mut h, channel + 0x1c), 0x5a5a);
         // Another select has its own registers.
@@ -451,6 +553,103 @@ mod tests {
         write(&mut other, &mut h, channel + 8, 0x1_0300);
         write(&mut other, &mut h, channel + 4, 1);
         assert_eq!(read(&mut other, &mut h, channel + 0x1c), 0x5a5a);
+    }
+
+    #[test]
+    fn an_opt_in_log_records_register_bus_frames_outside_the_checkpoint() {
+        let mut control = Control::new(BASE).unwrap().with_write_log();
+        let mut h = TestHost::new();
+        let channel = BASE + 0x200;
+        h.ram_write(0x1000, &[WRITE, 0x01, 0x23, 0x5a]).unwrap();
+        h.ram_write(0x1010, &[READ, 0x01, 0x23]).unwrap();
+        assert!(Control::new(BASE).unwrap().save()["write_log"].is_null());
+        write(&mut control, &mut h, channel + 8, 0x1_0300);
+        write(&mut control, &mut h, channel + 0xc, 0x1000);
+        write(&mut control, &mut h, channel + 0x10, 1);
+        write(&mut control, &mut h, channel + 4, 1);
+        write(&mut control, &mut h, channel + 0xc, 0x1010);
+        write(&mut control, &mut h, channel + 0x10, 1);
+        write(&mut control, &mut h, channel + 4, 1);
+        let saved = control.save();
+        assert!(saved["write_log"].is_null());
+        let log = control.diagnostic_state()["write_log"].clone();
+        let log: Vec<FrameRecord> = serde_json::from_value(log).unwrap();
+        assert_eq!(log.len(), 2);
+        assert_eq!(
+            (log[0].sequence, log[0].select, log[0].register),
+            (1, 3, 0x0123)
+        );
+        assert!(log[0].write);
+        assert_eq!(log[0].value, 0x5a);
+        assert_eq!(
+            (log[1].sequence, log[1].register, log[1].value),
+            (2, 0x0123, 0x5a)
+        );
+        assert!(!log[1].write);
+        assert_eq!(control.diagnostic_state()["write_log_sequence"], 2);
+    }
+
+    #[test]
+    fn a_transmit_applies_its_frames_until_a_zero_frame_and_publishes_the_pair() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let value = std::sync::Arc::new(AtomicU32::new(7));
+        let mut control = Control::new(BASE)
+            .unwrap()
+            .with_integration(Integration {
+                select: 4,
+                low: 0x1d,
+                high: 0x1e,
+                value: value.clone(),
+            })
+            .unwrap();
+        assert_eq!(value.load(Ordering::Relaxed), 0);
+        let mut h = TestHost::new();
+        let channel = BASE + 0x200;
+        let frame = |register: u8, byte: u8| [WRITE, 0, register, byte, 0, 0, 0, 0];
+        // A start-up block: two frames, then zero frames (one the bus must skip).
+        let mut block = [frame(0x01, 0x21), frame(0x03, 0x00)].concat();
+        block.extend([0; 8]);
+        block.extend(frame(0x1d, 0x99));
+        h.ram_write(0x1000, &block).unwrap();
+        write(&mut control, &mut h, channel + 8, 0x4_0400);
+        write(&mut control, &mut h, channel + 0xc, 0x1000);
+        write(&mut control, &mut h, channel + 0x10, 8);
+        write(&mut control, &mut h, channel + 4, 1);
+        assert_eq!(control.chip.get(&(4, 0x01)), Some(&0x21));
+        assert_eq!(control.chip.get(&(4, 0x03)), Some(&0x00));
+        assert_eq!(control.chip.get(&(4, 0x1d)), None);
+        assert_eq!(value.load(Ordering::Relaxed), 0);
+        // An exposure block: eight frames, the pair 0x1d/0x1e among them.
+        let block = [
+            frame(0x1d, 0x1e),
+            frame(0x1e, 0x06),
+            frame(0x1f, 0x1e),
+            frame(0x20, 0x06),
+            frame(0x21, 0x1e),
+            frame(0x22, 0x06),
+            frame(0x23, 0x1e),
+            frame(0x24, 0x06),
+        ]
+        .concat();
+        h.ram_write(0x2000, &block).unwrap();
+        write(&mut control, &mut h, channel + 0xc, 0x2000);
+        write(&mut control, &mut h, channel + 4, 1);
+        assert_eq!(control.chip.get(&(4, 0x24)), Some(&0x06));
+        assert_eq!(value.load(Ordering::Relaxed), 0x061e);
+        // A restored copy publishes the pair it restores.
+        let saved = control.save();
+        value.store(0, Ordering::Relaxed);
+        let mut other = Control::new(BASE)
+            .unwrap()
+            .with_integration(Integration {
+                select: 4,
+                low: 0x1d,
+                high: 0x1e,
+                value: value.clone(),
+            })
+            .unwrap();
+        other.restore(&saved).unwrap();
+        assert_eq!(value.load(Ordering::Relaxed), 0x061e);
     }
 
     #[test]

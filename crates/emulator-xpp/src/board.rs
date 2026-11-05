@@ -1,8 +1,8 @@
 //! X-Processor Pro topology on the shared native execution graph.
 //! The caller supplies checked wiring, assets, and physical contact inputs.
 use crate::{
-    adc, blocks, boot, clocks, display, dram, face, flash, i2c, imaging, jpeg, keys, lens, power,
-    resets, sd, serial, shutter, statistics, sync, timer,
+    adc, blocks, boot, clocks, display, dram, encoder, face, flash, i2c, imaging, jpeg, keys, lens,
+    power, resets, sd, serial, shutter, statistics, sync, timer,
 };
 use fujimod_emulator::board::{
     self, Board, InterruptMap, InterruptRegisters,
@@ -105,6 +105,11 @@ pub struct LiveViewFilm {
     pub linear_rgb: [u16; 3],
     /// (R, G, B) gains at which the scene renders neutral.
     pub white_balance_reference: [u32; 3],
+    /// The sensor's host picture, developed pixel by pixel in place of the
+    /// uniform `linear_rgb` light (each sRGB byte read as linear light on the
+    /// sensor's 16383 scale, as the zone statistics read it).
+    #[serde(default)]
+    pub picture: Option<HostImage>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -162,6 +167,14 @@ pub enum Model {
     Gpio {
         base: u64,
         inputs: [u16; 16],
+    },
+    /// A command dial on declared GPIO pads, its phases emitted at declared
+    /// edge times. The X-Processor Pro board has no pulse unit, so a counter
+    /// wiring is refused.
+    Encoder {
+        options: fujimod_emulator_parts_controls::encoder::Options,
+        #[serde(default)]
+        counter: Option<String>,
     },
     ClockControl {
         options: clocks::Options,
@@ -231,6 +244,16 @@ pub enum Model {
         /// Measured buffers written each frame: output register offset and words.
         #[serde(default)]
         buffers: Vec<(u64, Vec<u32>)>,
+        /// Words of a declared buffer that are linear light sums: output
+        /// register offset and `u32` indices into that buffer's words. They
+        /// follow the scene light like the zone sums; the other words are
+        /// written as declared.
+        #[serde(default)]
+        buffer_light_words: Vec<(u64, Vec<u32>)>,
+        /// The zone sums scale by the imaging chip's integration value over
+        /// this reference (declared with the imaging control's `integration`).
+        #[serde(default)]
+        exposure_reference: Option<u32>,
     },
     /// GPIO keys whose inputs also drive external interrupt lines; follows
     /// the GPIO bank and the reset/gate bank.
@@ -300,6 +323,14 @@ pub enum Model {
         /// the virtual scene.
         #[serde(default)]
         sensor_image: Option<HostImage>,
+        /// Opt-in register-bus frame log, read back through the device's
+        /// diagnostic state (never part of a checkpoint).
+        #[serde(default)]
+        write_log: bool,
+        /// Chip register pair (select, low, high) published as the
+        /// integration value the statistics engine's zone sums follow.
+        #[serde(default)]
+        integration: Option<(u8, u16, u16)>,
     },
     FrameSync {
         base: u64,
@@ -362,6 +393,7 @@ pub struct Built {
     pub nodes: BTreeMap<String, usize>,
     pub inputs: Vec<(String, Level, usize)>,
     pub contacts: BTreeMap<String, fujimod_emulator_devices::parts::card_contacts::Contacts>,
+    pub encoders: BTreeMap<String, fujimod_emulator_devices::parts::encoder_input::EncoderInput>,
 }
 struct Source(Arc<flash::Aperture>);
 impl pl330::Source for Source {
@@ -524,6 +556,7 @@ pub fn build(
     let mut nodes = BTreeMap::new();
     let mut inputs = vec![];
     let mut card_contacts = BTreeMap::new();
+    let mut encoders = BTreeMap::new();
     // Cross-node wiring, in node order: GPIO pins for the lens and shutter,
     // reset/gate lines for SD and the lens, the lens link for the PL330.
     let mut pins = None;
@@ -549,6 +582,51 @@ pub fn build(
         } => Some((*base, blocks::Published::default(), *white_balance)),
         _ => None,
     });
+    // A scene picture on the sensor and the live-view film's declared radiance
+    // give the zone sums their per-zone content; without them the statistics
+    // scene stays uniform.
+    let film_radiance = spec.nodes.iter().find_map(|n| match &n.model {
+        Model::RegisterBlock {
+            live_view_image: Some(image),
+            ..
+        } => image.film.as_ref().map(|film| film.linear_rgb),
+        _ => None,
+    });
+    let mut zone_source = None;
+    for node in &spec.nodes {
+        if let Model::ImagingControl {
+            sensor_image: Some(image),
+            ..
+        } = &node.model
+        {
+            if let Some(radiance) = film_radiance {
+                zone_source = Some((image.width, image.height, hex(&image.rgb)?, radiance));
+            }
+        }
+    }
+    // The imaging chip's integration value, shared with the statistics engine.
+    let integration_value = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let integration_declared = spec.nodes.iter().any(|n| {
+        matches!(
+            n.model,
+            Model::ImagingControl {
+                integration: Some(_),
+                ..
+            }
+        )
+    });
+    // The statistics scene-light scale (`statistics::Engine::set_scene_light`),
+    // shared with the live-view film that draws the same light.
+    let scene_light =
+        std::sync::Arc::new(std::sync::atomic::AtomicU32::new(statistics::LIGHT_UNIT));
+    let exposure_reference = spec.nodes.iter().find_map(|n| match &n.model {
+        Model::Statistics {
+            scene: Some(_),
+            exposure_reference,
+            ..
+        } => *exposure_reference,
+        _ => None,
+    });
     let mut color_published = false;
     for node in spec.nodes {
         if nodes.contains_key(&node.name) {
@@ -568,6 +646,28 @@ pub fn build(
                         base, shared,
                     )?),
                 )?
+            }
+            Model::Encoder { options, counter } => {
+                if counter.is_some() {
+                    return Err(
+                        "the X-Processor Pro board has no command-dial counter wiring".into(),
+                    );
+                }
+                let wiring = encoder::BankPins::new(
+                    pins.clone()
+                        .ok_or("the command-dial encoder follows the GPIO bank")?,
+                );
+                let model = fujimod_emulator_parts_controls::encoder::Encoder::new(
+                    options,
+                    fujimod_emulator_parts_controls::encoder::Wiring {
+                        gpio: Box::new(wiring),
+                        counter: None,
+                    },
+                )?;
+                if encoders.insert(node.name.clone(), model.input()).is_some() {
+                    return Err("repeated X-Processor Pro command-dial encoder".into());
+                }
+                devices.attach(Box::new(model))
             }
             Model::ClockControl { options } => {
                 let base = options.base;
@@ -774,13 +874,30 @@ pub fn build(
                                 let (_, words, _) = color
                                     .as_ref()
                                     .ok_or("a live-view film needs the still color unit")?;
-                                model.with_live_view_film(
+                                model = model.with_live_view_film(
                                     image.lines,
                                     film.linear_rgb,
                                     image.ycbcr,
                                     words.clone(),
                                     film.white_balance_reference,
-                                )?
+                                )?;
+                                if let Some(reference) = exposure_reference {
+                                    model = model.with_film_exposure(statistics::Exposure {
+                                        value: integration_value.clone(),
+                                        reference,
+                                    })?;
+                                }
+                                model = model.with_film_scene_light(statistics::SceneLight {
+                                    value: scene_light.clone(),
+                                })?;
+                                match film.picture {
+                                    Some(picture) => model.with_film_picture(
+                                        picture.width,
+                                        picture.height,
+                                        hex(&picture.rgb)?,
+                                    )?,
+                                    None => model,
+                                }
                             }
                         },
                         (Some(_), _) | (_, Some(_)) if image.film.is_some() => {
@@ -828,13 +945,41 @@ pub fn build(
                 period_ticks,
                 scene,
                 buffers,
+                buffer_light_words,
+                exposure_reference,
             } => {
                 let mut model = statistics::Engine::new(base, irq, period_ticks)?;
                 if let Some(scene) = scene {
                     model = model.with_scene(scene);
+                    if let Some((width, height, rgb, radiance)) = &zone_source {
+                        model = model.with_zone_scene(statistics::ZoneScene {
+                            width: *width,
+                            height: *height,
+                            rgb: rgb.clone(),
+                            sums: scene,
+                            radiance: *radiance,
+                        })?;
+                    }
+                    model = model.with_scene_light(statistics::SceneLight {
+                        value: scene_light.clone(),
+                    })?;
+                }
+                if let Some(reference) = exposure_reference {
+                    if !integration_declared {
+                        return Err(
+                            "A statistics exposure requires a declared imaging integration".into(),
+                        );
+                    }
+                    model = model.with_exposure(statistics::Exposure {
+                        value: integration_value.clone(),
+                        reference,
+                    })?;
                 }
                 for (output, words) in buffers {
                     model = model.with_buffer(output, &words)?;
+                }
+                for (output, words) in buffer_light_words {
+                    model = model.with_buffer_light_words(output, &words)?;
                 }
                 devices.register(base, statistics::WINDOW, Box::new(model))?
             }
@@ -950,6 +1095,8 @@ pub fn build(
                 readout,
                 sensor_frame,
                 sensor_image,
+                write_log,
+                integration,
             } => {
                 let end = base + imaging::WINDOW;
                 let windows = match hole {
@@ -978,13 +1125,29 @@ pub fn build(
                             Some(profile) => control.with_sensor_frame(&profile)?,
                             None => control,
                         };
-                        match sensor_image {
+                        let control = match sensor_image {
                             Some(image) => control.with_sensor_image(
                                 image.width,
                                 image.height,
                                 hex(&image.rgb)?,
                             )?,
                             None => control,
+                        };
+                        let control = match integration {
+                            Some((select, low, high)) => {
+                                control.with_integration(imaging::Integration {
+                                    select,
+                                    low,
+                                    high,
+                                    value: integration_value.clone(),
+                                })?
+                            }
+                            None => control,
+                        };
+                        if write_log {
+                            control.with_write_log()
+                        } else {
+                            control
                         }
                     }),
                 )?
@@ -1189,6 +1352,7 @@ pub fn build(
         nodes,
         inputs,
         contacts: card_contacts,
+        encoders,
     })
 }
 
@@ -1222,6 +1386,49 @@ mod tests {
         }))
         .map_err(|e| e.to_string())?;
         build(graph(), spec, &BTreeMap::new(), Mode::Strict)
+    }
+
+    #[test]
+    fn command_dial_phases_follow_the_gray_order_at_their_declared_pace() {
+        // A dial on GPIO bank 1 pads 2 and 3, resting at phase 2 (A high, B low),
+        // with a 10-tick edge period so the timeline stays short.
+        let built = build_nodes(json!([
+            {"name": "gpio", "model": {"kind": "gpio", "base": 0xfff10000_u64,
+                                       "inputs": [0, 4, 0, 0, 0, 0, 0, 0,
+                                                  0, 0, 0, 0, 0, 0, 0, 0]}},
+            {"name": "dial", "model": {"kind": "encoder", "options": {
+                "pins": [{"port": 1, "pin": 2}, {"port": 1, "pin": 3}],
+                "phase_ticks": 10, "rest_phase": 2}, "counter": null}}
+        ]))
+        .unwrap();
+        let Built {
+            mut board,
+            nodes,
+            encoders,
+            ..
+        } = built;
+        let gpio = nodes["gpio"];
+        let level = |board: &Board| {
+            let state = board.device_save(gpio).unwrap();
+            state["inputs"][1].as_u64().unwrap() as u32 & 0xf
+        };
+        assert_eq!(level(&board), 0x4);
+        let dial = encoders["dial"].clone();
+        let dial_node = nodes["dial"];
+        // One increasing step: 2 -> 0 -> 1 -> 3 -> 2, one edge per declared period.
+        dial.queue_cycles(0, 1).unwrap();
+        board.inputs_changed(dial_node).unwrap();
+        for (edge, pins) in [(10, 0x0), (20, 0x8), (30, 0xc), (40, 0x4)] {
+            board.run_until(edge + 1, 1).unwrap();
+            assert_eq!(level(&board), pins, "up at {edge}");
+        }
+        // One decreasing step runs the same Gray order backwards.
+        dial.queue_cycles(45, -1).unwrap();
+        board.inputs_changed(dial_node).unwrap();
+        for (edge, pins) in [(55, 0xc), (65, 0x8), (75, 0x0), (85, 0x4)] {
+            board.run_until(edge + 1, 1).unwrap();
+            assert_eq!(level(&board), pins, "down at {edge}");
+        }
     }
 
     #[test]

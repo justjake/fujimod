@@ -264,8 +264,8 @@
     },
     "playback-picture": {
       "result": "pass",
-      "passed": 3,
-      "total": 3
+      "passed": 4,
+      "total": 4
     },
     "playback-movie": {
       "result": "not-run"
@@ -274,7 +274,7 @@
       "result": "not-run"
     },
     "sd": {
-      "result": "stale",
+      "result": "pass",
       "passed": 2,
       "total": 2
     },
@@ -286,6 +286,7 @@
     "af": "not-run",
     "fujimod": "not-run",
     "aspect-ratio": "not-run",
+    "raw-teleconverter": "not-run",
     "surround-view": "not-run",
     "desqueeze": "not-run",
     "desqueeze-jpeg": "not-run",
@@ -304,6 +305,7 @@
     "menu-theme": "not-run",
     "overlay-opacity": "not-run",
     "menu-tap": "not-run",
+    "glgui": "not-run",
     "recipes": "not-run",
     "snap-focus": "not-run",
     "usb-debug": "not-run",

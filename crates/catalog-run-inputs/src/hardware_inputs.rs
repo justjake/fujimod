@@ -1236,6 +1236,30 @@ pub struct ZoneStatistics {
     /// Measured buffers of the same scene.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub buffers: Vec<StatisticsBuffer>,
+    /// Declared integration value that scales the zone sums: a register
+    /// pair the firmware writes to an imaging-side chip.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exposure: Option<ZoneExposure>,
+}
+
+/// Integration value of the zone sums: the chip register pair (low byte,
+/// high byte) of one select on the imaging control page's register bus.
+/// The zone sums scale by value / reference; before the pair is written the
+/// sums are the declared ones.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct ZoneExposure {
+    /// Declared basis.
+    pub basis: String,
+    /// Register-bus select (configuration bits 8..12).
+    pub select: u8,
+    /// Register holding the low byte.
+    pub low: u16,
+    /// Register holding the high byte.
+    pub high: u16,
+    /// Value at which the declared zone sums hold.
+    pub reference: u32,
 }
 
 /// Declared uniform image a live-view output unit writes at each frame.
@@ -1388,6 +1412,11 @@ pub struct StatisticsBuffer {
     pub output: u64,
     /// SHA-256 of the asset.
     pub sha256: String,
+    /// `u32` word indices of the buffer that are linear light sums: the engine
+    /// scales them with the scene light and the published exposure, like the
+    /// zone sums. Empty: every word is written as declared.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub light_words: Vec<u32>,
 }
 
 /// Declared hardware reset facts.

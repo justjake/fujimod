@@ -251,6 +251,24 @@ mod tests {
         assert_eq!(read(&mut d, &mut h, 0x10068), 0);
     }
     #[test]
+    fn pll_control_bit_28_is_stored_and_does_not_block_lock() {
+        let mut d = ClockControl::new(Options {
+            base: 0x10000,
+            lock_ticks: 5,
+            running: vec![4],
+        })
+        .unwrap();
+        let mut h = TestHost::new();
+        write(&mut d, &mut h, 0x10080, 0x1000002e);
+        assert_eq!(read(&mut d, &mut h, 0x10080), 0x1000002e);
+        assert_eq!(read(&mut d, &mut h, 0x1006c) & u64::from(LOCK[4]), 0);
+        write(&mut d, &mut h, 0x10080, 0x1400002e);
+        let at = h.now;
+        advance(&mut d, &mut h, at + 5);
+        assert_ne!(read(&mut d, &mut h, 0x1006c) & u64::from(LOCK[4]), 0);
+        assert!(d.restore_checkpoint(&d.checkpoint().unwrap()).is_ok());
+    }
+    #[test]
     fn running_plls_start_powered_and_locked() {
         let options = |running| Options {
             base: 0x10000,

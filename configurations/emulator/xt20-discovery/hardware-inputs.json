@@ -45,9 +45,10 @@
     "pll_input": {
       "running": [
         0,
-        3
+        3,
+        4
       ],
-      "basis": "Firmware: the kernel entry bypasses stage 2, whose PLL table 0xe0e8 (X-T20 2.11) powers PLL 0 and 3 up (clear bits 27:26, set bit 26, wait for the lock at 0xfff0b06c; 0x7e64), powers PLL 2 down (bit 27) and leaves PLL 1 and 4 at reset. Section 5 later re-enables PLL 0 by setting only bit 26 (0xc6aa74), which assumes it is powered. The reset values of PLL 1 and 4 are not measured."
+      "basis": "Firmware: the kernel entry bypasses stage 2, whose PLL table 0xe0e8 (X-T20 2.11) powers PLL 0 and 3 up (clear bits 27:26, set bit 26, wait for the lock at 0xfff0b06c; 0x7e64), powers PLL 2 down (bit 27) and leaves PLL 1 and 4 at reset. Section 5 later re-enables PLL 0 by setting only bit 26 (0xc6aa74), which assumes it is powered. PLL 4 is powered before stage 2 runs: stage 2's PLL 4 reconfiguration 0xa3f8 (six callers) clears bit 26, programs the dividers through 0x7be8 (which keeps bits 31:26), sets bit 26 and waits for lock bit 0 without clearing the power-down bit 27, and the camera boots the stock resident image that runs this path (SD boot, 2026-10-21). Whether PLL 4 is already enabled and locked at reset is not measured. The reset value of PLL 1 is not measured."
     },
     "sd_card": {
       "basis": "Declared, not measured: an empty 8 GiB SDHC card with high speed and without UHS-I or UHS-II modes, formatted as one FAT32 partition from sector 8192 with 32 KiB clusters, the layout of the other FujiMod REC configurations. A card was inserted during the measured power-ons (bank 10 bit 4 CARD_DET low); its identity, size and contents are not read.",
@@ -440,12 +441,20 @@
     ],
     "zone_statistics": {
       "zone_sums": [144736, 383321, 33695],
+      "exposure": {
+        "select": 4,
+        "low": 29,
+        "high": 30,
+        "reference": 1566,
+        "basis": "Section 6 0x17f67f4 builds the register-bus block 0x1a36c40 that 0xc35254 sends with frame count 8 (0x16b76fc): in REC eight writes to select 4, registers 0x1d..0x24, the u16 value repeated four times as low/high byte pairs (0x1d low, 0x1e high). The value grows as the scene darkens (emulator wall/half/quarter/black pictures 1566/2951/3843/3890; value x radiance about constant, capped at 3890), and the camera holds 3936 with the lens cap on and 3316/3207 in two lit live-view dumps: an integration time. Declared approximation, not measured: the zone sums scale linearly with it, and 1566, the value the AE reaches on the emulated wall picture whose sums are the measured ones, is the reference at which the declared sums hold."
+      },
       "buffers": [
         {
           "output": 464,
           "asset": "xt20-211-statistics-window",
           "sha256": "63ffb961adf0066f4c80ec5ea5e35c521cea2780edf88e5fa3e016d91bc3f7c0",
-          "basis": "Measured: the second statistics window buffer (+0x1d0, 0x3f481360 in the first half, 80 u32) of the same s2 REC capture, first half, copied unchanged. Words 0/2/4 are red/green/blue sums of a window of about 4.4 zones (641739 / 1700693 / 150556); nine smaller windows follow at stride 8 (red, green, blue at +0/+2/+4), and word 74 reads 365..368 in every scene. On the XP4 board (previous lens inputs) this buffer alone moves AE record field +0x10e (setter 0xd289dc, struct 0x1d09168) from -595 to 196 at the 170M write (camera s2: 53, offset as the zone-sum fields); the coarse 8x8 planes (+0x2670), the 256-bin histogram (+0x3290) and the other buffers left the record unchanged."
+          "light_words": [0, 2, 4, 8, 10, 12, 16, 18, 20, 24, 26, 28, 32, 34, 36, 40, 42, 44, 48, 50, 52, 56, 58, 60, 64, 66, 68],
+          "basis": "Measured: the second statistics window buffer (+0x1d0, 0x3f481360 in the first half, 80 u32) of the same s2 REC capture, first half, copied unchanged. Words 0/2/4 are red/green/blue sums of a window of about 4.4 zones (641739 / 1700693 / 150556); nine smaller windows follow at stride 8 (red, green, blue at +0/+2/+4), and word 74 reads 365..368 in every scene. On the XP4 board (previous lens inputs) this buffer alone moves AE record field +0x10e (setter 0xd289dc, struct 0x1d09168) from -595 to 196 at the 170M write (camera s2: 53, offset as the zone-sum fields); the coarse 8x8 planes (+0x2670), the 256-bin histogram (+0x3290) and the other buffers left the record unchanged. The declared light sums are the red/green/blue words +0/+2/+4 of records 0..8 (word indices 0, 2, 4 .. 64, 66, 68), which follow the scene light like the zone sums; record 9's word 74 reads 365..368 in every scene and is not a light sum, and every other word is 0."
         }
       ],
       "basis": "Measured mean zone sums, uniform scene: X-T20 2.11 REC live view of an evenly lit wall (s2, 2026-10-29). The statistics engine 0xfff54000 writes twelve buffers per frame into one of two halves 0x3690 apart (+0x10); the zone sums buffer (+0x1cc, 0x3f480360 in the first half) holds four 16x16 planes of u32: red, green (about 2.6 times red, probably both green sites), blue, and a plane of zeros. Both halves of the capture agree within 1%: mean 144736 / 383321 / 33695 / 0 (green zones 228289..478805: vignetting). Section 6 0x1698dd0 takes each completion as the half just written and alternates its pointer 0x1bc6310 without reprogramming the engine's buffer words; the engine keeps alternating across the firmware's per-frame restarts (with a restart from the first half, only the first half was ever written in the emulator, while the camera fills both). Declared uniform: every zone holds the mean."

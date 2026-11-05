@@ -8,8 +8,8 @@
 
 use crate::graph::{self, ProcessorStart};
 use fujimod_catalog::{
-    profiles::{RegisterIdleBits, RegisterLayouts, SocProfile},
-    reference::{MemoryKind, MemoryRegion, RegionSize},
+    profiles::{BodyProfile, RegisterIdleBits, RegisterLayouts, SocProfile},
+    reference::{Body, ConnectionSignal, MemoryKind, MemoryRegion, RegionSize},
     soc::ApplicationHardware,
 };
 use fujimod_catalog_configuration::RunInstructionRate;
@@ -80,6 +80,86 @@ fn soc_profile<'a>(resolved: &'a ResolvedConfiguration) -> Result<&'a SocProfile
 
 fn bits(bits: &RegisterIdleBits) -> Value {
     json!([bits.offset, bits.mask])
+}
+
+/// The selected body hardware profile of a resolved run.
+fn body_profile<'a>(resolved: &'a ResolvedConfiguration) -> Result<&'a BodyProfile, String> {
+    let choice = resolved
+        .configuration
+        .preset
+        .as_ref()
+        .and_then(|preset| preset.hardware_selection.as_ref())
+        .ok_or("X-Processor Pro assembly requires a hardware selection")?;
+    let body = &resolved.reference.body;
+    body.hardware
+        .as_ref()
+        .and_then(|hardware| hardware.profiles.get(&choice.body_profile_id))
+        .ok_or_else(|| {
+            format!(
+                "body {} has no hardware profile {}",
+                body.id, choice.body_profile_id
+            )
+        })
+}
+
+/// Command-dial encoder nodes of the selected body profile. Each declaration
+/// names a body connection whose two GPIO signals are the dial's phase pads, so
+/// the pads come from the body record and only the edge pacing is model policy.
+fn encoder_nodes(body: &Body, profile: &BodyProfile) -> Result<Vec<Value>, String> {
+    let mut out = Vec::new();
+    for declaration in profile.encoders.iter().flatten() {
+        let connection = body
+            .connections
+            .iter()
+            .find(|connection| connection.id == declaration.name)
+            .ok_or_else(|| {
+                format!(
+                    "command-dial encoder {} is not a declared body connection",
+                    declaration.name
+                )
+            })?;
+        let signals: Vec<(u8, u8)> = connection
+            .signals
+            .iter()
+            .filter_map(|signal| match signal {
+                ConnectionSignal::Gpio { port, pin, .. } => Some((*port, *pin)),
+                _ => None,
+            })
+            .collect();
+        let declared: Vec<(u8, u8)> = declaration
+            .options
+            .pins
+            .iter()
+            .map(|pin| (pin.port, pin.pin))
+            .collect();
+        if declared.len() != 2 || signals != declared {
+            return Err(format!(
+                "command-dial encoder {} pins differ from its connection's two GPIO signals",
+                declaration.name
+            ));
+        }
+        if declaration.options.phase_ticks == 0 || declaration.options.rest_phase > 3 {
+            return Err(format!(
+                "command-dial encoder {} needs a positive edge period and a two-bit rest phase",
+                declaration.name
+            ));
+        }
+        out.push(json!({
+            "name": declaration.name,
+            "model": {
+                "kind": "encoder",
+                "options": {
+                    "pins": declared.iter()
+                        .map(|&(port, pin)| json!({ "port": port, "pin": pin }))
+                        .collect::<Vec<_>>(),
+                    "phase_ticks": declaration.options.phase_ticks,
+                    "rest_phase": declaration.options.rest_phase,
+                },
+                "counter": declaration.counter,
+            },
+        }));
+    }
+    Ok(out)
 }
 
 fn hex_bytes(text: &str, label: &str) -> Result<Vec<u8>, String> {
@@ -423,6 +503,13 @@ fn nodes(
                     "linear_rgb": film.linear_rgb,
                     "white_balance_reference": film.white_balance_reference,
                 });
+                // The sensor's host picture is the scene the film develops in live view.
+                if let Some(picture) = inputs.sensor_image {
+                    model["live_view_image"]["film"]["picture"] = json!({
+                        "width": picture.width, "height": picture.height,
+                        "rgb": picture.rgb.iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
+                    });
+                }
             }
             if let Some(host) = &image.host_image {
                 model["live_view_image"]["host_image"] = json!({
@@ -441,6 +528,12 @@ fn nodes(
         });
         if let Some(scene) = scene {
             model["scene"] = json!(scene.zone_sums);
+            if let Some(exposure) = &scene.exposure {
+                if maps.imaging_control.is_none() {
+                    return Err("a zone-sum exposure requires the imaging control page".into());
+                }
+                model["exposure_reference"] = json!(exposure.reference);
+            }
             model["buffers"] = scene
                 .buffers
                 .iter()
@@ -451,6 +544,15 @@ fn nodes(
                     ]))
                 })
                 .collect::<Result<Value, String>>()?;
+            let light_words: Vec<Value> = scene
+                .buffers
+                .iter()
+                .filter(|b| !b.light_words.is_empty())
+                .map(|b| json!([b.output, b.light_words]))
+                .collect();
+            if !light_words.is_empty() {
+                model["buffer_light_words"] = json!(light_words);
+            }
         }
         node("statistics".into(), model);
     } else if scene.is_some() {
@@ -602,6 +704,11 @@ fn nodes(
                     "width": image.width, "height": image.height,
                     "rgb": image.rgb.iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
                 })),
+                "integration": reset
+                    .zone_statistics
+                    .as_ref()
+                    .and_then(|scene| scene.exposure.as_ref())
+                    .map(|e| json!([e.select, e.low, e.high])),
             }),
         );
     } else if reset.sensor_frame.is_some() {
@@ -737,6 +844,8 @@ pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result
         .hardware_inputs()?
         .ok_or("X-Processor Pro assembly requires hardware inputs")?
         .reset;
+    let body = &selection.body;
+    let profile = body_profile(resolved)?;
     let (numerator, denominator) = reset
         .execution_clock
         .as_ref()
@@ -753,6 +862,15 @@ pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result
         inputs.starts,
     )?;
     let cores = execution.processors.len() as u64;
+    let mut node_list = nodes(
+        maps,
+        &reset,
+        dram_address_space_limit_bytes,
+        &ram_banks(&selection.soc.memory_regions),
+        inputs,
+    )?;
+    // Command dials last: they take GPIO pads the bank node declares.
+    node_list.extend(encoder_nodes(body, profile)?);
     let devices = json!({
         "kind": "xpp",
         "cpus": (0..cores).map(|core| json!({
@@ -762,7 +880,7 @@ pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result
             "cache_sizes": [caches.l1_data_bytes, caches.l1_instruction_bytes, caches.l2_bytes],
         })).collect::<Vec<_>>(),
         "gic": { "distributor": gic.distributor, "cpu_interface": gic.cpu_interface, "lines": gic.lines },
-        "nodes": nodes(maps, &reset, dram_address_space_limit_bytes, &ram_banks(&selection.soc.memory_regions), inputs)?,
+        "nodes": node_list,
     });
     Ok(Assembly {
         execution,
@@ -896,10 +1014,39 @@ mod tests {
         assert!(position("gpio") < position("resets"));
         assert!(position("resets") < position("sd"));
         assert!(position("sd") < position("lens"));
-        assert_eq!(names[names.len() - 3..], ["lens", "shutter", "key-lines"]);
+        assert_eq!(
+            names[names.len() - 5..],
+            [
+                "lens",
+                "shutter",
+                "key-lines",
+                "controls-encoder-front",
+                "controls-encoder-rear"
+            ]
+        );
         assert_eq!(devices["cpus"].as_array().unwrap().len(), 2);
         assert_eq!(devices["cpus"][1]["mpidr"], 0x8000_0001_u64);
         assert_eq!(devices["cpus"][0]["configuration_base"], 0xffff_0000_u64);
+
+        // Command dials: one encoder node per declared body connection, its pads
+        // taken from the connection and its edge pacing from the body profile.
+        assert!(position("gpio") < position("controls-encoder-front"));
+        assert_eq!(
+            node(devices, "controls-encoder-front")["options"],
+            json!({
+                "pins": [{"port": 1, "pin": 2}, {"port": 1, "pin": 3}],
+                "phase_ticks": 240000,
+                "rest_phase": 2,
+            })
+        );
+        assert_eq!(
+            node(devices, "controls-encoder-rear")["options"]["pins"],
+            json!([{"port": 1, "pin": 4}, {"port": 1, "pin": 5}])
+        );
+        assert_eq!(
+            node(devices, "controls-encoder-rear")["counter"],
+            Value::Null
+        );
 
         // The AF-S imaging block's job law, from the SoC profile.
         let blocks = devices["nodes"]
@@ -952,6 +1099,15 @@ mod tests {
         assert_eq!(statistics["scene"], json!([144736, 383321, 33695]));
         assert_eq!(statistics["buffers"][0][0], 0x1d0);
         assert_eq!(statistics["buffers"][0][1].as_array().unwrap().len(), 80);
+        // The declared light sums of that buffer reach the node.
+        assert_eq!(statistics["buffer_light_words"][0][0], 0x1d0);
+        assert_eq!(
+            statistics["buffer_light_words"][0][1],
+            json!([
+                0, 2, 4, 8, 10, 12, 16, 18, 20, 24, 26, 28, 32, 34, 36, 40, 42, 44, 48, 50, 52, 56,
+                58, 60, 64, 66, 68
+            ])
+        );
         // Serial peers: the lens port has its own node; sub-CPU, gauge frames, idle channel 3.
         assert!(!names.contains(&"serial0"));
         assert_eq!(node(devices, "serial2")["peer"]["kind"], "registers");
@@ -1198,6 +1354,39 @@ mod tests {
             imaging["model"]["sensor_image"],
             json!({"width": 2, "height": 1, "rgb": "ff00000000ff"})
         );
+    }
+
+    #[test]
+    fn a_declared_zone_exposure_reaches_the_imaging_and_statistics_nodes() {
+        let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
+        let maps = soc_profile(&resolved)
+            .unwrap()
+            .register_maps
+            .as_ref()
+            .unwrap();
+        let reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let (starts, assets) = (starts(), assets());
+        let inputs = Inputs {
+            starts: &starts,
+            sub_cpu_registers: &[],
+            assets: &assets,
+            sensor_image: None,
+        };
+        let banks = ram_banks(&resolved.reference.soc.memory_regions);
+        let nodes = nodes(
+            maps,
+            &reset,
+            resolved.dram_address_space_limit_bytes().unwrap(),
+            &banks,
+            &inputs,
+        )
+        .unwrap();
+        let named = |name: &str| nodes.iter().find(|node| node["name"] == name).unwrap();
+        assert_eq!(
+            named("imaging")["model"]["integration"],
+            json!([4, 0x1d, 0x1e])
+        );
+        assert_eq!(named("statistics")["model"]["exposure_reference"], 1566);
     }
 
     #[test]

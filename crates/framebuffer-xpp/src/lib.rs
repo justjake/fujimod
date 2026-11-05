@@ -2,7 +2,9 @@
 use fujimod_framebuffer::raster::{self, PixelOrder, Plane};
 use std::collections::BTreeMap;
 pub const CONTROL: u64 = 0x000;
-pub const VIDEO_ENABLE: u32 = 1 << 2;
+/// +0x000 bit 0 enables the output and its video plane, bit 2 the OSD layer group.
+pub const VIDEO_ENABLE: u32 = 1 << 0;
+pub const OSD_ENABLE: u32 = 1 << 2;
 pub const VIDEO_FORMAT: u64 = 0x010;
 pub const PACKED_422: u32 = 0x333;
 pub const OUTPUT_SIZE: u64 = 0x014;
@@ -30,17 +32,34 @@ impl Decoder<'_> {
     pub fn extent(word: u32) -> Option<(u32, u32)> {
         (word & 0xf000_f000 == 0).then_some(((word >> 16) + 1, (word & 0xfff) + 1))
     }
+    /// Whether the video plane is shown. A plane whose words are all zero
+    /// (format, size and buffer) is not yet programmed: the firmware enables
+    /// the output (0x1010101) before REC sets it up.
+    pub fn video_shown(&self) -> bool {
+        self.word(CONTROL) & VIDEO_ENABLE != 0
+            && (self.word(VIDEO_FORMAT) != 0
+                || self.word(VIDEO_SIZE) != 0
+                || self.word(VIDEO_BUFFER) != 0)
+    }
+    /// The enabled OSD layers, or none while the OSD group is off.
+    pub fn layers_shown(&self) -> u32 {
+        if self.word(CONTROL) & OSD_ENABLE != 0 {
+            self.word(LAYER_ENABLE)
+        } else {
+            0
+        }
+    }
     /// Composite the video layer and the enabled OSD layers; `Ok(None)` when
     /// no layer is enabled.
     pub fn compose(
         &self,
         mut read: impl FnMut(u64, usize) -> Result<Vec<u8>, String>,
     ) -> Result<Option<(u32, u32, Vec<u8>, u64)>, ()> {
-        let enable = self.word(LAYER_ENABLE);
-        let video = self.word(CONTROL) & VIDEO_ENABLE != 0;
-        if enable & !0xf != 0 {
+        if self.word(LAYER_ENABLE) & !0xf != 0 {
             return Err(());
         }
+        let video = self.video_shown();
+        let enable = self.layers_shown();
         if enable == 0 && !video {
             return Ok(None);
         }

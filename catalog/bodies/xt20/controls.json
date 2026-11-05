@@ -781,7 +781,9 @@
       "manual_page": 8,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-encoder-front"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Rotate to select menu tabs, adjust aperture, select an auto scene, adjust exposure compensation when C is selected, or view other pictures; press to switch between aperture and exposure compensation when C is selected.",
@@ -990,7 +992,8 @@
       "face": null,
       "icon": null,
       "connection_ids": [
-        "controls-adc-4"
+        "controls-adc-4",
+        "controls-encoder-rear"
       ],
       "assignable": true,
       "pushable": true,

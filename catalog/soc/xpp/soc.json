@@ -1271,6 +1271,23 @@
                 "ticks": 144000
               },
               "basis": "Still development engine of X-T20 2.11 (step marker 0x06023310): started by +0x00 bit 0, finishes with status +0x3c bit 0 and interrupt 132; +0x00 bit 28 and +0x3c bit 20 read set when idle. run ticks are xpro-lab's 3 ms engine step; no data moves."
+            },
+            {
+              "base": 4294787072,
+              "size": 4096,
+              "idle_bits": [
+                { "offset": 0, "mask": 1 },
+                { "offset": 136, "mask": 65537 }
+              ],
+              "basis": "Unit at 0xfffd4000 of X-T20 2.11 section 6: a field-writer family covers +0x000..+0x098 (0x155d7c4 writes +0x00 bit 0, then 0x155d820..0x155e158 write +0x004, +0x008, +0x010..+0x02c, +0x040..+0x06c and +0x080..+0x098 with 14-, 3- and 1-bit fields). Three words are read only as status: +0x088 (0x155df64 takes bits 20..21, 16, 4..5 and 0), +0x090 (0x155dfa0) and +0x094 (0x155e09c), six flags each. The recording pipeline enters it through 0x155d16c (callers 0x1615ce4 and 0x16b1b7c), which first calls 0x155d0ec: that writes the +0x00 bit and polls it through 0x155d7f8 until it reads 1. 0x155d40c then polls +0x088 through 0x155df64 until bit 0 and bit 16 both read 1. The AUTO position of the auto mode selector lever is one path into this call chain (strict graph board, 2026-11-04). Its name and what it computes are unknown. The words read back their last write and start at 0; +0x00 bit 0 and +0x088 bits 0 and 16 are the only status bits the driver waits for and are declared idle. No interrupt, DMA or data is modeled."
+            },
+            {
+              "base": 4294430720,
+              "size": 4096,
+              "idle_bits": [
+                { "offset": 0, "mask": 1 }
+              ],
+              "basis": "Unit at 0xfff7d000 of X-T20 2.11 section 6: the driver's stop 0x156704c writes 0 to +0x00 and polls +0x00 through 0x1567064 until it reads 1, and 0x156707c follows it. The unit is stopped inside the section-6 worker whose state block is 0x1a5c444 (0x1566d6c from 0x16b2aa4 and 0x1566f54 from 0x16b2adc); moving the auto mode selector lever to AUTO stops it (strict graph board, 2026-11-04). Its name and what it computes are unknown. The words read back their last write and start at 0; +0x00 bit 0 is the only status bit seen waited for and is declared idle. No interrupt, DMA or data is modeled."
             }
           ],
           "imaging_statistics": {

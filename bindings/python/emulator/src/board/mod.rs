@@ -1565,6 +1565,16 @@ impl Board {
             })
             .map_err(error)
     }
+    /// Scale the scene light a device declares (1.0 = the declared scene) on
+    /// the stopped board.
+    fn xpp_scene_light(&mut self, node: &str, factor: f64) -> PyResult<()> {
+        let id = self.xpp_node(node)?;
+        self.board_mut()?
+            .with_device_inputs::<fujimod_emulator_xpp::statistics::Engine, _>(id, |engine, _| {
+                engine.set_scene_light(factor)
+            })
+            .map_err(error)
+    }
     /// The DWC3 physical link (cable data lines) at the current device time.
     fn xpp_usb_link(&mut self, node: &str, connected: bool) -> PyResult<()> {
         let id = self.xpp_node(node)?;

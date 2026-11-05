@@ -28,6 +28,42 @@
           "threshold": null
         }
       ]
+    },
+    {
+      "id": "controls-encoder-front",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 1,
+          "pin": 2,
+          "active_level": true
+        },
+        {
+          "kind": "gpio",
+          "port": 1,
+          "pin": 3,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "controls-encoder-rear",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 1,
+          "pin": 4,
+          "active_level": true
+        },
+        {
+          "kind": "gpio",
+          "port": 1,
+          "pin": 5,
+          "active_level": true
+        }
+      ]
     }
   ],
   "parts": [
@@ -47,7 +83,50 @@
     "thermal_connection_ids": [],
     "profiles": {
       "xt20-discovery": {
-        "dram_basis": "Camera MMU first-level table (X-T20 2.11, ff80 read of 0x108000, 2026-10-20): virtual 0-0x3fffffff is normal memory over physical 0. The second bank at 0x80000000 is not declared; no RAM population was measured."
+        "dram_basis": "Camera MMU first-level table (X-T20 2.11, ff80 read of 0x108000, 2026-10-20): virtual 0-0x3fffffff is normal memory over physical 0. The second bank at 0x80000000 is not declared; no RAM population was measured.",
+        "encoders": [
+          {
+            "name": "controls-encoder-front",
+            "options": {
+              "pins": [
+                {
+                  "port": 1,
+                  "pin": 2
+                },
+                {
+                  "port": 1,
+                  "pin": 3
+                }
+              ],
+              "phase_ticks": 240000,
+              "rest_phase": 2
+            },
+            "counter": null
+          },
+          {
+            "name": "controls-encoder-rear",
+            "options": {
+              "pins": [
+                {
+                  "port": 1,
+                  "pin": 4
+                },
+                {
+                  "port": 1,
+                  "pin": 5
+                }
+              ],
+              "phase_ticks": 240000,
+              "rest_phase": 2
+            },
+            "counter": null
+          }
+        ],
+        "limits": [
+          "Command-dial edge pacing comes from the emulator, not from camera measurement: on the stock REC X-T20 2.11 graph board the dial poller 0xc8f440 runs every 120000 board ticks (2.5 ms at 48 MHz; 13 entries over 6M executed instructions, deltas 115447..124850, median 119945), and it posts a step after one stable poll (descriptor field +0x14 = 1 at 0xf7a584), so each declared phase edge is held for 240000 ticks, two poll periods.",
+          "One firmware step is one full Gray cycle (0xc8fb80 forms 2*A+B from bank 1 bits 2/3 and 4/5; table 0xf7a668 front, 0xf7a64c rear posts 0x25/0x3d for 0->1 and 0x24/0x3c for 1->0). Edges per physical detent are not measured, so the model steps in firmware steps and claims no detent count.",
+          "The declared rest phase 2 (A high, B low) is the power-on GPIO bank 1 word 0x1014; one capture held bits 3/5 high instead, so the dial's physical rest position is not established."
+        ]
       }
     }
   }
