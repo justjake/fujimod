@@ -324,7 +324,10 @@ pub enum Model {
     },
     Encoder {
         options: serde_json::Value,
-        gpio: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        gpio: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        adc: Option<String>,
         counter: Option<String>,
     },
     #[serde(rename = "i2c-motor-bridge")]
@@ -628,8 +631,9 @@ impl Model {
                 refs.extend(controllers.iter().map(String::as_str));
             }
             Self::GpioContactResponse { gpio, .. } => refs.push(gpio.as_str()),
-            Self::Encoder { gpio, counter, .. } => {
-                refs.push(gpio.as_str());
+            Self::Encoder { gpio, adc, counter, .. } => {
+                refs.extend(gpio.as_deref());
+                refs.extend(adc.as_deref());
                 refs.extend(counter.as_deref());
             }
             Self::I2cMotorBridge { pulses, gpio, .. } => {

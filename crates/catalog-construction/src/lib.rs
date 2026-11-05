@@ -606,8 +606,12 @@ pub enum ConstructionModel {
         /// counter.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         counter: Option<String>,
-        /// gpio.
-        gpio: String,
+        /// Optional GPIO output connection.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        gpio: Option<String>,
+        /// Optional ADC output connection.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        adc: Option<String>,
     },
     /// exr2-interrupt-controller hardware.
     #[serde(rename = "exr2-interrupt-controller")]

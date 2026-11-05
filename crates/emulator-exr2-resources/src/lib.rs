@@ -100,6 +100,7 @@ pub struct Resources {
     pub users: BTreeMap<String, BTreeSet<usize>>,
     pub image_users: BTreeMap<String, BTreeSet<usize>>,
     pub gpio: BTreeMap<String, gpio::Pads>,
+    pub analog: BTreeMap<String, fujimod_emulator_devices::parts::analog::Samples>,
     pub pulses: BTreeMap<String, pulse::PulsePins>,
     pub encoders: BTreeMap<String, fujimod_emulator_devices::parts::encoder_input::EncoderInput>,
     pub hdmi_sinks: BTreeMap<String, HdmiSink>,

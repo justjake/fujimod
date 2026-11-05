@@ -250,7 +250,7 @@ impl Driver {
                     edges_per_step,
                     ..
                 } => {
-                    if !matches!(edges_per_step, -4 | -2 | 2 | 4) {
+                    if *edges_per_step == 0 || edges_per_step.unsigned_abs() > 64 {
                         return Err("invalid rotary edges per step".into());
                     }
                     session.resources.encoder(node)?;

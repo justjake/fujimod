@@ -1,7 +1,9 @@
 //! A command dial emits physical Gray-code levels at declared edge times.
-//! Host inspection never emits an edge. Firmware decodes the GPIO levels;
+//! Host inspection never emits an edge. Firmware decodes GPIO or ADC levels;
 //! optional counter wiring delivers the same phases to the pulse unit.
+//! ADC channels and their low/high raw codes are explicit body configuration.
 use fujimod_emulator_devices::parts::pins::{Pin, Pins};
+use fujimod_emulator_devices::parts::analog::Samples;
 use fujimod_emulator_devices::exr2::pulse::PulsePins;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::Deserialize;
@@ -10,15 +12,41 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 use fujimod_emulator_devices::parts::encoder_input::{EncoderInput, EncoderQueue};
 
+#[derive(Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Levels {
+    pub low: u16,
+    pub high: u16,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Outputs {
+    #[default]
+    Gpio,
+    Adc {
+        channels: [usize; 2],
+        levels: [Levels; 2],
+    },
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
-    pub pins: [Pin; 2],
+    #[serde(default)]
+    pub pins: Option<[Pin; 2]>,
+    #[serde(default)]
+    pub outputs: Outputs,
     pub phase_ticks: u64,
     pub rest_phase: u8,
 }
+pub enum OutputWiring {
+    Gpio(Box<dyn Pins>),
+    Adc(Samples),
+}
+
 pub struct Wiring {
-    pub gpio: Box<dyn Pins>,
+    pub outputs: OutputWiring,
     pub counter: Option<PulsePins>,
 }
 pub struct Encoder {
@@ -29,20 +57,41 @@ pub struct Encoder {
 }
 impl Encoder {
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
-        for pin in options.pins {
-            pin.validate()?;
+        if options.phase_ticks == 0 || options.rest_phase > 3 {
+            return Err("encoder requires a positive edge period and a two-bit rest phase".into());
         }
-        if options.pins[0] == options.pins[1] || options.phase_ticks == 0 || options.rest_phase > 3
-        {
-            return Err(
-                "encoder requires distinct pads, a positive edge period and a two-bit rest phase"
-                    .into(),
-            );
+        match (&options.outputs, &wiring.outputs) {
+            (Outputs::Gpio, OutputWiring::Gpio(_)) => {
+                let pins = options.pins.ok_or("GPIO encoder requires two pads")?;
+                for pin in pins {
+                    pin.validate()?;
+                }
+                if pins[0] == pins[1] {
+                    return Err("encoder requires distinct pads".into());
+                }
+            }
+            (Outputs::Adc { channels, levels }, OutputWiring::Adc(samples)) => {
+                if options.pins.is_some() || channels[0] == channels[1] {
+                    return Err("ADC encoder requires distinct channels and no GPIO pads".into());
+                }
+                for (&channel, level) in channels.iter().zip(levels) {
+                    samples.get(channel)?;
+                    if level.low >= level.high {
+                        return Err("ADC encoder low code must be below its high code".into());
+                    }
+                }
+            }
+            _ => return Err("encoder output configuration differs from its wiring".into()),
         }
         if wiring.counter.as_ref().is_some_and(|p| {
             !p.quadrature_wired() || p.phase() != [2, 3, 1, 0][options.rest_phase as usize]
         }) {
             return Err("dial counter connection must start at the declared rest phase".into());
+        }
+        if let (Outputs::Adc { channels, levels }, OutputWiring::Adc(samples)) =
+            (&options.outputs, &wiring.outputs)
+        {
+            Self::drive_adc(samples, channels, levels, options.rest_phase)?;
         }
         let input = EncoderInput {
             events: Arc::new(Mutex::new(EncoderQueue {
@@ -62,13 +111,40 @@ impl Encoder {
     }
     /// Body initialization drives the declared external rest state explicitly.
     pub fn initialize(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
-        for (pin, level) in self
-            .options
-            .pins
-            .into_iter()
-            .zip([self.phase & 2 != 0, self.phase & 1 != 0])
+        Self::drive_phase(&self.options, &mut self.wiring.outputs, cx, self.phase)
+    }
+    fn drive_adc(
+        samples: &Samples,
+        channels: &[usize; 2],
+        levels: &[Levels; 2],
+        phase: u8,
+    ) -> Result<(), String> {
+        for ((&channel, level), high) in channels
+            .iter()
+            .zip(levels)
+            .zip([phase & 2 != 0, phase & 1 != 0])
         {
-            self.wiring.gpio.input(cx, pin, level)?;
+            samples.set(channel, if high { level.high } else { level.low })?;
+        }
+        Ok(())
+    }
+    fn drive_phase(
+        options: &Options,
+        outputs: &mut OutputWiring,
+        cx: &mut Cx<'_>,
+        phase: u8,
+    ) -> Result<(), String> {
+        let high = [phase & 2 != 0, phase & 1 != 0];
+        match (&options.outputs, outputs) {
+            (Outputs::Gpio, OutputWiring::Gpio(gpio)) => {
+                for (pin, level) in options.pins.unwrap().into_iter().zip(high) {
+                    gpio.input(cx, pin, level)?;
+                }
+            }
+            (Outputs::Adc { channels, levels }, OutputWiring::Adc(samples)) => {
+                Self::drive_adc(samples, channels, levels, phase)?;
+            }
+            _ => return Err("encoder output configuration differs from its wiring".into()),
         }
         Ok(())
     }
@@ -132,16 +208,14 @@ impl Device for Encoder {
             if at > cx.now() {
                 break;
             }
-            for (pin, level) in self
-                .options
-                .pins
-                .into_iter()
-                .zip([phase & 2 != 0, phase & 1 != 0])
-            {
-                if let Err(error) = self.wiring.gpio.input(cx, pin, level) {
-                    cx.fail(error);
-                    return;
-                }
+            if let Err(error) = Self::drive_phase(
+                &self.options,
+                &mut self.wiring.outputs,
+                cx,
+                phase,
+            ) {
+                cx.fail(error);
+                return;
             }
             if let Some(counter) = &self.wiring.counter {
                 let ordinal = [2, 3, 1, 0][phase as usize];
