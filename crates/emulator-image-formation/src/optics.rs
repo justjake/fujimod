@@ -24,6 +24,9 @@ pub struct Projection {
     readouts: Mutex<Vec<BinnedPrepared>>,
 }
 const CACHE_PIXELS: usize = 4 * 1024 * 1024;
+// One full-resolution readout retains both its linear RGB16 and encoded
+// RGB16 arrays. Keep this pixel-storage budget separate from preview caches.
+const FULL_READOUT_CACHE_BYTES: usize = 256 * 1024 * 1024;
 struct Prepared {
     scene: Arc<Scene>,
     coordinates: Arc<Coordinates>,
@@ -382,7 +385,7 @@ impl Projection {
         frame.filtered = Some(super::exposure::Filtered::projected(pixels.clone()));
         // The scene is retained independently. Bound these sampled projection
         // buffers by their own size, including sparse readouts of large scenes.
-        if linear.len() <= CACHE_PIXELS {
+        if linear.len().saturating_mul(12) <= FULL_READOUT_CACHE_BYTES {
             *prepared = Some(Prepared {
                 scene,
                 coordinates,
@@ -961,6 +964,53 @@ mod tests {
         let mut rgb = frame(vec![128; 64 * 8 * 3], 0.0003);
         p.prepare(&mut rgb, p.subject_shift).unwrap();
         assert!(rgb.sample(0, 3, [64, 8])[1] < rgb.sample(31, 3, [64, 8])[1]);
+    }
+    #[test]
+    fn full_readout_reuses_its_projection_beyond_the_preview_cache_budget() {
+        let (width, height) = (2048, 2050);
+        let mut spec = projection().spec.clone();
+        spec.relative_illumination = Illumination::CosineFourth;
+        let p = Projection::new(spec, Default::default()).unwrap();
+        let base = ExposedFrame::from_frame(
+            Arc::new(
+                Frame::new(
+                    width,
+                    height,
+                    FramePixels::Rgb24(vec![128; width * height * 3].into()),
+                )
+                .unwrap(),
+            ),
+            Exposure {
+                seconds: 0.0002,
+                analog_gain: 1.,
+            },
+            8.,
+            Calibration {
+                full_scale: 16380,
+                reference_white: [256; 3],
+                saturation_lux_seconds: 1.,
+                color_sample_weights: [2, 5, 2],
+            },
+        )
+        .unwrap();
+        let mut first = base.clone();
+        p.prepare(&mut first, p.subject_shift).unwrap();
+        let first_pixels = first.filtered.as_ref().unwrap().materialize();
+        assert!(p.prepared.lock().unwrap().as_ref().unwrap().linear.len() > CACHE_PIXELS);
+        let mut second = base.clone();
+        p.prepare(&mut second, p.subject_shift).unwrap();
+        let second_pixels = second.filtered.as_ref().unwrap().materialize();
+        assert!(Arc::ptr_eq(&first_pixels, &second_pixels));
+        // Clearing the optimization cannot change the physical sample law.
+        *p.prepared.lock().unwrap() = None;
+        let mut cold = base;
+        p.prepare(&mut cold, p.subject_shift).unwrap();
+        let cold_pixels = cold.filtered.as_ref().unwrap().materialize();
+        assert!(!Arc::ptr_eq(&first_pixels, &cold_pixels));
+        for (x, y) in [(0, 0), (2047, 0), (0, 2049), (1024, 1025), (2047, 2049)] {
+            let at = (y * width + x) * 6;
+            assert_eq!(first_pixels[at..at + 6], cold_pixels[at..at + 6]);
+        }
     }
     #[test]
     fn repeated_exposures_reuse_optics_and_keep_uncached_pixel_results() {
