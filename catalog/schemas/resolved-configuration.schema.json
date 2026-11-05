@@ -7295,6 +7295,40 @@
         },
         {
           "additionalProperties": false,
+          "description": "Conjunction of the ordered digital contacts in one body connection.",
+          "properties": {
+            "callback": {
+              "description": "Firmware callback evaluating the conjunction.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "connection_id": {
+              "description": "Body connection carrying all of the contacts, in predicate order.",
+              "type": "string"
+            },
+            "expected_levels": {
+              "description": "Required logic level of each contact.",
+              "items": {
+                "type": "boolean"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "gpio_contacts",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "expected_levels",
+            "callback"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Physical encoder interpreted by a located quadrature decoder.",
           "properties": {
             "connection_id": {
