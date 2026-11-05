@@ -222,6 +222,7 @@ serde = "1"
 serde_json = "1"
 schemars = "1.2.3"
 ciborium = "0.2"
+smoltcp = { version = "0.12", default-features = false, features = ["std", "medium-ethernet", "proto-ipv4", "proto-dhcpv4", "proto-dns", "socket-udp"] }
 fujimod-usb = { path = "crates/usb", version = "0.1.0" }
 fujimod-usb-app80 = { path = "crates/usb-app80", version = "0.1.0" }
 fujimod-usb-app80-types = { path = "crates/usb-app80-types", version = "0.1.0" }
