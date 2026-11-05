@@ -389,6 +389,7 @@ fn profile() -> FirmwareCard {
             directory_context_bytes: 120,
             directory_attribute_offset: 59,
             directory_size_offset: 80,
+            directory_size_bytes: 8,
             chunk_bytes: 64,
             end_of_directory_status: 6,
         })),
@@ -975,4 +976,30 @@ fn bounded_requests_accept_the_mount_transfer_size_and_refuse_larger_or_overflow
             .is_err()
         );
     }
+}
+#[test]
+fn directory_size_width_is_explicit_and_geometry_is_checked() {
+    let mut p = profile();
+    let Mechanism::StockSdk(sdk) = &mut p.mechanism else {
+        panic!()
+    };
+    let mut value = serde_json::to_value(&**sdk).unwrap();
+    value
+        .as_object_mut()
+        .unwrap()
+        .remove("directory_size_bytes");
+    assert!(serde_json::from_value::<StockSdk>(value).is_err());
+    sdk.directory_size_bytes = 4;
+    p.validate().unwrap();
+    let Mechanism::StockSdk(sdk) = &mut p.mechanism else {
+        panic!()
+    };
+    sdk.directory_size_bytes = 3;
+    assert!(p.validate().is_err());
+    let Mechanism::StockSdk(sdk) = &mut p.mechanism else {
+        panic!()
+    };
+    sdk.directory_size_bytes = 4;
+    sdk.directory_size_offset = u32::MAX;
+    assert!(p.validate().is_err());
 }
