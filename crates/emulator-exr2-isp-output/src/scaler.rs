@@ -30,59 +30,62 @@ fn centered_packed422(
     source: &[u8],
     src: Raster,
     dst: Raster,
-    step: [u32; 2],
+    transform: [i32; 4],
     phase: [u32; 2],
     input_center: u32,
     output_center: u32,
     origin: [u32; 2],
     out: &mut [u8],
 ) -> Result<(), String> {
-    let fixed_coordinate = |axis: usize, index: usize| -> i64 {
-        let center = |word: u32| i64::from(word >> (axis * 16) & 8191);
-        let signed_phase = i64::from((phase[axis] << 2) as i32 >> 2);
-        (center(input_center) << 16)
-            + (i64::from(origin[axis]) + index as i64 - center(output_center))
-                * i64::from(step[axis])
-            + signed_phase
+    // The vertical affine pass feeds the horizontal shear. Both retain Q16
+    // precision here; bilinear sampling remains a declared approximation.
+    let fixed = |x: usize, y: usize| -> [i64; 2] {
+        let center = |word: u32, axis: usize| i64::from(word >> (axis * 16) & 8191);
+        let signed_phase = |axis: usize| i64::from((phase[axis] << 2) as i32 >> 2);
+        let dx = i64::from(origin[0]) + x as i64 - center(output_center, 0);
+        let dy = i64::from(origin[1]) + y as i64 - center(output_center, 1);
+        let sy = i64::from(transform[2]) * dx + i64::from(transform[3]) * dy + signed_phase(1);
+        let sx =
+            i64::from(transform[0]) * dx + i64::from(transform[1]) * sy / 65536 + signed_phase(0);
+        [
+            (center(input_center, 0) << 16) + sx,
+            (center(input_center, 1) << 16) + sy,
+        ]
     };
-    let coordinate = |axis: usize, index: usize| -> (usize, usize, u64) {
-        let bound = if axis == 0 { src.width } else { src.height };
-        let value = fixed_coordinate(axis, index).clamp(0, ((bound - 1) as i64) << 16);
-        let first = (value >> 16) as usize;
-        (first, (first + 1).min(bound - 1), (value & 65535) as u64)
-    };
-    // Admit partial overlap with replicated source edges, as in the plain
-    // bilinear path. An aligned destination tail need not lie inside the
-    // source. Refuse wholly disjoint spans before touching staging storage.
+    let corners = [
+        fixed(0, 0),
+        fixed(dst.width - 1, 0),
+        fixed(0, dst.height - 1),
+        fixed(dst.width - 1, dst.height - 1),
+    ];
     for axis in 0..2 {
-        let count = if axis == 0 { dst.width } else { dst.height };
         let bound = if axis == 0 { src.width } else { src.height };
-        if fixed_coordinate(axis, count - 1) < 0
-            || fixed_coordinate(axis, 0) > ((bound - 1) as i64) << 16
+        if corners.iter().all(|p| p[axis] < 0)
+            || corners.iter().all(|p| p[axis] > ((bound - 1) as i64) << 16)
         {
             return Err("scaler centered span misses source raster".into());
         }
     }
     for y in 0..dst.height {
-        let (y0, y1, dy) = coordinate(1, y);
         for x in (0..dst.width).step_by(2) {
             let at = (y * dst.width + x) * 2;
             for lane in 0..4 {
                 let channel = if lane < 2 { 0 } else { lane - 1 };
                 let index = if channel == 0 { x + lane } else { x };
-                let (mut x0, _, dx) = coordinate(0, index);
-                let mut fixed = ((x0 as u64) << 16) + dx;
+                let point = fixed(index, y);
+                let mut fx = point[0].clamp(0, ((src.width - 1) as i64) << 16) as u64;
+                let fy = point[1].clamp(0, ((src.height - 1) as i64) << 16) as u64;
+                if channel != 0 {
+                    fx /= 2;
+                }
                 let width = if channel == 0 {
                     src.width
                 } else {
                     src.width / 2
                 };
-                if channel != 0 {
-                    fixed /= 2;
-                }
-                x0 = (fixed >> 16) as usize;
-                let x1 = (x0 + 1).min(width - 1);
-                let dx = fixed & 65535;
+                let (x0, y0) = ((fx >> 16) as usize, (fy >> 16) as usize);
+                let (x1, y1) = ((x0 + 1).min(width - 1), (y0 + 1).min(src.height - 1));
+                let (dx, dy) = (fx & 65535, fy & 65535);
                 let sample = |x: usize, y: usize| {
                     let pixel = if channel == 0 { x } else { x * 2 };
                     let i = y * src.pitch
@@ -98,6 +101,7 @@ fn centered_packed422(
     }
     Ok(())
 }
+
 impl Scaler {
     pub fn new(options: Options, irq: Irq) -> Result<Self, String> {
         if !(1..=1 << 24).contains(&options.completion_ticks) {
@@ -130,7 +134,9 @@ impl Scaler {
         };
         src.validate(src.width * 2)?;
         dst.validate(dst.width * 2)?;
-        let centered = [0x4c, 0x5c, 0x60, 0x64].iter().any(|&o| r[o / 4] != 0);
+        let centered = [0x44, 0x4c, 0x50, 0x5c, 0x60, 0x64]
+            .iter()
+            .any(|&o| r[o / 4] != 0);
         if centered
             && [0x2c, 0x60, 0x64]
                 .iter()
@@ -141,9 +147,8 @@ impl Scaler {
         if self.dma.deadline().is_some()
             || r[0x7c / 4] & 0x1000 == 0
             || r[2] > 2
-            || [0x44, 0x48, 0x50, 0x58, 0x70]
-                .iter()
-                .any(|&o| r[o / 4] != 0)
+            || [0x44, 0x50].iter().any(|&o| r[o / 4] & !0x3ffff != 0)
+            || [0x48, 0x58, 0x70].iter().any(|&o| r[o / 4] != 0)
             || !centered && [0x2c, 0x4c, 0x5c].iter().any(|&o| r[o / 4] != 0)
             || centered && [0x4c, 0x5c].iter().any(|&o| r[o / 4] & !0x3fffffff != 0)
             || [src.width, dst.width, src.pitch / 2, dst.pitch / 2]
@@ -175,7 +180,7 @@ impl Scaler {
                 &self.source,
                 src,
                 dst,
-                [r[0x40 / 4], r[0x54 / 4]],
+                [0x40, 0x44, 0x50, 0x54].map(|o| (r[o / 4] << 14) as i32 >> 14),
                 [r[0x4c / 4], r[0x5c / 4]],
                 r[0x60 / 4],
                 r[0x64 / 4],

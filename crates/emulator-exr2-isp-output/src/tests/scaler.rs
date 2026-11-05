@@ -36,7 +36,7 @@ fn scaler_dma_padding_reset_and_unsupported_transform() {
     assert_eq!(read(&mut d, &mut h, 0xfff47074), 1);
     write(&mut d, &mut h, 0xfff47078, 1);
     assert_eq!(read(&mut d, &mut h, 0xfff47074), 0);
-    write(&mut d, &mut h, 0xfff47044, 1);
+    write(&mut d, &mut h, 0xfff47048, 1);
     let mut cx = h.cx();
     d.write(&mut cx, 0xfff47004, 4, 1);
     assert!(cx.refusal().is_some());
@@ -260,6 +260,54 @@ fn zero_center_translation_uses_phase_at_each_transfer_burst() {
             );
             assert_eq!(&h.ram[0x9010 + y * 32..0x9020 + y * 32], &[0xa5; 16]);
         }
+        assert_eq!(h.irqs, [(0, 67)]);
+    }
+}
+
+#[test]
+fn factorized_shears_compose_in_vertical_then_horizontal_order() {
+    for (vertical, horizontal, x, y, expected) in [
+        (32768, 0, 2, 1, 40),
+        (-32768i32, 0, 4, 3, 32),
+        (32768, 32768, 2, 2, 62),
+    ] {
+        let mut h = TestHost::new();
+        for y in 0..8 {
+            for x in (0..8).step_by(2) {
+                let at = 0x8000 + (y * 8 + x) * 2;
+                h.ram[at..at + 4].copy_from_slice(&[
+                    (x * 4 + y * 16) as u8,
+                    ((x + 1) * 4 + y * 16) as u8,
+                    80,
+                    160,
+                ]);
+            }
+        }
+        let mut d = Scaler::new(
+            fujimod_emulator_imaging::exr2_isp::options::scaler::Options {
+                completion_ticks: 4,
+            },
+            Irq { core: 0, line: 67 },
+        )
+        .unwrap();
+        for (offset, value) in [
+            (0x10, 0x8000),
+            (0x14, 8),
+            (0x18, 8 << 16 | 8),
+            (0x20, 0x9000),
+            (0x24, 8),
+            (0x28, 8 << 16 | 8),
+            (0x40, 65536),
+            (0x44, horizontal),
+            (0x50, vertical as u32 & 0x3ffff),
+            (0x54, 65536),
+            (0x7c, 0x1000),
+            (4, 1),
+        ] {
+            write(&mut d, &mut h, 0xfff47000 + offset, value);
+        }
+        advance(&mut d, &mut h, 4);
+        assert_eq!(h.ram[0x9000 + (y * 8 + x) / 2 * 4 + x % 2], expected);
         assert_eq!(h.irqs, [(0, 67)]);
     }
 }
