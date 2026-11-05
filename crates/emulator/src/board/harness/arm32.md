@@ -61,7 +61,7 @@ separately guarded host writes do not follow from the single-write control.
 
 **Verified (instruction source):** The
 [ARMv7-A/R architecture manual](https://documentation-service.arm.com/static/5f8daeb7f86e16515cdb8c4e),
-sections A8.8.43--44 and A8.8.79/A8.8.216, defines the DSB/DMB domain/access
+sections A8.8.44--45 and A8.8.79/A8.8.216, defines the DSB/DMB domain/access
 options and A32 LDREXH/STREXH encodings. The guard admits the eight defined
 ARMv7 DSB/DMB options, exact CLREX and ISB SY, and aligned RAM halfword
 exclusives. The CPU still executes these instructions and owns its exclusive
