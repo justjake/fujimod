@@ -710,6 +710,18 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
                     }
                 }
                 c.cpus[core].write_memory(physical, &value.to_le_bytes()[..size])?;
+                // Software-emulated exclusives bypass the CPU memory hook.
+                // Preflight checked the complete RAM write and record bound;
+                // record only the store that actually succeeded.
+                if let Some(guard) = &mut state.driver_guard {
+                    guard.store(
+                        core,
+                        address,
+                        physical,
+                        size as u32,
+                        value & (u64::MAX >> ((8 - size) * 8)),
+                    );
+                }
             }
             c.write_reg(core, arm::CORE[rd], u32::from(!success))?;
         }

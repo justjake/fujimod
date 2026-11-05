@@ -52,6 +52,89 @@ fn program(session: &Session, code: &[u32], policy: Value) {
 }
 
 #[test]
+fn halfword_exclusive_writes_are_recorded_only_on_success_and_respect_the_bound() {
+    let run = |session: &Session| {
+        // Software-emulated exclusives redirect the CPU; resume the same guard.
+        for _ in 0..16 {
+            let remaining = 64u64.saturating_sub(session.state(false).instructions);
+            assert!(remaining > 0, "exclusive caller instruction bound reached");
+            session.run(0, remaining as usize).unwrap();
+            let guard = session.driver_guard_state().unwrap();
+            if guard.returned || guard.failure.is_some() {
+                return;
+            }
+        }
+        panic!("exclusive caller redirect bound reached");
+    };
+    for limit in [1, 2] {
+        let session = session();
+        let mut code = vec![];
+        mov32(&mut code, 3, 0x4000);
+        mov32(&mut code, 1, 0x1234);
+        // Two successful halfword exclusives, with distinct values and DMB ISH.
+        code.extend([
+            0xf57ff05b, 0xe1f32f9f, 0xe1e30f91, 0xe2811001, 0xe1f32f9f, 0xe1e30f91, 0xe12fff1e,
+        ]);
+        let bytes: Vec<_> = code.iter().flat_map(|word| word.to_le_bytes()).collect();
+        session.write(0x1000, &bytes).unwrap();
+        session.write(0x4000, &[0xa5; 4]).unwrap();
+        session
+            .driver_guard_begin(
+                vec![(0x1000, 0x1000 + bytes.len() as u64)],
+                vec![(0, 65536)],
+                vec![(0x4000, 0x4002)],
+                0x8000,
+                limit,
+                0,
+                Some(policy(&[], false, vec![]).to_string()),
+            )
+            .unwrap();
+        run(&session);
+        let observed = session.driver_guard_state().unwrap();
+        let mut actual = [0; 4];
+        session.read(0x4000, &mut actual).unwrap();
+        if limit == 1 {
+            assert!(observed.failure.unwrap().contains("store record bound"));
+            assert_eq!(actual, [0x34, 0x12, 0xa5, 0xa5]);
+            assert_eq!(observed.stores, vec![(0, 0x1018, 0x4000, 2, 0x1234)]);
+        } else {
+            assert!(observed.returned && observed.failure.is_none());
+            assert_eq!(actual, [0x35, 0x12, 0xa5, 0xa5]);
+            assert_eq!(
+                observed.stores,
+                vec![
+                    (0, 0x1018, 0x4000, 2, 0x1234),
+                    (0, 0x1024, 0x4000, 2, 0x1235)
+                ]
+            );
+        }
+        session.driver_guard_end();
+    }
+
+    let session = session();
+    let mut code = vec![];
+    mov32(&mut code, 3, 0x4000);
+    mov32(&mut code, 1, 0x1234);
+    // No preceding load-exclusive: the CPU must report failure without a write.
+    code.extend([0xe1e30f91, 0xe12fff1e]);
+    session.write(0x4000, &[0xa5; 4]).unwrap();
+    program(&session, &code, policy(&[], false, vec![]));
+    run(&session);
+    let observed = session.driver_guard_state().unwrap();
+    assert!(observed.returned && observed.failure.is_none());
+    assert!(observed.stores.is_empty());
+    assert_eq!(
+        session
+            .read_register(0, Register::Arm32(arm::Register::R(0)))
+            .unwrap(),
+        1
+    );
+    let mut actual = [0; 4];
+    session.read(0x4000, &mut actual).unwrap();
+    assert_eq!(actual, [0xa5; 4]);
+}
+
+#[test]
 fn modeled_register_access_requires_explicit_policy_and_checks_before_dispatch() {
     for write in [false, true] {
         let session = session();
