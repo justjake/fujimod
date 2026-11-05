@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fujimod.com/schemas/ota-system-manifest.schema.json",
+  "title": "FujiMod OTA system manifest",
+  "description": "A.JSN and B.JSN are the two interchangeable system manifests under FUJIMOD/SYSTEM/<firmware>/. The loader and file layer use the higher gen that parses; an unparseable manifest leaves the other slot active.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "gen",
+    "fs"
+  ],
+  "properties": {
+    "gen": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2147483647,
+      "description": "Generation number. A commit writes the next generation into the older slot."
+    },
+    "version": {
+      "type": "string",
+      "maxLength": 127,
+      "default": "",
+      "description": "Release version copied from the selected release manifest. An absent version means an unknown release."
+    },
+    "fs": {
+      "type": "object",
+      "description": "File layer paths mapped to the full SHA-256 of the store file that supplies them.",
+      "maxProperties": 32,
+      "propertyNames": {
+        "maxLength": 127
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 64,
+        "maxLength": 64,
+        "pattern": "^[0-9a-fA-F]{64}$",
+        "description": "Full SHA-256 of the store file, in hexadecimal."
+      }
+    }
+  }
+}
