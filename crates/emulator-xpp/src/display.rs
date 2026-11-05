@@ -712,6 +712,51 @@ mod tests {
     }
 
     #[test]
+    fn an_enabled_video_path_without_a_committed_plane_scans_the_osd_layers() {
+        const BASE: u64 = 0xfff64000;
+        let scanout = Some(Scanout {
+            output: 0,
+            period: 10,
+        });
+        let mut out = Output::new(BASE, 0x3000, &[], &[], scanout).unwrap();
+        let mut host = Screen {
+            ram: vec![0; 0x100],
+            ..Screen::default()
+        };
+        // One 2 x 1 opaque red OSD layer.
+        host.ram[0x40..0x48].copy_from_slice(&[255, 0, 0, 255, 0, 0, 0, 0]);
+        let write = |out: &mut Output, host: &mut Screen, offset: u64, value: u32| {
+            out.write(
+                &mut Cx::new(host, 0, 0, 0),
+                BASE + offset,
+                4,
+                u64::from(value),
+            );
+        };
+        // The update UI's commit: video on, size and buffer still zero.
+        for (offset, value) in [
+            (CONTROL, 0x101_0104),
+            (OUTPUT_SIZE, 0x1_0000),
+            (VIDEO_FORMAT, PACKED_422),
+            (VIDEO_SIZE, 0),
+            (VIDEO_BUFFER, 0),
+            (LAYER_ENABLE, 1),
+            (LAYER_SIZE, 0x1_0000),
+            (LAYER_BUFFER, 0x40),
+        ] {
+            write(&mut out, &mut host, offset, value);
+        }
+        host.now = 10;
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        out.advance(&mut cx);
+        assert!(!cx.is_unmodeled());
+        assert_eq!(
+            host.frames.last().unwrap().rgba,
+            [255, 0, 0, 255, 0, 0, 0, 255]
+        );
+    }
+
+    #[test]
     fn outputs_read_back_words_with_declared_status_bits() {
         use fujimod_emulator_devices::test_host::{TestHost, read, write};
         const BASE: u64 = 0xfff64000;

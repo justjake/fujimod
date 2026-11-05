@@ -53,34 +53,42 @@ impl Decoder<'_> {
         if video {
             let (w, h) = Self::extent(self.word(VIDEO_SIZE)).ok_or(())?;
             let buffer = u64::from(self.word(VIDEO_BUFFER));
-            if self.word(VIDEO_FORMAT) != PACKED_422
-                || w > width
-                || h > height
-                || w & 1 != 0
-                || buffer & 3 != 0
+            // The video path can be on with no plane committed: the X-T20's
+            // update page switches bit 2 of +0x000 on while +0x02c and +0x030
+            // both stay zero, and the layers then compose over black. A plane
+            // with only one of them set is still refused.
+            let committed = self.word(VIDEO_SIZE) != 0 || buffer != 0;
+            if committed
+                && (self.word(VIDEO_FORMAT) != PACKED_422
+                    || w > width
+                    || h > height
+                    || w & 1 != 0
+                    || buffer & 3 != 0)
             {
                 return Err(());
             }
-            let plane = Plane {
-                address: buffer,
-                stride: w * 2,
-                source_x: 0,
-                source_y: 0,
-                source_width: w,
-                source_height: h,
-                sampling: None,
-                work_x: 0,
-                work_y: 0,
-                work_width: w,
-                work_height: h,
-                order: PixelOrder::YyCbCr,
-            };
-            raster::composite(|a, n| read(a, n), plane, width, height, &mut rgba)
-                .map_err(|_| ())?;
-            for pixel in rgba.chunks_exact_mut(4) {
-                pixel.swap(0, 2);
+            if committed {
+                let plane = Plane {
+                    address: buffer,
+                    stride: w * 2,
+                    source_x: 0,
+                    source_y: 0,
+                    source_width: w,
+                    source_height: h,
+                    sampling: None,
+                    work_x: 0,
+                    work_y: 0,
+                    work_width: w,
+                    work_height: h,
+                    order: PixelOrder::YyCbCr,
+                };
+                raster::composite(|a, n| read(a, n), plane, width, height, &mut rgba)
+                    .map_err(|_| ())?;
+                for pixel in rgba.chunks_exact_mut(4) {
+                    pixel.swap(0, 2);
+                }
+                top = buffer;
             }
-            top = buffer;
         }
         for layer in (0..4).filter(|n| enable & 1 << n != 0) {
             let at = |offset: u64| offset + 4 * layer as u64;
