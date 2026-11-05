@@ -8,8 +8,9 @@ serves `share.fujimod.com`; its signaling endpoint is
 ## Deploy
 
 Website deployment is independent of mod publication. GitHub Releases contain
-`patches.json`, mod patches, and optional `notes.md`. Generated emulator runtimes, the camera
-catalog, and feature media are uploaded directly to Cloudflare with the website.
+`patches.json`, mod patches, optional `notes.md`, and camera update assets.
+Generated emulator runtimes, the camera catalog, and feature media are uploaded
+directly to Cloudflare with the website.
 Generated assets stay outside Git.
 
 From `apps/web`, use the locally generated asset directories:
@@ -53,9 +54,46 @@ Only successful responses are cached; browser consumers still verify file sizes
 and SHA-256. Development and preview servers expose the same routes from
 `FUJIMOD_PATCHES` without caching.
 
+## OTA updates
+
+Camera updates use the same release. `GET /ota/<firmware-id>/latest.json`
+answers with the release manifest and `GET /ota/store/<XXXXXXXX.YYY>` with the
+store file of that content-addressed name. Both come from the newest published
+release that carries `patches.json`. `/ota/timezone` answers with
+`{"timezone": <request.cf.timezone>}` for clock setup.
+
+`fujimod-release-manifest` writes a release directory containing `latest.json`
+and one file per distinct SHA-256. Upload it with the manifest renamed to
+`<firmware-id>-latest.json`, because GitHub release assets have flat names:
+
+```sh
+gh release upload <tag> \
+  release/latest.json#x70-110-latest.json \
+  release/[0-9A-F]*.???
+```
+
+The store file name is the full asset name, so every release must include each
+store file its manifest names. The Worker rejects a manifest whose `firmware`
+field differs from the requested firmware id. Requests never forward the
+client's authorization or cookie headers to GitHub.
+
+`latest.json` is fetched from GitHub on every request and sent with
+`Cache-Control: no-store`, so a published release reaches cameras immediately.
+Store files are immutable: the Worker caches their full bytes at the edge and
+in the `RELEASES` KV namespace, and serves stored bytes while GitHub fails.
+
+A single `bytes=` range is honored. The Worker forwards it to GitHub and relays
+a `206` with `Content-Range`, or slices a cached full copy; an unsatisfiable
+range answers `416` with `Content-Range: bytes */<size>`. Other range syntax
+receives the whole file with `200`. `HEAD` answers with the same status and
+headers as `GET` and no body. The Worker follows GitHub's redirect to asset
+storage itself, so these routes answer directly over HTTPS without redirecting
+the camera.
+
 Verify both HTTPS hostnames, `/dev-tools/`, camera launch controls, an actual
-emulator boot, and feature media after deployment. Firmware DATs are selected
-locally in the browser and are not website assets.
+emulator boot, `/ota/timezone`, a release manifest, and feature media after
+deployment. Firmware DATs are selected locally in the browser and are not
+website assets.
 
 ## Accounts
 
