@@ -41,9 +41,6 @@
             {
               "name": "imagescaler",
               "kind": "ImageScaler",
-              "boot_entries": [
-                "loader"
-              ],
               "refs": {}
             },
             {
@@ -660,9 +657,6 @@
             {
               "name": "imagescaler",
               "kind": "ImageScaler",
-              "boot_entries": [
-                "loader"
-              ],
               "refs": {}
             },
             {
