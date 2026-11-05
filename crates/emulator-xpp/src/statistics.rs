@@ -30,6 +30,22 @@
 //! (red, green, blue; green is about 2.6 times red, probably both green
 //! sites) and a fourth plane of zeros, as in the camera's captures. The
 //! scene is uniform, so every zone of a plane holds the declared value.
+//! A declared picture ([`ZoneScene`]) replaces the uniform value with the
+//! mean linear radiance of each zone, sampled once when the picture is
+//! declared; the sums keep the declared scale.
+//! With a picture, three more buffers follow it. The first window record
+//! (+0x1d0 words 0, 2 and 4) scales the declared wall words by the mean
+//! radiance of the centre 2x2 zones over the wall's declared radiance. The
+//! coarse planes (+0x1d4, three 8x8 planes) hold the sum of each cell's 2x2
+//! zones times the camera's measured 2.2%. The reference planes (+0x1d8,
+//! three 8x8 planes) hold the constants 5084, 12710 and 5084, unscaled. The
+//! 256-bin histogram (+0x1e4) bins the display-coded luma of the picture,
+//! half a code per bin, on a regular grid, with its counts scaled to the
+//! camera's measured total of 725454; it does not take the exposure or
+//! scene-light scale. All of these are written at the address the buffer's
+//! output word holds; a word that holds no half (0) writes nothing, as the
+//! firmware has not programmed that buffer. Without a picture, none of the
+//! three is written, and the window keeps its declared words.
 //! Declared buffers name one of the twelve output words and the u32 words
 //! the engine writes there each frame, in the half it completes (measured
 //! buffers of the same scene). Declared light words of a buffer are linear
@@ -53,6 +69,28 @@ const IDLE: u32 = 1 << 16;
 const ZONE_SUMS: u64 = 0x1cc;
 const ZONES: usize = 256;
 const OUTPUTS: std::ops::RangeInclusive<u64> = 0x1b8..=0x1e4;
+/// The window buffer: 80 u32 in records of eight, red, green and blue at
+/// +0/+2/+4 of each record.
+const WINDOW_OUTPUT: u64 = 0x1d0;
+/// The words of the window's first record: the centre window's channels.
+const WINDOW_CENTRE: [u32; 3] = [0, 2, 4];
+/// The coarse planes: three 8x8 planes of 2x2 zone sums.
+const COARSE_OUTPUT: u64 = 0x1d4;
+/// The reference planes: three 8x8 planes of constants.
+const REFERENCE_OUTPUT: u64 = 0x1d8;
+/// The 256-bin luma histogram.
+const HISTOGRAM_OUTPUT: u64 = 0x1e4;
+/// The camera's coarse planes read 2.2% above the sum of their zones
+/// (measured on one uniform scene).
+const COARSE_GAIN: f64 = 1.022;
+/// The camera's histogram counts sum to this in every scene (measured on one
+/// uniform scene).
+const HISTOGRAM_TOTAL: u32 = 725_454;
+/// Samples per axis of the picture grid the histogram counts.
+const HISTOGRAM_GRID: u64 = 64;
+/// Each channel's reference-plane level: red, green, blue (the same in every
+/// camera capture).
+const REFERENCE_LEVELS: [u32; 3] = [5_084, 12_710, 5_084];
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -94,11 +132,21 @@ pub struct Engine {
     irq: u32,
     period: u64,
     scene: Option<[u32; 3]>,
-    zone_scene: Option<ZoneScene>,
+    picture: Option<Picture>,
     exposure: Option<Exposure>,
     light: Option<SceneLight>,
     buffers: Vec<Buffer>,
     state: State,
+}
+/// What a declared picture contributes to the buffers, computed once when it
+/// is declared: the mean radiance of every zone, the centre window's mean,
+/// the wall reference and the luma histogram.
+struct Picture {
+    sums: [u32; 3],
+    zones: Vec<[f64; 3]>,
+    centre: [f64; 3],
+    reference: [f64; 3],
+    histogram: [u32; 256],
 }
 /// One declared buffer: the output word (+0x1b8..+0x1e4), the u32 words the
 /// engine writes there each frame, and the word indices that are linear light
@@ -181,6 +229,66 @@ pub(crate) fn linear(sample: u8) -> f64 {
         ((s + 0.055) / 1.055).powf(2.4)
     }
 }
+/// Display-coded luma of one pixel: BT.601 weights, the matrix the declared
+/// still profile encodes its Y'CbCr with.
+fn luma(rgb: [u8; 3]) -> u8 {
+    let y = 0.299 * f64::from(rgb[0]) + 0.587 * f64::from(rgb[1]) + 0.114 * f64::from(rgb[2]);
+    y.round_ties_even().clamp(0., 255.) as u8
+}
+/// The picture's 256-bin luma histogram, half a code per bin, sampled on a
+/// regular grid and scaled so the counts total [`HISTOGRAM_TOTAL`] exactly.
+/// The exposure and scene-light scales do not enter it.
+fn histogram(scene: &ZoneScene) -> [u32; 256] {
+    let mut counts = [0u32; 256];
+    for sy in 0..HISTOGRAM_GRID {
+        for sx in 0..HISTOGRAM_GRID {
+            let x = ((2 * sx + 1) * scene.width / (2 * HISTOGRAM_GRID)).min(scene.width - 1);
+            let y = ((2 * sy + 1) * scene.height / (2 * HISTOGRAM_GRID)).min(scene.height - 1);
+            let at = ((y * scene.width + x) * 3) as usize;
+            let bin = usize::from(luma([scene.rgb[at], scene.rgb[at + 1], scene.rgb[at + 2]]) / 2);
+            counts[bin] += 1;
+        }
+    }
+    let samples: u64 = counts.iter().map(|count| u64::from(*count)).sum();
+    let mut scaled = [0u32; 256];
+    let mut before = 0u64;
+    let mut counted = 0u64;
+    for (bin, count) in counts.iter().enumerate() {
+        counted += u64::from(*count);
+        let upto = (counted * u64::from(HISTOGRAM_TOTAL) + samples / 2) / samples;
+        scaled[bin] = (upto - before) as u32;
+        before = upto;
+    }
+    scaled
+}
+/// The coarse planes: three 8x8 planes, each cell the sum of its 2x2 zones
+/// times the measured gain.
+fn coarse(zones: &[[u32; 3]]) -> Vec<u8> {
+    (0..3)
+        .flat_map(|channel| {
+            (0..64).map(move |cell| {
+                let (x, y) = (2 * (cell % 8), 2 * (cell / 8));
+                let sum: u64 = [0, 1, 2, 3]
+                    .map(|n| u64::from(zones[(y + n / 2) * 16 + x + n % 2][channel]))
+                    .into_iter()
+                    .sum();
+                (sum as f64 * COARSE_GAIN)
+                    .round()
+                    .clamp(0., f64::from(u32::MAX)) as u32
+            })
+        })
+        .flat_map(u32::to_le_bytes)
+        .collect()
+}
+/// The reference planes: three 8x8 planes of each channel's constant, not
+/// scaled by exposure or scene light.
+fn reference_planes() -> Vec<u8> {
+    REFERENCE_LEVELS
+        .iter()
+        .flat_map(|level| std::iter::repeat_n(level.to_le_bytes(), 64))
+        .flatten()
+        .collect()
+}
 impl Engine {
     pub fn new(base: u64, irq: u32, period: u64) -> Result<Self, String> {
         if base & 0xfff != 0 || !(32..512).contains(&irq) || period == 0 {
@@ -191,7 +299,7 @@ impl Engine {
             irq,
             period,
             scene: None,
-            zone_scene: None,
+            picture: None,
             exposure: None,
             light: None,
             buffers: Vec::new(),
@@ -204,7 +312,8 @@ impl Engine {
         self
     }
     /// The zone sums follow a declared scene image instead of one uniform
-    /// value per plane; requires the measured wall sums (`with_scene`).
+    /// value per plane; requires the measured wall sums (`with_scene`). The
+    /// picture's zone means and histogram are computed here, once.
     pub fn with_zone_scene(mut self, scene: ZoneScene) -> Result<Self, String> {
         if self.scene.is_none()
             || !(1..=8192).contains(&scene.width)
@@ -215,7 +324,25 @@ impl Engine {
         {
             return Err("Invalid X-Processor Pro zone scene".into());
         }
-        self.zone_scene = Some(scene);
+        let zones: Vec<[f64; 3]> = (0..ZONES)
+            .map(|zone| scene.zone(zone % 16, zone / 16))
+            .collect();
+        let mut centre = [0.; 3];
+        for zy in 7..9 {
+            for zx in 7..9 {
+                let zone = zones[zy * 16 + zx];
+                for c in 0..3 {
+                    centre[c] += zone[c] / 4.;
+                }
+            }
+        }
+        self.picture = Some(Picture {
+            sums: scene.sums,
+            reference: [scene.reference(0), scene.reference(1), scene.reference(2)],
+            zones,
+            centre,
+            histogram: histogram(&scene),
+        });
         Ok(self)
     }
     /// The zone sums follow a published integration value; requires the
@@ -308,25 +435,34 @@ impl Engine {
             cx.fail("Statistics buffer outside RAM");
         }
     }
+    /// Write a buffer the picture fills at the half its output word names; a
+    /// word that holds no half (0) writes nothing, as the firmware has not
+    /// programmed that buffer.
+    fn write_scene_output(&self, cx: &mut Cx<'_>, output: u64, data: &[u8]) {
+        if self.word(output) != 0 {
+            self.write_output(cx, output, data);
+        }
+    }
     fn write_buffers(&self, cx: &mut Cx<'_>) {
         let factor = self.scene_factor();
         let scaled = |value: f64| (value * factor).round().clamp(0., f64::from(u32::MAX)) as u32;
-        if let Some(scene) = &self.zone_scene {
+        let values = if let Some(picture) = &self.picture {
+            let mut values = vec![[0u32; 3]; ZONES];
             let mut planes = Vec::with_capacity(4 * ZONES * 4);
             for plane in 0..4 {
-                for zone in 0..ZONES {
-                    let value = match plane {
-                        3 => 0,
-                        c => {
-                            let (zx, zy) = (zone % 16, zone / 16);
-                            let radiance = scene.zone(zx, zy)[c];
-                            scaled(f64::from(scene.sums[c]) * radiance / scene.reference(c))
-                        }
-                    };
-                    planes.extend_from_slice(&value.to_le_bytes());
+                for (zone, value) in values.iter_mut().enumerate() {
+                    if plane < 3 {
+                        value[plane] = scaled(
+                            f64::from(picture.sums[plane]) * picture.zones[zone][plane]
+                                / picture.reference[plane],
+                        );
+                    }
+                    let word = if plane < 3 { value[plane] } else { 0 };
+                    planes.extend_from_slice(&word.to_le_bytes());
                 }
             }
             self.write_output(cx, ZONE_SUMS, &planes);
+            Some(values)
         } else if let Some(scene) = self.scene {
             let mut planes = Vec::with_capacity(4 * ZONES * 4);
             for value in scene.map(|v| scaled(f64::from(v))).into_iter().chain([0]) {
@@ -335,22 +471,43 @@ impl Engine {
                 }
             }
             self.write_output(cx, ZONE_SUMS, &planes);
-        }
+            None
+        } else {
+            None
+        };
         for buffer in &self.buffers {
             let data: Vec<u8> = buffer
                 .words
                 .iter()
                 .enumerate()
                 .flat_map(|(index, word)| {
-                    let word = if buffer.light.contains(&(index as u32)) {
-                        scaled(f64::from(*word))
-                    } else {
-                        *word
+                    let index = index as u32;
+                    let word = match &self.picture {
+                        Some(picture)
+                            if buffer.output == WINDOW_OUTPUT && WINDOW_CENTRE.contains(&index) =>
+                        {
+                            let c = (index / 2) as usize;
+                            scaled(f64::from(*word) * picture.centre[c] / picture.reference[c])
+                        }
+                        _ if buffer.light.contains(&index) => scaled(f64::from(*word)),
+                        _ => *word,
                     };
                     word.to_le_bytes()
                 })
                 .collect();
             self.write_output(cx, buffer.output, &data);
+        }
+        if let (Some(picture), Some(values)) = (&self.picture, &values) {
+            // These follow the picture, so they replace a declared buffer at
+            // the same output word.
+            self.write_scene_output(cx, COARSE_OUTPUT, &coarse(values));
+            self.write_scene_output(cx, REFERENCE_OUTPUT, &reference_planes());
+            let histogram: Vec<u8> = picture
+                .histogram
+                .iter()
+                .flat_map(|bin| bin.to_le_bytes())
+                .collect();
+            self.write_scene_output(cx, HISTOGRAM_OUTPUT, &histogram);
         }
     }
     fn word(&self, offset: u64) -> u32 {
@@ -462,18 +619,296 @@ mod tests {
 
     const BASE: u64 = 0xfff54000;
 
+    /// The measured wall: its zone sums, the radiance they hold and the sRGB
+    /// bytes whose linear light is that radiance (chosen to round-trip).
+    const WALL_SUMS: [u32; 3] = [144_736, 383_321, 33_695];
+    const WALL_RADIANCE: [u16; 3] = [2_001, 8_337, 15_238];
+    const WALL_BYTES: [u8; 3] = [98, 189, 247];
+    /// The first two records of the measured window buffer: red, green and
+    /// blue at +0/+2/+4 of each record of eight.
+    const WALL_WINDOW: [u32; 16] = [
+        641_739, 0, 1_700_693, 0, 150_556, 0, 0, 0, 590, 0, 1_676, 0, 158, 0, 0, 0,
+    ];
+
+    /// sRGB byte whose linear light is `radiance` on the declared 16383 scale.
+    fn srgb(radiance: u16) -> u8 {
+        let linear = f64::from(radiance) / 16383.;
+        let s = if linear <= 0.0031308 {
+            linear * 12.92
+        } else {
+            1.055 * linear.powf(1. / 2.4) - 0.055
+        };
+        (s * 255.).round() as u8
+    }
+
+    fn picture(width: u64, height: u64, pixel: impl Fn(u64, u64) -> [u8; 3]) -> Vec<u8> {
+        let mut rgb = Vec::with_capacity((width * height * 3) as usize);
+        for y in 0..height {
+            for x in 0..width {
+                rgb.extend_from_slice(&pixel(x, y));
+            }
+        }
+        rgb
+    }
+
+    fn zone_scene(rgb: Vec<u8>) -> ZoneScene {
+        ZoneScene {
+            width: 16,
+            height: 16,
+            rgb,
+            sums: WALL_SUMS,
+            radiance: WALL_RADIANCE,
+        }
+    }
+
+    fn word(h: &TestHost, at: usize) -> u32 {
+        u32::from_le_bytes(h.ram[at..at + 4].try_into().unwrap())
+    }
+
+    /// The declared wall radiance's linear value, as the wall reference.
+    fn wall_reference(c: usize) -> f64 {
+        f64::from(WALL_RADIANCE[c]) / 16383.
+    }
+
+    #[test]
+    fn a_picture_at_the_wall_radiance_reproduces_the_declared_wall_buffers() {
+        let mut stats = Engine::new(BASE, 106, 1000)
+            .unwrap()
+            .with_scene(WALL_SUMS)
+            .with_zone_scene(zone_scene(picture(16, 16, |_, _| WALL_BYTES)))
+            .unwrap()
+            .with_buffer(WINDOW_OUTPUT, &WALL_WINDOW)
+            .unwrap()
+            .with_buffer_light_words(WINDOW_OUTPUT, &[0, 2, 4, 8, 10, 12])
+            .unwrap();
+        let mut h = TestHost::new();
+        write(&mut stats, &mut h, BASE + ZONE_SUMS, 0x1000);
+        write(&mut stats, &mut h, BASE + WINDOW_OUTPUT, 0x2000);
+        write(&mut stats, &mut h, BASE + CONTROL, START);
+        advance(&mut stats, &mut h, 1000);
+        // The centre window's record holds the declared wall words (to the
+        // unit the 8-bit wall bytes round by).
+        let centre = [WALL_WINDOW[0], WALL_WINDOW[2], WALL_WINDOW[4]];
+        for (word, declared) in [0, 8, 16]
+            .map(|o| word(&h, 0x2000 + o))
+            .into_iter()
+            .zip(centre)
+        {
+            assert!(word.abs_diff(declared) <= 1, "{word} vs {declared}");
+        }
+        // The second record stays a declared light sum at unit light.
+        assert_eq!(
+            [32, 40, 48].map(|o| word(&h, 0x2000 + o)),
+            [WALL_WINDOW[8], WALL_WINDOW[10], WALL_WINDOW[12]]
+        );
+        // Every zone of a plane holds the declared sum.
+        for (c, &sum) in WALL_SUMS.iter().enumerate() {
+            for zone in [0, 255] {
+                assert_eq!(word(&h, 0x1000 + 0x400 * c + 4 * zone), sum);
+            }
+            assert_eq!(word(&h, 0x1000 + 0x400 * 3), 0);
+        }
+    }
+
+    #[test]
+    fn a_picture_with_a_bright_centre_raises_the_centre_window_and_its_zones() {
+        let bright = srgb(4_002);
+        let rgb = picture(16, 16, |x, y| {
+            if (7..9).contains(&x) && (7..9).contains(&y) {
+                [bright; 3]
+            } else {
+                WALL_BYTES
+            }
+        });
+        let mut stats = Engine::new(BASE, 106, 1000)
+            .unwrap()
+            .with_scene(WALL_SUMS)
+            .with_zone_scene(zone_scene(rgb))
+            .unwrap()
+            .with_buffer(WINDOW_OUTPUT, &WALL_WINDOW)
+            .unwrap()
+            .with_buffer_light_words(WINDOW_OUTPUT, &[0, 2, 4, 8, 10, 12])
+            .unwrap();
+        let mut h = TestHost::new();
+        write(&mut stats, &mut h, BASE + ZONE_SUMS, 0x1000);
+        write(&mut stats, &mut h, BASE + WINDOW_OUTPUT, 0x2000);
+        write(&mut stats, &mut h, BASE + CONTROL, START);
+        advance(&mut stats, &mut h, 1000);
+        let ratio = linear(bright) / wall_reference(0);
+        let expected =
+            (f64::from(WALL_WINDOW[0]) * linear(bright) / wall_reference(0)).round() as u32;
+        assert!(word(&h, 0x2000).abs_diff(expected) <= 1);
+        // The centre zones rise with the window; a corner zone keeps the wall.
+        let centre = word(&h, 0x1000 + 4 * (7 * 16 + 7));
+        assert!((f64::from(centre) / f64::from(WALL_SUMS[0]) - ratio).abs() < 1e-3);
+        assert_eq!(word(&h, 0x1000), WALL_SUMS[0]);
+        assert!(word(&h, 0x2000) > WALL_WINDOW[0] * 3 / 2);
+        // A red-heavy centre changes the window's red-to-green ratio.
+        let red = picture(16, 16, |x, y| {
+            if (7..9).contains(&x) && (7..9).contains(&y) {
+                [255, WALL_BYTES[1], WALL_BYTES[2]]
+            } else {
+                WALL_BYTES
+            }
+        });
+        let mut stats = Engine::new(BASE, 106, 1000)
+            .unwrap()
+            .with_scene(WALL_SUMS)
+            .with_zone_scene(zone_scene(red))
+            .unwrap()
+            .with_buffer(WINDOW_OUTPUT, &WALL_WINDOW)
+            .unwrap()
+            .with_buffer_light_words(WINDOW_OUTPUT, &[0, 2, 4, 8, 10, 12])
+            .unwrap();
+        write(&mut stats, &mut h, BASE + ZONE_SUMS, 0x1000);
+        write(&mut stats, &mut h, BASE + WINDOW_OUTPUT, 0x2000);
+        write(&mut stats, &mut h, BASE + CONTROL, START);
+        advance(&mut stats, &mut h, 2000);
+        let green = word(&h, 0x2000 + 8);
+        assert!(green.abs_diff(WALL_WINDOW[2]) <= 1);
+        let declared = f64::from(WALL_WINDOW[0]) / f64::from(WALL_WINDOW[2]);
+        let red_head = f64::from(word(&h, 0x2000)) / f64::from(green);
+        assert!(red_head > 3. * declared, "{red_head} vs {declared}");
+    }
+
+    #[test]
+    fn the_coarse_planes_hold_their_zones_summed_times_the_measured_gain() {
+        let rgb = picture(16, 16, |x, y| {
+            [
+                (x * 16 + y) as u8,
+                (x * 5 + y * 11) as u8,
+                (x * 3 + y * 7 + 40) as u8,
+            ]
+        });
+        let mut stats = Engine::new(BASE, 106, 1000)
+            .unwrap()
+            .with_scene(WALL_SUMS)
+            .with_zone_scene(zone_scene(rgb))
+            .unwrap();
+        let mut h = TestHost::new();
+        write(&mut stats, &mut h, BASE + ZONE_SUMS, 0x1000);
+        write(&mut stats, &mut h, BASE + COARSE_OUTPUT, 0x3000);
+        write(&mut stats, &mut h, BASE + CONTROL, START);
+        advance(&mut stats, &mut h, 1000);
+        let zones = |c: usize, zone: usize| u64::from(word(&h, 0x1000 + 0x400 * c + 4 * zone));
+        for c in 0..3 {
+            for cell in 0..64 {
+                let (x, y) = (2 * (cell % 8), 2 * (cell / 8));
+                let sum: u64 = [0, 1, 2, 3]
+                    .map(|n| zones(c, (y + n / 2) * 16 + x + n % 2))
+                    .into_iter()
+                    .sum();
+                let expected = (sum as f64 * 1.022).round() as u32;
+                assert_eq!(
+                    word(&h, 0x3000 + 0x100 * c + 4 * cell),
+                    expected,
+                    "c{c} cell{cell}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_histogram_counts_the_pictures_luma_in_proportion_to_its_area() {
+        let rgb = picture(
+            16,
+            16,
+            |x, _| {
+                if x < 12 { [0, 0, 0] } else { [255, 255, 255] }
+            },
+        );
+        let mut stats = Engine::new(BASE, 106, 1000)
+            .unwrap()
+            .with_scene(WALL_SUMS)
+            .with_zone_scene(zone_scene(rgb))
+            .unwrap();
+        let mut h = TestHost::new();
+        write(&mut stats, &mut h, BASE + HISTOGRAM_OUTPUT, 0x5000);
+        write(&mut stats, &mut h, BASE + CONTROL, START);
+        advance(&mut stats, &mut h, 1000);
+        let bins: Vec<u32> = (0..256).map(|bin| word(&h, 0x5000 + 4 * bin)).collect();
+        let total: u32 = bins.iter().sum();
+        assert_eq!(total, 725_454);
+        // Display-coded black and white: bins 0 and 127, in the 3:1 area ratio.
+        assert_eq!(bins[0], 544_091);
+        assert_eq!(bins[127], 181_363);
+        assert!(
+            bins.iter()
+                .enumerate()
+                .all(|(bin, count)| { *count == 0 || bin == 0 || bin == 127 })
+        );
+    }
+
+    #[test]
+    fn the_reference_planes_hold_their_constants_whatever_the_light() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let integration = std::sync::Arc::new(AtomicU32::new(0));
+        let mut stats = Engine::new(BASE, 106, 1000)
+            .unwrap()
+            .with_scene(WALL_SUMS)
+            .with_zone_scene(zone_scene(picture(16, 16, |_, _| WALL_BYTES)))
+            .unwrap()
+            .with_exposure(Exposure {
+                value: integration.clone(),
+                reference: 1566,
+            })
+            .unwrap()
+            .with_scene_light(SceneLight {
+                value: std::sync::Arc::new(AtomicU32::new(LIGHT_UNIT)),
+            })
+            .unwrap();
+        let mut h = TestHost::new();
+        write(&mut stats, &mut h, BASE + REFERENCE_OUTPUT, 0x4000);
+        write(&mut stats, &mut h, BASE + CONTROL, START);
+        advance(&mut stats, &mut h, 1000);
+        let levels = || [5_084, 12_710, 5_084];
+        for c in 0..3 {
+            for cell in 0..64 {
+                assert_eq!(word(&h, 0x4000 + 0x100 * c + 4 * cell), levels()[c]);
+            }
+        }
+        // The scales move the zone sums but not the reference planes.
+        stats.set_scene_light(0.5).unwrap();
+        integration.store(2 * 1566, Ordering::Relaxed);
+        advance(&mut stats, &mut h, 2000);
+        for c in 0..3 {
+            for cell in 0..64 {
+                assert_eq!(word(&h, 0x4000 + 0x100 * c + 4 * cell), levels()[c]);
+            }
+        }
+    }
+
+    #[test]
+    fn without_a_picture_the_scene_buffers_stay_unwritten() {
+        let mut stats = Engine::new(BASE, 106, 1000)
+            .unwrap()
+            .with_scene([1000, 2000, 300])
+            .with_buffer(WINDOW_OUTPUT, &WALL_WINDOW)
+            .unwrap()
+            .with_buffer_light_words(WINDOW_OUTPUT, &[0, 2, 4])
+            .unwrap();
+        let mut h = TestHost::new();
+        write(&mut stats, &mut h, BASE + ZONE_SUMS, 0x1000);
+        write(&mut stats, &mut h, BASE + WINDOW_OUTPUT, 0x2000);
+        write(&mut stats, &mut h, BASE + COARSE_OUTPUT, 0x3000);
+        write(&mut stats, &mut h, BASE + REFERENCE_OUTPUT, 0x4000);
+        write(&mut stats, &mut h, BASE + HISTOGRAM_OUTPUT, 0x5000);
+        write(&mut stats, &mut h, BASE + CONTROL, START);
+        advance(&mut stats, &mut h, 1000);
+        assert_eq!(
+            [0, 8, 16].map(|o| word(&h, 0x2000 + o)),
+            [WALL_WINDOW[0], WALL_WINDOW[2], WALL_WINDOW[4]]
+        );
+        assert_eq!(word(&h, 0x2000 + 32), WALL_WINDOW[8]);
+        assert_eq!(
+            [0x1000, 0x1400, 0x1800].map(|at| word(&h, at)),
+            [1000, 2000, 300]
+        );
+        assert!(h.ram[0x3000..0x6000].iter().all(|byte| *byte == 0));
+    }
+
     #[test]
     fn a_zone_scene_image_scales_the_measured_wall_sums_by_radiance() {
-        // sRGB byte whose linear light is the declared wall radiance.
-        let srgb = |radiance: u16| {
-            let linear = f64::from(radiance) / 16383.;
-            let s = if linear <= 0.0031308 {
-                linear * 12.92
-            } else {
-                1.055 * linear.powf(1. / 2.4) - 0.055
-            };
-            (s * 255.).round() as u8
-        };
         let sums = [145_000, 383_000, 34_000];
         let radiance = [1015_u16, 764, 577];
         let wall = [srgb(1015), srgb(764), srgb(577)];
