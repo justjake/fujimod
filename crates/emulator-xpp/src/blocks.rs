@@ -138,8 +138,8 @@ enum Picture {
     Host(u64, u64, Arc<[u8]>),
     /// One 14-bit linear (R, G, B) developed through the film law and white
     /// balance of the color unit's programmed words, with the packed pair
-    /// written while the unit is still unprogrammed. A unit caught half
-    /// reprogrammed completes no frame.
+    /// written while the unit is still unprogrammed. A unit not programmed
+    /// yet completes no frame.
     Film([u16; 3], [u8; 4]),
 }
 /// Virtual scene size: its normalized coordinates.
@@ -194,6 +194,9 @@ pub struct Block {
     /// The color unit's words, for the film law of a development job, and
     /// the declared reference white balance.
     color: Option<(Published, [u32; 3])>,
+    /// The still tone unit's words (matrix, curves and brightness table of the
+    /// still law), for a development job.
+    tone: Option<Published>,
     /// The published integration value and scene-light scale the film
     /// picture's light follows.
     film_exposure: Option<crate::statistics::Exposure>,
@@ -249,6 +252,7 @@ impl Block {
             commands: Vec::new(),
             published: None,
             color: None,
+            tone: None,
             film_exposure: None,
             film_light: None,
             film_picture: None,
@@ -307,6 +311,16 @@ impl Block {
         self.color = Some((words, reference));
         Ok(self)
     }
+    /// Develop with the matrix and curves of the still tone unit's published
+    /// words; widths, chroma, luma bands and white balance stay the color
+    /// unit's.
+    pub fn with_tone(mut self, words: Published) -> Result<Self, String> {
+        if !matches!(self.work, Some(Work::Develop { .. })) || self.color.is_none() {
+            return Err("Only a development job reads a still tone unit".into());
+        }
+        self.tone = Some(words);
+        Ok(self)
+    }
     fn publish(&self) {
         if let Some(words) = &self.published {
             *words.lock().unwrap() = self.state.words.clone();
@@ -328,8 +342,9 @@ impl Block {
                 let film = match &self.color {
                     Some((words, reference)) => {
                         let words = words.lock().unwrap();
+                        let still = self.tone.as_ref().map(|tone| tone.lock().unwrap());
                         Some((
-                            crate::development::film(&words)?,
+                            crate::development::film(still.as_deref(), &words)?,
                             crate::development::white_balance(&words, *reference)?,
                         ))
                     }
@@ -529,7 +544,7 @@ impl Block {
     }
     /// The film picture developed with `words` at `width` x `lines`, reused
     /// while the words, the light and the size are unchanged. `None` while
-    /// the unit is caught between two words of its reprogramming.
+    /// the unit is not programmed yet.
     fn developed_picture(
         &self,
         words: &BTreeMap<u64, u32>,
@@ -548,7 +563,7 @@ impl Block {
         }) {
             return Some(Ok(frame.image.clone()));
         }
-        let film = crate::development::film(words).ok()?;
+        let film = crate::development::film(None, words).ok()?;
         let balance = crate::development::white_balance(words, reference).ok()?;
         let light: Vec<u16> = (0..=255u8)
             .map(|v| {
@@ -650,8 +665,8 @@ impl Block {
                 let words = words.lock().unwrap().clone();
                 match self.developed_picture(&words, *reference, width, lines) {
                     Some(image) => image,
-                    // A unit caught between two words of its reprogramming
-                    // (unequal curve copies) completes no frame.
+                    // A unit not programmed yet completes no frame; a unit
+                    // between two words develops with the words as they are.
                     None => return,
                 }
             }
@@ -660,7 +675,7 @@ impl Block {
                 let pair = match &self.color {
                     Some((words, reference)) if !words.lock().unwrap().is_empty() => {
                         let words = words.lock().unwrap();
-                        let developed = crate::development::film(&words).and_then(|film| {
+                        let developed = crate::development::film(None, &words).and_then(|film| {
                             let factors = crate::development::white_balance(&words, *reference)?;
                             let level =
                                 |c: usize| crate::development::balanced(linear[c], factors[c]);
@@ -668,8 +683,7 @@ impl Block {
                         });
                         match developed {
                             Ok(pixel) => fujimod_emulator_imaging::film::Film::pack(pixel, pixel),
-                            // A unit caught between two words of its reprogramming
-                            // (unequal curve copies) completes no frame.
+                            // A unit not programmed yet completes no frame.
                             Err(_) => return,
                         }
                     }
@@ -1238,11 +1252,12 @@ mod tests {
         let warm_frame = frame(&mut unit, &mut h, 50);
         assert_ne!(warm_frame, provia_frame);
         assert_ne!(warm_frame, velvia_frame);
-        // Unequal curve copies, as when the unit is caught half reprogrammed,
-        // complete no frame.
+        // Unequal curve copies are a legitimate per-channel program: each
+        // output channel develops through its own slot with the words the
+        // unit holds, so the frame is not empty.
         program(None, reference);
         words.lock().unwrap().insert(0x440, 0);
-        assert_eq!(frame(&mut unit, &mut h, 60), [0; 4]);
+        assert_ne!(frame(&mut unit, &mut h, 60), [0; 4]);
     }
 
     #[test]

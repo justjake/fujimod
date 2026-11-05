@@ -144,6 +144,10 @@ pub enum BlockWork {
         phase: (u8, u8),
         #[serde(default)]
         color: Option<u64>,
+        /// Base of the still tone unit's register block: its matrix and curves
+        /// are the still development's, the color unit's the rest.
+        #[serde(default)]
+        tone: Option<u64>,
         /// Reference (R, G, B) gains at which the declared scene renders neutral.
         #[serde(default)]
         white_balance: Option<[u32; 3]>,
@@ -569,17 +573,25 @@ pub fn build(
             _ => None,
         })
         .transpose()?;
-    // The color unit a development engine reads, published by its block.
+    // The color unit and the still tone unit a development engine reads,
+    // published by their blocks.
     let color = spec.nodes.iter().find_map(|n| match &n.model {
         Model::RegisterBlock {
             work:
                 Some(BlockWork::Develop {
                     color: Some(base),
                     white_balance,
+                    tone,
                     ..
                 }),
             ..
-        } => Some((*base, blocks::Published::default(), *white_balance)),
+        } => Some((
+            *base,
+            blocks::Published::default(),
+            *white_balance,
+            *tone,
+            blocks::Published::default(),
+        )),
         _ => None,
     });
     // A scene picture on the sensor and the live-view film's declared radiance
@@ -628,6 +640,7 @@ pub fn build(
         _ => None,
     });
     let mut color_published = false;
+    let mut tone_published = false;
     for node in spec.nodes {
         if nodes.contains_key(&node.name) {
             return Err("Repeated X-Processor Pro node".into());
@@ -854,24 +867,35 @@ pub fn build(
                         return Err(format!("unknown still development profile {profile}"));
                     }
                     model = model.with_work(law)?;
-                    if let (blocks::Work::Develop { .. }, Some((_, words, reference))) =
-                        (law, &color)
+                    if let (
+                        blocks::Work::Develop { .. },
+                        Some((_, words, reference, tone, tone_words)),
+                    ) = (law, &color)
                     {
                         let reference = reference
                             .ok_or("a still color unit needs a reference white balance")?;
                         model = model.with_color(words.clone(), reference)?;
+                        if tone.is_some() {
+                            model = model.with_tone(tone_words.clone())?;
+                        }
                     }
                 }
-                if let Some((_, words, _)) = color.as_ref().filter(|(unit, ..)| *unit == base) {
-                    model = model.with_published(words.clone());
-                    color_published = true;
+                if let Some((unit, words, _, tone, tone_words)) = color.as_ref() {
+                    if *unit == base {
+                        model = model.with_published(words.clone());
+                        color_published = true;
+                    }
+                    if *tone == Some(base) {
+                        model = model.with_published(tone_words.clone());
+                        tone_published = true;
+                    }
                 }
                 if let Some(image) = live_view_image {
                     model = match (image.scene.as_deref(), image.host_image) {
                         (None, None) => match image.film {
                             None => model.with_live_view_image(image.lines, image.ycbcr)?,
                             Some(film) => {
-                                let (_, words, _) = color
+                                let (_, words, ..) = color
                                     .as_ref()
                                     .ok_or("a live-view film needs the still color unit")?;
                                 model = model.with_live_view_film(
@@ -1330,6 +1354,9 @@ pub fn build(
     }
     if color.is_some() && !color_published {
         return Err("the still color unit must be a register block".into());
+    }
+    if color.as_ref().is_some_and(|c| c.3.is_some()) && !tone_published {
+        return Err("the still tone unit must be a register block".into());
     }
     let interrupts = InterruptMap {
         gic: Box::new(gicv2::Gic::new(cores, spec.gic.lines)),

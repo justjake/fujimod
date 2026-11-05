@@ -32,36 +32,40 @@
 //! 0xfffc4000) are not modeled.
 //!
 //! With [`FILM_PROFILE`] the development engine instead takes its color
-//! from the words the firmware programmed into the color unit 0xfff47000.
-//! A film-simulation diff of two shots (PROVIA and Velvia) changes only
-//! that unit (and a copy at 0xfffac204), and its words carry the encodings
-//! of the X70 film stage ([`fujimod_emulator_imaging::film`]) at the X70
-//! offset minus 0x100: the brightness gain table at +0x204, the Q10 matrix
-//! at +0x300, the curve points at +0x400, the chroma pair at +0x504, the
-//! luma band bounds and bands at +0x540. The unit holds three copies of the
-//! curve (+0x400, +0x43c, +0x478); a shot programs them equal, and unequal
-//! copies are refused. No curve width word sits beside them: the declared
-//! widths are those of the curve at +0xa60 (+0xa58/+0xa5c), which agree
-//! with the slope joints of the PROVIA curve. Each output pixel takes the
-//! nearest site of each color as before, its black-subtracted level is
-//! scaled to 14 bits and white balanced, and the film law develops it to Y,
-//! Cb and Cr. The order against the other units and the color unit's
-//! remaining words are not modeled.
+//! from the words the firmware programmed into the still tone unit
+//! 0xfffac000, and the stages that unit has no registers for from the color
+//! unit 0xfff47000. Both units program the encodings of the X70 film stage
+//! ([`fujimod_emulator_imaging::film`]): the still unit holds the brightness
+//! table at +0x008, the 3x3 matrix at +0x204 and its three 15-word tone slots
+//! at +0x21c/+0x258/+0x294, each slot one output channel (R, G, B, see
+//! [`CURVE_SLOT_CHANNELS`]); it has no width, chroma or luma-band words, so
+//! those stages (and the live-view curve slots +0x400/+0x43c/+0x478) stay the
+//! color unit's. The color unit programs the matrix at +0x300, the brightness
+//! table at +0x204, the curve copies at +0x400/+0x43c/+0x478, the Q10 chroma
+//! pair at +0x504, the luma band bounds and bands at +0x540 and the curve
+//! widths at +0xa58/+0xa5c. A film-simulation diff of two shots (PROVIA and
+//! Velvia) changes the still unit's matrix and slots and the color unit's
+//! matrix, slots, chroma and bands; a white-balance diff changes the gains at
+//! +0x100/+0x104 (and their still-block copy at +0x64/+0x68). Each output
+//! pixel takes the nearest site of each color as before, its black-subtracted
+//! level is scaled to 14 bits and white balanced, and the film law develops it
+//! to Y, Cb and Cr, each color channel through its own curve.
 //!
 //! White balance is relative, as for the X70's film scene: the declared scene
 //! renders neutral at a declared reference of (R, G, B) gains, and the gains
 //! the firmware programs into +0x100 (R bits 0-14, G bits 16-30) and +0x104
-//! (B bits 0-14) act by their ratio to it, normalized to green. A WB preset
-//! diff (AUTO against incandescent) changes only these words among the
-//! color unit's (and their copies in 0xfffa9000/0xfffac000); successive
-//! passes of one shot program the same ratios at different scales.
+//! (B bits 0-14) act by their ratio to it, normalized to green. The still
+//! block's copy at +0x64/+0x68 carries the same ratios scaled up and clamped,
+//! so the color unit's words stay the source. Successive passes of one shot
+//! program the same ratios at different scales.
 
 use fujimod_emulator_imaging::film::{Film, FilmPixels};
 use std::collections::BTreeMap;
 
 /// Declared development and scaling approximation (see the module notes).
 pub const PROFILE: &str = "xpp-declared-xtrans-nearest-srgb-jfif-422-v1";
-/// The same, with the color and white balance of the programmed color unit.
+/// The same, with the color of the programmed still tone and color units and
+/// the color unit's white balance.
 pub const FILM_PROFILE: &str = "xpp-declared-xtrans-nearest-fff47-film-relative-wb-422-v1";
 
 /// Q12 factors that move the programmed white balance's R and B ratios to
@@ -94,24 +98,62 @@ fn color_offset(x70: u64) -> Option<u64> {
     }
 }
 
+/// Still-tone word of each X70 film-stage word the still development reads
+/// from the still tone unit 0xfffac000. The unit has no width, chroma or
+/// luma-band words: those stages stay the color unit's, as does the white
+/// balance (the still block's copy at 0xfffac064/0x68 is the same ratios
+/// scaled up and clamped, so the color unit's words keep the declared
+/// reference exact).
+fn still_offset(x70: u64) -> Option<u64> {
+    match x70 {
+        0x304..=0x32c => Some(x70 - 0x304 + 0x008), // brightness table, 0xfffac008
+        0x400..=0x414 => Some(x70 - 0x400 + 0x204), // 3x3 matrix, 0xfffac204
+        _ => None,
+    }
+}
+
+/// Tone-curve slot of each output channel, in R, G, B order. Slot 0 is the
+/// still unit's 0xfffac21c curve, slot 1 0xfffac258, slot 2 0xfffac294; the
+/// order is the only place it lives. Slot 1/2/3 = R/G/B is measured for
+/// stills (a card test that halved slot 2 and quartered slot 3 moved the
+/// JPEG colour centre from 106.4, 107.3, 109.0 to 126.8, 59.0, 0.7); the
+/// live-view order is by eye.
+pub const CURVE_SLOT_CHANNELS: [usize; 3] = [0, 1, 2];
+
 /// A 14-bit linear level scaled by a Q12 white-balance factor.
 pub fn balanced(linear: u16, factor: u32) -> u16 {
     (u64::from(linear) * u64::from(factor) >> 12).min(16383) as u16
 }
 
-/// The film law of the color unit's programmed words.
-pub fn film(words: &BTreeMap<u64, u32>) -> Result<Film, String> {
-    let word = |o: u64| words.get(&o).copied().unwrap_or(0);
-    if (0x300..0x318).step_by(4).all(|o| word(o) == 0) {
+/// The film law of the programmed units: the still tone unit's matrix, curves
+/// and brightness table when `still` is given, with widths, chroma, luma bands
+/// and white balance from the color unit; without it, the live-view law of the
+/// color unit's words, its three slots one per channel.
+pub fn film(
+    still: Option<&BTreeMap<u64, u32>>,
+    words: &BTreeMap<u64, u32>,
+) -> Result<Film, String> {
+    let live = |o: u64| words.get(&o).copied().unwrap_or(0);
+    let still_word = |o: u64| still.and_then(|w| w.get(&o).copied()).unwrap_or(0);
+    if (0x300..0x318).step_by(4).all(|o| live(o) == 0) {
         return Err("Still development before the color unit was programmed".into());
     }
-    if (0..15).any(|i| {
-        word(0x400 + 4 * i) != word(0x43c + 4 * i) || word(0x400 + 4 * i) != word(0x478 + 4 * i)
-    }) {
-        return Err("Unmodeled per-channel film curves".into());
+    if still.is_some() && (0x21c..0x2cc).step_by(4).all(|o| still_word(o) == 0) {
+        return Err("Still development before the still tone unit was programmed".into());
     }
     let mut film = Film::default();
-    film.update(|o| color_offset(o as u64).map_or(0, word))?;
+    let word = |x70: u64| match still.and_then(|_| still_offset(x70)) {
+        Some(o) => still_word(o),
+        None => color_offset(x70).map_or(0, live),
+    };
+    let points = |channel: usize, i: usize| {
+        let slot = CURVE_SLOT_CHANNELS[channel] as u64;
+        match still {
+            Some(_) => still_word(0x21c + 0x3c * slot + 4 * i as u64),
+            None => live(0x400 + 0x3c * slot + 4 * i as u64),
+        }
+    };
+    film.update_slots(|o| word(o as u64), points)?;
     Ok(film)
 }
 
@@ -500,6 +542,38 @@ pub(crate) mod tests {
         words
     }
 
+    /// The still tone block (0x1a51edc / 0xfffac000 offsets) a PROVIA still
+    /// programs: brightness table, matrix, and the three curve slots. The
+    /// words are the color unit's measured copies at their still offsets.
+    pub(crate) fn still() -> BTreeMap<u64, u32> {
+        let live = provia();
+        let mut words = BTreeMap::new();
+        for i in 0..11 {
+            words.insert(0x008 + 4 * i, live[&(0x204 + 4 * i)]);
+        }
+        for i in 0..6 {
+            words.insert(0x204 + 4 * i, live[&(0x300 + 4 * i)]);
+        }
+        for slot in 0..3 {
+            for i in 0..15 {
+                words.insert(
+                    0x21c + 0x3c * slot + 4 * i,
+                    live[&(0x400 + 0x3c * slot + 4 * i)],
+                );
+            }
+        }
+        words
+    }
+
+    /// Halve every point of one still slot.
+    fn halve_slot(words: &mut BTreeMap<u64, u32>, slot: u64) {
+        for i in 0..14 {
+            let w = words[&(0x21c + 0x3c * slot + 4 * i)];
+            let half = ((w & 0x3fff) / 2) | ((((w >> 16) & 0x3fff) / 2) << 16);
+            words.insert(0x21c + 0x3c * slot + 4 * i, half);
+        }
+    }
+
     #[test]
     fn the_color_unit_decodes_as_the_x70_film_stage() {
         let words = provia();
@@ -507,7 +581,7 @@ pub(crate) mod tests {
         assert_eq!(color_offset(0x508), Some(0x400));
         assert_eq!(color_offset(0x500), Some(0xa58));
         assert_eq!(color_offset(0x700), None);
-        let film = film(&words).unwrap();
+        let film = film(None, &words).unwrap();
         // Gray stays neutral, white is white and black is black.
         let gray = film.develop([4096; 3]);
         assert!(
@@ -519,16 +593,98 @@ pub(crate) mod tests {
         // Red has red chroma.
         let red = film.develop([16383, 0, 0]);
         assert!(red[2] > 200 && red[1] < 128, "{red:?}");
-        let mut unequal = words.clone();
-        unequal.insert(0x440, 0);
-        assert!(super::film(&unequal).is_err());
-        assert!(super::film(&BTreeMap::new()).is_err());
+        assert!(super::film(None, &BTreeMap::new()).is_err());
+    }
+
+    #[test]
+    fn the_still_tone_unit_holds_its_own_matrix_and_three_slots() {
+        assert_eq!(CURVE_SLOT_CHANNELS, [0, 1, 2]);
+        let live = provia();
+        let stock = still();
+        let stock_film = film(Some(&stock), &live).unwrap();
+        let live_film = film(None, &live).unwrap();
+        let input = [6000, 3000, 2000];
+        // The stock still block carries the color unit's words: equal slots
+        // develop like the single-curve law.
+        assert_eq!(stock_film.develop(input), live_film.develop(input));
+
+        // A still slot moves its channel in the still film only.
+        for slot in 0..3 {
+            let mut slots = stock.clone();
+            halve_slot(&mut slots, slot);
+            let changed = film(Some(&slots), &live).unwrap();
+            let (stock_color, changed_color) = (stock_film.color(input), changed.color(input));
+            for channel in 0..3 {
+                let of_slot = CURVE_SLOT_CHANNELS
+                    .iter()
+                    .position(|&s| s == slot as usize)
+                    .unwrap();
+                if channel == of_slot {
+                    assert_ne!(changed_color[channel], stock_color[channel], "slot {slot}");
+                } else {
+                    assert_eq!(changed_color[channel], stock_color[channel], "slot {slot}");
+                }
+            }
+            assert_eq!(
+                film(None, &live).unwrap().develop(input),
+                live_film.develop(input)
+            );
+        }
+
+        // The still matrix is the still block's, the live matrix the color
+        // unit's: a mismatch shows in the right unit's output only.
+        let mut still_matrix = stock.clone();
+        still_matrix.insert(0x204, 0x1f71040b);
+        assert_ne!(
+            film(Some(&still_matrix), &live).unwrap().color(input),
+            stock_film.color(input)
+        );
+        let mut live_matrix = live.clone();
+        live_matrix.insert(0x300, 0x1f71040b);
+        assert_ne!(
+            film(None, &live_matrix).unwrap().color(input),
+            live_film.color(input)
+        );
+        assert_eq!(
+            film(Some(&stock), &live_matrix).unwrap().color(input),
+            stock_film.color(input)
+        );
+    }
+
+    #[test]
+    fn each_still_slot_is_the_channel_the_constant_names() {
+        let live = provia();
+        let stock = still();
+        let mut slots = stock.clone();
+        halve_slot(&mut slots, 1);
+        halve_slot(&mut slots, 2);
+        halve_slot(&mut slots, 2);
+        let joint = film(Some(&slots), &live).unwrap();
+        for (channel, &slot) in CURVE_SLOT_CHANNELS.iter().enumerate() {
+            // Every slot carries this channel's curve: a single-curve film.
+            let mut all = stock.clone();
+            let slot = slot as u64;
+            for other in 0..3 {
+                for i in 0..15 {
+                    let w = slots[&(0x21c + 0x3c * slot + 4 * i)];
+                    all.insert(0x21c + 0x3c * other + 4 * i, w);
+                }
+            }
+            let single = film(Some(&all), &live).unwrap();
+            for input in [[1000, 2000, 3000], [6000, 3000, 2000], [16383, 8000, 4000]] {
+                assert_eq!(
+                    joint.color(input)[channel],
+                    single.color(input)[channel],
+                    "channel {channel} input {input:?}"
+                );
+            }
+        }
     }
 
     #[test]
     fn the_film_law_develops_a_uniform_color() {
         let words = provia();
-        let film = film(&words).unwrap();
+        let film = film(None, &words).unwrap();
         let (lines, width, stride) = (12, 12, 32);
         let mut raw = vec![0; stride * lines];
         for y in 0..lines {
@@ -570,7 +726,7 @@ pub(crate) mod tests {
             "{r} {g} {b}"
         );
         // Gray turns blue under the incandescent preset.
-        let film = film(&words).unwrap();
+        let film = film(None, &words).unwrap();
         let gray = crate::imaging::BLACK + (crate::imaging::WHITE - crate::imaging::BLACK) / 4;
         let raw: Vec<u8> = (0..12 * 12).flat_map(|_| gray.to_le_bytes()).collect();
         let out = develop(&raw, 24, 12, 12, (0, 0), Some((&film, [r, g, b]))).unwrap();

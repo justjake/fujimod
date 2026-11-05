@@ -37,7 +37,8 @@ fn bezier(points: &[i64], widths: &[usize], x: usize) -> i64 {
 pub struct Film {
     words: Vec<u32>,
     gain: Vec<u16>,
-    curve: Vec<u16>,
+    /// One tone curve per output channel, in R, G, B order.
+    curves: [Vec<u16>; 3],
     matrix: [[i32; 3]; 3],
     chroma: [i32; 4],
     bounds: [i32; 4],
@@ -48,7 +49,7 @@ impl Default for Film {
         Self {
             words: Vec::new(),
             gain: vec![0; 4096],
-            curve: vec![0; 4096],
+            curves: std::array::from_fn(|_| vec![0; 4096]),
             matrix: [[0; 3]; 3],
             chroma: [0; 4],
             bounds: [0; 4],
@@ -72,6 +73,18 @@ impl Film {
         if self.matches(&r) {
             return Ok(());
         }
+        self.update_slots(&r, |_, i| r(0x508 + 4 * i))
+    }
+    /// Update from a word source `r` (matrix, brightness table, widths, chroma,
+    /// luma bands) and one 14-word curve point set per output channel, in R, G,
+    /// B order: `points(channel, i)` is word `i` of that channel's 28-point
+    /// curve. A single-curve law passes the same offsets for all three
+    /// channels; equal slots develop exactly like [`Film::update`].
+    pub fn update_slots(
+        &mut self,
+        r: impl Fn(usize) -> u32,
+        points: impl Fn(usize, usize) -> u32,
+    ) -> Result<(), String> {
         let bounds = std::array::from_fn(|i| ((r(0x640) >> (8 * i)) & 255) as i32);
         if bounds.windows(2).any(|w| w[0] > w[1]) {
             return Err("film luma bounds are not ordered".into());
@@ -98,14 +111,18 @@ impl Film {
         });
         let table: [i64; 22] =
             std::array::from_fn(|i| ((r(0x304 + i / 2 * 4) >> (i % 2 * 16)) & 8191) as i64);
-        let points: [i64; 28] =
-            std::array::from_fn(|i| ((r(0x508 + i / 2 * 4) >> (i % 2 * 16)) & 16383) as i64);
         let widths: [usize; 9] = std::array::from_fn(|i| {
             16 << ((r(if i < 8 { 0x500 } else { 0x504 }) >> (if i < 8 { i * 4 } else { 0 })) & 7)
         });
         for x in 0..4096 {
             self.gain[x] = bezier(&table, &[64, 64, 128, 256, 512, 1024, 2048], x) as u16;
-            self.curve[x] = bezier(&points, &widths, x) as u16;
+        }
+        for (channel, curve) in self.curves.iter_mut().enumerate() {
+            let slot: [i64; 28] =
+                std::array::from_fn(|i| ((points(channel, i / 2) >> (i % 2 * 16)) & 16383) as i64);
+            for (x, value) in curve.iter_mut().enumerate() {
+                *value = bezier(&slot, &widths, x) as u16;
+            }
         }
         self.words.clear();
         for (o, n) in GROUPS {
@@ -116,7 +133,7 @@ impl Film {
         Ok(())
     }
     #[inline(always)]
-    fn color(&self, w: [u16; 3]) -> [i32; 3] {
+    pub fn color(&self, w: [u16; 3]) -> [i32; 3] {
         // Register masks bound the hottest products: 14-bit ADC * 13-bit gain
         // is below 2^27; signed 13-bit matrix * 12-bit color is below 2^24.
         // Chroma is clamped before band gain. All pixel arithmetic fits i32;
@@ -137,10 +154,10 @@ impl Film {
             ((w[2] * gain) >> 11).min(4095),
         ];
         let mut color = [0; 3];
-        for (color, m) in color.iter_mut().zip(&self.matrix) {
+        for (channel, (color, m)) in color.iter_mut().zip(&self.matrix).enumerate() {
             let value =
                 (((m[0] * x[0]) >> 7) + ((m[1] * x[1]) >> 7) + ((m[2] * x[2]) >> 7) + 4) >> 3;
-            *color = i32::from(self.curve[value.clamp(0, 4095) as usize] >> 6);
+            *color = i32::from(self.curves[channel][value.clamp(0, 4095) as usize] >> 6);
         }
         color
     }
@@ -251,7 +268,7 @@ mod tests {
             for (coefficient, channel) in f.matrix[row].iter().zip(channels) {
                 sum += (i64::from(*coefficient) * channel) >> 7;
             }
-            *out = i64::from(f.curve[(sum >> 3).clamp(0, 4095) as usize] >> 6);
+            *out = i64::from(f.curves[row][(sum >> 3).clamp(0, 4095) as usize] >> 6);
         }
         let [red, green, blue] = color;
         let luma = (((306 * red) >> 7) + ((601 * green) >> 7) + ((117 * blue) >> 7) + 4) >> 3;
@@ -344,6 +361,70 @@ mod tests {
         assert_eq!(bezier(&[0, 10, 20, 30], &[16], 16), 30);
         assert_eq!(Film::pack([12, 2, 3], [34, 3, 4]), [12, 34, 2, 4]);
     }
+    #[test]
+    fn each_channel_develops_through_its_own_slot() {
+        let words = fujimod_emulator_devices::test_host::film_words();
+        let at = |o: usize| words[o / 4];
+        // Three distinct point sets: stock, half, and inverted.
+        let half = |i: usize| {
+            let w = at(0x508 + 4 * i);
+            ((w & 0x3fff) / 2) | ((((w >> 16) & 0x3fff) / 2) << 16)
+        };
+        let inverted = |i: usize| {
+            let w = at(0x508 + 4 * i);
+            (0x3fff - (w & 0x3fff)) | ((0x3fff - ((w >> 16) & 0x3fff)) << 16)
+        };
+        let point = |channel: usize, i: usize| match channel {
+            0 => at(0x508 + 4 * i),
+            1 => half(i),
+            _ => inverted(i),
+        };
+        let mut film = Film::default();
+        film.update_slots(at, point).unwrap();
+        for channel in 0..3 {
+            let mut single = Film::default();
+            single.update_slots(at, |_, i| point(channel, i)).unwrap();
+            for rgb in [
+                [0, 0, 0],
+                [1000, 2000, 3000],
+                [6000, 3000, 2000],
+                [16383; 3],
+            ] {
+                assert_eq!(
+                    film.color(rgb)[channel],
+                    single.color(rgb)[channel],
+                    "channel {channel} input {rgb:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn equal_slots_develop_like_the_single_curve_law() {
+        let words = fujimod_emulator_devices::test_host::film_words();
+        let at = |o: usize| words[o / 4];
+        let mut single = Film::default();
+        single.update(at).unwrap();
+        let mut slots = Film::default();
+        slots.update_slots(at, |_, i| at(0x508 + 4 * i)).unwrap();
+        for rgb in [
+            [0; 3],
+            [1, 1, 1],
+            [1000, 2000, 3000],
+            [6000, 3000, 2000],
+            [16383; 3],
+            [0, 16383, 0],
+        ] {
+            assert_eq!(slots.color(rgb), single.color(rgb));
+            assert_eq!(slots.develop(rgb), single.develop(rgb));
+        }
+        let mut pixels = FilmPixels::new(&slots);
+        for i in 0..4096 {
+            let rgb = [i as u16 * 3, i as u16, (i as u16).wrapping_mul(7)];
+            assert_eq!(pixels.develop(rgb), single.develop(rgb), "input {rgb:?}");
+        }
+    }
+
     #[test]
     fn zero_and_signed_matrix_law() {
         let mut f = Film::default();
@@ -481,9 +562,9 @@ pub(crate) mod color_tests {
         assert_eq!(f.develop([1024; 3]), [16, 128, 128]);
         assert_eq!(f.develop([4096; 3]), [64, 128, 128]);
         assert_eq!(f.develop([4096, 0, 0]), [19, 117, 160]);
-        let lut = f.curve.as_ptr();
+        let lut = f.curves[0].as_ptr();
         f.update(|o| r[o / 4]).unwrap();
-        assert_eq!(f.curve.as_ptr(), lut);
+        assert_eq!(f.curves[0].as_ptr(), lut);
     }
     #[test]
     fn host_film_lut_crop_and_padding() {

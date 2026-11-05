@@ -1006,6 +1006,24 @@ pub struct LiveViewFilm {
     /// (R, G, B) gains the firmware programs at which the scene renders
     /// neutral.
     pub white_balance_reference: [u32; 3],
+    /// Per-site light of the declared wall in camera space, in the same units
+    /// as `linear_rgb`. A caller's picture declared as camera raw light is
+    /// relative to it: the zone sums divide by this radiance instead of
+    /// `linear_rgb`, and the white-balance references act as flat gains.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera_raw_radiance: Option<CameraRawRadiance>,
+}
+
+/// Declared per-site light of the film scene's wall in camera space.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetCameraRawRadiance"))]
+pub struct CameraRawRadiance {
+    /// Declared basis.
+    pub basis: String,
+    /// (R, G, B) light of the wall's sites in camera space.
+    pub radiance: [u16; 3],
 }
 
 /// Host RGB image of a live-view output unit: an asset holding rows of red,
@@ -1063,6 +1081,11 @@ pub struct StillDevelopment {
     /// the development engine applies.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<u64>,
+    /// Base of the still tone unit's register block, whose matrix, curves and
+    /// brightness table the still development applies; widths, chroma, luma
+    /// bands and white balance stay the color unit's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tone: Option<u64>,
     /// Declared (R, G, B) white-balance gains at which the scene renders
     /// neutral; the color unit's programmed gains act by their ratio to it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
