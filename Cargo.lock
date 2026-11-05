@@ -2957,6 +2957,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-release-manifest"
+version = "0.1.0"
+dependencies = [
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror",
+]
+
+[[package]]
 name = "fujimod-remote"
 version = "0.1.0"
 dependencies = [
