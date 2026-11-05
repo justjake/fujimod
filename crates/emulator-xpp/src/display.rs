@@ -142,9 +142,9 @@ impl Device for FrameClock {
     }
 }
 
-use fujimod_framebuffer_xpp::{CONTROL, VIDEO_ENABLE, LAYER_ENABLE, LAYER_BUFFER};
+use fujimod_framebuffer_xpp::{CONTROL, VIDEO_ENABLE, LAYER_ENABLE, LAYER_BUFFER, VIDEO_SIZE, VIDEO_BUFFER, LAYER_SIZE};
 #[cfg(test)]
-use fujimod_framebuffer_xpp::{VIDEO_FORMAT, PACKED_422, OUTPUT_SIZE, VIDEO_SIZE, VIDEO_BUFFER, LAYER_ORIGIN, LAYER_SIZE};
+use fujimod_framebuffer_xpp::{VIDEO_FORMAT, PACKED_422, OUTPUT_SIZE, LAYER_ORIGIN};
 
 /// Host output index and capture period of a scanned-out display output.
 #[derive(Clone, Copy, Debug)]
@@ -174,6 +174,8 @@ pub struct Output {
     words: BTreeMap<u64, u32>,
     scanout: Option<Scanout>,
     capture: Capture,
+    /// The last composed frame and its hash, keyed by the inputs `compose` read.
+    last: Option<(Vec<u8>, (u32, u32, Vec<u8>, u64), u64)>,
     handshake_ticks: Option<u64>,
     handshake: Handshake,
 }
@@ -218,6 +220,7 @@ impl Output {
             scanout,
             handshake_ticks: None,
             handshake: Handshake::default(),
+            last: None,
             capture: Capture {
                 next: scanout.map_or(0, |s| s.period),
                 ..Capture::default()
@@ -238,27 +241,65 @@ impl Output {
     fn compose(&self,cx:&mut Cx<'_>)->Result<Option<(u32,u32,Vec<u8>,u64)>,()> {
         fujimod_framebuffer_xpp::Decoder{words:&self.words}.compose(|a,n|cx.ram_bytes(a,n))
     }
-    fn scan(&mut self, cx: &mut Cx<'_>, scanout: Scanout) {
-        let (width, height, rgba, source) = match self.compose(cx) {
-            Ok(Some(frame)) => frame,
-            Ok(None) => {
-                let _ =
-                    cx.output_status(scanout.output, json!({ "active": false, "tick": cx.now() }));
-                return;
-            }
-            Err(()) => {
-                cx.unmodeled();
-                return;
-            }
-        };
-        // FNV-1a: a stable digest for the image-change sequence.
-        let hash = [width, height]
+    /// The registers and source bytes `compose` reads; equal inputs compose
+    /// the same frame. `None` when a layer cannot be read.
+    fn inputs(&self, cx: &mut Cx<'_>) -> Option<Vec<u8>> {
+        let mut key: Vec<u8> = self
+            .words
             .iter()
-            .flat_map(|v| v.to_le_bytes())
-            .chain(rgba.iter().copied())
-            .fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
-                (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3)
-            });
+            .flat_map(|(offset, value)| offset.to_le_bytes().into_iter().chain(value.to_le_bytes()))
+            .collect();
+        if self.word(CONTROL) & VIDEO_ENABLE != 0 {
+            let (w, h) = fujimod_framebuffer_xpp::Decoder::extent(self.word(VIDEO_SIZE))?;
+            let buffer = u64::from(self.word(VIDEO_BUFFER));
+            key.extend(cx.ram_bytes(buffer, w as usize * h as usize * 2).ok()?);
+        }
+        for layer in (0..4u64).filter(|n| self.word(LAYER_ENABLE) & 1 << n != 0) {
+            let (w, h) = fujimod_framebuffer_xpp::Decoder::extent(self.word(LAYER_SIZE + 4 * layer))?;
+            let buffer = u64::from(self.word(LAYER_BUFFER + 4 * layer));
+            key.extend(cx.ram_bytes(buffer, w as usize * h as usize * 4).ok()?);
+        }
+        Some(key)
+    }
+    fn scan(&mut self, cx: &mut Cx<'_>, scanout: Scanout) {
+        let inputs = self.inputs(cx);
+        let cached = match (&inputs, &self.last) {
+            (Some(inputs), Some((key, frame, hash))) if inputs == key => {
+                Some((frame.clone(), *hash))
+            }
+            _ => None,
+        };
+        let ((width, height, rgba, source), hash) = if let Some(cached) = cached {
+            cached
+        } else {
+            self.last = None;
+            let frame = match self.compose(cx) {
+                Ok(Some(frame)) => frame,
+                Ok(None) => {
+                    let _ = cx.output_status(
+                        scanout.output,
+                        json!({ "active": false, "tick": cx.now() }),
+                    );
+                    return;
+                }
+                Err(()) => {
+                    cx.unmodeled();
+                    return;
+                }
+            };
+            // FNV-1a: a stable digest for the image-change sequence.
+            let hash = [frame.0, frame.1]
+                .iter()
+                .flat_map(|v| v.to_le_bytes())
+                .chain(frame.2.iter().copied())
+                .fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
+                    (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3)
+                });
+            if let Some(inputs) = inputs {
+                self.last = Some((inputs, frame.clone(), hash));
+            }
+            (frame, hash)
+        };
         if self.capture.hash != Some(hash) {
             self.capture.sequence += 1;
             self.capture.hash = Some(hash);
