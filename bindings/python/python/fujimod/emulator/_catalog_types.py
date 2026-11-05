@@ -1528,6 +1528,7 @@ type ElectricalInput = (
     | ElectricalInputVariant4
     | ElectricalInputVariant5
     | ElectricalInputVariant6
+    | ElectricalInputVariant7
 )
 
 
@@ -1573,11 +1574,21 @@ class ElectricalInputVariant4(TypedDict, total=False):
 
 class ElectricalInputVariant5(TypedDict, total=False):
     connection_id: Required[str]
+    decoder_event: Required[int]
+    guard: Required[int]
+    kind: Required[Literal["gpio_transition"]]
+    phase_map: Required[list[int]]
+    threshold: Required[int]
+    transitions: Required[list[int]]
+
+
+class ElectricalInputVariant6(TypedDict, total=False):
+    connection_id: Required[str]
     cycle_sign: Required[int]
     kind: Required[Literal["gpio_fixed_cycle"]]
 
 
-class ElectricalInputVariant6(TypedDict, total=False):
+class ElectricalInputVariant7(TypedDict, total=False):
     active_value: Required[int]
     connection_id: Required[str]
     endpoint: Required[int]
