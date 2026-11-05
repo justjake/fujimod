@@ -135,8 +135,9 @@ pub fn window_features(
         || columns == 0
         || rows == 0
         || window.contains(&0)
-        || width > 2048
-        || height > 2048
+        || width > 8192
+        || height > 8192
+        || width * height * 2 > 32 << 20
         || columns > 64
         || rows > 64
         || origin
@@ -201,8 +202,9 @@ pub fn track_features(
     height: usize,
     out: &mut [u8],
 ) -> Result<(), String> {
-    if !(3..=2048).contains(&width)
-        || !(3..=2048).contains(&height)
+    if !(3..=8192).contains(&width)
+        || !(3..=8192).contains(&height)
+        || width * height * 2 > 32 << 20
         || first.len() != width * height * 2
         || second.len() != first.len()
         || features.is_empty()

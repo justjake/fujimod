@@ -1,8 +1,8 @@
-use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
 use crate::*;
-use fujimod_emulator_exr2_isp_testing::*;
+use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
 use fujimod_emulator_devices::Cx;
 use fujimod_emulator_devices::Device;
+use fujimod_emulator_exr2_isp_testing::*;
 fn window() -> (WindowAnalysis, Memory, IrqRoutes) {
     let routes = routes(0x46);
     let d = WindowAnalysis::new(
@@ -83,6 +83,91 @@ fn window_tracking_and_unsupported_geometry() {
     assert_eq!(&m.bytes[0x10000..0x10008], &[3, 0, 3, 0, 100, 0, 0, 0]);
     write(&mut d, &mut m, 0xfff42050, 0);
     reject(&mut d, &mut m, 0xfff42000, 1);
+}
+
+#[test]
+fn full_raster_accepts_the_input_dma_control_bit() {
+    let (mut d, mut m, _) = window();
+    window_config(&mut d, &mut m, 1);
+    let (width, height) = (4896usize, 3264usize);
+    let destination = 0x2100000usize;
+    m.bytes.resize(destination + 8, 0);
+    for y in 0..7 {
+        for x in 0..7 {
+            let value = (x * 17 + y * 13) as u16;
+            let offset = 0x4000 + (y * width + x) * 2;
+            m.bytes[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
+        }
+    }
+    for (offset, value) in [
+        (0x48, destination as u64),
+        (0x50, (((width - 1) << 16) | (height - 1)) as u64),
+        (0x104, 0x10001),
+    ] {
+        write(&mut d, &mut m, 0xfff42000 + offset, value);
+    }
+    write(&mut d, &mut m, 0xfff42000, 1);
+    advance(&mut d, &mut m, 3);
+    assert_eq!(
+        &m.bytes[destination..destination + 8],
+        &[1, 0, 1, 0, 26, 0, 0, 0]
+    );
+    assert_eq!(
+        m.effects,
+        [Effect::Dma(destination as u64, 8), Effect::Irq(0, 0x46)]
+    );
+}
+
+#[test]
+fn full_raster_tracking_preserves_high_coordinates_and_measures_translation() {
+    let (mut d, mut m, _) = window();
+    window_config(&mut d, &mut m, 2);
+    let (width, height) = (4896usize, 3264usize);
+    let (first, second, features, output) =
+        (0x4000usize, 0x2100000usize, 0x4100000usize, 0x4100008usize);
+    m.bytes.resize(output + 8, 0);
+    for y in 0..9 {
+        for x in 0..9 {
+            let value = (x * x * 17 + y * y * 13 + x * y * 3 + 100) as u16;
+            let a = first + ((3000 + y) * width + 4000 + x) * 2;
+            let b = second + ((3000 + y) * width + 4001 + x) * 2;
+            m.bytes[a..a + 2].copy_from_slice(&value.to_le_bytes());
+            m.bytes[b..b + 2].copy_from_slice(&value.to_le_bytes());
+        }
+    }
+    let record = [4004u16.to_le_bytes(), 3004u16.to_le_bytes()].concat();
+    m.bytes[features..features + 4].copy_from_slice(&record);
+    m.bytes[features + 4..features + 8].copy_from_slice(&100u32.to_le_bytes());
+    for (offset, value) in [
+        (0x2c, second as u64),
+        (0x48, features as u64),
+        (0x4c, output as u64),
+        (0x50, (((width - 1) << 16) | (height - 1)) as u64),
+        (0x104, 0x10001),
+    ] {
+        write(&mut d, &mut m, 0xfff42000 + offset, value);
+    }
+    write(&mut d, &mut m, 0xfff42000, 1);
+    advance(&mut d, &mut m, 3);
+    assert_eq!(&m.bytes[output..output + 2], &4005u16.to_le_bytes());
+    assert_eq!(&m.bytes[output + 2..output + 4], &3004u16.to_le_bytes());
+    assert_eq!(&m.bytes[output + 4..output + 8], &100u32.to_le_bytes());
+    assert_eq!(
+        m.effects,
+        [Effect::Dma(output as u64, 8), Effect::Irq(0, 0x46)]
+    );
+}
+
+#[test]
+fn input_dma_reserved_bits_and_oversized_rasters_refuse() {
+    let (mut d, mut m, _) = window();
+    window_config(&mut d, &mut m, 1);
+    write(&mut d, &mut m, 0xfff42104, 0x10003);
+    reject(&mut d, &mut m, 0xfff42000, 1);
+    write(&mut d, &mut m, 0xfff42104, 0x10001);
+    write(&mut d, &mut m, 0xfff42050, (8191 << 16) | 4095);
+    reject(&mut d, &mut m, 0xfff42000, 1);
+    assert!(m.effects.is_empty());
 }
 #[test]
 fn window_route_change_refuses_before_result_dma() {

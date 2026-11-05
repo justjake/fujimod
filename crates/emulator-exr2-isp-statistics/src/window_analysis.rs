@@ -1,14 +1,18 @@
 //! FFF42000 window analysis. Y16 minimum-axis gradients, local 3x3 SAD
 //! tracking, eight-byte result records, and latency are declared, unmeasured
 //! numerical laws. Other pyramid/tuning words are retained without inventing
-//! their silicon effects.
-use fujimod_emulator_imaging::exr2_isp::{dma::{self, Raster, Transfer}, due};
+//! their silicon effects. The supported input DMA enable words share this
+//! declared arithmetic; source rasters are bounded to 32 MiB.
 use fujimod_emulator_devices::exr2::irq_routes::{Irq, IrqRoutes};
-use fujimod_emulator_image_processing::analysis::{self, WindowGrid};
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_image_processing::analysis::{self, WindowGrid};
 use fujimod_emulator_imaging::exr2_isp::options::window_analysis::Options;
+use fujimod_emulator_imaging::exr2_isp::{
+    dma::{self, Raster, Transfer},
+    due,
+};
 const BASE: u64 = 0xfff42000;
-const IMAGE_BYTES: usize = 8 << 20;
+const IMAGE_BYTES: usize = 32 << 20;
 pub struct Wiring {
     pub routes: IrqRoutes,
 }
@@ -69,7 +73,7 @@ impl WindowAnalysis {
             || !matches!(kind, 1 | 2)
             || mode != 2
             || r[0x1f8 / 4] != 0x10000000
-            || r[0x104 / 4] != 1
+            || !matches!(r[0x104 / 4], 1 | 0x10001)
             || r[0x184 / 4] != 0x10001
         {
             return Err("image-window start needs declared mode and two armed DMA channels".into());
@@ -78,10 +82,13 @@ impl WindowAnalysis {
         let height = (r[0x50 / 4] & 0x1fff) as usize + 1;
         let count = (r[0x9c / 4] & 0x7ff) as usize + 1;
         let bytes = ((r[0x1a8 / 4] >> 2) & 0x3ffffff) as usize;
-        if !(3..=2048).contains(&width) || !(3..=2048).contains(&height) || bytes != count * 8 {
+        if !(3..=8192).contains(&width) || !(3..=8192).contains(&height) || bytes != count * 8 {
             return Err("unsupported image-window dimensions or output count".into());
         }
         let image_bytes = width * height * 2;
+        if image_bytes > IMAGE_BYTES {
+            return Err("image-window raster exceeds the bounded source domain".into());
+        }
         let destination = if kind == 1 { r[0x48 / 4] } else { r[0x4c / 4] } as u64;
         if destination & 7 != 0 {
             return Err("unaligned image-window result destination".into());
