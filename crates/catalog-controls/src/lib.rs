@@ -626,6 +626,21 @@ pub enum ElectricalInput {
         /// Located decoder activation threshold.
         threshold: u32,
     },
+    /// Physical encoder whose decoder emits each accepted transition without a latch.
+    GpioTransition {
+        /// Ordered body connection carrying the two encoder phases.
+        connection_id: String,
+        /// Decoder phase mapping.
+        phase_map: [u8; 4],
+        /// Decoder transition values indexed by new phase, then old phase.
+        transitions: [u8; 16],
+        /// Decoder-local direction event, distinct from the UI event.
+        decoder_event: u32,
+        /// Located decoder guard address.
+        guard: u64,
+        /// Located decoder activation threshold.
+        threshold: u32,
+    },
     /// Physical encoder whose firmware counts whole phase cycles, one event per cycle.
     GpioFixedCycle {
         /// Body connection carrying the encoder phases.
@@ -1483,6 +1498,7 @@ impl FirmwareControlIds {
                     ElectricalInput::Adc { connection_id, .. }
                     | ElectricalInput::Gpio { connection_id, .. }
                     | ElectricalInput::GpioContacts { connection_id, .. }
+                    | ElectricalInput::GpioTransition { connection_id, .. }
                     | ElectricalInput::GpioQuadrature { connection_id, .. } => vec![connection_id],
                     ElectricalInput::GpioFixedCycle { connection_id, .. }
                     | ElectricalInput::SerialStatus { connection_id, .. } => vec![connection_id],
@@ -1518,6 +1534,22 @@ impl FirmwareControlIds {
                         "input {} has an invalid encoder cycle sign",
                         input.id
                     ));
+                }
+                if let ElectricalInput::GpioTransition {
+                    phase_map, transitions, decoder_event, guard, threshold, ..
+                } = electrical {
+                    let mut phases = *phase_map;
+                    phases.sort_unstable();
+                    if phases != [0, 1, 2, 3]
+                        || transitions.iter().any(|event| *event > 2)
+                        || !matches!(*decoder_event, 1 | 2)
+                        || !transitions.contains(&(*decoder_event as u8))
+                        || *guard == 0
+                        || *threshold != 1
+                        || input.scanner.is_some()
+                    {
+                        return Err(format!("input {} has an invalid transition encoder", input.id));
+                    }
                 }
                 if let ElectricalInput::GpioContacts { expected_levels, callback, .. } = electrical
                     && (!(2..=8).contains(&expected_levels.len())

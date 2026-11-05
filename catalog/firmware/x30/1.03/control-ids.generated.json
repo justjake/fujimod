@@ -5125,6 +5125,88 @@
       }
     },
     {
+      "id": "encoder-43",
+      "event": 43,
+      "debug_key": "CMD_LEFT",
+      "target": {
+        "kind": "control",
+        "control_id": "command_dial"
+      },
+      "scanner": null,
+      "electrical": {
+        "kind": "gpio_transition",
+        "connection_id": "controls-encoder-3-8-3-9",
+        "phase_map": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "transitions": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          2,
+          2,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ],
+        "decoder_event": 2,
+        "guard": 9720260,
+        "threshold": 1
+      }
+    },
+    {
+      "id": "encoder-44",
+      "event": 44,
+      "debug_key": "CMD_RIGHT",
+      "target": {
+        "kind": "control",
+        "control_id": "command_dial"
+      },
+      "scanner": null,
+      "electrical": {
+        "kind": "gpio_transition",
+        "connection_id": "controls-encoder-3-8-3-9",
+        "phase_map": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "transitions": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          2,
+          2,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ],
+        "decoder_event": 1,
+        "guard": 9720260,
+        "threshold": 1
+      }
+    },
+    {
       "id": "debug-18",
       "event": 18,
       "debug_key": "TELE",
