@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fujimod.com/schemas/ota-release-manifest.schema.json",
+  "title": "FujiMod OTA release manifest",
+  "description": "latest.json names one firmware release. Each fs key is an absolute path in the camera file layer; its value is the complete SHA-256 and byte size of the store file for that path. The camera applies a release when its version differs from the active system manifest, in either direction.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "firmware",
+    "version",
+    "fs"
+  ],
+  "properties": {
+    "firmware": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 31,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "description": "Firmware id of the release, such as X70-110. It must equal the running camera's firmware directory name."
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 127,
+      "description": "Release version compared with the active system manifest. Any difference, including an older version, is an update."
+    },
+    "fs": {
+      "type": "object",
+      "description": "Published file layer paths mapped to their content-addressed store files.",
+      "maxProperties": 32,
+      "propertyNames": {
+        "maxLength": 127
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/file"
+      }
+    }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "size"
+      ],
+      "properties": {
+        "sha256": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-fA-F]{64}$",
+          "description": "Full SHA-256 of the store file, in hexadecimal."
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Store file size in bytes."
+        }
+      }
+    }
+  }
+}
