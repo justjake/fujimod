@@ -46,6 +46,12 @@ impl Model {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Identity(u64);
 impl Identity {
+    /// Opaque process-local identity for diagnostics. Values carry no ordering
+    /// or persistence guarantee.
+    pub fn get(self) -> u64 {
+        self.0
+    }
+
     pub fn allocate() -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(1);
         Self(NEXT.fetch_add(1, Ordering::Relaxed))
@@ -727,6 +733,25 @@ pub trait Cpu {
         permissions: u32,
         backing: NonNull<u8>,
     ) -> Result<(), String>;
+    /// Permanently freeze an externally owned physical backing view until CPU
+    /// destruction. Host writes, ordinary aliases, permission escalation
+    /// and restores that could bypass this policy must refuse. Unmapping a
+    /// view or replacing it with different backing does not thaw the source. Ordinary read-only
+    /// mappings retain their existing privileged host initialization behavior.
+    /// # Safety
+    /// The allocation must use interior mutability and remain alive until CPU
+    /// destruction. All mappings/writers of these bytes must use this contract;
+    /// raw pointer writes are forbidden after the first frozen mapping. Mapping
+    /// changes on all CPUs sharing the allocation must be serialized.
+    unsafe fn map_frozen_backing(
+        &self,
+        _address: u64,
+        _bytes: usize,
+        _permissions: u32,
+        _backing: NonNull<u8>,
+    ) -> Result<(), String> {
+        Err("backend does not support frozen backing mappings".into())
+    }
     /// Map backing with its canonical physical RAM identity. Address aliases
     /// must preserve that identity for code writes and exclusive reservations.
     /// # Safety
