@@ -21,6 +21,8 @@ pub mod mprofile;
 pub mod observation;
 pub mod preservation;
 #[cfg(test)]
+mod observation_tests;
+#[cfg(test)]
 mod preservation_tests;
 mod observe;
 mod schedule;

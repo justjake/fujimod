@@ -70,6 +70,11 @@ impl MemoryContext {
         let (Some(state), Some(cpu)) = (self.state.upgrade(), self.cpu.upgrade()) else {
             return Ok(());
         };
+        // `address` is the address the processor used after its own
+        // translation (the backend reports memory hooks in physical space).
+        // The board's decoder/mapping tables then give the canonical physical
+        // identity, so a store through a second alias of the same RAM is
+        // decided against the same watched byte.
         let state = state.borrow();
         let physical = state
             .decoders
@@ -90,7 +95,9 @@ impl MemoryContext {
         if !records.overlaps(physical, size) {
             return Ok(());
         }
-        if tcm_overlap(&*cpu, address, size)? {
+        // Only an R-profile core can hide physical RAM behind a private TCM
+        // overlay; an A-profile core's MMU is already reflected in `address`.
+        if cpu.model() == Model::CortexR5F && tcm_overlap(&*cpu, address, size)? {
             return Err("Memory watch intersects a CPU-private TCM overlay".into());
         }
         let byte_order = if scalar(&*cpu, Register::Pstate)? & (1 << 9) != 0 {
@@ -248,14 +255,26 @@ impl Board {
         limit: usize,
         maps: Vec<MemoryMap>,
     ) -> Result<Box<MemoryWatch>, String> {
+        // A memory hook's bounds and the address it reports are physical: the
+        // backend checks them after the processor's own MMU/MPU translation
+        // (`cputlb.c` dispatches `UC_HOOK_MEM_*` with the translated page), so
+        // one physical range covers every virtual alias, and a remap needs no
+        // re-arming. AArch64 boards leave the backend's page-hook filter off,
+        // which would send every access through the slow path, so they stay
+        // refused.
         if ranges.is_empty()
             || ranges.len() > 256
             || limit == 0
             || limit > 1 << 22
             || ranges.iter().any(|&(lo, hi)| lo >= hi || hi > 1 << 32)
-            || self.cpus.iter().any(|cpu| cpu.model() != Model::CortexR5F)
+            || self
+                .cpus
+                .iter()
+                .any(|cpu| !matches!(cpu.model(), Model::CortexR5F | Model::CortexA7))
         {
-            return Err("Memory watch requires bounded ranges and R-profile processors".into());
+            return Err(
+                "Memory watch requires bounded physical ranges and R5F or A7 processors".into(),
+            );
         }
         if self.preservation_active() {
             return Err("A preservation observation conflicts with memory watch".into());
@@ -314,26 +333,31 @@ impl Board {
                 .cast_mut()
                 .cast();
             for (begin, end) in union(spans) {
-                for hook in [
-                    Hook::Memory {
-                        callback: access,
-                        data,
-                        read: true,
-                        write: true,
-                        range: HookRange::Inclusive {
-                            begin,
-                            end: end - 1,
-                        },
+                let mut hooks = vec![Hook::Memory {
+                    callback: access,
+                    data,
+                    read: true,
+                    write: true,
+                    range: HookRange::Inclusive {
+                        begin,
+                        end: end - 1,
                     },
-                    Hook::Instruction {
+                }];
+                // Instruction hooks compare the virtual program counter, which
+                // only equals the physical range on an MPU/R-profile core with
+                // no MMU. An A-profile fetch of a watched range is not
+                // observable here; data reads and stores are.
+                if cpu.model() == Model::CortexR5F {
+                    hooks.push(Hook::Instruction {
                         callback: fetch,
                         data,
                         range: HookRange::Inclusive {
                             begin,
                             end: end - 1,
                         },
-                    },
-                ] {
+                    });
+                }
+                for hook in hooks {
                     match unsafe { cpu.install_hook(hook) } {
                         Ok(id) => watch.hooks.push((core, id)),
                         Err(error) => {
