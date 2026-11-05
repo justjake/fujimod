@@ -28,6 +28,7 @@ pub trait Xp4Backend {
         return_address: u64,
         store_limit: usize,
         core: usize,
+        device_policy: Option<String>,
     ) -> PyResult<()>;
     fn instruction_points(&self, core: usize, addresses: Vec<u64>) -> PyResult<()>;
     fn function_watch_begin(

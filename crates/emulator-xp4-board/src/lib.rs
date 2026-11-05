@@ -450,6 +450,15 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
         ));
     }
     c.due();
+    if unsafe {
+        (*c.state.get())
+            .driver_guard
+            .as_ref()
+            .is_some_and(|guard| guard.stopped())
+    } {
+        c.cpus[core].stop()?;
+        return Ok(());
+    }
     if unsafe { (*c.state.get()).remap_pending } && c.cp(core, 1, 0, 0, 0)? & 1 == 0 {
         unsafe {
             (*c.state.get()).remap_ready = true;
@@ -856,6 +865,9 @@ fn access(offset: u64, size: u32, write: bool, value: u64, data: *mut c_void) ->
     }
     let result = (|| -> Result<u64, String> {
         let pc = c.reg(hook.core, arm::PC)?;
+        if let Some(guard) = unsafe { &mut (*c.state.get()).driver_guard } {
+            guard.mmio_access(hook.core, address, size, write)?;
+        }
         let device = c.device_access(hook.core, address, size, write, value)?;
         if let Some((reply, false)) = device {
             return Ok(reply);
@@ -1730,13 +1742,14 @@ impl Session {
         return_address: u64,
         store_limit: usize,
         core: usize,
+        device_policy: Option<String>,
     ) -> Result<(), String> {
         self.inner.cpu(core)?;
         let state = unsafe { &mut *self.inner.state.get() };
         if state.driver_guard.is_some()
             || state.discovery.enabled
             || state.failure.is_some()
-            || state.devices.is_some()
+            || (state.devices.is_some() && device_policy.is_none())
             || state.timer.is_some()
             || state.recorder.is_some()
             || state.memory_watch.is_some()
@@ -1753,7 +1766,13 @@ impl Session {
         self.inner
             .memory_pointer(return_address, 4, 4)
             .map_err(|_| "Driver guard return sentinel requires executable physical backing")?;
-        state.driver_guard = Some(driver_guard::Guard::new(
+        let policy: Option<driver_guard::DevicePolicy> = device_policy
+            .map(|json| {
+                serde_json::from_str(&json)
+                    .map_err(|error| format!("Invalid driver device policy: {error}"))
+            })
+            .transpose()?;
+        let mut guard = driver_guard::Guard::new(
             core,
             executable,
             readable,
@@ -1768,7 +1787,21 @@ impl Session {
                         .map(|window| (window.base, window.base + window.data.len() as u64)),
                 )
                 .collect(),
-        )?);
+        )?;
+        if let Some(policy) = policy {
+            let mut windows = state
+                .devices
+                .as_ref()
+                .map(|devices| devices.guard_windows())
+                .unwrap_or_default();
+            if let Some(base) = self.inner.cbar {
+                windows.push((u64::from(base) + 0x1000, u64::from(base) + 0x3000));
+            }
+            guard = guard
+                .with_mmio(policy.mmio, windows)?
+                .with_model_memory(policy.model_readable, policy.model_writable)?;
+        }
+        state.driver_guard = Some(guard);
         Ok(())
     }
     pub fn driver_guard_end(&self) {
