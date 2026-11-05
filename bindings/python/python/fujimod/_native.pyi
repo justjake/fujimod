@@ -47,6 +47,7 @@ class emulator:
         sub_cpu_registers: Sequence[tuple[int, int]] = ...,
         assets: Mapping[str, bytes] | None = None,
         sensor_image: tuple[int, int, bytes] | None = None,
+        sensor_light: str | None = None,
     ) -> str: ...
 
     @final

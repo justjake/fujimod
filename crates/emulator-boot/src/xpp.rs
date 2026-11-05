@@ -57,6 +57,35 @@ pub struct SensorImage {
     pub width: u32,
     pub height: u32,
     pub rgb: Vec<u8>,
+    /// The light the picture's channels carry.
+    pub light: SensorImageLight,
+}
+
+/// The light a caller's picture carries, as the declared sensor frame writes it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SensorImageLight {
+    /// Display-referred sRGB at the declared wall's light (the default).
+    /// It keeps the established, warm-wall path byte for byte: a neutral
+    /// picture develops as the wall does, under the wall's AUTO gains. Camera
+    /// raw would become the default once callers rely on neutral pictures
+    /// developing neutral at any light, and its radiance has a measured basis.
+    #[default]
+    Rendered,
+    /// The camera's own linear light per site, unbalanced: each channel is a
+    /// light ratio against the live-view film's declared `camera_raw_radiance`,
+    /// so development applies the programmed white balance absolutely.
+    CameraRaw,
+}
+
+impl SensorImageLight {
+    /// The light kind a language binding or configuration names.
+    pub fn parse(name: &str) -> Result<Self, String> {
+        match name {
+            "rendered" => Ok(Self::Rendered),
+            "camera-raw" => Ok(Self::CameraRaw),
+            other => Err(format!("unknown sensor picture light {other}")),
+        }
+    }
 }
 
 fn soc_profile<'a>(resolved: &'a ResolvedConfiguration) -> Result<&'a SocProfile, String> {
@@ -80,6 +109,13 @@ fn soc_profile<'a>(resolved: &'a ResolvedConfiguration) -> Result<&'a SocProfile
 
 fn bits(bits: &RegisterIdleBits) -> Value {
     json!([bits.offset, bits.mask])
+}
+
+/// A declared white-balance reference with its green value in all three
+/// channels: programmed gains then act on the light absolutely, by their ratio
+/// to green, instead of relative to a scene that renders neutral.
+fn flat_reference(reference: [u32; 3]) -> [u32; 3] {
+    [reference[1]; 3]
 }
 
 /// The selected body hardware profile of a resolved run.
@@ -441,6 +477,27 @@ fn nodes(
     {
         return Err("still development units must be register blocks with jobs".into());
     }
+    // A camera-raw picture holds the camera's own light per site, not light
+    // rendered under the declared wall: the wall's camera-space radiance is its
+    // reference (zone sums and the film's uniform light), and both white-balance
+    // references go flat so the programmed gains act on it absolutely.
+    let camera_raw_radiance = match inputs
+        .sensor_image
+        .filter(|picture| picture.light == SensorImageLight::CameraRaw)
+    {
+        None => None,
+        Some(_) => {
+            let radiance = image
+                .and_then(|image| image.film.as_ref())
+                .and_then(|film| film.camera_raw_radiance.as_ref())
+                .map(|declared| declared.radiance)
+                .ok_or("a camera-raw sensor picture needs a declared camera-raw radiance")?;
+            if radiance.contains(&0) {
+                return Err("a camera-raw radiance needs light in every channel".into());
+            }
+            Some(radiance)
+        }
+    };
     for (n, block) in maps.register_blocks.iter().enumerate() {
         let mut model = json!({
             "kind": "register-block", "base": block.base, "size": block.size,
@@ -474,7 +531,10 @@ fn nodes(
                                       "phase": development.source_phase });
                 if let Some(color) = development.color {
                     law["color"] = json!(color);
-                    law["white_balance"] = json!(development.white_balance_reference);
+                    law["white_balance"] = json!(match camera_raw_radiance {
+                        Some(_) => development.white_balance_reference.map(flat_reference),
+                        None => development.white_balance_reference,
+                    });
                 }
                 Some(law)
             } else if block.base == development.resizer {
@@ -500,8 +560,11 @@ fn nodes(
                     return Err("a live-view film needs the still color unit and no scene".into());
                 }
                 model["live_view_image"]["film"] = json!({
-                    "linear_rgb": film.linear_rgb,
-                    "white_balance_reference": film.white_balance_reference,
+                    "linear_rgb": camera_raw_radiance.unwrap_or(film.linear_rgb),
+                    "white_balance_reference": match camera_raw_radiance {
+                        Some(_) => flat_reference(film.white_balance_reference),
+                        None => film.white_balance_reference,
+                    },
                 });
                 // The sensor's host picture is the scene the film develops in live view.
                 if let Some(picture) = inputs.sensor_image {
@@ -1329,6 +1392,7 @@ mod tests {
             width: 2,
             height: 1,
             rgb: vec![255, 0, 0, 0, 0, 255],
+            light: SensorImageLight::Rendered,
         };
         reset.sensor_frame = None;
         assert_eq!(
@@ -1343,6 +1407,7 @@ mod tests {
             width: 2,
             height: 2,
             rgb: image.rgb.clone(),
+            light: SensorImageLight::Rendered,
         };
         assert!(built(&reset, &short).is_err());
         let nodes = built(&reset, &image).unwrap();
@@ -1353,6 +1418,175 @@ mod tests {
         assert_eq!(
             imaging["model"]["sensor_image"],
             json!({"width": 2, "height": 1, "rgb": "ff00000000ff"})
+        );
+    }
+
+    /// The graph nodes of one reset with an optional camera picture.
+    fn picture_test(
+        resolved: &ResolvedConfiguration,
+        reset: &HardwareReset,
+        picture: Option<&SensorImage>,
+    ) -> Result<Vec<Value>, String> {
+        let maps = soc_profile(resolved)
+            .unwrap()
+            .register_maps
+            .as_ref()
+            .unwrap();
+        let selection = &resolved.reference;
+        let banks = ram_banks(&selection.soc.memory_regions);
+        let (starts, assets) = (starts(), assets());
+        nodes(
+            maps,
+            reset,
+            resolved.dram_address_space_limit_bytes().unwrap(),
+            &banks,
+            &Inputs {
+                starts: &starts,
+                sub_cpu_registers: &[],
+                assets: &assets,
+                sensor_image: picture,
+            },
+        )
+    }
+
+    fn model_of(nodes: &[Value], base: u64) -> Value {
+        nodes
+            .iter()
+            .find(|node| node["model"]["base"] == base)
+            .unwrap()["model"]
+            .clone()
+    }
+
+    fn picture() -> SensorImage {
+        SensorImage {
+            width: 2,
+            height: 1,
+            rgb: vec![255, 0, 0, 0, 0, 255],
+            light: SensorImageLight::Rendered,
+        }
+    }
+
+    #[test]
+    fn a_rendered_sensor_picture_keeps_the_declared_film_and_still_references() {
+        let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
+        let reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let unit = reset.live_view_image.as_ref().unwrap().unit;
+        let developer = reset.still_development.as_ref().unwrap().developer;
+        let without = picture_test(&resolved, &reset, None).unwrap();
+        let rendered = picture_test(&resolved, &reset, Some(&picture())).unwrap();
+        // The default light leaves the still law and the film light as declared.
+        let declared_law = json!([734, 604, 2284]);
+        assert_eq!(
+            model_of(&without, developer)["work"]["white_balance"],
+            declared_law
+        );
+        assert_eq!(
+            model_of(&rendered, developer)["work"]["white_balance"],
+            declared_law
+        );
+        let mut film = model_of(&rendered, unit)["live_view_image"]["film"].clone();
+        assert_eq!(
+            film["picture"],
+            json!({"width": 2, "height": 1, "rgb": "ff00000000ff"})
+        );
+        film.as_object_mut().unwrap().remove("picture");
+        assert_eq!(film, model_of(&without, unit)["live_view_image"]["film"]);
+        assert_eq!(
+            film,
+            json!({"linear_rgb": [1015, 764, 577], "white_balance_reference": [1138, 604, 1096]})
+        );
+    }
+
+    #[test]
+    fn a_camera_raw_sensor_picture_takes_the_wall_radiance_and_flat_gains() {
+        let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
+        let reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let unit = reset.live_view_image.as_ref().unwrap().unit;
+        let developer = reset.still_development.as_ref().unwrap().developer;
+        let radiance = reset
+            .live_view_image
+            .as_ref()
+            .unwrap()
+            .film
+            .as_ref()
+            .unwrap()
+            .camera_raw_radiance
+            .as_ref()
+            .unwrap()
+            .radiance;
+        assert_eq!(radiance, [721, 764, 168]);
+        let raw = SensorImage {
+            light: SensorImageLight::CameraRaw,
+            ..picture()
+        };
+        let nodes = picture_test(&resolved, &reset, Some(&raw)).unwrap();
+        assert_eq!(
+            model_of(&nodes, unit)["live_view_image"]["film"],
+            json!({
+                "linear_rgb": [721, 764, 168],
+                "white_balance_reference": [604, 604, 604],
+                "picture": {"width": 2, "height": 1, "rgb": "ff00000000ff"},
+            })
+        );
+        assert_eq!(
+            model_of(&nodes, developer)["work"]["white_balance"],
+            json!([604, 604, 604])
+        );
+        let imaging = nodes
+            .iter()
+            .find(|node| node["model"]["kind"] == "imaging-control")
+            .unwrap();
+        assert_eq!(imaging["model"]["sensor_image"]["rgb"], "ff00000000ff");
+    }
+
+    #[test]
+    fn a_camera_raw_sensor_picture_needs_the_declared_radiance_and_a_known_kind() {
+        use fujimod_catalog_run_inputs::hardware_inputs::CameraRawRadiance;
+        assert_eq!(
+            SensorImageLight::parse("rendered"),
+            Ok(SensorImageLight::Rendered)
+        );
+        assert_eq!(
+            SensorImageLight::parse("camera-raw"),
+            Ok(SensorImageLight::CameraRaw)
+        );
+        assert_eq!(
+            SensorImageLight::parse("balanced"),
+            Err("unknown sensor picture light balanced".into())
+        );
+        let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
+        let raw = SensorImage {
+            light: SensorImageLight::CameraRaw,
+            ..picture()
+        };
+        let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let film = reset
+            .live_view_image
+            .as_mut()
+            .unwrap()
+            .film
+            .as_mut()
+            .unwrap();
+        film.camera_raw_radiance = None;
+        assert_eq!(
+            picture_test(&resolved, &reset, Some(&raw)).err().unwrap(),
+            "a camera-raw sensor picture needs a declared camera-raw radiance"
+        );
+        let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let film = reset
+            .live_view_image
+            .as_mut()
+            .unwrap()
+            .film
+            .as_mut()
+            .unwrap();
+        film.camera_raw_radiance = Some(CameraRawRadiance {
+            basis: "test".into(),
+            radiance: [721, 764, 0],
+        });
+        assert_eq!(
+            picture_test(&resolved, &reset, Some(&raw)).err().unwrap(),
+            "a camera-raw radiance needs light in every channel"
         );
     }
 

@@ -467,7 +467,11 @@
       "film": {
         "basis": "Declared, inverted from the measurement above. X-T20 2.11's MAIN pipeline reprograms the color unit 0xfff47000 from its parameter structure (0x1a52198) before every live-view frame (caller 0x156ade0, every 880000 ticks; the copies at 0xfffac000 and 0xfffa9000 receive no writes in REC), so the live-view image is developed with the words the unit holds. The scene is the 14-bit linear light (R, G, B) that the PROVIA film words the firmware programs by default turn into the measured Y 73, Cb 114, Cr 138 at the live AUTO white balance the firmware converges to for the declared zone statistics (gains 1138, 604, 1096). Another film simulation or white balance changes the image from there; the camera's film, white balance and live gains at the measurement were not recorded, so this inversion is declared, not measured.",
         "linear_rgb": [1015, 764, 577],
-        "white_balance_reference": [1138, 604, 1096]
+        "white_balance_reference": [1138, 604, 1096],
+        "camera_raw_radiance": {
+          "basis": "Declared approximation, not measured: the per-site light in camera space of the wall measured for the scene statistics above (2026-10-29), from its zone means 144736/383321/33695 divided by the X-Trans site counts 1:2.5:1 (0.944:1:0.220), scaled to the wall's green 764. Assumes the zone sums are plain sums of raw sites. That the wall was lit by a warm lamp is an inference: neutral targets shot on the camera under a warm LED (2026-11-05) gave per-site ratios 0.81:1:0.245 and under daylight 0.405:1:0.73, and the wall's ratios lie near the lamp. The camera's own per-site light on the wall was not read. A camera-raw picture is relative to this light; its white balance is computed by the firmware's own AUTO white balance, not injected.",
+          "radiance": [721, 764, 168]
+        }
       }
     },
     "sensor_frame": {

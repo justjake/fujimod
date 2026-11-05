@@ -42,7 +42,7 @@ pub(crate) fn register() {
 /// X-Processor Pro execution and device graphs of a bundled run configuration, as JSON.
 /// `registers` is a JSON list of each application core's reset registers.
 #[pyo3::pyfunction]
-#[pyo3(signature = (configuration_id, registers, overlays=Vec::new(), sub_cpu_registers=Vec::new(), assets=None, sensor_image=None))]
+#[pyo3(signature = (configuration_id, registers, overlays=Vec::new(), sub_cpu_registers=Vec::new(), assets=None, sensor_image=None, sensor_light=None))]
 pub(crate) fn xpp_definition(
     configuration_id: &str,
     registers: &str,
@@ -50,8 +50,19 @@ pub(crate) fn xpp_definition(
     sub_cpu_registers: Vec<(u8, u8)>,
     assets: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>,
     sensor_image: Option<(u32, u32, Vec<u8>)>,
+    sensor_light: Option<&str>,
 ) -> pyo3::PyResult<String> {
     use pyo3::types::{PyAnyMethods, PyBytes, PyBytesMethods, PyDictMethods};
+    if sensor_light.is_some() && sensor_image.is_none() {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "a sensor picture light needs a sensor picture",
+        ));
+    }
+    let light = match sensor_light {
+        None => boot::xpp::SensorImageLight::Rendered,
+        Some(name) => boot::xpp::SensorImageLight::parse(name)
+            .map_err(pyo3::exceptions::PyValueError::new_err)?,
+    };
     let mut loaded = std::collections::BTreeMap::new();
     for (name, bytes) in assets.into_iter().flat_map(|assets| assets.iter()) {
         loaded.insert(
@@ -68,7 +79,12 @@ pub(crate) fn xpp_definition(
         &sub_cpu_registers,
         &loaded,
         sensor_image
-            .map(|(width, height, rgb)| boot::xpp::SensorImage { width, height, rgb })
+            .map(|(width, height, rgb)| boot::xpp::SensorImage {
+                width,
+                height,
+                rgb,
+                light,
+            })
             .as_ref(),
     )
     .map_err(fujimod_python_base::error)?;

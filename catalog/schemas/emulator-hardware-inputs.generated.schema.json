@@ -602,6 +602,33 @@
       ],
       "type": "object"
     },
+    "ResetCameraRawRadiance": {
+      "additionalProperties": false,
+      "description": "Declared per-site light of the film scene's wall in camera space.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "radiance": {
+          "description": "(R, G, B) light of the wall's sites in camera space.",
+          "items": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "radiance"
+      ],
+      "type": "object"
+    },
     "ResetCard": {
       "additionalProperties": false,
       "description": "Declared card facts.",
@@ -1490,6 +1517,17 @@
         "basis": {
           "description": "Declared basis.",
           "type": "string"
+        },
+        "camera_raw_radiance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetCameraRawRadiance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Per-site light of the declared wall in camera space, in the same units\nas `linear_rgb`. A caller's picture declared as camera raw light is\nrelative to it: the zone sums divide by this radiance instead of\n`linear_rgb`, and the white-balance references act as flat gains."
         },
         "linear_rgb": {
           "description": "14-bit linear light of every pixel at the reference white balance.",
