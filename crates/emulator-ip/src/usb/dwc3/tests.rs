@@ -72,6 +72,13 @@ fn tick(d: &mut Dwc3, b: &mut Board, at: u64) {
     d.event(&mut cx, 0);
     assert_eq!(cx.refusal(), None);
 }
+fn dsts(d: &mut Dwc3, b: &mut Board) -> u32 {
+    let pc = b.pc;
+    let mut cx = Cx::new(b, 0, pc, 0);
+    let value = d.read(&mut cx, config().base + u64::from(DSTS), 4);
+    assert_eq!(cx.refusal(), None);
+    value as u32
+}
 fn command(d: &mut Dwc3, b: &mut Board, ep: usize, code: u32, parameters: [u32; 3]) {
     let base = 0xc800 + ep as u32 * 16;
     for (n, value) in parameters.into_iter().enumerate() {
@@ -506,4 +513,190 @@ fn exact_checkpoint_carries_pending_host_packets_and_resumes_identically() {
             .validate_checkpoint(&saved)
             .is_err()
     );
+}
+
+#[test]
+fn rx_detect_is_consumed_while_disconnected_and_changes_nothing_else() {
+    fn run(pc: u64) -> serde_json::Value {
+        let (mut d, mut b) = ready(pc);
+        d.link(b.now, false).unwrap();
+        let at = b.now + 4;
+        tick(&mut d, &mut b, at);
+        assert_eq!(d.reg(0xc40c), 4);
+        assert!(b.irq);
+        write(&mut d, &mut b, 0xc40c, 4).unwrap();
+        assert!(!b.irq);
+        let before = d.save();
+        write(&mut d, &mut b, DCTL, RUN | LINK_REQUEST_RX_DETECT).unwrap();
+        // The one-shot request is consumed: no register value, event, link or
+        // pending operation changes.
+        assert_eq!(d.reg(DCTL), RUN);
+        assert_eq!(d.save(), before);
+        assert!(d.state.running);
+        assert!(!d.state.connected);
+        assert!(d.state.pending.is_empty());
+        assert_eq!(d.next_deadline(b.now), None);
+        assert_eq!(d.reg(0xc40c), 0);
+        assert!(!b.irq);
+        // DSTS still reports high speed, disconnected and not halted.
+        let status = dsts(&mut d, &mut b);
+        assert_eq!(status & 7, 0);
+        assert_eq!(status >> 18 & 0xf, 4);
+        assert_eq!(status >> 22 & 1, 0);
+        d.save()
+    }
+    assert_eq!(run(0x11111110), run(0x99999998));
+}
+
+#[test]
+fn accepted_rx_detect_keeps_running_stop_reset_and_reconnect_traffic() {
+    let (mut d, mut b) = ready(0x1234);
+    d.link(b.now, false).unwrap();
+    let at = b.now + 4;
+    tick(&mut d, &mut b, at);
+    write(&mut d, &mut b, 0xc40c, 4).unwrap();
+    write(&mut d, &mut b, DCTL, RUN | LINK_REQUEST_RX_DETECT).unwrap();
+    // RUN/stop is still a delayed command: the core runs until its deadline
+    // and only then reports DEVCTRLHLT.
+    write(&mut d, &mut b, DCTL, 0).unwrap();
+    let at = b.now + 8;
+    assert_eq!(d.next_deadline(b.now), Some(at));
+    tick(&mut d, &mut b, at - 1);
+    assert!(d.state.running);
+    tick(&mut d, &mut b, at);
+    assert!(!d.state.running);
+    assert_eq!(dsts(&mut d, &mut b) >> 22 & 1, 1);
+    // A core reset clears the registers and leaves the core halted.
+    write(&mut d, &mut b, DCTL, RESET).unwrap();
+    let at = b.now + 8;
+    tick(&mut d, &mut b, at);
+    assert_eq!(d.reg(DCTL), 0);
+    assert!(!d.state.running);
+    // The reset also cleared the event ring; restore it for later traffic.
+    write(&mut d, &mut b, 0xc400, 0x1000).unwrap();
+    write(&mut d, &mut b, 0xc408, 0x100).unwrap();
+    // RX_DETECT while halted and disconnected is accepted without starting
+    // the controller or queueing anything.
+    write(&mut d, &mut b, DCTL, LINK_REQUEST_RX_DETECT).unwrap();
+    assert_eq!(d.reg(DCTL), 0);
+    assert!(!d.state.running);
+    assert!(d.state.pending.is_empty());
+    assert_eq!(d.next_deadline(b.now), None);
+    // A physical reconnect and RUN then reach the connect path and ordinary
+    // endpoint traffic.
+    d.link(b.now, true).unwrap();
+    let at = b.now + 4;
+    tick(&mut d, &mut b, at);
+    assert!(d.state.connected);
+    write(&mut d, &mut b, DCTL, RUN).unwrap();
+    let at = b.now + 8;
+    tick(&mut d, &mut b, at);
+    assert!(d.state.running);
+    // The reset cleared DEVTEN, so the start queues no event.
+    assert!(!b.irq);
+    endpoint(&mut d, &mut b, 2, 8);
+    trb(&mut b, 0x2000, 0x3000, 8, 1);
+    start(&mut d, &mut b, 2, 0x2000);
+    let id = d
+        .transaction(b.now, 2, false, Some(b"abcdefgh".to_vec()))
+        .unwrap();
+    let at = b.now + 4;
+    tick(&mut d, &mut b, at);
+    assert_eq!(d.reply(id), Some(&Reply::Ack));
+    assert_eq!(&b.ram[0x3000..0x3008], b"abcdefgh");
+}
+
+#[test]
+fn connected_or_unsupported_link_requests_are_refused_without_changing_state() {
+    let (mut d, mut b) = ready(0x5554);
+    let before = d.save();
+    for value in [
+        RUN | LINK_REQUEST_RX_DETECT,
+        RUN | (1 << 5),
+        RUN | (2 << 5),
+        RUN | (3 << 5),
+        RUN | (4 << 5),
+        RUN | (6 << 5),
+        RUN | (8 << 5),
+        RUN | (10 << 5),
+        RUN | (11 << 5),
+        RUN | 1,
+        RUN | (1 << 1),
+        RUN | (0xf << 1),
+        RUN | (1 << 16),
+        RUN | (1 << 17),
+        RUN | (1 << 18),
+        RUN | (1 << 19),
+        RUN | (1 << 23),
+        RUN | (1 << 29),
+    ] {
+        assert!(write(&mut d, &mut b, DCTL, value).is_err(), "{value:#x}");
+        assert_eq!(d.save(), before, "{value:#x}");
+    }
+    // NO_ACTION is always permitted and changes nothing.
+    write(&mut d, &mut b, DCTL, RUN).unwrap();
+    assert_eq!(d.save(), before);
+    // Only RX_DETECT is accepted once the link is disconnected.
+    d.link(b.now, false).unwrap();
+    let at = b.now + 4;
+    tick(&mut d, &mut b, at);
+    write(&mut d, &mut b, 0xc40c, 4).unwrap();
+    let before = d.save();
+    for value in [
+        RUN | (1 << 5),
+        RUN | (2 << 5),
+        RUN | (3 << 5),
+        RUN | (4 << 5),
+        RUN | (6 << 5),
+        RUN | (8 << 5),
+        RUN | (10 << 5),
+        RUN | (11 << 5),
+        RUN | (15 << 5),
+    ] {
+        assert!(write(&mut d, &mut b, DCTL, value).is_err(), "{value:#x}");
+        assert_eq!(d.save(), before, "{value:#x}");
+    }
+    write(&mut d, &mut b, DCTL, RUN | LINK_REQUEST_RX_DETECT).unwrap();
+    assert_eq!(d.save(), before);
+}
+
+#[test]
+fn checkpoints_never_hold_link_requests_and_malformed_ones_are_refused() {
+    let (mut d, mut b) = ready(0x7654);
+    d.link(b.now, false).unwrap();
+    let at = b.now + 4;
+    tick(&mut d, &mut b, at);
+    write(&mut d, &mut b, 0xc40c, 4).unwrap();
+    write(&mut d, &mut b, DCTL, RUN | LINK_REQUEST_RX_DETECT).unwrap();
+    let saved = d.save();
+    let checkpoint = d.checkpoint().unwrap();
+    let mut restored = Dwc3::new(config()).unwrap();
+    restored.restore(&saved).unwrap();
+    assert_eq!(restored.save(), saved);
+    assert!(restored.validate_checkpoint(&checkpoint).is_ok());
+    // Any saved request field is malformed: the core consumes it, so neither
+    // RX_DETECT nor another encoding may appear in a checkpoint.
+    for register in [RUN | LINK_REQUEST_RX_DETECT, RUN | (4 << 5)] {
+        let mut state = saved.clone();
+        *state.pointer_mut("/state/registers/50948").unwrap() = serde_json::json!(register);
+        assert!(d.restore(&state).is_err(), "{register:#x}");
+        assert_eq!(d.save(), saved);
+    }
+    let mut malformed = Saved {
+        config: config(),
+        state: d.state.clone(),
+    };
+    malformed
+        .state
+        .registers
+        .insert(DCTL, RUN | LINK_REQUEST_RX_DETECT);
+    let encoded =
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode("dwc3", &malformed).unwrap();
+    assert!(d.validate_checkpoint(&encoded).is_err());
+    // The same field while connected is malformed too.
+    let (mut connected, _) = ready(0x2468);
+    let mut state = connected.save();
+    *state.pointer_mut("/state/registers/50948").unwrap() =
+        serde_json::json!(RUN | LINK_REQUEST_RX_DETECT);
+    assert!(connected.restore(&state).is_err());
 }
