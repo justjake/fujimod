@@ -1,4 +1,5 @@
 //! Definition admission only: these tests execute no guest instructions.
+//! A control request word owns its whole 0x100-byte block (word at +0x80).
 use fujimod_emulator_xp4_board::{Definition, Session};
 use serde_json::{Value, json};
 fn input() -> Value { json!({"ram_size":65536,"cores":1,"discovery":false,"cbar":0x20000000u32}) }
@@ -82,7 +83,7 @@ fn selection_special_owns_exactly_three_words_and_leaves_b14_to_its_existing_own
         let error = Session::new(serde_json::from_value(bad).unwrap(), None, vec![]).err().unwrap();
         assert!(error.contains("Overlapping"), "{error}");
     }
-    v["control_requests"] = json!([[0xfff48608u64, 8]]);
+    v["control_requests"] = json!([[0xfff48690u64, 8]]);
     assert!(Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).is_ok());
     cfg["selection_special"]["selection_reset"] = json!(0xc00);
     v["xp4_functional_system_control"] = cfg;
@@ -124,7 +125,7 @@ fn boolean_write_port_is_optional_exact_and_separate_from_dma_mux() {
     v["xp4_functional_system_control"]["boolean_write_fff4a400"] = json!({"enabled": true});
     let error = Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).err().unwrap();
     assert!(error.contains("Overlapping"), "{error}");
-    for address in [0xfff4a3fcu64, 0xfff4a404] {
+    for address in [0xfff4a380u64, 0xfff4a484] {
         v["control_requests"] = json!([[address, 8]]);
         assert!(Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).is_ok());
     }
@@ -149,7 +150,7 @@ fn serial_clock_port_owns_only_its_explicit_word_and_rejects_overlap() {
     v["xp4_functional_system_control"]["serial_clock_select_fff48700"] = json!({"enabled":true});
     let error = Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).err().unwrap();
     assert!(error.contains("Overlapping"), "{error}");
-    for address in [0xfff486fcu64, 0xfff48704] {
+    for address in [0xfff48680u64, 0xfff48784] {
         v["control_requests"] = json!([[address, 8]]);
         let session = Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).unwrap();
         let state: Value = serde_json::from_str(&session.device_state_json()["xp4-functional-system-control"]).unwrap();

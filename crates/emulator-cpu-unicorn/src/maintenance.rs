@@ -48,7 +48,7 @@ impl Core {
         }
         let attach = self.api.extensions.tlbi_attach.ok_or("Missing TLBI attachment ABI")?;
         static NEXT: AtomicU64 = AtomicU64::new(1);
-        let token = NEXT.fetch_update(Ordering::Relaxed, Ordering::Relaxed,
+        let token = NEXT.try_update(Ordering::Relaxed, Ordering::Relaxed,
             |value| value.checked_add(1)).map_err(|_| "TLBI owner identity exhausted")?;
         self.check(unsafe { attach(self.raw, ABI, token) })?;
         self.tlbi_owner.set(Some(token));

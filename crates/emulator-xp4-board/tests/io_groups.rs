@@ -15,7 +15,8 @@ fn io_group_is_explicit_and_owns_its_exact_window() {
         let error=Session::new(serde_json::from_value(conflict).unwrap(),None,vec![]).err().unwrap();
         assert!(error.contains("Overlapping XP4 IO-group"),"{error}");
     }
-    selected["control_requests"]=json!([[0xfff420a0u64,4]]);
+    // A request word at +0x80 owns its whole 0x100-byte block.
+    selected["control_requests"]=json!([[0xfff42120u64,4]]);
     assert!(Session::new(serde_json::from_value(selected).unwrap(),None,vec![]).is_ok());
 }
 #[test]
