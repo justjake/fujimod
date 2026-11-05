@@ -322,6 +322,11 @@ impl Guard {
             || word & 0x7e00_0000 == 0x3600_0000
             || matches!(word & 0xffff_fc1f, 0xd61f_0000 | 0xd63f_0000 | 0xd65f_0000);
         let scalar_fmov_immediate = word & 0xff20_1fe0 == 0x1e20_1000 && (word >> 22) & 3 <= 1; // S/D forms; half and reserved forms refuse.
+        let scalar_fmov_register_transfer = matches!(
+            word & 0xffff_fc00,
+            0x1e26_0000 | 0x1e27_0000 | 0x9e66_0000 | 0x9e67_0000
+        ); // FMOV W/S and X/D bit transfers; other SIMD register moves refuse.
+        let scalar_ucvtf = matches!(word & 0xffff_fc00, 0x1e23_0000 | 0x7e21_d800); // UCVTF S,W and S,S; other conversion widths refuse.
         let scalar_fp_math = ((word & 0xff20_fc00 == 0x1e20_0800 // FMUL S/D.
             || word & 0xff20_0c00 == 0x1e20_0c00 // FCSEL S/D.
             || word & 0xff20_fc1f == 0x1e20_2000) // FCMP S/D.
@@ -333,6 +338,8 @@ impl Guard {
             || integer
             || branch
             || scalar_fmov_immediate
+            || scalar_fmov_register_transfer
+            || scalar_ucvtf
             || scalar_fp_math
         {
             return Ok(());
@@ -844,6 +851,57 @@ mod tests {
         let r = checked_call(&mut b, options()).unwrap();
         assert_eq!(r.instructions, 0);
         assert!(r.failure.unwrap().contains("Unsupported instruction"));
+    }
+    #[test]
+    fn scalar_fmov_register_transfer_round_trips_integer_bits() {
+        for (to_fp, from_fp, input, expected) in [
+            (
+                0x1e27_0008, // FMOV S8,W0.
+                0x1e26_0101, // FMOV W1,S8.
+                0x1234_5678_90ab_cdefu64,
+                0x90ab_cdefu64,
+            ),
+            (
+                0x9e67_0008, // FMOV D8,X0.
+                0x9e66_0101, // FMOV X1,D8.
+                0x1234_5678_90ab_cdefu64,
+                0x1234_5678_90ab_cdefu64,
+            ),
+        ] {
+            let mut b = board(&[to_fp, from_fp, 0xd65f_03c0]);
+            let mut o = options();
+            o.arguments = vec![input];
+            let r = checked_call(&mut b, o).unwrap();
+            assert!(r.returned, "{to_fp:#x}: {:?}", r.failure);
+            assert_eq!(r.instructions, 3);
+            assert_eq!(r.registers["x1"], expected);
+        }
+    }
+    #[test]
+    fn scalar_ucvtf_from_integer_register_and_scalar_bits_retires() {
+        for (words, expected_instructions) in [
+            (
+                vec![0x1e23_0000, 0x1e26_0001, 0xd65f_03c0], // UCVTF S0,W0; FMOV W1,S0.
+                3,
+            ),
+            (
+                vec![
+                    0x1e27_0008, // FMOV S8,W0.
+                    0x7e21_d902, // UCVTF S2,S8.
+                    0x1e26_0041, // FMOV W1,S2.
+                    0xd65f_03c0,
+                ],
+                4,
+            ),
+        ] {
+            let mut b = board(&words);
+            let mut o = options();
+            o.arguments = vec![640];
+            let r = checked_call(&mut b, o).unwrap();
+            assert!(r.returned, "{:?}", r.failure);
+            assert_eq!(r.instructions, expected_instructions);
+            assert_eq!(r.registers["x1"], 640.0f32.to_bits() as u64);
+        }
     }
     #[test]
     fn scalar_fp_register_math_and_round_toward_zero_are_checked() {
