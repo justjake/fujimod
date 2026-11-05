@@ -1,6 +1,7 @@
 //! One-function SDIO module with enumeration, ROM download and MT5931 HIF.
 //! Device behavior consumes only SDIO transactions.
 pub mod mt5931;
+pub mod virtual_network;
 use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -75,21 +76,20 @@ impl WifiModule {
             return Err("MT5931 requires explicit endpoint identity".into());
         }
         if let Some(endpoint) = &options.mt5931 {
-            if endpoint.mac_address == [0; 6] || endpoint.mac_address[0] & 1 != 0 {
-                return Err("MT5931 permanent MAC must be a nonzero unicast address".into());
-            }
+            endpoint.validate()?;
         }
         let mut bytes = [0; 0x112];
         for (a, v) in [(0, 0x22), (1, 3), (8, 0x82)] {
             bytes[a] = v;
         }
+        let endpoint = mt5931::Endpoint::new(options.mt5931.as_ref());
         Ok(Self {
             options,
             bytes,
             phase: Phase::Idle,
             cursor: 0,
             direct: false,
-            endpoint: mt5931::Endpoint::default(),
+            endpoint,
         })
     }
     pub fn protocol(&self) -> Protocol {
@@ -178,7 +178,7 @@ impl WifiModule {
         u16::from_le_bytes([self.bytes[0x110], self.bytes[0x111]])
     }
     pub fn vendor(
-        &self,
+        &mut self,
         address: u32,
         write: bool,
         payload: &[u8],
@@ -188,13 +188,7 @@ impl WifiModule {
             return Err("Wi-Fi vendor transfers require ROM download option".into());
         }
         if self.options.protocol == Protocol::Mt5931 && self.phase == Phase::Configured {
-            let (data, change) = self.endpoint.transfer(
-                self.options.mt5931.as_ref().unwrap(),
-                address,
-                write,
-                payload,
-                quantity,
-            )?;
+            let (data, change) = self.endpoint.transfer(address, write, payload, quantity)?;
             return Ok(Operation {
                 response: data
                     .get(..4)
