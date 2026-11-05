@@ -590,13 +590,13 @@
         "dram_basis": "Declared catalog input.",
         "imaging": {
           "sensor_capture": {
-            "width": 4096,
-            "height": 3012,
+            "width": 4224,
+            "height": 3132,
             "period_ticks": 1200000,
             "dma_ticks": 1000,
             "cfa_origin": [
-              16,
-              6
+              112,
+              126
             ]
           },
           "capture_color": {
@@ -690,8 +690,8 @@
               1
             ],
             "sensor_image_area": [
-              16,
-              6,
+              112,
+              126,
               4000,
               3000
             ]
@@ -1378,13 +1378,13 @@
         "dram_basis": "Declared catalog input.",
         "imaging": {
           "sensor_capture": {
-            "width": 4096,
-            "height": 3012,
+            "width": 4224,
+            "height": 3132,
             "period_ticks": 1200000,
             "dma_ticks": 1000,
             "cfa_origin": [
-              16,
-              6
+              112,
+              126
             ]
           },
           "capture_color": {
@@ -1478,8 +1478,8 @@
               1
             ],
             "sensor_image_area": [
-              16,
-              6,
+              112,
+              126,
               4000,
               3000
             ]
