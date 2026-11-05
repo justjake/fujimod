@@ -11,7 +11,10 @@ fn raw_readback_keeps_neutral_light_across_sensor_window_origins() {
     let layout: Vec<u8> = (0..36).map(|i| ((i / 6 + i % 6) % 3) as u8).collect();
     let sensor = Cfa::new(layout.clone()).unwrap();
     let mut reference = None;
-    for (left, top) in [(0, 0), (1, 62), (4, 5)] {
+    for (left, top, captured_origin) in [
+        (0, 0, false), (0, 62, false), (4, 4, false),
+        (0, 0, true), (0, 62, true), (4, 4, true),
+    ] {
         let mut h = TestHost::new();
         let outputs: fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle = Default::default();
         outputs.lock().unwrap().configure(0, Some(dma::Raster {
@@ -19,7 +22,7 @@ fn raw_readback_keeps_neutral_light_across_sensor_window_origins() {
         })).unwrap();
         for y in 0..6 {
             for x in 0..6 {
-                let value = [400u16, 800, 1600][sensor.color(left + x, top + y)];
+                let value = [100u16, 200, 400][sensor.color(left + x, top + y)];
                 let at = 0x8000 + (y * 6 + x) * 2;
                 h.ram[at..at + 2].copy_from_slice(&value.to_le_bytes());
             }
@@ -35,8 +38,14 @@ fn raw_readback_keeps_neutral_light_across_sensor_window_origins() {
         let mut options = input_options();
         options.cfa = Some(layout.clone());
         let mut device = ImageInput::new(options, wiring).unwrap();
+        if captured_origin {
+            let mut captured = device.save();
+            captured[0]["raw_origins"] = serde_json::json!({"32768": [left, top]});
+            device.restore(&captured).unwrap();
+        }
         for (offset, value) in [
-            (4, 1), (0x14, (left as u32) << 16 | 5), (0x18, (top as u32) << 16 | 5),
+            (4, u32::from(!captured_origin)),
+            (0x14, (left as u32) << 16 | 5), (0x18, (top as u32) << 16 | 5),
             (0x358, 0x8000), (0x35c, 1),
             (0x394, 0x1000000), (0x398, 6 << 16), (0x39c, 0x40000),
             (0x3a0, 6), (0x3a4, 12), (0x3a8, 0x40008000),
@@ -45,7 +54,8 @@ fn raw_readback_keeps_neutral_light_across_sensor_window_origins() {
         h.now = 7;
         assert!(outputs.lock().unwrap().transfers[0].write(&mut h.cx()).unwrap());
         let pixels = h.ram[0x9000..0x9000 + 72].to_vec();
-        assert!(pixels.chunks_exact(4).all(|p| p[0] == p[1] && p[2..] == [128, 128]));
+        assert!(pixels.chunks_exact(4).all(|p| p[0] > 0 && p[0] < 255
+            && p[0] == p[1] && p[2..] == [128, 128]));
         if let Some(expected) = &reference { assert_eq!(&pixels, expected); }
         else { reference = Some(pixels); }
     }

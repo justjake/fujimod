@@ -687,6 +687,18 @@ impl FaceDetector {
                     }
                     request.step = 1;
                     registers.insert(offset, value);
+                } else if operation == DmaOperation::Write && offset == 0 {
+                    // A stopped, closed request may be reset before another
+                    // configuration. Preserve the ordered 0/1 control words
+                    // and the access trace; this supplies no detector result.
+                    if dma
+                        .iter()
+                        .any(|channel| !Self::valid_idle_dma_registers(&channel.registers))
+                        || value != 0 && !(value == 1 && registers.get(&0) == Some(&0))
+                    {
+                        return false;
+                    }
+                    registers.insert(0, value);
                 } else if let Some((channel, local)) = Self::dma_location(offset) {
                     if !Self::apply_dma_access(&mut dma[channel], operation, local, value) {
                         return false;
@@ -1477,6 +1489,18 @@ mod tests {
             }
             let reopening = model.save();
             FaceDetector::default().restore(&reopening).unwrap();
+            // Native reconfiguration can reset this already closed request.
+            // It still needs the ordered pair and cannot alter retained DMA.
+            assert!(write(&mut model, 0, 1).is_some());
+            assert_eq!(model.save(), reopening);
+            assert_eq!(write(&mut model, 0, 0), None);
+            FaceDetector::default().restore(&model.save()).unwrap();
+            assert_eq!(write(&mut model, 0, 1), None);
+            FaceDetector::default().restore(&model.save()).unwrap();
+            assert_eq!(model.next_deadline(0), None);
+            for (channel, previous) in model.state.dma.iter().zip(&retained) {
+                assert_eq!(channel.registers, previous.registers);
+            }
             initialize(&mut model, 2);
             for access in &submission {
                 if access.operation == DmaOperation::Write {
