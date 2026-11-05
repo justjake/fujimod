@@ -57,7 +57,7 @@ fn window_gradient_dma_status_then_irq_and_cancel() {
     advance(&mut d, &mut m, 3);
     assert_eq!(m.effects, [Effect::Dma(0xc000, 8), Effect::Irq(0, 0x46)]);
     assert_eq!(read(&mut d, &mut m, 0xfff42000), 0x10000);
-    assert_eq!(&m.bytes[0xc000..0xc008], &[1, 0, 1, 0, 26, 0, 0, 0]);
+    assert_eq!(&m.bytes[0xc000..0xc008], &[8, 0, 8, 0, 26, 0, 0, 0]);
     write(&mut d, &mut m, 0xfff42000, 1);
     write(&mut d, &mut m, 0xfff42000, 0);
     advance(&mut d, &mut m, 6);
@@ -77,10 +77,10 @@ fn window_tracking_and_unsupported_geometry() {
     }
     let image = m.bytes[0x4000..0x4000 + 98].to_vec();
     m.bytes[0x8000..0x8000 + 98].copy_from_slice(&image);
-    m.bytes[0xc000..0xc008].copy_from_slice(&[3, 0, 3, 0, 100, 0, 0, 0]);
+    m.bytes[0xc000..0xc008].copy_from_slice(&[24, 0, 24, 0, 100, 0, 0, 0]);
     write(&mut d, &mut m, 0xfff42000, 1);
     advance(&mut d, &mut m, 3);
-    assert_eq!(&m.bytes[0x10000..0x10008], &[3, 0, 3, 0, 100, 0, 0, 0]);
+    assert_eq!(&m.bytes[0x10000..0x10008], &[24, 0, 24, 0, 100, 0, 0, 0]);
     write(&mut d, &mut m, 0xfff42050, 0);
     reject(&mut d, &mut m, 0xfff42000, 1);
 }
@@ -110,7 +110,7 @@ fn full_raster_accepts_the_input_dma_control_bit() {
     advance(&mut d, &mut m, 3);
     assert_eq!(
         &m.bytes[destination..destination + 8],
-        &[1, 0, 1, 0, 26, 0, 0, 0]
+        &[8, 0, 8, 0, 26, 0, 0, 0]
     );
     assert_eq!(
         m.effects,
@@ -135,7 +135,11 @@ fn full_raster_tracking_preserves_high_coordinates_and_measures_translation() {
             m.bytes[b..b + 2].copy_from_slice(&value.to_le_bytes());
         }
     }
-    let record = [4004u16.to_le_bytes(), 3004u16.to_le_bytes()].concat();
+    let record = [
+        (3004u16 * 8 + 5).to_le_bytes(),
+        (4004u16 * 8 + 3).to_le_bytes(),
+    ]
+    .concat();
     m.bytes[features..features + 4].copy_from_slice(&record);
     m.bytes[features + 4..features + 8].copy_from_slice(&100u32.to_le_bytes());
     for (offset, value) in [
@@ -149,8 +153,14 @@ fn full_raster_tracking_preserves_high_coordinates_and_measures_translation() {
     }
     write(&mut d, &mut m, 0xfff42000, 1);
     advance(&mut d, &mut m, 3);
-    assert_eq!(&m.bytes[output..output + 2], &4005u16.to_le_bytes());
-    assert_eq!(&m.bytes[output + 2..output + 4], &3004u16.to_le_bytes());
+    assert_eq!(
+        &m.bytes[output..output + 2],
+        &(3004u16 * 8 + 5).to_le_bytes()
+    );
+    assert_eq!(
+        &m.bytes[output + 2..output + 4],
+        &(4005u16 * 8 + 3).to_le_bytes()
+    );
     assert_eq!(&m.bytes[output + 4..output + 8], &100u32.to_le_bytes());
     assert_eq!(
         m.effects,
@@ -218,6 +228,6 @@ fn maximum_window_count_uses_the_complete_result_extent() {
     );
     assert_eq!(
         &m.bytes[0xc000 + 16384 - 8..0xc000 + 16384],
-        &[63, 0, 31, 0, 0, 0, 0, 0]
+        &[248, 0, 248, 1, 0, 0, 0, 0]
     );
 }

@@ -130,12 +130,11 @@ impl Scaler {
         };
         src.validate(src.width * 2)?;
         dst.validate(dst.width * 2)?;
-        let centered = r[0x60 / 4] != 0 || r[0x64 / 4] != 0;
+        let centered = [0x4c, 0x5c, 0x60, 0x64].iter().any(|&o| r[o / 4] != 0);
         if centered
-            && (r[2] != 0
-                || [0x2c, 0x60, 0x64]
-                    .iter()
-                    .any(|&o| r[o / 4] & !0x1fff1fff != 0))
+            && [0x2c, 0x60, 0x64]
+                .iter()
+                .any(|&o| r[o / 4] & !0x1fff1fff != 0)
         {
             return Err("scaler centered fields are unsupported".into());
         }

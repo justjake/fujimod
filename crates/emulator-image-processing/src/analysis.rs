@@ -215,8 +215,9 @@ pub fn track_features(
     }
     for index in 0..features.len() / 8 {
         let f = &features[index * 8..][..8];
-        let x = u16::from_le_bytes([f[0], f[1]]) as usize;
-        let y = u16::from_le_bytes([f[2], f[3]]) as usize;
+        let qx = u16::from_le_bytes([f[2], f[3]]) as usize;
+        let qy = u16::from_le_bytes([f[0], f[1]]) as usize;
+        let (x, y) = (qx / 8, qy / 8);
         let score = u32::from_le_bytes(f[4..8].try_into().unwrap());
         if x >= width || y >= height {
             return Err("tracked feature exceeds source image".into());
@@ -259,7 +260,12 @@ pub fn track_features(
                 score.saturating_sub(best.0 / 9),
             )
         };
-        record(&mut out[index * 8..][..8], nx, ny, score);
+        record_q3(
+            &mut out[index * 8..][..8],
+            nx * 8 + qx % 8,
+            ny * 8 + qy % 8,
+            score,
+        );
     }
     Ok(())
 }
@@ -268,8 +274,12 @@ fn pixel(image: &[u8], width: usize, x: usize, y: usize) -> u16 {
     u16::from_le_bytes([image[i], image[i + 1]])
 }
 fn record(out: &mut [u8], x: usize, y: usize, score: u32) {
-    out[..2].copy_from_slice(&(x as u16).to_le_bytes());
-    out[2..4].copy_from_slice(&(y as u16).to_le_bytes());
+    record_q3(out, x * 8, y * 8, score);
+}
+// Coordinates are Q3, with x in the high halfword of the first LE word.
+fn record_q3(out: &mut [u8], x: usize, y: usize, score: u32) {
+    out[..2].copy_from_slice(&(y as u16).to_le_bytes());
+    out[2..4].copy_from_slice(&(x as u16).to_le_bytes());
     out[4..].copy_from_slice(&score.to_le_bytes());
 }
 

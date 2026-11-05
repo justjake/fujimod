@@ -212,3 +212,54 @@ fn centered_scale_replicates_edges_in_aligned_destination_tails() {
     }
     assert_eq!(host.irqs, [(0, 67)]);
 }
+
+#[test]
+fn zero_center_translation_uses_phase_at_each_transfer_burst() {
+    for burst in [0, 1, 2] {
+        let mut h = TestHost::new();
+        for y in 0..2 {
+            for pair in 0..4 {
+                let at = 0x8000 + y * 16 + pair * 4;
+                h.ram[at..at + 4].copy_from_slice(&[
+                    (pair * 2 + 1) as u8,
+                    (pair * 2 + 2) as u8,
+                    80,
+                    160,
+                ]);
+            }
+        }
+        h.ram[0x9000..0x9040].fill(0xa5);
+        let mut d = Scaler::new(
+            fujimod_emulator_imaging::exr2_isp::options::scaler::Options {
+                completion_ticks: 4,
+            },
+            Irq { core: 0, line: 67 },
+        )
+        .unwrap();
+        for (offset, value) in [
+            (8, burst),
+            (0x10, 0x8000),
+            (0x14, 8),
+            (0x18, 2 << 16 | 8),
+            (0x20, 0x9000),
+            (0x24, 16),
+            (0x28, 2 << 16 | 8),
+            (0x40, 65536),
+            (0x4c, 2 * 65536),
+            (0x54, 65536),
+            (0x7c, 0x1000),
+            (4, 1),
+        ] {
+            write(&mut d, &mut h, 0xfff47000 + offset, value);
+        }
+        advance(&mut d, &mut h, 4);
+        for y in 0..2 {
+            assert_eq!(
+                &h.ram[0x9000 + y * 32..0x9010 + y * 32],
+                &[3, 4, 80, 160, 5, 6, 80, 160, 7, 8, 80, 160, 8, 8, 80, 160]
+            );
+            assert_eq!(&h.ram[0x9010 + y * 32..0x9020 + y * 32], &[0xa5; 16]);
+        }
+        assert_eq!(h.irqs, [(0, 67)]);
+    }
+}
