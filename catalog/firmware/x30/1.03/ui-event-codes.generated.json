@@ -1,0 +1,11 @@
+{
+  "$schema": "https://fujimod.com/schemas/ui-event-codes.generated.schema.json",
+  "schema": 1,
+  "id": "x30-103-ui-event-codes",
+  "firmware_id": "x30-103",
+  "firmware_sha256": "76c9fcbdd6d02ca0b376146fd326927e1ea7a5b0055daac755eb8c152e983084",
+  "ui_event_codes": {
+    "UI_EVTID_REC_SETPARAM": 34406400,
+    "UI_EVTID_SYS_SETPARAM": 17367040
+  }
+}

@@ -20456,6 +20456,18 @@
           "default": null,
           "description": "Safely readable state regions, when established for this selection."
         },
+        "ui_event_codes": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UiEventCodes"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Located stock event category codes."
+        },
         "ui_scene_names": {
           "anyOf": [
             {
@@ -26041,6 +26053,48 @@
       "required": [
         "physical_key",
         "event"
+      ],
+      "type": "object"
+    },
+    "UiEventCodes": {
+      "additionalProperties": false,
+      "description": "Exact stock event names and their firmware-specific numeric codes.",
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "firmware_id": {
+          "type": "string"
+        },
+        "firmware_sha256": {
+          "description": "SHA-256 of the update from which the codes were located.",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "schema": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ui_event_codes": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Located stock event names, without renaming or aliases.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "id",
+        "firmware_id",
+        "firmware_sha256",
+        "ui_event_codes"
       ],
       "type": "object"
     },

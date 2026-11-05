@@ -1,0 +1,11 @@
+{
+  "$schema": "https://fujimod.com/schemas/ui-event-codes.generated.schema.json",
+  "schema": 1,
+  "id": "xe2s-111-ui-event-codes",
+  "firmware_id": "xe2s-111",
+  "firmware_sha256": "a34859b8e7ad2b915bcb77b337ddca4799cc29141a57de88909ee5746c62d424",
+  "ui_event_codes": {
+    "UI_EVTID_REC_SETPARAM": 34406400,
+    "UI_EVTID_SYS_SETPARAM": 17367040
+  }
+}

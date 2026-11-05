@@ -89,6 +89,12 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
+        "ui-event-codes.generated.schema.json",
+        schema::<fujimod_catalog::ui_event_codes::UiEventCodes>(
+            fujimod_catalog::ui_event_codes::UI_EVENT_CODES_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
         "ui-scene-names.generated.schema.json",
         schema::<fujimod_catalog::ui_scene_names::UiSceneNames>(
             fujimod_catalog::ui_scene_names::UI_SCENE_NAMES_SCHEMA_URI,

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://fujimod.com/schemas/ui-event-codes.generated.schema.json",
+  "schema": 1,
+  "id": "x70-110-ui-event-codes",
+  "firmware_id": "x70-110",
+  "firmware_sha256": "7dd5b358a66f38d1fc7dad899a77d35fe4e6ed0edd0ed1d04fbca512d5dc8fd6",
+  "ui_event_codes": {
+    "UI_EVTID_REC_SETPARAM": 34406400,
+    "UI_EVTID_SYS_SETPARAM": 17367040
+  }
+}

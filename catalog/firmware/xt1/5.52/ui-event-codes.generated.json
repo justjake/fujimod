@@ -1,0 +1,11 @@
+{
+  "$schema": "https://fujimod.com/schemas/ui-event-codes.generated.schema.json",
+  "schema": 1,
+  "id": "xt1-552-ui-event-codes",
+  "firmware_id": "xt1-552",
+  "firmware_sha256": "4cf56ba6abb4298a844422c016289228bb0acce0a2ae2c6755c05fffb38e92db",
+  "ui_event_codes": {
+    "UI_EVTID_REC_SETPARAM": 34406400,
+    "UI_EVTID_SYS_SETPARAM": 17367040
+  }
+}

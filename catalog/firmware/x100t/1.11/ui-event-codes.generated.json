@@ -1,0 +1,11 @@
+{
+  "$schema": "https://fujimod.com/schemas/ui-event-codes.generated.schema.json",
+  "schema": 1,
+  "id": "x100t-111-ui-event-codes",
+  "firmware_id": "x100t-111",
+  "firmware_sha256": "8c84b29e3b9b4b7385653e66c7027707995826ddf29a7e80232302de60f3dd3d",
+  "ui_event_codes": {
+    "UI_EVTID_REC_SETPARAM": 34406400,
+    "UI_EVTID_SYS_SETPARAM": 17367040
+  }
+}

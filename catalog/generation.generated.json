@@ -1540,6 +1540,42 @@
           "status": "available",
           "errors": []
         },
+        "stock_screen.menu_cursor_classifier": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.cursor",
+              "reason": "ValueError: ui_menu_get_cursor_field_1368: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.menu_roots.quick_menu": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.roots",
+              "reason": "ValueError: UI_MENU_KIND_QUICK has no checked menu root"
+            }
+          ]
+        },
+        "stock_screen.record_transition_state": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.record",
+              "reason": "ValueError: ui_dispatch_machine_event: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.ui_event_codes": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.event_codes",
+              "reason": "ValueError: UI_EVTID_REC_SETPARAM: 0 verified enum chains"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -1594,6 +1630,22 @@
           "errors": []
         },
         "state": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.menu_cursor_classifier": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.menu_roots.quick_menu": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.record_transition_state": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.ui_event_codes": {
           "status": "available",
           "errors": []
         },
@@ -1891,6 +1943,42 @@
           "status": "available",
           "errors": []
         },
+        "stock_screen.menu_cursor_classifier": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.cursor",
+              "reason": "ValueError: ui_menu_get_cursor_field_1368: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.menu_roots.quick_menu": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.roots",
+              "reason": "ValueError: UI_MENU_KIND_QUICK has no checked menu root"
+            }
+          ]
+        },
+        "stock_screen.record_transition_state": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.record",
+              "reason": "ValueError: ui_dispatch_machine_event: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.ui_event_codes": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.event_codes",
+              "reason": "ValueError: UI_EVTID_REC_SETPARAM: 0 verified enum chains"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -1948,6 +2036,22 @@
           "status": "available",
           "errors": []
         },
+        "stock_screen.menu_cursor_classifier": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.menu_roots.quick_menu": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.record_transition_state": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.ui_event_codes": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -2001,6 +2105,22 @@
           "errors": []
         },
         "state": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.menu_cursor_classifier": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.menu_roots.quick_menu": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.record_transition_state": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.ui_event_codes": {
           "status": "available",
           "errors": []
         },
@@ -2083,6 +2203,42 @@
         "state": {
           "status": "available",
           "errors": []
+        },
+        "stock_screen.menu_cursor_classifier": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.cursor",
+              "reason": "ValueError: ui_menu_get_cursor_field_1368: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.menu_roots.quick_menu": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.roots",
+              "reason": "ValueError: UI_MENU_KIND_QUICK has no checked menu root"
+            }
+          ]
+        },
+        "stock_screen.record_transition_state": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.record",
+              "reason": "ValueError: ui_dispatch_machine_event: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.ui_event_codes": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.event_codes",
+              "reason": "ValueError: UI_EVTID_REC_SETPARAM: 0 verified enum chains"
+            }
+          ]
         },
         "versions": {
           "status": "available",
@@ -2264,6 +2420,42 @@
         "state": {
           "status": "available",
           "errors": []
+        },
+        "stock_screen.menu_cursor_classifier": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.cursor",
+              "reason": "ValueError: ui_menu_get_cursor_field_1368: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.menu_roots.quick_menu": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.roots",
+              "reason": "ValueError: UI_MENU_KIND_QUICK has no checked menu root"
+            }
+          ]
+        },
+        "stock_screen.record_transition_state": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.record",
+              "reason": "ValueError: ui_dispatch_machine_event: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.ui_event_codes": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.event_codes",
+              "reason": "ValueError: UI_EVTID_REC_SETPARAM: 0 verified enum chains"
+            }
+          ]
         },
         "versions": {
           "status": "available",
@@ -2884,6 +3076,22 @@
           "status": "available",
           "errors": []
         },
+        "stock_screen.menu_cursor_classifier": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.menu_roots.quick_menu": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.record_transition_state": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.ui_event_codes": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -2938,6 +3146,22 @@
           "errors": []
         },
         "state": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.menu_cursor_classifier": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.menu_roots.quick_menu": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.record_transition_state": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.ui_event_codes": {
           "status": "available",
           "errors": []
         },
@@ -4173,6 +4397,42 @@
             }
           ]
         },
+        "stock_screen.menu_cursor_classifier": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.cursor",
+              "reason": "ValueError: ui_menu_get_cursor_field_1368: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.menu_roots.quick_menu": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.roots",
+              "reason": "ValueError: UI_MENU_KIND_QUICK has no checked menu root"
+            }
+          ]
+        },
+        "stock_screen.record_transition_state": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.record",
+              "reason": "ValueError: ui_dispatch_machine_event: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.ui_event_codes": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.event_codes",
+              "reason": "ValueError: UI_EVTID_REC_SETPARAM: 0 verified enum chains"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -4299,6 +4559,42 @@
             }
           ]
         },
+        "stock_screen.menu_cursor_classifier": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.cursor",
+              "reason": "ValueError: ui_menu_get_cursor_field_1368: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.menu_roots.quick_menu": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.roots",
+              "reason": "ValueError: UI_MENU_KIND_QUICK has no checked menu root"
+            }
+          ]
+        },
+        "stock_screen.record_transition_state": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.record",
+              "reason": "ValueError: ui_dispatch_machine_event: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.ui_event_codes": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.event_codes",
+              "reason": "ValueError: UI_EVTID_REC_SETPARAM: 0 verified enum chains"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -4378,6 +4674,42 @@
         "state": {
           "status": "available",
           "errors": []
+        },
+        "stock_screen.menu_cursor_classifier": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.cursor",
+              "reason": "ValueError: ui_menu_get_cursor_field_1368: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.menu_roots.quick_menu": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.roots",
+              "reason": "ValueError: UI_MENU_KIND_QUICK has no checked menu root"
+            }
+          ]
+        },
+        "stock_screen.record_transition_state": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.record",
+              "reason": "ValueError: ui_dispatch_machine_event: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.ui_event_codes": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.event_codes",
+              "reason": "ValueError: UI_EVTID_REC_SETPARAM: 0 verified enum chains"
+            }
+          ]
         },
         "versions": {
           "status": "available",
@@ -4998,6 +5330,42 @@
           "status": "available",
           "errors": []
         },
+        "stock_screen.menu_cursor_classifier": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.cursor",
+              "reason": "ValueError: ui_menu_get_cursor_field_1368: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.menu_roots.quick_menu": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.roots",
+              "reason": "ValueError: UI_MENU_KIND_QUICK has no checked menu root"
+            }
+          ]
+        },
+        "stock_screen.record_transition_state": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.record",
+              "reason": "ValueError: ui_dispatch_machine_event: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.ui_event_codes": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.event_codes",
+              "reason": "ValueError: UI_EVTID_REC_SETPARAM: 0 verified enum chains"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -5076,6 +5444,42 @@
         "state": {
           "status": "available",
           "errors": []
+        },
+        "stock_screen.menu_cursor_classifier": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.cursor",
+              "reason": "ValueError: ui_menu_get_cursor_field_1368: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.menu_roots.quick_menu": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.roots",
+              "reason": "ValueError: UI_MENU_KIND_QUICK has no checked menu root"
+            }
+          ]
+        },
+        "stock_screen.record_transition_state": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.record",
+              "reason": "ValueError: ui_dispatch_machine_event: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "stock_screen.ui_event_codes": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "stock_screen.event_codes",
+              "reason": "ValueError: UI_EVTID_REC_SETPARAM: 0 verified enum chains"
+            }
+          ]
         },
         "versions": {
           "status": "available",
@@ -5525,6 +5929,22 @@
           "status": "available",
           "errors": []
         },
+        "stock_screen.menu_cursor_classifier": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.menu_roots.quick_menu": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.record_transition_state": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.ui_event_codes": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -5579,6 +5999,22 @@
           "errors": []
         },
         "state": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.menu_cursor_classifier": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.menu_roots.quick_menu": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.record_transition_state": {
+          "status": "available",
+          "errors": []
+        },
+        "stock_screen.ui_event_codes": {
           "status": "available",
           "errors": []
         },

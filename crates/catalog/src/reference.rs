@@ -2529,6 +2529,9 @@ pub struct ResolvedSelection {
     /// Exact stock scene names and their firmware-specific IDs.
     #[serde(default)]
     pub ui_scene_names: Option<crate::ui_scene_names::UiSceneNames>,
+    /// Located stock event category codes.
+    #[serde(default)]
+    pub ui_event_codes: Option<crate::ui_event_codes::UiEventCodes>,
     /// Stock diagnostic bulk reads, when located for this firmware.
     #[serde(default)]
     pub bulk: Option<fujimod_catalog_bulk::FirmwareBulk>,
@@ -2563,6 +2566,7 @@ pub struct ReferenceCatalog {
     control_ids: BTreeMap<String, serde_json::Value>,
     first_start: BTreeMap<String, crate::first_start::FirstStartMenu>,
     ui_scene_names: BTreeMap<String, crate::ui_scene_names::UiSceneNames>,
+    ui_event_codes: BTreeMap<String, crate::ui_event_codes::UiEventCodes>,
     bulk: BTreeMap<String, fujimod_catalog_bulk::FirmwareBulk>,
     restart: BTreeMap<String, fujimod_catalog_restart::FirmwareRestart>,
     card_files: BTreeMap<String, fujimod_catalog_card::FirmwareCard>,
@@ -2664,6 +2668,7 @@ impl ReferenceCatalog {
             control_ids: self.control_ids.get(&firmware.id).cloned(),
             first_start: self.first_start.get(&firmware.id).cloned(),
             ui_scene_names: self.ui_scene_names.get(&firmware.id).cloned(),
+            ui_event_codes: self.ui_event_codes.get(&firmware.id).cloned(),
             bulk: self.bulk.get(&firmware.id).cloned(),
             restart: self.restart.get(&firmware.id).cloned(),
             card_files: self.card_files.get(&firmware.id).cloned(),
@@ -2716,6 +2721,11 @@ impl ReferenceCatalog {
         self.bulk.values()
     }
 
+    /// Named stock event category codes, when located for this firmware.
+    pub fn ui_event_codes(&self, firmware_id: &str) -> Option<&crate::ui_event_codes::UiEventCodes> {
+        self.ui_event_codes.get(firmware_id)
+    }
+
     /// Exact stock scene names for a firmware, when its routine was located.
     pub fn ui_scene_names(&self, firmware_id: &str) -> Option<&crate::ui_scene_names::UiSceneNames> {
         self.ui_scene_names.get(firmware_id)
@@ -2754,6 +2764,11 @@ impl ReferenceCatalog {
         path: &Path,
     ) -> Result<(), String> {
         match kind {
+            ReferenceKind::UiEventCodes => {
+                let value: crate::ui_event_codes::UiEventCodes = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(&mut self.ui_event_codes, value.firmware_id.clone(), value, path)
+            }
             ReferenceKind::UiSceneNames => {
                 let value: crate::ui_scene_names::UiSceneNames = decode(bytes, path)?;
                 value.validate()?;
@@ -2827,6 +2842,16 @@ impl ReferenceCatalog {
     }
 
     fn validate_controls(&self) -> Result<(), String> {
+        for (firmware_id, events) in &self.ui_event_codes {
+            let update = self.firmwares.get(firmware_id)
+                .and_then(|firmware| firmware.update.as_ref().map(|update| update.sha256.as_str()))
+                .or_else(|| self.firmware_versions.iter()
+                    .find(|release| &release.firmware_id == firmware_id)
+                    .map(|release| release.update_sha256.as_str()));
+            if update != Some(events.firmware_sha256.as_str()) {
+                return Err(format!("event codes differ from update identity {firmware_id}"));
+            }
+        }
         for (firmware_id, scenes) in &self.ui_scene_names {
             let update = self.firmwares.get(firmware_id)
                 .and_then(|firmware| firmware.update.as_ref().map(|update| update.sha256.as_str()))
@@ -3410,6 +3435,7 @@ enum ReferenceKind {
     ControlIds,
     FirstStart,
     UiSceneNames,
+    UiEventCodes,
     Bulk,
     CardFiles,
     Restart,
@@ -3433,6 +3459,7 @@ impl ReferenceKind {
             Some("control-ids.generated.json") => Ok(Self::ControlIds),
             Some("first-start.generated.json") => Ok(Self::FirstStart),
             Some("ui-scene-names.generated.json") => Ok(Self::UiSceneNames),
+            Some("ui-event-codes.generated.json") => Ok(Self::UiEventCodes),
             Some("bulk.generated.json") => Ok(Self::Bulk),
             Some("card-files.generated.json") => Ok(Self::CardFiles),
             Some("restart.generated.json") => Ok(Self::Restart),
@@ -3473,6 +3500,48 @@ mod ui_scene_names_tests {
         let path = Path::new("ui-scene-names.generated.json");
         catalog.insert_document(ReferenceKind::of_firmware_file(path).unwrap(), &bytes, path).unwrap();
         assert_eq!(catalog.ui_scene_names("example-100").unwrap().ui_scene_names["UILIB_SUB_SCR_EXAMPLE"], 7);
+        assert!(catalog.validate_controls().is_err());
+        catalog.firmware_versions.push(crate::firmware_versions::FirmwareVersion {
+            firmware_id: "example-100".into(), product: "EXAMPLE".into(), version: "1.00".into(),
+            internal_version: "1.00".into(), update_sha256: "a".repeat(64),
+            download_url: "https://example.com/firmware".into(), boot_rom: None,
+        });
+        catalog.validate_controls().unwrap();
+        catalog.firmware_versions[0].update_sha256 = "b".repeat(64);
+        assert!(catalog.validate_controls().is_err());
+    }
+}
+
+#[cfg(test)]
+mod ui_event_codes_tests {
+    use super::*;
+
+    #[test]
+    fn bundles_named_event_codes() {
+        let catalog = ReferenceCatalog::bundled().unwrap();
+        for firmware in ["x70-110", "xe2s-111"] {
+            let codes = &catalog.ui_event_codes(firmware).unwrap().ui_event_codes;
+            assert_eq!(codes["UI_EVTID_REC_SETPARAM"], 0x020d0000);
+            assert_eq!(codes["UI_EVTID_SYS_SETPARAM"], 0x01090000);
+        }
+        assert!(catalog.ui_event_codes("xm1-150").is_none());
+    }
+
+    #[test]
+    fn loads_event_document_and_checks_release_identity() {
+        let mut catalog = ReferenceCatalog::default();
+        let value = serde_json::json!({
+            "$schema": crate::ui_event_codes::UI_EVENT_CODES_SCHEMA_URI,
+            "schema": 1,
+            "id": "example-100-ui-event-codes",
+            "firmware_id": "example-100",
+            "firmware_sha256": "a".repeat(64),
+            "ui_event_codes": {"UI_EVTID_EXAMPLE": 34406400}
+        });
+        let bytes = serde_json::to_vec(&value).unwrap();
+        let path = Path::new("ui-event-codes.generated.json");
+        catalog.insert_document(ReferenceKind::of_firmware_file(path).unwrap(), &bytes, path).unwrap();
+        assert_eq!(catalog.ui_event_codes("example-100").unwrap().ui_event_codes["UI_EVTID_EXAMPLE"], 34406400);
         assert!(catalog.validate_controls().is_err());
         catalog.firmware_versions.push(crate::firmware_versions::FirmwareVersion {
             firmware_id: "example-100".into(), product: "EXAMPLE".into(), version: "1.00".into(),

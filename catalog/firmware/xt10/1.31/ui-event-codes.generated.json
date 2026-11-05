@@ -1,0 +1,11 @@
+{
+  "$schema": "https://fujimod.com/schemas/ui-event-codes.generated.schema.json",
+  "schema": 1,
+  "id": "xt10-131-ui-event-codes",
+  "firmware_id": "xt10-131",
+  "firmware_sha256": "aa58f0ff3878b5ced79bb53a2e85dea3946be169dbc7416f0c896d4c5d7f4a8b",
+  "ui_event_codes": {
+    "UI_EVTID_REC_SETPARAM": 34406400,
+    "UI_EVTID_SYS_SETPARAM": 17367040
+  }
+}

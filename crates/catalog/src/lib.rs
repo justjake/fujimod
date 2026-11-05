@@ -4,6 +4,7 @@ pub mod capture;
 pub mod firmware_versions;
 pub mod first_start;
 pub mod ui_scene_names;
+pub mod ui_event_codes;
 pub mod generation;
 pub mod progress;
 pub mod reference;
