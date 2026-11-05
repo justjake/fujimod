@@ -122,6 +122,39 @@ impl Pl330 {
         }
     }
 
+    /// Executes the DMAMOV at `pc` on `t` and returns its length. Preview,
+    /// eager setup and the run share it so a register selector means the same
+    /// thing everywhere: unknown selectors and data values that are not a CCR
+    /// refuse.
+    fn mov(&self, cx: &Cx<'_>, t: &mut Thread, pc: u32) -> Result<u32, String> {
+        let b = cx.ram_bytes(u64::from(pc) + 1, 5)?;
+        let v = u32::from_le_bytes([b[1], b[2], b[3], b[4]]);
+        match b[0] {
+            0 => t.sar = v,
+            1 if v >> 28 & 7 == 0 => t.ccr = v,
+            2 => t.dar = v,
+            _ => return Err("Unmodeled PL330 DMAMOV".into()),
+        }
+        Ok(6)
+    }
+
+    /// Executes only the DMAMOV instructions `t`'s program starts with, so a
+    /// poller sees the new job's addresses as soon as the channel reports it
+    /// running. Program bytes are the only reads; nothing is loaded, stored or
+    /// signaled. A program that starts with any other instruction keeps the
+    /// channel's previous registers. Bounded by [`STEP_LIMIT`].
+    fn setup_registers(&self, cx: &Cx<'_>, t: &mut Thread) -> Result<(), String> {
+        for _ in 0..STEP_LIMIT {
+            let pc = t.pc;
+            if cx.ram_bytes(u64::from(pc), 1)?[0] != 0xbc {
+                return Ok(());
+            }
+            let len = self.mov(cx, t, pc)?;
+            t.pc = pc.wrapping_add(len);
+        }
+        Err("PL330 program exceeds step bound".into())
+    }
+
     /// Runs channel `n` to DMAEND. Without `apply`, no memory, event or
     /// channel state changes; loaded bytes are not read.
     fn run(&mut self, cx: &mut Cx<'_>, n: usize, apply: bool) -> Result<Transfer, String> {
@@ -228,17 +261,7 @@ impl Pl330 {
                     }
                 }
                 // DMAMOV SAR/CCR/DAR
-                0xbc => {
-                    len = 6;
-                    let b = fetch(cx, pc + 1, 5)?;
-                    let v = u32::from_le_bytes([b[1], b[2], b[3], b[4]]);
-                    match b[0] {
-                        0 => t.sar = v,
-                        1 if v >> 28 & 7 == 0 => t.ccr = v,
-                        2 => t.dar = v,
-                        _ => return Err("Unmodeled PL330 DMAMOV".into()),
-                    }
-                }
+                0xbc => len = self.mov(cx, &mut t, pc)?,
                 _ => return Err(format!("Unmodeled PL330 instruction {op:#x}")),
             }
             t.pc = t.pc.wrapping_add(len);
@@ -256,8 +279,22 @@ impl Pl330 {
                 if self.threads[n].running {
                     return Err("PL330 DMAGO on a running channel".into());
                 }
-                self.threads[n].pc = second;
-                let transfer = self.run(cx, n, false)?;
+                // The leading register setup belongs to the new job, so it is
+                // applied before the channel reports running; the whole-program
+                // preview then measures the same transfer from the first
+                // non-DMAMOV instruction, which the delayed run resumes at.
+                let previous = self.threads[n].clone();
+                let mut t = previous.clone();
+                t.pc = second;
+                self.setup_registers(cx, &mut t)?;
+                self.threads[n] = t;
+                let transfer = match self.run(cx, n, false) {
+                    Ok(transfer) => transfer,
+                    Err(e) => {
+                        self.threads[n] = previous;
+                        return Err(e);
+                    }
+                };
                 let at = cx.now()
                     + self.timing.setup_ticks
                     + transfer.bytes.div_ceil(self.timing.bytes_per_tick);
@@ -569,6 +606,194 @@ mod tests {
         assert_eq!(resumed.save(), saved);
         let mut rewired = Pl330::new(BASE, (208..216).collect(), vec![], timing).unwrap();
         assert!(rewired.restore(&saved).is_err());
+    }
+
+    /// DMAMOV SAR, DMAMOV DAR, DMAMOV CCR `ccr`, then DMALD; DMAST; DMASEV
+    /// `event`; DMAEND. The setup prefix is [`SETUP_LEN`] bytes.
+    fn copy_program(sar: u32, dar: u32, ccr: u32, event: u8) -> Vec<u8> {
+        let mut program = vec![0xbc, 0];
+        program.extend(sar.to_le_bytes());
+        program.extend([0xbc, 2]);
+        program.extend(dar.to_le_bytes());
+        program.extend([0xbc, 1]);
+        program.extend(ccr.to_le_bytes());
+        program.extend([0x04, 0x08, 0x34, event << 3, 0]);
+        program
+    }
+    const SETUP_LEN: u32 = 18;
+
+    fn reg(d: &mut Pl330, h: &mut TestHost, offset: u64) -> u32 {
+        let mut cx = Cx::new(h, 0, 0, 0);
+        let value = d.read(&mut cx, BASE + offset, 4) as u32;
+        assert_eq!(cx.refusal(), None, "{offset:#x}");
+        value
+    }
+
+    fn dmago(d: &mut Pl330, h: &mut TestHost, channel: u32, pc: u32) {
+        write(d, h, 0xd0c, pc);
+        write(d, h, 0xd08, 0xa2_0000 | channel << 24);
+        write(d, h, 0xd04, 0);
+    }
+
+    fn complete(d: &mut Pl330, h: &mut TestHost, channel: u64) {
+        let mut cx = Cx::new(h, 0, 0, 0);
+        d.event(&mut cx, channel);
+        assert_eq!(cx.refusal(), None);
+    }
+
+    #[test]
+    fn dmago_publishes_the_new_jobs_registers_before_its_due() {
+        let timing = Throughput {
+            setup_ticks: 16,
+            bytes_per_tick: 16,
+        };
+        let mut dma = Pl330::new(BASE, (207..211).collect(), vec![], timing).unwrap();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![0; 0x8000],
+            ..TestHost::default()
+        };
+        h.ram[0x3000..0x3010].fill(0xaa);
+        h.ram[0x5000..0x5008].fill(0xbb);
+        let first = copy_program(0x3000, 0x4000, 0x5c017, 2);
+        // CCR 0x1c007: 8-byte bursts both ways, so this job copies 8 bytes.
+        let second = copy_program(0x5000, 0x6000, 0x1c007, 3);
+        h.ram[0x100..0x100 + first.len()].copy_from_slice(&first);
+        h.ram[0x200..0x200 + second.len()].copy_from_slice(&second);
+        write(&mut dma, &mut h, 0x20, 1 << 2 | 1 << 3);
+
+        // First job: its own setup, then completion at its due.
+        dmago(&mut dma, &mut h, 0, 0x100);
+        assert_eq!(reg(&mut dma, &mut h, 0x100), 1);
+        assert_eq!(reg(&mut dma, &mut h, 0x400), 0x3000);
+        assert_eq!(reg(&mut dma, &mut h, 0x404), 0x4000);
+        assert_eq!(reg(&mut dma, &mut h, 0x408), 0x5c017);
+        assert_eq!(reg(&mut dma, &mut h, 0x104), 0x100 + SETUP_LEN);
+        assert_eq!(h.ram[0x4000..0x4010], [0; 16]);
+        h.now = 117;
+        complete(&mut dma, &mut h, 0);
+        assert_eq!(h.ram[0x4000..0x4010], [0xaa; 16]);
+        assert_eq!(reg(&mut dma, &mut h, 0x400), 0x3010);
+        assert_eq!(reg(&mut dma, &mut h, 0x404), 0x4010);
+        assert_eq!(h.irqs, vec![(209, true)]);
+        assert_eq!(h.records.len(), 1);
+
+        // Second job on the same channel: different program, registers and CCR.
+        dmago(&mut dma, &mut h, 0, 0x200);
+        assert_eq!(reg(&mut dma, &mut h, 0x100), 1);
+        assert_eq!(reg(&mut dma, &mut h, 0x400), 0x5000);
+        assert_eq!(reg(&mut dma, &mut h, 0x404), 0x6000);
+        assert_eq!(reg(&mut dma, &mut h, 0x408), 0x1c007);
+        assert_eq!(reg(&mut dma, &mut h, 0x104), 0x200 + SETUP_LEN);
+        assert_eq!(h.ram[0x6000..0x6010], [0; 16]);
+        assert_eq!(h.ram[0x4000..0x4010], [0xaa; 16]);
+        assert_eq!(h.irqs, vec![(209, true)]);
+        assert_eq!(h.records.len(), 1);
+
+        // Nothing moves before the due tick, then exactly one 8-byte copy.
+        h.now = 133;
+        complete(&mut dma, &mut h, 0);
+        assert_eq!(h.ram[0x6000..0x6010], [0; 16]);
+        h.now = 134;
+        complete(&mut dma, &mut h, 0);
+        assert_eq!(h.ram[0x6000..0x6008], [0xbb; 8]);
+        assert_eq!(h.ram[0x6008..0x6010], [0; 8]);
+        assert_eq!(reg(&mut dma, &mut h, 0x400), 0x5008);
+        assert_eq!(reg(&mut dma, &mut h, 0x404), 0x6008);
+        assert_eq!(reg(&mut dma, &mut h, 0x100), 0);
+        assert_eq!(h.irqs, vec![(209, true), (210, true)]);
+        assert_eq!(h.records.len(), 2);
+    }
+
+    #[test]
+    fn dmakill_after_the_eager_setup_leaves_no_memory_or_event_effects() {
+        let timing = Throughput {
+            setup_ticks: 16,
+            bytes_per_tick: 16,
+        };
+        let mut dma = Pl330::new(BASE, (207..211).collect(), vec![], timing).unwrap();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![0; 0x8000],
+            ..TestHost::default()
+        };
+        h.ram[0x3000..0x3010].fill(0xaa);
+        let program = copy_program(0x3000, 0x4000, 0x5c017, 2);
+        h.ram[0x100..0x100 + program.len()].copy_from_slice(&program);
+        write(&mut dma, &mut h, 0x20, 1 << 2);
+        dmago(&mut dma, &mut h, 0, 0x100);
+        assert_eq!(reg(&mut dma, &mut h, 0x400), 0x3000);
+        // DMAKILL from the channel's own debug instruction.
+        write(&mut dma, &mut h, 0xd08, 0x0001_0001);
+        write(&mut dma, &mut h, 0xd04, 0);
+        assert_eq!(reg(&mut dma, &mut h, 0x100), 0);
+        h.now = 200;
+        complete(&mut dma, &mut h, 0);
+        assert_eq!(h.ram[0x4000..0x4010], [0; 16]);
+        assert_eq!(h.irqs, Vec::new());
+        assert_eq!(h.records.len(), 0);
+        assert_eq!(reg(&mut dma, &mut h, 0x400), 0x3000);
+        assert_eq!(reg(&mut dma, &mut h, 0x404), 0x4000);
+    }
+
+    #[test]
+    fn a_relative_operation_after_the_setup_prefix_runs_exactly_once() {
+        let timing = Throughput {
+            setup_ticks: 1,
+            bytes_per_tick: 1,
+        };
+        let mut dma = Pl330::new(BASE, vec![207], vec![], timing).unwrap();
+        let mut h = TestHost {
+            ram: vec![0; 0x8000],
+            ..TestHost::default()
+        };
+        h.ram[0x3010..0x3020].fill(0xaa);
+        h.ram[0x3020..0x3030].fill(0xbb);
+        // Setup, DMAADDH SAR, 0x10, then one 16-byte load and store.
+        let mut program = vec![0xbc, 0];
+        program.extend(0x3000u32.to_le_bytes());
+        program.extend([0xbc, 2]);
+        program.extend(0x4000u32.to_le_bytes());
+        program.extend([0xbc, 1]);
+        program.extend(0x5c017u32.to_le_bytes());
+        program.extend([0x54, 0x10, 0x00, 0x04, 0x08, 0]);
+        h.ram[0x100..0x100 + program.len()].copy_from_slice(&program);
+        dmago(&mut dma, &mut h, 0, 0x100);
+        // The add is not part of the setup: it stays for the delayed run.
+        assert_eq!(reg(&mut dma, &mut h, 0x400), 0x3000);
+        assert_eq!(reg(&mut dma, &mut h, 0x104), 0x100 + SETUP_LEN);
+        h.now = 17;
+        complete(&mut dma, &mut h, 0);
+        assert_eq!(h.ram[0x4000..0x4010], [0xaa; 16]);
+        assert_eq!(reg(&mut dma, &mut h, 0x400), 0x3020);
+        assert_eq!(reg(&mut dma, &mut h, 0x404), 0x4010);
+    }
+
+    #[test]
+    fn a_program_without_a_leading_setup_keeps_the_previous_registers() {
+        let timing = Throughput {
+            setup_ticks: 1,
+            bytes_per_tick: 1,
+        };
+        let mut dma = Pl330::new(BASE, vec![207], vec![], timing).unwrap();
+        let mut h = TestHost {
+            ram: vec![0; 0x2000],
+            ..TestHost::default()
+        };
+        // The program is DMAEND alone: no leading DMAMOV to publish.
+        h.ram[0x100] = 0;
+        dmago(&mut dma, &mut h, 0, 0x100);
+        assert_eq!(reg(&mut dma, &mut h, 0x100), 1);
+        assert_eq!(reg(&mut dma, &mut h, 0x400), 0);
+        assert_eq!(reg(&mut dma, &mut h, 0x404), 0);
+        assert_eq!(reg(&mut dma, &mut h, 0x408), 0);
+        assert_eq!(reg(&mut dma, &mut h, 0x104), 0x100);
+        assert_eq!(h.events, vec![(1, 0)]);
+        h.now = 1;
+        complete(&mut dma, &mut h, 0);
+        assert_eq!(h.records.len(), 1);
+        assert_eq!(h.irqs, Vec::new());
+        assert_eq!(reg(&mut dma, &mut h, 0x100), 0);
     }
 
     #[test]
