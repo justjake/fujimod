@@ -13,6 +13,10 @@ const EVENT_BASIC_CONFIG: u8 = 0x09;
 const EVENT_SCAN_DONE: u8 = 0x0f;
 const EVENT_SCAN_CHANGE: u8 = 0x15;
 const EVENT_TX_DONE: u8 = 0x17;
+const EVENT_CHANNEL_PRIVILEGE: u8 = 0x18;
+/// WHISR bits 0-2 (TX, RX0 and RX1 done) clear when read in the default
+/// register mode.
+const READ_CLEAR_MASK: u32 = 0x7;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -77,7 +81,19 @@ pub enum Change {
     LowPower(u32),
     ClearInterrupt(u32),
     ClearTx(usize),
-    Receive,
+    /// The 0x58-byte request-flag window: WHISR bits clear when read unless
+    /// WHCR bit 1 selects write-one-to-clear, and both TX credit counters are
+    /// drained by the read.
+    RequestFlags {
+        interrupt_mask: u32,
+        drain_tx: bool,
+    },
+    /// A FIFO read that removed this many queued packets from the named
+    /// receive FIFO (0 is RX0, 1 is RX1).
+    Receive {
+        fifo: u8,
+        count: usize,
+    },
     Response {
         class: u8,
         frame_kind: u8,
@@ -138,43 +154,56 @@ impl Endpoint {
         payload: &[u8],
         quantity: usize,
     ) -> Result<(Vec<u8>, Option<Change>), String> {
-        if address == 0x2c && write {
+        // WTDR0 and WTDR1 both carry HIF packets; stock sends data frames
+        // through WTDR0 and commands and management frames through WTDR1.
+        if (address == 0x28 || address == 0x2c) && write {
             return self.transmit(payload, quantity);
         }
         if address == 0x34 && !write {
             if self.rx1.is_empty() {
                 self.poll_network();
             }
-            let packet = self.rx1.front().ok_or("MT5931 RX1 FIFO underflow")?;
-            if quantity != packet.len().div_ceil(4) * 4 {
-                return Err(format!(
-                    "MT5931 RX1 extent {quantity} does not match packet {}",
-                    packet.len()
-                ));
-            }
-            let mut data = packet.clone();
-            data.resize(quantity, 0);
-            return Ok((data, Some(Change::Receive)));
+            let (data, count) = receive_batch(&self.rx1, quantity, "RX1")?;
+            return Ok((data, Some(Change::Receive { fifo: 1, count })));
         }
         if address == 0x30 && !write {
-            let packet = self.rx0.front().ok_or("MT5931 RX0 FIFO underflow")?;
-            if quantity != packet.len().div_ceil(4) * 4 {
-                return Err("MT5931 RX0 extent does not match packet".into());
-            }
-            let mut data = packet.clone();
-            data.resize(quantity, 0);
-            return Ok((data, Some(Change::Receive)));
+            let (data, count) = receive_batch(&self.rx0, quantity, "RX0")?;
+            return Ok((data, Some(Change::Receive { fifo: 0, count })));
         }
         // The stock request-flag reader samples the 0x58-byte window at 0x10.
-        // The first word is WHISR; the two TX status words follow it. Stock's
-        // table-driven action consumes those bits and then clears the source
-        // registers through their own W1C/read-clear accesses.
+        // The first word is WHISR; the two TX status words follow it. WHISR
+        // bits 0-2 are read-clear unless WHCR bit 1 selects write-one-to-clear,
+        // and this bulk read is the access that clears them. Stock dispatches
+        // on the sampled value, so the window must still report it.
         if address == 0x10 && !write && quantity == 0x58 {
             let mut block = vec![0u8; 0x58];
             block[..4].copy_from_slice(&self.interrupt_status.to_le_bytes());
             block[4..8].copy_from_slice(&self.tx_released[..4]);
             block[8..12].copy_from_slice(&self.tx_released[4..]);
-            return Ok((block, None));
+            // The block also carries the receive batch stock's action table
+            // consumes: a count per FIFO at 0x0c/0x0e, then 16 little-endian
+            // packet lengths for RX0 at 0x10 and RX1 at 0x30.
+            block[0x0c..0x0e].copy_from_slice(&(self.rx0.len() as u16).to_le_bytes());
+            block[0x0e..0x10].copy_from_slice(&(self.rx1.len() as u16).to_le_bytes());
+            let length_of = |packet: &Vec<u8>| u16::from_le_bytes([packet[0], packet[1]]);
+            for (index, packet) in self.rx0.iter().take(16).enumerate() {
+                let at = 0x10 + index * 2;
+                block[at..at + 2].copy_from_slice(&length_of(packet).to_le_bytes());
+            }
+            for (index, packet) in self.rx1.iter().take(16).enumerate() {
+                let at = 0x30 + index * 2;
+                block[at..at + 2].copy_from_slice(&length_of(packet).to_le_bytes());
+            }
+            let interrupt_mask = if self.control & 2 == 0 {
+                self.interrupt_status & READ_CLEAR_MASK
+            } else {
+                0
+            };
+            let change = Some(Change::RequestFlags {
+                interrupt_mask,
+                drain_tx: true,
+            });
+            return Ok((block, change));
         }
         if quantity != 4 || write && payload.len() != 4 {
             return Err(format!(
@@ -209,7 +238,9 @@ impl Endpoint {
             0x14 => (self.interrupt_enable, None),
             0x10 => (
                 self.interrupt_status,
-                (self.control & 2 == 0).then_some(Change::ClearInterrupt(self.interrupt_status)),
+                (self.control & 2 == 0).then_some(Change::ClearInterrupt(
+                    self.interrupt_status & READ_CLEAR_MASK,
+                )),
             ),
             0x20 | 0x24 => {
                 let index = (address - 0x20) as usize;
@@ -219,8 +250,10 @@ impl Endpoint {
                 )
             }
             0x50 => {
-                let rx0 = self.rx0.front().map_or(0, Vec::len) as u32;
-                let rx1 = self.rx1.front().map_or(0, Vec::len) as u32;
+                let length_of =
+                    |packet: &Vec<u8>| u32::from(u16::from_le_bytes([packet[0], packet[1]]));
+                let rx0 = self.rx0.front().map_or(0, length_of);
+                let rx1 = self.rx1.front().map_or(0, length_of);
                 (rx0 | rx1 << 16, None)
             }
             _ => return Err(format!("MT5931 unsupported register read {address:#x}")),
@@ -257,7 +290,10 @@ impl Endpoint {
 
     fn push_event(&mut self, event: Vec<u8>) {
         if self.rx1.len() < 16 {
-            self.rx1.push_back(event);
+            let mut packet = event;
+            let padded = packet.len().div_ceil(4) * 4;
+            packet.resize(padded + 4, 0);
+            self.rx1.push_back(packet);
             self.interrupt_status |= 4;
         }
     }
@@ -283,7 +319,10 @@ impl Endpoint {
             return Err("MT5931 truncated HIF header".into());
         }
         let length = (u16::from_le_bytes(packet[..2].try_into().unwrap()) & 0xfff) as usize;
-        if length < 8 || length > quantity || quantity != length.div_ceil(4) * 4 {
+        // Management frames reach the chip unpadded (a 30-byte authentication
+        // frame is a 46-byte transfer), while commands and data frames are
+        // padded to a word.
+        if length < 8 || length > quantity || quantity > length + 3 {
             return Err(format!(
                 "MT5931 unsupported HIF packet length {length}/{quantity}"
             ));
@@ -435,11 +474,19 @@ impl Endpoint {
             0x05 if body.len() == 4 => {
                 self.wlan_ready = false;
             }
-            0x06 if body.len() == 4 => events.push(Self::command_result(cid, sequence)),
+            0x06 if body.len() == 4 => {
+                if !set {
+                    events.push(Self::command_result(cid, sequence))
+                }
+            }
             0x08 if body.len() == 64 => events.push(Self::command_result(cid, sequence)),
             0x0a if body.is_empty() => events.push(Self::command_result(cid, sequence)),
             0x0b if body.len() == 4 => events.push(Self::command_result(cid, sequence)),
-            0x13 if body.len() == 56 => events.push(Self::command_result(cid, sequence)),
+            0x13 if body.len() == 56 => {
+                if !set {
+                    events.push(Self::command_result(cid, sequence))
+                }
+            }
             0x15 if body.len() >= 2 => {
                 self.station.channel = (body[1] != 0).then_some(body[0]);
                 events.push(Self::command_result(cid, sequence));
@@ -451,14 +498,13 @@ impl Endpoint {
             }
             0x17 if body.len() == 40 => {
                 self.station.selector = body[0];
-                self.station.address = Some(body[2..8].try_into().unwrap_or([0; 6]));
                 events.push(Self::command_result(cid, sequence));
             }
             0x18 if body.len() == 8 => {
                 self.station.associated = false;
                 events.push(Self::command_result(cid, sequence));
             }
-            0x19 | 0x1a | 0x1b | 0x1c | 0x1d | 0x1f | 0x20 | 0x21 | 0x28 | 0x2b | 0x3a | 0xc3
+            0x19 | 0x1a | 0x1b | 0x1c | 0x1d | 0x1f | 0x21 | 0x2b | 0x3a | 0xc3
                 if cid == 0x1c
                     || matches!(
                         (cid, body.len()),
@@ -467,15 +513,28 @@ impl Endpoint {
                             | (0x1b, 4)
                             | (0x1d, 16)
                             | (0x1f, 4)
-                            | (0x20, 20)
                             | (0x21, 44)
-                            | (0x28, 40)
                             | (0x2b, 4)
                             | (0x3a, 12)
                             | (0xc3, 200)
                     ) =>
             {
                 events.push(Self::command_result(cid, sequence));
+            }
+            0x20 if body.len() == 20 => {
+                // Channel-privilege request: stock matches event 0x18 and
+                // reads selector, operation, flags and timing back from it.
+                let mut privilege = body.to_vec();
+                if privilege[0] > 2 {
+                    privilege[0] = 0;
+                }
+                privilege[2] = 0;
+                events.push(Self::event(EVENT_CHANNEL_PRIVILEGE, sequence, &privilege));
+            }
+            0x28 if body.len() == 40 => {
+                if !set {
+                    events.push(Self::command_result(cid, sequence))
+                }
             }
             0x1e if body.len() >= 0x6e => {
                 let (scan_events, frames) = self.scan(body, sequence, false);
@@ -512,7 +571,11 @@ impl Endpoint {
             }
             0xc1 if body.len() == 12 => {
                 if set {
-                    self.station.address = Some(body[..6].try_into().unwrap());
+                    // Stock reuses BASIC_CONFIG with the broadcast address to
+                    // program a packet filter; that is not a station address.
+                    if body[0] & 1 == 0 {
+                        self.station.address = Some(body[..6].try_into().unwrap());
+                    }
                 } else {
                     let mut config = [0u8; 12];
                     config[..6].copy_from_slice(&self.station.address.unwrap_or(self.mac_address));
@@ -543,9 +606,17 @@ impl Endpoint {
     }
 
     fn scan(&mut self, body: &[u8], sequence: u8, v2: bool) -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
+        // The scan request body starts with its own sequence byte. Stock keys
+        // the scan-change event by that byte, not by the command header's
+        // sequence.
+        let scan_sequence = body.first().copied().unwrap_or(sequence);
         let Some(access_point) = self.access_point.clone() else {
             return (
-                vec![Self::event(EVENT_SCAN_DONE, sequence, &[0; 96])],
+                {
+                    let mut info = [0u8; 96];
+                    info[0] = scan_sequence;
+                    vec![Self::event(EVENT_SCAN_DONE, sequence, &info)]
+                },
                 Vec::new(),
             );
         };
@@ -577,13 +648,13 @@ impl Endpoint {
             Vec::new()
         };
         let mut info = [0u8; 96];
-        info[0] = access_point.channel;
+        info[0] = scan_sequence;
         let mut events = vec![
             Self::event(EVENT_SCAN_DONE, sequence, &info),
             Self::event(
                 EVENT_SCAN_CHANGE,
                 sequence,
-                &[access_point.channel, 1, 0, 0],
+                &[scan_sequence, 1, 0, access_point.channel],
             ),
         ];
         if !matches {
@@ -601,6 +672,12 @@ impl Endpoint {
             }
             Change::LowPower(value) => {
                 self.ownership = value & 0x300;
+                // WHLPCR bit 1 resets the transport. The chip's TX credit
+                // counters start over, so credits reported before the reset
+                // must not be added to the host's fresh balance.
+                if value & 2 != 0 {
+                    self.tx_released.fill(0);
+                }
                 if value & 1 != 0 {
                     self.interrupt_output = true;
                 }
@@ -610,8 +687,24 @@ impl Endpoint {
             }
             Change::ClearInterrupt(mask) => self.interrupt_status &= !mask,
             Change::ClearTx(index) => self.tx_released[index..index + 4].fill(0),
-            Change::Receive => {
-                self.rx1.pop_front();
+            Change::RequestFlags {
+                interrupt_mask,
+                drain_tx,
+            } => {
+                self.interrupt_status &= !interrupt_mask;
+                if drain_tx {
+                    self.tx_released.fill(0);
+                }
+            }
+            Change::Receive { fifo, count } => {
+                let queue = if fifo == 0 {
+                    &mut self.rx0
+                } else {
+                    &mut self.rx1
+                };
+                for _ in 0..count {
+                    queue.pop_front();
+                }
             }
             Change::Response {
                 class,
@@ -634,6 +727,49 @@ impl Endpoint {
             }
         }
     }
+}
+
+/// Drains the longest prefix of one receive FIFO whose padded lengths add up
+/// to the transfer extent stock requested. Stock reads a whole receive batch
+/// in one transfer and parses the concatenated packets afterwards.
+fn receive_batch(
+    queue: &VecDeque<Vec<u8>>,
+    quantity: usize,
+    name: &str,
+) -> Result<(Vec<u8>, usize), String> {
+    if queue.is_empty() {
+        return Err(format!("MT5931 {name} FIFO underflow"));
+    }
+    if let Some(first) = queue.front() {
+        let payload = u16::from_le_bytes([first[0], first[1]]) as usize;
+        if quantity == payload || quantity == first.len() {
+            let mut data = first[..first.len().min(quantity)].to_vec();
+            data.resize(quantity, 0);
+            return Ok((data, 1));
+        }
+    }
+    let mut total = 0;
+    let mut count = 0;
+    for packet in queue.iter() {
+        if total + packet.len() > quantity {
+            break;
+        }
+        total += packet.len();
+        count += 1;
+        if total == quantity {
+            break;
+        }
+    }
+    if count == 0 || total != quantity {
+        return Err(format!(
+            "MT5931 {name} extent {quantity} does not match the queued packets"
+        ));
+    }
+    let mut data = Vec::with_capacity(total);
+    for packet in queue.iter().take(count) {
+        data.extend(packet);
+    }
+    Ok((data, count))
 }
 
 fn beacon(access_point: &AccessPoint, destination: [u8; 6], control: u16) -> Vec<u8> {

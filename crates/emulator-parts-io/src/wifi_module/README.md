@@ -50,14 +50,24 @@ The endpoint accepts the boot sequence above the upload: F2, C1 query and set,
 later 0x06, 0x13 and request-flag reads. Every accepted command returns its
 traffic-class credit and, where stock waits, its command-result event. The
 stock request-flag window at `0x10` is 0x58 bytes: WHISR, the two TX status
-words, then reserved receive and mailbox space.
+words, per-FIFO receive counts at 0x0c/0x0e, 16 RX0 lengths at 0x10 and 16 RX1
+lengths at 0x30. WHISR bits 0-2 are read-clear in the default register mode,
+and the same window read drains WTSR0/WTSR1; stock adds those credits to its
+own traffic-class balance. Command 0x20 answers event 0x18 with its flag byte
+cleared, which stock consumes as the channel-privilege grant.
 
 Scan requests (CID 0x1E and 0x04) produce a beacon and probe response for the
 configured SSID and channel, followed by event 0x0F with a 0x60-byte body and
-event 0x15 with the selected channel. Management authentication and association
+event 0x15, whose body starts with the scan request's sequence byte, then the
+sparse-valid flag, band and channel. Management authentication and association
 requests for the configured BSSID receive open-network responses. Data frames
-use the 16-byte HIF TX header and the 12-byte receive header; events remain the
-eight-byte WIFI_EVENT_T packets required by the stock reply dispatcher.
+use the 16-byte HIF TX header and may arrive through WTDR0 or WTDR1; commands
+and management frames use WTDR1. Received frames carry the 12-byte receive
+header; events remain the eight-byte WIFI_EVENT_T packets required by the
+stock reply dispatcher, padded with the same four-byte trailing convention as
+frames. Stock reads a whole receive batch listed by the request-flag window in
+one WRDR read, so the endpoint drains every packet whose padded length fits the
+requested extent.
 
 NIC capability command `0x80` refuses before any command, credit or RX effect
 unless the board supplies an explicit 20-byte capability body. The reference
