@@ -700,3 +700,66 @@ fn checkpoints_never_hold_link_requests_and_malformed_ones_are_refused() {
         serde_json::json!(RUN | LINK_REQUEST_RX_DETECT);
     assert!(connected.restore(&state).is_err());
 }
+
+#[test]
+fn idle_running_core_reset_finishes_at_deadline_and_keeps_the_physical_link() {
+    fn run(pc: u64, keep_run_bit: bool) -> serde_json::Value {
+        let (mut d, mut b) = ready(pc);
+        endpoint(&mut d, &mut b, 2, 8);
+        trb(&mut b, 0x2000, 0x3000, 4, 1);
+        start(&mut d, &mut b, 2, 0x2000);
+        let ram = b.ram.clone();
+        let at = b.now + config().command_ticks;
+        write(
+            &mut d,
+            &mut b,
+            DCTL,
+            RESET | if keep_run_bit { RUN } else { 0 },
+        )
+        .unwrap();
+        assert!(d.state.running && d.state.connected);
+        assert_ne!(d.reg(DCTL) & RESET, 0);
+        let saved = d.save();
+        let mut restored = Dwc3::new(config()).unwrap();
+        restored.restore(&saved).unwrap();
+        assert_eq!(restored.save(), saved);
+        let id = restored
+            .transaction(b.now, 2, false, Some(b"test".to_vec()))
+            .unwrap();
+        let packet_at = b.now + config().transaction_ticks;
+        tick(&mut restored, &mut b, packet_at);
+        assert_eq!(restored.reply(id), Some(&Reply::Nak));
+        restored.consume_reply(id).unwrap();
+        assert_eq!(b.ram, ram);
+        tick(&mut restored, &mut b, at - 1);
+        assert!(restored.state.running);
+        assert_ne!(restored.reg(DCTL) & RESET, 0);
+        tick(&mut restored, &mut b, at);
+        assert!(!restored.state.running && restored.state.connected);
+        assert_eq!(restored.reg(DCTL), 0);
+        assert!(
+            restored
+                .state
+                .endpoints
+                .iter()
+                .all(|ep| !ep.configured && ep.trb.is_none())
+        );
+        assert_eq!(restored.reg(0xc40c), 0);
+        assert!(!b.irq);
+        let mut fresh = Dwc3::new(config()).unwrap();
+        fresh.restore(&restored.save()).unwrap();
+        restored.save()
+    }
+    for keep_run in [false, true] {
+        assert_eq!(run(0x11111110, keep_run), run(0x99999998, keep_run));
+    }
+}
+
+#[test]
+fn core_reset_refuses_pending_operations_without_cancelling_them() {
+    let (mut d, mut b) = ready(0x11111110);
+    d.transaction(b.now, 0, true, Some(vec![0; 8])).unwrap();
+    let before = d.save();
+    assert!(write(&mut d, &mut b, DCTL, RUN | RESET).is_err());
+    assert_eq!(d.save(), before);
+}

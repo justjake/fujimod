@@ -303,7 +303,15 @@ impl Dwc3 {
         setup: bool,
         out: Option<Vec<u8>>,
     ) -> Result<Reply, String> {
-        if !self.state.running || !self.state.connected || self.reg(0xc720) & (1 << ep) == 0 {
+        if !self.state.running
+            || !self.state.connected
+            || self.reg(0xc720) & (1 << ep) == 0
+            || self
+                .state
+                .pending
+                .iter()
+                .any(|p| matches!(p.operation, Operation::Reset))
+        {
             return Ok(Reply::Nak);
         }
         if setup {
@@ -610,9 +618,10 @@ impl Device for Dwc3 {
                     }
                     let old = self.reg(offset);
                     if value & RESET != 0 {
-                        if self.state.running || value & RUN != 0 || !self.state.pending.is_empty()
-                        {
-                            return Err("Unsupported active DWC3 core reset".into());
+                        // CSFTRST resets a running device too. Only an idle queue
+                        // is qualified here; cancellation of in-flight commands is not.
+                        if !self.state.pending.is_empty() {
+                            return Err("DWC3 core reset with pending operations".into());
                         }
                         self.queue(cx.now(), self.config.command_ticks, Operation::Reset)?;
                     } else if (old ^ value) & RUN != 0 {
@@ -862,7 +871,7 @@ impl Dwc3 {
             || (reg(0xc714) & ACTIVE != 0) != (global_commands == 1)
             || resets > 1
             || (reg(DCTL) & RESET != 0) != (resets == 1)
-            || (reg(DCTL) & RUN != 0) != running
+            || resets == 0 && (reg(DCTL) & RUN != 0) != running
         {
             return Err("Invalid DWC3 checkpoint or changed physical wiring".into());
         }
