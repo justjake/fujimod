@@ -55,6 +55,11 @@
           "result": "pass"
         },
         {
+          "id": "card-files",
+          "title": "Optional card file access located",
+          "result": "not-run"
+        },
+        {
           "id": "controls",
           "title": "Physical controls mapped to firmware inputs",
           "result": "pass"
@@ -134,6 +139,16 @@
         {
           "id": "camera-snapshot",
           "title": "Camera state dumped (RAM at least)",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-fast-memory",
+          "title": "Memory capture measured at 8 MiB/s or more",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-fast-flash",
+          "title": "Flash capture measured at 8 MiB/s or more",
           "result": "not-run"
         },
         {
@@ -268,6 +283,7 @@
     "af": "not-run",
     "fujimod": "not-run",
     "aspect-ratio": "not-run",
+    "raw-teleconverter": "not-run",
     "surround-view": "not-run",
     "desqueeze": "not-run",
     "desqueeze-jpeg": "not-run",
@@ -286,6 +302,7 @@
     "menu-theme": "not-run",
     "overlay-opacity": "not-run",
     "menu-tap": "not-run",
+    "glgui": "not-run",
     "recipes": "not-run",
     "snap-focus": "not-run",
     "usb-debug": "not-run",
