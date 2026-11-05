@@ -51,6 +51,16 @@ impl Decoder<'_> {
     }
     /// Composite the video layer and the enabled OSD layers; `Ok(None)` when
     /// no layer is enabled.
+    ///
+    /// The output size (+0x014) is the active area the panel reads each frame.
+    /// A plane larger than it shows its top-left part: rows and columns past the
+    /// active area are not fetched. The X-T20 2.11 VIEW MODE switch from the EVF
+    /// back to the rear screen produces this: the firmware writes the rear
+    /// screen's timing (720 x 480) and re-enables the OSD group in one step,
+    /// while the plane sizes still hold the EVF's 1024 x 768 (OSD) and
+    /// 1024 x 682 (video) until its next commit, and a frame is scanned in
+    /// between. The law is inferred from that sequence, not measured on the
+    /// panel.
     pub fn compose(
         &self,
         mut read: impl FnMut(u64, usize) -> Result<Vec<u8>, String>,
@@ -76,13 +86,10 @@ impl Decoder<'_> {
             // update page switches bit 2 of +0x000 on while +0x02c and +0x030
             // both stay zero, and the layers then compose over black. A plane
             // with only one of them set is still refused.
+            // A plane larger than the output is clipped to the output's active
+            // area (see `compose`).
             let committed = self.word(VIDEO_SIZE) != 0 || buffer != 0;
-            if committed
-                && (self.word(VIDEO_FORMAT) != PACKED_422
-                    || w > width
-                    || h > height
-                    || w & 1 != 0
-                    || buffer & 3 != 0)
+            if committed && (self.word(VIDEO_FORMAT) != PACKED_422 || w & 1 != 0 || buffer & 3 != 0)
             {
                 return Err(());
             }
@@ -113,12 +120,14 @@ impl Decoder<'_> {
             let at = |offset: u64| offset + 4 * layer as u64;
             let (w, h) = Self::extent(self.word(at(LAYER_SIZE))).ok_or(())?;
             let buffer = u64::from(self.word(at(LAYER_BUFFER)));
-            if self.word(at(LAYER_ORIGIN)) != 0 || w > width || h > height || buffer & 3 != 0 {
+            if self.word(at(LAYER_ORIGIN)) != 0 || buffer & 3 != 0 {
                 return Err(());
             }
-            let pixels = read(buffer, w as usize * h as usize * 4).map_err(|_| ())?;
+            let (shown_w, shown_h) = (w.min(width) as usize, h.min(height) as usize);
+            let pixels = read(buffer, w as usize * shown_h * 4).map_err(|_| ())?;
             for (y, row) in pixels.chunks_exact(w as usize * 4).enumerate() {
-                let line = &mut rgba[y * width as usize * 4..][..w as usize * 4];
+                let row = &row[..shown_w * 4];
+                let line = &mut rgba[y * width as usize * 4..][..shown_w * 4];
                 for (out, src) in line.chunks_exact_mut(4).zip(row.chunks_exact(4)) {
                     let keep = 255 - u32::from(src[3]);
                     for n in 0..3 {

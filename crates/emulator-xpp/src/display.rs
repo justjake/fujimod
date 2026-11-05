@@ -41,7 +41,10 @@
 //!
 //! A video layer whose words are all zero (format, size and buffer) is not
 //! yet programmed: the output shows only its OSD layers, or nothing (no
-//! frame) without them. Any other unsupported video word refuses.
+//! frame) without them. Any other unsupported video word refuses. A plane
+//! larger than the output size shows its top-left part, clipped to the
+//! output's active area (VIEW MODE switches between the EVF and the rear
+//! screen scan one frame with the new timing and the old plane sizes).
 //! Format 0x333 is packed 4:2:2 `Y0 Y1 Cb Cr` with rows of two bytes per
 //! pixel, as in the camera's live-view buffers. The conversion to RGB
 //! (BT.601, limited range) is the shared raster law, not a measured one.
@@ -820,6 +823,57 @@ mod tests {
             host.frames.last().unwrap().rgba,
             [255, 0, 0, 255, 0, 0, 0, 255]
         );
+    }
+
+    #[test]
+    fn planes_larger_than_the_output_show_their_top_left_part() {
+        // The X-T20 2.11 VIEW MODE switch back from the EVF: the rear-screen
+        // timing is written while both planes still hold the larger EVF sizes,
+        // and a frame is scanned before the next commit shrinks them.
+        const BASE: u64 = 0xfff64000;
+        let scanout = Some(Scanout {
+            output: 0,
+            period: 10,
+        });
+        let mut out = Output::new(BASE, 0x3000, &[], &[], scanout).unwrap();
+        let mut host = Screen {
+            ram: vec![0; 0x100],
+            ..Screen::default()
+        };
+        // A 3 x 2 OSD layer: opaque red, transparent, then pixels outside 2 x 1.
+        host.ram[0x40..0x4c].copy_from_slice(&[255, 0, 0, 255, 0, 0, 0, 0, 9, 9, 9, 255]);
+        host.ram[0x4c..0x58].fill(9);
+        // A 4 x 2 packed 4:2:2 video plane, every pair the same blue.
+        for row in host.ram[0x80..0x90].chunks_exact_mut(4) {
+            row.copy_from_slice(&[81, 81, 90, 240]);
+        }
+        let write = |out: &mut Output, host: &mut Screen, offset: u64, value: u32| {
+            out.write(
+                &mut Cx::new(host, 0, 0, 0),
+                BASE + offset,
+                4,
+                u64::from(value),
+            );
+        };
+        for (offset, value) in [
+            (CONTROL, VIDEO_ENABLE | OSD_ENABLE),
+            (OUTPUT_SIZE, 0x1_0000),
+            (VIDEO_FORMAT, PACKED_422),
+            (VIDEO_SIZE, 0x3_0001),
+            (VIDEO_BUFFER, 0x80),
+            (LAYER_ENABLE, 1),
+            (LAYER_SIZE, 0x2_0001),
+            (LAYER_BUFFER, 0x40),
+        ] {
+            write(&mut out, &mut host, offset, value);
+        }
+        host.now = 10;
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        out.advance(&mut cx);
+        assert!(!cx.is_unmodeled());
+        let frame = host.frames.last().unwrap();
+        assert_eq!((frame.width, frame.height), (2, 1));
+        assert_eq!(frame.rgba, [255, 0, 0, 255, 0, 0, 255, 255]);
     }
 
     #[test]
