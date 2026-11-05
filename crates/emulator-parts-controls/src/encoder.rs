@@ -6,8 +6,9 @@ use fujimod_emulator_devices::exr2::pulse::PulsePins;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::Deserialize;
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
-use fujimod_emulator_devices::parts::encoder_input::EncoderInput;
+use parking_lot::Mutex;
+use std::sync::Arc;
+use fujimod_emulator_devices::parts::encoder_input::{EncoderInput, EncoderQueue};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -44,7 +45,10 @@ impl Encoder {
             return Err("dial counter connection must start at the declared rest phase".into());
         }
         let input = EncoderInput {
-            events: Arc::new(Mutex::new(VecDeque::with_capacity(4096))),
+            events: Arc::new(Mutex::new(EncoderQueue {
+                events: VecDeque::with_capacity(4096),
+                final_phase: options.rest_phase,
+            })),
             phase_ticks: options.phase_ticks,
             rest_phase: options.rest_phase,
         };
@@ -71,6 +75,9 @@ impl Encoder {
     pub fn queue_cycles(&mut self, now: u64, cycles: i32) -> Result<(), String> {
         self.input.queue_cycles(now, cycles)
     }
+    pub fn queue_edges(&mut self, now: u64, edges: i32) -> Result<(), String> {
+        self.input.queue_edges(now, edges)
+    }
     pub fn input(&self) -> EncoderInput {
         self.input.clone()
     }
@@ -84,11 +91,7 @@ impl Device for Encoder {
             self.name(),
             &(
                 self.phase,
-                &*self
-                    .input
-                    .events
-                    .lock()
-                    .map_err(|_| "encoder queue poisoned")?,
+                &self.input.events.lock().events,
             ),
         )
     }
@@ -97,19 +100,17 @@ impl Device for Encoder {
         Ok(())
     }
     fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
-        let (phase, events) = saved.decode(self.name())?;
+        let (phase, events): (u8, VecDeque<(u64, u8)>) = saved.decode(self.name())?;
         self.phase = phase;
-        *self
-            .input
-            .events
-            .lock()
-            .map_err(|_| "encoder queue poisoned")? = events;
+        let mut queue = self.input.events.lock();
+        queue.final_phase = events.back().map_or(phase, |event| event.1);
+        queue.events = events;
         Ok(())
     }
 
     fn fingerprint(&self) -> Result<serde_json::Value, String> {
         Ok(
-            serde_json::json!({"phase":self.phase,"rest_phase":self.input.rest_phase,"phase_ticks":self.input.phase_ticks,"events":*self.input.events.lock().unwrap()}),
+            serde_json::json!({"phase":self.phase,"rest_phase":self.input.rest_phase,"phase_ticks":self.input.phase_ticks,"events":self.input.events.lock().events}),
         )
     }
     fn name(&self) -> &'static str {
@@ -123,11 +124,11 @@ impl Device for Encoder {
         cx.unmodeled();
     }
     fn next_deadline(&self, _: u64) -> Option<u64> {
-        self.input.events.lock().unwrap().front().map(|e| e.0)
+        self.input.events.lock().events.front().map(|e| e.0)
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
-        let mut events = self.input.events.lock().unwrap();
-        while let Some(&(at, phase)) = events.front() {
+        let mut queue = self.input.events.lock();
+        while let Some(&(at, phase)) = queue.events.front() {
             if at > cx.now() {
                 break;
             }
@@ -150,7 +151,7 @@ impl Device for Encoder {
                 }
             }
             self.phase = phase;
-            events.pop_front();
+            queue.events.pop_front();
         }
     }
     fn event(&mut self, cx: &mut Cx<'_>, _: u64) {

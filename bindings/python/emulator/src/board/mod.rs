@@ -884,8 +884,8 @@ impl Board {
             .map_err(error)
     }
     fn rotate_control(&mut self, id: &str, steps: i32) -> PyResult<()> {
-        let (node, cycles) = self.session()?.rotation(id, steps).map_err(error)?;
-        self.session_mut()?.rotate(&node, cycles).map_err(error)
+        let (node, edges) = self.session()?.rotation(id, steps).map_err(error)?;
+        self.session_mut()?.rotate_edges(&node, edges).map_err(error)
     }
     fn touch_script(&mut self, node: &str, script: &str) -> PyResult<()> {
         self.session_mut()?

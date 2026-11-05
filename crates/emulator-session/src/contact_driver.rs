@@ -106,7 +106,7 @@ pub enum Interface {
     Rotary {
         id: String,
         node: String,
-        cycles_per_step: i32,
+        edges_per_step: i32,
     },
     Touch {
         id: String,
@@ -247,11 +247,11 @@ impl Driver {
             match interface {
                 Interface::Rotary {
                     node,
-                    cycles_per_step,
+                    edges_per_step,
                     ..
                 } => {
-                    if !matches!(cycles_per_step, -1 | 1) {
-                        return Err("invalid rotary cycle direction".into());
+                    if !matches!(edges_per_step, -4 | -2 | 2 | 4) {
+                        return Err("invalid rotary edges per step".into());
                     }
                     session.resources.encoder(node)?;
                 }

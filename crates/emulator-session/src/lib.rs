@@ -166,6 +166,12 @@ impl Session {
             .queue_cycles(self.board.now(), cycles)?;
         self.board.inputs_changed(self.node(name)?)
     }
+    pub fn rotate_edges(&mut self, name: &str, edges: i32) -> Result<(), String> {
+        self.resources
+            .encoder(name)?
+            .queue_edges(self.board.now(), edges)?;
+        self.board.inputs_changed(self.node(name)?)
+    }
     fn image_inputs_changed(&mut self, name: &str) -> Result<(), String> {
         for user in self.resources.image_users(name)? {
             self.board.inputs_changed(user)?;

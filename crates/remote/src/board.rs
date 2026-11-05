@@ -304,8 +304,8 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
             }
             let result = self.owner.with_session(|s| match &input.state {
                 InputState::Turn(steps) => {
-                    let (node, cycles) = s.rotation(id, *steps)?;
-                    s.rotate(&node, cycles)
+                    let (node, edges) = s.rotation(id, *steps)?;
+                    s.rotate_edges(&node, edges)
                 }
                 _ => drive(s, id, &input.state),
             });
