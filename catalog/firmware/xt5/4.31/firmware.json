@@ -1,0 +1,141 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xt5-431",
+  "body_id": "xt5",
+  "version": "4.31",
+  "update": {
+    "size": 109365284,
+    "sha256": "790d6deecf26766188b0e506e40645e6b816addfeba39a52334349405421724e"
+  },
+  "boot_rom": null,
+  "installation": null,
+  "generated_facts": null,
+  "layouts": {
+    "profiles": {
+      "xt5-431": {
+        "flash_image": {
+          "dat_origin": 628,
+          "xor": 255
+        },
+        "cpu": [
+          {
+            "id": 0,
+            "pc": 361596,
+            "cpsr": 964,
+            "running": true,
+            "regs": {
+              "x19": 0,
+              "x20": 21863252,
+              "x21": 99920
+            },
+            "sysregs": {
+              "ICC_PMR_EL1": 255,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "VBAR_EL1": 366592,
+              "SCTLR_EL1": 818939904,
+              "CPACR_EL1": 3145728,
+              "SP_EL0": 696320,
+              "SP_EL1": 696320
+            }
+          },
+          {
+            "id": 1,
+            "pc": 361596,
+            "cpsr": 964,
+            "running": true,
+            "regs": {
+              "x19": 1,
+              "x20": 21863252,
+              "x21": 99920
+            },
+            "sysregs": {
+              "ICC_PMR_EL1": 255,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "VBAR_EL1": 366592,
+              "SCTLR_EL1": 818939904,
+              "CPACR_EL1": 3145728,
+              "SP_EL0": 712704,
+              "SP_EL1": 712704
+            }
+          },
+          {
+            "id": 2,
+            "pc": 361596,
+            "cpsr": 964,
+            "running": true,
+            "regs": {
+              "x19": 2,
+              "x20": 21863252,
+              "x21": 99920
+            },
+            "sysregs": {
+              "ICC_PMR_EL1": 255,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "VBAR_EL1": 366592,
+              "SCTLR_EL1": 818939904,
+              "CPACR_EL1": 3145728,
+              "SP_EL0": 729088,
+              "SP_EL1": 729088
+            }
+          },
+          {
+            "id": 3,
+            "pc": 361596,
+            "cpsr": 964,
+            "running": true,
+            "regs": {
+              "x19": 3,
+              "x20": 21863252,
+              "x21": 99920
+            },
+            "sysregs": {
+              "ICC_PMR_EL1": 255,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "VBAR_EL1": 366592,
+              "SCTLR_EL1": 818939904,
+              "CPACR_EL1": 3145728,
+              "SP_EL0": 745472,
+              "SP_EL1": 745472
+            }
+          }
+        ],
+        "gic_initial": {
+          "0x0": 7
+        },
+        "gic_redistributor_initial": [
+          {
+            "core": 0,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 1,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 2,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 3,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          }
+        ],
+        "limits": []
+      }
+    },
+    "views": {}
+  }
+}

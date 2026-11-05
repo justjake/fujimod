@@ -29,6 +29,29 @@ pub struct BodyHardware {
     pub keypad_samples: BTreeMap<String, u16>,
     /// Body connections carrying thermal sensor voltages.
     pub thermal_connection_ids: Vec<String>,
+    /// Address the firmware reads to drain the bus past this body's DRAM map.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bus_drain: Option<BusDrain>,
+}
+
+/// One discarded read the firmware issues to drain its write buffers: the
+/// first address past the body's DRAM map, which only the board knows.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct BusDrain {
+    /// Physical address of the four-byte read; word aligned.
+    pub address: u64,
+    /// SoC processors whose firmware issues the read.
+    pub processor_ids: Vec<String>,
+    /// Evidence the address comes from.
+    pub basis: String,
 }
 
 /// A physical serial endpoint attached to one SoC controller.
@@ -109,6 +132,22 @@ impl BodyHardware {
         }
         for id in &self.thermal_connection_ids {
             connection(id)?;
+        }
+        if let Some(drain) = &self.bus_drain {
+            if drain.address % 4 != 0
+                || drain.address.checked_add(4).is_none()
+                || drain.processor_ids.is_empty()
+                || drain.basis.is_empty()
+            {
+                return Err(format!("body {} has an invalid bus drain", body.id));
+            }
+            let mut seen = std::collections::BTreeSet::new();
+            for id in &drain.processor_ids {
+                fujimod_catalog_identity::validate_id(id)?;
+                if !seen.insert(id) {
+                    return Err(format!("body {} bus drain repeats processor {id}", body.id));
+                }
+            }
         }
         Ok(())
     }

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "xt5",
+  "soc_id": "xp5",
+  "dram_bytes": null,
+  "nand": null,
+  "sensor": null,
+  "lens": null,
+  "display": null,
+  "microcontroller": null,
+  "power_control": null,
+  "card_slot": null,
+  "control_bus_chips": [],
+  "connections": [
+    {
+      "id": "power-controller-bus",
+      "kind": "power-control",
+      "signals": []
+    },
+    {
+      "id": "power-controller-select",
+      "kind": "power-control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 15,
+          "pin": 15,
+          "active_level": true
+        }
+      ]
+    }
+  ],
+  "parts": [
+    "power-controller",
+    "xt5-serial-nor"
+  ],
+  "wiring": [
+    {
+      "source_id": "spi8",
+      "target_id": "power-controller",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "flash",
+      "target_id": "xt5-serial-nor",
+      "signal": "storage"
+    }
+  ],
+  "hardware": {
+    "serial_attachments": [
+      {
+        "part_id": "power-controller",
+        "controller_id": "spi8",
+        "connection_id": "power-controller-bus",
+        "select_connection_id": "power-controller-select"
+      }
+    ],
+    "gpio_feedback": [],
+    "keypad_samples": {},
+    "thermal_connection_ids": [],
+    "bus_drain": {
+      "address": 1610612736,
+      "processor_ids": ["core0", "core1", "core2", "core3"],
+      "basis": "The stock firmware drains the bus with a discarded read of the first address past its DRAM map, which ends at 0x60000000: Linux 256 MiB at 0x40000000 (supplied device tree, mem=256M) plus shared arenas up to 0x5ff00000+0x100000 in the firmware memory map."
+    },
+    "profiles": {
+      "xt5": {
+        "limits": [],
+        "dram_basis": "Run configuration declares the address-space limit; installed capacity is unknown."
+      }
+    }
+  }
+}

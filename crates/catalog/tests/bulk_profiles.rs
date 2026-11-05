@@ -7,7 +7,6 @@ fn located_bulk_profiles_resolve_without_body_or_execution_records() {
         ("xe4-201", "X-E4", "1.43"),
         ("xt30ii-204", "X-T30 II", "1.46"),
         ("gfx100rf-113", "GFX100RF", "1.57"),
-        ("xt5-431", "X-T5", "2.14"),
     ] {
         let profile = catalog.bulk(id).unwrap();
         profile.validate().unwrap();

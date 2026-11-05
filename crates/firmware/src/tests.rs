@@ -339,3 +339,11 @@ fn update_sums_reject_other_types_and_truncated_regions() {
     data.truncate(0x274 + 0x7f);
     assert!(matches!(update_sums(&data), Err(Error::Extent { .. })));
 }
+#[test]
+fn type_six_payload_follows_the_setup_envelope_when_present() {
+    let mut data = vec![0; 0x300];
+    put(&mut data, 0, &[6]);
+    assert_eq!(outer_header(&data).unwrap().payload_offset, 0x27c);
+    put(&mut data, 0x274, &[0, u32::MAX, 0x5555_5555, 0xaaaa_aaaa]);
+    assert_eq!(outer_header(&data).unwrap().payload_offset, 0x274);
+}

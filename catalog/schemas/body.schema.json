@@ -90,6 +90,17 @@
       "additionalProperties": false,
       "description": "Additional body-specific physical wiring.",
       "properties": {
+        "bus_drain": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BusDrain"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Address the firmware reads to drain the bus past this body's DRAM map."
+        },
         "gpio_feedback": {
           "description": "Connections between GPIO output and input pads.",
           "items": {
@@ -396,6 +407,35 @@
         "source_id",
         "target_id",
         "signal"
+      ],
+      "type": "object"
+    },
+    "BusDrain": {
+      "additionalProperties": false,
+      "description": "One discarded read the firmware issues to drain its write buffers: the\nfirst address past the body's DRAM map, which only the board knows.",
+      "properties": {
+        "address": {
+          "description": "Physical address of the four-byte read; word aligned.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Evidence the address comes from.",
+          "type": "string"
+        },
+        "processor_ids": {
+          "description": "SoC processors whose firmware issues the read.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "address",
+        "processor_ids",
+        "basis"
       ],
       "type": "object"
     },

@@ -208,7 +208,6 @@ impl Spi {
         attachments: Vec<Attachment>,
     ) -> Result<Self, String> {
         if source_hz == 0
-            || attachments.is_empty()
             || attachments.iter().enumerate().any(|(i, a)| {
                 a.select.port >= 20
                     || a.select.pin >= 16
@@ -563,6 +562,15 @@ mod tests {
             assert_eq!(spi.save()["endpoints"][1], saved["endpoints"][1]);
             assert!(host.irqs.is_empty());
         }
+    }
+    #[test]
+    fn controller_without_an_attached_peer_refuses_a_transfer() {
+        let (_, _, mut host) = fixture(false);
+        let mut spi = Spi::new(BASE, Pins::shared(), 48_000_000, vec![]).unwrap();
+        setup(&mut spi, &mut host, 0xc7, 6);
+        let mut cx = Cx::new(&mut host, 99, 0x14d3b70, 6);
+        spi.write(&mut cx, BASE + 8, 4, 0x92);
+        assert!(cx.refusal().unwrap().contains("exactly one selected endpoint"));
     }
     #[test]
     fn invalid_modes_words_and_selects_refuse_without_data_or_deadlines() {

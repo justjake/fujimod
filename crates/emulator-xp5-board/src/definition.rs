@@ -216,7 +216,7 @@ impl Definition {
             mode,
             processors: graph,
             windows,
-            controls,
+            controls: Some(controls),
             resources,
             engine,
             interrupts: interrupts.map(Interrupts::open).transpose()?,

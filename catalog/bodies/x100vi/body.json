@@ -320,6 +320,11 @@
       "right": 2068
     },
     "thermal_connection_ids": [],
+    "bus_drain": {
+      "address": 1744830464,
+      "processor_ids": ["core0", "core1", "core2", "core3"],
+      "basis": "The stock firmware drains the bus with a discarded read of the first address past its DRAM map, which ends at 0x68000000 (Linux 366 MiB plus shared arenas, from the supplied Linux device tree and the firmware memory map)."
+    },
     "profiles": {
       "x100vi": {
         "limits": [],

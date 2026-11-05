@@ -453,13 +453,6 @@
       "clock_id": null
     },
     {
-      "id": "bus-drain-68000000",
-      "base": 1744830464,
-      "size": 4,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
       "id": "bus-drain-80000000",
       "base": 2147483648,
       "size": 4,
@@ -568,13 +561,6 @@
       "id": "peripheral-window-faf08000",
       "base": 4210065408,
       "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "peripheral-window-68000000",
-      "base": 1744830464,
-      "size": 4,
       "kind": "address-window",
       "clock_id": null
     },
@@ -726,11 +712,6 @@
     },
     {
       "core": "core0",
-      "block_id": "peripheral-window-68000000",
-      "address": 1744830464
-    },
-    {
-      "core": "core0",
       "block_id": "peripheral-window-80000000",
       "address": 2147483648
     },
@@ -811,11 +792,6 @@
     },
     {
       "core": "core1",
-      "block_id": "peripheral-window-68000000",
-      "address": 1744830464
-    },
-    {
-      "core": "core1",
       "block_id": "peripheral-window-80000000",
       "address": 2147483648
     },
@@ -896,11 +872,6 @@
     },
     {
       "core": "core2",
-      "block_id": "peripheral-window-68000000",
-      "address": 1744830464
-    },
-    {
-      "core": "core2",
       "block_id": "peripheral-window-80000000",
       "address": 2147483648
     },
@@ -978,11 +949,6 @@
       "core": "core3",
       "block_id": "peripheral-window-faf08000",
       "address": 4210065408
-    },
-    {
-      "core": "core3",
-      "block_id": "peripheral-window-68000000",
-      "address": 1744830464
     },
     {
       "core": "core3",
@@ -1398,12 +1364,6 @@
             "base": 4287685888,
             "size": 32,
             "kind": "dma-request-routing"
-          },
-          {
-            "name": "bus_drain_68000000",
-            "base": 1744830464,
-            "size": 4,
-            "kind": "unmodeled-bus-drain"
           },
           {
             "name": "bus_drain_80000000",

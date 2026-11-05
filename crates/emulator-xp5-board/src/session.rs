@@ -10,7 +10,7 @@ use std::time::Duration;
 /// devices that consume them.
 pub struct Inputs {
     pins: SharedPins,
-    controls: std::sync::Arc<ResistorKeys>,
+    controls: Option<std::sync::Arc<ResistorKeys>>,
     gpio_devices: Vec<usize>,
     control_source: usize,
 }
@@ -18,7 +18,7 @@ pub struct Inputs {
 impl Inputs {
     pub(crate) fn new(
         pins: SharedPins,
-        controls: std::sync::Arc<ResistorKeys>,
+        controls: Option<std::sync::Arc<ResistorKeys>>,
         gpio_devices: Vec<usize>,
         control_source: usize,
     ) -> Self {
@@ -39,6 +39,8 @@ impl Inputs {
         pressed: bool,
     ) -> Result<(), String> {
         self.controls
+            .as_ref()
+            .ok_or("this XP5 body has no physical key model; key edges are refused")?
             .enqueue(Duration::from_nanos(at_ns), key, pressed)?;
         session.board.inputs_changed(self.control_source)
     }

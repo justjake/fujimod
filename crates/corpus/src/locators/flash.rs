@@ -107,6 +107,35 @@ impl<L: Lookup> Locator<'_, L> {
         one(routines, name)
     }
 }
+impl<L: Lookup> Locator<'_, L> {
+    /// Single-range routines of at most `limit` bytes accepted by `verify`, for
+    /// firmwares whose symbols are not recovered.
+    fn small_routines(&self, limit: u64, verify: impl Fn(&Routine) -> bool) -> Vec<Routine> {
+        let Ok(functions) = self
+            .index
+            .select(Some(self.firmware), Some(&self.unit), None)
+        else {
+            return vec![];
+        };
+        functions
+            .iter()
+            .filter(|entry| {
+                let ranges = &entry.function.ranges;
+                ranges.len() == 1 && ranges[0].1 - ranges[0].0 <= limit
+            })
+            .filter_map(|entry| self.routine(entry.function.key.address).ok())
+            .filter(|routine| verify(routine))
+            .collect()
+    }
+    fn small_routine(
+        &self,
+        limit: u64,
+        verify: impl Fn(&Routine) -> bool,
+        name: &str,
+    ) -> Result<Routine> {
+        one(self.small_routines(limit, verify), name)
+    }
+}
 pub(super) fn number(text: &str) -> Result<u64> {
     if let Some(hex) = text.strip_prefix("0x") {
         u64::from_str_radix(hex, 16)
@@ -203,7 +232,7 @@ pub fn flash<L: Lookup>(
         firmware,
         unit: "main".into(),
     };
-    let reader = locator.named("flash_read", |r| {
+    let is_reader = |r: &Routine| {
         [
             ("str", "x0, [sp, #0x10]"),
             ("str", "x1, [sp, #0x18]"),
@@ -213,14 +242,24 @@ pub fn flash<L: Lookup>(
         ]
         .into_iter()
         .all(|(m, o)| r.has(m, o))
-    })?;
+    };
+    let reader = if firmware_names_flash_read(index, firmware)? {
+        locator.named("flash_read", is_reader)?
+    } else {
+        unnamed_reader(&locator, is_reader)?
+    };
     let request = one(locator.calls(&reader)?, "read request")?;
-    locator.named("flash_window_address", |r| {
+    let is_window = |r: &Routine| {
         r.code.len() == 3
             && r.has("mov", "x1, #0xf0000000")
             && r.has("add", "x0, x0, x1")
             && r.has("ret", "")
-    })?;
+    };
+    if firmware_names_flash_read(index, firmware)? {
+        locator.named("flash_window_address", is_window)?;
+    } else {
+        locator.small_routine(0xc, is_window, "flash_window_address")?;
+    }
     if !request.has("mov", "x0, #0xf8000000")
         || !request.has("mov", "w0, #0x7ffffff")
         || !request.has("movk", "w0, #0x7766, lsl #16")
@@ -1252,6 +1291,42 @@ fn locate_xp4_byte_reader<L: Lookup>(
     one(matches, "XP4 byte-offset flash reader")
 }
 
+fn firmware_names_flash_read<L: Lookup>(index: &L, firmware: &str) -> Result<bool> {
+    Ok(!index
+        .find(Some("flash_read"), None, Some(firmware), Some("main"))
+        .map_err(|e| e.to_string())?
+        .is_empty())
+}
+
+/// Find the reader in a firmware whose symbols are not recovered: a small
+/// routine that stores the four request arguments and returns, whose callee
+/// is the read request (bounded flash window and the initialized marker
+/// `mov w0, #0x6555; movk w0, #0x7766, lsl #16`).
+fn unnamed_reader<L: Lookup>(
+    locator: &Locator<'_, L>,
+    is_reader: impl Fn(&Routine) -> bool,
+) -> Result<Routine> {
+    let readers = locator.small_routines(0x40, |routine| {
+        is_reader(routine)
+            && locator.calls(routine).unwrap_or_default().iter().any(|request| {
+                request.has("mov", "w0, #0x6555") && request.has("movk", "w0, #0x7766, lsl #16")
+            })
+    });
+    one(readers, "flash_read")
+}
+
+/// The loader is the lowest mapped range of the main unit: every later range
+/// is a decompressed stream placed above it.
+fn loader_address<L: Lookup>(index: &L, firmware: &str) -> Result<u64> {
+    index
+        .units(firmware, Some("main"))
+        .map_err(|e| e.to_string())?
+        .iter()
+        .flat_map(|unit| unit.layout.address_ranges.iter().map(|range| range.0))
+        .min()
+        .ok_or_else(|| "mapped loader missing".to_string())
+}
+
 /// Match the mapped loader against the decoded linear update image. The origin
 /// is supplied by the update container decoder, rather than inferred from a
 /// coincidental occurrence of setup bytes in another image.
@@ -1261,8 +1336,9 @@ pub fn image_offsets<L: Lookup>(
     inverted: &[u8],
     origin: u64,
 ) -> Result<(u64, u64)> {
+    let loader_address = loader_address(index, firmware)?;
     let loader = index
-        .read(firmware, "main", 0x81000, 128)
+        .read(firmware, "main", loader_address, 128)
         .map_err(|e| e.to_string())?
         .ok_or("mapped loader missing")?;
     let start = usize::try_from(origin).map_err(|_| "update origin overflow")?;

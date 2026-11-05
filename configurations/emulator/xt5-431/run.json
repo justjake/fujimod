@@ -1,0 +1,83 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+  "schema": 1,
+  "id": "xt5-431",
+  "purpose": "rom_boot",
+  "body_id": "xt5",
+  "firmware_id": "xt5-431",
+  "start": {
+    "kind": "loader"
+  },
+  "execution": {
+    "mode": "strict",
+    "engine": "hypervisor",
+    "quantum": 1000,
+    "instructions_per_tick": {
+      "numerator": 1,
+      "denominator": 1
+    }
+  },
+  "inputs": {
+    "kind": "xp5",
+    "ticks_per_second": 1000000000,
+    "blocks": [
+      {
+        "kind": "adc",
+        "block_id": "adc",
+        "samples": [
+          2713,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095
+        ]
+      },
+      {
+        "kind": "flash",
+        "block_id": "flash-aperture",
+        "part_id": "xt5-serial-nor",
+        "source": "firmware_update",
+        "erased_tail": 255,
+        "seeds": []
+      }
+    ],
+    "parts": [
+      {
+        "kind": "clock",
+        "part_id": "power-controller",
+        "seconds": 845151906,
+        "valid": true
+      }
+    ],
+    "timings": []
+  },
+  "scene": {
+    "kind": "xp5",
+    "frames": [],
+    "statistics": [],
+    "command_images": []
+  },
+  "overlays": [],
+  "preset": {
+    "factory_options": {},
+    "hardware_selection": {
+      "soc_profile_id": "xp5",
+      "body_profile_id": "xt5"
+    },
+    "firmware_profile_id": "xt5-431"
+  },
+  "dram_address_space": {
+    "limit_bytes": 1073741824,
+    "basis": "Stock kernel's first page tables identity-map 0..0x40000000 as executable Normal memory; the limit is that mapped extent, not installed DRAM."
+  }
+}

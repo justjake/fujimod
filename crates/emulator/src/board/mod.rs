@@ -1066,8 +1066,11 @@ impl Board {
                     let x0 = scalar(&**cpu, Register::X(0))
                         .map(|value| format!("{value:#x}"))
                         .unwrap_or_else(|_| "unavailable".into());
+                    let lr = scalar(&**cpu, Register::X(30))
+                        .map(|value| format!("{value:#x}"))
+                        .unwrap_or_else(|_| "unavailable".into());
                     format!(
-                        "CPU{core} {} at PC {stop_pc:#x}, instruction {word}, X0 {x0}: {error}",
+                        "CPU{core} {} at PC {stop_pc:#x}, LR {lr}, instruction {word}, X0 {x0}: {error}",
                         error.kind()
                     )
                 } else {

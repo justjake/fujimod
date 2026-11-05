@@ -468,6 +468,24 @@ pub fn assemble_with_starts(
         })
         .collect::<Result<_, String>>()?;
     let (numerator, denominator) = (rate.numerator, rate.denominator);
+    let mut peripherals: Vec<factory::Peripheral> = peripherals;
+    if let Some(drain) = body
+        .hardware
+        .as_ref()
+        .and_then(|hardware| hardware.bus_drain.as_ref())
+    {
+        for id in &drain.processor_ids {
+            let core = *cores
+                .get(id.as_str())
+                .ok_or_else(|| format!("bus drain names absent core {id}"))?;
+            peripherals.push(factory::Peripheral {
+                core,
+                address: drain.address,
+                physical: drain.address,
+                size: 4,
+            });
+        }
+    }
     let peripherals = peripheral_pages(&processors, peripherals)?;
     let graph = factory::Graph {
         processors,
@@ -918,5 +936,78 @@ mod tests {
         assert_eq!(decoder.choices.len(), 2);
         assert_eq!(decoder.choices[0].processors[0].physical, 0x8000_0000);
         assert_eq!(decoder.choices[1].processors[0].physical, 0);
+    }
+
+    #[test]
+    fn xp5_bodies_map_their_own_bus_drain_on_the_declared_cores() {
+        let rate = RunInstructionRate {
+            numerator: 24,
+            denominator: 1,
+        };
+        for (body, firmware, drain, limit) in [
+            ("x100vi", "x100vi-131", 0x6800_0000u64, 0x6800_0000u64),
+            ("xt5", "xt5-431", 0x6000_0000, 0x4000_0000),
+        ] {
+            let selection = fujimod_catalog::ReferenceCatalog::bundled()
+                .unwrap()
+                .resolve(body, firmware)
+                .unwrap();
+            let starts: Vec<ProcessorStart> = selection
+                .soc
+                .processors
+                .iter()
+                .map(|processor| ProcessorStart {
+                    processor_id: processor.id.clone(),
+                    released: processor.id == "core0",
+                    registers: vec![],
+                })
+                .collect();
+            let graph = assemble_with_starts(&selection, limit, rate, Some(1_000_000_000), &starts).unwrap();
+            let other = if drain == 0x6800_0000 { 0x6000_0000 } else { 0x6800_0000 };
+            let cores = |address: u64| {
+                graph
+                    .peripherals
+                    .iter()
+                    .filter(|p| (p.physical..p.physical + p.size as u64).contains(&address))
+                    .count()
+            };
+            assert_eq!(cores(drain), 4, "{body}");
+            assert_eq!(cores(other), 0, "{body}");
+        }
+    }
+
+    #[test]
+    fn bus_drain_names_only_present_cores() {
+        let mut selection = fujimod_catalog::ReferenceCatalog::bundled()
+            .unwrap()
+            .resolve("xt5", "xt5-431")
+            .unwrap();
+        selection
+            .body
+            .hardware
+            .as_mut()
+            .unwrap()
+            .bus_drain
+            .as_mut()
+            .unwrap()
+            .processor_ids = vec!["core9".into()];
+        let rate = RunInstructionRate {
+            numerator: 24,
+            denominator: 1,
+        };
+        let starts: Vec<ProcessorStart> = selection
+            .soc
+            .processors
+            .iter()
+            .map(|processor| ProcessorStart {
+                processor_id: processor.id.clone(),
+                released: false,
+                registers: vec![],
+            })
+            .collect();
+        let error = assemble_with_starts(&selection, 0x4000_0000, rate, Some(1_000_000_000), &starts)
+            .err()
+            .unwrap();
+        assert!(error.contains("core9"), "{error}");
     }
 }

@@ -901,7 +901,13 @@ impl Bus {
         } else if due {
             w.device.advance(&mut cx);
         }
-        let outcome = Self::outcome(&mut cx);
+        // Keep the device's stated reason for an unmodeled event or deadline.
+        let detail = cx.take_refusal();
+        let outcome = if cx.is_unmodeled() {
+            Ok(false)
+        } else {
+            detail.clone().map_or(Ok(true), Err)
+        };
         drop(cx);
         self.publication_after(device, publication);
         self.record_host_time(
@@ -926,7 +932,13 @@ impl Bus {
                 },
                 outcome
                     .err()
-                    .unwrap_or_else(|| "device event is unmodeled".into()),
+                    .unwrap_or_else(|| {
+                        format!(
+                            "device event is unmodeled in {} (token {token:?}): {}",
+                            self.windows[device].device.name(),
+                            detail.as_deref().unwrap_or("no reason given")
+                        )
+                    }),
             )?;
             return Ok(());
         }

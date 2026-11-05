@@ -3607,13 +3607,8 @@
       "internal_version": "1.90",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "BulkCatalogError: No bulk transport locator for X-Processor Pro"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "unavailable",
@@ -6687,68 +6682,19 @@
           "errors": []
         },
         "controls": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "controls",
-              "reason": "ControlIdsError: No catalog firmware, body, and physical-control records are published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "facts": {
           "status": "unavailable",
           "errors": [
             {
-              "locator": "debug_gate",
-              "reason": "referenced USB identity selector: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "cfgdata_reader",
-              "reason": "referenced USB identity selector: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "cfgdata_location",
-              "reason": "referenced USB identity selector: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "ui_mode",
-              "reason": "ui_commit_mode_change: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "ui_modes",
-              "reason": "ui_commit_mode_change: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "menu_cursor",
-              "reason": "menu_cursor_set_node: 0 candidates, 0 verified results"
-            },
-            {
               "locator": "remote_menu",
-              "reason": "ui_commit_mode_change: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "ff80_limits",
-              "reason": "usb_service_debug_dispatch: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "identity_checks",
-              "reason": "referenced USB identity selector: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "internal_version",
-              "reason": "cfg_initialize: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "usb_service_ids",
-              "reason": "referenced USB identity selector: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "usb_identity_configuration",
-              "reason": "referenced USB identity selector: 0 candidates, 0 verified results"
+              "reason": "ui_menu_reset_all_root_values: 0 candidates, 0 verified results"
             },
             {
               "locator": "usb_normal_ids",
-              "reason": "referenced USB identity selector: 0 candidates, 0 verified results"
+              "reason": "Unrecognized configuration byte reader"
             },
             {
               "locator": "app80",

@@ -337,6 +337,7 @@ class BodyConnection(TypedDict, total=False):
 
 
 class BodyHardware(TypedDict, total=False):
+    bus_drain: NotRequired[BusDrain | None]
     gpio_feedback: Required[list[GpioFeedback]]
     keypad_samples: Required[dict[str, int]]
     profiles: NotRequired[dict[str, BodyProfile]]
@@ -412,10 +413,22 @@ class BulkRange(TypedDict, total=False):
     size: Required[int]
 
 
-type BulkSource = BulkSourceVariant0 | BulkSourceVariant1 | BulkSourceVariant2
+type BulkSource = (
+    BulkSourceVariant0 | BulkSourceVariant1 | BulkSourceVariant2 | BulkSourceVariant3
+)
 
 
 class BulkSourceVariant0(TypedDict, total=False):
+    base: Required[int]
+    capacities: Required[list[int]]
+    data_offset: Required[int]
+    mechanism: Required[Literal["direct_query"]]
+    query_base: Required[int]
+    tag: Required[int]
+    wrapping: Required[bool]
+
+
+class BulkSourceVariant1(TypedDict, total=False):
     base: Required[int]
     callback_offset: Required[int]
     callback_table: Required[int]
@@ -427,14 +440,14 @@ class BulkSourceVariant0(TypedDict, total=False):
     wrapping: Required[bool]
 
 
-class BulkSourceVariant1(TypedDict, total=False):
+class BulkSourceVariant2(TypedDict, total=False):
     capacity: Required[int]
     mechanism: Required[Literal["pattern"]]
     registered_buffer: Required[int]
     source_state: Required[int]
 
 
-class BulkSourceVariant2(TypedDict, total=False):
+class BulkSourceVariant3(TypedDict, total=False):
     capacity: Required[int]
     configuration_bytes: Required[int]
     configuration_pointer: Required[int]
@@ -442,6 +455,12 @@ class BulkSourceVariant2(TypedDict, total=False):
     registered_buffer: Required[int]
     source_state: Required[int]
     system_mode_address: Required[int]
+
+
+class BusDrain(TypedDict, total=False):
+    address: Required[int]
+    basis: Required[str]
+    processor_ids: Required[list[str]]
 
 
 class CacheGeometry(TypedDict, total=False):
@@ -1743,7 +1762,7 @@ FirmwareFlash = TypedDict(
         "e1_window": NotRequired["FlashRange | None"],
         "firmware_id": Required["str"],
         "id": Required["str"],
-        "reader": Required["FlashReader"],
+        "reader": NotRequired["FlashReader | None"],
         "schema": Required["int"],
         "state_checks": Required["list[FlashStateCheck]"],
         "transport": NotRequired["str | None"],
@@ -2116,6 +2135,7 @@ class FlashCodeRange(TypedDict, total=False):
 
 class FlashControl(TypedDict, total=False):
     offset: Required[int]
+    sha256: Required[str]
     size: Required[int]
 
 

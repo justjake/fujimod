@@ -462,10 +462,28 @@ pub fn windows(
         .windows
         .as_ref()
         .ok_or_else(|| format!("SoC profile {profile_id} declares no register windows"))?;
-    windows
+    let drain = selection
+        .body
+        .hardware
+        .as_ref()
+        .and_then(|hardware| hardware.bus_drain.as_ref())
+        .ok_or_else(|| {
+            format!(
+                "body {} declares no bus-drain address the XP5 firmware reads",
+                selection.body.id
+            )
+        })?;
+    let mut devices = windows
         .iter()
         .map(|window| device_window(selection, window))
-        .collect()
+        .collect::<Result<Vec<_>, _>>()?;
+    devices.push(DeviceWindow {
+        base: drain.address,
+        size: 4,
+        kind: "unmodeled-bus-drain".into(),
+        options: Default::default(),
+    });
+    Ok(devices)
 }
 
 /// An XP5 device bus assembled from the selected SoC profile.
@@ -482,16 +500,23 @@ pub struct DeviceAssembly {
 /// layout and timing remain application inputs rather than emulator policy.
 pub fn assemble_devices(
     windows: Vec<DeviceWindow>,
-    controls_options: ResistorKeysOptions,
+    controls_options: Option<ResistorKeysOptions>,
     mut resources: xp5_board::Resources,
     mode: Mode,
 ) -> Result<DeviceAssembly, String> {
     let contacts = resources.sd.iter().map(|(base, media)| (format!("{base:#x}"), media.contacts.clone())).collect();
     let input_driver: Arc<dyn DriveInput> = resources.pins.clone();
-    let controls = Arc::new(ResistorKeys::new(input_driver, controls_options)?);
-    controls.start(Duration::ZERO);
-    let control_interface: Arc<dyn Controls> = controls.clone();
-    resources.controls = control_interface;
+    let controls = controls_options
+        .map(|options| ResistorKeys::new(input_driver, options).map(Arc::new))
+        .transpose()?;
+    if let Some(controls) = &controls {
+        controls.start(Duration::ZERO);
+    }
+    let control_interface: Arc<dyn Controls> = match &controls {
+        Some(controls) => controls.clone(),
+        None => Arc::new(fujimod_emulator_parts_controls::absent::AbsentControls),
+    };
+    resources.controls = control_interface.clone();
     let mut graph = DeviceGraph::new();
     let mut unknown = |window: &fujimod_emulator_devices::graph::DeviceWindow| {
         Err(format!(
@@ -504,7 +529,7 @@ pub fn assemble_devices(
     if !resources.displays.is_empty() {
         return Err("XP5 profile has unused display configurations".into());
     }
-    let control_source = graph.attach(Box::new(Source::new(controls.clone())));
+    let control_source = graph.attach(Box::new(Source::new(control_interface)));
     let gpio_devices = windows
         .iter()
         .filter(|window| matches!(window.kind.as_str(), "gpio" | "gpio-port3"))
@@ -564,7 +589,8 @@ pub struct OpenOptions {
     pub mode: Mode,
     pub processors: factory::Graph,
     pub windows: Vec<DeviceWindow>,
-    pub controls: ResistorKeysOptions,
+    /// `None` when the body has no key model; key edges are then refused.
+    pub controls: Option<ResistorKeysOptions>,
     pub resources: xp5_board::Resources,
     pub engine: factory::Engine,
     pub interrupts: Option<InterruptMap>,
@@ -644,4 +670,44 @@ pub fn open(
         recording_frames: Default::default(),
     };
     Ok((session, assembly.inputs))
+}
+
+#[cfg(test)]
+mod bus_drain_tests {
+    use super::windows;
+
+    fn selection(body: &str, firmware: &str) -> fujimod_catalog::ResolvedSelection {
+        fujimod_catalog::ReferenceCatalog::bundled()
+            .unwrap()
+            .resolve(body, firmware)
+            .unwrap()
+    }
+
+    fn drains(selection: &fujimod_catalog::ResolvedSelection) -> Vec<u64> {
+        windows(selection, "xp5")
+            .unwrap()
+            .iter()
+            .filter(|window| window.kind == "unmodeled-bus-drain")
+            .map(|window| window.base)
+            .collect()
+    }
+
+    #[test]
+    fn each_body_gets_its_own_drain_beside_the_soc_ones() {
+        let x100vi = drains(&selection("x100vi", "x100vi-131"));
+        let xt5 = drains(&selection("xt5", "xt5-431"));
+        assert!(x100vi.contains(&0x6800_0000) && !x100vi.contains(&0x6000_0000));
+        assert!(xt5.contains(&0x6000_0000) && !xt5.contains(&0x6800_0000));
+        for drains in [&x100vi, &xt5] {
+            assert!(drains.contains(&0x8000_0000) && drains.contains(&0x1_c000_0000));
+        }
+    }
+
+    #[test]
+    fn a_body_without_a_declared_drain_is_refused() {
+        let mut selection = selection("xt5", "xt5-431");
+        selection.body.hardware.as_mut().unwrap().bus_drain = None;
+        let error = windows(&selection, "xp5").err().unwrap();
+        assert!(error.contains("no bus-drain address"), "{error}");
+    }
 }

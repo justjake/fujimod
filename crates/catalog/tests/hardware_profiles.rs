@@ -78,3 +78,39 @@ fn x70_loader_profiles_connect_window_analysis_completion() {
         );
     }
 }
+
+fn body(id: &str) -> Body {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../catalog/bodies")
+        .join(id)
+        .join("body.json");
+    serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
+}
+
+#[test]
+fn xp5_bodies_declare_their_own_bus_drain() {
+    let drain = |id: &str| {
+        let body = body(id);
+        let drain = body.hardware.unwrap().bus_drain.unwrap();
+        (drain.address, drain.processor_ids)
+    };
+    let cores: Vec<String> = (0..4).map(|n| format!("core{n}")).collect();
+    assert_eq!(drain("x100vi"), (0x6800_0000, cores.clone()));
+    assert_eq!(drain("xt5"), (0x6000_0000, cores));
+}
+
+#[test]
+fn bus_drain_must_be_aligned_and_name_processors() {
+    let mut body = body("xt5");
+    let drain = body.hardware.as_mut().unwrap().bus_drain.as_mut().unwrap();
+    drain.address += 2;
+    assert!(body.validate("xt5").is_err());
+    let mut body = self::body("xt5");
+    let drain = body.hardware.as_mut().unwrap().bus_drain.as_mut().unwrap();
+    drain.processor_ids.clear();
+    assert!(body.validate("xt5").is_err());
+    let mut body = self::body("xt5");
+    let drain = body.hardware.as_mut().unwrap().bus_drain.as_mut().unwrap();
+    drain.processor_ids = vec!["core0".into(), "core0".into()];
+    assert!(body.validate("xt5").is_err());
+}

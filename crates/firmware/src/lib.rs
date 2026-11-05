@@ -536,11 +536,19 @@ pub struct OuterHeader<'a> {
     pub signed_bytes: Option<&'a [u8]>,
     pub signature_der: Option<&'a [u8]>,
 }
+/// First sixteen bytes of the signed setup envelope as stored in a DAT
+/// (the inverted words `ffffffff 00000000 aaaaaaaa 55555555`).
+const SETUP_ENVELOPE_STORED: [u8; 16] = [
+    0, 0, 0, 0, 255, 255, 255, 255, 85, 85, 85, 85, 170, 170, 170, 170,
+];
 pub fn outer_header(source: &[u8]) -> Result<OuterHeader<'_>> {
     let kind = word(source, 0)?;
     let payload_offset = match kind {
         4 => 0x25c,
         5 => 0x268,
+        // X-Processor 5 type-6 updates begin the signed setup envelope at 0x274;
+        // the other type-6 layouts keep their payload at 0x27c.
+        6 if source.get(0x274..0x284) == Some(&SETUP_ENVELOPE_STORED) => 0x274,
         6 => 0x27c,
         8 => 0x2bc,
         _ => {
