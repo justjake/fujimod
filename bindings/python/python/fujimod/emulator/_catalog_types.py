@@ -149,6 +149,12 @@ class ApplicationHardwareVariant1(TypedDict, total=False):
     virtual_timer_irq: Required[int]
 
 
+class ApplicationLadderInput(TypedDict, total=False):
+    basis: Required[str]
+    released: Required[int]
+    wire: Required[LadderWire]
+
+
 type ApplicationPartInput = (
     ApplicationPartInputVariant0
     | ApplicationPartInputVariant1
@@ -1275,6 +1281,14 @@ class ControlInterfaceVariant1(TypedDict, total=False):
     register: Required[int]
     report_bytes: Required[int]
     width: Required[int]
+
+
+class ControlLadder(TypedDict, total=False):
+    basis: Required[str]
+    levels: Required[int]
+    released: NotRequired[int | None]
+    rungs: Required[list[LadderRung]]
+    wire: Required[LadderWire]
 
 
 type ControlMotion = ControlMotionVariant0 | ControlMotionVariant1
@@ -3150,6 +3164,27 @@ class IrisOptics(TypedDict, total=False):
     travel_limits: Required[list[int]]
 
 
+class LadderRung(TypedDict, total=False):
+    band_high: Required[int]
+    band_low: Required[int]
+    basis: Required[str]
+    control_id: Required[str]
+    sample: Required[int]
+
+
+type LadderWire = LadderWireVariant0 | LadderWireVariant1
+
+
+class LadderWireVariant0(TypedDict, total=False):
+    channel: Required[int]
+    kind: Required[Literal["adc"]]
+
+
+class LadderWireVariant1(TypedDict, total=False):
+    kind: Required[Literal["power_controller_register"]]
+    register: Required[int]
+
+
 class LensAssembly(TypedDict, total=False):
     connection_id: Required[str]
     encoder_connection_id: NotRequired[str | None]
@@ -3912,6 +3947,7 @@ PhysicalControls = TypedDict(
         "boot": NotRequired["PhysicalControlsVariant0"],
         "controls": Required["dict[str, PhysicalControl]"],
         "id": Required["str"],
+        "ladders": NotRequired["list[ControlLadder]"],
         "manual": Required["ManualReference"],
         "schema": Required["int"],
     },
@@ -4477,6 +4513,7 @@ class RunInputsVariant0(TypedDict, total=False):
 class RunInputsVariant1(TypedDict, total=False):
     blocks: Required[list[ApplicationBlockInput]]
     kind: Required[Literal["xp4"]]
+    ladders: NotRequired[list[ApplicationLadderInput]]
     parts: Required[list[ApplicationPartInput]]
     ticks_per_second: Required[int]
     timings: Required[list[ApplicationTiming]]
@@ -4485,6 +4522,7 @@ class RunInputsVariant1(TypedDict, total=False):
 class RunInputsVariant2(TypedDict, total=False):
     blocks: Required[list[ApplicationBlockInput]]
     kind: Required[Literal["xp5"]]
+    ladders: NotRequired[list[ApplicationLadderInput]]
     parts: Required[list[ApplicationPartInput]]
     ticks_per_second: Required[int]
     timings: Required[list[ApplicationTiming]]

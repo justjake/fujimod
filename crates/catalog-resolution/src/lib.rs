@@ -650,6 +650,7 @@ fn application_inputs_selection(
     for input in &inputs.parts {
         part(input.part_id())?;
     }
+    ladder_inputs_selection(&inputs.ladders, selection)?;
     for timing in &inputs.timings {
         match timing {
             ApplicationTiming::Delay { block_ids, .. }
@@ -662,6 +663,57 @@ fn application_inputs_selection(
                 block(block_id)?;
             }
             ApplicationTiming::StorageProgramming { part_id, .. } => part(part_id)?,
+        }
+    }
+    Ok(())
+}
+
+/// Check run-supplied released values against the body's declared ladders.
+///
+/// A run may supply the released value of a register ladder only where the
+/// body record has none; the value must be readable on the wire and hold no
+/// control. An ADC ladder's released value is the ADC block input's sample.
+fn ladder_inputs_selection(
+    ladders: &[ApplicationLadderInput],
+    selection: &ResolvedSelection,
+) -> Result<(), String> {
+    if ladders.is_empty() {
+        return Ok(());
+    }
+    let body = &selection.body.id;
+    let document = selection
+        .physical_controls
+        .as_ref()
+        .ok_or_else(|| format!("application ladder input: body {body} documents no controls"))?;
+    let controls = fujimod_catalog_controls::PhysicalControls::decode_document(document, body)?;
+    for input in ladders {
+        let wire = input.wire;
+        if matches!(wire, fujimod_catalog_controls::LadderWire::Adc { .. }) {
+            return Err(format!(
+                "application ladder input {wire:?}: an ADC ladder's released value is the ADC block input's sample"
+            ));
+        }
+        let ladder = controls
+            .ladders
+            .iter()
+            .find(|ladder| ladder.wire == wire)
+            .ok_or_else(|| format!("application ladder input {wire:?}: body {body} declares no such ladder"))?;
+        if ladder.released.is_some() {
+            return Err(format!(
+                "application ladder input {wire:?}: body {body} already declares its released value"
+            ));
+        }
+        if input.released >= ladder.levels {
+            return Err(format!(
+                "application ladder input {wire:?}: released value {} exceeds its {} levels",
+                input.released, ladder.levels
+            ));
+        }
+        if let Some(rung) = ladder.rungs.iter().find(|rung| rung.contains(input.released)) {
+            return Err(format!(
+                "application ladder input {wire:?}: released value {} lies in the band of {}",
+                input.released, rung.control_id
+            ));
         }
     }
     Ok(())
@@ -830,5 +882,46 @@ mod tests {
                     .unwrap_or_else(|error| panic!("run overlay {id}: {error}"));
             assert_eq!(resolved.configuration.overlays, [id]);
         }
+    }
+
+    #[test]
+    fn run_ladder_inputs_name_body_register_ladders_with_key_free_values() {
+        let config = RunConfiguration::bundled("xt5-431").unwrap();
+        let catalog = ReferenceCatalog::bundled().unwrap();
+        let selection = catalog.resolve("xt5", "xt5-431").unwrap();
+        validate_selection(&config, &selection).unwrap();
+        let refused = |edit: &dyn Fn(&mut Vec<ApplicationLadderInput>), needle: &str| {
+            let mut invalid = config.clone();
+            let Some(RunInputs::Xp5(inputs)) = invalid.inputs.as_mut() else {
+                panic!("X-T5 run inputs must be XP5 inputs");
+            };
+            edit(&mut inputs.ladders);
+            let error = validate_selection(&invalid, &selection).unwrap_err();
+            assert!(error.contains(needle), "{error}");
+        };
+        let register = |register| fujimod_catalog_controls::LadderWire::PowerControllerRegister {
+            register,
+        };
+        refused(&|ladders| ladders[0].released = 554, "lies in the band of menu_ok_button");
+        refused(&|ladders| ladders[0].released = 1024, "exceeds its 1024 levels");
+        refused(&|ladders| ladders[0].wire = register(0x36), "declares no such ladder");
+        refused(
+            &|ladders| ladders[0].wire = fujimod_catalog_controls::LadderWire::Adc { channel: 1 },
+            "ADC block input's sample",
+        );
+        refused(&|ladders| ladders[1].wire = register(0x34), "repeats ladder");
+        refused(&|ladders| ladders[0].basis = " ".into(), "needs a basis");
+
+        let mut declared = selection.clone();
+        declared.physical_controls.as_mut().unwrap()["ladders"][3]["released"] = 1000.into();
+        let error = validate_selection(&config, &declared).unwrap_err();
+        assert!(error.contains("already declares its released value"), "{error}");
+
+        let mut bare = config.clone();
+        let Some(RunInputs::Xp5(inputs)) = bare.inputs.as_mut() else {
+            panic!("X-T5 run inputs must be XP5 inputs");
+        };
+        inputs.ladders.clear();
+        validate_selection(&bare, &selection).unwrap();
     }
 }

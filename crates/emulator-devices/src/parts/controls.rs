@@ -9,6 +9,16 @@ pub trait Controls: Send + Sync {
     fn next_deadline(&self) -> Option<u64>;
     /// Observe the current resistor ladder; host inspection never advances it.
     fn sample(&self, channel: usize, fallback: u16) -> u16;
+    /// Registers of a power controller whose value these controls drive, in
+    /// ascending order. Bodies whose keys are not register ladders drive none.
+    fn register_ladders(&self) -> Vec<u8> {
+        Vec::new()
+    }
+    /// Current value of a driven register ladder; `None` for any register
+    /// that is not one. Host inspection never advances the controls.
+    fn register_sample(&self, _register: u8) -> Option<u16> {
+        None
+    }
     fn save(&self) -> Value;
     fn restore(&self, state: &Value) -> Result<(), String>;
 }

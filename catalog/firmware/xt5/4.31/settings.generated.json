@@ -1,0 +1,23 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "xt5-431-settings",
+  "firmware_id": "xt5-431",
+  "source": {
+    "flash_offset": 3145728,
+    "address": 17829888,
+    "size": 11743456,
+    "sha256": "fd5f899217a833552f135d719d22e025aea2e0780b2fd1f8c66b353ead969724"
+  },
+  "configuration": {
+    "flash_offset": 786432,
+    "bytes": 814080,
+    "sha256": "ee0e0f8c7760f2ec3399009b4f8fdb12d4652d16429afec0e59a582e988d90cb",
+    "basis": "At startup the stock configuration initializer zero-fills the configuration store when its stored signature is invalid and, when the firmware image enables it, copies these installed flash bytes to store offset 0."
+  },
+  "defaults": null,
+  "fields": [],
+  "profile": null,
+  "settings": {},
+  "sections": []
+}

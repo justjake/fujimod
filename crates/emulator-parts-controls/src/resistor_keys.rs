@@ -25,6 +25,20 @@ pub enum Key {
     RearMinus,
     FrontPlus,
     FrontMinus,
+    /// Delete button (X-T5 scanner debug name DRIVE).
+    Delete,
+    /// View-mode button.
+    ViewMode,
+    Fn1,
+    Fn2,
+    /// Quick-menu (Q) button.
+    Quick,
+    /// Focus-stick tilts and press.
+    StickUp,
+    StickDown,
+    StickLeft,
+    StickRight,
+    StickPush,
 }
 impl Key {
     pub fn parse(s: &str) -> Result<Self, String> {
@@ -41,13 +55,42 @@ impl Key {
             "REAR-" => Ok(Self::RearMinus),
             "FRONT+" => Ok(Self::FrontPlus),
             "FRONT-" => Ok(Self::FrontMinus),
+            "DELETE" | "DRIVE" => Ok(Self::Delete),
+            "VIEW" | "VIEW_MODE" => Ok(Self::ViewMode),
+            "FN1" => Ok(Self::Fn1),
+            "FN2" => Ok(Self::Fn2),
+            "Q" | "QUICK" => Ok(Self::Quick),
+            "STICK_UP" => Ok(Self::StickUp),
+            "STICK_DOWN" => Ok(Self::StickDown),
+            "STICK_LEFT" => Ok(Self::StickLeft),
+            "STICK_RIGHT" => Ok(Self::StickRight),
+            "STICK_PUSH" => Ok(Self::StickPush),
             _ => Err(format!("unknown physical key {s:?}")),
         }
     }
-    fn dial(self) -> bool {
+    pub(crate) fn dial(self) -> bool {
         matches!(
             self,
             Self::RearPlus | Self::RearMinus | Self::FrontPlus | Self::FrontMinus
+        )
+    }
+    /// Keys the resistor-key layout wires: shutter and dial pads, MENU/OK and
+    /// DISP/BACK on one ADC channel, the selector on another.
+    fn resistor_wired(self) -> bool {
+        matches!(
+            self,
+            Self::Menu
+                | Self::Back
+                | Self::Up
+                | Self::Down
+                | Self::Left
+                | Self::Right
+                | Self::ShutterHalf
+                | Self::ShutterFull
+                | Self::RearPlus
+                | Self::RearMinus
+                | Self::FrontPlus
+                | Self::FrontMinus
         )
     }
 }
@@ -149,6 +192,29 @@ impl Options {
     }
 }
 
+/// Parse a `t=SECONDS:KEY;t=SECONDS:-KEY` script into timed edges, relative
+/// to `origin`. A leading `-` releases the key.
+pub fn parse_script(script: &str, origin: Duration) -> Result<Vec<(Duration, Key, bool)>, String> {
+    let mut edges = Vec::new();
+    for entry in script.split(';').filter(|s| !s.trim().is_empty()) {
+        let (time, name) = entry
+            .trim()
+            .split_once(':')
+            .ok_or("keys need t=SECONDS:KEY")?;
+        let time = time.strip_prefix("t=").ok_or("keys need t=SECONDS:KEY")?;
+        let delay = Duration::try_from_secs_f64(time.parse::<f64>().map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+        let at = origin.checked_add(delay).ok_or("key time overflow")?;
+        let (pressed, name) = name.strip_prefix('-').map_or((true, name), |n| (false, n));
+        let key = Key::parse(name)?;
+        if key.dial() && !pressed {
+            return Err("dial detents release automatically".into());
+        }
+        edges.push((at, key, pressed));
+    }
+    Ok(edges)
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 struct Edge {
     at: Duration,
@@ -200,6 +266,9 @@ impl ResistorKeys {
         }
     }
     pub fn enqueue(&self, at: Duration, key: Key, pressed: bool) -> Result<(), String> {
+        if !key.resistor_wired() {
+            return Err(format!("{key:?} has no wiring in the resistor-key layout"));
+        }
         if key.dial() && !pressed {
             return Err("dial detents have an automatic return phase".into());
         }
@@ -238,24 +307,7 @@ impl ResistorKeys {
     /// the held keys and queued edges restored from the checkpoint.
     pub fn script_at(&self, script: &str, origin: Duration) -> Result<(), String> {
         // Parse all entries before mutating the queue.
-        let mut edges = Vec::new();
-        for entry in script.split(';').filter(|s| !s.trim().is_empty()) {
-            let (time, name) = entry
-                .trim()
-                .split_once(':')
-                .ok_or("keys need t=SECONDS:KEY")?;
-            let time = time.strip_prefix("t=").ok_or("keys need t=SECONDS:KEY")?;
-            let delay =
-                Duration::try_from_secs_f64(time.parse::<f64>().map_err(|e| e.to_string())?)
-                    .map_err(|e| e.to_string())?;
-            let at = origin.checked_add(delay).ok_or("key time overflow")?;
-            let (pressed, name) = name.strip_prefix('-').map_or((true, name), |n| (false, n));
-            let key = Key::parse(name)?;
-            if key.dial() && !pressed {
-                return Err("dial detents release automatically".into());
-            }
-            edges.push((at, key, pressed));
-        }
+        let edges = parse_script(script, origin)?;
         for (at, key, pressed) in edges {
             self.enqueue(at, key, pressed)?;
         }

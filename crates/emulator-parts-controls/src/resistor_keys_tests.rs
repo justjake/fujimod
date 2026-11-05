@@ -116,3 +116,13 @@ fn shutter_sequence_and_dial_return_use_edge_time_not_service_frequency() {
     assert!(batched.restore(&Value::Null).is_err());
     assert_eq!(batched.save(), saved);
 }
+#[test]
+fn keys_outside_the_resistor_layout_are_refused() {
+    let (input, _) = input();
+    for key in [Key::Delete, Key::Quick, Key::StickPush, Key::StickUp] {
+        let error = input.enqueue(Duration::ZERO, key, true).unwrap_err();
+        assert!(error.contains("no wiring in the resistor-key layout"), "{error}");
+    }
+    assert!(input.script("t=1:Q").is_err());
+    assert!(!input.used());
+}

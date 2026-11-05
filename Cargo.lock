@@ -1499,6 +1499,7 @@ name = "fujimod-catalog-configuration"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog-construction",
+ "fujimod-catalog-controls",
  "fujimod-catalog-identity",
  "fujimod-catalog-run-inputs",
  "fujimod-workspace-hack",
@@ -1578,6 +1579,7 @@ dependencies = [
  "fujimod-catalog",
  "fujimod-catalog-configuration",
  "fujimod-catalog-construction",
+ "fujimod-catalog-controls",
  "fujimod-catalog-identity",
  "fujimod-catalog-run-inputs",
  "fujimod-workspace-hack",
@@ -1782,6 +1784,7 @@ dependencies = [
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -2514,6 +2517,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
  "fujimod-catalog-configuration",
+ "fujimod-catalog-controls",
  "fujimod-catalog-resolution",
  "fujimod-emulator",
  "fujimod-emulator-boot",

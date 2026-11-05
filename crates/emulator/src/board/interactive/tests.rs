@@ -439,3 +439,154 @@ fn serviced_deadline_precedes_interactive_mmio_catch_up() {
         "local PMU counted restarts twice: {words:?}"
     );
 }
+
+/// Three cores over shared RAM `0..0x8000`, without devices: an initiator
+/// at `0x1000` and two responders at `0x2000` whose flag address is in r6.
+fn rendezvous_board() -> Board {
+    let backing = Backing::aligned_zeros(0x8000, 4096).unwrap();
+    let shared_memory = cpu_memory::Memory::default().shared();
+    let cpus = (0..3)
+        .map(|core| {
+            let cpu = worker::spawn(worker::Config {
+                translation_cache_size_bytes: 1024 * 1024,
+                options: Default::default(),
+                memory: shared_memory.clone(),
+            })
+            .unwrap();
+            unsafe {
+                cpu.map_physical(
+                    0,
+                    0,
+                    0x8000,
+                    7,
+                    std::ptr::NonNull::new(backing.as_ptr()).unwrap(),
+                )
+                .unwrap();
+            }
+            set(&cpu, Register::Pc, if core == 0 { 0x1000 } else { 0x2000 }).unwrap();
+            set(&cpu, Register::Pstate, 0xd3).unwrap();
+            set(
+                &cpu,
+                Register::Arm32(fujimod_emulator_cpu::arm::Register::R(6)),
+                0x4000 + 4 * core as u64,
+            )
+            .unwrap();
+            Box::new(cpu) as Box<dyn fujimod_emulator_cpu::Cpu>
+        })
+        .collect();
+    Board::new(
+        cpus,
+        Bus::new(bus::Mode::Strict),
+        Ratio::new(1, 1).unwrap(),
+        None,
+        vec![true; 3],
+        crate::board::memory::Memory::new(vec![(0, backing)], vec![BusMapping::ram(0, 0x8000)])
+            .unwrap(),
+    )
+    .unwrap()
+}
+
+/// A flag rendezvous of the shape firmware can use for cross-core cache
+/// maintenance. The initiator clears every flag, announces a round, works, sets its own flag and waits until all flags are set; each
+/// responder works, sets its flag once per round and waits until all flags
+/// are set. Only the next round clears a flag. If the initiator sees the last
+/// flag, leaves and clears the flags before another responder has read them,
+/// that responder spins forever on a flag it already set. Whether that
+/// happens depends only on how far one core may run while another does not.
+/// Returns the rounds each responder completed and the three PCs.
+fn rendezvous_rounds(quantum: usize, instructions: u64) -> ([u32; 2], [u64; 3]) {
+    let mut board = rendezvous_board();
+    let initiator = [
+        0xe3a04a04u32, // mov r4, #0x4000: flags 0..2, round at +16
+        0xe3a00000,    // round: mov r0, #0
+        0xe5840004,    // str r0, [r4, #4]: clear the responders' flags
+        0xe5840008,    // str r0, [r4, #8]
+        0xe5840000,    // str r0, [r4]: and its own
+        0xe5941010,    // ldr r1, [r4, #16]
+        0xe2811001,    // add r1, r1, #1
+        0xe5841010,    // str r1, [r4, #16]: announce the round
+        0xe3a02040,    // mov r2, #64: work before its own flag
+        0xe2522001,    // subs r2, r2, #1
+        0x1afffffd,    // bne to subs
+        0xe3a00001,    // mov r0, #1
+        0xe5840000,    // str r0, [r4]: its own flag
+        0xe5943000,    // wait: ldr r3, [r4]
+        0xe3530000,    // cmp r3, #0
+        0x0afffffc,    // beq wait
+        0xe5943004,    // ldr r3, [r4, #4]
+        0xe3530000,    // cmp r3, #0
+        0x0afffff9,    // beq wait (restart at flag 0)
+        0xe5943008,    // ldr r3, [r4, #8]
+        0xe3530000,    // cmp r3, #0
+        0x0afffff6,    // beq wait
+        0xe3a02010,    // mov r2, #16: path to the next round's clear
+        0xe2522001,    // subs r2, r2, #1
+        0x1afffffd,    // bne to subs
+        0xeaffffe6,    // b round
+    ];
+    let responder = [
+        0xe3a04a04u32, // mov r4, #0x4000
+        0xe3a05000,    // mov r5, #0: last round seen
+        0xe5941010,    // idle: ldr r1, [r4, #16]
+        0xe1510005,    // cmp r1, r5
+        0x0afffffc,    // beq idle
+        0xe1a05001,    // mov r5, r1
+        0xe3a02040,    // mov r2, #64: work before its own flag
+        0xe2522001,    // subs r2, r2, #1
+        0x1afffffd,    // bne to subs
+        0xe3a00001,    // mov r0, #1
+        0xe5860000,    // str r0, [r6]: its own flag
+        0xe5943000,    // wait: ldr r3, [r4]
+        0xe3530000,    // cmp r3, #0
+        0x0afffffc,    // beq wait
+        0xe5943004,    // ldr r3, [r4, #4]
+        0xe3530000,    // cmp r3, #0
+        0x0afffff9,    // beq wait (restart at flag 0)
+        0xe5943008,    // ldr r3, [r4, #8]
+        0xe3530000,    // cmp r3, #0
+        0x0afffff6,    // beq wait
+        0xe5963020,    // ldr r3, [r6, #32]
+        0xe2833001,    // add r3, r3, #1
+        0xe5863020,    // str r3, [r6, #32]: rounds completed
+        0xeaffffe9,    // b idle
+    ];
+    let bytes = |words: &[u32]| {
+        words
+            .iter()
+            .flat_map(|word| word.to_le_bytes())
+            .collect::<Vec<_>>()
+    };
+    board.write_memory(0, 0x1000, &bytes(&initiator)).unwrap();
+    board.write_memory(0, 0x2000, &bytes(&responder)).unwrap();
+    board.run_for_instructions(instructions, quantum).unwrap();
+    let completed = |core: u64| {
+        let mut word = [0; 4];
+        board.read_memory(0, 0x4020 + 4 * core, &mut word).unwrap();
+        u32::from_le_bytes(word)
+    };
+    let pc = |core| board.read_register(core, Register::Pc).unwrap();
+    ([completed(1), completed(2)], [pc(0), pc(1), pc(2)])
+}
+
+#[test]
+fn flag_rendezvous_continues_with_short_turns_and_livelocks_when_one_core_runs_a_round_ahead() {
+    // Turns shorter than the initiator's path from its wait to the next
+    // clear (about 40 instructions): every responder reads the last flag.
+    let (early, _) = rendezvous_rounds(8, 100_000);
+    let (later, _) = rendezvous_rounds(8, 200_000);
+    assert!(
+        early.iter().all(|&rounds| rounds > 50) && later[0] > early[0] && later[1] > early[1],
+        "{early:?} then {later:?}"
+    );
+
+    // With 1000-instruction turns the last responder to set its flag (core
+    // 2) is followed by the initiator, which leaves, clears the flags and
+    // starts the next round before core 1 runs again. Core 1 never completes
+    // that round; every core then waits in its flag loop.
+    let (stalled, pcs) = rendezvous_rounds(1000, 100_000);
+    let (still, _) = rendezvous_rounds(1000, 200_000);
+    assert_eq!(stalled, still, "rounds continued with a 1000-instruction quantum");
+    assert_eq!(stalled[0], 0, "{stalled:?}");
+    assert!((0x1034..=0x1054).contains(&pcs[0]), "{:#x}", pcs[0]);
+    assert!(pcs[1..].iter().all(|pc| (0x202c..=0x204c).contains(pc)), "{pcs:x?}");
+}

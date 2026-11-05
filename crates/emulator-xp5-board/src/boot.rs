@@ -19,7 +19,7 @@ use fujimod_catalog::{
 };
 use fujimod_emulator_cpu::{Register, arm64};
 use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, parts::{controls::{Controls, Source}, pins::DriveInput}};
-use fujimod_emulator_parts_controls::resistor_keys::{Options as ResistorKeysOptions, ResistorKeys};
+use fujimod_emulator_parts_controls::key_input::{ControlsOptions, KeyInput};
 use fujimod_emulator::board::aprofile::generic_timer;
 use fujimod_emulator_ip_arm::gicv3::Gic;
 use crate::board as xp5_board;
@@ -496,24 +496,24 @@ pub struct DeviceAssembly {
 
 /// Construct XP5 devices and retain their shared external input state.
 ///
-/// The resistor-key controller is supplied by the caller so its electrical
+/// The declared key model is supplied by the caller so its electrical
 /// layout and timing remain application inputs rather than emulator policy.
 pub fn assemble_devices(
     windows: Vec<DeviceWindow>,
-    controls_options: Option<ResistorKeysOptions>,
+    controls_options: Option<ControlsOptions>,
     mut resources: xp5_board::Resources,
     mode: Mode,
 ) -> Result<DeviceAssembly, String> {
     let contacts = resources.sd.iter().map(|(base, media)| (format!("{base:#x}"), media.contacts.clone())).collect();
     let input_driver: Arc<dyn DriveInput> = resources.pins.clone();
-    let controls = controls_options
-        .map(|options| ResistorKeys::new(input_driver, options).map(Arc::new))
+    let controls: Option<Arc<dyn KeyInput>> = controls_options
+        .map(|options| options.open(input_driver))
         .transpose()?;
     if let Some(controls) = &controls {
         controls.start(Duration::ZERO);
     }
     let control_interface: Arc<dyn Controls> = match &controls {
-        Some(controls) => controls.clone(),
+        Some(controls) => controls.clone() as Arc<dyn Controls>,
         None => Arc::new(fujimod_emulator_parts_controls::absent::AbsentControls),
     };
     resources.controls = control_interface.clone();
@@ -590,7 +590,7 @@ pub struct OpenOptions {
     pub processors: factory::Graph,
     pub windows: Vec<DeviceWindow>,
     /// `None` when the body has no key model; key edges are then refused.
-    pub controls: Option<ResistorKeysOptions>,
+    pub controls: Option<ControlsOptions>,
     pub resources: xp5_board::Resources,
     pub engine: factory::Engine,
     pub interrupts: Option<InterruptMap>,

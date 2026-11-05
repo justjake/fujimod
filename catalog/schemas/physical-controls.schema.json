@@ -369,6 +369,52 @@
       ],
       "type": "string"
     },
+    "ControlLadder": {
+      "additionalProperties": false,
+      "description": "Controls read as disjoint bands of one sampled value.",
+      "properties": {
+        "basis": {
+          "description": "Evidence for the wire, its resolution and any released value.",
+          "type": "string"
+        },
+        "levels": {
+          "description": "Number of distinct values the firmware reads on this wire.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "released": {
+          "default": null,
+          "description": "Value read while no control of this ladder is held, when established.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "rungs": {
+          "description": "One rung per control; bands are disjoint.",
+          "items": {
+            "$ref": "#/$defs/LadderRung"
+          },
+          "type": "array"
+        },
+        "wire": {
+          "$ref": "#/$defs/LadderWire",
+          "description": "Where the firmware reads the ladder."
+        }
+      },
+      "required": [
+        "wire",
+        "levels",
+        "basis",
+        "rungs"
+      ],
+      "type": "object"
+    },
     "ControlMotion": {
       "description": "A rotary mechanism's mutually exclusive position or step declarations.",
       "oneOf": [
@@ -548,6 +594,98 @@
           "required": [
             "kind",
             "name"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "LadderRung": {
+      "additionalProperties": false,
+      "description": "The band the firmware accepts as one control held alone.",
+      "properties": {
+        "band_high": {
+          "description": "Highest value the firmware accepts as this control alone.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "band_low": {
+          "description": "Lowest value the firmware accepts as this control alone.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Evidence for the band, the control identity and the sample.",
+          "type": "string"
+        },
+        "control_id": {
+          "description": "Exact control identity, including a pad direction, held on this rung.",
+          "type": "string"
+        },
+        "sample": {
+          "description": "Value presented while the control is held; inside the band.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "control_id",
+        "band_low",
+        "band_high",
+        "sample",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "LadderWire": {
+      "description": "The sampled value a ladder is read from.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "One channel of the SoC's ADC.",
+          "properties": {
+            "channel": {
+              "description": "ADC channel number.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "adc",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "channel"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One register of the body's serial power controller.",
+          "properties": {
+            "kind": {
+              "const": "power_controller_register",
+              "type": "string"
+            },
+            "register": {
+              "description": "Register number.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "register"
           ],
           "type": "object"
         }
@@ -753,6 +891,13 @@
     "id": {
       "description": "Stable document identity referenced by the body.",
       "type": "string"
+    },
+    "ladders": {
+      "description": "Momentary controls read as bands of one ADC channel or power-controller\nregister; a control without an established band has no rung.",
+      "items": {
+        "$ref": "#/$defs/ControlLadder"
+      },
+      "type": "array"
     },
     "manual": {
       "$ref": "#/$defs/ManualReference",

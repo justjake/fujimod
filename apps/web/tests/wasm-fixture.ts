@@ -85,32 +85,30 @@ export async function wasmFixture(fault = false) {
               { base: ADC, size: 0x1000, kind: 'adc', options: { samples: Array(15).fill(0x456) } },
             ],
             controls: {
-              kind: 'x100vi',
-              resistor_keys: {
-                layout: {
-                  shutter_half: { port: 0, pin: 0 },
-                  shutter_full: { port: 0, pin: 1 },
-                  rear_dial: [
-                    { port: 5, pin: 7 },
-                    { port: 5, pin: 9 },
-                  ],
-                  front_dial: [
-                    { port: 5, pin: 8 },
-                    { port: 13, pin: 5 },
-                  ],
-                },
-                initial_levels: [
-                  { pin: { port: 0, pin: 0 }, high: true },
-                  { pin: { port: 0, pin: 1 }, high: true },
-                  { pin: { port: 5, pin: 7 }, high: false },
-                  { pin: { port: 5, pin: 9 }, high: false },
-                  { pin: { port: 5, pin: 8 }, high: false },
-                  { pin: { port: 13, pin: 5 }, high: false },
+              kind: 'resistor-keys',
+              layout: {
+                shutter_half: { port: 0, pin: 0 },
+                shutter_full: { port: 0, pin: 1 },
+                rear_dial: [
+                  { port: 5, pin: 7 },
+                  { port: 5, pin: 9 },
                 ],
-                samples: { menu: 0x123, back: 2, menu_back: 3, up: 4, down: 5, left: 6, right: 7 },
-                detent_return_ns: 60000000,
-                shutter_half_delay_ns: 30000000,
+                front_dial: [
+                  { port: 5, pin: 8 },
+                  { port: 13, pin: 5 },
+                ],
               },
+              initial_levels: [
+                { pin: { port: 0, pin: 0 }, high: true },
+                { pin: { port: 0, pin: 1 }, high: true },
+                { pin: { port: 5, pin: 7 }, high: false },
+                { pin: { port: 5, pin: 9 }, high: false },
+                { pin: { port: 5, pin: 8 }, high: false },
+                { pin: { port: 13, pin: 5 }, high: false },
+              ],
+              samples: { menu: 0x123, back: 2, menu_back: 3, up: 4, down: 5, left: 6, right: 7 },
+              detent_return_ns: 60000000,
+              shutter_half_delay_ns: 30000000,
             },
             displays: [
               { base: LCD, period_ns: 3_000_000, raw_formats: ['bgra', null, null, null] },

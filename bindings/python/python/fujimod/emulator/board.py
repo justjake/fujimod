@@ -578,7 +578,7 @@ class Session:
         return self._native_board().xp5_gpio_level(port, pin)
 
     def xp5_key(self, at_ns: int, key: str, pressed: bool) -> None:
-        """Queue a resistor-key edge at an absolute guest nanosecond."""
+        """Queue a declared key-model edge at an absolute guest nanosecond."""
         if type(at_ns) is not int or not 0 <= at_ns < 1 << 64 or type(pressed) is not bool:
             raise TypeError("XP5 key edge needs an unsigned time and boolean pressed state")
         if not isinstance(key, str) or not key:

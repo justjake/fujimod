@@ -16,6 +16,7 @@ fujimod-emulator-session.workspace = true
 fujimod-emulator-storage.workspace = true
 fujimod-catalog.workspace = true
 fujimod-catalog-configuration.workspace = true
+fujimod-catalog-controls.workspace = true
 fujimod-catalog-resolution.workspace = true
 fujimod-emulator.workspace = true
 fujimod-emulator-boot.workspace = true

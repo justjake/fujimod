@@ -1,0 +1,75 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "xt50",
+  "soc_id": "xp5",
+  "dram_bytes": null,
+  "nand": null,
+  "sensor": null,
+  "lens": null,
+  "display": null,
+  "microcontroller": null,
+  "power_control": null,
+  "card_slot": null,
+  "control_bus_chips": [],
+  "connections": [
+    {
+      "id": "power-controller-bus",
+      "kind": "power-control",
+      "signals": []
+    },
+    {
+      "id": "power-controller-select",
+      "kind": "power-control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 15,
+          "pin": 15,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "thermal-0",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 0,
+          "threshold": null
+        }
+      ]
+    }
+  ],
+  "parts": [
+    "power-controller"
+  ],
+  "wiring": [
+    {
+      "source_id": "spi8",
+      "target_id": "power-controller",
+      "signal": "serial_data"
+    }
+  ],
+  "hardware": {
+    "serial_attachments": [
+      {
+        "part_id": "power-controller",
+        "controller_id": "spi8",
+        "connection_id": "power-controller-bus",
+        "select_connection_id": "power-controller-select"
+      }
+    ],
+    "gpio_feedback": [],
+    "keypad_samples": {},
+    "thermal_connection_ids": ["thermal-0"],
+    "bus_drain": null,
+    "profiles": {
+      "xt50": {
+        "limits": [],
+        "dram_basis": "Installed capacity is unmeasured; the update's memory map and Linux device tree bound the address space only."
+      }
+    }
+  }
+}

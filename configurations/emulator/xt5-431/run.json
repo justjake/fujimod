@@ -59,7 +59,25 @@
         "valid": true
       }
     ],
-    "timings": []
+    "timings": [],
+    "ladders": [
+      {
+        "wire": {
+          "kind": "power_controller_register",
+          "register": 52
+        },
+        "released": 1023,
+        "basis": "No key callback compares any value in 934..1023 on this register: the last band of its table in the X-T5 4.31 factory configuration page is read by no code, and every key band ends at 933 or lower. Any value in 934..1023 holds no control; 1023 is the top of that range, not the body's measured idle reading."
+      },
+      {
+        "wire": {
+          "kind": "power_controller_register",
+          "register": 53
+        },
+        "released": 1023,
+        "basis": "No key callback compares any value in 934..1023 on this register: the last band of its table in the X-T5 4.31 factory configuration page is read by no code, and every key band ends at 933 or lower. Any value in 934..1023 holds no control; 1023 is the top of that range, not the body's measured idle reading."
+      }
+    ]
   },
   "scene": {
     "kind": "xp5",
