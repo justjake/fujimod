@@ -4079,7 +4079,15 @@
           "upper": 1
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "gpio_contacts",
+        "connection_id": "controls-contacts-3-6-3-7",
+        "expected_levels": [
+          true,
+          true
+        ],
+        "callback": 9701484
+      }
     },
     {
       "id": "row-27",
@@ -4099,7 +4107,15 @@
           "upper": 1
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "gpio_contacts",
+        "connection_id": "controls-contacts-3-6-3-7",
+        "expected_levels": [
+          false,
+          true
+        ],
+        "callback": 9701552
+      }
     },
     {
       "id": "row-28",
@@ -4119,7 +4135,15 @@
           "upper": 1
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "gpio_contacts",
+        "connection_id": "controls-contacts-3-6-3-7",
+        "expected_levels": [
+          true,
+          false
+        ],
+        "callback": 9701620
+      }
     },
     {
       "id": "row-29",
