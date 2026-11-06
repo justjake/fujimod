@@ -728,7 +728,7 @@ fn raw_dma_refuses_out_of_raster_windows_and_unmodeled_transport_selections() {
     for (offset, value, reason) in [
         (0x24, 3, "bounded input window"), // Odd active width cannot form packed pairs.
         (0x14, 0x80003, "bounded input window"),
-        (0x14, 1, "bounded input window"),
+        (0x14, 5 << 16 | 3, "bounded input window"), // Window [5, 9) exceeds the 8-column sensor.
         (0x18, 0x40000, "bounded input window"),
         (0x18, 4, "bounded input window"),
         (0x354, 0x10200000, "transport"),

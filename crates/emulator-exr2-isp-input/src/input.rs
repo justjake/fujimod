@@ -713,12 +713,15 @@ impl ImageInput {
         } else {
             Packing::U16
         };
-        let width = ((r[0x14 / 4] & 0x1fff) + 1) as usize;
+        // Active columns (0x24) bound the readout; the window count (0x14)
+        // may narrow it.
+        let width = (r[0x24 / 4] & 0x3fff).min((r[0x14 / 4] & 0x1fff) + 1) as usize;
         let height = (r[0x18 / 4] & 0x3fff) as usize + 1;
         let left = (r[0x14 / 4] >> 16 & 0x3fff) as usize;
         let top = (r[0x18 / 4] >> 16 & 0x3fff) as usize;
         if r[0x14 / 4] & !0x3fff1fff != 0
             || r[0x18 / 4] & !0x3fff3fff != 0
+            || width == 0
             || width % 2 != 0
             || left + width > sensor.width
             || top + height > sensor.height
