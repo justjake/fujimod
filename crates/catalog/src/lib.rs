@@ -7,6 +7,7 @@ pub mod ui_scene_names;
 pub mod ui_setting_names;
 pub mod ui_event_codes;
 pub mod generation;
+pub mod nand_boot;
 pub mod progress;
 pub mod reference;
 pub mod soc;

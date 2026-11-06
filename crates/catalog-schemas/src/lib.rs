@@ -101,6 +101,12 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
+        "nand-boot.generated.schema.json",
+        schema::<fujimod_catalog::nand_boot::FirmwareNandBoot>(
+            fujimod_catalog::nand_boot::NAND_BOOT_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
         "progress.generated.schema.json",
         schema::<fujimod_catalog::progress::FirmwareProgress>(
             fujimod_catalog::progress::PROGRESS_SCHEMA_URI,
