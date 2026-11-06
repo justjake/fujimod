@@ -1,10 +1,10 @@
 //! Host-side virtual network behind the MT5931 data path.
 //!
 //! The peer is a deterministic IPv4 network: one DHCP server, one gateway,
-//! two DNS servers, and a TCP relay to a host loopback port. Ethernet frames
-//! are consumed from the chip's data FIFO and produced for its receive FIFO.
-//! Packet headers and checksums use smoltcp's wire layer; the server state is
-//! our own and serializes with the device.
+//! two DNS servers, an optional NTP server, and a TCP relay to a host
+//! loopback port. Ethernet frames are consumed from the chip's data FIFO and
+//! produced for its receive FIFO. Packet headers and checksums use smoltcp's
+//! wire layer; the server state is our own and serializes with the device.
 use serde::{Deserialize, Serialize};
 use smoltcp::wire::{
     DhcpMessageType, DhcpPacket, DhcpRepr, EthernetAddress, EthernetFrame, IpAddress, IpProtocol,
@@ -16,12 +16,41 @@ use std::net::{SocketAddr, TcpStream};
 const DHCP_CLIENT_PORT: u16 = 68;
 const DHCP_SERVER_PORT: u16 = 67;
 const DNS_PORT: u16 = 53;
+const NTP_PORT: u16 = 123;
 const MAX_CONNECTIONS: usize = 8;
 const TCP_WINDOW: u16 = 8192;
 const TCP_MSS: usize = 1460;
 const DHCP_LEASE_SECONDS: u32 = 3600;
 const HOST_CONNECT_TIMEOUT_MS: u64 = 200;
 const TCP_RETRANSMIT_MS: u64 = 1000;
+const NTP_UNIX_OFFSET_SECONDS: u64 = 2_208_988_800;
+const NTP_MAX_UNIX_SECONDS: u64 = u32::MAX as u64 - NTP_UNIX_OFFSET_SECONDS;
+
+/// One NTP server on a fixed UTC time, advancing with the network clock.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Ntp {
+    /// Name the DNS server resolves to `address`.
+    pub hostname: String,
+    pub address: [u8; 4],
+    /// UTC at the network's zero tick, seconds since 1970.
+    pub seconds: u64,
+}
+
+impl Ntp {
+    fn validate(&self) -> Result<(), String> {
+        if self.hostname.is_empty() || self.hostname.len() > 253 {
+            return Err("virtual NTP name must be 1..=253 bytes".into());
+        }
+        if self.address == [0; 4] || self.address == [255; 4] {
+            return Err("virtual NTP address must be unicast".into());
+        }
+        if self.seconds > NTP_MAX_UNIX_SECONDS {
+            return Err("virtual NTP time is outside the 32-bit NTP epoch".into());
+        }
+        Ok(())
+    }
+}
 
 /// One configured open access point and its attached virtual network.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -37,6 +66,8 @@ pub struct AccessPoint {
     pub host: [u8; 4],
     pub host_port: u16,
     pub local_port: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ntp: Option<Ntp>,
 }
 
 impl AccessPoint {
@@ -72,6 +103,9 @@ impl AccessPoint {
         if self.host_port == 0 || self.local_port == 0 {
             return Err("virtual host and local ports must be nonzero".into());
         }
+        if let Some(ntp) = &self.ntp {
+            ntp.validate()?;
+        }
         Ok(())
     }
 
@@ -90,14 +124,7 @@ impl AccessPoint {
     pub fn client_address(&self) -> [u8; 4] {
         let subnet = self.subnet();
         let mut address = [subnet[0], subnet[1], subnet[2], 100];
-        while [
-            self.gateway,
-            self.dns_servers[0],
-            self.dns_servers[1],
-            self.host,
-        ]
-        .contains(&address)
-        {
+        while self.configured_addresses().contains(&address) {
             address[3] = address[3].wrapping_add(1);
             if address[3] == 255 {
                 address[3] = 1;
@@ -106,14 +133,23 @@ impl AccessPoint {
         address
     }
 
-    fn local_addresses(&self) -> [[u8; 4]; 5] {
-        [
+    fn configured_addresses(&self) -> Vec<[u8; 4]> {
+        let mut addresses = vec![
             self.gateway,
             self.dns_servers[0],
             self.dns_servers[1],
             self.host,
-            self.client_address(),
-        ]
+        ];
+        if let Some(ntp) = &self.ntp {
+            addresses.push(ntp.address);
+        }
+        addresses
+    }
+
+    fn local_addresses(&self) -> Vec<[u8; 4]> {
+        let mut addresses = self.configured_addresses();
+        addresses.push(self.client_address());
+        addresses
     }
 }
 
@@ -341,6 +377,21 @@ impl Network {
         if destination_port == DNS_PORT && ap.dns_servers.contains(&destination) {
             return self.receive_dns(ap, source, destination, source_port, payload);
         }
+        if destination_port == NTP_PORT {
+            if let Some(ntp) = &ap.ntp {
+                if destination == ntp.address {
+                    return self.receive_ntp(
+                        ap,
+                        ntp,
+                        source,
+                        destination,
+                        source_port,
+                        payload,
+                        now_ms,
+                    );
+                }
+            }
+        }
         Vec::new()
     }
 
@@ -470,7 +521,18 @@ impl Network {
             return Vec::new();
         };
         let expected = ap.hostname.trim_end_matches('.').to_ascii_lowercase();
-        let known = query.name.eq_ignore_ascii_case(expected.as_bytes());
+        let ntp_name = ap
+            .ntp
+            .as_ref()
+            .map(|ntp| ntp.hostname.trim_end_matches('.').to_ascii_lowercase());
+        let address = if query.name.eq_ignore_ascii_case(expected.as_bytes()) {
+            Some(ap.host)
+        } else if ntp_name.is_some_and(|name| query.name.eq_ignore_ascii_case(name.as_bytes())) {
+            ap.ntp.as_ref().map(|ntp| ntp.address)
+        } else {
+            None
+        };
+        let known = address.is_some();
         let answer = known && query.kind == 1;
         let mut reply = Vec::with_capacity(query.question.len() + 28);
         reply.extend_from_slice(&query.identifier.to_be_bytes());
@@ -493,7 +555,7 @@ impl Network {
             reply.extend_from_slice(&1u16.to_be_bytes());
             reply.extend_from_slice(&60u32.to_be_bytes());
             reply.extend_from_slice(&4u16.to_be_bytes());
-            reply.extend_from_slice(&ap.host);
+            reply.extend_from_slice(&address.unwrap_or([0; 4]));
         }
         let frame = udp_frame(
             &mac,
@@ -501,6 +563,53 @@ impl Network {
             destination,
             source,
             DNS_PORT,
+            source_port,
+            &reply,
+        );
+        vec![frame]
+    }
+
+    fn receive_ntp(
+        &mut self,
+        ap: &AccessPoint,
+        ntp: &Ntp,
+        source: [u8; 4],
+        destination: [u8; 4],
+        source_port: u16,
+        payload: &[u8],
+        now_ms: u64,
+    ) -> Vec<Vec<u8>> {
+        let Some(mac) = self.guest_mac else {
+            return Vec::new();
+        };
+        if payload.len() < 48 {
+            return Vec::new();
+        }
+        let version = (payload[0] >> 3) & 7;
+        let mode = payload[0] & 7;
+        if !(3..=4).contains(&version) || mode != 3 {
+            return Vec::new();
+        }
+        let seconds = ntp.seconds.saturating_add(now_ms / 1000);
+        let timestamp = ntp_timestamp(seconds, (now_ms % 1000) as u32);
+        let mut reply = vec![0u8; 48];
+        reply[0] = (version << 3) | 4;
+        reply[1] = 2;
+        reply[2] = 6;
+        reply[3] = 0xec;
+        reply[4..8].copy_from_slice(&0x0000_0010u32.to_be_bytes());
+        reply[8..12].copy_from_slice(&0x0000_0010u32.to_be_bytes());
+        reply[12..16].copy_from_slice(b"LOCL");
+        reply[16..24].copy_from_slice(&timestamp);
+        reply[24..32].copy_from_slice(&payload[40..48]);
+        reply[32..40].copy_from_slice(&timestamp);
+        reply[40..48].copy_from_slice(&timestamp);
+        let frame = udp_frame(
+            &mac,
+            &ap.bssid,
+            destination,
+            source,
+            NTP_PORT,
             source_port,
             &reply,
         );
@@ -907,6 +1016,12 @@ fn parse_dns_query(payload: &[u8]) -> Option<DnsQuery> {
     })
 }
 
+fn ntp_timestamp(seconds: u64, milliseconds: u32) -> [u8; 8] {
+    let fraction = (u64::from(milliseconds) << 32) / 1000;
+    let value = (seconds.saturating_add(NTP_UNIX_OFFSET_SECONDS) << 32) | fraction;
+    value.to_be_bytes()
+}
+
 fn ethernet_frame(
     destination: &[u8; 6],
     source: &[u8; 6],
@@ -1049,7 +1164,18 @@ mod tests {
             host: [203, 0, 113, 10],
             host_port: 443,
             local_port: 8080,
+            ntp: None,
         }
+    }
+
+    fn ap_with_ntp() -> AccessPoint {
+        let mut ap = ap();
+        ap.ntp = Some(Ntp {
+            hostname: "time.test".into(),
+            address: [192, 168, 4, 1],
+            seconds: 1_791_331_200,
+        });
+        ap
     }
 
     fn dhcp_request(kind: DhcpMessageType, mac: [u8; 6]) -> Vec<u8> {
@@ -1110,6 +1236,25 @@ mod tests {
             53,
             &payload,
         )
+    }
+
+    fn ntp_query_to(destination: [u8; 4], lvm: u8, transmit: [u8; 8]) -> Vec<u8> {
+        let mut payload = vec![0u8; 48];
+        payload[0] = lvm;
+        payload[40..48].copy_from_slice(&transmit);
+        udp_frame(
+            &[2, 0, 0, 0, 0, 2],
+            &[2, 0, 0, 0, 0, 1],
+            [192, 168, 4, 100],
+            destination,
+            49153,
+            123,
+            &payload,
+        )
+    }
+
+    fn ntp_query(transmit: [u8; 8]) -> Vec<u8> {
+        ntp_query_to([192, 168, 4, 1], (4 << 3) | 3, transmit)
     }
 
     fn arp_request(ip: [u8; 4], mac: [u8; 6]) -> Vec<u8> {
@@ -1193,6 +1338,57 @@ mod tests {
         let answer = udp.payload();
         assert_eq!(u16::from_be_bytes([answer[6], answer[7]]), 0);
         assert_eq!(u16::from_be_bytes([answer[2], answer[3]]) & 15, 3);
+    }
+
+    #[test]
+    fn dns_and_ntp_answer_the_configured_time_server() {
+        let ap = ap_with_ntp();
+        let mut network = Network::default();
+        network.guest_mac = Some([2, 0, 0, 0, 0, 2]);
+        let lookup = network.receive(&ap, &dns_query("time.test"), 0);
+        assert_eq!(lookup.len(), 1);
+        let ethernet = EthernetFrame::new_checked(&lookup[0]).unwrap();
+        let ip = Ipv4Packet::new_checked(ethernet.payload()).unwrap();
+        let udp = UdpPacket::new_checked(ip.payload()).unwrap();
+        let answer = udp.payload();
+        assert_eq!(u16::from_be_bytes([answer[6], answer[7]]), 1);
+        assert_eq!(&answer[answer.len() - 4..], &[192, 168, 4, 1]);
+
+        let transmit = [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88];
+        let reply = network.receive(&ap, &ntp_query(transmit), 0);
+        assert_eq!(reply.len(), 1);
+        let ethernet = EthernetFrame::new_checked(&reply[0]).unwrap();
+        let ip = Ipv4Packet::new_checked(ethernet.payload()).unwrap();
+        let udp = UdpPacket::new_checked(ip.payload()).unwrap();
+        assert_eq!(udp.src_port(), 123);
+        assert_eq!(udp.dst_port(), 49153);
+        let answer = udp.payload();
+        assert_eq!(answer.len(), 48);
+        assert_eq!(answer[0], (4 << 3) | 4);
+        assert_eq!(answer[1], 2);
+        assert_eq!(&answer[24..32], &transmit);
+        let expected = (1_791_331_200u64 + NTP_UNIX_OFFSET_SECONDS) << 32;
+        assert_eq!(&answer[32..40], &expected.to_be_bytes());
+        assert_eq!(&answer[40..48], &expected.to_be_bytes());
+
+        let arp = network.receive(&ap, &arp_request([192, 168, 4, 1], [2, 0, 0, 0, 0, 9]), 0);
+        assert_eq!(arp.len(), 1);
+        let ethernet = EthernetFrame::new_checked(&arp[0]).unwrap();
+        assert_eq!(ethernet.ethertype(), smoltcp::wire::EthernetProtocol::Arp);
+    }
+
+    #[test]
+    fn ntp_ignores_responses_other_addresses_and_missing_servers() {
+        let ap = ap_with_ntp();
+        let mut network = Network::default();
+        network.guest_mac = Some([2, 0, 0, 0, 0, 2]);
+        let response = ntp_query_to([192, 168, 4, 1], (4 << 3) | 4, [1; 8]);
+        assert!(network.receive(&ap, &response, 0).is_empty());
+        let elsewhere = ntp_query_to([192, 168, 4, 2], (4 << 3) | 3, [1; 8]);
+        assert!(network.receive(&ap, &elsewhere, 0).is_empty());
+        let mut missing = ap.clone();
+        missing.ntp = None;
+        assert!(network.receive(&missing, &ntp_query([1; 8]), 0).is_empty());
     }
 
     fn tcp_packet(

@@ -80,17 +80,21 @@ stored as WHLPCR bits 8 and 9 without a timing model.
 ## Virtual network
 
 The data path is bridged to a deterministic IPv4 network in
-`virtual_network.rs`: a DHCP server, a gateway, two DNS servers, and a TCP
-relay to one host loopback port. Packet headers and checksums use
-[smoltcp](https://crates.io/crates/smoltcp) 0.12's wire layer (0BSD). The server
-state is our own and serializes with the device; host TCP streams are host
-resources and are not checkpointed, so a restored connection is reset.
+`virtual_network.rs`: a DHCP server, a gateway, two DNS servers, an optional
+NTP server, and a TCP relay to one host loopback port. Packet headers and
+checksums use [smoltcp](https://crates.io/crates/smoltcp) 0.12's wire layer
+(0BSD). The server state is our own and serializes with the device; host TCP
+streams are host resources and are not checkpointed, so a restored connection
+is reset.
 
 The DHCP lease is the gateway subnet's `.100` host (skipping configured
 addresses), with the gateway as router and the two configured addresses as DNS.
-DNS answers the configured name with the configured host address and returns
-NXDOMAIN for other names. ARP answers every configured local address. TCP
-connects to `127.0.0.1:<local_port>` when the station sends a SYN to
+DNS answers the configured name with the configured host address, resolves an
+optional NTP name to its server, and returns NXDOMAIN for other names. A
+configured NTP server answers client-mode requests on port 123 with a
+stratum-2 server reply whose time is the configured UTC instant plus the
+network's elapsed milliseconds. ARP answers every configured local address.
+TCP connects to `127.0.0.1:<local_port>` when the station sends a SYN to
 `<host>:<host_port>`; a connection is polled from RX FIFO reads and from the
 endpoint's data path. WPA2/EAPOL remains unmodeled. Unsupported command IDs and
 malformed register/FIFO extents refuse before effects.
