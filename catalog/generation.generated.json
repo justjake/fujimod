@@ -129,6 +129,10 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -305,6 +309,10 @@
               "reason": "xpp: no established safely readable boot ROM extent"
             }
           ]
+        },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
         },
         "versions": {
           "status": "available",
@@ -491,6 +499,10 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -653,6 +665,15 @@
             {
               "locator": "publication",
               "reason": "No catalog firmware and body record is published"
+            }
+          ]
+        },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
             }
           ]
         },
@@ -826,6 +847,15 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
+            }
+          ]
+        },
         "versions": {
           "status": "unavailable",
           "errors": [
@@ -996,6 +1026,15 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
+            }
+          ]
+        },
         "versions": {
           "status": "unavailable",
           "errors": [
@@ -1151,6 +1190,15 @@
             {
               "locator": "publication",
               "reason": "No catalog firmware and body record is published"
+            }
+          ]
+        },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
             }
           ]
         },
@@ -1319,6 +1367,15 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -1456,6 +1513,10 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -1576,6 +1637,15 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -1646,6 +1716,10 @@
           "errors": []
         },
         "stock_screen.ui_event_codes": {
+          "status": "available",
+          "errors": []
+        },
+        "ui_setting_names": {
           "status": "available",
           "errors": []
         },
@@ -1754,6 +1828,10 @@
           "status": "available",
           "errors": []
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -1858,6 +1936,10 @@
               "reason": "xp5: no established safely readable boot ROM extent"
             }
           ]
+        },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
         },
         "versions": {
           "status": "available",
@@ -1979,6 +2061,15 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -2052,6 +2143,10 @@
           "status": "available",
           "errors": []
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -2121,6 +2216,10 @@
           "errors": []
         },
         "stock_screen.ui_event_codes": {
+          "status": "available",
+          "errors": []
+        },
+        "ui_setting_names": {
           "status": "available",
           "errors": []
         },
@@ -2240,6 +2339,15 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -2275,7 +2383,7 @@
           "errors": [
             {
               "locator": "inputs",
-              "reason": "RegistryError: <input> is missing; run <input> unpack xa10-221"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -2338,6 +2446,15 @@
             {
               "locator": "publication",
               "reason": "No catalog firmware and body record is published"
+            }
+          ]
+        },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -2457,6 +2574,15 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -2492,7 +2618,7 @@
           "errors": [
             {
               "locator": "inputs",
-              "reason": "RegistryError: <input> is missing; run <input> unpack xa20-112"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -2555,6 +2681,15 @@
             {
               "locator": "publication",
               "reason": "No catalog firmware and body record is published"
+            }
+          ]
+        },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -2593,7 +2728,7 @@
           "errors": [
             {
               "locator": "inputs",
-              "reason": "RegistryError: <input> is missing; run <input> unpack xa3-222"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -2656,6 +2791,15 @@
             {
               "locator": "publication",
               "reason": "No catalog firmware and body record is published"
+            }
+          ]
+        },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -2694,7 +2838,7 @@
           "errors": [
             {
               "locator": "inputs",
-              "reason": "RegistryError: <input> is missing; run <input> unpack xa5-203"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -2757,6 +2901,15 @@
             {
               "locator": "publication",
               "reason": "No catalog firmware and body record is published"
+            }
+          ]
+        },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -2795,7 +2948,7 @@
           "errors": [
             {
               "locator": "inputs",
-              "reason": "RegistryError: <input> is missing; run <input> unpack xa7-133"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -2858,6 +3011,15 @@
             {
               "locator": "publication",
               "reason": "No catalog firmware and body record is published"
+            }
+          ]
+        },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -3014,6 +3176,15 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -3092,6 +3263,10 @@
           "status": "available",
           "errors": []
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -3165,6 +3340,10 @@
           "status": "available",
           "errors": []
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -3200,7 +3379,7 @@
           "errors": [
             {
               "locator": "inputs",
-              "reason": "RegistryError: <input> is missing; run <input> unpack xe3-132"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -3263,6 +3442,15 @@
             {
               "locator": "publication",
               "reason": "No catalog firmware and body record is published"
+            }
+          ]
+        },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -3393,6 +3581,10 @@
               "reason": "No catalog firmware and body record is published"
             }
           ]
+        },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
         },
         "versions": {
           "status": "available",
@@ -3568,6 +3760,10 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -3717,6 +3913,15 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -3752,7 +3957,7 @@
           "errors": [
             {
               "locator": "inputs",
-              "reason": "RegistryError: <input> is missing; run <input> unpack xf10-112"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -3815,6 +4020,15 @@
             {
               "locator": "publication",
               "reason": "No catalog firmware and body record is published"
+            }
+          ]
+        },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -3950,6 +4164,10 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -3967,7 +4185,7 @@
           "errors": [
             {
               "locator": "bulk",
-              "reason": "RegistryError: <input> is missing; run <input> unpack xh2-530"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -3985,7 +4203,7 @@
           "errors": [
             {
               "locator": "inputs",
-              "reason": "RegistryError: <input> is missing; run <input> unpack xh2-530"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -4059,6 +4277,10 @@
               "reason": "No catalog firmware and body record is published"
             }
           ]
+        },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
         },
         "versions": {
           "status": "available",
@@ -4077,7 +4299,7 @@
           "errors": [
             {
               "locator": "bulk",
-              "reason": "RegistryError: <input> is missing; run <input> unpack xh2s-730"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -4095,7 +4317,7 @@
           "errors": [
             {
               "locator": "inputs",
-              "reason": "RegistryError: <input> is missing; run <input> unpack xh2s-730"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -4169,6 +4391,10 @@
               "reason": "No catalog firmware and body record is published"
             }
           ]
+        },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
         },
         "versions": {
           "status": "available",
@@ -4205,7 +4431,7 @@
           "errors": [
             {
               "locator": "inputs",
-              "reason": "RegistryError: <input> is missing; run <input> unpack xhalf-200"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -4268,6 +4494,15 @@
             {
               "locator": "publication",
               "reason": "No catalog firmware and body record is published"
+            }
+          ]
+        },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -4433,6 +4668,15 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -4595,6 +4839,15 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -4711,6 +4964,15 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -4824,6 +5086,10 @@
               "reason": "xp5: no established safely readable boot ROM extent"
             }
           ]
+        },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
         },
         "versions": {
           "status": "available",
@@ -4978,6 +5244,15 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -5119,6 +5394,10 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -5251,6 +5530,10 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -5366,6 +5649,15 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -5478,6 +5770,15 @@
             {
               "locator": "stock_screen.event_codes",
               "reason": "ValueError: UI_EVTID_REC_SETPARAM: 0 verified enum chains"
+            }
+          ]
+        },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
             }
           ]
         },
@@ -5634,6 +5935,15 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "ValueError: UI_SETP_NONE is absent from every mapped firmware unit"
+            }
+          ]
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -5740,6 +6050,10 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -5757,7 +6071,7 @@
           "errors": [
             {
               "locator": "bulk",
-              "reason": "RegistryError: <input> is missing; run <input> unpack xs20-330"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -5775,7 +6089,7 @@
           "errors": [
             {
               "locator": "inputs",
-              "reason": "RegistryError: <input> is missing; run <input> unpack xs20-330"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -5849,6 +6163,10 @@
               "reason": "No catalog firmware and body record is published"
             }
           ]
+        },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
         },
         "versions": {
           "status": "available",
@@ -5945,6 +6263,10 @@
           "status": "available",
           "errors": []
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -6018,6 +6340,10 @@
           "status": "available",
           "errors": []
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -6053,7 +6379,7 @@
           "errors": [
             {
               "locator": "inputs",
-              "reason": "RegistryError: <input> is missing; run <input> unpack xt100-203"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -6116,6 +6442,15 @@
             {
               "locator": "publication",
               "reason": "No catalog firmware and body record is published"
+            }
+          ]
+        },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -6256,6 +6591,10 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -6332,6 +6671,10 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -6367,7 +6710,7 @@
           "errors": [
             {
               "locator": "inputs",
-              "reason": "RegistryError: <input> is missing; run <input> unpack xt200-116"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -6430,6 +6773,15 @@
             {
               "locator": "publication",
               "reason": "No catalog firmware and body record is published"
+            }
+          ]
+        },
+        "ui_setting_names": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_setting_names.locate",
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -6543,6 +6895,10 @@
               "reason": "xp4: no established safely readable boot ROM extent"
             }
           ]
+        },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
         },
         "versions": {
           "status": "available",
@@ -6684,6 +7040,10 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -6811,6 +7171,10 @@
               "reason": "No catalog firmware and body record is published"
             }
           ]
+        },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
         },
         "versions": {
           "status": "available",
@@ -6986,6 +7350,10 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -7105,6 +7473,10 @@
             }
           ]
         },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
+        },
         "versions": {
           "status": "available",
           "errors": []
@@ -7208,6 +7580,10 @@
               "reason": "empty state capture"
             }
           ]
+        },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
         },
         "versions": {
           "status": "available",
@@ -7330,6 +7706,10 @@
               "reason": "No catalog firmware and body record is published"
             }
           ]
+        },
+        "ui_setting_names": {
+          "status": "available",
+          "errors": []
         },
         "versions": {
           "status": "available",

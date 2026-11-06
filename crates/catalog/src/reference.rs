@@ -2529,6 +2529,9 @@ pub struct ResolvedSelection {
     /// Exact stock scene names and their firmware-specific IDs.
     #[serde(default)]
     pub ui_scene_names: Option<crate::ui_scene_names::UiSceneNames>,
+    /// Exact stock setting names and their firmware-specific IDs.
+    #[serde(default)]
+    pub ui_setting_names: Option<crate::ui_setting_names::UiSettingNames>,
     /// Located stock event category codes.
     #[serde(default)]
     pub ui_event_codes: Option<crate::ui_event_codes::UiEventCodes>,
@@ -2566,6 +2569,7 @@ pub struct ReferenceCatalog {
     control_ids: BTreeMap<String, serde_json::Value>,
     first_start: BTreeMap<String, crate::first_start::FirstStartMenu>,
     ui_scene_names: BTreeMap<String, crate::ui_scene_names::UiSceneNames>,
+    ui_setting_names: BTreeMap<String, crate::ui_setting_names::UiSettingNames>,
     ui_event_codes: BTreeMap<String, crate::ui_event_codes::UiEventCodes>,
     bulk: BTreeMap<String, fujimod_catalog_bulk::FirmwareBulk>,
     restart: BTreeMap<String, fujimod_catalog_restart::FirmwareRestart>,
@@ -2668,6 +2672,7 @@ impl ReferenceCatalog {
             control_ids: self.control_ids.get(&firmware.id).cloned(),
             first_start: self.first_start.get(&firmware.id).cloned(),
             ui_scene_names: self.ui_scene_names.get(&firmware.id).cloned(),
+            ui_setting_names: self.ui_setting_names.get(&firmware.id).cloned(),
             ui_event_codes: self.ui_event_codes.get(&firmware.id).cloned(),
             bulk: self.bulk.get(&firmware.id).cloned(),
             restart: self.restart.get(&firmware.id).cloned(),
@@ -2731,6 +2736,11 @@ impl ReferenceCatalog {
         self.ui_scene_names.get(firmware_id)
     }
 
+    /// Exact stock setting names for a firmware, when its routine was located.
+    pub fn ui_setting_names(&self, firmware_id: &str) -> Option<&crate::ui_setting_names::UiSettingNames> {
+        self.ui_setting_names.get(firmware_id)
+    }
+
     /// Return the bulk profile for a firmware release.
     pub fn bulk(&self, firmware_id: &str) -> Option<&fujimod_catalog_bulk::FirmwareBulk> {
         self.bulk.get(firmware_id)
@@ -2773,6 +2783,11 @@ impl ReferenceCatalog {
                 let value: crate::ui_scene_names::UiSceneNames = decode(bytes, path)?;
                 value.validate()?;
                 insert_unique(&mut self.ui_scene_names, value.firmware_id.clone(), value, path)
+            }
+            ReferenceKind::UiSettingNames => {
+                let value: crate::ui_setting_names::UiSettingNames = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(&mut self.ui_setting_names, value.firmware_id.clone(), value, path)
             }
             ReferenceKind::FirstStart => {
                 let value: crate::first_start::FirstStartMenu = decode(bytes, path)?;
@@ -2860,6 +2875,16 @@ impl ReferenceCatalog {
                     .map(|release| release.update_sha256.as_str()));
             if update != Some(scenes.firmware_sha256.as_str()) {
                 return Err(format!("scene names differ from update identity {firmware_id}"));
+            }
+        }
+        for (firmware_id, settings) in &self.ui_setting_names {
+            let update = self.firmwares.get(firmware_id)
+                .and_then(|firmware| firmware.update.as_ref().map(|update| update.sha256.as_str()))
+                .or_else(|| self.firmware_versions.iter()
+                    .find(|release| &release.firmware_id == firmware_id)
+                    .map(|release| release.update_sha256.as_str()));
+            if update != Some(settings.firmware_sha256.as_str()) {
+                return Err(format!("setting names differ from update identity {firmware_id}"));
             }
         }
         for firmware_id in self.first_start.keys() {
@@ -3435,6 +3460,7 @@ enum ReferenceKind {
     ControlIds,
     FirstStart,
     UiSceneNames,
+    UiSettingNames,
     UiEventCodes,
     Bulk,
     CardFiles,
@@ -3459,6 +3485,7 @@ impl ReferenceKind {
             Some("control-ids.generated.json") => Ok(Self::ControlIds),
             Some("first-start.generated.json") => Ok(Self::FirstStart),
             Some("ui-scene-names.generated.json") => Ok(Self::UiSceneNames),
+            Some("ui-setting-names.generated.json") => Ok(Self::UiSettingNames),
             Some("ui-event-codes.generated.json") => Ok(Self::UiEventCodes),
             Some("bulk.generated.json") => Ok(Self::Bulk),
             Some("card-files.generated.json") => Ok(Self::CardFiles),
@@ -3500,6 +3527,47 @@ mod ui_scene_names_tests {
         let path = Path::new("ui-scene-names.generated.json");
         catalog.insert_document(ReferenceKind::of_firmware_file(path).unwrap(), &bytes, path).unwrap();
         assert_eq!(catalog.ui_scene_names("example-100").unwrap().ui_scene_names["UILIB_SUB_SCR_EXAMPLE"], 7);
+        assert!(catalog.validate_controls().is_err());
+        catalog.firmware_versions.push(crate::firmware_versions::FirmwareVersion {
+            firmware_id: "example-100".into(), product: "EXAMPLE".into(), version: "1.00".into(),
+            internal_version: "1.00".into(), update_sha256: "a".repeat(64),
+            download_url: "https://example.com/firmware".into(), boot_rom: None,
+        });
+        catalog.validate_controls().unwrap();
+        catalog.firmware_versions[0].update_sha256 = "b".repeat(64);
+        assert!(catalog.validate_controls().is_err());
+    }
+}
+
+#[cfg(test)]
+mod ui_setting_names_tests {
+    use super::*;
+
+    #[test]
+    fn bundles_named_setting_ids() {
+        let catalog = ReferenceCatalog::bundled().unwrap();
+        let names = &catalog.ui_setting_names("x70-110").unwrap().ui_setting_names;
+        assert_eq!(names["UI_SETP_NONE"], 0);
+        assert_eq!(names["UI_SETP_COLOR_SPACE"], 41);
+        assert_eq!(names["UI_SETP_PLAY_ERASE"], 820);
+        assert_eq!(names["UI_SET_LAST_READ_FULLPATH"], 842);
+    }
+
+    #[test]
+    fn loads_setting_document_and_checks_release_identity() {
+        let mut catalog = ReferenceCatalog::default();
+        let value = serde_json::json!({
+            "$schema": crate::ui_setting_names::UI_SETTING_NAMES_SCHEMA_URI,
+            "schema": 1,
+            "id": "example-100-ui-setting-names",
+            "firmware_id": "example-100",
+            "firmware_sha256": "a".repeat(64),
+            "ui_setting_names": {"UI_SETP_NONE": 0, "UI_SETP_COLOR_SPACE": 41}
+        });
+        let bytes = serde_json::to_vec(&value).unwrap();
+        let path = Path::new("ui-setting-names.generated.json");
+        catalog.insert_document(ReferenceKind::of_firmware_file(path).unwrap(), &bytes, path).unwrap();
+        assert_eq!(catalog.ui_setting_names("example-100").unwrap().ui_setting_names["UI_SETP_COLOR_SPACE"], 41);
         assert!(catalog.validate_controls().is_err());
         catalog.firmware_versions.push(crate::firmware_versions::FirmwareVersion {
             firmware_id: "example-100".into(), product: "EXAMPLE".into(), version: "1.00".into(),

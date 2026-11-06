@@ -58,6 +58,7 @@ fn main() {
             ("Firmware", "control-ids.generated.json") => "ControlIds",
             ("Firmware", "first-start.generated.json") => "FirstStart",
             ("Firmware", "ui-scene-names.generated.json") => "UiSceneNames",
+            ("Firmware", "ui-setting-names.generated.json") => "UiSettingNames",
             ("Firmware", "ui-event-codes.generated.json") => "UiEventCodes",
             ("Firmware", "bulk.generated.json") => "Bulk",
             ("Firmware", "card-files.generated.json") => "CardFiles",

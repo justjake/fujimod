@@ -1,0 +1,47 @@
+{
+  "$id": "https://fujimod.com/schemas/ui-setting-names.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Exact stock setting names and their firmware-specific numeric IDs.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/ui-setting-names.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "firmware_id": {
+      "type": "string"
+    },
+    "firmware_sha256": {
+      "description": "SHA-256 of the update from which the names were located.",
+      "type": "string"
+    },
+    "id": {
+      "type": "string"
+    },
+    "schema": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "ui_setting_names": {
+      "additionalProperties": {
+        "format": "uint32",
+        "minimum": 0,
+        "type": "integer"
+      },
+      "description": "Every name in the located stock setting table, without renaming or aliases.",
+      "type": "object"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "firmware_id",
+    "firmware_sha256",
+    "ui_setting_names"
+  ],
+  "title": "UiSettingNames",
+  "type": "object"
+}
