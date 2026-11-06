@@ -70,6 +70,51 @@ pub struct RestartMechanism {
     pub ui: RecIdle,
     /// What the stock power-off does with the request.
     pub power_off: PowerOff,
+    /// Optional stock timer ABI for an autonomous deferred restart. This is
+    /// present only when its locator qualified a callback timer on the same
+    /// firmware; delivery and callback placement remain separate mechanisms.
+    pub deferred_timer: Option<DeferredTimer>,
+}
+
+/// A stock timer that calls a no-argument callback after a millisecond delay.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(missing_as_null)
+)]
+pub struct DeferredTimer {
+    /// Normalized ABI identifier.
+    pub kind: String,
+    /// Unit accepted by `start`'s first argument.
+    pub period_unit: String,
+    /// Value of the periodic selector for a one-shot callback.
+    pub one_shot_periodic: u32,
+    /// Whether nonzero selector values repeat the callback.
+    pub periodic_nonzero: bool,
+    /// Number of arguments passed to the callback.
+    pub callback_arguments: u32,
+    /// Stock routine that starts a timer.
+    pub start: TimerRoutine,
+    /// Stock routine that cancels the handle returned by `start`.
+    pub cancel: TimerRoutine,
+}
+
+/// A bounded stock routine that Rust verifies before using the timer ABI.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
+pub struct TimerRoutine {
+    /// Entry address before `code_alias`.
+    pub address: u64,
+    /// Exact routine bytes covered by the matching code check.
+    pub size: u64,
 }
 
 /// How the host makes the camera call the sender.
@@ -273,6 +318,27 @@ impl FirmwareRestart {
         }
         if m.power_off.alarm.seconds.is_empty() {
             return fail("alarm seconds registers are required");
+        }
+        if let Some(timer) = &m.deferred_timer {
+            if timer.kind != "software-timer-callback-v1"
+                || timer.period_unit != "milliseconds"
+                || timer.callback_arguments != 0
+                || timer.start.address == 0
+                || timer.cancel.address == 0
+                || timer.start.size == 0
+                || timer.cancel.size == 0
+                || timer.start.address == timer.cancel.address
+            {
+                return fail("invalid deferred callback timer");
+            }
+            let covered = |routine: &TimerRoutine| {
+                self.code_checks.iter().any(|check| {
+                    check.address == routine.address && check.size == routine.size
+                })
+            };
+            if !covered(&timer.start) || !covered(&timer.cancel) {
+                return fail("deferred timer routines need matching code checks");
+            }
         }
         Ok(())
     }

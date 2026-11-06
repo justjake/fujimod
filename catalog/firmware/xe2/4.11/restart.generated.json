@@ -60,6 +60,18 @@
       "address": 9554004,
       "size": 100,
       "sha256": "6e6f550e527d01107ecdda894f1c97c9144740aacfa4b44e65b0913cd5099cb3"
+    },
+    {
+      "name": "deferred_timer_start",
+      "address": 9685212,
+      "size": 504,
+      "sha256": "af4c2d09056858fc8e5786ceea1e6f9b3d116cffd55b883b02441d2a40170fa7"
+    },
+    {
+      "name": "deferred_timer_cancel",
+      "address": 9685716,
+      "size": 112,
+      "sha256": "4c64a40cf7d70c3e08c06bb03e39c7b5c19147a0faf367b0f429938c7b8df279"
     }
   ],
   "mechanism": {
@@ -98,6 +110,21 @@
       },
       "deadline_parameter": 0,
       "rollover_parameter": 13
+    },
+    "deferred_timer": {
+      "kind": "software-timer-callback-v1",
+      "period_unit": "milliseconds",
+      "one_shot_periodic": 0,
+      "periodic_nonzero": true,
+      "callback_arguments": 0,
+      "start": {
+        "address": 9685212,
+        "size": 504
+      },
+      "cancel": {
+        "address": 9685716,
+        "size": 112
+      }
     }
   }
 }

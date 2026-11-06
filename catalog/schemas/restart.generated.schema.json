@@ -66,6 +66,54 @@
       ],
       "type": "object"
     },
+    "DeferredTimer": {
+      "additionalProperties": false,
+      "description": "A stock timer that calls a no-argument callback after a millisecond delay.",
+      "properties": {
+        "callback_arguments": {
+          "description": "Number of arguments passed to the callback.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cancel": {
+          "$ref": "#/$defs/TimerRoutine",
+          "description": "Stock routine that cancels the handle returned by `start`."
+        },
+        "kind": {
+          "description": "Normalized ABI identifier.",
+          "type": "string"
+        },
+        "one_shot_periodic": {
+          "description": "Value of the periodic selector for a one-shot callback.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "period_unit": {
+          "description": "Unit accepted by `start`'s first argument.",
+          "type": "string"
+        },
+        "periodic_nonzero": {
+          "description": "Whether nonzero selector values repeat the callback.",
+          "type": "boolean"
+        },
+        "start": {
+          "$ref": "#/$defs/TimerRoutine",
+          "description": "Stock routine that starts a timer."
+        }
+      },
+      "required": [
+        "kind",
+        "period_unit",
+        "one_shot_periodic",
+        "periodic_nonzero",
+        "callback_arguments",
+        "start",
+        "cancel"
+      ],
+      "type": "object"
+    },
     "PowerOff": {
       "additionalProperties": false,
       "description": "The stock power-off reached by the request.",
@@ -308,6 +356,17 @@
           "minimum": 0,
           "type": "integer"
         },
+        "deferred_timer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeferredTimer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional stock timer ABI for an autonomous deferred restart. This is\npresent only when its locator qualified a callback timer on the same\nfirmware; delivery and callback placement remain separate mechanisms."
+        },
         "parameter_bytes": {
           "description": "Bytes of sender parameters.",
           "format": "uint32",
@@ -354,6 +413,29 @@
         "parameter_bytes",
         "ui",
         "power_off"
+      ],
+      "type": "object"
+    },
+    "TimerRoutine": {
+      "additionalProperties": false,
+      "description": "A bounded stock routine that Rust verifies before using the timer ABI.",
+      "properties": {
+        "address": {
+          "description": "Entry address before `code_alias`.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Exact routine bytes covered by the matching code check.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size"
       ],
       "type": "object"
     },
