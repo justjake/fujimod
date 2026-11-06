@@ -2576,6 +2576,7 @@ pub struct ReferenceCatalog {
     ui_event_codes: BTreeMap<String, crate::ui_event_codes::UiEventCodes>,
     bulk: BTreeMap<String, fujimod_catalog_bulk::FirmwareBulk>,
     execution: BTreeMap<String, fujimod_catalog_execution::FirmwareExecution>,
+    nand_boot: BTreeMap<String, crate::nand_boot::FirmwareNandBoot>,
     restart: BTreeMap<String, fujimod_catalog_restart::FirmwareRestart>,
     card_files: BTreeMap<String, fujimod_catalog_card::FirmwareCard>,
     settings: BTreeMap<String, fujimod_catalog_settings::FirmwareSettings>,
@@ -2766,6 +2767,16 @@ impl ReferenceCatalog {
         self.execution.get(firmware_id)
     }
 
+    /// Located NAND bootloader facts, independent of a body or execution profile.
+    pub fn nand_boot_profiles(&self) -> impl Iterator<Item = &crate::nand_boot::FirmwareNandBoot> {
+        self.nand_boot.values()
+    }
+
+    /// Return the NAND bootloader facts for a firmware release.
+    pub fn nand_boot(&self, firmware_id: &str) -> Option<&crate::nand_boot::FirmwareNandBoot> {
+        self.nand_boot.get(firmware_id)
+    }
+
     /// Located restart profiles, independent of a body or execution profile.
     pub fn restart_profiles(
         &self,
@@ -2843,6 +2854,11 @@ impl ReferenceCatalog {
                 let value: fujimod_catalog_execution::FirmwareExecution = decode(bytes, path)?;
                 value.validate()?;
                 insert_unique(&mut self.execution, value.firmware_id.clone(), value, path)
+            }
+            ReferenceKind::NandBoot => {
+                let value: crate::nand_boot::FirmwareNandBoot = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(&mut self.nand_boot, value.firmware_id.clone(), value, path)
             }
             ReferenceKind::Restart => {
                 let value: fujimod_catalog_restart::FirmwareRestart = decode(bytes, path)?;
@@ -2929,6 +2945,7 @@ impl ReferenceCatalog {
         for firmware_id in self
             .bulk
             .keys()
+            .chain(self.nand_boot.keys())
             .chain(self.restart.keys())
             .chain(self.card_files.keys())
         {
@@ -2939,7 +2956,7 @@ impl ReferenceCatalog {
                     .any(|release| &release.firmware_id == firmware_id)
             {
                 return Err(format!(
-                    "bulk or restart facts refer to missing firmware {firmware_id}"
+                    "bulk, NAND-boot or restart facts refer to missing firmware {firmware_id}"
                 ));
             }
         }
@@ -3489,6 +3506,7 @@ enum ReferenceKind {
     UiEventCodes,
     Bulk,
     Execution,
+    NandBoot,
     CardFiles,
     Restart,
     Settings,
@@ -3515,6 +3533,7 @@ impl ReferenceKind {
             Some("ui-event-codes.generated.json") => Ok(Self::UiEventCodes),
             Some("bulk.generated.json") => Ok(Self::Bulk),
             Some("execution.generated.json") => Ok(Self::Execution),
+            Some("nand-boot.generated.json") => Ok(Self::NandBoot),
             Some("card-files.generated.json") => Ok(Self::CardFiles),
             Some("restart.generated.json") => Ok(Self::Restart),
             Some("settings.generated.json") => Ok(Self::Settings),
