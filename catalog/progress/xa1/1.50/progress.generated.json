@@ -55,6 +55,11 @@
           "result": "not-run"
         },
         {
+          "id": "card-files",
+          "title": "Optional card file access located",
+          "result": "not-run"
+        },
+        {
           "id": "controls",
           "title": "Physical controls mapped to firmware inputs",
           "result": "pass"
@@ -68,6 +73,11 @@
           "id": "sd-facts",
           "title": "SD-boot load map and packaging located",
           "result": "pass"
+        },
+        {
+          "id": "nand-boot-facts",
+          "title": "EXR II NAND bootloader facts located",
+          "result": "not-run"
         }
       ]
     },
@@ -79,6 +89,11 @@
           "id": "rec",
           "title": "Boots to the shooting screen",
           "result": "pass"
+        },
+        {
+          "id": "emulator-nand-boot",
+          "title": "NAND bootloader boots stock or the card program",
+          "result": "not-run"
         },
         {
           "id": "menu",
@@ -134,6 +149,16 @@
         {
           "id": "camera-snapshot",
           "title": "Camera state dumped (RAM at least)",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-fast-memory",
+          "title": "Memory capture measured at 8 MiB/s or more",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-fast-flash",
+          "title": "Flash capture measured at 8 MiB/s or more",
           "result": "not-run"
         },
         {
@@ -265,6 +290,7 @@
     "af": "not-run",
     "fujimod": "not-run",
     "aspect-ratio": "not-run",
+    "raw-teleconverter": "not-run",
     "surround-view": "not-run",
     "desqueeze": "not-run",
     "desqueeze-jpeg": "not-run",
@@ -283,12 +309,14 @@
     "menu-theme": "not-run",
     "overlay-opacity": "not-run",
     "menu-tap": "not-run",
+    "glgui": "not-run",
     "recipes": "not-run",
     "snap-focus": "not-run",
     "usb-debug": "not-run",
     "af-scene-capture": "not-run",
     "bug-report": "not-run",
     "sd-volume-name": "not-run",
-    "date-folders": "not-run"
+    "date-folders": "not-run",
+    "ota-runtime": "not-run"
   }
 }

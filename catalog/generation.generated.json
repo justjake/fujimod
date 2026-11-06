@@ -1510,6 +1510,15 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: the stage-1 image starts at 0x8000, not after the two header blocks"
+            }
+          ]
+        },
         "progress": {
           "status": "available",
           "errors": []
@@ -1576,6 +1585,15 @@
         "flash": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: x100t-111 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         },
         "progress": {
           "status": "available",
@@ -1861,6 +1879,15 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: the stage-1 image starts at 0x8000, not after the two header blocks"
+            }
+          ]
+        },
         "progress": {
           "status": "available",
           "errors": []
@@ -1928,6 +1955,15 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: no registered boot ROM: x30-103 has no registered boot ROM asset"
+            }
+          ]
+        },
         "progress": {
           "status": "available",
           "errors": []
@@ -1981,6 +2017,10 @@
           "errors": []
         },
         "flash": {
+          "status": "available",
+          "errors": []
+        },
+        "nand-boot": {
           "status": "available",
           "errors": []
         },
@@ -2053,6 +2093,15 @@
         "flash": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xa1-150 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         },
         "progress": {
           "status": "available",
@@ -2234,6 +2283,15 @@
         "flash": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xa2-130 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         },
         "progress": {
           "status": "available",
@@ -2859,6 +2917,15 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xe2-411 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
+        },
         "progress": {
           "status": "available",
           "errors": []
@@ -2920,6 +2987,15 @@
         "flash": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xe2s-111 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         },
         "progress": {
           "status": "available",
@@ -4128,6 +4204,15 @@
             }
           ]
         },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: no registered boot ROM: xm1-101 has no registered boot ROM asset"
+            }
+          ]
+        },
         "progress": {
           "status": "unavailable",
           "errors": [
@@ -4254,6 +4339,15 @@
             }
           ]
         },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: no mod target for xm1-120 (<input>)"
+            }
+          ]
+        },
         "progress": {
           "status": "unavailable",
           "errors": [
@@ -4348,6 +4442,15 @@
         "flash": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xm1-150 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         },
         "progress": {
           "status": "available",
@@ -4973,6 +5076,15 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xq1-121 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
+        },
         "progress": {
           "status": "available",
           "errors": []
@@ -5051,6 +5163,15 @@
         "flash": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xq2-101 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         },
         "progress": {
           "status": "available",
@@ -5500,6 +5621,15 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xt1-552 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
+        },
         "progress": {
           "status": "available",
           "errors": []
@@ -5561,6 +5691,15 @@
         "flash": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xt10-131 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         },
         "progress": {
           "status": "available",

@@ -55,6 +55,11 @@
           "result": "pass"
         },
         {
+          "id": "card-files",
+          "title": "Optional card file access located",
+          "result": "pass"
+        },
+        {
           "id": "controls",
           "title": "Physical controls mapped to firmware inputs",
           "result": "pass"
@@ -68,6 +73,11 @@
           "id": "sd-facts",
           "title": "SD-boot load map and packaging located",
           "result": "pass"
+        },
+        {
+          "id": "nand-boot-facts",
+          "title": "EXR II NAND bootloader facts located",
+          "result": "pass"
         }
       ]
     },
@@ -78,6 +88,11 @@
         {
           "id": "rec",
           "title": "Boots to the shooting screen",
+          "result": "pass"
+        },
+        {
+          "id": "emulator-nand-boot",
+          "title": "NAND bootloader boots stock or the card program",
           "result": "pass"
         },
         {
@@ -135,6 +150,16 @@
           "id": "camera-snapshot",
           "title": "Camera state dumped (RAM at least)",
           "result": "pass"
+        },
+        {
+          "id": "camera-fast-memory",
+          "title": "Memory capture measured at 8 MiB/s or more",
+          "result": "stale"
+        },
+        {
+          "id": "camera-fast-flash",
+          "title": "Flash capture measured at 8 MiB/s or more",
+          "result": "stale"
         },
         {
           "id": "camera-debug",
@@ -287,6 +312,7 @@
     "af": "stale",
     "fujimod": "stale",
     "aspect-ratio": "stale",
+    "raw-teleconverter": "not-run",
     "surround-view": "stale",
     "desqueeze": "stale",
     "desqueeze-jpeg": "stale",
@@ -305,12 +331,14 @@
     "menu-theme": "not-run",
     "overlay-opacity": "stale",
     "menu-tap": "stale",
+    "glgui": "not-run",
     "recipes": "not-run",
     "snap-focus": "stale",
     "usb-debug": "stale",
     "af-scene-capture": "stale",
     "bug-report": "stale",
     "sd-volume-name": "stale",
-    "date-folders": "stale"
+    "date-folders": "stale",
+    "ota-runtime": "not-run"
   }
 }
