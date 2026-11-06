@@ -807,6 +807,7 @@ mod tests {
             host: [203, 0, 113, 10],
             host_port: 443,
             local_port: 8080,
+            ntp: None,
         }
     }
 
