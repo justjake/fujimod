@@ -650,8 +650,8 @@
             "period_ticks": 1200000,
             "dma_ticks": 1000,
             "cfa_origin": [
-              112,
-              126
+              192,
+              120
             ]
           },
           "capture_color": {
@@ -745,10 +745,10 @@
               1
             ],
             "sensor_image_area": [
-              112,
-              126,
-              4000,
-              3000
+              192,
+              120,
+              4032,
+              3012
             ]
           },
           "focus_imaging": {
@@ -1438,8 +1438,8 @@
             "period_ticks": 1200000,
             "dma_ticks": 1000,
             "cfa_origin": [
-              112,
-              126
+              192,
+              120
             ]
           },
           "capture_color": {
@@ -1533,10 +1533,10 @@
               1
             ],
             "sensor_image_area": [
-              112,
-              126,
-              4000,
-              3000
+              192,
+              120,
+              4032,
+              3012
             ]
           },
           "focus_imaging": {
