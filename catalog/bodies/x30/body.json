@@ -173,6 +173,47 @@
               "name": "displayformatter",
               "kind": "DisplayFormatter",
               "refs": {}
+            },
+            {
+              "name": "prefilter",
+              "kind": "PrefilterControl",
+              "refs": {}
+            },
+            {
+              "name": "rawstatistics",
+              "kind": "RawStatisticsControl",
+              "refs": {}
+            },
+            {
+              "name": "stillisp",
+              "kind": "StillProcessor",
+              "refs": {}
+            },
+            {
+              "name": "imagewarp",
+              "kind": "ImageWarpControl",
+              "refs": {}
+            },
+            {
+              "name": "jpegencoder",
+              "kind": "ApproximateJPEGEncodeControl",
+              "refs": {
+                "stream_source": "imagewarp"
+              }
+            },
+            {
+              "name": "rawreadback",
+              "kind": "MemoryReadback",
+              "refs": {
+                "input_controller": "inputprocessingcontrol",
+                "image_output": "imageworkcontrol",
+                "parameters": "imageparametercontrol"
+              }
+            },
+            {
+              "name": "jpegdecoder",
+              "kind": "JPEGDecodeControl",
+              "refs": {}
             }
           ],
           "construction_order": [
@@ -205,7 +246,14 @@
             "graphicsaccelerator",
             "displayscanout",
             "displaytiming",
-            "displayformatter"
+            "displayformatter",
+            "prefilter",
+            "rawstatistics",
+            "stillisp",
+            "imagewarp",
+            "jpegencoder",
+            "rawreadback",
+            "jpegdecoder"
           ],
           "attachment_order": [
             "windowanalysis",
@@ -237,7 +285,14 @@
             "graphicsaccelerator",
             "displayscanout",
             "displaytiming",
-            "displayformatter"
+            "displayformatter",
+            "prefilter",
+            "rawstatistics",
+            "stillisp",
+            "imagewarp",
+            "jpegencoder",
+            "rawreadback",
+            "jpegdecoder"
           ]
         },
         "controllers": {
