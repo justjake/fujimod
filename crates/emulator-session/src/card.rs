@@ -1,12 +1,13 @@
 //! Host FAT access to the very medium owned by the native SD controller.
 use super::Session;
 use fujimod_emulator_devices::capability::CardSlot;
-use fujimod_emulator_devices::parts::sd_card::Card;
 use fujimod_emulator_devices::parts::sd_card::faults::{DataFault, DataFaultEvent};
+use fujimod_emulator_devices::parts::sd_card::Card;
 use fujimod_emulator_storage::fat;
 
 /// SD card contacts and host controller state.
-#[derive(Clone, Debug, PartialEq, serde::Serialize, tsify::Tsify)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[derive(tsify::Tsify)]
 #[tsify(hashmap_as_object, missing_as_null)]
 pub struct CardState {
     pub supported: bool,
@@ -34,7 +35,8 @@ impl CardState {
     }
 }
 /// Card state with the FAT tree of one revision.
-#[derive(Clone, Debug, serde::Serialize, tsify::Tsify)]
+#[derive(Clone, Debug, serde::Serialize)]
+#[derive(tsify::Tsify)]
 #[tsify(hashmap_as_object, missing_as_null)]
 pub struct CardTree {
     #[serde(flatten)]
@@ -62,9 +64,7 @@ impl Session {
     /// Declare a data CRC failure on the card's data lines for later transfers.
     pub fn card_data_fault(&mut self, name: &str, fault: DataFault) -> Result<(), String> {
         self.board
-            .edit_capability::<dyn CardSlot, _>(self.node(name)?, |host| {
-                host.inject_data_fault(fault)
-            })
+            .edit_capability::<dyn CardSlot, _>(self.node(name)?, |host| host.inject_data_fault(fault))
     }
     pub fn card_clear_data_faults(&mut self, name: &str) -> Result<(), String> {
         self.board
@@ -73,9 +73,7 @@ impl Session {
     pub fn card_tree(&self, name: &str, revision: Option<u64>) -> Result<CardTree, String> {
         let entries = self
             .board
-            .inspect_capability::<dyn CardSlot, _>(self.node(name)?, |host| {
-                fat::Reader::new(host.readable_card(revision)?)?.tree()
-            })?;
+            .inspect_capability::<dyn CardSlot, _>(self.node(name)?, |host| fat::Reader::new(host.readable_card(revision)?)?.tree())?;
         Ok(CardTree {
             state: self.card_state(name)?,
             entries,
@@ -141,16 +139,15 @@ impl Session {
         // Preflight activity, presence, geometry and all files before replacing
         // media. Guest formatting still happens exclusively via sector writes.
         let id = self.node(name)?;
-        self.board
-            .inspect_capability::<dyn CardSlot, _>(id, |host| {
-                if host.busy() {
-                    return Err("SD medium is busy".into());
-                }
-                if host.card().sectors() != options.sectors {
-                    return Err("formatted card capacity differs".into());
-                }
-                Ok(())
-            })?;
+        self.board.inspect_capability::<dyn CardSlot, _>(id, |host| {
+            if host.busy() {
+                return Err("SD medium is busy".into());
+            }
+            if host.card().sectors() != options.sectors {
+                return Err("formatted card capacity differs".into());
+            }
+            Ok(())
+        })?;
         let card = fat::format(options, files)?;
         self.board
             .edit_capability::<dyn CardSlot, _>(id, |host| host.replace_card(card).map(|_| ()))
@@ -164,9 +161,7 @@ impl Session {
             return Err("initial card revision requires an unexecuted board".into());
         }
         self.board
-            .edit_capability::<dyn CardSlot, _>(self.node(name)?, |host| {
-                host.initialize_revision(revision)
-            })
+            .edit_capability::<dyn CardSlot, _>(self.node(name)?, |host| host.initialize_revision(revision))
     }
     pub fn retain_card(
         &mut self,
