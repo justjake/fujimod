@@ -9,34 +9,62 @@ the emulator does extra work and that is a correctness bug.
 
 ## Measurements
 
-The X70 runs with saved settings and a set clock: it reaches REC at 0.34 s of
-emulated time and accepts input at 1.35 s, after 53.6M instructions. Board
-construction from the run configuration takes 0.15 s. REC live view with a RAW
-scene costs 1.44 CPU seconds per emulated second; the ISP statistics producer
-alone takes 134 ms per frame and the image output channels about 47 ms more.
+Two numbers matter, and neither is wall time on a shared machine. The host
+instruction count is stable across machines; engine CPU time is stable enough
+to compare back-to-back runs. Every table below was taken with the CPU
+contended, so wall seconds are omitted.
 
-| Change | CPU seconds to input readiness |
-|---|---|
-| Before | 1.09–1.14 |
-| Memory DMA status as a fast read | 0.81–0.82 |
-| Interactive runs test exits only at block entry | 0.72–0.74 |
+The engine keeps its own accounting. `fujimod.perf` begins a guide, then
+reports per-core `calls` and `elapsed_ns`, the guest instructions and ticks
+of every phase, and the CPU and R-profile exit counters:
+
+    from fujimod import perf
+    perf.begin_guide("ev-dial")
+    ...boot and run the guide...
+    summary = perf.end_guide()   # summary["engines"]: [{core, calls, elapsed_ns}]
+
+For attribution, let the engine name every generated block and sample the
+process:
+
+    FUJIMOD_PERF_MAP=1 samply record --save-only --output profile.json.gz -- <emulator command>
+
+Set `FUJIMOD_PERF_MAP` to a path or to `1` for `/tmp/perf-PID.map`. Each
+installed translation gets one line, `HOSTSTART SIZE guest_<pc>`, so Samply
+attributes samples inside generated code to the guest address that generated
+them.
+
+The reference workload, `controls/hero/ev_dial` with a saved card and clock,
+is 1,853,033,658 guest instructions and 159,279,534 virtual ticks. Core 0
+makes 293,421 engine calls and core 1 273,143; core 0 translates 93,380 blocks
+and invalidates 4,113. Of the block entries, 806,825 on core 0 and 766,915 on
+core 1 leave translated code for the Rust callback.
 
 ## Where the time goes
 
-Samples of three boots to input readiness, as shares of emulation time:
+Attribution on a scratch ARM program, because a walkthrough mixes engine cost
+with Python observation, PNG decoding and scene rendering. The program is the
+shape from the engine design notes: `bl` to a two-instruction leaf that
+returns with `bx lr`, then `subs` and `bne` — five guest instructions in
+three blocks. 1,073 samples of a 200M-instruction run, self samples:
 
 | Cost | Share |
-|---|---|
-| Translating guest code (`tb_gen_code`) | 21% |
-| Device register accesses (`load_helper`, `store_helper`) | 19% |
-| Per-block hook helper (`helper_uc_tracecode`) | 12% |
-| Device deadlines, mostly firmware LZ decompression (`method4::Stream::feed`) | 10% |
-| Instruction callbacks, half of them exclusives (`Execution::instruction`) | 8% |
-| Per-access and per-block exit checks (`helper_check_exit_request`) | 7% |
-| JIT write-protect switches | 5% |
+|---|---:|
+| `helper_lookup_tb_ptr` (includes `cpu_get_tb_cpu_state`) | 46.9% |
+| leaf block (`add`, `bx lr`) | 24.4% |
+| caller block (`bl`) | 15.8% |
+| loop block (`subs`, `bne`) | 12.3% |
 
-Before the DMA change, 81% of all device accesses during boot were one status
-register polled in a tight loop, each a full exit into the board.
+Only the `bx lr` exit entered C: `bl` and `bne` are direct branches that
+use QEMU's patched `goto_tb` chain. Recomputing the block state and probing
+`tb_jmp_cache` on every return cost more than the guest instructions it
+separated, which is why the engine now remembers the last indirect target per
+processor and drops it whenever a translation dies.
+
+With that cache the same loop runs 326.5 million guest instructions per engine
+CPU second in interactive policy (median of five 30M-instruction passes,
+thread CPU time) against 256.2 before it. A straight-line load/store loop
+reaches 1.37 billion. The helper-accounting path, which shares the lookup,
+goes from 119.3 to 252.9.
 
 ## Plan
 
@@ -51,6 +79,9 @@ host instructions retired (load barely changes them):
    hook helper left host instructions unchanged (30.9G for three boots either
    way): most blocks reach the hook because the interactive budget is short or
    the accounting mode changed. Find why, and widen the interactive window.
+   Translated accounting is now the default and is worth 2.2x on short-block
+   code, but a whole guide still spends nearly a callback per thousand guest
+   instructions, so the interactive window is still the thing to widen.
 3. Done: interactive runs test exits at block entry with QEMU's inline test
    and no check after guest loads and stores.
 4. Done: exclusives without leaving translated code (below).
