@@ -115,7 +115,10 @@ pub struct BootPatchTrigger {
     /// ARM register holding the copied length for a range trigger.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub length_register: Option<String>,
-    /// Units in RAM once the trigger fires.
+    /// Mask applied to the base register before reporting a range.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address_mask: Option<u32>,
+    /// Resident units and units streamed by this or earlier triggers.
     pub units: Vec<String>,
 }
 
@@ -225,13 +228,14 @@ impl FirmwareBootPatch {
                 trigger.kind,
                 &trigger.base_register,
                 &trigger.length_register,
+                trigger.address_mask,
             ) {
-                (BootPatchTriggerKind::Once, None, None) => {}
-                (BootPatchTriggerKind::Range, Some(base), Some(length))
-                    if register(base) && register(length) => {}
-                (BootPatchTriggerKind::Range, _, _) => {
+                (BootPatchTriggerKind::Once, None, None, None) => {}
+                (BootPatchTriggerKind::Range, Some(base), Some(length), Some(mask))
+                    if register(base) && register(length) && mask != 0 => {}
+                (BootPatchTriggerKind::Range, _, _, _) => {
                     return Err(format!(
-                        "boot-patch: range trigger {} needs base and length registers",
+                        "boot-patch: range trigger {} needs base and length registers and a nonzero address mask",
                         trigger.name
                     ));
                 }
