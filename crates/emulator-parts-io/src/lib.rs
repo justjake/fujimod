@@ -6,6 +6,7 @@ pub mod lsm6ds;
 pub mod power_controller;
 pub mod serial;
 pub mod serial_calibration;
+pub mod serial_command_registers;
 pub mod spi;
 pub mod spi_registers;
 pub mod usb_endpoint;

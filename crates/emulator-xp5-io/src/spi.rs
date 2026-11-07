@@ -261,6 +261,11 @@ impl Spi {
         let select = self.attachments[endpoint].select;
         let epoch = pins.output_rising_edges(select.port, select.pin);
         drop(pins);
+        // A new select period ends the endpoint's previous transaction before
+        // the first word of the next one is checked against it.
+        if self.state.last_endpoint != Some(endpoint) || self.state.last_cs_epoch != epoch {
+            self.attachments[endpoint].endpoint.reset_transaction();
+        }
         self.attachments[endpoint].endpoint.validate(frame)?;
         let cycles = u128::from(frame.bits)
             * u128::from(self.state.divider)
@@ -270,9 +275,6 @@ impl Spi {
             .now()
             .checked_add(u64::try_from(ns).map_err(|_| "SPI period overflow")?)
             .ok_or("SPI deadline overflow")?;
-        if self.state.last_endpoint != Some(endpoint) || self.state.last_cs_epoch != epoch {
-            self.attachments[endpoint].endpoint.reset_transaction();
-        }
         self.state.last_endpoint = Some(endpoint);
         self.state.last_cs_epoch = epoch;
         self.state.generation += 1;
@@ -562,6 +564,31 @@ mod tests {
             assert_eq!(spi.save()["endpoints"][1], saved["endpoints"][1]);
             assert!(host.irqs.is_empty());
         }
+    }
+    #[test]
+    fn each_select_period_starts_a_new_endpoint_transaction() {
+        let shared = Pins::shared();
+        let mut gpio = Gpio::new(0xff907000, shared.clone(), false, vec![]).unwrap();
+        let mut host = RecordingHost::default();
+        let part = fujimod_emulator_parts_io::serial_command_registers::CommandRegisters::new(0, false)
+            .unwrap();
+        let select = Select {
+            port: 12,
+            pin: 8,
+            active_high: false,
+        };
+        let mut spi = Spi::new(BASE, shared, 48_000_000, vec![Attachment::new(select, Box::new(part))])
+            .unwrap();
+        setup(&mut spi, &mut host, 15, 6);
+        for (register, value) in [(0x0019, 0x1234), (0x001d, 0x8001)] {
+            pins(&mut gpio, &mut host, false, true);
+            transfer(&mut spi, &mut host, register);
+            transfer(&mut spi, &mut host, value);
+            pins(&mut gpio, &mut host, false, false);
+        }
+        let state = &spi.save()["endpoints"][0]["state"]["registers"];
+        assert_eq!(state["registers"], json!({"25": 0x1234, "29": 0x8001}));
+        assert_eq!(state["writes"], 2);
     }
     #[test]
     fn controller_without_an_attached_peer_refuses_a_transfer() {
