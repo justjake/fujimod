@@ -8,6 +8,8 @@ pub mod decoder;
 mod decoder_tests;
 #[cfg(test)]
 mod accounting_equivalence_tests;
+#[cfg(test)]
+mod restart_tests;
 pub mod discovery;
 pub mod factory;
 pub mod harness;
