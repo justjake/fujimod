@@ -216,7 +216,7 @@ impl Device for ClockControl {
         Ok(())
     }
     fn fingerprint(&self) -> Result<Value, String> {
-        Ok(self.checkpoint()?.fingerprint())
+        Ok(self.checkpoint()?.state())
     }
 }
 #[cfg(test)]

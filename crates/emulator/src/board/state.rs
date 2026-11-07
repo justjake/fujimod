@@ -212,7 +212,7 @@ impl BoardState {
                     "kind":device.kind,
                     "windows":device.mappings,
                     "native_dependencies":device.native_dependencies,
-                    "state":device.checkpoint.fingerprint(),
+                    "state":device.checkpoint.state(),
                 })).collect::<Vec<_>>(),
             },
             "runtime":self.runtime,

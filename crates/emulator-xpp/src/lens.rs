@@ -501,7 +501,7 @@ impl Device for LensPort {
         Ok(())
     }
     fn fingerprint(&self) -> Result<Value, String> {
-        Ok(self.checkpoint()?.fingerprint())
+        Ok(self.checkpoint()?.state())
     }
 }
 impl LensPort {

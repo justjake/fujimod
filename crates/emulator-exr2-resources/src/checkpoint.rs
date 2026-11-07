@@ -147,25 +147,25 @@ impl ResourceSnapshot {
         let mut wires = self
             .wires
             .iter()
-            .map(|(name, state)| (name.clone(), state.fingerprint()))
+            .map(|(name, state)| (name.clone(), state.state()))
             .collect::<BTreeMap<_, _>>();
         for (name, state) in &self.images.wires {
-            wires.insert(name.clone(), state.fingerprint());
+            wires.insert(name.clone(), state.state());
         }
         Ok(json!({
             "wires":wires,
-            "images":self.images.images.iter().map(|(name, state)| (name.clone(), state.fingerprint())).collect::<BTreeMap<_, _>>(),
-            "statistics":self.images.statistics.iter().map(|(name, state)| (name.clone(), state.fingerprint())).collect::<BTreeMap<_, _>>(),
+            "images":self.images.images.iter().map(|(name, state)| (name.clone(), state.state())).collect::<BTreeMap<_, _>>(),
+            "statistics":self.images.statistics.iter().map(|(name, state)| (name.clone(), state.state())).collect::<BTreeMap<_, _>>(),
             "sensors":self.images.sensors.iter().map(|(name, state)| {
                 Ok((name.clone(), json!({
                     "edge":state.0.edge(),
                     "view":state.0.view(),
                     "shared":state.0.shared(),
-                    "frames":state.0.frames()?.iter().map(Checkpoint::fingerprint).collect::<Vec<_>>(),
+                    "frames":state.0.frames()?.iter().map(Checkpoint::state).collect::<Vec<_>>(),
                 })))
             }).collect::<Result<BTreeMap<_, _>, String>>()?,
             "cards":cards.iter().map(|(name, card)| (name.clone(), card.state())).collect::<BTreeMap<_, _>>(),
-            "nands":self.nands.iter().map(|(name, state)| (name.clone(), state.fingerprint())).collect::<BTreeMap<_, _>>(),
+            "nands":self.nands.iter().map(|(name, state)| (name.clone(), state.state())).collect::<BTreeMap<_, _>>(),
             "files":files.iter().map(|(name, entries)| {
                 (name.clone(), entries.iter().map(|(path, data)| json!({
                     "path":path,

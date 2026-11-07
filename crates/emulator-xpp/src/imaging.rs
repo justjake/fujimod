@@ -483,7 +483,7 @@ impl Device for Control {
         Ok(())
     }
     fn fingerprint(&self) -> Result<Value, String> {
-        Ok(self.checkpoint()?.fingerprint())
+        Ok(self.checkpoint()?.state())
     }
 }
 impl Control {

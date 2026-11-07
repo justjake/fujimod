@@ -2003,7 +2003,7 @@ impl Device for Renderer {
         Ok(())
     }
     fn fingerprint(&self) -> Result<Value, String> {
-        Ok(self.checkpoint()?.fingerprint())
+        Ok(self.checkpoint()?.state())
     }
     fn next_deadline(&self, _: u64) -> Option<u64> {
         self.state.lock().unwrap().deadline

@@ -485,7 +485,7 @@ impl Device for Pl330 {
         Ok(())
     }
     fn fingerprint(&self) -> Result<Value, String> {
-        Ok(self.checkpoint()?.fingerprint())
+        Ok(self.checkpoint()?.state())
     }
 }
 

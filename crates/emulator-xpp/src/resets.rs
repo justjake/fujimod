@@ -260,7 +260,7 @@ impl Device for Gates {
         Ok(())
     }
     fn fingerprint(&self) -> Result<Value, String> {
-        Ok(self.checkpoint()?.fingerprint())
+        Ok(self.checkpoint()?.state())
     }
 }
 impl Gates {

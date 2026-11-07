@@ -287,7 +287,7 @@ impl Device for Controller {
                 self.reset.as_ref().map(|r| r.1),
             ),
         )?;
-        Ok(json!({"wrapper":wrapper.fingerprint(),"host":self.host.fingerprint()?}))
+        Ok(json!({"wrapper":wrapper.state(),"host":self.host.fingerprint()?}))
     }
 }
 

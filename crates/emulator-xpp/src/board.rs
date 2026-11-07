@@ -525,7 +525,7 @@ impl Device for Timers {
         Ok(())
     }
     fn fingerprint(&self) -> Result<Value, String> {
-        Ok(self.checkpoint()?.fingerprint())
+        Ok(self.checkpoint()?.state())
     }
 }
 /// Bytes of a hexadecimal node field.

@@ -59,12 +59,12 @@ impl Checkpoint {
     /// Diagnostic extent of the complete typed state: kind, encoded byte
     /// length, blob lengths and children. Binary content stays in the
     /// checkpoint itself.
-    pub fn fingerprint(&self) -> serde_json::Value {
+    pub fn state(&self) -> serde_json::Value {
         serde_json::json!({
             "kind":self.kind,
             "bytes":{"length":self.bytes.len()},
             "blobs":self.blobs.iter().map(|blob| blob.len()).collect::<Vec<_>>(),
-            "children":self.children.iter().map(Self::fingerprint).collect::<Vec<_>>(),
+            "children":self.children.iter().map(Self::state).collect::<Vec<_>>(),
         })
     }
 
@@ -172,11 +172,11 @@ macro_rules! checkpoint_fields {
     };
 }
 
-/// Exact checkpoint, validation, restore and fingerprint of a device whose
+/// Exact checkpoint, validation, restore and state of a device whose
 /// mutable state is one serde value held in a field. `$check` is
 /// `fn(&Self, &$state) -> Result<(), String>` and validates the saved state
 /// against the device's wiring and invariants; restore assigns the field only
-/// after it passes. The fingerprint reports the extent of the same state.
+/// after it passes. The state JSON reports the extent of the same state.
 #[macro_export]
 macro_rules! checkpoint_state {
     ($field:ident : $state:ty, $check:path) => {
@@ -202,7 +202,7 @@ macro_rules! checkpoint_state {
             Ok(())
         }
         fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
-            Ok(self.checkpoint()?.fingerprint())
+            Ok(self.checkpoint()?.state())
         }
     };
 }
@@ -227,7 +227,7 @@ pub mod array {
 }
 
 /// Encode contiguous byte storage as a CBOR byte string. JSON retains its
-/// ordinary integer-array representation, including diagnostic fingerprints.
+/// ordinary integer-array representation, including diagnostic state JSON.
 pub mod bytes {
     use serde::{Deserialize, Deserializer, Serializer};
     pub fn serialize<S: Serializer>(value: &[u8], serializer: S) -> Result<S::Ok, S::Error> {

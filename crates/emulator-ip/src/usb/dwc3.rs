@@ -736,7 +736,7 @@ impl Device for Dwc3 {
         Ok(())
     }
     fn fingerprint(&self) -> Result<serde_json::Value, String> {
-        Ok(self.checkpoint()?.fingerprint())
+        Ok(self.checkpoint()?.state())
     }
 }
 impl Dwc3 {

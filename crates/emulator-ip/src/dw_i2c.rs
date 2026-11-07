@@ -468,7 +468,7 @@ impl<B: Bus> Device for Controller<B> {
         Ok(())
     }
     fn fingerprint(&self) -> Result<Value, String> {
-        Ok(self.checkpoint()?.fingerprint())
+        Ok(self.checkpoint()?.state())
     }
 }
 impl<B: Bus> Controller<B> {

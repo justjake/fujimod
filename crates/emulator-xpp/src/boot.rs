@@ -207,7 +207,7 @@ impl Device for BootController {
         self.restore(&state)
     }
     fn fingerprint(&self) -> Result<Value, String> {
-        Ok(self.checkpoint()?.fingerprint())
+        Ok(self.checkpoint()?.state())
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State =

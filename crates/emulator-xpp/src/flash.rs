@@ -699,7 +699,7 @@ impl Device for FlashController {
         self.apply(saved.decode(self.name())?)
     }
     fn fingerprint(&self) -> Result<Value, String> {
-        Ok(self.checkpoint()?.fingerprint())
+        Ok(self.checkpoint()?.state())
     }
 }
 

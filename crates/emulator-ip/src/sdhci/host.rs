@@ -1644,15 +1644,15 @@ mod tests {
         assert_eq!((bytes[16], mode), (1, 1));
     }
     #[test]
-    fn fingerprint_distinguishes_media_with_the_same_diagnostic_summary() {
+    fn state_distinguishes_media_with_the_same_diagnostic_summary() {
         let mut a = host(Protocol::Sdhc);
         let mut b = host(Protocol::Sdhc);
         a.card.write_bytes(512, &[1; 512]).unwrap();
         b.card.write_bytes(512, &[2; 512]).unwrap();
         assert_eq!(a.save(), b.save());
-        assert_ne!(a.fingerprint().unwrap(), b.fingerprint().unwrap());
-        let stable = a.fingerprint().unwrap();
-        assert_eq!(a.fingerprint().unwrap(), stable);
+        assert_ne!(a.checkpoint().unwrap(), b.checkpoint().unwrap());
+        let stable = a.checkpoint().unwrap();
+        assert_eq!(a.checkpoint().unwrap(), stable);
         let mut bytes = [0; 512];
         a.card.read_bytes(512, &mut bytes).unwrap();
         assert_eq!(bytes, [1; 512]);
