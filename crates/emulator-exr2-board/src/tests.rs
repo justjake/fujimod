@@ -884,7 +884,7 @@ fn declared_power_endpoint_and_clock_share_register_driven_alarm() {
     let gpio = node("pads", 0xfff89000, 0x480,
         json!({"kind":"gpio","options":{"input_levels":vec![0u32;16],
             "output_levels":[{"pin":{"port":12,"pin":3},"high":false}]},"irqs":[]}));
-    let mut serial = node("power", 0xfff84040, 0x20,
+    let serial = node("power", 0xfff84040, 0x20,
         json!({"kind":"serial-channel","options":{"base":0xfff84040u64,
             "transports":[{"control":0xe0,"configuration":6,"bits":16,"receive":true}],
             "selection":[{"pin":{"port":12,"pin":3},"high":false}],
@@ -892,7 +892,7 @@ fn declared_power_endpoint_and_clock_share_register_driven_alarm() {
             "endpoint":{"kind":"wake-registers","clock":"clocks","ticks_per_second":1_000_000,
                 "options":{"registers":[[104,0],[105,0],[106,0]],"readable":true,
                     "status_registers":[],"clock":null}}}));
-    serial["dependencies"] = json!(["clocks","pads"]);
+    assert!(parse(document(vec![serial.clone(), clocks.clone(), gpio.clone()])).is_err());
     let mut built = build(document(vec![clocks, gpio, serial])).unwrap();
     let mut host = Ram::new(0);
     put(&mut built, &mut host, 0xfff84040, 4, 0xe0);
