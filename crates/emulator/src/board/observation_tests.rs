@@ -497,3 +497,23 @@ fn a7_watch_cost_measurement() {
     measure("record per store", true, Some(WATCH), 2_000_000);
     measure("record-free baseline", true, None, 2_000_000);
 }
+
+#[test]
+fn fresh_epoch_preserves_host_time_and_instruction_totals() {
+    let mut board = a7_graph().build(
+        Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20)
+            .with_epoch(9000, vec![321]),
+        Bus::new(Mode::Strict), None,
+    ).unwrap();
+    assert_eq!(board.now(), 9000);
+    assert_eq!(board.instruction_counts(), [321]);
+    words(&board, CODE, &[0xe1a00000, 0xeafffffe]);
+    board.run_for_instructions(4, 2).unwrap();
+    assert_eq!(board.instruction_counts(), [325]);
+    assert_eq!(board.now(), 9004);
+    assert!(a7_graph().build(
+        Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20)
+            .with_epoch(9000, vec![1, 2]),
+        Bus::new(Mode::Strict), None,
+    ).is_err());
+}
