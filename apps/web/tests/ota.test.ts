@@ -1,4 +1,5 @@
 import { afterEach, expect, test, vi } from 'vite-plus/test';
+import type { D1Database } from '@cloudflare/workers-types';
 import worker, { serveOta, type ReleaseCache, type ReleaseStore } from '../worker.ts';
 
 const firmware = 'x70-110';
@@ -515,6 +516,10 @@ test('the Worker sends OTA paths to the proxy and leaves static paths to assets'
         get: async () => null,
         put: async () => {},
       } as ReleaseStore,
+      AUTH_DB: {} as D1Database,
+      BETTER_AUTH_SECRET: 'test-secret-test-secret-test-secret',
+      GOOGLE_CLIENT_ID: 'test-client-id',
+      GOOGLE_CLIENT_SECRET: 'test-client-secret',
     };
     const zone = await worker.fetch(new Request('https://fujimod.com/ota/timezone'), env, {
       waitUntil() {},
