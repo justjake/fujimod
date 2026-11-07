@@ -45,6 +45,7 @@ fn two_view_board() -> (super::super::Board, Vec<factory::MemoryMap>) {
                     },
                     btcm: Default::default(),
                 },
+                ..Default::default()
             }),
             registers: vec![(Register::Pc, 0x20000), (Register::Pstate, 0xd3)],
         }],

@@ -71,6 +71,7 @@ pub(super) fn board_mode(mode: bus::Mode) -> Board {
                         reset: 0xffff8001,
                     },
                 },
+                ..Default::default()
             }),
             registers: vec![
                 (Register::Pc, 0x1000 + core * 0x100),

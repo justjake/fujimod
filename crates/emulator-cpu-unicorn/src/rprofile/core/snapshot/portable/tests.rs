@@ -17,6 +17,7 @@ fn options() -> Options {
                 reset: 0x70001001,
             },
         },
+        ..Default::default()
     }
 }
 fn processor(options: Options) -> Core {

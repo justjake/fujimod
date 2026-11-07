@@ -62,14 +62,16 @@ fn build(legacy: bool) -> (Board, Arc<Mutex<Probe>>) {
     let cpu: Box<dyn Cpu> = Box::new(
         fujimod_emulator_cpu_unicorn::rprofile::core::Core::new(
             raw,
-            fujimod_emulator_cpu_unicorn::rprofile::core::Options::default(),
+            fujimod_emulator_cpu_unicorn::rprofile::core::Options {
+                legacy_block_accounting: legacy,
+                ..Default::default()
+            },
             fujimod_emulator_cpu_unicorn::rprofile::core::Wiring {
                 memory: Default::default(),
             },
         )
         .unwrap(),
     );
-    cpu.set_legacy_block_accounting(legacy).unwrap();
     cpu.map_zeroed(0x10000, 0x1000, 7).unwrap();
     cpu.map_zeroed(0x20000, 0x1000, 7).unwrap();
     cpu.map_zeroed(0x11000, 0x1000, 7).unwrap();

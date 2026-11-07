@@ -185,6 +185,7 @@ fn board(released: Vec<bool>) -> (Board, Readings) {
                         },
                         btcm: Default::default(),
                     },
+                    ..Default::default()
                 }),
                 registers: vec![(Register::Pc, 0x30000), (Register::Pstate, 0xd3)],
             })

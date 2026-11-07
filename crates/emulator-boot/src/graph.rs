@@ -142,6 +142,7 @@ fn build_processor(
                     btcm: bank(state.btcm)?,
                     atcm: bank(state.atcm)?,
                 },
+                ..Default::default()
             })
         })
         .transpose()?;
