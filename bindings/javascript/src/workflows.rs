@@ -332,6 +332,26 @@ impl Restart {
 }
 #[wasm_bindgen]
 impl Session {
+    /// Serialize the selected firmware's timer/wake facts into the portable
+    /// ARM32 queue-auto-restart guard contract. This performs no USB I/O.
+    #[wasm_bindgen(js_name=deferredRestartContract)]
+    pub fn deferred_restart_contract(
+        &self,
+        firmware_id: &str,
+        milliseconds: u32,
+    ) -> Result<Vec<u8>, JsValue> {
+        let restart = crate::reference::bundled()?
+            .restart(firmware_id)
+            .ok_or_else(|| {
+                workflow_error(fujimod_catalog::generation::missing_table_reason(
+                    firmware_id,
+                    "restart",
+                ))
+            })?;
+        fujimod_workflows::restart::deferred_guard_contract(restart, milliseconds)
+            .map_err(workflow_error)
+    }
+
     /// Restart the camera through the firmware's located stock power-off with
     /// a wake deadline. Resolves "accepted" when the query returned, or
     /// "session-ended" when the camera cut power before answering; either way
