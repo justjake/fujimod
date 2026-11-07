@@ -60,6 +60,7 @@ fn main() {
             ("Firmware", "first-start.generated.json") => "FirstStart",
             ("Firmware", "bulk.generated.json") => "Bulk",
             ("Firmware", "nand-boot.generated.json") => "NandBoot",
+            ("Firmware", "boot-patch.generated.json") => "BootPatch",
             ("BootRom", _) => "BootRom",
             ("Firmware", "card-files.generated.json") => "CardFiles",
             ("Firmware", "restart.generated.json") => "Restart",

@@ -1,0 +1,187 @@
+{
+  "$schema": "https://fujimod.com/schemas/boot-patch.generated.schema.json",
+  "schema": 1,
+  "id": "x70-110-boot-patch",
+  "firmware_id": "x70-110",
+  "update_sha256": "7dd5b358a66f38d1fc7dad899a77d35fe4e6ed0edd0ed1d04fbca512d5dc8fd6",
+  "isa": "arm32",
+  "units": [
+    {
+      "name": "boot",
+      "address": 0,
+      "size": 131072,
+      "dat_offset": 262748,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "f17f9eb671a2b39483bf8aa924360f13dc717fe13ddcfa658621ed908c6e2306"
+    },
+    {
+      "name": "kernel0",
+      "address": 262144,
+      "size": 56224,
+      "dat_offset": 524892,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "399c48c26c1b09e8dafcf666fe0efa62619f9cdcaa27166fb8f6d864a3d8d6f0"
+    },
+    {
+      "name": "kernel1",
+      "address": 851968,
+      "size": 56192,
+      "dat_offset": 655964,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "6db7ca9ec6d87124d830acbbf452c9f2d57fb26089766c2a88e0c5503d7de128"
+    },
+    {
+      "name": "resources2",
+      "address": 1245184,
+      "size": 2368484,
+      "dat_offset": 17433180,
+      "compression": "raw",
+      "executable": false,
+      "sha256": "a49704197cfa9f145aa238cdf9793489913fe1e33e218340eb9afa8f886bc35f"
+    },
+    {
+      "name": "resources3",
+      "address": 6553600,
+      "size": 541332,
+      "dat_offset": 23462492,
+      "compression": "raw",
+      "executable": false,
+      "sha256": "d6151afefc17b30d8eb2f194582d891de9b16b04eebea6aebbe39a88e67cb1af"
+    },
+    {
+      "name": "section_table",
+      "address": 9043968,
+      "size": 1024,
+      "dat_offset": 1311324,
+      "compression": "raw",
+      "executable": false,
+      "sha256": "6f44765ca78458df5a7de219105745b6eccf701a5fbb533de020fceef2633f7d"
+    },
+    {
+      "name": "section4",
+      "address": 9044992,
+      "size": 3409248,
+      "dat_offset": 1442396,
+      "compression": "method4",
+      "executable": true,
+      "sha256": "9923d542f84f07196f0acdae181f0d536578c3f3f0419dba5960d9b055925acb"
+    },
+    {
+      "name": "section5",
+      "address": 16090784,
+      "size": 6011584,
+      "dat_offset": 3277404,
+      "compression": "method4",
+      "executable": true,
+      "sha256": "316f14c6e1fa3a26f02d79b47904d41ce41f6d631fa623044902af4821974394"
+    },
+    {
+      "name": "overlay48",
+      "address": 26869760,
+      "size": 3151104,
+      "dat_offset": 6685276,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "afdda2f3a26057f38bcb7e2e67a038e414213989920c14a0aba70978cc53e31e"
+    },
+    {
+      "name": "overlay4a",
+      "address": 30146560,
+      "size": 119616,
+      "dat_offset": 9962076,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "26b3f00108829868645af2bb1afa6e76c29eb43f314e63f61591cd4d97c57d9a"
+    },
+    {
+      "name": "overlay4b",
+      "address": 30277632,
+      "size": 2489408,
+      "dat_offset": 10093148,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "95c905155a0f93dddea193b89a55dfdc6310ca63fa573761dab38ae1c9b98fb2"
+    }
+  ],
+  "triggers": [
+    {
+      "name": "section4-decoded",
+      "site": 7556,
+      "expected": 3942646075,
+      "kind": "once",
+      "units": [
+        "boot",
+        "kernel0",
+        "kernel1",
+        "section_table",
+        "section4"
+      ]
+    },
+    {
+      "name": "section5-loaded",
+      "site": 9743392,
+      "expected": 3809149612,
+      "kind": "once",
+      "units": [
+        "boot",
+        "kernel0",
+        "kernel1",
+        "section_table",
+        "section4",
+        "section5"
+      ]
+    }
+  ],
+  "clears": [
+    {
+      "address": 17728,
+      "size": 4416,
+      "done_after": "section4-decoded",
+      "name": "stage1-primary-entry"
+    },
+    {
+      "address": 87200,
+      "size": 32,
+      "done_after": "section4-decoded",
+      "name": "stage1-secondary-entry"
+    },
+    {
+      "name": "kernel0-bss",
+      "address": 318368,
+      "size": 84768,
+      "done_after": "section5-loaded"
+    },
+    {
+      "name": "kernel1-bss",
+      "address": 908160,
+      "size": 84768,
+      "done_after": "section5-loaded"
+    },
+    {
+      "name": "section4-bss",
+      "address": 12454240,
+      "size": 3636544,
+      "done_after": "section4-decoded"
+    },
+    {
+      "name": "section5-bss",
+      "address": 22102368,
+      "size": 4665344,
+      "done_after": "section5-loaded"
+    }
+  ],
+  "trampoline_space": {
+    "address": 8650752,
+    "size": 4096
+  },
+  "resident_space": {
+    "address": 486801408,
+    "size": 3014656
+  },
+  "stage3_resident": [
+    "boot"
+  ]
+}
