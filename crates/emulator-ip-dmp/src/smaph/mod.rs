@@ -522,8 +522,11 @@ impl Texture {
         let m = self.matrix;
         let px = x as f64 + 0.5;
         let py = y as f64 + 0.5;
-        let tx = (m[0] * px + m[1] * py + m[2]) * self.width as f64;
-        let ty = (m[3] * px + m[4] * py + m[5]) * self.height as f64;
+        // The matrix gives coordinates normalized over the image's valid extent (0x158): the
+        // client sends scale = width / backing (0x117/0x118) with the backing size (0x152),
+        // so 1.0 is the image's own width and height, not the padded backing.
+        let tx = (m[0] * px + m[1] * py + m[2]) * self.valid[0] as f64;
+        let ty = (m[3] * px + m[4] * py + m[5]) * self.valid[1] as f64;
         // Declared software nearest sampling with transparent image border.
         if tx < 0.0 || ty < 0.0 || tx >= self.valid[0] as f64 || ty >= self.valid[1] as f64 {
             return Ok([0; 4]);
@@ -1501,6 +1504,16 @@ mod tests {
         )
         .unwrap();
         assert_eq!(texture.sample(1, 1).unwrap(), [0, 16, 0, 255]);
+
+        // An 8x8 image in a 16x16 backing, drawn over 16x16: the normalized matrix spans the
+        // 8x8 valid extent, so the whole destination samples the image (stretched 2x).
+        let mut padded = sample_regs.clone();
+        padded.insert(0x10c, 0x3b0000);
+        padded.insert(0x158, (8 << 16) | 8);
+        let texture = Texture::new(&Cx::new(&mut host, 0, 0, 0), &padded, 0x102000, 1024).unwrap();
+        assert_eq!(texture.sample(15, 15).unwrap(), texture.sample(14, 14).unwrap());
+        assert_ne!(texture.sample(15, 15).unwrap(), [0; 4]);
+        assert_eq!(texture.sample(15, 0).unwrap(), [112, 0, 0, 255]);
     }
 
 }
