@@ -68,7 +68,7 @@ impl SessionState {
         Ok(bytes)
     }
 
-    /// Readable direct-state JSON with base64 byte leaves.
+    /// Readable direct-state JSON; binary content stays in the typed checkpoint.
     pub fn to_json(&self) -> Result<Value, String> {
         Ok(serde_json::json!({
             "schema":2,

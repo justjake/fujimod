@@ -45,17 +45,17 @@ fn conversion_latches_i420_planes_and_commits_packed_receipt_dma_before_status_a
     assert_eq!(receipt["bytes"], 512);
     assert_eq!(receipt["completed_tick"], 2);
     assert_eq!(receipt["packing"], "yycbcr");
-    assert_ne!(receipt["source_sha256"], receipt["output_sha256"]);
+    assert_ne!(receipt["source_content"], receipt["output_content"]);
     assert_eq!(
-        receipt["source_sha256"],
-        fujimod_emulator_devices::state::bytes(&source)["base64"]
+        receipt["source_content"],
+        fujimod_emulator_devices::state::bytes(&source)
     );
     assert_eq!(receipt["source_packing"], "i420");
     assert_eq!(receipt["source_pitch"], 64);
     assert_eq!(receipt["source_bytes"], 384);
     assert_eq!(
-        receipt["output_sha256"],
-        fujimod_emulator_devices::state::bytes(&expected)["base64"]
+        receipt["output_content"],
+        fujimod_emulator_devices::state::bytes(&expected)
     );
     write(&mut d, &mut h, 0xfff6401c, 0x31);
     assert_eq!(h.irqs, [(0, 73)]);
@@ -110,12 +110,11 @@ fn copy_checkpoint_rejects_changed_payload_and_busy_reconfiguration() {
             .unwrap_err()
             .contains("payload differs")
     );
-    // A matching source digest alone cannot authorize unrelated output pixels.
+    // A matching source content alone cannot authorize unrelated output pixels.
     let mut source = saved.blobs()[1].to_vec();
     source[0] ^= 1;
     let mut metadata: serde_json::Value = saved.decode(d.name()).unwrap();
-    metadata["pending"]["source_sha256"] =
-        fujimod_emulator_devices::state::bytes(&source)["base64"].clone();
+    metadata["pending"]["source_content"][0] = serde_json::json!(source[0]);
     let inconsistent =
         fujimod_emulator_devices::checkpoint::Checkpoint::encode(d.name(), &metadata)
             .unwrap()

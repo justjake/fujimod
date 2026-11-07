@@ -185,7 +185,7 @@ impl BoardState {
         ]))
     }
 
-    /// Readable direct-state JSON with base64 byte leaves.
+    /// Readable direct-state JSON; binary content stays in the typed checkpoint.
     pub fn to_json(&self) -> serde_json::Value {
         use fujimod_emulator_devices::state::bytes as state_bytes;
         serde_json::json!({

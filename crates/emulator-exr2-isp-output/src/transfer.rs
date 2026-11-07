@@ -14,14 +14,25 @@ struct Receipt {
     /// Bytes per row. Register 0C expresses this in luma samples.
     pitch: usize,
     bytes: usize,
-    source_sha256: String,
+    source_content: Vec<u8>,
     source_packing: String,
     source_pitch: usize,
     source_bytes: usize,
-    output_sha256: String,
+    output_content: Vec<u8>,
     packing: String,
     started_tick: u64,
     completed_tick: u64,
+}
+impl Receipt {
+    fn json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "source":self.source,"destination":self.destination,"width":self.width,"height":self.height,
+            "pitch":self.pitch,"bytes":self.bytes,"source_content":fujimod_emulator_devices::state::bytes(&self.source_content),
+            "source_packing":self.source_packing,"source_pitch":self.source_pitch,"source_bytes":self.source_bytes,
+            "output_content":fujimod_emulator_devices::state::bytes(&self.output_content),"packing":self.packing,
+            "started_tick":self.started_tick,"completed_tick":self.completed_tick,
+        })
+    }
 }
 #[derive(Serialize, Deserialize)]
 struct State {
@@ -106,14 +117,6 @@ impl ImageTransfer {
             fujimod_emulator_image_processing::yuv::i420_to_yycbcr(width, height, &source_payload)?
                 .into();
         cx.ram_bytes(destination, bytes)?;
-        let hash = fujimod_emulator_devices::state::bytes(&payload)["base64"]
-            .as_str()
-            .ok_or("image transfer digest absent")?
-            .to_owned();
-        let source_hash = fujimod_emulator_devices::state::bytes(&source_payload)["base64"]
-            .as_str()
-            .ok_or("image transfer input digest absent")?
-            .to_owned();
         let completed_tick = due(cx.now(), (bytes as u64).div_ceil(256).max(2))?;
         let receipt = Receipt {
             source,
@@ -122,11 +125,11 @@ impl ImageTransfer {
             height,
             pitch,
             bytes,
-            source_sha256: source_hash,
+            source_content: source_payload.to_vec(),
             source_packing: "i420".into(),
             source_pitch: width,
             source_bytes,
-            output_sha256: hash,
+            output_content: payload.to_vec(),
             packing: "yycbcr".into(),
             started_tick: cx.now(),
             completed_tick,
@@ -171,12 +174,8 @@ impl ImageTransfer {
                 || p.completed_tick <= p.started_tick
                 || saved.blobs()[0].len() != p.bytes
                 || saved.blobs()[1].len() != p.source_bytes
-                || fujimod_emulator_devices::state::bytes(&saved.blobs()[1])["base64"]
-                    .as_str()
-                    != Some(&p.source_sha256)
-                || fujimod_emulator_devices::state::bytes(&saved.blobs()[0])["base64"]
-                    .as_str()
-                    != Some(&p.output_sha256)
+                || saved.blobs()[1].as_ref() != p.source_content.as_slice()
+                || saved.blobs()[0].as_ref() != p.output_content.as_slice()
             {
                 return Err("image transfer checkpoint payload differs".into());
             }
@@ -211,9 +210,14 @@ impl Device for ImageTransfer {
         Ok(())
     }
     fn fingerprint(&self) -> Result<serde_json::Value, String> {
-        Ok(
-            serde_json::json!({"state":self.state,"payload":fujimod_emulator_devices::state::bytes(&self.payload),"source_payload":fujimod_emulator_devices::state::bytes(&self.source_payload)}),
-        )
+        Ok(serde_json::json!({
+            "state":{"r":self.state.r,"reset":self.state.reset,
+                "pending":self.state.pending.as_ref().map(Receipt::json),
+                "last_output":self.state.last_output.as_ref().map(Receipt::json),
+                "transfers":self.state.transfers,"irq_level":self.state.irq_level},
+            "payload":fujimod_emulator_devices::state::bytes(&self.payload),
+            "source_payload":fujimod_emulator_devices::state::bytes(&self.source_payload),
+        }))
     }
     fn name(&self) -> &'static str {
         "exr2-isp-image-transfer"
@@ -329,7 +333,9 @@ impl Device for ImageTransfer {
         self.advance(cx)
     }
     fn save(&self) -> serde_json::Value {
-        serde_json::json!({"registers":self.state.r,"reset":self.state.reset,"pending":self.state.pending,
-            "transfers":self.state.transfers,"last_output":self.state.last_output})
+        serde_json::json!({"registers":self.state.r,"reset":self.state.reset,
+            "pending":self.state.pending.as_ref().map(Receipt::json),
+            "transfers":self.state.transfers,
+            "last_output":self.state.last_output.as_ref().map(Receipt::json)})
     }
 }

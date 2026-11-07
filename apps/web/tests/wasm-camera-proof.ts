@@ -92,7 +92,6 @@ try {
     check((dmp.gpuLists ?? 0) > 0, 'WebGPU did not complete a DMP command list.');
   result.execution = {
     profile: await engine.profile(0),
-    state: await engine.completeState(),
     dmpRasterizer: dmp.rasterizer,
     dmpGpuLists: dmp.gpuLists ?? 0,
     frame: { width: canvas.width, height: canvas.height, sha256: result.rec },

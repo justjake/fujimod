@@ -96,12 +96,12 @@ fn native_bank_padding_is_consumed_by_annex_b_boundaries_before_clocked_dma_and_
     assert_eq!(state["decode"]["last_output"]["width"], 64);
     assert_eq!(state["decode"]["last_output"]["stride"], 64);
     assert_eq!(
-        state["decode"]["last_output"]["base64"],
-        fujimod_emulator_devices::state::bytes(&h.ram[OUTPUT..OUTPUT + 3072])["base64"]
+        state["decode"]["last_output"]["content"],
+        fujimod_emulator_devices::state::bytes(&h.ram[OUTPUT..OUTPUT + 3072])
     );
     assert_eq!(
-        state["decode"]["last_output"]["input_base64"],
-        state["decode"]["last_input"]["base64"]
+        state["decode"]["last_output"]["input_content"],
+        state["decode"]["last_input"]["content"]
     );
     assert!((h.ram[OUTPUT] as i16 - 40).abs() < 12);
     write(&mut codec, &mut h, 0xfff60c24, 1 << 10);
@@ -124,8 +124,8 @@ fn native_bank_padding_is_consumed_by_annex_b_boundaries_before_clocked_dma_and_
     advance_from_checkpoint(&mut codec, &mut h, deadline);
     assert_eq!(codec.save()["decode"]["frames"], 2);
     assert_eq!(
-        codec.save()["decode"]["last_output"]["input_base64"],
-        codec.save()["decode"]["last_input"]["base64"]
+        codec.save()["decode"]["last_output"]["input_content"],
+        codec.save()["decode"]["last_input"]["content"]
     );
     assert!((h.ram[OUTPUT] as i16 - 200).abs() < 12);
     assert_eq!(codec.save()["frames"], 0);
@@ -147,8 +147,8 @@ fn zero_delimited_picture_ignores_stale_bank_pixels_and_receipts_only_coded_inpu
         packet.len()
     );
     assert_eq!(
-        codec.save()["decode"]["last_input"]["base64"],
-        codec.save()["decode"]["last_output"]["input_base64"]
+        codec.save()["decode"]["last_input"]["content"],
+        codec.save()["decode"]["last_output"]["input_content"]
     );
     assert!((host.ram[OUTPUT] as i16 - 40).abs() < 12);
 }

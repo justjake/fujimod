@@ -316,7 +316,7 @@ mod tests {
         )
         .unwrap();
         assert!(!frame.same_pixels(&other));
-        assert_ne!(frame.fingerprint(), other.fingerprint());
+        assert_ne!(frame.checkpoint().unwrap(), other.checkpoint().unwrap());
         let mut odd = serde_json::to_value(&frame).unwrap();
         odd["pixels"]["Mosaic"]["radiance"]["counts"]
             .as_array_mut()
@@ -354,7 +354,7 @@ mod tests {
         assert!(matches!(&s.latched.pixels,FramePixels::Raw16(p) if p==&[3,4]));
     }
     #[test]
-    fn mosaic_frames_checkpoint_and_fingerprint_every_site_and_phase() {
+    fn mosaic_frames_checkpoint_every_site_and_phase() {
         let cfa = [
             [0, 2, 1, 2, 0, 1],
             [1, 1, 0, 1, 1, 2],
@@ -431,7 +431,7 @@ mod tests {
 }
 
 #[cfg(test)]
-mod fingerprint_tests {
+mod state_tests {
     use super::*;
     #[test]
     fn sensor_state_retains_complete_pixels() {
@@ -457,17 +457,14 @@ mod fingerprint_tests {
         assert_eq!(source.fingerprint(), before);
     }
     #[test]
-    fn raw_fingerprint_uses_every_word_in_little_endian_order() {
+    fn raw_checkpoint_uses_every_word_in_little_endian_order() {
         let words = [0x1234, 0xff00, 0, 0xabcd];
-        let identity = fujimod_emulator_devices::state::words16(&words);
-        let bytes: Vec<_> = words.iter().flat_map(|v| v.to_le_bytes()).collect();
-        assert_eq!(
-            identity["base64"],
-            fujimod_emulator_devices::state::bytes(&bytes)["base64"]
-        );
-        assert_ne!(
-            identity,
-            fujimod_emulator_devices::state::words16(&[0x1234, 0xff00, 0, 0xabce])
-        );
+        let frame = Frame::new(2, 2, FramePixels::Raw16(words.to_vec())).unwrap();
+        let saved = frame.checkpoint().unwrap();
+        assert_eq!(saved.blobs()[0].as_ref(), [0x34, 0x12, 0x00, 0xff, 0, 0, 0xcd, 0xab]);
+        let other =
+            Frame::new(2, 2, FramePixels::Raw16(vec![0x1234, 0xff00, 0, 0xabce])).unwrap();
+        assert_ne!(other.checkpoint().unwrap(), saved);
+        assert_eq!(Frame::from_checkpoint(&saved).unwrap().checkpoint().unwrap(), saved);
     }
 }

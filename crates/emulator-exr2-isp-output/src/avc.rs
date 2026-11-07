@@ -27,6 +27,16 @@ struct Pending {
     decoded: Option<DecodeOutput>,
     decode_input: Option<DecodeInput>,
 }
+impl Pending {
+    fn json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "deadline":self.deadline,"writes":self.writes,
+            "cursor":self.cursor,"bank":self.bank,"bits":self.bits,"flags":self.flags,"mode":self.mode,
+            "decoded":self.decoded.as_ref().map(decode::DecodeOutput::json),
+            "decode_input":self.decode_input.as_ref().map(decode::DecodeInput::json),
+        })
+    }
+}
 #[derive(Serialize, Deserialize)]
 struct State {
     backend: Backend,
@@ -391,18 +401,13 @@ impl AvcCodec {
                     || output.slot >= 3
                     || pending.writes
                         != [(physical(output.destination, output.bytes)?, output.bytes)]
-                    || fujimod_emulator_devices::state::bytes(&saved.blobs()[0])["base64"]
-                        .as_str()
-                        != Some(&output.base64)
-                    || fujimod_emulator_devices::state::bytes(
-                        &saved.blobs()[decode_offset + 2],
-                    )["base64"]
-                        .as_str()
-                        != Some(&output.input_base64)
+                    || saved.blobs()[0].as_ref() != output.content.as_slice()
+                    || saved.blobs()[decode_offset + 2].as_ref()
+                        != output.input_content.as_slice()
                     || pending
                         .decode_input
                         .as_ref()
-                        .is_none_or(|input| input.base64 != output.input_base64))
+                        .is_none_or(|input| input.content != output.input_content))
             {
                 return Err("AVC checkpoint decoded output differs".into());
             }
@@ -457,7 +462,14 @@ impl Device for AvcCodec {
             return Err("Active VideoToolbox sequences have no identical replay fingerprint; select software".into());
         }
         Ok(
-            serde_json::json!({"state":self.state,"payload":fujimod_emulator_devices::state::bytes(&self.payload),
+            serde_json::json!({"state":{"backend":self.state.backend,"r":self.state.r,
+            "pending":self.state.pending.as_ref().map(Pending::json),"finish_requested":self.state.finish_requested,
+            "irq_level":self.state.irq_level,"bank_available":self.state.bank_available,
+            "config":self.state.config,"parameter_sets":fujimod_emulator_devices::state::bytes(&self.state.parameter_sets),
+            "frames":self.state.frames,"output_bytes":self.state.output_bytes,
+            "history_lengths":self.state.history_lengths,"payload_length":self.state.payload_length,
+            "mode":self.state.mode,"decode":self.state.decode.json()},
+            "payload":fujimod_emulator_devices::state::bytes(&self.payload),
             "history":self.history.iter().map(|b|fujimod_emulator_devices::state::bytes(b)).collect::<Vec<_>>(),
             "decode_input":fujimod_emulator_devices::state::bytes(&self.decode_runtime.input),
             "decode_pending_input":fujimod_emulator_devices::state::bytes(&self.decode_runtime.pending_input),
@@ -584,7 +596,7 @@ impl Device for AvcCodec {
     }
     fn save(&self) -> serde_json::Value {
         serde_json::json!({"backend":self.state.backend,"frames":self.state.frames,"output_bytes":self.state.output_bytes,
-            "registers":self.state.r,"pending":self.state.pending,"gop_frames":self.history.len(),"decode":self.state.decode})
+            "registers":self.state.r,"pending":self.state.pending.as_ref().map(Pending::json),"gop_frames":self.history.len(),"decode":self.state.decode.json()})
     }
     fn diagnostic_buffer(&self, name: &str) -> Result<&[u8], String> {
         match name {

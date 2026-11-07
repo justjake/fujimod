@@ -395,14 +395,14 @@ mod tests {
                 },
             })
             .unwrap();
-        let fingerprint = frame.fingerprint();
+        let state = frame.checkpoint().unwrap();
         session.power(false).unwrap();
         assert!(Arc::ptr_eq(&sensor.lock().unwrap().current, &frame));
         session.power(true).unwrap();
         session.power_cycle(&[]).unwrap();
         let current = sensor.lock().unwrap().current.clone();
         assert!(Arc::ptr_eq(&current, &frame));
-        assert_eq!(current.fingerprint(), fingerprint);
+        assert_eq!(current.checkpoint().unwrap(), state);
     }
 
     #[test]

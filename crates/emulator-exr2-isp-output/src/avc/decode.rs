@@ -6,7 +6,7 @@ use fujimod_emulator_image_codecs::h264::decode::{self as host, Decoder, Sequenc
 pub(super) struct DecodeInput {
     source: u64,
     bytes: usize,
-    pub base64: String,
+    pub content: Vec<u8>,
     spans: Vec<(u64, usize)>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -17,8 +17,8 @@ pub(super) struct DecodeOutput {
     pub stride: usize,
     pub packing: String,
     pub bytes: usize,
-    pub base64: String,
-    pub input_base64: String,
+    pub content: Vec<u8>,
+    pub input_content: Vec<u8>,
     pub completed_tick: u64,
     pub slot: u32,
 }
@@ -33,6 +33,31 @@ pub(super) struct DecodeState {
     pub pending_input_bytes: usize,
     pub history_lengths: Vec<usize>,
     pub next_slot: u32,
+}
+impl DecodeInput {
+    pub(super) fn json(&self) -> serde_json::Value {
+        serde_json::json!({"source":self.source,"bytes":self.bytes,
+            "content":fujimod_emulator_devices::state::bytes(&self.content),"spans":self.spans})
+    }
+}
+impl DecodeOutput {
+    pub(super) fn json(&self) -> serde_json::Value {
+        serde_json::json!({"destination":self.destination,"width":self.width,"height":self.height,
+            "stride":self.stride,"packing":self.packing,"bytes":self.bytes,
+            "content":fujimod_emulator_devices::state::bytes(&self.content),
+            "input_content":fujimod_emulator_devices::state::bytes(&self.input_content),
+            "completed_tick":self.completed_tick,"slot":self.slot})
+    }
+}
+impl DecodeState {
+    pub(super) fn json(&self) -> serde_json::Value {
+        serde_json::json!({"frames":self.frames,
+            "last_input":self.last_input.as_ref().map(DecodeInput::json),
+            "last_output":self.last_output.as_ref().map(DecodeOutput::json),
+            "sequence":self.sequence,"parameter_bytes":self.parameter_bytes,
+            "input_bytes":self.input_bytes,"pending_input_bytes":self.pending_input_bytes,
+            "history_lengths":self.history_lengths,"next_slot":self.next_slot})
+    }
 }
 #[derive(Default)]
 pub(super) struct DecodeRuntime {
@@ -150,8 +175,6 @@ impl AvcCodec {
             cx.now(),
             (sequence.width * sequence.height).div_ceil(64) as u64,
         )?;
-        let digest = fujimod_emulator_devices::state::bytes(&picture.i420);
-        let input_digest = fujimod_emulator_devices::state::bytes(&packet);
         let output = DecodeOutput {
             destination,
             width: sequence.width,
@@ -159,10 +182,10 @@ impl AvcCodec {
             stride: sequence.width,
             packing: "i420".into(),
             bytes: picture.i420.len(),
-            base64: digest["base64"].as_str().unwrap().into(),
+            content: picture.i420.clone(),
             completed_tick: deadline,
             slot: slot as u32,
-            input_base64: input_digest["base64"].as_str().unwrap().into(),
+            input_content: packet.to_vec(),
         };
         let mut available = self.state.bank_available;
         let mut next_bank = bank;
@@ -181,7 +204,7 @@ impl AvcCodec {
         let receipt = DecodeInput {
             source: bases[bank] + cursor as u64,
             bytes: consumed,
-            base64: input_digest["base64"].as_str().unwrap().into(),
+            content: packet.to_vec(),
             spans,
         };
         self.state.decode.sequence = Some(sequence);

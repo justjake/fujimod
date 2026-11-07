@@ -216,10 +216,8 @@ mod tests {
                 .collect();
             let identity = fujimod_emulator_devices::state::float32s(radiance.values());
             assert_eq!(identity["floats"], 65536);
-            assert_eq!(
-                identity["base64"],
-                fujimod_emulator_devices::state::bytes(&original)["base64"]
-            );
+            let actual: Vec<_> = radiance.values().flat_map(f32::to_le_bytes).collect();
+            assert_eq!(actual, original);
         }
         assert!(Radiance::from_bytes(Arc::from([0u8]), 1.).is_err());
     }

@@ -1721,7 +1721,7 @@ impl BoardState {
     fn diff(&self, other: PyRef<'_, BoardState>) -> Option<String> {
         self.state.diff(&other.state)
     }
-    /// Complete direct-state JSON with base64 byte leaves.
+    /// Readable direct-state JSON; binary content stays in the typed checkpoint.
     fn json(&self) -> PyResult<String> {
         serde_json::to_string(&self.state.to_json().map_err(error)?)
             .map_err(|e| error(e.to_string()))

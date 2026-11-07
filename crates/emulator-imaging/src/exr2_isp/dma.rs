@@ -333,7 +333,7 @@ pub fn write(cx: &mut Cx<'_>, address: u64, bytes: &[u8]) -> Result<(), String> 
 }
 
 #[cfg(test)]
-mod fingerprint_tests {
+mod state_tests {
     use super::*;
     #[test]
     fn active_row_aliases_distinguish_interleaved_padding_and_later_row_collisions() {
@@ -415,9 +415,15 @@ mod fingerprint_tests {
         );
         let saved = fujimod_emulator_devices::checkpoint::Checkpoint::encode("transfer", &transfer).unwrap();
         let mut restored: Transfer = saved.decode("transfer").unwrap();
-        assert_eq!(restored.fingerprint(), identity);
+        assert_eq!(
+            fujimod_emulator_devices::checkpoint::Checkpoint::encode("transfer", &restored).unwrap(),
+            saved
+        );
         *restored.pixels.last_mut().unwrap() ^= 1;
-        assert_ne!(restored.fingerprint(), identity);
+        assert_ne!(
+            fujimod_emulator_devices::checkpoint::Checkpoint::encode("transfer", &restored).unwrap(),
+            saved
+        );
         assert_eq!(*transfer.pixels.last().unwrap(), 0xa5);
         restored = saved.decode("transfer").unwrap();
         restored.deadline = Some(15);

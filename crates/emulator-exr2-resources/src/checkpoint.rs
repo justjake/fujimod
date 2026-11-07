@@ -130,7 +130,7 @@ impl ResourceSnapshot {
         Ok(Checkpoint::encode("resources", &())?.with_children(children))
     }
 
-    /// Readable direct-state JSON with base64 byte leaves.
+    /// Readable direct-state JSON; binary content stays in the typed checkpoint.
     pub fn to_json(&self) -> Result<serde_json::Value, String> {
         if let Some(readable) = &self.readable {
             return Ok(readable.clone());

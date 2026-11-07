@@ -134,23 +134,18 @@ pub fn assert_exact_restore(
     d: &mut dyn Device,
     mutate: impl FnOnce(&mut dyn Device),
 ) -> crate::checkpoint::Checkpoint {
-    let before = d.fingerprint().unwrap();
+    let before = d.checkpoint().unwrap();
     let saved = d.checkpoint().unwrap();
-    assert_eq!(d.checkpoint().unwrap().fingerprint(), saved.fingerprint());
+    assert_eq!(d.checkpoint().unwrap(), before);
     mutate(d);
-    assert_ne!(
-        d.fingerprint().unwrap(),
-        before,
-        "the mutation changed nothing"
-    );
+    assert_ne!(d.checkpoint().unwrap(), before, "the mutation changed nothing");
     d.validate_checkpoint(&saved).unwrap();
     d.restore_checkpoint(&saved).unwrap();
-    assert_eq!(d.fingerprint().unwrap(), before);
-    assert_eq!(d.checkpoint().unwrap().fingerprint(), saved.fingerprint());
+    assert_eq!(d.checkpoint().unwrap(), before);
     let envelope = crate::checkpoint::Checkpoint::encode("envelope", &saved).unwrap();
     let decoded: crate::checkpoint::Checkpoint = envelope.decode("envelope").unwrap();
     d.restore_checkpoint(&decoded).unwrap();
-    assert_eq!(d.fingerprint().unwrap(), before);
+    assert_eq!(d.checkpoint().unwrap(), before);
     saved
 }
 

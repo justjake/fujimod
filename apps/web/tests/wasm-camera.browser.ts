@@ -12,7 +12,6 @@ const expected = JSON.parse(await readFile(receipt, 'utf8')) as {
   error: string | null;
   status: { ticks: string; cores: string[]; failed: boolean };
   frame: { width: number; height: number; sha256: string };
-  state: Uint8Array;
 };
 assert(expected.created && !expected.error && !expected.status.failed && expected.frame);
 const url = new URL('/__wasm-camera', base).href;
@@ -60,7 +59,6 @@ for (const type of manifest.dmpCpuRenderer === false ? [chromium] : [chromium, w
       return manifest.dmpCpuRenderer === false ? 'WebGPU' : 'CPU';
     });
     assert.equal(result.execution.dmpRasterizer, expectedRasterizer);
-    assert.deepEqual(result.execution.state, expected.state);
     assert.deepEqual(result.execution.frame, {
       width: expected.frame.width,
       height: expected.frame.height,

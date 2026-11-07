@@ -1887,7 +1887,6 @@ name = "fujimod-emulator-devices"
 version = "0.1.0"
 dependencies = [
  "apple-cf",
- "base64 0.23.1",
  "ciborium",
  "fujimod-emulator-image-codecs",
  "fujimod-emulator-imaging",

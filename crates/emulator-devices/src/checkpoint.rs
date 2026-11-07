@@ -56,15 +56,14 @@ impl Checkpoint {
             + self.blobs.iter().map(|b| b.len()).sum::<usize>()
             + self.children.iter().map(Self::bytes).sum::<usize>()
     }
-    /// Complete typed state: kind, encoded bytes, blobs and children, with no
-    /// host address or allocation identity.
+    /// Diagnostic extent of the complete typed state: kind, encoded byte
+    /// length, blob lengths and children. Binary content stays in the
+    /// checkpoint itself.
     pub fn fingerprint(&self) -> serde_json::Value {
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
         serde_json::json!({
             "kind":self.kind,
-            "bytes":{"length":self.bytes.len(),"base64":STANDARD.encode(&self.bytes)},
-            "blobs":self.blobs.iter().map(|blob| serde_json::json!({
-                "length":blob.len(),"base64":STANDARD.encode(blob)})).collect::<Vec<_>>(),
+            "bytes":{"length":self.bytes.len()},
+            "blobs":self.blobs.iter().map(|blob| blob.len()).collect::<Vec<_>>(),
             "children":self.children.iter().map(Self::fingerprint).collect::<Vec<_>>(),
         })
     }
@@ -177,7 +176,7 @@ macro_rules! checkpoint_fields {
 /// mutable state is one serde value held in a field. `$check` is
 /// `fn(&Self, &$state) -> Result<(), String>` and validates the saved state
 /// against the device's wiring and invariants; restore assigns the field only
-/// after it passes. The fingerprint is the content identity of the same state.
+/// after it passes. The fingerprint reports the extent of the same state.
 #[macro_export]
 macro_rules! checkpoint_state {
     ($field:ident : $state:ty, $check:path) => {
