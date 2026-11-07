@@ -63,6 +63,8 @@ fn card_session_with_power(epoch: Option<(u64, Vec<u64>)>, power: Option<std::sy
     let pads = gpio.pads();
     let gpio_id = bus.register(0xfff89000, 0x480, Box::new(gpio)).unwrap();
     let mut resources = Resources::default();
+    resources.wires.insert("usb_cable".into(), fujimod_emulator_exr2_resources::Wire::logic_level(false));
+    resources.users.insert("usb_cable".into(), Default::default());
     if let Some(power) = power {
         use fujimod_emulator_devices::exr2::clock;
         let clocks = clock::Clocks::new(clock::Options { output_settle_ticks: 2, reset_ready: true }, ()).unwrap();

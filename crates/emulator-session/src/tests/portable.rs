@@ -312,8 +312,10 @@ fn power_cycle_retains_card_and_packet_and_runs_no_instructions_while_off() {
         p.write(0, 0x68, 1).unwrap();
     }
     let mut session = card_session_with_power(None, Some(power));
+    session.logic_input("usb_cable", true).unwrap();
     session.configure_power_cycle(PowerCycle::new("clocks".into(),
-        crate::durable::Spec { cards: vec!["sd".into()], nands: vec![] }, Box::new(Builder))).unwrap();
+        crate::durable::Spec { cards: vec!["sd".into()], nands: vec![] }, Box::new(Builder))
+        .with_logic_inputs(vec!["usb_cable".into()])).unwrap();
     // Guest store releases power hold, followed by a self-loop.
     session.board.write_physical(0, &0xe5801000u32.to_le_bytes()).unwrap();
     session.board.write_physical(4, &0xeafffffeu32.to_le_bytes()).unwrap();
@@ -329,6 +331,7 @@ fn power_cycle_retains_card_and_packet_and_runs_no_instructions_while_off() {
     assert_eq!(session.board.now(), 1_000_000);
     assert_eq!(session.board.instruction_counts(), counts);
     assert!(session.board.epoch_is_unexecuted());
+    assert!(session.resources.logic_level("usb_cable").unwrap().high());
     assert_eq!(session.resources.clock("clocks").unwrap().power_alarm().unwrap().unwrap().lock().unwrap().packet(), Some([0x5a; 16]));
     let revision = session.card_state("sd").unwrap().revision;
     assert_eq!(session.card_read("sd", "/DCIM/100_FUJI/A.JPG", revision, 100).unwrap(), b"card bytes");
