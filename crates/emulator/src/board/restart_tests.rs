@@ -29,7 +29,6 @@ fn words(cpu: &dyn Cpu, address: u64, values: &[u32]) {
 struct Case {
     /// Advance the store base each iteration instead of reusing one address.
     moving_store: bool,
-    legacy_block_accounting: bool,
     policy: ExecutionPolicy,
 }
 
@@ -37,23 +36,20 @@ impl std::fmt::Debug for Case {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "moving_store={} legacy={} {:?}",
-            self.moving_store, self.legacy_block_accounting, self.policy
+            "moving_store={} {:?}",
+            self.moving_store, self.policy
         )
     }
 }
 
 fn cases() -> impl Iterator<Item = Case> {
     [false, true].into_iter().flat_map(|moving_store| {
-        [false, true].into_iter().flat_map(move |legacy_block_accounting| {
-            [ExecutionPolicy::Interactive, ExecutionPolicy::Exact]
-                .into_iter()
-                .map(move |policy| Case {
-                    moving_store,
-                    legacy_block_accounting,
-                    policy,
-                })
-        })
+        [ExecutionPolicy::Interactive, ExecutionPolicy::Exact]
+            .into_iter()
+            .map(move |policy| Case {
+                moving_store,
+                policy,
+            })
     })
 }
 
@@ -63,10 +59,7 @@ fn cpu_only(case: Case) -> Box<dyn Cpu> {
     let cpu: Box<dyn Cpu> = Box::new(
         fujimod_emulator_cpu_unicorn::rprofile::core::Core::new(
             raw,
-            fujimod_emulator_cpu_unicorn::rprofile::core::Options {
-                legacy_block_accounting: case.legacy_block_accounting,
-                ..Default::default()
-            },
+            fujimod_emulator_cpu_unicorn::rprofile::core::Options::default(),
             fujimod_emulator_cpu_unicorn::rprofile::core::Wiring {
                 memory: Default::default(),
             },

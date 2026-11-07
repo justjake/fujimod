@@ -646,11 +646,6 @@ pub trait Cpu {
             }
         }
     }
-    /// Select the pre-inline per-block accounting path for equivalence checks.
-    /// Backends with one accounting implementation refuse the selection.
-    fn set_legacy_block_accounting(&self, _enabled: bool) -> Result<(), String> {
-        Err("processor backend has no selectable block accounting path".into())
-    }
     /// External mutable backing covered by a whole-board keyframe. Private
     /// memory retained by the processor snapshot is excluded. Unknown owners
     /// refuse, so a board cannot silently omit independently mapped RAM.

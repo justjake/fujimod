@@ -1,10 +1,17 @@
-//! The translated and helper budget paths must produce identical guest state.
+//! Translated block accounting must land on a known guest and device state.
+//!
+//! The program exercises a coarse debit inside a block, an exact stop, a guest
+//! timer read with its deadline, a self-modifying store and an ARM/Thumb call.
+//! Both policies are pinned to the state the engine produced when the
+//! translated path replaced the helper path.
 use super::*;
 use fujimod_emulator_cpu::arm;
 use fujimod_emulator_cpu::Model;
 use fujimod_emulator_cpu_unicorn::Library;
 use fujimod_emulator_devices::{Cx, Device};
 use std::sync::{Arc, Mutex};
+
+const BUDGET: u64 = 260;
 
 #[derive(Default)]
 struct Probe {
@@ -56,16 +63,13 @@ fn words(cpu: &dyn Cpu, address: u64, values: &[u32]) {
     .unwrap();
 }
 
-fn build(legacy: bool) -> (Board, Arc<Mutex<Probe>>) {
+fn build() -> (Board, Arc<Mutex<Probe>>) {
     let library = Library::linked().unwrap();
     let raw = library.open(Model::CortexR5F, 4 << 20).unwrap();
     let cpu: Box<dyn Cpu> = Box::new(
         fujimod_emulator_cpu_unicorn::rprofile::core::Core::new(
             raw,
-            fujimod_emulator_cpu_unicorn::rprofile::core::Options {
-                legacy_block_accounting: legacy,
-                ..Default::default()
-            },
+            fujimod_emulator_cpu_unicorn::rprofile::core::Options::default(),
             fujimod_emulator_cpu_unicorn::rprofile::core::Wiring {
                 memory: Default::default(),
             },
@@ -126,69 +130,86 @@ fn build(legacy: bool) -> (Board, Arc<Mutex<Probe>>) {
     (board, probe)
 }
 
-fn compare(inline: &Board, legacy: &Board, a: &Arc<Mutex<Probe>>, b: &Arc<Mutex<Probe>>) {
-    assert_eq!(inline.instruction_counts(), legacy.instruction_counts());
-    assert_eq!(inline.state(), legacy.state());
-    assert_eq!(
-        inline.cpu(0).unwrap().fingerprint().unwrap(),
-        legacy.cpu(0).unwrap().fingerprint().unwrap()
-    );
-    let mut ram_a = vec![0; 0x1000];
-    let mut ram_b = vec![0; 0x1000];
-    inline.read_memory(0, 0x20000, &mut ram_a).unwrap();
-    legacy.read_memory(0, 0x20000, &mut ram_b).unwrap();
-    assert_eq!(ram_a, ram_b);
-    assert_eq!(
-        {
-            let p = a.lock().unwrap();
-            json!({"due":p.due,"calls":p.calls,"value":p.value})
+struct Case {
+    policy: ExecutionPolicy,
+    registers: [u32; 16],
+    ram: [u8; 20],
+    clock: u64,
+    probe: Value,
+}
+
+fn cases() -> [Case; 2] {
+    [
+        Case {
+            policy: ExecutionPolicy::Interactive,
+            registers: [
+                3, 2, 1, 3_850_633_232, 0x20000, 0x8000000, 0, 0x20004, 0x10034, 0x11001,
+                0, 0, 0, 0, 0x10040, 0x10044,
+            ],
+            ram: [
+                2, 0, 0, 0, 0x10, 0, 0x84, 0xe5, 1, 0, 0, 0, 3, 0, 0, 0, 1, 0, 0, 0,
+            ],
+            clock: 252,
+            probe: json!({"calls":[[24,0],[24,0x8000000]],"due":null,"value":1}),
         },
-        {
-            let p = b.lock().unwrap();
-            json!({"due":p.due,"calls":p.calls,"value":p.value})
-        }
-    );
+        Case {
+            policy: ExecutionPolicy::Exact,
+            registers: [
+                2, 2, 0, 3_850_633_232, 0x20000, 0x8000000, 0, 0x20004, 0x10034, 0x11001,
+                0, 0, 0, 0, 0x10040, 0x10044,
+            ],
+            ram: [
+                2, 0, 0, 0, 0x10, 0, 0x84, 0xe5, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0,
+            ],
+            clock: 260,
+            probe: json!({"calls":[[3,0x8000000],[9,0]],"due":null,"value":1}),
+        },
+    ]
 }
 
 #[test]
-fn inline_and_helper_block_accounting_preserve_the_same_board_state() {
-    let (mut inline, probe_inline) = build(false);
-    let (mut legacy, probe_legacy) = build(true);
-    for board in [&mut inline, &mut legacy] {
-        board.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
-    }
-    compare(&inline, &legacy, &probe_inline, &probe_legacy);
+fn translated_accounting_lands_on_the_expected_state() {
+    for case in cases() {
+        let (mut board, probe) = build();
+        board.set_execution_policy(case.policy).unwrap();
+        board.run_for_instructions(BUDGET, 1000).unwrap();
 
-    // Caps inside a block, zero work, a deadline, a timer read and a
-    // self-modifying store all enter the accounting paths under comparison.
-    for count in [0, 1, 7, 13, 29, 41, 101, 211, 257] {
-        inline.run_for_instructions(count, 1000).unwrap();
-        legacy.run_for_instructions(count, 1000).unwrap();
-        compare(&inline, &legacy, &probe_inline, &probe_legacy);
-    }
-    // The self-modifying store and the Thumb call must both have executed, or
-    // the runs above would not compare the paths they claim to.
-    let mut reached = vec![0; 0x1000];
-    inline.read_memory(0, 0x20000, &mut reached).unwrap();
-    let word = |at: usize| u32::from_le_bytes(reached[at * 4..at * 4 + 4].try_into().unwrap());
-    assert_eq!(word(0), 2, "both counted stores must run");
-    assert_ne!(word(2), 0, "the timer read must reach r0");
-    assert_eq!(word(4), word(2), "the patched store must see the same r0");
-    assert_eq!(word(3), word(2) + 2, "the Thumb leaf must add two to r0");
-    let due = {
-        let p = probe_inline.lock().unwrap();
-        p.due.unwrap_or(7)
-    };
-    inline.run_until(due, 1000).unwrap();
-    legacy.run_until(due, 1000).unwrap();
-    compare(&inline, &legacy, &probe_inline, &probe_legacy);
+        assert_eq!(
+            board.instruction_counts(),
+            vec![BUDGET],
+            "{:?}: instruction count",
+            case.policy
+        );
+        let fingerprint = board.cpu(0).unwrap().fingerprint().unwrap();
+        let registers: Vec<u32> = fingerprint["architecture"]["registers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| u32::try_from(value.as_u64().unwrap()).unwrap())
+            .collect();
+        assert_eq!(
+            registers,
+            case.registers.to_vec(),
+            "{:?}: architectural registers",
+            case.policy
+        );
+        assert_eq!(
+            fingerprint["clock"]["now"].as_u64(),
+            Some(case.clock),
+            "{:?}: board clock",
+            case.policy
+        );
 
-    // Exact accounting keeps its ring write in the helper on both boards; the
-    // policy transition and final state must still match.
-    for board in [&mut inline, &mut legacy] {
-        board.set_execution_policy(ExecutionPolicy::Exact).unwrap();
+        let mut ram = vec![0; case.ram.len()];
+        board.read_memory(0, 0x20000, &mut ram).unwrap();
+        assert_eq!(ram, case.ram.to_vec(), "{:?}: guest RAM", case.policy);
+
+        // Serializing the board reads every device, so the probe lock must not
+        // be held across it.
+        let device = {
+            let probe = probe.lock().unwrap();
+            json!({"due":probe.due,"calls":probe.calls,"value":probe.value})
+        };
+        assert_eq!(device, case.probe, "{:?}: timer device", case.policy);
     }
-    inline.run_for_instructions(17, 1000).unwrap();
-    legacy.run_for_instructions(17, 1000).unwrap();
-    compare(&inline, &legacy, &probe_inline, &probe_legacy);
 }

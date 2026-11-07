@@ -40,10 +40,6 @@ mod tests;
 pub struct Options {
     pub cp14_identity: u32,
     pub tcm: super::tcm::Options,
-    /// Run block accounting through the C hook helper instead of the code the
-    /// translator emits. Only the accounting equivalence test sets this.
-    #[serde(skip)]
-    pub legacy_block_accounting: bool,
 }
 pub struct Wiring {
     pub memory: Memory,
@@ -213,9 +209,6 @@ impl Core {
             return Err("R-profile backing must be mapped through its execution owner".into());
         }
         cpu.set_instruction_counter(true)?;
-        if options.legacy_block_accounting {
-            cpu.set_legacy_block_accounting(true)?;
-        }
         let record = cpu
             .accounting()
             .ok_or("missing R-profile accounting record")?;

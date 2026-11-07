@@ -464,11 +464,6 @@ impl Board {
             .map(|c| &**c)
             .ok_or("absent processor".into())
     }
-
-    /// Number of processors this board runs.
-    pub fn cpu_count(&self) -> usize {
-        self.cpus.len()
-    }
     pub fn instruction_counts(&self) -> Vec<u64> {
         self.state.borrow().instructions.clone()
     }

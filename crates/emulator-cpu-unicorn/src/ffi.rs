@@ -53,8 +53,6 @@ pub struct Extensions {
     /// Test exit requests inline at block entry and after memory accesses.
     pub set_block_exits: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub set_instruction_counter: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
-    /// Select the pre-inline per-block accounting helper for equivalence tests.
-    pub set_legacy_block_accounting: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub reset_instruction_counter: Option<unsafe extern "C" fn(Engine) -> Error>,
     pub instruction_counter: Option<unsafe extern "C" fn(Engine) -> u64>,
     // uc_embedder_features bits (0 without the export): 1 = block hook size bit 31
@@ -120,9 +118,8 @@ impl Extensions {
                 "uc_embedder_features (replaced ARM instructions)",
             ),
             (
-                self.set_legacy_block_accounting.is_some()
-                    && self.features & FEATURE_INLINE_BLOCK_ACCOUNTING != 0,
-                "uc_embedder_set_legacy_block_accounting",
+                self.features & FEATURE_INLINE_BLOCK_ACCOUNTING != 0,
+                "uc_embedder_features (translated block accounting)",
             ),
         ]
         .into_iter()
@@ -230,7 +227,6 @@ mod linked {
         fn uc_embedder_set_parallel_cpus(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_block_exits(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_instruction_counter(engine: Engine, enabled: bool) -> Error;
-        fn uc_embedder_set_legacy_block_accounting(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_reset_instruction_counter(engine: Engine) -> Error;
         fn uc_embedder_instruction_counter(engine: Engine) -> u64;
         fn uc_embedder_accounting(engine: Engine) -> *mut Accounting;
@@ -251,7 +247,6 @@ mod linked {
             set_parallel_cpus: Some(uc_embedder_set_parallel_cpus),
             set_block_exits: Some(uc_embedder_set_block_exits),
             set_instruction_counter: Some(uc_embedder_set_instruction_counter),
-            set_legacy_block_accounting: Some(uc_embedder_set_legacy_block_accounting),
             reset_instruction_counter: Some(uc_embedder_reset_instruction_counter),
             instruction_counter: Some(uc_embedder_instruction_counter),
             accounting: Some(uc_embedder_accounting),

@@ -77,13 +77,6 @@ impl Cpu for Core {
         unsafe { (*e.record.as_ptr()).enabled = e.accounting_mode() };
         Ok(())
     }
-    fn set_legacy_block_accounting(&self, enabled: bool) -> Result<(), String> {
-        let e = &self.execution;
-        if e.active.get() || e.memory.run_reserved(e.id.get()) {
-            return Err("block accounting path requires a stopped processor".into());
-        }
-        e.cpu.set_legacy_block_accounting(enabled)
-    }
     fn checkpoint_backings(&self) -> Result<Vec<(NonNull<u8>, usize)>, String> {
         Ok(self
             .execution
