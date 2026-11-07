@@ -27,8 +27,8 @@ impl Host for TestHost {
     fn now(&self) -> u64 {
         self.now
     }
-    fn request_pause(&mut self) -> Result<(), String> {
-        self.effects.push("pause");
+    fn power_off(&mut self) -> Result<(), String> {
+        self.effects.push("power-off");
         Ok(())
     }
     fn schedule(&mut self, _: usize, _: u64, _: u64) {}

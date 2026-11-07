@@ -298,6 +298,16 @@ impl Timeline {
         self.now = at;
         Ok(true)
     }
+    /// Advance an unpowered machine without executing its old device events.
+    /// The old powered epoch cannot be resumed after this operation.
+    pub fn advance_unpowered(&mut self, at: u64) -> Result<(), String> {
+        if at < self.now { return Err("unpowered time moved backward".into()); }
+        self.queue.clear();
+        self.lags.fill(0);
+        self.now = at;
+        self.phase = 0;
+        Ok(())
+    }
     pub fn pop_due(&mut self) -> Option<Event> {
         if self.queue.peek().is_some_and(|e| e.0.at <= self.now) {
             self.queue.pop().map(|e| e.0)

@@ -113,6 +113,10 @@ pub trait Host {
     fn request_pause(&mut self) -> Result<(), String> {
         Err("host cannot pause guest execution for asynchronous work".into())
     }
+    /// Stop the powered processors because the board's supply was released.
+    fn power_off(&mut self) -> Result<(), String> {
+        Err("host cannot model supply removal".into())
+    }
     /// Worker count for pure host computation. Zero selects the exact serial
     /// path; workers never receive guest state or publish device effects.
     fn compute_workers(&self) -> usize {
@@ -187,6 +191,10 @@ impl<'a> Cx<'a> {
     }
     pub fn request_pause(&mut self) -> Result<(), String> {
         self.host.request_pause()
+    }
+    /// Signal that the connected board supply has actually turned off.
+    pub fn power_off(&mut self) -> Result<(), String> {
+        self.host.power_off()
     }
     /// Bounded strategy for pure, deterministic raster work. The owner still
     /// applies every resulting device effect on this context's thread.

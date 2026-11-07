@@ -523,3 +523,74 @@ fn fresh_epoch_preserves_host_time_and_instruction_totals() {
         Bus::new(Mode::Strict), None,
     ).is_err());
 }
+
+#[test]
+fn supply_off_deadline_stops_execution_and_only_power_time_can_advance() {
+    struct SupplyOff { due: Option<u64> }
+    impl fujimod_emulator_devices::Device for SupplyOff {
+        fn name(&self) -> &'static str { "test-supply" }
+        fn read(&mut self, _: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8) -> u64 { 0 }
+        fn write(&mut self, _: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8, _: u64) {}
+        fn next_deadline(&self, _: u64) -> Option<u64> { self.due }
+        fn advance(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>) {
+            if self.due.is_some_and(|due| due <= cx.now()) {
+                self.due = None;
+                cx.power_off().unwrap();
+            }
+        }
+    }
+    struct LateDma;
+    impl fujimod_emulator_devices::Device for LateDma {
+        fn name(&self) -> &'static str { "test-late-dma" }
+        fn read(&mut self, _: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8) -> u64 { 0 }
+        fn write(&mut self, _: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8, _: u64) {}
+        fn next_deadline(&self, _: u64) -> Option<u64> { Some(12) }
+        fn advance(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>) {
+            if cx.now() >= 12 { cx.ram_write(0x2000, &[0x7f]).unwrap(); }
+        }
+    }
+    let mut bus = Bus::new(Mode::Strict);
+    bus.attach(Box::new(SupplyOff { due: Some(8) }));
+    bus.attach(Box::new(LateDma));
+    let mut board = a7_graph().build(
+        Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20),
+        bus, None,
+    ).unwrap();
+    words(&board, CODE, &[0xeafffffe]);
+    assert!(board.advance_unpowered(1).is_err());
+    board.run_for_instructions(100, 2).unwrap();
+    assert!(board.is_powered_off());
+    assert_eq!(board.now(), 8);
+    let counts = board.instruction_counts();
+    assert!(board.run_for_instructions(1, 2).is_err());
+    assert!(board.run_until(20, 2).is_err());
+    assert!(board.state()["failure"].is_null());
+    board.advance_unpowered(50).unwrap();
+    assert_eq!(board.now(), 50);
+    assert_eq!(board.instruction_counts(), counts);
+    let mut byte = [0];
+    board.read_physical(0x2000, &mut byte).unwrap();
+    assert_eq!(byte, [0]);
+    assert!(board.advance_unpowered(49).is_err());
+}
+
+#[test]
+fn connected_clock_removes_power_at_the_guest_hold_deadline() {
+    use fujimod_emulator_devices::exr2::{clock, wake_alarm::{Supply, WakeAlarm}};
+    use std::sync::{Arc, Mutex};
+    let power = Arc::new(Mutex::new(WakeAlarm::new(12_000_000, clock::POWER_HOLD_RELEASE_LIMIT_TICKS).unwrap()));
+    let clocks = clock::Clocks::new(clock::Options { output_settle_ticks: 2, reset_ready: true }, ()).unwrap();
+    clocks.output().attach_power(power.clone()).unwrap();
+    let mut bus = Bus::new(Mode::Strict);
+    bus.register(clock::BASE, 0x100, Box::new(clocks)).unwrap();
+    let mut graph = a7_graph();
+    graph.peripherals.push(super::factory::Peripheral { core: 0, address: clock::BASE, physical: clock::BASE, size: 0x100 });
+    let mut board = graph.build(Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20), bus, None).unwrap();
+    let mut code = store_at(clock::BASE as u32 + 0x84, 0, 0).to_vec();
+    code.push(0xeafffffe);
+    words(&board, CODE, &code);
+    board.run_for_instructions(200_000, 1000).unwrap();
+    assert!(board.is_powered_off());
+    assert_eq!(power.lock().unwrap().supply(), Supply::Off);
+    assert!(board.now() >= clock::POWER_HOLD_RELEASE_LIMIT_TICKS);
+}

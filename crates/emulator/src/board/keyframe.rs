@@ -10,6 +10,7 @@ mod portable;
 struct Saved {
     #[serde(with = "portable::policy")]
     execution_policy: ExecutionPolicy,
+    power_off: bool,
     #[serde(with = "portable::timeline")]
     timeline: Timeline,
     interrupt_changed: Vec<bool>,
@@ -98,6 +99,7 @@ impl State {
             device_workers: _,
             host_pause: _,
             clock_limit: _,
+            power_off,
             memory: _,
             bus: _,
             timeline,
@@ -141,6 +143,7 @@ impl State {
         } = self;
         Saved {
             execution_policy: *execution_policy,
+            power_off: *power_off,
             timeline: timeline.clone(),
             interrupt_changed: interrupt_changed.clone(),
             released: released.clone(),
@@ -176,6 +179,7 @@ impl State {
     }
     fn restore_state(&mut self, saved: &Saved) -> Result<(), String> {
         self.execution_policy = saved.execution_policy;
+        self.power_off = saved.power_off;
         self.clock_limit = None;
         self.timeline.clone_from(&saved.timeline);
         self.interrupt_changed.clone_from(&saved.interrupt_changed);
