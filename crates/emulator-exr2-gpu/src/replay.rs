@@ -2,7 +2,6 @@
 
 use crate::recording::{Event, MemoryRead, RecordingReader, RegisterWrite, TargetSample};
 use crate::{Action, CommandProcessor, Inputs};
-use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, VecDeque};
 use std::io;
 use std::path::Path;
@@ -83,12 +82,11 @@ struct Summary {
     matched_outputs: u64,
     operation_time: Duration,
     access_time: Duration,
-    digest_time: Duration,
     output_lines: Vec<String>,
 }
 
 /// Run the model and rasterizer against one binary recording and print timing
-/// and the digest of every DMA output.
+/// and every DMA output comparison.
 pub fn run(path: impl AsRef<Path>) -> Result<(), String> {
     let mut recording = RecordingReader::open(path.as_ref()).map_err(format_io)?;
     let mut state = CommandProcessor {
@@ -204,21 +202,10 @@ pub fn run(path: impl AsRef<Path>) -> Result<(), String> {
                 }
 
                 for ((address, bytes), expected) in output.iter().zip(&completion.outputs) {
-                    if *address != expected.address || bytes.len() as u64 != expected.length {
+                    if *address != expected.address || bytes.as_slice() != expected.bytes.as_slice() {
                         return Err(format!(
-                            "GPU replay output location differs for token {}",
+                            "GPU replay output location or bytes differ for token {}",
                             completion.token
-                        ));
-                    }
-                    let digest_start = Instant::now();
-                    let digest: [u8; 32] = Sha256::digest(bytes.as_slice()).into();
-                    summary.digest_time += digest_start.elapsed();
-                    if digest != expected.sha256 {
-                        return Err(format!(
-                            "GPU replay output digest differs at {address:#x} on tick {}: expected {}, got {}",
-                            completion.now,
-                            hex_digest(&expected.sha256),
-                            hex_digest(&digest)
                         ));
                     }
                     let write_start = Instant::now();
@@ -227,10 +214,9 @@ pub fn run(path: impl AsRef<Path>) -> Result<(), String> {
                     summary.outputs += 1;
                     summary.matched_outputs += 1;
                     summary.output_lines.push(format!(
-                        "output tick={} address={address:#x} bytes={} sha256={}",
+                        "output tick={} address={address:#x} bytes={}",
                         completion.now,
-                        bytes.len(),
-                        hex_digest(&digest)
+                        bytes.len()
                     ));
                 }
 
@@ -265,13 +251,9 @@ pub fn run(path: impl AsRef<Path>) -> Result<(), String> {
         "time per register access: {:.3} ns",
         nanos_per(summary.access_time, summary.accesses)
     );
-    println!(
-        "output digest time: {:.6} s",
-        summary.digest_time.as_secs_f64()
-    );
     println!("replay wall time: {:.6} s", replay_time.as_secs_f64());
     println!(
-        "digest check: matched {} of {} output writes",
+        "byte check: matched {} of {} output writes",
         summary.matched_outputs, summary.outputs
     );
     Ok(())
@@ -325,10 +307,6 @@ fn nanos_per(duration: Duration, count: u64) -> f64 {
     } else {
         duration.as_nanos() as f64 / count as f64
     }
-}
-
-fn hex_digest(digest: &[u8; 32]) -> String {
-    digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn format_io(error: io::Error) -> String {

@@ -7,7 +7,6 @@ use fujimod_emulator_devices::{Cx, Device};
 use fujimod_framebuffer::raster::{self, PixelOrder};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use sha2::Digest;
 
 #[derive(Clone, Serialize, Deserialize)]
 struct State {
@@ -17,7 +16,7 @@ struct State {
     phase: usize,
     deadline: Option<u64>,
     frames: u64,
-    last_hash: String,
+    last_rgba: Vec<u8>,
 }
 #[derive(Debug)]
 struct Timing {
@@ -69,7 +68,7 @@ impl Display {
                 phase: 0,
                 deadline: None,
                 frames: 0,
-                last_hash: String::new(),
+                last_rgba: Vec::new(),
             },
             period_ns: config.period_ns,
             formats: config.raw_formats,
@@ -198,16 +197,14 @@ impl Display {
             raster::composite_snapshot(p, width, height, &mut rgba)?;
         }
         self.input = Some((width, height, captured));
-        let hash = format!("{:x}", sha2::Sha256::digest(&rgba));
-        let hash = format!("{width}x{height}:{hash}");
-        let changed = hash != self.state.last_hash;
+        let changed = rgba != self.state.last_rgba;
         if changed {
             self.state.frames = self
                 .state
                 .frames
                 .checked_add(1)
                 .ok_or("scanout sequence overflow")?;
-            self.state.last_hash = hash;
+            self.state.last_rgba = rgba.clone();
         } else if !self.needs_publication {
             if blank {
                 self.blank = Some((width, height));

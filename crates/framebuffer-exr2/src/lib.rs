@@ -145,7 +145,7 @@ impl Compositor {
         Ok(self.pipes[i].regs.get_or_zero(o))
     }
 }
-use fujimod_framebuffer::frame::{Frame, State as S, sha256};
+use fujimod_framebuffer::frame::{Frame, State as S};
 /// The board RAM callback and screenshot-only color/image encoders. The
 /// Host inspection never writes RAM here (`write_bytes` is accepted but unused).
 pub trait ScanoutHost {
@@ -169,13 +169,6 @@ pub trait ScanoutHost {
     fn encode_png(&mut self, rgb: &[u8], width: usize, height: usize) -> Result<Option<Vec<u8>>>;
 }
 
-fn frame_hash(host: &dyn ScanoutHost, bytes: &[u8]) -> S {
-    if host.diagnostic_hashes() {
-        S::str(&sha256(bytes))
-    } else {
-        S::None
-    }
-}
 /// Group 0 mode-1 byte order per register 0 bits 23:20: source byte index of
 /// R, G, B (byte 3 is alpha). Formats 0-5 select the six channel orders, 12-15
 /// select the default order, and 6-11 are not supported as 32-bit pixels.
@@ -530,11 +523,6 @@ impl Compositor {
                     ("height", S::Int(clip_h as i64)),
                 ]),
             ),
-            ("frame_sha256", frame_hash(host, &raw)),
-            (
-                "png_sha256",
-                png.as_ref().map_or(S::None, |png| frame_hash(host, png)),
-            ),
             (
                 "kind",
                 S::str("main video plane at explicit frame boundary"),
@@ -578,10 +566,9 @@ impl Compositor {
             return Ok(None);
         };
         let rectangles = crate::rectangles::decode(&self.pipes[i], self.rectangle_composition)?;
-        crate::rectangles::compose(&mut frame, &rectangles, host.diagnostic_hashes());
+        crate::rectangles::compose(&mut frame, &rectangles);
         if let Some(rgb) = &frame.rgb {
             if let Some(png) = host.encode_png(rgb, frame.width, frame.height)? {
-                frame.state.set("png_sha256", frame_hash(host, &png));
                 frame.png = Some(png);
             }
         }
@@ -832,7 +819,6 @@ impl Compositor {
                     "ABGR byte order, byte 0 straight alpha"
                 }),
             );
-            s.set("sha256", frame_hash(host, &plane));
             if scale != 1 {
                 s.set("scale", S::Int(scale as i64));
                 s.set(
@@ -880,11 +866,6 @@ impl Compositor {
             ("declared_backdrop_used", S::Bool(backdrop)),
             ("main", main.map_or(S::None, |f| f.state)),
             ("graphics", S::List(plane_states)),
-            ("frame_sha256", frame_hash(host, &raw)),
-            (
-                "png_sha256",
-                png.as_ref().map_or(S::None, |p| frame_hash(host, p)),
-            ),
             (
                 "kind",
                 S::str("actual RAM composition with an explicit graphics interpretation"),

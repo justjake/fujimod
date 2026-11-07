@@ -973,7 +973,7 @@ impl CommandProcessor {
         actions.push(Action::QueueIrq(c.irq_cpu as u8, IRQ));
         Ok(c.job)
     }
-    /// Commit replay state after the recorder's independent output digest check.
+    /// Commit replay state after the recorder's independent output byte check.
     /// Replay discards diagnostic records, so it does not build another receipt.
     pub(crate) fn complete_for_replay(&mut self, token: u64, _now: u64) -> Result<()> {
         let c = self

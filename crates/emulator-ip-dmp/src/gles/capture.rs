@@ -1,12 +1,11 @@
 use super::{Engine, Snapshots};
-use sha2::{Digest, Sha256};
 use std::cell::Cell;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-const MAGIC: &[u8; 8] = b"FJDMP002";
+const MAGIC: &[u8; 8] = b"FJDMP003";
 const MAX_CAPTURE_BLOB_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_CAPTURE_ITEMS: usize = 1 << 20;
 const MAX_COMMAND_WORDS: usize = 1024 * 1024 / 4;
@@ -35,15 +34,14 @@ struct Record {
     state: Vec<u8>,
     words: Vec<u32>,
     reads: Vec<(u64, Vec<u8>)>,
-    snapshots: Vec<SnapshotDigest>,
+    snapshots: Vec<SnapshotBytes>,
     written_ranges: Vec<(u64, usize)>,
 }
 
 #[derive(PartialEq, Eq)]
-struct SnapshotDigest {
+struct SnapshotBytes {
     address: u64,
-    length: u64,
-    sha256: [u8; 32],
+    bytes: Vec<u8>,
 }
 
 pub(super) fn capture_directory() -> Option<PathBuf> {
@@ -112,9 +110,7 @@ fn write_record(
     }
     for (address, bytes) in snapshots {
         writer.write_all(&address.to_le_bytes())?;
-        writer.write_all(&(bytes.len() as u64).to_le_bytes())?;
-        let sha256 = Sha256::digest(bytes);
-        writer.write_all(&sha256)?;
+        write_blob(writer, bytes)?;
     }
     for (address, length) in written_ranges {
         writer.write_all(&address.to_le_bytes())?;
@@ -170,31 +166,20 @@ fn read_reader_range(reader: &mut impl Read) -> io::Result<(u64, Vec<u8>)> {
     Ok((read_u64(reader)?, read_blob(reader)?))
 }
 
-fn read_snapshot_digest(reader: &mut impl Read) -> io::Result<SnapshotDigest> {
+fn read_snapshot_bytes(reader: &mut impl Read) -> io::Result<SnapshotBytes> {
     let address = read_u64(reader)?;
-    let length = read_u64(reader)?;
-    if length > MAX_CAPTURE_BLOB_BYTES {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "snapshot extent exceeds limit",
-        ));
-    }
-    let mut sha256 = [0; 32];
-    reader.read_exact(&mut sha256)?;
-    Ok(SnapshotDigest {
+    Ok(SnapshotBytes {
         address,
-        length,
-        sha256,
+        bytes: read_blob(reader)?,
     })
 }
 
-fn snapshot_digests(snapshots: &Snapshots) -> Vec<SnapshotDigest> {
+fn snapshot_bytes(snapshots: &Snapshots) -> Vec<SnapshotBytes> {
     snapshots
         .iter()
-        .map(|(address, bytes)| SnapshotDigest {
+        .map(|(address, bytes)| SnapshotBytes {
             address: *address,
-            length: bytes.len() as u64,
-            sha256: Sha256::digest(bytes).into(),
+            bytes: bytes.clone(),
         })
         .collect()
 }
@@ -232,7 +217,7 @@ fn read_record(path: &Path) -> Result<Record, String> {
     }
     let mut snapshots = Vec::with_capacity(snapshot_count);
     for _ in 0..snapshot_count {
-        snapshots.push(read_snapshot_digest(&mut file).map_err(|error| error.to_string())?);
+        snapshots.push(read_snapshot_bytes(&mut file).map_err(|error| error.to_string())?);
     }
     let mut written_ranges = Vec::with_capacity(range_count);
     for _ in 0..range_count {
@@ -312,8 +297,8 @@ fn replay_record(path: &Path) -> Result<(), String> {
             used_reads.len(),
         ));
     }
-    if snapshot_digests(&actual_snapshots) != record.snapshots {
-        return Err(format!("{} replay snapshot hashes differ", path.display()));
+    if snapshot_bytes(&actual_snapshots) != record.snapshots {
+        return Err(format!("{} replay snapshot bytes differ", path.display()));
     }
     if engine.written_ranges() != record.written_ranges {
         return Err(format!("{} replay written ranges differ", path.display()));
@@ -351,11 +336,11 @@ mod tests {
     use super::write_record;
 
     #[test]
-    fn snapshots_are_stored_as_digests() {
+    fn snapshots_are_stored_as_bytes() {
         let snapshots = vec![(0x1000, vec![0xa5; 2 * 1024 * 1024])];
         let mut capture = Vec::new();
         write_record(&mut capture, &[], &[], &[], &snapshots, &[]).unwrap();
 
-        assert_eq!(capture.len(), 80);
+        assert_eq!(capture.len(), 48 + 2 * 1024 * 1024);
     }
 }

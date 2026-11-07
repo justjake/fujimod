@@ -5,7 +5,6 @@ use fujimod_emulator_exr2_gpu::{
     Inputs, WebGpuUiRequest, WebGpuUiResult, render_ui_host_gpu_async,
 };
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use std::io::Cursor;
 use wasm_bindgen::prelude::*;
 
@@ -135,7 +134,6 @@ fn read_capture_range(
 struct SnapshotSummary {
     address: String,
     length: usize,
-    sha256: String,
 }
 
 #[derive(Serialize)]
@@ -164,10 +162,6 @@ fn summarize_snapshots(snapshots: &Snapshots) -> Vec<SnapshotSummary> {
         .map(|(address, bytes)| SnapshotSummary {
             address: format!("{address:#x}"),
             length: bytes.len(),
-            sha256: Sha256::digest(bytes)
-                .iter()
-                .map(|byte| format!("{byte:02x}"))
-                .collect(),
         })
         .collect()
 }

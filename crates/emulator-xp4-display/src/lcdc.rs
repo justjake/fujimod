@@ -3,11 +3,10 @@
 //! phase routes. The input pixel clock and phase law are explicit functional
 //! assumptions, not measured silicon timing. No guest software is inspected.
 use fujimod_emulator_devices::{Cx, Device, graphics::scanout::Frame};
-use fujimod_framebuffer::raster::{PixelOrder, Plane};
+use fujimod_framebuffer::raster::PixelOrder;
 use fujimod_framebuffer_xp4::{Picture, Video};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 
 #[derive(Clone, Serialize, Deserialize)]
 struct State {
@@ -16,7 +15,7 @@ struct State {
     phase: usize,
     frames: u64,
     sequence: u64,
-    image_hash: Option<[u8; 32]>,
+    last_image: Option<(u32, u32, Vec<u8>)>,
 }
 pub struct Lcdc {
     base: u64,
@@ -53,7 +52,7 @@ impl Lcdc {
                 phase: 0,
                 frames: 0,
                 sequence: 0,
-                image_hash: None,
+                last_image: None,
             },
         })
     }
@@ -91,7 +90,6 @@ impl Lcdc {
         active: bool,
         source: u64,
         format: Option<&str>,
-        planes: &[Plane],
     ) -> Result<(), String> {
         cx.output_status(
             self.output(),
@@ -101,19 +99,6 @@ impl Lcdc {
                 "source": format!("0x{source:x}"), "sequence": self.state.sequence,
                 "width": self.r(0x14) & 0x3fff, "height": self.r(0x20) & 0x1fff,
                 "tick": cx.now(), "capture": "active-picture-phase",
-                "planes": planes.iter().map(|plane| {
-                    // plane() constructs only these explicitly selected transports.
-                    let video = plane.order == PixelOrder::YyCbCr;
-                    serde_json::json!({
-                        "kind": if video { "video" } else { "picture" },
-                        "format": if video { "yycbcr422" } else { "bgra8888-straight" },
-                        "source": format!("0x{:x}", plane.address),
-                        "stride_bytes": plane.stride,
-                        "source_rect": [plane.source_x, plane.source_y, plane.source_width, plane.source_height],
-                        "destination_rect": [plane.work_x, plane.work_y, plane.work_width, plane.work_height],
-                        "sampling_q12": plane.sampling,
-                    })
-                }).collect::<Vec<_>>(),
             }),
         )
     }
@@ -121,21 +106,16 @@ impl Lcdc {
         if self.picture.is_none() && self.video.is_none() {
             return Ok(());
         }
-        let Some(output)=fujimod_framebuffer_xp4::decode(&self.state.regs,self.picture,self.video)? else {return self.status(cx,false,0,None,&[])};
+        let Some(output)=fujimod_framebuffer_xp4::decode(&self.state.regs,self.picture,self.video)? else {return self.status(cx,false,0,None)};
         let (width,height)=(output.width,output.height);
         let planes:Vec<_>=output.layers.iter().map(|layer|layer.plane).collect();
         let top=planes.last().unwrap();
         let source=top.address;
         let format=if top.order==PixelOrder::YyCbCr{"yycbcr422"}else{"bgra8888-straight"};
         let rgba=output.render(|a,n|cx.ram_bytes(a,n))?;
-        let mut digest = Sha256::new();
-        digest.update(width.to_le_bytes());
-        digest.update(height.to_le_bytes());
-        digest.update(&rgba);
-        let hash: [u8; 32] = digest.finalize().into();
-        if self.state.image_hash != Some(hash) {
+        if self.state.last_image.as_ref() != Some(&(width, height, rgba.clone())) {
             self.state.sequence += 1;
-            self.state.image_hash = Some(hash);
+            self.state.last_image = Some((width, height, rgba.clone()));
         }
         cx.scanout(Frame {
             output: self.output(),
@@ -144,7 +124,7 @@ impl Lcdc {
             height,
             rgba,
         })?;
-        self.status(cx, true, source, Some(format), &planes)
+        self.status(cx, true, source, Some(format))
     }
     fn register(offset: u64) -> bool {
         matches!(
@@ -218,7 +198,7 @@ impl Device for Lcdc {
         }
         self.state.regs[offset as usize / 4] = value;
         if offset == 4 && value == 0 {
-            if let Err(error) = self.status(cx, false, 0, None, &[]) {
+            if let Err(error) = self.status(cx, false, 0, None) {
                 cx.fail(error);
             }
         }
@@ -432,14 +412,6 @@ mod tests {
             ]
             .repeat(2)
         );
-        assert_eq!(
-            h.outputs.last().unwrap()["planes"],
-            serde_json::json!([{
-                "kind": "picture", "format": "bgra8888-straight", "source": "0x10",
-                "stride_bytes": 8, "source_rect": [0, 0, 2, 1],
-                "destination_rect": [0, 0, 4, 2], "sampling_q12": [2048, 2048]
-            }])
-        );
         let saved = d.save();
         for _ in 0..100 {
             assert_eq!(d.save(), saved);
@@ -465,7 +437,6 @@ mod tests {
         assert_eq!(h.images[3].sequence, 2);
         write(&mut restored, &mut h, 0, 4, 0);
         assert_eq!(h.outputs.last().unwrap()["active"], false);
-        assert_eq!(h.outputs.last().unwrap()["planes"], serde_json::json!([]));
     }
     #[test]
     fn unknown_layers_and_picture_modes_refuse() {
@@ -519,17 +490,6 @@ mod tests {
         d.advance(&mut Cx::new(&mut h, 1, 0xabcdef, 0));
         assert_eq!(&h.images[1].rgba[..8], &[10, 20, 30, 255, 10, 20, 30, 255]);
         assert_eq!(&h.images[1].rgba[8..12], &[68, 78, 88, 255]);
-        assert_eq!(
-            h.outputs.last().unwrap()["planes"],
-            serde_json::json!([
-                {"kind": "video", "format": "yycbcr422", "source": "0x40",
-                 "stride_bytes": 16, "source_rect": [0, 0, 4, 2],
-                 "destination_rect": [0, 0, 4, 2], "sampling_q12": [4096, 4096]},
-                {"kind": "picture", "format": "bgra8888-straight", "source": "0x10",
-                 "stride_bytes": 8, "source_rect": [0, 0, 2, 1],
-                 "destination_rect": [0, 0, 4, 2], "sampling_q12": [2048, 2048]}
-            ])
-        );
         assert_eq!(d.next_deadline(h.now), Some(192));
         // An unsupported packing bit must fail without publishing an image.
         write(&mut d, &mut h, 0, 0x16c, 0x10002);

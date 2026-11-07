@@ -1,7 +1,6 @@
 //! Binary input recordings for the vector GPU replay benchmark.
 
 use crate::{CommandProcessor, Profile};
-use sha2::{Digest, Sha256};
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::path::Path;
@@ -9,7 +8,7 @@ use std::sync::Arc;
 
 const MAGIC_V1: &[u8; 8] = b"FMVGPU01";
 const MAGIC_V2: &[u8; 8] = b"FMVGPU02";
-const MAGIC_V3: &[u8; 8] = b"FMVGPU03";
+const MAGIC_V4: &[u8; 8] = b"FMVGPU04";
 const MAX_RECORD_BYTES: u64 = 2 << 30;
 
 #[derive(Clone, Debug)]
@@ -77,17 +76,16 @@ pub struct RegisterWrite {
 }
 
 #[derive(Clone, Debug)]
-pub struct OutputDigest {
+pub struct OutputBytes {
     pub address: u64,
-    pub length: u64,
-    pub sha256: [u8; 32],
+    pub bytes: Vec<u8>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Completion {
     pub now: u64,
     pub token: u64,
-    pub outputs: Vec<OutputDigest>,
+    pub outputs: Vec<OutputBytes>,
 }
 
 #[derive(Clone, Debug)]
@@ -109,7 +107,7 @@ impl Recorder {
             writer: BufWriter::new(file),
             finished: false,
         };
-        recorder.writer.write_all(MAGIC_V3)?;
+        recorder.writer.write_all(MAGIC_V4)?;
         recorder.write_header(header)?;
         recorder.writer.flush()?;
         Ok(recorder)
@@ -220,8 +218,9 @@ impl Recorder {
             write_count(record, output.len())?;
             for (address, bytes) in output {
                 record.write_all(&address.to_le_bytes())?;
-                record.write_all(&usize_to_u64(bytes.len())?.to_le_bytes())?;
-                record.write_all(&Sha256::digest(bytes.as_slice()))?;
+                let length = usize_to_u64(bytes.len())?;
+                record.write_all(&length.to_le_bytes())?;
+                record.write_all(bytes)?;
             }
             Ok(())
         })
@@ -270,7 +269,7 @@ impl RecordingReader {
             (false, true)
         } else if &magic == MAGIC_V2 {
             (true, true)
-        } else if &magic == MAGIC_V3 {
+        } else if &magic == MAGIC_V4 {
             (true, false)
         } else {
             return Err(invalid_data("not a supported vector GPU recording"));
@@ -471,13 +470,10 @@ fn read_event_body(reader: &mut impl Read, tag: u8) -> io::Result<Event> {
             for _ in 0..output_count {
                 let address = read_u64(reader)?;
                 let length = read_u64(reader)?;
-                let mut sha256 = [0; 32];
-                reader.read_exact(&mut sha256)?;
-                outputs.push(OutputDigest {
-                    address,
-                    length,
-                    sha256,
-                });
+                let count = u64_to_usize(length)?;
+                let mut bytes = vec![0; count];
+                reader.read_exact(&mut bytes)?;
+                outputs.push(OutputBytes { address, bytes });
             }
             Ok(Event::Completion(Completion {
                 now,

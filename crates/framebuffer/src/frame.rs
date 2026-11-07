@@ -38,13 +38,6 @@ impl State {
         }
     }
 }
-/// SHA-256 uses sha2's CPU-feature-selected ARMv8 backend, matching the
-/// stable content hashing on this host.
-pub fn sha256(data: &[u8]) -> String {
-    use sha2::{Digest, Sha256};
-    format!("{:x}", Sha256::digest(data))
-}
-
 impl State {
     pub fn json(&self) -> serde_json::Value {
         use serde_json::Value as J;
