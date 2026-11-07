@@ -23,19 +23,7 @@ fn header_value(offset: u64, field: &'static str, value: u64, expected: u64) -> 
         },
     )
 }
-fn verify_hash(data: &[u8], offset: u64, expected: &str) -> Result<()> {
-    let actual = sha256(data);
-    if actual == expected {
-        Ok(())
-    } else {
-        Err(Error::Hash {
-            offset,
-            size: data.len() as u64,
-            expected: expected.into(),
-            actual,
-        })
-    }
-}
+/// Content key for build and cache producers.
 pub fn sha256(data: &[u8]) -> String {
     Sha256::digest(data)
         .iter()
@@ -267,7 +255,6 @@ pub struct Unit {
 }
 #[derive(Debug)]
 pub struct Image {
-    pub source_sha256: String,
     pub units: Vec<Unit>,
 }
 #[derive(Debug, Clone)]
@@ -316,23 +303,19 @@ pub fn decode(source: &[u8], mappings: &[Mapping]) -> Result<Image> {
             executable: m.executable,
         });
     }
-    Ok(Image {
-        source_sha256: sha256(source),
-        units,
-    })
+    Ok(Image { units })
 }
 /// Verify a raw initialized mapping or explicit extent; never infer a load address.
 #[derive(Debug)]
-pub struct RawSpec<'a> {
+pub struct RawSpec {
     pub offset: u64,
     pub size: u64,
     pub base: u64,
-    pub sha256: &'a str,
     pub header_bits: Option<u8>,
     pub entry: Option<u64>,
     pub architecture_bits: u8,
 }
-pub fn raw<'a>(data: &'a [u8], spec: &RawSpec<'_>) -> Result<&'a [u8]> {
+pub fn raw<'a>(data: &'a [u8], spec: &RawSpec) -> Result<&'a [u8]> {
     require(
         spec.size > 0 && spec.base.checked_add(spec.size).is_some(),
         Error::Overflow {
@@ -341,7 +324,6 @@ pub fn raw<'a>(data: &'a [u8], spec: &RawSpec<'_>) -> Result<&'a [u8]> {
         },
     )?;
     let bytes = extent(data, spec.offset, spec.size)?;
-    verify_hash(bytes, spec.offset, spec.sha256)?;
     if let Some(bits) = spec.header_bits {
         let actual = inner_header(bytes);
         let valid = actual.as_ref().is_some_and(|h| {
@@ -381,14 +363,12 @@ pub struct Overlay {
     pub address: u64,
     pub size: u64,
     pub dat_offset: u64,
-    pub sha256: String,
 }
 #[derive(Debug)]
 pub struct OverlayTable<'a> {
     pub offset: u64,
     pub base: u64,
     pub size: u64,
-    pub sha256: &'a str,
     pub alias: u64,
     pub flash_dat_bias: u64,
     pub section_id: u32,
@@ -397,7 +377,6 @@ pub struct OverlayTable<'a> {
 }
 pub fn overlays(data: &[u8], spec: &OverlayTable<'_>) -> Result<Vec<Overlay>> {
     let table = extent(data, spec.offset, spec.size)?;
-    verify_hash(table, spec.offset, spec.sha256)?;
     let words = |mut address: u64, count: usize| -> Result<Vec<u32>> {
         if spec.alias != 0 && address >= spec.alias {
             address -= spec.alias;
@@ -506,13 +485,13 @@ pub fn overlays(data: &[u8], spec: &OverlayTable<'_>) -> Result<Vec<Overlay>> {
                 offset: spec.flash_dat_bias,
                 size: u64::from(section[5]) + run - u64::from(group[1]),
             })?;
+        extent(data, dat, length)?;
         records.push(Overlay {
             logical_id: r[0],
             semaphore: r[5],
             address: run,
             size: length,
             dat_offset: dat,
-            sha256: sha256(extent(data, dat, length)?),
         });
     }
     Err(Error::UnterminatedTable {

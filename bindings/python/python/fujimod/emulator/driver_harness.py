@@ -8,7 +8,6 @@ No file lookup or firmware selection occurs in this module.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Callable, Iterable, Sequence
 from typing import TYPE_CHECKING, Literal, TypedDict, TypeGuard
@@ -238,7 +237,7 @@ class CallContext:
 class DriverHarness:
     """Isolated ARM caller over an explicitly prepared board and code images.
 
-    Images carry checked hashes and read-only declarations. Memory views,
+    Images carry explicit bytes and read-only declarations. Memory views,
     scratch/stack reservations and symbol lookup are caller inputs. Fixtures,
     patches, payloads and callee substitutions remain explicit in every result.
     The board owns device construction and uses the common native Session.
@@ -422,7 +421,6 @@ class DriverHarness:
             raise ValueError("Patches must not overlap")
         for address, data, index in ordered:
             base, image = self.images[index]
-            original = image[address - base : address - base + len(data)]
             patched = (
                 image[: address - base] + data + image[address - base + len(data) :]
             )
@@ -433,8 +431,6 @@ class DriverHarness:
                     address=address,
                     length=len(data),
                     section=self.image_names[index],
-                    original_sha256=hashlib.sha256(original).hexdigest(),
-                    patched_sha256=hashlib.sha256(data).hexdigest(),
                 )
             )
 
@@ -495,8 +491,6 @@ class DriverHarness:
             length=len(data),
             section=self.image_names[index],
             reason=reason,
-            original_sha256=hashlib.sha256(original).hexdigest(),
-            new_sha256=hashlib.sha256(data).hexdigest(),
         )
         self.data_overrides.append(record)
         self._override_originals[address] = original
@@ -537,8 +531,6 @@ class DriverHarness:
                 record,
                 event="restore",
                 call_index=self._calls,
-                restored_sha256=hashlib.sha256(original).hexdigest(),
-                overridden_sha256=record["new_sha256"],
             )
         )
         return address
@@ -557,10 +549,8 @@ class DriverHarness:
         caches for all declared memory views are invalidated;
         registered breakpoints stay registered. Each replacement is appended to
         ``payload_replacements`` (also in every call result): ``address``,
-        ``length``, ``old_sha256``, ``new_sha256`` of the span,
-        ``payload`` (its address), ``payload_sha256_before/after``, ``reason``
-        and ``call_index`` (the number of calls made before it). ``payloads``
-        entries report the current whole-payload ``sha256``. Returns the record.
+        ``length``, ``payload`` (its address), ``reason`` and ``call_index``
+        (the number of calls made before it). Returns the record.
         """
         if self.board.executing_cpu is not None:
             raise ValueError("replace_payload requires a paused harness")
@@ -587,20 +577,11 @@ class DriverHarness:
                 + hex(address)
             )
         payload = owner[0]
-        old = self.board.read_memory(physical, len(data), self._core)
-        before = payload["sha256"]
         self.board.write_memory(physical, data, self._core)
-        payload["sha256"] = hashlib.sha256(
-            self.board.read_memory(payload["address"], payload["length"], self._core)
-        ).hexdigest()
         record = dict(
             address=physical,
             length=len(data),
-            old_sha256=hashlib.sha256(old).hexdigest(),
-            new_sha256=hashlib.sha256(data).hexdigest(),
             payload=payload["address"],
-            payload_sha256_before=before,
-            payload_sha256_after=payload["sha256"],
             reason=reason,
             call_index=self._calls,
         )
@@ -666,7 +647,6 @@ class DriverHarness:
                 dict(
                     address=physical,
                     length=len(data),
-                    sha256=hashlib.sha256(data).hexdigest(),
                 )
             )
 

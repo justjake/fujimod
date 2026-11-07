@@ -1,6 +1,5 @@
 """Resolved code and caller reservations for isolated ARM routine execution."""
 
-import hashlib
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -45,7 +44,6 @@ class CodeImage:
     name: str
     address: int
     data: bytes
-    sha256: str
     readonly: bool = False
 
     def __post_init__(self) -> None:
@@ -58,8 +56,6 @@ class CodeImage:
             or not 0 <= self.address < self.address + len(self.data) <= 1 << 32
         ):
             raise ValueError("Code image needs bytes within a 32-bit address interval")
-        if hashlib.sha256(self.data).hexdigest() != self.sha256:
-            raise ValueError("Code image SHA-256 differs: " + self.name)
         if type(self.readonly) is not bool:
             raise ValueError("Code image readonly must be a bool")
 

@@ -12,11 +12,10 @@ from typing import Literal
 
 @dataclass(frozen=True)
 class Asset:
-    """Identity and expected contents for one explicitly supplied input."""
+    """Identity and byte count for one explicitly supplied input."""
 
     id: str
     size: int
-    sha256: str
 
     def __post_init__(self) -> None:
         if (
@@ -34,17 +33,8 @@ class Asset:
             raise ValueError("Asset id must be a bounded identifier")
         if type(self.size) is not int or not 0 <= self.size < 1 << 64:
             raise ValueError("Asset size must be an unsigned 64-bit integer")
-        if (
-            type(self.sha256) is not str
-            or len(self.sha256) != 64
-            or any(character not in "0123456789abcdef" for character in self.sha256)
-        ):
-            raise ValueError(
-                "Asset SHA-256 must contain 64 lowercase hexadecimal characters"
-            )
-
     def manifest(self) -> dict[str, object]:
-        return dict(id=self.id, content=dict(size=self.size, sha256=self.sha256))
+        return dict(id=self.id, content=dict(size=self.size))
 
 
 @dataclass(frozen=True)

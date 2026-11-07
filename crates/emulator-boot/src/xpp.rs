@@ -18,7 +18,6 @@ use fujimod_catalog_run_inputs::HardwareReset;
 use fujimod_emulator::board::factory;
 use fujimod_emulator_cpu::Register;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 /// Performance-counter cycles per board tick of each application core.
@@ -211,21 +210,15 @@ fn hex_bytes(text: &str, label: &str) -> Result<Vec<u8>, String> {
         .collect()
 }
 
-/// The words of a declared statistics buffer, checked against its identity.
-fn buffer_words(
-    assets: &BTreeMap<String, Vec<u8>>,
-    asset: &str,
-    sha256: &str,
-) -> Result<Vec<u32>, String> {
+/// The words of a declared statistics buffer, checked for complete words.
+fn buffer_words(assets: &BTreeMap<String, Vec<u8>>, asset: &str) -> Result<Vec<u32>, String> {
     let data = assets
         .get(asset)
         .ok_or_else(|| format!("statistics buffer asset {asset} was not supplied"))?;
-    let digest: String = Sha256::digest(data)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect();
-    if data.is_empty() || data.len() % 4 != 0 || digest != sha256 {
-        return Err(format!("statistics buffer asset {asset} identity differs"));
+    if data.is_empty() || data.len() % 4 != 0 {
+        return Err(format!(
+            "statistics buffer asset {asset} must contain complete words"
+        ));
     }
     Ok(data
         .chunks_exact(4)
@@ -233,7 +226,7 @@ fn buffer_words(
         .collect())
 }
 
-/// Hexadecimal rows of a declared live-view host image, after its identity check.
+/// Hexadecimal rows of a declared live-view host image with the declared size.
 fn host_image(
     assets: &BTreeMap<String, Vec<u8>>,
     image: &fujimod_catalog_run_inputs::hardware_inputs::LiveViewHostImage,
@@ -242,13 +235,13 @@ fn host_image(
     let data = assets
         .get(asset)
         .ok_or_else(|| format!("live-view image asset {asset} was not supplied"))?;
-    let digest: String = Sha256::digest(data)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect();
-    let size = u64::from(image.width) * u64::from(image.height) * 3;
-    if size == 0 || data.len() as u64 != size || digest != image.sha256 {
-        return Err(format!("live-view image asset {asset} identity differs"));
+    let size = u64::from(image.width)
+        .checked_mul(u64::from(image.height))
+        .and_then(|pixels| pixels.checked_mul(3))
+        .filter(|size| *size > 0)
+        .ok_or_else(|| format!("live-view image asset {asset} dimensions are invalid"))?;
+    if data.len() as u64 != size {
+        return Err(format!("live-view image asset {asset} size differs"));
     }
     Ok(data.iter().map(|byte| format!("{byte:02x}")).collect())
 }
@@ -606,12 +599,7 @@ fn nodes(
             model["buffers"] = scene
                 .buffers
                 .iter()
-                .map(|b| {
-                    Ok(json!([
-                        b.output,
-                        buffer_words(inputs.assets, &b.asset, &b.sha256)?
-                    ]))
-                })
+                .map(|b| Ok(json!([b.output, buffer_words(inputs.assets, &b.asset)?])))
                 .collect::<Result<Value, String>>()?;
             let light_words: Vec<Value> = scene
                 .buffers
@@ -1298,6 +1286,38 @@ mod tests {
     }
 
     #[test]
+    fn asset_words_and_host_image_dimensions_are_checked_directly() {
+        use fujimod_catalog_run_inputs::hardware_inputs::LiveViewHostImage;
+        let mut assets = BTreeMap::from([("input".into(), vec![0x78, 0x56, 0x34, 0x12])]);
+        assert_eq!(buffer_words(&assets, "input").unwrap(), [0x1234_5678]);
+        let mut image = LiveViewHostImage {
+            asset: "input".into(),
+            basis: "test".into(),
+            width: 1,
+            height: 1,
+            sha256: "unused cache key".into(),
+        };
+        assert!(host_image(&assets, &image).unwrap_err().contains("size"));
+        assets.get_mut("input").unwrap().pop();
+        assert_eq!(host_image(&assets, &image).unwrap(), "785634");
+        for (width, height) in [(0, 1), (1, 0), (u32::MAX, u32::MAX)] {
+            image.width = width;
+            image.height = height;
+            assert!(
+                host_image(&assets, &image)
+                    .unwrap_err()
+                    .contains("dimensions")
+            );
+        }
+        assets.clear();
+        assert!(
+            host_image(&assets, &image)
+                .unwrap_err()
+                .contains("not supplied")
+        );
+    }
+
+    #[test]
     fn a_live_view_host_image_is_checked_and_passed_to_its_unit() {
         use fujimod_catalog_run_inputs::hardware_inputs::LiveViewHostImage;
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
@@ -1338,21 +1358,12 @@ mod tests {
                 &inputs,
             )
         };
+        assets.get_mut("host").unwrap().pop();
         assert_eq!(
             built(&reset, &assets).err().unwrap(),
-            "live-view image asset host identity differs"
+            "live-view image asset host size differs"
         );
-        let host = reset
-            .live_view_image
-            .as_mut()
-            .unwrap()
-            .host_image
-            .as_mut()
-            .unwrap();
-        host.sha256 = Sha256::digest(&pixels)
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect();
+        assets.insert("host".into(), pixels);
         let nodes = built(&reset, &assets).unwrap();
         let block = nodes
             .iter()
@@ -1760,10 +1771,18 @@ mod tests {
             error(&BTreeMap::new()),
             "statistics buffer asset xt20-211-statistics-window was not supplied"
         );
-        let wrong = BTreeMap::from([("xt20-211-statistics-window".to_string(), vec![0; 320])]);
+        for bytes in [vec![], vec![0; 3], vec![0; 319]] {
+            let wrong = BTreeMap::from([("xt20-211-statistics-window".to_string(), bytes)]);
+            assert_eq!(
+                error(&wrong),
+                "statistics buffer asset xt20-211-statistics-window must contain complete words"
+            );
+        }
+        let changed = BTreeMap::from([("xt20-211-statistics-window".to_string(), vec![0; 320])]);
+        let assembly = xt20(&changed).unwrap();
         assert_eq!(
-            error(&wrong),
-            "statistics buffer asset xt20-211-statistics-window identity differs"
+            node(&assembly.devices, "statistics")["buffers"][0][1],
+            json!(vec![0u32; 80])
         );
         // A run without a hardware selection has no SoC profile to assemble from.
         let mut resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();

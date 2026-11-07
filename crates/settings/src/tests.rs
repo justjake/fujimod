@@ -32,7 +32,7 @@ fn range(address: u64, bytes: &[u8]) -> UpdateRange {
     UpdateRange {
         address,
         size: bytes.len() as u64,
-        sha256: fujimod_firmware::sha256(bytes),
+        sha256: "unused range cache key".into(),
     }
 }
 fn fixture() -> (Vec<u8>, FirmwareSettings) {
@@ -53,7 +53,7 @@ fn fixture() -> (Vec<u8>, FirmwareSettings) {
             flash_offset: 0x10,
             address: 0x1000,
             size: section.len() as u64,
-            sha256: fujimod_firmware::sha256(&section),
+            sha256: "unused source cache key".into(),
         },
         bank: Some(SettingsBank {
             descriptor: range(0x1000, &descriptor),
@@ -128,7 +128,7 @@ fn banks_take_stock_defaults_fields_and_requested_settings() {
 }
 
 #[test]
-fn unknown_settings_and_changed_updates_refuse() {
+fn unknown_settings_and_malformed_updates_refuse() {
     let (source, layout) = fixture();
     let flash = flash_image(&source, 4).unwrap();
     let unknown = BTreeMap::from([("language".into(), "en".into())]);
@@ -165,7 +165,6 @@ fn profile_fixture() -> (Vec<u8>, FirmwareSettings) {
     section.extend(header);
     section.extend(record);
     layout.source.size = section.len() as u64;
-    layout.source.sha256 = fujimod_firmware::sha256(&section);
     layout.profile = Some(SettingsProfile {
         derived_fields: vec![],
         header: range(0x101c, &header),
@@ -214,7 +213,7 @@ fn configuration_windows_feed_derived_fields_and_place_no_bank() {
     layout.configuration = Some(ConfigurationWindow {
         flash_offset: 0x10,
         bytes: 0x20,
-        sha256: fujimod_firmware::sha256(window),
+        sha256: "unused window cache key".into(),
         basis: "Sample configuration copy.".into(),
     });
     layout.defaults = None;
@@ -248,7 +247,21 @@ fn configuration_windows_feed_derived_fields_and_place_no_bank() {
     assert!(build(&layout, &flash, &requested, Some(&camera)).is_err());
     let mut changed = flash.clone();
     changed[0x2f] ^= 1;
-    assert!(build(&layout, &changed, &requested, None).is_err());
+    let changed_profile = build(&layout, &changed, &requested, None)
+        .unwrap()
+        .profile
+        .unwrap();
+    assert_eq!(
+        &changed_profile.records[0].bytes[0x20..0x24],
+        &changed[0x2c..0x30]
+    );
+    assert_ne!(
+        &changed_profile.records[0].bytes[0x20..0x24],
+        &record.bytes[0x20..0x24]
+    );
+    let mut outside = layout.clone();
+    outside.configuration.as_mut().unwrap().flash_offset = flash.len() as u64;
+    assert!(build(&outside, &flash, &requested, None).is_err());
     let mut banked = layout.clone();
     banked.settings.insert(
         "debug".into(),
@@ -432,4 +445,25 @@ fn profile_fields_use_the_requested_bank_and_preserve_masked_bits() {
         values.push(values[0].clone());
     }
     assert!(invalid.validate().is_err());
+}
+
+#[test]
+fn source_and_range_extents_remain_bounded() {
+    let (update, mut layout) = fixture();
+    let flash = flash_image(&update, 4).unwrap();
+    layout.source.size += 1;
+    assert!(
+        build(&layout, &flash, &BTreeMap::new(), None)
+            .unwrap_err()
+            .contains("shorter")
+    );
+    layout.source.size -= 1;
+    let mut range = layout.defaults.clone().unwrap();
+    range.address = layout.source.address - 1;
+    assert!(read(&[0; 32], &layout, &range).is_err());
+    range.address = layout.source.address;
+    range.size = u64::MAX;
+    assert!(read(&[0; 32], &layout, &range).is_err());
+    layout.source.flash_offset = u64::MAX;
+    assert!(build(&layout, &flash, &BTreeMap::new(), None).is_err());
 }

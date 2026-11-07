@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
@@ -30,11 +29,10 @@ def _word(value: int) -> int:
     return value
 
 
-def _receipt(address: int, data: bytes) -> dict:
+def _receipt(address: int, size: int) -> dict:
     return {
         "address": address,
-        "size": len(data),
-        "sha256": hashlib.sha256(data).hexdigest(),
+        "size": size,
     }
 
 
@@ -47,18 +45,15 @@ class Aarch64Image:
     name: str
     address: int
     data: bytes
-    sha256: str
     executable: bool = True
 
     def __post_init__(self) -> None:
         if type(self.executable) is not bool:
             raise ValueError("Executable declaration must be a bool")
-        Asset(self.name, len(self.data), self.sha256)
         if not isinstance(self.data, bytes) or not self.data:
             raise ValueError("Image requires immutable nonempty bytes")
+        Asset(self.name, len(self.data))
         _range(self.address, self.address + len(self.data))
-        if hashlib.sha256(self.data).hexdigest() != self.sha256:
-            raise ValueError("Image SHA-256 differs: " + self.name)
 
 
 @dataclass(frozen=True)
@@ -233,7 +228,7 @@ class Aarch64DriverHarness:
                 "instructions_per_tick": [1, 1],
             },
             devices={"kind": "none"},
-            assets=tuple(Asset(i.name, len(i.data), i.sha256) for i in inputs.images),
+            assets=tuple(Asset(i.name, len(i.data)) for i in inputs.images),
             images=tuple(Image(i.name, i.address) for i in inputs.images),
             quantum=quantum,
         )
@@ -467,13 +462,13 @@ class Aarch64DriverHarness:
         self._failed = result["failure"] is not None
         result.update(
             images=[
-                dict(name=i.name, **_receipt(i.address, i.data))
+                dict(name=i.name, **_receipt(i.address, len(i.data)))
                 for i in self.inputs.images
             ],
-            code=[_receipt(a, self.read(a, b - a)) for a, b in executable],
-            patches=[_receipt(a, d) for a, d in self._patches],
-            ram_fixture=[_receipt(a, d) for a, d in self._fixture],
-            allocations=[_receipt(a, d) for a, d in self._allocations],
+            code=[_receipt(a, b - a) for a, b in executable],
+            patches=[_receipt(a, len(d)) for a, d in self._patches],
+            ram_fixture=[_receipt(a, len(d)) for a, d in self._fixture],
+            allocations=[_receipt(a, len(d)) for a, d in self._allocations],
             stubs=list(self._stubs),
             stops=list(self._stops),
             observers=list(self._observers),

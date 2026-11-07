@@ -18,7 +18,6 @@ class Firmware(unittest.TestCase):
             firmware.scan(source)[0]["sha256"], hashlib.sha256(decoded).hexdigest()
         )
         image = firmware.decode(source, [("code", 0, 16, 0x1000, True, True)])
-        self.assertEqual(image.source_sha256, hashlib.sha256(source).hexdigest())
         self.assertEqual(
             (
                 image.units[0].name,
@@ -34,12 +33,11 @@ class Firmware(unittest.TestCase):
     def test_headers_and_raw(self) -> None:
         data = struct.pack("<8I", 0, 0x1000, 32, 0x1010, 0, 0, 0, 0xAAAAFFFF)
         self.assertEqual(firmware.inner_header(data), (32, 0x1000, 32))
-        digest = hashlib.sha256(data).hexdigest()
         self.assertEqual(
-            firmware.raw(data, 0, 32, 0x1000, digest, 32, 32, 0x1010), data
+            firmware.raw(data, 0, 32, 0x1000, 32, 32, 0x1010), data
         )
         with self.assertRaises(ValueError):
-            firmware.raw(data, 0, 32, 0x1000, digest, 64, 32, 0x1010)
+            firmware.raw(data, 0, 32, 0x1000, 64, 32, 0x1010)
         outer = bytearray(0x2BC)
         struct.pack_into("<I", outer, 0, 8)
         struct.pack_into("<2I", outer, 0x204, 1, 0x23)

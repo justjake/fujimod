@@ -34,7 +34,6 @@ def raw(
     offset: int,
     size: int,
     base: int,
-    digest: str,
     architecture_bits: int,
     header_bits: int | None = ...,
     entry: int | None = ...,
@@ -68,8 +67,6 @@ class Unit:
 
 class Image:
     @property
-    def source_sha256(self) -> str: ...
-    @property
     def units(self) -> list[Unit]: ...
 
 class Overlay(TypedDict):
@@ -79,14 +76,12 @@ class Overlay(TypedDict):
     address: int
     size: int
     dat_offset: int
-    sha256: str
 
 def overlays(
     data: bytes,
     offset: int,
     base: int,
     size: int,
-    digest: str,
     alias: int,
     bias: int,
     section_id: int,

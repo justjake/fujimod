@@ -405,8 +405,8 @@ pub(super) fn decode(
     spec: &Firmware,
     firmware: &[u8],
 ) -> Result<Vec<fujimod_firmware::Unit>, String> {
-    if firmware.len() != spec.size || fujimod_firmware::sha256(firmware) != spec.sha256 {
-        return Err("firmware size/SHA-256 mismatch".into());
+    if firmware.len() != spec.size {
+        return Err("firmware size mismatch".into());
     }
     let images = match spec.format {
         Format::Dat => {
@@ -489,7 +489,7 @@ mod tests {
                 "windows":[{"kind":"adc","base":ADC,"size":0x1000,"options":{"samples":vec![RELEASED; 15]}}],
                 "controls": controls},
             "scenario": {"quantum": 16, "firmware": {"size": program.len(),
-                "sha256": fujimod_firmware::sha256(program), "format": "raw",
+                "sha256": "ab".repeat(32), "format": "raw",
                 "mappings": [{"name":"program","offset":0,"size":program.len(),"base":RAM,
                     "encoding":"raw","executable":true}]}},
         })
@@ -501,6 +501,39 @@ mod tests {
         json!({"kind":"ladder-keys","ladders":[{"wire":{"kind":"adc","channel":1},"levels":4096,"rungs":[
             {"key":"Menu","band_low":100,"band_high":200,"sample":150,"basis":"test fixture"},
             {"key":"StickPush","band_low":300,"band_high":400,"sample":350,"basis":"test fixture"}]}]})
+    }
+
+    #[test]
+    fn decode_preserves_size_mappings_and_format_checks_without_hashing() {
+        let program = program();
+        let config: Config = serde_json::from_slice(&config(&program, ladder_keys())).unwrap();
+        let mut firmware = config.scenario.firmware;
+        let mut changed = program.clone();
+        changed[0] ^= 0xff;
+        let units = decode(&firmware, &changed).unwrap();
+        assert_eq!(units.len(), 1);
+        assert_eq!(units[0].name, "program");
+        assert_eq!(units[0].base, RAM);
+        assert!(units[0].executable);
+        assert_eq!(units[0].bytes, changed);
+        assert_eq!(
+            decode(&firmware, &program[..program.len() - 1]).unwrap_err(),
+            "firmware size mismatch"
+        );
+        assert_eq!(
+            decode(&firmware, &[program.as_slice(), &[0]].concat()).unwrap_err(),
+            "firmware size mismatch"
+        );
+        firmware.mappings[0].offset = program.len();
+        assert!(decode(&firmware, &program).is_err());
+        firmware.mappings[0].offset = 0;
+        firmware.mappings[0].encoding = Encoding::Method4;
+        assert_eq!(
+            decode(&firmware, &program).unwrap_err(),
+            "raw image cannot use DAT compression"
+        );
+        firmware.format = Format::Dat;
+        assert!(decode(&firmware, &program).is_err());
     }
 
     fn sample(session: &mut Session) -> u16 {

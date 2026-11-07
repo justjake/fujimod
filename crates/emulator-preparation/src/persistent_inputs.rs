@@ -1,10 +1,10 @@
-//! Host preparation of declared persistent inputs. Asset identity, placement,
+//! Host preparation of declared persistent inputs. Asset selection, placement,
 //! byte edits and journal layout come from explicit typed run inputs. No guest execution,
 //! camera transport or capture-pipeline module participates in preparation.
-use fujimod_emulator_devices::parts::nand::{Nand, Options as Geometry, Overlay, managed_tag};
 use fujimod_catalog_settings::persistent_inputs::{
     PersistentInputs, PersistentJournalAppend, PersistentPacket,
 };
+use fujimod_emulator_devices::parts::nand::{Nand, Options as Geometry, Overlay, managed_tag};
 use std::{collections::BTreeMap, sync::Arc};
 
 pub trait PreparePersistentInputs {
@@ -205,7 +205,6 @@ fn append_record(
 mod tests {
     use super::*;
     use fujimod_catalog_settings::persistent_inputs::{PersistentAsset, PersistentPatch};
-    use sha2::{Digest, Sha256};
     #[test]
     fn authored_catalog_decodes_and_erased_inputs_need_no_assets() {
         let mut packet = vec![0; 16];
@@ -255,13 +254,13 @@ mod tests {
         );
     }
     #[test]
-    fn patches_are_identity_checked_and_journal_parity_is_recomputed() {
+    fn patches_are_applied_to_bounded_inputs_and_journal_parity_is_recomputed() {
         let source = [1u8, 2, 3];
         let normalized = [1u8, 5, 3];
         let asset = PersistentAsset {
             bytes: 3,
-            sha256: format!("{:x}", Sha256::digest(source)),
-            normalized_sha256: format!("{:x}", Sha256::digest(normalized)),
+            sha256: "unused source cache key".into(),
+            normalized_sha256: "unused normalized cache key".into(),
             patches: vec![PersistentPatch {
                 offset: 1,
                 bytes: vec![5],
@@ -269,7 +268,17 @@ mod tests {
         };
         assert_eq!(asset.prepare(&source).unwrap(), normalized);
         assert_eq!(asset.prepare(&normalized).unwrap(), normalized);
-        assert!(asset.prepare(&[1, 2, 4]).is_err());
+        assert_eq!(asset.prepare(&[1, 2, 4]).unwrap(), [1, 5, 4]);
+        assert!(asset.prepare(&[1, 2]).is_err());
+        assert!(asset.prepare(&[1, 2, 3, 4]).is_err());
+        let mut invalid = asset.clone();
+        invalid.patches[0].offset = usize::MAX;
+        assert!(invalid.prepare(&source).is_err());
+        invalid.patches[0].offset = 3;
+        assert!(invalid.prepare(&source).is_err());
+        invalid.patches[0].offset = 0;
+        invalid.patches[0].bytes.clear();
+        assert!(invalid.prepare(&source).is_err());
         let layout = PersistentJournalAppend {
             record_asset: "r".into(),
             payload_asset: "p".into(),

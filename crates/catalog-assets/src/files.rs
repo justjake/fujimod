@@ -82,7 +82,6 @@ impl Files {
         content: &Content,
         limit: u64,
     ) -> Result<Vec<u8>, String> {
-        content.validate()?;
         location.validate()?;
         if content.size > limit {
             return Err("input exceeds the caller's byte limit".into());

@@ -23,7 +23,7 @@ impl Provider for Memory {
 fn content(bytes: &[u8]) -> Content {
     Content {
         size: bytes.len() as u64,
-        sha256: format!("{:x}", Sha256::digest(bytes)),
+        sha256: "unused cache key".into(),
     }
 }
 fn key(kind: Kind, id: &str) -> Key {
@@ -58,7 +58,7 @@ struct Facts {
 }
 
 #[test]
-fn resolves_only_identity_checked_documents_and_separate_assets() {
+fn resolves_typed_documents_and_loads_separate_assets() {
     let mut provider = Memory::default();
     let processor = add(&mut provider, document(Kind::Processor, "demo.processor"));
     let bytes = b"authored scene input".to_vec();
@@ -77,25 +77,28 @@ fn resolves_only_identity_checked_documents_and_separate_assets() {
     );
     assert_eq!(catalog.asset("scene", &provider).unwrap(), bytes);
     provider.assets.get_mut("scene").unwrap()[0] ^= 1;
+    let changed = provider.assets["scene"].clone();
+    assert_eq!(catalog.asset("scene", &provider).unwrap(), changed);
+    provider.assets.get_mut("scene").unwrap().push(0);
     assert!(
         catalog
             .asset("scene", &provider)
             .unwrap_err()
-            .contains("SHA-256")
+            .contains("size")
     );
     assert!(catalog.asset("absent", &provider).is_err());
 }
 
 #[test]
-fn missing_wrong_size_hash_and_identity_are_distinct_failures() {
+fn missing_wrong_size_and_identity_are_distinct_failures() {
     let mut provider = Memory::default();
     let root = add(&mut provider, document(Kind::Firmware, "demo.update"));
     let mut wrong = root.clone();
     wrong.content.size += 1;
     assert!(Catalog::resolve(&wrong, &provider).is_err());
     wrong = root.clone();
-    wrong.content.sha256 = "0".repeat(64);
-    assert!(Catalog::resolve(&wrong, &provider).is_err());
+    wrong.content.sha256 = "different unused cache key".into();
+    assert!(Catalog::resolve(&wrong, &provider).is_ok());
     wrong = root.clone();
     wrong.key.id = "different".into();
     provider
@@ -212,16 +215,88 @@ fn malformed_content_ids_and_duplicate_references_refuse() {
 }
 
 #[test]
-fn content_identity_uses_standard_sha256_and_exact_byte_counts() {
-    let identity = Content::identify(b"abc");
-    assert_eq!(identity.size, 3);
-    assert_eq!(
-        identity.sha256,
-        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+fn loading_checks_exact_byte_counts_without_a_content_digest() {
+    let identity = content(b"abc");
+    identity.check(b"abc").unwrap();
+    identity.check(b"xyz").unwrap();
+    assert!(identity.check(b"ab").is_err());
+    assert!(identity.check(b"abcd").is_err());
+}
+
+#[test]
+fn shared_references_and_assets_check_sizes_and_ignore_cache_keys() {
+    for conflicting_size in [false, true] {
+        let mut provider = Memory::default();
+        let processor = add(&mut provider, document(Kind::Processor, "shared.processor"));
+        let mut body = document(Kind::Body, "shared.body");
+        let mut shared = processor.clone();
+        shared.content.sha256 = "another unused cache key".into();
+        if conflicting_size {
+            shared.content.size += 1;
+        }
+        body.references.push(shared);
+        let body = add(&mut provider, body);
+        let mut root = document(Kind::Firmware, "shared.update");
+        root.references = vec![processor, body];
+        let root = add(&mut provider, root);
+        let result = Catalog::resolve(&root, &provider);
+        if conflicting_size {
+            assert!(result.err().unwrap().contains("conflicting"));
+        } else {
+            assert!(result.is_ok());
+        }
+    }
+
+    let mut provider = Memory::default();
+    let mut child = document(Kind::Processor, "shared.processor");
+    child.assets.push(Asset {
+        id: "shared".into(),
+        content: content(b"data"),
+    });
+    let child = add(&mut provider, child);
+    let mut root = document(Kind::Body, "shared.body");
+    root.references.push(child);
+    root.assets.push(Asset {
+        id: "shared".into(),
+        content: Content {
+            size: 4,
+            sha256: "another unused cache key".into(),
+        },
+    });
+    let root = add(&mut provider, root);
+    provider.assets.insert("shared".into(), b"DATA".to_vec());
+    let catalog = Catalog::resolve(&root, &provider).unwrap();
+    assert_eq!(catalog.asset("shared", &provider).unwrap(), b"DATA");
+}
+
+#[test]
+fn duplicate_assets_and_malformed_document_bytes_refuse() {
+    let mut provider = Memory::default();
+    let mut root = document(Kind::Body, "duplicate.body");
+    let asset = Asset {
+        id: "duplicate".into(),
+        content: content(b"data"),
+    };
+    root.assets = vec![asset.clone(), asset];
+    let root = add(&mut provider, root);
+    assert!(
+        Catalog::resolve(&root, &provider)
+            .err()
+            .unwrap()
+            .contains("duplicate")
     );
-    assert_eq!(
-        Content::identify(b"").sha256,
-        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    provider
+        .documents
+        .insert(root.key.clone(), b"invalid".to_vec());
+    let root = Reference {
+        content: content(b"invalid"),
+        ..root
+    };
+    assert!(
+        Catalog::resolve(&root, &provider)
+            .err()
+            .unwrap()
+            .contains("invalid catalog document")
     );
 }
 

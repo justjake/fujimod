@@ -234,7 +234,7 @@ pub struct ConfigurationWindow {
     pub flash_offset: u64,
     /// Window length in bytes.
     pub bytes: u64,
-    /// Lowercase hexadecimal SHA-256 of the window.
+    /// Build/cache identity of the window; unused when loading settings.
     pub sha256: String,
     /// The stock copy that fills the configuration store from this window.
     pub basis: String,
@@ -283,7 +283,7 @@ pub struct SettingsSource {
     pub address: u64,
     /// Decoded length in bytes.
     pub size: u64,
-    /// Lowercase hexadecimal SHA-256 of the decoded section.
+    /// Build/cache identity of the decoded section; unused when loading settings.
     pub sha256: String,
 }
 
@@ -310,7 +310,7 @@ pub struct SettingsBank {
     pub bytes: u64,
 }
 
-/// Bytes at a firmware address in the decoded update, identified by SHA-256.
+/// A bounded range at a firmware address in the decoded update.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -323,7 +323,7 @@ pub struct UpdateRange {
     pub address: u64,
     /// Length in bytes.
     pub size: u64,
-    /// Lowercase hexadecimal SHA-256 of the stock bytes.
+    /// Build/cache identity of the stock bytes; unused when loading settings.
     pub sha256: String,
 }
 
@@ -382,7 +382,6 @@ impl FirmwareSettings {
                 if window.bytes == 0
                     || window.flash_offset.checked_add(window.bytes).is_none()
                     || window.basis.is_empty()
-                    || !hex_digest(&window.sha256)
                     || self.defaults.is_some()
                     || !self.fields.is_empty()
                     || !self.sections.is_empty()
@@ -420,10 +419,7 @@ impl FirmwareSettings {
             {
                 return fail("stock range outside the source section");
             }
-            if range.size == 0
-                || range.address.checked_add(range.size).is_none()
-                || !hex_digest(&range.sha256)
-            {
+            if range.size == 0 || range.address.checked_add(range.size).is_none() {
                 return fail("invalid update range");
             }
         }
@@ -558,14 +554,6 @@ impl FirmwareSettings {
         }
         Ok(())
     }
-}
-
-/// A lowercase hexadecimal SHA-256.
-fn hex_digest(digest: &str) -> bool {
-    digest.len() == 64
-        && digest
-            .bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 #[cfg(test)]

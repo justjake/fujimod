@@ -122,9 +122,14 @@ class Board:
             if not isinstance(data, Buffer):
                 raise TypeError(f"asset {asset_id} must be bytes-like")
         loaded = {asset_id: bytes(data) for asset_id, data in assets.items()}
-        _native.verify_input_assets(
-            json.dumps([asset.manifest() for asset in definition.assets]), loaded
-        )
+        declared = {asset.id: asset for asset in definition.assets}
+        for asset in declared.values():
+            if asset.id not in loaded:
+                raise ValueError(f"missing input asset {asset.id}")
+            if len(loaded[asset.id]) != asset.size:
+                raise ValueError(f"input asset {asset.id} size differs")
+        if set(declared) != set(loaded):
+            raise ValueError("undeclared input assets")
         images = []
         for image in definition.images:
             if image.asset not in loaded:

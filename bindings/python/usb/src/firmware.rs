@@ -64,7 +64,7 @@ fn scan<'py>(py: Python<'py>, source: &[u8]) -> PyResult<Bound<'py, PyList>> {
     Ok(list)
 }
 #[pyfunction]
-#[pyo3(signature=(data, offset, size, base, digest, architecture_bits, header_bits=None, entry=None))]
+#[pyo3(signature=(data, offset, size, base, architecture_bits, header_bits=None, entry=None))]
 #[allow(clippy::too_many_arguments)]
 fn raw<'py>(
     py: Python<'py>,
@@ -72,7 +72,6 @@ fn raw<'py>(
     offset: u64,
     size: u64,
     base: u64,
-    digest: &str,
     architecture_bits: u8,
     header_bits: Option<u8>,
     entry: Option<u64>,
@@ -83,7 +82,6 @@ fn raw<'py>(
             offset,
             size,
             base,
-            sha256: digest,
             header_bits,
             entry,
             architecture_bits,
@@ -100,7 +98,6 @@ fn overlays<'py>(
     offset: u64,
     base: u64,
     size: u64,
-    digest: &str,
     alias: u64,
     bias: u64,
     section_id: u32,
@@ -112,7 +109,6 @@ fn overlays<'py>(
             offset,
             base,
             size,
-            sha256: digest,
             alias,
             flash_dat_bias: bias,
             section_id,
@@ -129,7 +125,6 @@ fn overlays<'py>(
         d.set_item("address", r.address)?;
         d.set_item("size", r.size)?;
         d.set_item("dat_offset", r.dat_offset)?;
-        d.set_item("sha256", r.sha256)?;
         list.append(d)?;
     }
     Ok(list)
@@ -207,10 +202,6 @@ struct Image {
 }
 #[pymethods]
 impl Image {
-    #[getter]
-    fn source_sha256(&self) -> &str {
-        &self.inner.source_sha256
-    }
     #[getter]
     fn units(&self) -> Vec<Unit> {
         self.inner

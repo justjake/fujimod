@@ -87,7 +87,6 @@ pub struct StubHit {
 pub struct WriteReceipt {
     pub address: u64,
     pub size: usize,
-    pub sha256: String,
 }
 pub type StubResponse = (u64, Vec<(u64, Vec<u8>)>);
 pub type StubSnapshot = Vec<(u64, Vec<u8>)>;
@@ -630,13 +629,11 @@ pub fn checked_call_with(
                         board.read_memory(0, address, &mut bytes)?;
                         snapshots.push((address, bytes));
                     }
-                    use sha2::{Digest, Sha256};
                     hit.reads = snapshots
                         .iter()
                         .map(|(address, bytes)| WriteReceipt {
                             address: *address,
                             size: bytes.len(),
-                            sha256: format!("{:x}", Sha256::digest(bytes)),
                         })
                         .collect();
                     let (returns, writes) = callback(&hit, &snapshots)?;
@@ -654,12 +651,10 @@ pub fn checked_call_with(
                     }
                     // Validate the entire effect set before applying any write.
                     for (address, bytes) in writes {
-                        use sha2::{Digest, Sha256};
                         board.write_memory(0, address, &bytes)?;
                         hit.writes.push(WriteReceipt {
                             address,
                             size: bytes.len(),
-                            sha256: format!("{:x}", Sha256::digest(&bytes)),
                         });
                     }
                     hit.returns = returns;

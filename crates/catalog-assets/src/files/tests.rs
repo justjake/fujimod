@@ -45,7 +45,10 @@ impl Drop for Directory {
     }
 }
 fn content(bytes: &[u8]) -> Content {
-    Content::identify(bytes)
+    Content {
+        size: bytes.len() as u64,
+        sha256: "unused cache key".into(),
+    }
 }
 fn asset(bytes: &[u8]) -> Asset {
     Asset {
@@ -55,7 +58,7 @@ fn asset(bytes: &[u8]) -> Asset {
 }
 
 #[test]
-fn locations_are_separate_from_catalog_facts_and_every_load_checks_identity() {
+fn locations_are_separate_from_catalog_facts_and_every_load_checks_size() {
     let directory = Directory::new();
     let bytes = b"authored input";
     std::fs::write(directory.0.join("assets/input.data"), bytes).unwrap();
@@ -103,6 +106,11 @@ fn locations_are_separate_from_catalog_facts_and_every_load_checks_identity() {
     );
     assert_eq!(catalog.asset("input", &provider).unwrap(), bytes);
     std::fs::write(directory.0.join("assets/input.data"), b"changed input!").unwrap();
+    assert_eq!(
+        catalog.asset("input", &provider).unwrap(),
+        b"changed input!"
+    );
+    std::fs::write(directory.0.join("assets/input.data"), b"short").unwrap();
     assert!(catalog.asset("input", &provider).is_err());
 }
 
@@ -137,7 +145,7 @@ fn declared_windows_are_bounded_and_whole_files_require_the_exact_extent() {
 }
 
 #[test]
-fn absent_inputs_changed_bytes_and_caller_limits_refuse() {
+fn absent_inputs_and_caller_limits_refuse() {
     let directory = Directory::new();
     let provider = directory.files(
         Location::File {
@@ -147,7 +155,7 @@ fn absent_inputs_changed_bytes_and_caller_limits_refuse() {
     );
     assert!(asset(b"data").load(&provider).is_err());
     std::fs::write(directory.0.join("assets/absent"), b"DATA").unwrap();
-    assert!(asset(b"data").load(&provider).is_err());
+    assert_eq!(asset(b"data").load(&provider).unwrap(), b"DATA");
     let mut missing = asset(b"DATA");
     missing.id = "other".into();
     assert!(missing.load(&provider).is_err());

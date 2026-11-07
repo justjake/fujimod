@@ -1,6 +1,5 @@
 """Synthetic instruction contracts for checked isolated AArch64 calls."""
 
-import hashlib
 import struct
 
 import pytest
@@ -26,7 +25,7 @@ def harness(
     patches: tuple[tuple[int, bytes], ...] | list[tuple[int, bytes]] = (),
     fixture: list[tuple[int, bytes]] | None = None,
 ) -> Aarch64DriverHarness:
-    image = Aarch64Image("code", CODE, code, hashlib.sha256(code).hexdigest())
+    image = Aarch64Image("code", CODE, code)
     inputs = Aarch64Inputs(
         images=(image,),
         stack=(SP - 0x1000, SP + 64),
@@ -42,6 +41,17 @@ def harness(
     return result
 
 
+@pytest.mark.parametrize('changes', [
+    {'name': ''}, {'name': '../code'}, {'name': 'x' * 129},
+    {'address': -1}, {'address': (1 << 64) - 1}, {'address': True},
+    {'data': b''}, {'data': bytearray(4)}, {'executable': 1},
+])
+def test_image_retains_name_byte_address_and_execution_checks(changes) -> None:
+    values = dict(name='code', address=CODE, data=words(0xD65F03C0))
+    with pytest.raises(ValueError):
+        Aarch64Image(**(values | changes))
+
+
 def test_arguments_and_returns_preserve_all_64_bits() -> None:
     # Sum x0..x7, then return through x30.
     code = words(*(0x8B000000 | (r << 16) for r in range(1, 8)), 0xD65F03C0)
@@ -51,10 +61,8 @@ def test_arguments_and_returns_preserve_all_64_bits() -> None:
         assert result["returned"] and result["return_value"] == sum(args)
         assert result["registers"]["sp"] == SP
         assert result["instructions"] == 8
-        assert result["images"][0]["sha256"] == hashlib.sha256(code).hexdigest()
-        assert (
-            result["ram_fixture"][0]["sha256"] == hashlib.sha256(bytes(32)).hexdigest()
-        )
+        assert result["images"] == [{"name": "code", "address": CODE, "size": len(code)}]
+        assert result["ram_fixture"] == [{"address": DATA, "size": 32}]
         assert result["allowed_code"] == [[CODE, CODE + len(code)]]
 
 
@@ -135,9 +143,9 @@ def test_stub_and_patch_identities_and_full_width_stub_return() -> None:
         assert len(result["patches"]) == 2
         assert result["stubs"][0]["label"] == "synthetic callee"
         assert len(result["stub_hits"]) == 1
-        assert (
-            result["code"][0]["sha256"]
-            == hashlib.sha256(h.read(CODE, len(code))).hexdigest()
+        assert result["code"] == [{"address": CODE, "size": len(code)}]
+        assert h.read(CODE, len(code)) == words(
+            0xAA1E03F1, 0x94000003, 0xAA1103FE, 0xD65F03C0, 0xD4200000
         )
 
 
@@ -169,10 +177,7 @@ def test_dynamic_stub_snapshots_and_declared_writes_are_recorded() -> None:
         result = h.call(CODE, args=(DATA, DATA + 8, BASE))
         assert result["returned"] and result["return_value"] == BASE + 1
         assert captured == [b"original"] and h.read(DATA + 8, 8) == b"original"
-        assert (
-            result["stub_hits"][0]["writes"][0]["sha256"]
-            == hashlib.sha256(b"original").hexdigest()
-        )
+        assert result["stub_hits"][0]["writes"] == [{"address": DATA + 8, "size": 8}]
         assert result["stubs"][0]["dynamic"] is True
         second = h.call(CODE, args=(DATA + 8, DATA + 16, 7))
         assert second["returned"] and h.read(DATA + 16, 8) == b"original"
@@ -251,10 +256,7 @@ def test_indirect_stub_snapshots_capture_packet_before_stack_reuse() -> None:
         )
         result = h.call(CODE, args=(0, DATA))
         assert result["returned"] and captured == [b"packet!!"]
-        assert (
-            result["stub_hits"][0]["reads"][-1]["sha256"]
-            == hashlib.sha256(b"packet!!").hexdigest()
-        )
+        assert result["stub_hits"][0]["reads"][-1] == {"address": DATA + 16, "size": 8}
 
 
 def test_fixture_inside_image_is_data_only_and_successful_calls_share_changes() -> None:

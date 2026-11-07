@@ -1,6 +1,5 @@
-//! Explicit, identity-checked persistent inputs supplied for a run.
+//! Explicit, bounded persistent inputs supplied for a run.
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 /// Declared source windows and selected placements, independent of file locations.
@@ -13,18 +12,18 @@ pub struct PersistentInputs {
     /// Named, independently selected input sets.
     pub sets: BTreeMap<String, PersistentSet>,
 }
-/// A bounded source window verified before and after normalization.
+/// A bounded source window with explicit normalization edits.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct PersistentAsset {
     /// Exact source window length in bytes.
     pub bytes: usize,
-    /// SHA-256 of the supplied source window.
+    /// Build/cache identity of the source window; unused during preparation.
     pub sha256: String,
-    /// SHA-256 after applying the declared edits.
+    /// Build/cache identity after applying the edits; unused during preparation.
     pub normalized_sha256: String,
-    /// Explicit edits applied only to an exact source identity.
+    /// Explicit edits applied to the supplied source window.
     pub patches: Vec<PersistentPatch>,
 }
 /// An explicit byte edit within a source window.
@@ -97,7 +96,7 @@ pub enum PersistentPacket {
         /// Packet content.
         bytes: Vec<u8>,
     },
-    /// Packet extracted from an identity-checked asset.
+    /// Packet extracted from a bounded asset.
     Window {
         /// Asset identity.
         asset: String,
@@ -108,38 +107,21 @@ pub enum PersistentPacket {
     },
 }
 impl PersistentAsset {
-    /// Verify the source, apply declared edits, and verify the final identity.
+    /// Check the source length and apply declared edits.
     pub fn prepare(&self, input: &[u8]) -> Result<Vec<u8>, String> {
         self.validate()?;
         if input.len() != self.bytes {
             return Err("Persistent input window length differs".into());
         }
-        let digest = format!("{:x}", Sha256::digest(input));
         let mut bytes = input.to_vec();
-        if digest == self.sha256 {
-            for patch in &self.patches {
-                bytes[patch.offset..patch.offset + patch.bytes.len()].copy_from_slice(&patch.bytes);
-            }
-        } else if digest != self.normalized_sha256 {
-            return Err("Persistent input SHA-256 differs".into());
-        }
-        if format!("{:x}", Sha256::digest(&bytes)) != self.normalized_sha256 {
-            return Err("Normalized persistent input SHA-256 differs".into());
+        for patch in &self.patches {
+            bytes[patch.offset..patch.offset + patch.bytes.len()].copy_from_slice(&patch.bytes);
         }
         Ok(bytes)
     }
     fn validate(&self) -> Result<(), String> {
         if self.bytes == 0 || self.bytes > 128 << 20 || self.patches.len() > 4096 {
             return Err("Persistent input extent exceeds its bound".into());
-        }
-        for digest in [&self.sha256, &self.normalized_sha256] {
-            if digest.len() != 64
-                || !digest
-                    .bytes()
-                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-            {
-                return Err("Persistent input SHA-256 must be lowercase hexadecimal".into());
-            }
         }
         for patch in &self.patches {
             if patch.bytes.is_empty()

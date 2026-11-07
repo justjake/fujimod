@@ -16,23 +16,25 @@ use std::collections::{BTreeMap, BTreeSet};
 #[serde(deny_unknown_fields)]
 pub struct Content {
     pub size: u64,
+    /// Build/cache identity; loading checks only the declared byte count.
+    #[serde(default)]
     pub sha256: String,
 }
 impl Content {
+    /// Compute content identity when building a catalog or cache entry.
     pub fn identify(bytes: &[u8]) -> Self {
         Self {
             size: bytes.len() as u64,
             sha256: format!("{:x}", Sha256::digest(bytes)),
         }
     }
+    /// Validate a content key when authoring a catalog or cache entry.
     pub fn validate(&self) -> Result<(), String> {
         validate_content_sha256(&self.sha256)
     }
     pub fn check(&self, bytes: &[u8]) -> Result<(), String> {
-        self.validate()?;
-        if self.size != bytes.len() as u64 || self.sha256 != format!("{:x}", Sha256::digest(bytes))
-        {
-            return Err("content size or SHA-256 differs".into());
+        if self.size != bytes.len() as u64 {
+            return Err("content size differs".into());
         }
         Ok(())
     }
@@ -46,8 +48,7 @@ pub struct Asset {
 }
 impl Asset {
     pub fn validate(&self) -> Result<(), String> {
-        validate_id(&self.id)?;
-        self.content.validate()
+        validate_id(&self.id)
     }
     pub fn check(&self, bytes: &[u8]) -> Result<(), String> {
         self.validate()?;
@@ -90,7 +91,7 @@ impl Reference {
         if self.content.size == 0 {
             return Err("catalog document cannot be empty".into());
         }
-        self.content.validate()
+        Ok(())
     }
 }
 
@@ -127,8 +128,8 @@ impl<T> Document<T> {
     }
 }
 
-/// Locations and transport are supplied by the host. The catalog checks every
-/// returned byte string, including providers that cache or fetch their inputs.
+/// Locations and transport are supplied by the host. The catalog checks the size
+/// of returned bytes, including providers that cache or fetch their inputs.
 pub trait Provider {
     fn document(&self, reference: &Reference) -> Result<Vec<u8>, String>;
     fn asset(&self, asset: &Asset) -> Result<Vec<u8>, String>;
@@ -136,7 +137,7 @@ pub trait Provider {
 
 pub struct Catalog {
     documents: BTreeMap<Key, Document<serde_json::Value>>,
-    references: BTreeMap<Key, Content>,
+    references: BTreeMap<Key, u64>,
     assets: BTreeMap<String, Asset>,
 }
 impl Catalog {
@@ -159,8 +160,8 @@ impl Catalog {
         if active.contains(&reference.key) {
             return Err("cyclic catalog document reference".into());
         }
-        if let Some(content) = self.references.get(&reference.key) {
-            return if *content == reference.content {
+        if let Some(size) = self.references.get(&reference.key) {
+            return if *size == reference.content.size {
                 Ok(())
             } else {
                 Err("catalog identity has conflicting content".into())
@@ -181,14 +182,14 @@ impl Catalog {
             if self
                 .assets
                 .get(&asset.id)
-                .is_some_and(|known| *known != *asset)
+                .is_some_and(|known| known.content.size != asset.content.size)
             {
                 return Err("catalog asset identity has conflicting content".into());
             }
             self.assets.insert(asset.id.clone(), asset.clone());
         }
         self.references
-            .insert(reference.key.clone(), reference.content.clone());
+            .insert(reference.key.clone(), reference.content.size);
         active.insert(reference.key.clone());
         for child in &document.references {
             self.visit(child, provider, active)?;

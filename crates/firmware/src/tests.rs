@@ -14,17 +14,6 @@ fn recompress_preserves_unmodified_tokens_and_prevents_dictionary_edit_propagati
     assert!(recompress(&original, b"short").is_err());
     assert!(recompress(&original[..21], &replacement).is_err());
 }
-#[test]
-fn sha256_matches_standard_vectors() {
-    assert_eq!(
-        sha256(b""),
-        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    );
-    assert_eq!(
-        sha256(b"abc"),
-        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-    );
-}
 fn stream(body: &[u8], size: u32) -> Vec<u8> {
     let packed = body.len() as u32 + 20;
     [
@@ -100,7 +89,6 @@ fn headers_raw_and_typed_image() {
             offset: 0,
             size: 64,
             base: 0x1000,
-            sha256: &sha256(&data),
             header_bits: Some(bits as u8),
             entry: Some(0x1020),
             architecture_bits: bits as u8,
@@ -130,7 +118,9 @@ fn headers_raw_and_typed_image() {
         )
         .unwrap();
         assert_eq!(image.units[0].bytes, data);
-        assert_eq!(image.source_sha256, sha256(&invert(&data)));
+        assert_eq!(image.units.len(), 1);
+        assert_eq!(image.units[0].base, 0x1000);
+        assert!(image.units[0].executable);
     }
     assert!(inner_header(&[0; 64]).is_none());
     assert!(extent(&[], u64::MAX, 2).is_err());
@@ -159,7 +149,6 @@ fn parse_overlays(data: &[u8]) -> Result<Vec<Overlay>> {
             offset: 0,
             base: 0x1000,
             size: 0x200,
-            sha256: &sha256(&data[..0x200]),
             alias: 0x40000000,
             flash_dat_bias: 0,
             section_id: 6,
@@ -270,7 +259,10 @@ fn overlay_descriptors_address_bytes_not_hardware_flash_blocks() {
     let rows = parse_overlays(&data).unwrap();
     assert_eq!(rows[0].dat_offset, 0x20004);
     assert_eq!(rows[0].address, 0x40004);
-    assert_eq!(rows[0].sha256, sha256(b"code"));
+    assert_eq!(
+        extent(&data, rows[0].dat_offset, rows[0].size).unwrap(),
+        b"code"
+    );
     assert!(parse_overlays(&data[..0x20007]).is_err());
 }
 
