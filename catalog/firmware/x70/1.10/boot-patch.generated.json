@@ -133,6 +133,26 @@
         "section4",
         "section5"
       ]
+    },
+    {
+      "name": "overlay-block",
+      "site": 10157300,
+      "expected": 3766485001,
+      "kind": "range",
+      "base_register": "r0",
+      "length_register": "r9",
+      "address_mask": 3221225471,
+      "units": [
+        "boot",
+        "kernel0",
+        "kernel1",
+        "section_table",
+        "section4",
+        "section5",
+        "overlay48",
+        "overlay4a",
+        "overlay4b"
+      ]
     }
   ],
   "clears": [
@@ -174,7 +194,7 @@
     }
   ],
   "trampoline_space": {
-    "address": 8650752,
+    "address": 589824,
     "size": 4096
   },
   "resident_space": {

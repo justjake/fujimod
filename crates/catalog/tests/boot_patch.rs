@@ -14,7 +14,7 @@ fn located_boot_patch_facts_resolve() {
     assert_eq!(facts.units[6].name, "section4");
     assert_eq!(facts.units[6].compression, BootPatchCompression::Method4);
 
-    assert_eq!(facts.triggers.len(), 2);
+    assert_eq!(facts.triggers.len(), 3);
     let first = &facts.triggers[0];
     assert_eq!(first.name, "section4-decoded");
     assert_eq!(first.site, 0x1d84);
@@ -26,6 +26,22 @@ fn located_boot_patch_facts_resolve() {
     assert_eq!(second.site, 0x94ac20);
     assert_eq!(second.expected, 0xe30b02ac);
     assert!(second.units.contains(&"section5".to_string()));
+    let overlay = &facts.triggers[2];
+    assert_eq!(overlay.site, 0x9afcf4);
+    assert_eq!(overlay.expected, 0xe0800009);
+    assert_eq!(overlay.kind, BootPatchTriggerKind::Range);
+    assert_eq!(overlay.base_register.as_deref(), Some("r0"));
+    assert_eq!(overlay.length_register.as_deref(), Some("r9"));
+    assert_eq!(overlay.address_mask, Some(0xbfffffff));
+    assert_eq!(
+        &overlay.units[second.units.len()..],
+        ["overlay48", "overlay4a", "overlay4b"]
+    );
+    let mut invalid = facts.clone();
+    invalid.triggers[2].address_mask = None;
+    assert!(invalid.validate().is_err());
+    invalid.triggers[2].address_mask = Some(0);
+    assert!(invalid.validate().is_err());
 
     assert_eq!(facts.clears.len(), 6);
     let section5 = facts
@@ -37,7 +53,7 @@ fn located_boot_patch_facts_resolve() {
     assert_eq!(section5.size, 0x473000);
     assert_eq!(section5.done_after, "section5-loaded");
 
-    assert_eq!(facts.trampoline_space.address, 0x840000);
+    assert_eq!(facts.trampoline_space.address, 0x90000);
     assert_eq!(facts.trampoline_space.size, 0x1000);
     assert_eq!(facts.resident_space.address, 0x1d040000);
     assert_eq!(facts.resident_space.size, 0x2E0000);
