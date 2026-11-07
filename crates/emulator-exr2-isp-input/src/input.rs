@@ -381,7 +381,9 @@ impl ImageInput {
         // Other source controls and partial-field modes remain unsupported.
         let (packing, pitch) = match (r[0x394 / 4], r[0x3ac / 4], r[0x39c / 4]) {
             (0x1000000, 0xc003, 0x40000) => (Packing::U16, r[0x3a4 / 4] as usize),
-            (0x1000100, 0xc004, 0) => (
+            // X30 1.03 reads back its packed12 still RAW (written with 0x4
+            // bit 16) through burst selector 0xc003 rather than 0xc004.
+            (0x1000100, 0xc004 | 0xc003, 0) => (
                 Packing::Packed12,
                 Packing::Packed12.row_bytes(r[0x3a4 / 4] as usize),
             ),
