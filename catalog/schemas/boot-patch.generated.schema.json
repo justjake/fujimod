@@ -85,6 +85,15 @@
       "additionalProperties": false,
       "description": "One site whose completion means its group can be applied.",
       "properties": {
+        "address_mask": {
+          "description": "Mask applied to the base register before reporting a range.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "base_register": {
           "description": "ARM register holding the copied base for a range trigger.",
           "type": [
@@ -120,7 +129,7 @@
           "type": "integer"
         },
         "units": {
-          "description": "Units in RAM once the trigger fires.",
+          "description": "Resident units and units streamed by this or earlier triggers.",
           "items": {
             "type": "string"
           },
