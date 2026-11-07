@@ -21,6 +21,7 @@ struct Saved {
     interrupt_delivery: Vec<bool>,
     irq_observations: Option<(usize, Vec<Value>)>,
     instructions: Vec<u64>,
+    epoch_instructions: Vec<u64>,
     accounted: Vec<u64>,
     deadlines: Vec<Option<u64>>,
     generations: Vec<u64>,
@@ -110,6 +111,7 @@ impl State {
             pins,
             interrupt_delivery,
             instructions,
+            epoch_instructions,
             accounted,
             deadlines,
             generations,
@@ -149,6 +151,7 @@ impl State {
             interrupt_delivery: interrupt_delivery.clone(),
             irq_observations: irq_observations.clone(),
             instructions: instructions.clone(),
+            epoch_instructions: epoch_instructions.clone(),
             accounted: accounted.clone(),
             deadlines: deadlines.clone(),
             generations: generations.clone(),
@@ -185,6 +188,7 @@ impl State {
             .clone_from(&saved.interrupt_delivery);
         self.irq_observations.clone_from(&saved.irq_observations);
         self.instructions.clone_from(&saved.instructions);
+        self.epoch_instructions.clone_from(&saved.epoch_instructions);
         self.accounted.clone_from(&saved.accounted);
         self.deadlines.clone_from(&saved.deadlines);
         self.generations.clone_from(&saved.generations);

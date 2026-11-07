@@ -507,10 +507,16 @@ fn fresh_epoch_preserves_host_time_and_instruction_totals() {
     ).unwrap();
     assert_eq!(board.now(), 9000);
     assert_eq!(board.instruction_counts(), [321]);
+    assert!(board.epoch_is_unexecuted());
     words(&board, CODE, &[0xe1a00000, 0xeafffffe]);
+    let initial = board.checkpoint(None).unwrap();
     board.run_for_instructions(4, 2).unwrap();
     assert_eq!(board.instruction_counts(), [325]);
+    assert!(!board.epoch_is_unexecuted());
     assert_eq!(board.now(), 9004);
+    board.restore_keyframe(&initial).unwrap();
+    assert!(board.epoch_is_unexecuted());
+    assert_eq!(board.instruction_counts(), [321]);
     assert!(a7_graph().build(
         Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20)
             .with_epoch(9000, vec![1, 2]),

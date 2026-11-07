@@ -9,6 +9,9 @@ use fujimod_emulator_ip::sdhci::host::{self as sdhc, SdHost};
 use fujimod_emulator_storage::fat;
 
 fn card_session() -> Session {
+    card_session_with_epoch(None)
+}
+fn card_session_with_epoch(epoch: Option<(u64, Vec<u64>)>) -> Session {
     let contacts = fujimod_emulator_devices::parts::card_contacts::Contacts::new(true, false);
     let card = fat::format(
         &format(),
@@ -74,13 +77,13 @@ fn card_session() -> Session {
         "mappings":[{"core":0,"address":0,"physical":0,"size":4096,"permissions":7}],
         "peripherals":[],"decoders":[],"instructions_per_tick":[24,1]
     })).unwrap();
+    let mut options = factory::Options::new(factory::Engine::Unicorn)
+        .with_translation_cache_size_bytes(1 << 20);
+    if let Some((tick, counts)) = epoch {
+        options = options.with_epoch(tick, counts);
+    }
     let board = graph
-        .build(
-            factory::Options::new(factory::Engine::Unicorn)
-                .with_translation_cache_size_bytes(1 << 20),
-            bus,
-            None,
-        )
+        .build(options, bus, None)
         .unwrap();
     Session {
         definition: serde_json::json!({"fixture":"card-session"}),

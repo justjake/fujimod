@@ -91,6 +91,7 @@ struct State {
     pins: Vec<(bool, bool)>,
     interrupt_delivery: Vec<bool>,
     instructions: Vec<u64>,
+    epoch_instructions: Vec<u64>,
     accounted: Vec<u64>,
     deadlines: Vec<Option<u64>>,
     generations: Vec<u64>,
@@ -294,6 +295,7 @@ impl Board {
         if let Some(g) = &interrupts {
             g.validate(cpus.len())?;
         }
+        let epoch_instructions = instructions.clone();
         let n = cpus.len();
         let reset_contexts = cpus
             .iter()
@@ -334,6 +336,7 @@ impl Board {
             pins: vec![(false, false); n],
             interrupt_delivery: vec![true; n],
             instructions,
+            epoch_instructions,
             accounted: vec![0; n],
             deadlines: vec![None; count],
             generations: vec![0; count],
@@ -460,6 +463,11 @@ impl Board {
         &self,
     ) -> Vec<Result<std::collections::BTreeMap<&'static str, u64>, String>> {
         self.cpus.iter().map(|cpu| cpu.exit_counters()).collect()
+    }
+    /// Whether the processors constructed for this epoch have executed.
+    pub fn epoch_is_unexecuted(&self) -> bool {
+        let state = self.state.borrow();
+        state.instructions == state.epoch_instructions
     }
     /// Serviced board MMIO callbacks, indexed by processor.
     pub fn mmio_trap_callback_counts(&self) -> Vec<u64> {
@@ -1088,7 +1096,7 @@ impl Board {
         let s = self.state.borrow();
         self.track_all_devices(&s.bus);
         let mut value = json!({"execution_mode":s.bus.mode().name(),"execution_policy":s.execution_policy.name(),"counts_as_boot":s.bus.mode()==bus::Mode::Strict,
-            "timeline":s.timeline.save(),"instructions":s.instructions,"released":s.released,"waiting":s.waiting,"waiting_event":s.waiting_event,"events":s.events,"next_core":self.next_core.get(),"slice_left":self.slice_left.get(),"quantum":self.quantum.get(),"failure":s.error,
+            "timeline":s.timeline.save(),"instructions":s.instructions,"epoch_instructions":s.epoch_instructions,"released":s.released,"waiting":s.waiting,"waiting_event":s.waiting_event,"events":s.events,"next_core":self.next_core.get(),"slice_left":self.slice_left.get(),"quantum":self.quantum.get(),"failure":s.error,
             "memory_decoders":s.decoders.state(),"dma_mappings":s.memory.state(),"gic":s.interrupts.as_ref().map(|g|g.gic.save()),"core_interrupt_devices":s.core_interrupts.iter().map(|c|c.as_ref().map(|c|c.device)).collect::<Vec<_>>(),"outputs":s.outputs,"implementation_cluster":s.implementation_cluster,"unmodeled_system":s.unmodeled_system.iter().map(|(&(core,register,pc),&(reads,writes))|json!({"core":core,"register":register,"pc":pc,"reads":reads,"writes":writes})).collect::<Vec<_>>(),"armv7a":s.armv7a,"aprofile":s.aprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()).unwrap_or_else(|e|json!({"error":e})))).collect::<Vec<_>>(),"mprofile":s.mprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()))).collect::<Vec<_>>()});
         value["bus"] = bus;
         value["discovery_callee_stubs"] = self.discovery_callee_stubs();

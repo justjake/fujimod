@@ -14,7 +14,7 @@ impl Session {
             })
     }
     pub fn retain_nand(&mut self, name: &str, medium: Nand) -> Result<(), String> {
-        if self.board.instruction_counts().iter().any(|n| *n != 0) {
+        if !self.board.epoch_is_unexecuted() {
             return Err("retaining NAND requires an unexecuted board".into());
         }
         self.board
