@@ -171,7 +171,7 @@ class WalkthroughTests(unittest.TestCase):
             min(ImageStat.Stat(picture.crop((135, 140, 185, 178))).mean), 250
         )
         self.assertEqual(plain(report["steps"][0]["title"]), "Example")
-        self.assertIn("video.mp4", report["artifacts"])
+        self.assertTrue((guide.output / "video.mp4").is_file())
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg required")
     def test_output_switch_keeps_native_screenshot_and_fixed_video_canvas(self) -> None:

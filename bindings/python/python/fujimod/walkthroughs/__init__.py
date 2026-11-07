@@ -1,6 +1,5 @@
 """Executable illustrated guides. Camera adapters own execution and observation."""
 
-import hashlib
 import importlib
 import importlib.abc
 import importlib.machinery
@@ -101,7 +100,7 @@ class Step(TypedDict):
     title: list[Token]
     text: list[Token]
     screenshot: str
-    screenshot_sha256: str
+    capture_index: int
     video_start: float
     video_end: float
     hold: float
@@ -155,7 +154,6 @@ class Report(TypedDict):
     error: NotRequired[str]
     video: NotRequired[str]
     presentation: NotRequired[Presentation]
-    artifacts: NotRequired[dict[str, str]]
     overlays: NotRequired[list[dict[str, object]]]
 
 
@@ -315,7 +313,7 @@ def discover(path: str | Path) -> list[Walkthrough]:
     )
     package = (
         "_walkthrough_"
-        + hashlib.sha256(str(directory).encode()).hexdigest()
+        + "_".join(part for part in directory.name.split() if part)
         + "_"
         + str(next(_discoveries))
     )
@@ -353,14 +351,6 @@ def discover(path: str | Path) -> list[Walkthrough]:
                 value, Walkthrough(source, name, value.walkthrough_title, value)
             )
     return list(found.values())
-
-
-def _digest(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 class Guide[C: RecordingCamera]:
@@ -583,7 +573,7 @@ class Guide[C: RecordingCamera]:
                 return
             number = len(self.report["steps"]) + 1
             name = f"screenshots/{number:03d}.png"
-            digest = self.recording.screenshot(frame, name)
+            self.recording.screenshot(frame, name)
             self.recording.still(frame, hold)
             self.report["steps"].append(
                 dict(
@@ -591,7 +581,7 @@ class Guide[C: RecordingCamera]:
                     title=title_tokens,
                     text=text_tokens,
                     screenshot=name,
-                    screenshot_sha256=digest,
+                    capture_index=len(self.report.get("captures", [])) - 1,
                     video_start=start,
                     video_end=self.recording.seconds,
                     hold=hold,
@@ -725,12 +715,6 @@ class Guide[C: RecordingCamera]:
                 if self.input_badges is not None
                 else None,
             )
-            artifacts = {
-                str(p.relative_to(self.output)): _digest(p)
-                for p in self.output.rglob("*")
-                if p.is_file() and p.name not in ("guide.json", ".guide.json.tmp")
-            }
-            self.report["artifacts"] = artifacts
             self.report["performance"] = perf.end_guide(getattr(self.camera, "board", None))
             self.save()
         if error is not None:

@@ -1,6 +1,5 @@
 """T-strings retain semantic identity through JSON and HTML rendering."""
 
-import hashlib
 from pathlib import Path
 from string.templatelib import Template
 from tempfile import TemporaryDirectory
@@ -44,7 +43,7 @@ class SemanticTextTests(TestCase):
         icon = tokens[1]["icon"]
         assert icon is not None
         self.assertEqual((self.output / icon["asset"]).read_bytes(), PNG)
-        self.assertEqual(icon["sha256"], hashlib.sha256(PNG).hexdigest())
+        self.assertNotIn("sha256", icon)
 
     def test_name_and_icon_views_preserve_identity(self) -> None:
         item = ref(menu="mod")

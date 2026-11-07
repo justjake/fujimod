@@ -53,7 +53,7 @@ state fingerprints; it neither drives execution nor acknowledges hardware.
 Python exposes `fujimod.recording.Frame`, `Recorder` and `capture_scanout` through
 the native binding. Guide code receives native frames; only an explicit image
 consumer calls `Frame.png()`. `Frame.save()` and `Recorder.screenshot()` write
-screenshots and return their SHA-256. Importing PNG is supported for image files
+screenshots. Importing PNG is supported for image files
 and test inputs; the native scanout/video path never uses PNG intermediates.
 
 Run `cargo test -p fujimod-recording` and

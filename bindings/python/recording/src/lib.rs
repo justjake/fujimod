@@ -59,7 +59,7 @@ impl Frame {
     fn pixels<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         PyBytes::new(py, self.inner.pixels())
     }
-    fn save(&self, path: PathBuf) -> PyResult<String> {
+    fn save(&self, path: PathBuf) -> PyResult<()> {
         self.inner.save(&path).map_err(error)
     }
     fn annotated(&self, labels: Vec<(String, u8)>) -> PyResult<Self> {
@@ -68,10 +68,6 @@ impl Frame {
             state: "{}".into(),
             instance: None,
         })
-    }
-    #[getter]
-    fn sha256(&self) -> PyResult<String> {
-        self.inner.sha256().map_err(error)
     }
     #[getter]
     fn width(&self) -> u32 {
@@ -183,7 +179,7 @@ impl Recorder {
             .still(frame.inner.clone(), seconds)
             .map_err(error)
     }
-    fn screenshot(&mut self, frame: &Frame, name: &str) -> PyResult<String> {
+    fn screenshot(&mut self, frame: &Frame, name: &str) -> PyResult<()> {
         self.inner.screenshot(&frame.inner, name).map_err(error)
     }
     #[pyo3(signature=(source,seconds,*,instance=None,force=false))]

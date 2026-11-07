@@ -36,10 +36,9 @@ fn screenshots_need_no_encoder_and_keep_pixels() {
     recorder.frame(frame.clone(), 0.).unwrap();
     recorder.input("menu_ok_button", true, 0.1).unwrap();
     recorder.still(frame.clone(), 1.5).unwrap();
-    let digest = recorder.screenshot(&frame, "screenshots/001.png").unwrap();
+    recorder.screenshot(&frame, "screenshots/001.png").unwrap();
     recorder.finish().unwrap();
     recorder.finish().unwrap();
-    assert_eq!(digest.len(), 64);
     assert_eq!(
         Frame::from_png(&std::fs::read(output.0.join("screenshots/001.png")).unwrap())
             .unwrap()

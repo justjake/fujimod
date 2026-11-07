@@ -143,8 +143,8 @@ and fixtures fail the run even if author code catches their exception.
 `guide.fixture(description)` records setup interventions and suppresses coverage.
 
 `guide.json` schema 3 contains identity, title, prerequisite results, pass/fail,
-numbered steps, screenshot hashes, local video timestamps, input edges,
-interactions, fixtures, presentation timing and artifact hashes. `poster.png`
+numbered steps, screenshot paths, local video timestamps, input edges,
+interactions, fixtures, presentation timing and artifact paths. `poster.png`
 is the segment's actual starting frame, captured after prerequisite replay.
 That state includes inputs after the parent's last illustrated step; its last
 screenshot may still show a highlighted destination before activation.
@@ -193,6 +193,6 @@ be observational and contributes no interaction or coverage.
 Each step's `title` and `text` are JSON token arrays: `text` tokens hold literal
 text, `menu` tokens hold identity, English name, display mode and optional icon,
 and `menu_path` tokens hold ordered menu entries. Icon descriptors contain a
-relative `icons/<sha256>.png` asset and its hash; assets are bundled with the
-report and verified like screenshots. Renderers use these resolved values,
+relative `icons/<sha256>.png` asset; assets are bundled with the report.
+Renderers use these resolved values,
 without firmware access or evaluation of Python expressions.

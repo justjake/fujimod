@@ -1,5 +1,4 @@
 //! Transport-independent RGB captures. PNG is computed only when requested.
-use sha2::{Digest, Sha256};
 use std::{
     io::Cursor,
     path::Path,
@@ -146,13 +145,10 @@ impl Frame {
         let _ = self.0.png.set(bytes);
         Ok(self.0.png.get().unwrap())
     }
-    pub fn save(&self, path: &Path) -> Result<String> {
+    pub fn save(&self, path: &Path) -> Result<()> {
         let bytes = self.png()?;
         std::fs::write(path, bytes).map_err(|e| e.to_string())?;
-        self.sha256()
-    }
-    pub fn sha256(&self) -> Result<String> {
-        Ok(format!("{:x}", Sha256::digest(self.png()?)))
+        Ok(())
     }
     /// Keep the first frame's video canvas; screenshots retain native dimensions.
     pub fn fit(&self, width: u32, height: u32) -> Result<Self> {

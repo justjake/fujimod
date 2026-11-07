@@ -1,6 +1,5 @@
 """The shared native source protocol and screenshot-default recording API."""
 
-import hashlib
 import json
 import shutil
 import subprocess
@@ -206,16 +205,11 @@ class RecordingTests(unittest.TestCase):
                 recorder.sample_scanout(source, index / 15, force=True)
             frame = capture_scanout(source)
             assert frame is not None
-            digest = recorder.screenshot(frame, "screenshots/001.png")
+            recorder.screenshot(frame, "screenshots/001.png")
             recorder.still(frame, 1.5)
             recorder.finish()
             self.assertEqual(source.calls, 2)
             self.assertEqual((source.instructions, source.ticks), (123, 456))
-            self.assertEqual(
-                digest,
-                hashlib.sha256((root / "screenshots/001.png").read_bytes()).hexdigest(),
-            )
-            self.assertEqual(frame.sha256, digest)
             self.assertEqual(json.loads(recorder.metrics())["written_frames"], 0)
             self.assertFalse((root / "video.mp4").exists())
             self.assertFalse((root / "ffmpeg.log").exists())

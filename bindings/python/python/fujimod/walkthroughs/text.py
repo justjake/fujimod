@@ -15,7 +15,6 @@ from typing import Literal, TypedDict
 
 class Icon(TypedDict):
     asset: str
-    sha256: str
 
 
 class TextToken(TypedDict):
@@ -146,7 +145,7 @@ def encode(
             if destination.exists() and destination.read_bytes() != entry.icon:
                 raise ValueError("Conflicting menu icon asset")
             destination.write_bytes(entry.icon)
-            token["icon"] = dict(asset=asset, sha256=digest)
+            token["icon"] = dict(asset=asset)
         return token
 
     def interpolation(item: MenuReference | MenuPath) -> MenuToken | MenuPathToken:
@@ -252,8 +251,6 @@ def icons(tokens: Sequence[Token]) -> Iterator[Icon]:
                     or len(path.parts) != 2
                     or path.parts[0] != "icons"
                     or path.suffix != ".png"
-                    or not isinstance(icon["sha256"], str)
-                    or len(icon["sha256"]) != 64
                 ):
                     raise ValueError("Invalid menu icon asset")
                 yield icon

@@ -351,7 +351,7 @@ impl Recorder {
         }
         Ok(())
     }
-    pub fn screenshot(&mut self, frame: &Frame, name: &str) -> Result<String> {
+    pub fn screenshot(&mut self, frame: &Frame, name: &str) -> Result<()> {
         let relative = Path::new(name);
         if relative.is_absolute()
             || relative
@@ -365,9 +365,9 @@ impl Recorder {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
         let start = Instant::now();
-        let hash = frame.save(&path)?;
+        frame.save(&path)?;
         self.metrics.png_seconds += start.elapsed().as_secs_f64();
-        Ok(hash)
+        Ok(())
     }
     fn current_labels(&mut self) -> Vec<(String, u8)> {
         let lifetime = 5 * u64::from(self.fps);

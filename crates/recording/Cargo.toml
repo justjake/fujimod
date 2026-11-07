@@ -15,5 +15,4 @@ tiny-skia = { version = "0.12", default-features = false, features = ["std"] }
 ab_glyph = "0.2"
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-sha2.workspace = true
 fujimod-workspace-hack.workspace = true

@@ -124,7 +124,6 @@ class DisplayOverlay:
                     action="show",
                     label=self.label,
                     width=self.width,
-                    source_sha256=frame.sha256,
                 )
             )
             if self._recorder.video and self._recorder.has_poster:
