@@ -1328,6 +1328,10 @@ impl Board {
     fn guest_profile(&self) -> PyResult<String> {
         serde_json::to_string(&self.board()?.guest_profile()).map_err(|e| error(e.to_string()))
     }
+    fn exit_counters(&self) -> PyResult<String> {
+        serde_json::to_string(&self.board()?.exit_counters())
+            .map_err(|e| error(e.to_string()))
+    }
     fn encoder_cycles(&mut self, name: &str, cycles: i32) -> PyResult<()> {
         self.session_mut()?.rotate(name, cycles).map_err(error)
     }
