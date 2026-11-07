@@ -391,7 +391,8 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                         completion_reads: ReadSet::default(),
                     })
                 })?;
-                capture.reads = full_reads;
+                capture.reads = reads.clone();
+                capture.reads.extend(full_reads);
                 capture.reads.extend(completion_reads.clone());
                 capture.completion_reads = completion_reads;
                 reads.extend(capture.reads.clone());
