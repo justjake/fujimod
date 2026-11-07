@@ -898,6 +898,7 @@ fn declared_power_endpoint_and_clock_share_register_driven_alarm() {
     put(&mut built, &mut host, 0xfff84040, 4, 0xe0);
     put(&mut built, &mut host, 0xfff84044, 4, 6);
     let id = built.node_ids["power"];
+    assert!(built.graph.nodes[id].native_dependencies.contains(&built.node_ids["clocks"]));
     for word in [0xe901, 0xea00, 0xe801] {
         put(&mut built, &mut host, 0xfff8405c, 4, word);
         host.now += 4;
