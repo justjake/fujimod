@@ -112,9 +112,10 @@ impl Sha256 {
 /// Pure host checksums; batching avoids a call per immutable sector.
 #[pyfunction]
 fn sha256_many(values: Vec<Bound<'_, PyBytes>>) -> Vec<String> {
+    use sha2::{Digest, Sha256};
     values
         .iter()
-        .map(|value| fujimod_framebuffer::frame::sha256(value.as_bytes()))
+        .map(|value| format!("{:x}", Sha256::digest(value.as_bytes())))
         .collect()
 }
 
