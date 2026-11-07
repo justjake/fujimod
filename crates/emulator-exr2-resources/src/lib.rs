@@ -136,9 +136,9 @@ impl Resources {
             json!({"wires":wires,"users":self.users,"image_users":self.image_users,"software_sources":self.software_sources,
                 "images":images,
                 "statistics":statistics,
-                "sensors":sensors,"cards":self.inputs.cards.iter().map(|(k,v)|(k,v.fingerprint())).collect::<BTreeMap<_,_>>(),
-                "nands":self.inputs.nands.iter().map(|(k,v)|(k,v.fingerprint())).collect::<BTreeMap<_,_>>(),
-                "files":self.inputs.files.iter().map(|(k,v)|(k,v.iter().map(|(path,data)|json!({"path":path,"contents":fujimod_emulator_devices::fingerprint::bytes(data)})).collect::<Vec<_>>())).collect::<BTreeMap<_,_>>()
+                "sensors":sensors,"cards":self.inputs.cards.iter().map(|(k,v)|(k,v.state())).collect::<BTreeMap<_,_>>(),
+                "nands":self.inputs.nands.iter().map(|(k,v)|(k,v.state())).collect::<BTreeMap<_,_>>(),
+                "files":self.inputs.files.iter().map(|(k,v)|(k,v.iter().map(|(path,data)|json!({"path":path,"contents":fujimod_emulator_devices::state::bytes(data)})).collect::<Vec<_>>())).collect::<BTreeMap<_,_>>()
             }),
         )
     }

@@ -32,6 +32,10 @@ declare class Camera {
      */
     close(): void;
     completeHostRequest(device: number, id: bigint, result: Uint8Array): void;
+    /**
+     * Complete stopped-session state as a canonical typed archive.
+     */
+    completeState(): Uint8Array;
     deviceStates(kind: string): DeviceStates;
     /**
      * Set the stopped host worker preference (0 or 2) and report it.
@@ -39,7 +43,6 @@ declare class Camera {
     deviceWorkers(count?: number | null): DeviceWorkers;
     errorReport(): ErrorReport;
     exportSnapshot(): SessionSnapshot;
-    fingerprint(): Fingerprint;
     /**
      * The latest presented frame of `output`, or `undefined` before the first.
      */
@@ -312,15 +315,6 @@ export interface QueueState {
 }
 
 /**
-* Host-visible controls and their current positions.
-*/
-export interface ControlState {
-    inputs: ControlInput[];
-    positions: Record<string, string>;
-    inputQueue: QueueState | null;
-}
-
-/**
 * Host-visible controls, card and power after a state-changing command.
 */
 export interface SessionState {
@@ -466,10 +460,6 @@ export interface EndpointOptions {
     dma_limit: number;
     out_endpoints: [number, number][];
     in_endpoints: [number, number][];
-}
-
-export interface Fingerprint {
-    sha256: string;
 }
 
 export interface JitOptions {

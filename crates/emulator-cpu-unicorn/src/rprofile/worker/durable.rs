@@ -93,21 +93,21 @@ mod tests {
             run(&source, 35);
             let saved = source.snapshot(None).unwrap();
             let bytes = saved.export().unwrap();
-            let before_resume = source.fingerprint().unwrap();
+            let before_resume = source.state().unwrap();
             run(&source, 2113);
             assert_eq!(saved.export().unwrap(), bytes);
-            (bytes, source.fingerprint().unwrap(), before_resume)
+            (bytes, source.state().unwrap(), before_resume)
         };
         let target = processor();
-        let before = target.fingerprint().unwrap();
+        let before = target.state().unwrap();
         let saved = target.import_snapshot(&bytes).unwrap();
         assert_eq!(saved.owner(), target.identity());
-        assert_eq!(target.fingerprint().unwrap(), before);
+        assert_eq!(target.state().unwrap(), before);
         target.restore(saved.as_ref()).unwrap();
-        assert_eq!(target.fingerprint().unwrap(), before_resume);
+        assert_eq!(target.state().unwrap(), before_resume);
         target.snapshot(Some(saved.as_ref())).unwrap();
         run(&target, 2113);
-        assert_eq!(target.fingerprint().unwrap(), expected);
+        assert_eq!(target.state().unwrap(), expected);
     }
     #[test]
     fn invalid_worker_archive_does_not_change_live_processor_or_retained_points() {
@@ -116,10 +116,10 @@ mod tests {
         let bytes = point.export().unwrap();
         let mut bad = bytes.clone();
         bad.push(0);
-        let before = cpu.fingerprint().unwrap();
+        let before = cpu.state().unwrap();
         assert!(cpu.import_snapshot(&bad).is_err());
         assert!(cpu.import_snapshot(&[]).is_err());
-        assert_eq!(cpu.fingerprint().unwrap(), before);
+        assert_eq!(cpu.state().unwrap(), before);
         assert_eq!(point.export().unwrap(), bytes);
         cpu.restore(point.as_ref()).unwrap();
     }

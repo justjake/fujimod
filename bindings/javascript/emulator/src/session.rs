@@ -524,7 +524,7 @@ mod tests {
             decode(&firmware, &[program.as_slice(), &[0]].concat()).unwrap_err(),
             "firmware size mismatch"
         );
-        firmware.mappings[0].offset = program.len();
+        firmware.mappings[0].offset = program.len() as u64;
         assert!(decode(&firmware, &program).is_err());
         firmware.mappings[0].offset = 0;
         firmware.mappings[0].encoding = Encoding::Method4;

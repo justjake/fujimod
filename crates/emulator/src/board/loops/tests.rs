@@ -168,11 +168,11 @@ fn loop_execution_stops_at_dma_deadlines_and_peer_turns_with_rational_time() {
                 for tick in [9, 28, 52, 53, 54, 100] {
                     off.run_until(tick, quantum).unwrap();
                     on.run_until(tick, quantum).unwrap();
-                    assert_eq!(
-                        on.fingerprint().unwrap(),
-                        off.fingerprint().unwrap(),
-                        "mmio={mmio} peer={peer} quantum={quantum} tick={tick}"
-                    );
+                    let left = on.complete_state().unwrap();
+                    let right = off.complete_state().unwrap();
+                    if let Some(message) = left.diff(&right) {
+                        panic!("mmio={mmio} peer={peer} quantum={quantum} tick={tick}: {message}");
+                    }
                 }
                 if !peer {
                     assert!(
@@ -218,8 +218,8 @@ fn an_interrupt_at_the_input_deadline_enters_before_the_next_loop_instruction() 
         off.run_until(tick, 1000).unwrap();
         on.run_until(tick, 1000).unwrap();
         assert_eq!(
-            on.fingerprint().unwrap(),
-            off.fingerprint().unwrap(),
+            on.complete_state().unwrap(),
+            off.complete_state().unwrap(),
             "tick={tick}"
         );
     }
@@ -238,7 +238,7 @@ fn store_continuations_allow_loops_and_stop_at_the_due_dma() {
         assert!(board.continuation_end().unwrap());
         assert_eq!(board.now(), 53);
     }
-    assert_eq!(on.fingerprint().unwrap(), off.fingerprint().unwrap());
+    assert_eq!(on.complete_state().unwrap(), off.complete_state().unwrap());
     assert!(
         on.loop_statistics().unwrap()[0]["loop_accelerated_instructions"]
             .as_u64()
@@ -316,7 +316,7 @@ fn clock_poll_acceleration_preserves_device_deadlines_and_complete_board_state()
             }
             board.run_until(200, 1000).unwrap();
         }
-        assert_eq!(on.fingerprint().unwrap(), off.fingerprint().unwrap());
+        assert_eq!(on.complete_state().unwrap(), off.complete_state().unwrap());
         assert!(
             on.loop_statistics().unwrap()[0]["loop_clock_poll_instructions"]
                 .as_u64()

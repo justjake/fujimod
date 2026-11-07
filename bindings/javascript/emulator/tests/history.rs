@@ -20,7 +20,7 @@ fn command(
     let text = |key: &str| o[key].as_str().unwrap().to_owned();
     let none = Vec::new();
     Ok(match action {
-        "fingerprint" => (value(s.fingerprint()?), none),
+        "complete_state" => (value(s.complete_state()?), none),
         "state" => (value(s.session_state()?), none),
         "checkpoint" => (value(s.checkpoint()?), none),
         "restore" => (value(s.restore_checkpoint(&text("id"))?), none),
@@ -208,25 +208,25 @@ fn portable_archive_reconstructs_a_destroyed_session_and_continues_exactly() {
     )
     .unwrap();
     source.run(11).unwrap();
-    let before = command(&mut source, "fingerprint", json!({}), &[])
+    let before = command(&mut source, "complete_state", json!({}), &[])
         .unwrap()
         .0;
     let (metadata, bytes) = command(&mut source, "export_snapshot", json!({}), &[]).unwrap();
     assert_eq!(metadata["tick"], "11");
     assert_eq!(
-        command(&mut source, "fingerprint", json!({}), &[])
+        command(&mut source, "complete_state", json!({}), &[])
             .unwrap()
             .0,
         before
     );
     source.run(53).unwrap();
-    let expected = command(&mut source, "fingerprint", json!({}), &[])
+    let expected = command(&mut source, "complete_state", json!({}), &[])
         .unwrap()
         .0;
     source.core.board.finish().unwrap();
     let mut loaded = load_snapshot(&bytes);
     assert_eq!(
-        command(&mut loaded, "fingerprint", json!({}), &[])
+        command(&mut loaded, "complete_state", json!({}), &[])
             .unwrap()
             .0,
         before
@@ -237,7 +237,7 @@ fn portable_archive_reconstructs_a_destroyed_session_and_continues_exactly() {
     );
     loaded.run(53).unwrap();
     assert_eq!(
-        command(&mut loaded, "fingerprint", json!({}), &[])
+        command(&mut loaded, "complete_state", json!({}), &[])
             .unwrap()
             .0,
         expected
@@ -255,7 +255,7 @@ fn error_report_exports_a_healthy_retained_point_without_changing_the_failed_ses
     });
     command(&mut source, "checkpoint", json!({}), &[]).unwrap();
     let original_error = source.run(1).unwrap_err();
-    let failed = command(&mut source, "fingerprint", json!({}), &[])
+    let failed = command(&mut source, "complete_state", json!({}), &[])
         .unwrap()
         .0;
     let (report, bytes) = command(&mut source, "error_report", json!({}), &[]).unwrap();
@@ -263,7 +263,7 @@ fn error_report_exports_a_healthy_retained_point_without_changing_the_failed_ses
     assert_eq!(report["report"]["snapshot"]["tick"], "0");
     assert_ne!(report["report"]["snapshot"]["source"], "current");
     assert_eq!(
-        command(&mut source, "fingerprint", json!({}), &[])
+        command(&mut source, "complete_state", json!({}), &[])
             .unwrap()
             .0,
         failed
@@ -314,21 +314,21 @@ fn cbor_history_preserves_u64_runs_and_restores_failed_replay_at_ratio_24() {
         entries: Vec<fujimod_emulator_session::history::Entry>,
     }
     let mut h = create(false);
-    let cold = command(&mut h, "fingerprint", json!({}), &[]).unwrap().0;
-    assert_eq!(cold["sha256"].as_str().unwrap().len(), 64);
+    let cold = command(&mut h, "complete_state", json!({}), &[]).unwrap().0;
+    assert!(cold.as_array().is_some_and(|bytes| !bytes.is_empty()));
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         cold
     );
     let checkpoint = command(&mut h, "checkpoint", json!({}), &[]).unwrap().0;
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         cold
     );
     assert_eq!(checkpoint["tick"], "0");
     h.run(5).unwrap();
     let at_five = command(&mut h, "error_report", json!({}), &[]).unwrap().0["report"].clone();
-    let five_fingerprint = command(&mut h, "fingerprint", json!({}), &[]).unwrap().0;
+    let five_fingerprint = command(&mut h, "complete_state", json!({}), &[]).unwrap().0;
     assert_ne!(five_fingerprint, cold);
     let (summary, bytes) = command(&mut h, "history", json!({}), &[]).unwrap();
     assert_eq!(summary["entries"], 1);
@@ -346,7 +346,7 @@ fn cbor_history_preserves_u64_runs_and_restores_failed_replay_at_ratio_24() {
     );
     let before = command(&mut h, "error_report", json!({}), &[]).unwrap().0["report"].clone();
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         cold
     );
     log.entries[0].after.instructions[0] += 1;
@@ -362,7 +362,7 @@ fn cbor_history_preserves_u64_runs_and_restores_failed_replay_at_ratio_24() {
         before
     );
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         cold
     );
     assert_eq!(
@@ -374,12 +374,12 @@ fn cbor_history_preserves_u64_runs_and_restores_failed_replay_at_ratio_24() {
         at_five
     );
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         five_fingerprint
     );
     command(&mut h, "restore", json!({"id":checkpoint["id"]}), &[]).unwrap();
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         cold
     );
     h.run(9).unwrap();
@@ -394,7 +394,7 @@ fn cbor_history_preserves_u64_runs_and_restores_failed_replay_at_ratio_24() {
         at_five
     );
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         five_fingerprint
     );
     let mut other = create(false);
@@ -417,11 +417,11 @@ fn cbor_history_preserves_u64_runs_and_restores_failed_replay_at_ratio_24() {
 fn late_pc_witnesses_are_observational_and_capture_only_future_entries() {
     let mut h = create(false);
     h.run(5).unwrap();
-    let before = command(&mut h, "fingerprint", json!({}), &[]).unwrap().0;
+    let before = command(&mut h, "complete_state", json!({}), &[]).unwrap().0;
     let history_before = command(&mut h, "history", json!({}), &[]).unwrap();
     command(&mut h, "watch_pcs", json!({"addresses":[0x10000]}), &[]).unwrap();
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         before
     );
     assert_eq!(
@@ -450,7 +450,7 @@ fn late_pc_witnesses_are_observational_and_capture_only_future_entries() {
 fn positions_drive_external_levels_and_restore_with_the_machine() {
     let mut h = create(false);
     let initial = command(&mut h, "checkpoint", json!({}), &[]).unwrap().0;
-    let before = command(&mut h, "fingerprint", json!({}), &[]).unwrap().0;
+    let before = command(&mut h, "complete_state", json!({}), &[]).unwrap().0;
     let read = command(
         &mut h,
         "memory_read",
@@ -470,7 +470,7 @@ fn positions_drive_external_levels_and_restore_with_the_machine() {
         .is_err()
     );
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         before
     );
     for (position, value) in [("on", 900), ("off", 10)] {
@@ -492,16 +492,16 @@ fn positions_drive_external_levels_and_restore_with_the_machine() {
             .unwrap();
         assert_eq!(adc["state"]["external"][0], value);
     }
-    let after = command(&mut h, "fingerprint", json!({}), &[]).unwrap().0;
+    let after = command(&mut h, "complete_state", json!({}), &[]).unwrap().0;
     let log = command(&mut h, "history", json!({}), &[]).unwrap().1;
     command(&mut h, "restore", json!({"id":initial["id"]}), &[]).unwrap();
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         before
     );
     command(&mut h, "replay", json!({}), &log).unwrap();
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         after
     );
     h.core.board.finish().unwrap();
@@ -515,7 +515,7 @@ fn queued_physical_taps_wait_for_guest_acknowledgments_and_restore_in_flight() {
         command(&mut h, "press", json!({"id":"button"}), &[]).unwrap();
         command(&mut h, "release", json!({"id":"button"}), &[]).unwrap();
     }
-    let before = command(&mut h, "fingerprint", json!({}), &[]).unwrap().0;
+    let before = command(&mut h, "complete_state", json!({}), &[]).unwrap().0;
     for _ in 0..10 {
         let state = command(&mut h, "state", json!({}), &[]).unwrap().0;
         assert_eq!(state["positions"]["button"], "pressed");
@@ -523,7 +523,7 @@ fn queued_physical_taps_wait_for_guest_acknowledgments_and_restore_in_flight() {
         assert_eq!(state["inputs"][0]["supported"], true);
     }
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         before
     );
     assert!(
@@ -536,24 +536,24 @@ fn queued_physical_taps_wait_for_guest_acknowledgments_and_restore_in_flight() {
         .is_err()
     );
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         before
     );
     let saved = command(&mut h, "checkpoint", json!({}), &[]).unwrap().0;
     h.run(100).unwrap();
-    let after = command(&mut h, "fingerprint", json!({}), &[]).unwrap().0;
+    let after = command(&mut h, "complete_state", json!({}), &[]).unwrap().0;
     let state = command(&mut h, "state", json!({}), &[]).unwrap().0;
     assert_eq!(state["inputQueue"]["completed"], 4);
     assert_eq!(state["inputQueue"]["active"], Value::Null);
     assert_eq!(state["positions"]["button"], "released");
     command(&mut h, "restore", json!({"id":saved["id"]}), &[]).unwrap();
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         before
     );
     h.run(100).unwrap();
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         after
     );
     h.core.board.finish().unwrap();
@@ -566,14 +566,14 @@ fn full_contact_queue_reserves_release_and_refuses_without_losing_accepted_taps(
         command(&mut h, "press", json!({"id":"button"}), &[]).unwrap();
         command(&mut h, "release", json!({"id":"button"}), &[]).unwrap();
     }
-    let before = command(&mut h, "fingerprint", json!({}), &[]).unwrap().0;
+    let before = command(&mut h, "complete_state", json!({}), &[]).unwrap().0;
     assert!(
         command(&mut h, "press", json!({"id":"button"}), &[])
             .unwrap_err()
             .contains("queue is full")
     );
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         before
     );
     h.run(900).unwrap();
@@ -665,7 +665,7 @@ fn durable_storage_cold_lifecycle_and_held_boot_contacts_use_the_same_c_abi() {
         .1,
         vec![0]
     );
-    let stable = command(&mut h, "fingerprint", json!({}), &[]).unwrap().0;
+    let stable = command(&mut h, "complete_state", json!({}), &[]).unwrap().0;
     assert!(
         command(
             &mut h,
@@ -676,7 +676,7 @@ fn durable_storage_cold_lifecycle_and_held_boot_contacts_use_the_same_c_abi() {
         .is_err()
     );
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         stable
     );
     let off = command(&mut h, "save", json!({}), &[]).unwrap().1;
@@ -697,14 +697,14 @@ fn durable_storage_cold_lifecycle_and_held_boot_contacts_use_the_same_c_abi() {
         command(&mut other, "state", json!({}), &[]).unwrap().0["poweredOn"],
         true
     );
-    let before = command(&mut other, "fingerprint", json!({}), &[])
+    let before = command(&mut other, "complete_state", json!({}), &[])
         .unwrap()
         .0;
     let mut corrupt = off.clone();
     corrupt.push(0);
     assert!(command(&mut other, "restore_durable", json!({}), &corrupt).is_err());
     assert_eq!(
-        command(&mut other, "fingerprint", json!({}), &[])
+        command(&mut other, "complete_state", json!({}), &[])
             .unwrap()
             .0,
         before
@@ -732,7 +732,7 @@ fn rotary_admission_is_atomic_and_in_flight_phases_replay_through_the_command_ap
             "interfaces":[{"kind":"rotary","id":"ring","node":"encoder","cycles_per_step":-1}]});
     });
     command(&mut h, "checkpoint", json!({}), &[]).unwrap();
-    let cold = command(&mut h, "fingerprint", json!({}), &[]).unwrap().0;
+    let cold = command(&mut h, "complete_state", json!({}), &[]).unwrap().0;
     let entries = command(&mut h, "history", json!({}), &[]).unwrap().0;
     assert!(
         command(&mut h, "rotate", json!({"id":"ring","steps":385}), &[])
@@ -740,7 +740,7 @@ fn rotary_admission_is_atomic_and_in_flight_phases_replay_through_the_command_ap
             .contains("bound")
     );
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         cold
     );
     assert_eq!(
@@ -748,24 +748,24 @@ fn rotary_admission_is_atomic_and_in_flight_phases_replay_through_the_command_ap
         entries
     );
     command(&mut h, "rotate", json!({"id":"ring","steps":2}), &[]).unwrap();
-    let queued = command(&mut h, "fingerprint", json!({}), &[]).unwrap().0;
+    let queued = command(&mut h, "complete_state", json!({}), &[]).unwrap().0;
     h.run(100).unwrap();
-    let middle = command(&mut h, "fingerprint", json!({}), &[]).unwrap().0;
+    let middle = command(&mut h, "complete_state", json!({}), &[]).unwrap().0;
     assert_ne!(middle, cold);
     let (_, log) = command(&mut h, "history", json!({}), &[]).unwrap();
     command(&mut h, "undo", json!({}), &[]).unwrap();
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         queued
     );
     command(&mut h, "undo", json!({}), &[]).unwrap();
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         cold
     );
     command(&mut h, "replay", json!({}), &log).unwrap();
     assert_eq!(
-        command(&mut h, "fingerprint", json!({}), &[]).unwrap().0,
+        command(&mut h, "complete_state", json!({}), &[]).unwrap().0,
         middle
     );
     h.core.board.finish().unwrap();
@@ -844,7 +844,7 @@ fn raw_usb_commands_preserve_opaque_packets_and_never_run_the_guest() {
 }
 
 #[test]
-fn device_workers_are_host_preferences_without_history_or_fingerprint_effects() {
+fn device_workers_are_host_preferences_without_history_or_state_effects() {
     let mut handle = create(false);
     assert_eq!(
         command(&mut handle, "device_workers", json!({}), &[])
@@ -852,7 +852,7 @@ fn device_workers_are_host_preferences_without_history_or_fingerprint_effects() 
             .0,
         json!({"count":0,"effective":0})
     );
-    let before = command(&mut handle, "fingerprint", json!({}), &[]).unwrap();
+    let before = command(&mut handle, "complete_state", json!({}), &[]).unwrap();
     assert_eq!(
         command(&mut handle, "device_workers", json!({"count":2}), &[])
             .unwrap()
@@ -867,7 +867,7 @@ fn device_workers_are_host_preferences_without_history_or_fingerprint_effects() 
         json!({"count":0,"effective":0})
     );
     assert_eq!(
-        command(&mut handle, "fingerprint", json!({}), &[]).unwrap(),
+        command(&mut handle, "complete_state", json!({}), &[]).unwrap(),
         before
     );
     handle.core.board.finish().unwrap();
@@ -882,7 +882,7 @@ fn interactive_device_workers_default_inline_and_allow_explicit_stopped_selectio
             .0,
         json!({"count":0,"effective":0})
     );
-    let before = command(&mut handle, "fingerprint", json!({}), &[]).unwrap();
+    let before = command(&mut handle, "complete_state", json!({}), &[]).unwrap();
     assert_eq!(
         command(&mut handle, "device_workers", json!({"count":2}), &[])
             .unwrap()
@@ -890,7 +890,7 @@ fn interactive_device_workers_default_inline_and_allow_explicit_stopped_selectio
         json!({"count":2,"effective":2})
     );
     assert_eq!(
-        command(&mut handle, "fingerprint", json!({}), &[]).unwrap(),
+        command(&mut handle, "complete_state", json!({}), &[]).unwrap(),
         before
     );
     handle.run(5).unwrap();

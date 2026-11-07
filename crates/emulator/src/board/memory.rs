@@ -7,7 +7,7 @@ use std::{
     rc::Rc,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BusMapping {
     pub address: u64,
@@ -75,12 +75,62 @@ pub struct Memory {
     pub(super) preservation:
         RefCell<Option<std::rc::Weak<RefCell<super::preservation::PreservationRecords>>>>,
 }
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub(super) struct Checkpoint {
     regions: Vec<(u64, fujimod_emulator_cpu::memory::pages::Image)>,
     mappings: Vec<BusMapping>,
 }
+impl Checkpoint {
+    pub(super) fn diff(&self, other: &Self) -> Option<String> {
+        Memory::checkpoint_diff(self, other)
+    }
+    pub(super) fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "regions":self.regions.iter().map(|(base, image)| {
+                serde_json::json!({
+                    "base":base,
+                    "length":image.len(),
+                    "pages":(0..image.len().div_ceil(fujimod_emulator_cpu::memory::pages::PAGE_BYTES))
+                        .map(|page| image.page(page).map(fujimod_emulator_devices::state::bytes))
+                        .collect::<Vec<_>>(),
+                })
+            }).collect::<Vec<_>>(),
+            "mappings":self.mappings,
+        })
+    }
+}
 impl Memory {
+    pub(super) fn checkpoint_diff(left: &Checkpoint, right: &Checkpoint) -> Option<String> {
+        if left.regions.len() != right.regions.len() {
+            return Some(format!(
+                "regions: count {} differs from {}",
+                left.regions.len(),
+                right.regions.len()
+            ));
+        }
+        for (index, ((a_base, a), (b_base, b))) in
+            left.regions.iter().zip(&right.regions).enumerate()
+        {
+            if a_base != b_base || a.len() != b.len() {
+                return Some(format!("regions[{index}]: base or length differs"));
+            }
+            for page in 0..a.len().div_ceil(fujimod_emulator_cpu::memory::pages::PAGE_BYTES) {
+                let (Some(x), Some(y)) = (a.page(page), b.page(page)) else {
+                    return Some(format!("regions[{index}]: page {page} is missing"));
+                };
+                if let Some(offset) = first_difference(x, y) {
+                    return Some(format!(
+                        "regions[{index}] at {:#x}: page {page} differs at byte {offset}",
+                        a_base + (page * fujimod_emulator_cpu::memory::pages::PAGE_BYTES) as u64
+                    ));
+                }
+            }
+        }
+        if left.mappings != right.mappings {
+            return Some("bus mappings differ".into());
+        }
+        None
+    }
     pub(super) fn physical_ranges(
         &self,
         address: u64,
@@ -202,6 +252,26 @@ impl Memory {
             mappings: self.mappings.borrow().clone(),
         }
     }
+    pub(super) fn checkpoint_full(&self) -> Checkpoint {
+        Checkpoint {
+            regions: self
+                .regions
+                .iter()
+                .zip(&self.trackers)
+                .map(|((base, b), t)| (*base, unsafe { t.capture_all(b.as_ptr()) }))
+                .collect(),
+            mappings: self.mappings.borrow().clone(),
+        }
+    }
+    pub(super) fn memory_state(&self) -> serde_json::Value {
+        self.regions
+            .iter()
+            .map(|(base, backing)| {
+                let bytes = unsafe { std::slice::from_raw_parts(backing.as_ptr(), backing.len()) };
+                serde_json::json!({"base":base,"contents":fujimod_emulator_devices::state::bytes(bytes)})
+            })
+            .collect()
+    }
     pub(super) fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
         if self.regions.len() != saved.regions.len()
             || self
@@ -285,12 +355,6 @@ impl Memory {
         Err("dirty write has no physical backing".into())
     }
 
-    pub(super) fn fingerprint(&self) -> serde_json::Value {
-        self.regions.iter().map(|(base, backing)| {
-            let bytes = unsafe { std::slice::from_raw_parts(backing.as_ptr(), backing.len()) };
-            serde_json::json!({"base":base,"contents":fujimod_emulator_devices::fingerprint::bytes(bytes)})
-        }).collect()
-    }
     pub fn new(
         mut regions: Vec<(u64, Backing)>,
         mut mappings: Vec<BusMapping>,
@@ -536,4 +600,11 @@ impl Iterator for Chunks<'_> {
         self.address += len as u64;
         Some(Ok((physical, NonNull::new(pointer).unwrap(), len)))
     }
+}
+
+fn first_difference(left: &[u8], right: &[u8]) -> Option<usize> {
+    left.iter()
+        .zip(right)
+        .position(|(a, b)| a != b)
+        .or_else(|| (left.len() != right.len()).then_some(left.len().min(right.len())))
 }

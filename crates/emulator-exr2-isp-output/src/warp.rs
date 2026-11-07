@@ -201,7 +201,7 @@ impl Device for Warp {
     fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
         Ok(
             serde_json::json!({"r":self.r,"dma":self.dma.fingerprint(),"stop":self.stop,
-            "source":fujimod_emulator_devices::fingerprint::bytes(&self.source),"stream":*self.stream.lock().unwrap()}),
+            "source":fujimod_emulator_devices::state::bytes(&self.source),"stream":*self.stream.lock().unwrap()}),
         )
     }
 
@@ -308,7 +308,7 @@ impl Device for Warp {
         let stream = self.stream.lock().unwrap();
         let summary = serde_json::json!({"state":stream.state,"width":stream.width,
             "height":stream.height,
-            "pixels":fujimod_emulator_devices::fingerprint::bytes(&stream.pixels)});
+            "pixels":fujimod_emulator_devices::state::bytes(&stream.pixels)});
         serde_json::json!((&self.r, self.dma.fingerprint(), self.stop, summary))
     }
     fn diagnostic_buffer(&self, name: &str) -> Result<&[u8], String> {

@@ -101,7 +101,7 @@ pthread worker entry, so keep its URL reachable alongside the Wasm binary.
 
 Module loading defaults to `executionPolicy: 'interactive'`, the same board/CPU
 policy used by native clients. Use `{ executionPolicy: 'exact' }` for native
-fingerprint comparisons and deterministic replay. A runtime manifest can select
+complete-state comparisons and deterministic replay. A runtime manifest can select
 the same policy with `executionPolicy`. The policy is selected before the reset
 checkpoint, so power cycling preserves it. Interactive Undo restores a stopped
 checkpoint and may replay approximately.

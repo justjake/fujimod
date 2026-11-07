@@ -453,9 +453,9 @@ impl ExposedFrame {
         serde_json::json!({"frame":self.frame.fingerprint(),"exposure":self.exposure,
             "aperture_squared":self.aperture_squared,"color_sample_weights":self.color_sample_weights,
             "focus_shift_mm":self.focus_shift_mm,"view":self.view,"response_scale":self.response_scale,
-            "filtered":self.filtered.as_ref().map(|pixels|fujimod_emulator_devices::fingerprint::bytes(&pixels.materialize())),
+            "filtered":self.filtered.as_ref().map(|pixels|fujimod_emulator_devices::state::bytes(&pixels.materialize())),
             "sample_dimensions":self.sample_dimensions(),
-            "response":fujimod_emulator_devices::fingerprint::words16(&response)})
+            "response":fujimod_emulator_devices::state::words16(&response)})
     }
 }
 

@@ -401,7 +401,7 @@ impl Device for SdioHost {
 
     fn fingerprint(&self) -> Result<serde_json::Value, String> {
         Ok(
-            serde_json::json!({"module":self.module.fingerprint(),"clocks":self.clocks.save(),"registers":self.regs.0.as_slice(),"response":self.response,"state":self.state,"request":self.request,"scratch":fujimod_emulator_devices::fingerprint::bytes(&self.scratch)}),
+            serde_json::json!({"module":self.module.fingerprint(),"clocks":self.clocks.save(),"registers":self.regs.0.as_slice(),"response":self.response,"state":self.state,"request":self.request,"scratch":fujimod_emulator_devices::state::bytes(&self.scratch)}),
         )
     }
 

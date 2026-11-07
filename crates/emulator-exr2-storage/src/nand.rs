@@ -623,10 +623,10 @@ impl Device for NandController {
 
     fn fingerprint(&self) -> Result<serde_json::Value, String> {
         Ok(
-            serde_json::json!({"medium":self.medium.fingerprint(),"registers":&*self.regs,
-            "aperture":fujimod_emulator_devices::fingerprint::bytes(&self.aperture),"scratch":fujimod_emulator_devices::fingerprint::bytes(&self.scratch),
+            serde_json::json!({"medium":self.medium.state(),"registers":&*self.regs,
+            "aperture":fujimod_emulator_devices::state::bytes(&self.aperture),"scratch":fujimod_emulator_devices::state::bytes(&self.scratch),
             "pending":self.pending,"jobs_started":self.jobs_started,"staged":self.staged,"cache":self.cache.as_ref().map(|c|
-                serde_json::json!({"row":c.row,"sector":c.sector,"metadata":c.metadata,"data":fujimod_emulator_devices::fingerprint::bytes(&c.data)}))}),
+                serde_json::json!({"row":c.row,"sector":c.sector,"metadata":c.metadata,"data":fujimod_emulator_devices::state::bytes(&c.data)}))}),
         )
     }
     fn name(&self) -> &'static str {

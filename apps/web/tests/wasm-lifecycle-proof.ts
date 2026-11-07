@@ -22,6 +22,8 @@ let engine!: Engine;
 const check = (value: unknown, message: string) => {
   if (!value) throw Error(message);
 };
+const sameBytes = (a: Uint8Array, b: Uint8Array) =>
+  a.length === b.length && a.every((value, index) => value === b[index]);
 function show(stage: string) {
   result.stage = stage;
   console.log(stage);
@@ -88,13 +90,13 @@ try {
   );
   const rec = await pixels(),
     point = await engine.checkpoint(),
-    fingerprint = await engine.fingerprint();
+    state = await engine.completeState();
   show('Generated MENU and Undo');
   await tap('menu_ok_button');
   result.menu = await pixels();
   check(result.menu !== rec, 'MENU pixels did not change.');
   await engine.restoreCheckpoint(point.id);
-  check((await engine.fingerprint()).sha256 === fingerprint.sha256, 'Undo fingerprint differs.');
+  check(sameBytes(await engine.completeState(), state), 'Undo state differs.');
   check((await pixels()) === rec, 'Undo pixels differ.');
   result.undo = true;
   await engine.setPosition('shutter_speed_dial', '125');

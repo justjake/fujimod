@@ -180,13 +180,15 @@ fn translated_accounting_lands_on_the_expected_state() {
             "{:?}: instruction count",
             case.policy
         );
-        let fingerprint = board.cpu(0).unwrap().fingerprint().unwrap();
-        let registers: Vec<u32> = fingerprint["architecture"]["registers"]
-            .as_array()
-            .unwrap()
+        let cpu = board.cpu(0).unwrap();
+        let registers = arm::CORE
             .iter()
-            .map(|value| u32::try_from(value.as_u64().unwrap()).unwrap())
-            .collect();
+            .map(|&register| {
+                let mut bytes = [0; 4];
+                cpu.read_register(register, &mut bytes).unwrap();
+                u32::from_le_bytes(bytes)
+            })
+            .collect::<Vec<_>>();
         assert_eq!(
             registers,
             case.registers.to_vec(),
@@ -194,8 +196,8 @@ fn translated_accounting_lands_on_the_expected_state() {
             case.policy
         );
         assert_eq!(
-            fingerprint["clock"]["now"].as_u64(),
-            Some(case.clock),
+            board.now(),
+            case.clock,
             "{:?}: board clock",
             case.policy
         );

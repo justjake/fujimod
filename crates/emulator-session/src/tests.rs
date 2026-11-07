@@ -204,7 +204,7 @@ fn scene_rgb_prepares_only_the_next_sensor_exposure() {
             },
         )
         .unwrap();
-    let straight = session.fingerprint().unwrap();
+    let straight = session.complete_state().unwrap();
     let log = fujimod_emulator_devices::checkpoint::Checkpoint::encode(
         "scene-input-log",
         &history.entries(),
@@ -213,7 +213,7 @@ fn scene_rgb_prepares_only_the_next_sensor_exposure() {
     let replay: Vec<super::history::Entry> = log.decode("scene-input-log").unwrap();
     session.restore(&saved).unwrap();
     super::history::History::replay(&mut session, &replay).unwrap();
-    assert_eq!(session.fingerprint().unwrap(), straight);
+    assert_eq!(session.complete_state().unwrap(), straight);
     assert!(session.sensor_rgb("sensor", 1, 1, &[7], 10000.).is_err());
     assert!(
         session
@@ -366,7 +366,7 @@ fn session_keyframe_and_input_replay_preserve_card_adc_and_fractional_cpu_bounda
             },
         )
         .unwrap();
-    let straight = session.fingerprint().unwrap();
+    let straight = session.complete_state().unwrap();
     let encoded = fujimod_emulator_devices::checkpoint::Checkpoint::encode(
         "input-log",
         &&history.entries()[cursor..],
@@ -378,7 +378,7 @@ fn session_keyframe_and_input_replay_preserve_card_adc_and_fractional_cpu_bounda
     assert!(session.card_state("sd").unwrap().present);
     assert_eq!(session.adc_samples("adc").unwrap(), vec![837; 12]);
     History::replay(&mut session, &replay).unwrap();
-    assert_eq!(session.fingerprint().unwrap(), straight);
+    assert_eq!(session.complete_state().unwrap(), straight);
     history.undo(&mut session).unwrap();
     assert_eq!(session.board.instruction_counts(), [13]);
     assert_eq!(session.board.read_register(0, arm::CORE[0]).unwrap(), 7);
@@ -397,7 +397,7 @@ fn session_keyframe_and_input_replay_preserve_card_adc_and_fractional_cpu_bounda
         .unwrap();
     history.rollback(&mut session, 3).unwrap();
     assert_eq!(session.board.now(), 3);
-    let rolled = session.fingerprint().unwrap();
+    let rolled = session.complete_state().unwrap();
     // Repeat the same target directly from the retained earlier state.
     session.restore(&before).unwrap();
     assert_eq!(Boundary::capture(&session), rollback_start);
@@ -405,7 +405,7 @@ fn session_keyframe_and_input_replay_preserve_card_adc_and_fractional_cpu_bounda
         .board
         .run_with_limits(240, 17, None, Some(3))
         .unwrap();
-    assert_eq!(session.fingerprint().unwrap(), rolled);
+    assert_eq!(session.complete_state().unwrap(), rolled);
 }
 
 #[test]
@@ -480,7 +480,7 @@ fn history_rollback_bounds_interactive_run_and_keeps_exact_keyframe_restore() {
             .write_physical(0, &[0xfe, 0xff, 0xff, 0xea])
             .unwrap();
 
-        let initial = session.fingerprint().unwrap();
+        let initial = session.complete_state().unwrap();
         let initial_boundary = Boundary::capture(&session);
         let mut history = History::new(2, usize::MAX).unwrap();
         history.mark(&session).unwrap();
@@ -510,7 +510,7 @@ fn history_rollback_bounds_interactive_run_and_keeps_exact_keyframe_restore() {
         assert!(matches!(&replayed.input, Input::Run { until: Some(3), .. }));
 
         history.undo(&mut session).unwrap();
-        assert_eq!(session.fingerprint().unwrap(), initial);
+        assert_eq!(session.complete_state().unwrap(), initial);
         assert_eq!(Boundary::capture(&session), initial_boundary);
     }
 }
@@ -715,10 +715,10 @@ fn automatic_history_coalesces_interactive_inputs_and_keeps_exact_boundaries() {
             assert_eq!(captured.len(), 3);
             assert_eq!(history.entries().len(), 40);
             let entries = history.entries().to_vec();
-            let final_state = session.fingerprint().unwrap();
+            let final_state = session.complete_state().unwrap();
             assert_eq!(history.undo(&mut session).unwrap(), captured[2]);
             History::replay(&mut session, &entries[32..]).unwrap();
-            assert_eq!(session.fingerprint().unwrap(), final_state);
+            assert_eq!(session.complete_state().unwrap(), final_state);
             // An explicit mark remains immediate even inside an automatic group.
             let explicit = Boundary::capture(&session);
             history.mark(&session).unwrap();
@@ -862,8 +862,11 @@ fn raf_history_and_replay_share_the_installed_frame_and_checkpoint_counts() {
     else {
         panic!("RAF input");
     };
-    assert!(Arc::ptr_eq(&retained.frame.clone().downcast::<Frame>().unwrap(), &frame));
-    let straight = session.fingerprint().unwrap();
+    assert!(Arc::ptr_eq(
+        &retained.frame.clone().downcast::<Frame>().unwrap(),
+        &frame
+    ));
+    let straight = session.complete_state().unwrap();
     let encoded =
         fujimod_emulator_devices::checkpoint::Checkpoint::encode("raf-history", &history.entries())
             .unwrap();
@@ -878,7 +881,7 @@ fn raf_history_and_replay_share_the_installed_frame_and_checkpoint_counts() {
     };
     let replayed = replayed.frame.clone().downcast::<Frame>().unwrap();
     assert!(Arc::ptr_eq(&input.lock().unwrap().current, &replayed));
-    assert_eq!(session.fingerprint().unwrap(), straight);
+    assert_eq!(session.complete_state().unwrap(), straight);
     let current = session.checkpoint(None).unwrap();
     session.restore(&saved).unwrap();
     session.restore(&current).unwrap();

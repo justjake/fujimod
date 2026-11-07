@@ -175,7 +175,7 @@ impl Transfer {
         let pixels = &self.pixels;
         let (raster, row_bytes) = self.layout();
         let deadline = self.deadline;
-        let mut value = serde_json::json!({"pixels":fujimod_emulator_devices::fingerprint::bytes(pixels),"raster":raster,
+        let mut value = serde_json::json!({"pixels":fujimod_emulator_devices::state::bytes(pixels),"raster":raster,
             "row_bytes":row_bytes,"deadline":deadline});
         if let Some(failure) = pixels.failure() {
             value["failure"] = failure.into();
@@ -392,7 +392,7 @@ mod fingerprint_tests {
         assert!(source.active_rows_overlap(1441, output, 384).is_err());
     }
     #[test]
-    fn pending_image_identity_is_bounded_and_preserves_payload_and_deadline() {
+    fn pending_image_state_preserves_payload_and_deadline() {
         let mut transfer = Transfer::default();
         transfer
             .prepare(
@@ -409,7 +409,10 @@ mod fingerprint_tests {
             .unwrap();
         transfer.pixels.fill(0xa5);
         let identity = transfer.fingerprint();
-        assert!(serde_json::to_vec(&identity).unwrap().len() < 500);
+        assert_eq!(
+            identity["pixels"],
+            fujimod_emulator_devices::state::bytes(&transfer.pixels)
+        );
         let saved = fujimod_emulator_devices::checkpoint::Checkpoint::encode("transfer", &transfer).unwrap();
         let mut restored: Transfer = saved.decode("transfer").unwrap();
         assert_eq!(restored.fingerprint(), identity);

@@ -7,7 +7,6 @@ import type {
   CardState,
   CardTree,
   ControlInput,
-  Fingerprint,
   InputLog,
   Point,
   TouchPhase,
@@ -73,7 +72,7 @@ export interface Engine {
   undo(): Promise<Record<string, string>>;
   history(): Promise<InputLog>;
   replayHistory(bytes: Uint8Array): Promise<void>;
-  fingerprint(): Promise<Fingerprint>;
+  completeState(): Promise<Uint8Array>;
   prepare(config: EngineConfig): void;
   saveCamera(): Promise<void>;
   cameraSaves(

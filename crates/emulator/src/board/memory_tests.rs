@@ -404,10 +404,15 @@ fn continuation_store_dma_and_publication_stops_preserve_execution() {
         (
             board.instruction_counts(),
             board.state()["timeline"]["now"].clone(),
-            board.fingerprint().unwrap(),
+            board.complete_state().unwrap(),
         )
     };
-    assert_eq!(run(false), run(true));
+    let unwatched = run(false);
+    let watched = run(true);
+    if let Some(message) = unwatched.2.diff(&watched.2) {
+        panic!("{message}");
+    }
+    assert_eq!(unwatched, watched);
 }
 
 #[test]

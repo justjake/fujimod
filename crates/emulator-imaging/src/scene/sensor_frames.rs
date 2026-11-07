@@ -104,13 +104,13 @@ impl Frame {
     pub fn fingerprint(&self) -> serde_json::Value {
         let pixels = match &self.pixels {
             FramePixels::Rgb24(bytes) => {
-                serde_json::json!({"kind":"rgb24","contents":fujimod_emulator_devices::fingerprint::bytes(bytes)})
+                serde_json::json!({"kind":"rgb24","contents":fujimod_emulator_devices::state::bytes(bytes)})
             }
             FramePixels::Raw16(samples) => {
-                serde_json::json!({"kind":"raw16","contents":fujimod_emulator_devices::fingerprint::words16(samples)})
+                serde_json::json!({"kind":"raw16","contents":fujimod_emulator_devices::state::words16(samples)})
             }
             FramePixels::Mosaic { cfa, radiance } => {
-                serde_json::json!({"kind":"mosaic","cfa":cfa,"contents":fujimod_emulator_devices::fingerprint::float32s(radiance.values())})
+                serde_json::json!({"kind":"mosaic","cfa":cfa,"contents":fujimod_emulator_devices::state::float32s(radiance.values())})
             }
         };
         let mut result = serde_json::json!({"width":self.width,"height":self.height,"white_luminance":self.white_luminance,"pixels":pixels});
@@ -434,7 +434,7 @@ mod tests {
 mod fingerprint_tests {
     use super::*;
     #[test]
-    fn sensor_identity_hashes_complete_pixels_without_expanding_rasters() {
+    fn sensor_state_retains_complete_pixels() {
         let mut source = SensorFrames::new(
             Frame::new(
                 1536,
@@ -446,7 +446,7 @@ mod fingerprint_tests {
         source.latch(10).unwrap();
         let saved = source.clone();
         let before = source.fingerprint();
-        assert!(serde_json::to_vec(&before).unwrap().len() < 1024);
+        assert_eq!(before["current"]["pixels"]["contents"]["bytes"], 1536 * 1024 * 3);
         source.set_frame(Frame::new(1, 1, FramePixels::Rgb24(vec![4, 5, 6].into())).unwrap());
         assert_ne!(source.fingerprint(), before);
         assert_eq!(saved.fingerprint(), before);
@@ -459,15 +459,15 @@ mod fingerprint_tests {
     #[test]
     fn raw_fingerprint_uses_every_word_in_little_endian_order() {
         let words = [0x1234, 0xff00, 0, 0xabcd];
-        let identity = fujimod_emulator_devices::fingerprint::words16(&words);
+        let identity = fujimod_emulator_devices::state::words16(&words);
         let bytes: Vec<_> = words.iter().flat_map(|v| v.to_le_bytes()).collect();
         assert_eq!(
-            identity["sha256"],
-            fujimod_emulator_devices::fingerprint::bytes(&bytes)["sha256"]
+            identity["base64"],
+            fujimod_emulator_devices::state::bytes(&bytes)["base64"]
         );
         assert_ne!(
             identity,
-            fujimod_emulator_devices::fingerprint::words16(&[0x1234, 0xff00, 0, 0xabce])
+            fujimod_emulator_devices::state::words16(&[0x1234, 0xff00, 0, 0xabce])
         );
     }
 }

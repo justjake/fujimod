@@ -106,11 +106,11 @@ impl ImageTransfer {
             fujimod_emulator_image_processing::yuv::i420_to_yycbcr(width, height, &source_payload)?
                 .into();
         cx.ram_bytes(destination, bytes)?;
-        let hash = fujimod_emulator_devices::fingerprint::bytes(&payload)["sha256"]
+        let hash = fujimod_emulator_devices::state::bytes(&payload)["base64"]
             .as_str()
             .ok_or("image transfer digest absent")?
             .to_owned();
-        let source_hash = fujimod_emulator_devices::fingerprint::bytes(&source_payload)["sha256"]
+        let source_hash = fujimod_emulator_devices::state::bytes(&source_payload)["base64"]
             .as_str()
             .ok_or("image transfer input digest absent")?
             .to_owned();
@@ -171,10 +171,10 @@ impl ImageTransfer {
                 || p.completed_tick <= p.started_tick
                 || saved.blobs()[0].len() != p.bytes
                 || saved.blobs()[1].len() != p.source_bytes
-                || fujimod_emulator_devices::fingerprint::bytes(&saved.blobs()[1])["sha256"]
+                || fujimod_emulator_devices::state::bytes(&saved.blobs()[1])["base64"]
                     .as_str()
                     != Some(&p.source_sha256)
-                || fujimod_emulator_devices::fingerprint::bytes(&saved.blobs()[0])["sha256"]
+                || fujimod_emulator_devices::state::bytes(&saved.blobs()[0])["base64"]
                     .as_str()
                     != Some(&p.output_sha256)
             {
@@ -212,7 +212,7 @@ impl Device for ImageTransfer {
     }
     fn fingerprint(&self) -> Result<serde_json::Value, String> {
         Ok(
-            serde_json::json!({"state":self.state,"payload":fujimod_emulator_devices::fingerprint::bytes(&self.payload),"source_payload":fujimod_emulator_devices::fingerprint::bytes(&self.source_payload)}),
+            serde_json::json!({"state":self.state,"payload":fujimod_emulator_devices::state::bytes(&self.payload),"source_payload":fujimod_emulator_devices::state::bytes(&self.source_payload)}),
         )
     }
     fn name(&self) -> &'static str {

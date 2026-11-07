@@ -175,14 +175,14 @@ fn deadline_samples_policy_boundary_and_checkpoint_restores_the_observed_state()
 
         assert_eq!(board.state()["timeline"]["now"], 2);
         assert_eq!(samples(&board, device), [(2, expected)]);
-        let before = board.fingerprint().unwrap();
+        let before = board.complete_state().unwrap();
         let saved = board.checkpoint(None).unwrap();
 
         board
             .write_physical(0x3000, &0xdead_beefu32.to_le_bytes())
             .unwrap();
         board.restore_keyframe(&saved).unwrap();
-        assert_eq!(board.fingerprint().unwrap(), before);
+        assert_eq!(board.complete_state().unwrap(), before);
         assert_eq!(samples(&board, device), [(2, expected)]);
 
         board.run_until(4, 16).unwrap();
@@ -300,11 +300,11 @@ fn check_mmio_progress(policy: ExecutionPolicy, tick_limit: bool) {
             [100_000]
         );
     }
-    let before = board.fingerprint().unwrap();
+    let before = board.complete_state().unwrap();
     let saved = board.checkpoint(None).unwrap();
     board.run_for_instructions(1000, 1000).unwrap();
     board.restore_keyframe(&saved).unwrap();
-    assert_eq!(board.fingerprint().unwrap(), before);
+    assert_eq!(board.complete_state().unwrap(), before);
 }
 
 #[test]
@@ -354,10 +354,10 @@ fn mmio_created_deadline_survives_callback_restarts_and_checkpoint_restore() {
     board.run_until(armed + 32, 1000).unwrap();
     assert_eq!(samples(&board, device), [(armed + 32, 0)]);
     let saved = board.checkpoint(None).unwrap();
-    let before = board.fingerprint().unwrap();
+    let before = board.complete_state().unwrap();
     board.run_until(20_000, 1000).unwrap();
     board.restore_keyframe(&saved).unwrap();
-    assert_eq!(board.fingerprint().unwrap(), before);
+    assert_eq!(board.complete_state().unwrap(), before);
     assert_eq!(samples(&board, device), [(armed + 32, 0)]);
 }
 

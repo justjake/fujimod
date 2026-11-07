@@ -7,11 +7,11 @@ use super::{
     },
     session::Session,
 };
+use fujimod_emulator_boot::RecReport;
 use fujimod_emulator_session::{
     card::{CardState, CardTree},
     history::Input,
 };
-use fujimod_emulator_boot::RecReport;
 
 impl Session {
     fn card_node(&self) -> Result<&str, String> {
@@ -27,8 +27,9 @@ impl Session {
             None => Ok(CardState::unsupported()),
         }
     }
-    pub fn fingerprint(&self) -> Result<super::results::Fingerprint, String> {
-        super::fingerprint::session(&self.core, self.powered_on)
+    /// Complete stopped-session state as a canonical typed archive.
+    pub fn complete_state(&self) -> Result<Vec<u8>, String> {
+        self.core.complete_state()?.to_bytes()
     }
     pub fn session_state(&self) -> Result<SessionState, String> {
         let (inputs, positions, input_queue) = if self.core.controls.is_some() {

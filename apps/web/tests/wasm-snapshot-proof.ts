@@ -14,6 +14,9 @@ const config: EngineConfig = {
 function check(value: unknown, message: string): asserts value {
   if (!value) throw Error(message);
 }
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
 function finish(value: unknown, passed: boolean) {
   result.textContent = JSON.stringify(value, null, 2);
   document.body.dataset.proof = passed ? 'passed' : 'failed';
@@ -47,7 +50,7 @@ async function load(bytes: Uint8Array) {
     await engine.loadSnapshot(bytes, config, (message) => {
       result.textContent = message;
     });
-    const restored = await engine.fingerprint();
+    const restored = await engine.completeState();
     const initial = await engine.profile(1);
     check(initial.ticks === 13, 'Snapshot lost the guest execution boundary.');
     const card = await engine.readCardFile('/DCIM/100_FUJI/A.JPG');
@@ -55,7 +58,7 @@ async function load(bytes: Uint8Array) {
     await engine.replay([{ action: 'advance', ticks: 687 }]);
     return {
       restored,
-      continued: await engine.fingerprint(),
+      continued: await engine.completeState(),
       ticks: (await engine.profile(1)).ticks,
     };
   } finally {
@@ -86,20 +89,20 @@ if (new URL(location.href).searchParams.has('load')) {
     await source.boot(dat, config, () => {});
     await source.setScene({ width: 1, height: 1, rgb: new Uint8Array([91, 37, 13]) });
     await source.replay([{ action: 'advance', ticks: 13 }]);
-    const before = await source.fingerprint();
+    const before = await source.completeState();
     const direct = await source.exportSnapshot();
     check(direct.length > 0, 'Explicit export is empty.');
     const bytes = await snapshotMember(await source.errorReport());
     check(
-      (await source.fingerprint()).sha256 === before.sha256,
+      sameBytes(await source.completeState(), before),
       'Export changed the source machine.',
     );
     await source.replay([{ action: 'advance', ticks: 687 }]);
-    const expected = await source.fingerprint();
+    const expected = await source.completeState();
     source.dispose();
     const restored = await load(bytes);
-    check(restored.restored.sha256 === before.sha256, 'Fresh worker restore fingerprint differs.');
-    check(restored.continued.sha256 === expected.sha256, 'Fresh worker continuation differs.');
+    check(sameBytes(restored.restored, before), 'Fresh worker restore state differs.');
+    check(sameBytes(restored.continued, expected), 'Fresh worker continuation differs.');
     const link = document.createElement('a');
     link.download = 'snapshot.emusnap';
     link.textContent = 'Download snapshot';

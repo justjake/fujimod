@@ -91,8 +91,8 @@ impl Cpu for Core {
             })
             .collect())
     }
-    fn fingerprint(&self) -> Result<serde_json::Value, String> {
-        self.execution.fingerprint()
+    fn state(&self) -> Result<fujimod_emulator_cpu::CpuState, String> {
+        self.direct_state()
     }
     fn model(&self) -> Model {
         Model::CortexR5F

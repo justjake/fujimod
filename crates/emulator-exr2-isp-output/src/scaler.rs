@@ -227,7 +227,7 @@ impl Device for Scaler {
     fujimod_emulator_devices::checkpoint_fields!(r: Vec<u32>, dma: Transfer, #[serde(with = "fujimod_emulator_devices::checkpoint::bytes")] source: Vec<u8>);
     fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
         Ok(
-            serde_json::json!({"r":self.r,"dma":self.dma.fingerprint(),"source":fujimod_emulator_devices::fingerprint::bytes(&self.source)}),
+            serde_json::json!({"r":self.r,"dma":self.dma.fingerprint(),"source":fujimod_emulator_devices::state::bytes(&self.source)}),
         )
     }
 

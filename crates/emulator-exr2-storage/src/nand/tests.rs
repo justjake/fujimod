@@ -328,7 +328,7 @@ fn small_page_erase_refuses_misaligned_inconsistent_and_out_of_range_rows() {
         assert!(cx.refusal().unwrap().contains("NAND erase"));
         assert_eq!(m.next_deadline(0), None);
         // A refused command is recorded as a register write but cannot erase.
-        assert_eq!(m.medium.fingerprint(), before["medium"]);
+        assert_eq!(m.medium.state(), before["medium"]);
     }
 }
 

@@ -93,21 +93,23 @@ fn finite_store_observers_do_not_accumulate_native_hooks_on_a_parked_core() {
     let calls = RefCell::new(Vec::<(u64, i64)>::new());
     let hook = Hook::CompletedStore {
         callback: observed,
-        data: (&calls as *const RefCell<Vec<(u64, i64)>>).cast_mut().cast(),
+        data: (&calls as *const RefCell<Vec<(u64, i64)>>)
+            .cast_mut()
+            .cast(),
         range: HookRange::Inclusive {
             begin: 0x2000,
             end: 0x2003,
         },
     };
     let native_hooks = cpu.execution.cpu.hooks.borrow().len();
-    let before = cpu.fingerprint().unwrap();
+    let before = cpu.state().unwrap();
     // No intervening execution drains Unicorn's deferred deletion list.
     for _ in 0..1024 {
         let id = unsafe { cpu.install_hook(hook) }.unwrap();
         assert_eq!(cpu.execution.cpu.hooks.borrow().len(), native_hooks);
         cpu.remove_hook(id).unwrap();
     }
-    assert_eq!(cpu.fingerprint().unwrap(), before);
+    assert_eq!(cpu.state().unwrap(), before);
     let id = unsafe { cpu.install_hook(hook) }.unwrap();
     assert!(matches!(
         resume(&cpu, 100).unwrap(),
@@ -729,9 +731,10 @@ fn exclusive_monitors_follow_physical_aliases_peer_stores_dma_and_word_granules(
     set(&a, arm::CORE[1], 0x1800);
     set(&a, arm::CORE[2], 9);
     run(&a, 0x1000, 1).unwrap();
-    let observed = a.fingerprint().unwrap();
-    assert!(observed["reservation"].is_array());
-    assert_eq!(a.fingerprint().unwrap(), observed);
+    let observed = a.state().unwrap();
+    let observed_json: serde_json::Value = serde_json::from_slice(&observed.architecture).unwrap();
+    assert!(observed_json["reservation"].is_array());
+    assert_eq!(a.state().unwrap(), observed);
     words(&a, 0x5804, &[99]); // adjacent word preserves this 4-byte reservation
     resume(&a, 1).unwrap();
     assert_eq!((get(&a, arm::CORE[0]), get(&a, arm::CORE[3])), (5, 0));
@@ -1011,13 +1014,13 @@ fn interactive_policy_runs_full_blocks_and_rebases_clock_after_bounded_overshoot
     interactive
         .set_execution_policy(ExecutionPolicy::Interactive)
         .unwrap();
-    let before_snapshot = interactive.fingerprint().unwrap();
+    let before_snapshot = interactive.state().unwrap();
     let snapshot = interactive.snapshot(None).unwrap();
     interactive
         .set_execution_policy(ExecutionPolicy::Exact)
         .unwrap();
     interactive.restore(snapshot.as_ref()).unwrap();
-    assert_eq!(interactive.fingerprint().unwrap(), before_snapshot);
+    assert_eq!(interactive.state().unwrap(), before_snapshot);
     assert_eq!(
         interactive.execution.policy.get(),
         ExecutionPolicy::Interactive
@@ -1643,7 +1646,7 @@ fn a_narrow_pc_observer_keeps_other_instructions_on_the_block_accelerator() {
 }
 
 #[test]
-fn fingerprint_reads_detached_banks_without_changing_live_context() {
+fn state_reads_detached_banks_without_changing_live_context() {
     let cpu = processor(&Memory::default());
     cpu.map_zeroed(0, 0x4000, 7).unwrap();
     words(&cpu, 0x1000, &[0xe3a0002a, 0xe320f003]);
@@ -1654,13 +1657,13 @@ fn fingerprint_reads_detached_banks_without_changing_live_context() {
         run(&cpu, 0x1000, 10).unwrap(),
         Exit::Hint(Hint::WaitForInterrupt)
     ));
-    let before = cpu.fingerprint().unwrap();
+    let before = cpu.state().unwrap();
     assert_eq!(get(&cpu, arm::CPSR), 0x53);
     assert_eq!(get(&cpu, arm::CORE[13]), 0x3000);
     assert_eq!(system(&cpu, 6, 2, 0, None), 3);
-    assert_eq!(cpu.fingerprint().unwrap(), before);
+    assert_eq!(cpu.state().unwrap(), before);
     set(&cpu, arm::CORE[0], 43);
-    assert_ne!(cpu.fingerprint().unwrap(), before);
+    assert_ne!(cpu.state().unwrap(), before);
 }
 
 #[test]

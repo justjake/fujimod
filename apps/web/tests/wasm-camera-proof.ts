@@ -23,6 +23,9 @@ const result: Record<string, unknown> = {};
 function check(value: unknown, message: string): asserts value {
   if (!value) throw Error(message);
 }
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
 function dmpDiagnostics(states: unknown[]): { rasterizer: string; gpuLists?: number } | undefined {
   for (const state of states) {
     if (state === null || typeof state !== 'object' || !('gles' in state)) continue;
@@ -89,7 +92,7 @@ try {
     check((dmp.gpuLists ?? 0) > 0, 'WebGPU did not complete a DMP command list.');
   result.execution = {
     profile: await engine.profile(0),
-    fingerprint: await engine.fingerprint(),
+    state: await engine.completeState(),
     dmpRasterizer: dmp.rasterizer,
     dmpGpuLists: dmp.gpuLists ?? 0,
     frame: { width: canvas.width, height: canvas.height, sha256: result.rec },
@@ -99,7 +102,7 @@ try {
     'Generated native controls are unavailable.',
   );
   const point = await engine.checkpoint(),
-    fingerprint = await engine.fingerprint();
+    state = await engine.completeState();
   await engine.press('menu_ok_button');
   await engine.release('menu_ok_button');
   await advance();
@@ -107,8 +110,8 @@ try {
   check(result.menu !== result.rec, 'MENU did not change guest LCD pixels.');
   await engine.restoreCheckpoint(point.id);
   check(
-    (await engine.fingerprint()).sha256 === fingerprint.sha256,
-    'Native checkpoint fingerprint differs after restore.',
+    sameBytes(await engine.completeState(), state),
+    'Native checkpoint state differs after restore.',
   );
   check((await pixels()) === result.rec, 'Restored LCD pixels differ.');
   await engine.setPosition('shutter_speed_dial', '500');

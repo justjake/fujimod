@@ -7,7 +7,6 @@ import type {
   CardState,
   CardTree,
   ControlInput,
-  Fingerprint,
   InputLog,
   TouchPhase,
 } from 'fujimod/emulator';
@@ -249,8 +248,8 @@ export class RemoteEngine implements Engine {
   replayHistory(_bytes: Uint8Array): Promise<void> {
     return this.unavailableMethod('History replay');
   }
-  fingerprint(): Promise<Fingerprint> {
-    return this.unavailableMethod('Fingerprint');
+  completeState(): Promise<Uint8Array> {
+    return this.unavailableMethod('Complete state');
   }
   prepare(_config: EngineConfig): void {}
   saveCamera(): Promise<void> {

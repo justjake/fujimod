@@ -1332,15 +1332,15 @@ impl Device for SdHost {
                 Payload::None => serde_json::json!({"kind":"none"}),
                 Payload::Read(lba) => serde_json::json!({"kind":"read","lba":lba}),
                 Payload::Write(lba) => serde_json::json!({"kind":"write","lba":lba}),
-                Payload::Metadata { bytes, len } => serde_json::json!({"kind":"metadata","bytes":fujimod_emulator_devices::fingerprint::bytes(&bytes),"len":len}),
+                Payload::Metadata { bytes, len } => serde_json::json!({"kind":"metadata","bytes":fujimod_emulator_devices::state::bytes(&bytes),"len":len}),
             };
             serde_json::json!({"state":r.state,"app":r.app,"block_length":r.block_length,"bus_width":r.bus_width,"response":r.response,
                 "payload":payload,"transfer":r.transfer,"quantity":r.quantity,"cursor":r.cursor,"address":r.address,"phase":r.phase,
                 "due":r.due,"command":r.command,"fault":r.fault})
         });
-        let mut value = serde_json::json!({"reads":self.reads,"card":self.card.fingerprint(),"contacts":[self.contacts.present(),self.contacts.protected()],"registers":self.regs.0.as_slice(),
+        let mut value = serde_json::json!({"reads":self.reads,"card":self.card.state(),"contacts":[self.contacts.present(),self.contacts.protected()],"registers":self.regs.0.as_slice(),
             "clocks":self.clocks.save(),"state":self.state,"app":self.app,"block_length":self.block_length,"bus_width":self.bus_width,
-            "response":self.response,"request":request,"fifo":fujimod_emulator_devices::fingerprint::bytes(&fifo),"scratch":fujimod_emulator_devices::fingerprint::bytes(&self.scratch),
+            "response":self.response,"request":request,"fifo":fujimod_emulator_devices::state::bytes(&fifo),"scratch":fujimod_emulator_devices::state::bytes(&self.scratch),
             "fifo_position":fifo_position,"rom_fifo_ready":self.rom_fifo_ready,
             "initialization_fault":self.options.initialization_fault,"faults":self.faults,"fault_history":self.fault_history});
         if self.access_mode != 0 {

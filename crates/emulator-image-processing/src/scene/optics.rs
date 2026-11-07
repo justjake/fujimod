@@ -104,7 +104,7 @@ impl Optics {
     pub fn fingerprint(&self) -> serde_json::Value {
         serde_json::json!({"position":self.position.value(),"last":self.last,
             "target":self.options.target_position,"pulses_per_radius":self.options.pulses_per_radius,
-            "maximum_radius":self.options.maximum_radius,"source":fujimod_emulator_devices::fingerprint::bytes(&self.source)})
+            "maximum_radius":self.options.maximum_radius,"source":fujimod_emulator_devices::state::bytes(&self.source)})
     }
 }
 

@@ -5,7 +5,6 @@ import {
   type CardState,
   type CardTree,
   type ControlInput,
-  type Fingerprint,
   type InputLog,
   type TouchPhase,
 } from 'fujimod/emulator';
@@ -244,8 +243,8 @@ export class WasmEngine implements Engine {
   replayHistory(bytes: Uint8Array) {
     return this.rpc({ action: 'replay_history', bytes });
   }
-  fingerprint() {
-    return this.rpc<Fingerprint>({ action: 'fingerprint' });
+  completeState() {
+    return this.rpc<Uint8Array>({ action: 'complete_state' });
   }
   prepare(config: EngineConfig) {
     void this.rpc({ action: 'prepare', bundle: this.absolute(config).bundle }).catch(() => {});

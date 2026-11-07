@@ -58,6 +58,46 @@ def _json_object(value: object) -> dict[str, object]:
     return value
 
 
+class BoardState(dict[str, object]):
+    """Diagnostic board state with direct complete-state equality."""
+
+    def __init__(self, diagnostic: dict[str, object], native: _native.emulator.BoardState) -> None:
+        super().__init__(diagnostic)
+        self._native = native
+        self._complete: dict[str, object] | None = None
+
+    def _load_complete(self) -> None:
+        if self._complete is None:
+            self._complete = _json_object(json.loads(self._native.json()))
+            self.update(self._complete)
+
+    def __getitem__(self, key: str) -> object:
+        if key not in self:
+            self._load_complete()
+        return super().__getitem__(key)
+
+    def get(self, key: str, default: object = None) -> object:
+        if key not in self:
+            self._load_complete()
+        return super().get(key, default)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, BoardState):
+            return self._native == other._native
+        return dict.__eq__(self, other)
+
+    def __ne__(self, other: object) -> bool:
+        return not self == other
+
+    __hash__ = None
+
+    def diff(self, other: BoardState) -> str | None:
+        """First structural difference from another captured state."""
+        if not isinstance(other, BoardState):
+            raise TypeError("state comparison requires another BoardState")
+        return self._native.diff(other._native)
+
+
 def _boot_report(value: object) -> BootReport:
     report = _json_object(value)
     status = report.get("status")
@@ -485,15 +525,17 @@ class Board:
         self._validate_range(address, len(payload))
         self._native.physical_write(address, payload)
 
-    def state(self) -> dict[str, object]:
-        """Return the current execution and device state."""
+    def state(self) -> BoardState:
+        """Return the current diagnostic and complete modeled state."""
         self._ensure_open()
-        return _json_object(json.loads(self._native.state()))
+        return BoardState(
+            _json_object(json.loads(self._native.state())), self._native.complete_state()
+        )
 
-    def fingerprint(self) -> dict[str, object]:
-        """Return a stable snapshot of execution-relevant state."""
+    def complete_state_json(self) -> dict[str, object]:
+        """Return the complete modeled state as direct JSON."""
         self._ensure_open()
-        return _json_object(json.loads(self._native.fingerprint()))
+        return _json_object(json.loads(self._native.complete_state().json()))
 
     def checkpoint(
         self, previous: _native.Checkpoint | None = None

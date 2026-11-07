@@ -12,7 +12,7 @@ pub struct Options {
     pub sectors: u32,
     pub max_dirty_sectors: usize,
 }
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Card {
     sectors: u32,
     max_dirty: usize,
@@ -43,24 +43,16 @@ mod sector_bytes {
     }
 }
 impl Card {
-    pub fn fingerprint(&self) -> serde_json::Value {
-        use sha2::{Digest, Sha256};
+    pub fn state(&self) -> serde_json::Value {
         let Self {
             sectors,
             max_dirty,
             data,
             revision,
         } = self;
-        let mut hash = Sha256::new();
-        hash.update(b"sd-card-sectors-le-v1\0");
-        hash.update((data.len() as u64).to_le_bytes());
-        for (lba, bytes) in data {
-            hash.update(lba.to_le_bytes());
-            hash.update((bytes.len() as u64).to_le_bytes());
-            hash.update(bytes);
-        }
         serde_json::json!({"sectors":sectors,"max_dirty":max_dirty,"revision":revision,
-            "dirty_sectors":data.len(),"data":{"encoding":"sparse-sectors-le-v1","sha256":format!("{:x}",hash.finalize())}})
+            "dirty_sectors":data.len(),"data":data.iter().map(|(lba, bytes)|
+                (lba, crate::state::bytes(bytes))).collect::<Vec<_>>()})
     }
     pub fn new(options: Options) -> Result<Self, String> {
         if !(0x400000..=0x4000000).contains(&options.sectors)
@@ -248,32 +240,31 @@ impl Card {
 mod tests {
     use super::*;
     #[test]
-    fn fingerprint_bounds_sparse_bytes_and_retains_addresses_content_and_metadata() {
+    fn state_retains_addresses_content_and_metadata() {
         let mut a = Card::new(Options {
             sectors: 0x800000,
             max_dirty_sectors: 4096,
         })
         .unwrap();
         a.write_bytes(512, &vec![0xa5; 2 * 1024 * 1024]).unwrap();
-        let identity = a.fingerprint();
-        assert!(serde_json::to_vec(&identity).unwrap().len() < 350);
-        assert_eq!(a.fingerprint(), identity);
+        let identity = a.clone();
+        assert_eq!(a, identity);
         let mut b = a.clone();
         b.data.get_mut(&1).unwrap()[511] ^= 1;
-        assert_ne!(b.fingerprint(), identity);
+        assert_ne!(b, identity);
         b = a.clone();
         let bytes = b.data.remove(&1).unwrap();
         b.data.insert(4097, bytes);
-        assert_ne!(b.fingerprint(), identity);
+        assert_ne!(b, identity);
         b = a.clone();
         b.revision += 1;
-        assert_ne!(b.fingerprint(), identity);
+        assert_ne!(b, identity);
         b = a.clone();
         b.max_dirty += 1;
-        assert_ne!(b.fingerprint(), identity);
+        assert_ne!(b, identity);
         b = a.clone();
         b.sectors += 1024;
-        assert_ne!(b.fingerprint(), identity);
+        assert_ne!(b, identity);
     }
     #[test]
     fn sector_checkpoint_uses_bulk_bytes_without_changing_card_identity() {
@@ -323,10 +314,10 @@ mod tests {
         })
         .unwrap();
         card.write_bytes(0, &[0x46; 1024]).unwrap();
-        let before = card.fingerprint();
+        let before = card.clone();
         for limit in [0, 1, (1 << 21) + 1] {
             assert!(card.set_allocation_limit(limit).is_err());
-            assert_eq!(card.fingerprint(), before);
+            assert_eq!(card, before);
         }
         let revision = card.revision();
         card.set_allocation_limit(8).unwrap();

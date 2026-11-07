@@ -963,7 +963,7 @@ impl Device for ImageInput {
             raw_origins,
         } = &self.state;
         let state = serde_json::json!({"r":r,"reset":reset,"command_due":command_due,"command_armed":command_armed,
-            "raw_exposure":raw_exposure,"command_done":command_done,"command_bytes":fujimod_emulator_devices::fingerprint::bytes(command_bytes),"phases":phases,
+            "raw_exposure":raw_exposure,"command_done":command_done,"command_bytes":fujimod_emulator_devices::state::bytes(command_bytes),"phases":phases,
             "phase_due":phase_due,"phase_pending":phase_pending,"phase_period":phase_period,"sensor_due":sensor_due,"capture_ack":capture_ack,
             "capture_irq_sent":capture_irq_sent,"raw3_ack":raw3_ack,"raw3_irq_sent":raw3_irq_sent,
             "readback_due":readback_due,"stop_due":stop_due,"dma":dma.fingerprint(),"raw3_dma":raw3_dma.fingerprint(),"raw_origins":raw_origins});
@@ -975,7 +975,7 @@ impl Device for ImageInput {
             .map(|s| s.lock().unwrap().fingerprint());
         Ok(
             serde_json::json!({"state":state,"edges":*self.wiring.edges.lock().unwrap(),"sensor":sensor,
-            "frame_period":self.wiring.frame_period.is_some(),"statistics_grid":self.wiring.statistics_grid.is_some(),"outputs":outputs,"cfa":self.cfa,"film":self.film,"source":fujimod_emulator_devices::fingerprint::bytes(&self.source)}),
+            "frame_period":self.wiring.frame_period.is_some(),"statistics_grid":self.wiring.statistics_grid.is_some(),"outputs":outputs,"cfa":self.cfa,"film":self.film,"source":fujimod_emulator_devices::state::bytes(&self.source)}),
         )
     }
 

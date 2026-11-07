@@ -1560,8 +1560,8 @@ impl Board {
         serde_json::to_string(&self.board()?.device_states(kind).map_err(error)?)
             .map_err(|e| error(e.to_string()))
     }
-    fn device_fingerprints(&self, kind: &str) -> PyResult<String> {
-        serde_json::to_string(&self.board()?.device_fingerprints(kind).map_err(error)?)
+    fn device_state_values(&self, kind: &str) -> PyResult<String> {
+        serde_json::to_string(&self.board()?.device_state_values(kind).map_err(error)?)
             .map_err(|e| error(e.to_string()))
     }
     fn device_buffer<'py>(&self, py: Python<'py>, kind: &str, name: &str) -> PyResult<Bound<'py, PyBytes>> {
@@ -1697,9 +1697,37 @@ impl Board {
         }
         serde_json::to_string(&state).map_err(|e| error(e.to_string()))
     }
-    fn fingerprint(&self) -> PyResult<String> {
-        serde_json::to_string(&self.session()?.fingerprint().map_err(error)?)
+    /// Complete stopped-session state for direct comparison.
+    fn complete_state(&self) -> PyResult<BoardState> {
+        Ok(BoardState {
+            state: self.session()?.complete_state().map_err(error)?,
+        })
+    }
+}
+
+#[pyclass(module = "fujimod._native.emulator")]
+pub struct BoardState {
+    state: fujimod_emulator_session::SessionState,
+}
+#[pymethods]
+impl BoardState {
+    fn __eq__(&self, other: PyRef<'_, BoardState>) -> bool {
+        self.state == other.state
+    }
+    fn __ne__(&self, other: PyRef<'_, BoardState>) -> bool {
+        self.state != other.state
+    }
+    /// First structural difference, or None when the states are equal.
+    fn diff(&self, other: PyRef<'_, BoardState>) -> Option<String> {
+        self.state.diff(&other.state)
+    }
+    /// Complete direct-state JSON with base64 byte leaves.
+    fn json(&self) -> PyResult<String> {
+        serde_json::to_string(&self.state.to_json().map_err(error)?)
             .map_err(|e| error(e.to_string()))
+    }
+    fn __repr__(&self) -> &'static str {
+        "BoardState(complete stopped session state)"
     }
 }
 

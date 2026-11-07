@@ -3,10 +3,10 @@ use super::Board;
 use fujimod_emulator_devices::Device;
 
 impl Board {
-    /// Complete physical RAM digests without serializing device state.
-    pub fn memory_fingerprint(&self) -> Result<serde_json::Value, String> {
+    /// Complete physical RAM bytes without serializing device state.
+    pub fn memory_state(&self) -> Result<serde_json::Value, String> {
         let state = self.state.try_borrow().map_err(|_| "board is executing")?;
-        Ok(state.memory.fingerprint())
+        Ok(state.memory.memory_state())
     }
 
     pub fn device_states(&self, kind: &str) -> Result<serde_json::Value, String> {
@@ -15,10 +15,10 @@ impl Board {
         Ok(serde_json::json!(state.bus.device_states(kind)))
     }
 
-    pub fn device_fingerprints(&self, kind: &str) -> Result<serde_json::Value, String> {
+    pub fn device_state_values(&self, kind: &str) -> Result<serde_json::Value, String> {
         let state = self.state.try_borrow().map_err(|_| "board is executing")?;
         self.track_device_kind(kind, &state.bus);
-        Ok(serde_json::json!(state.bus.device_fingerprints(kind)?))
+        Ok(serde_json::json!(state.bus.device_state_values(kind)?))
     }
 
     /// The current execution failure without observing devices.
@@ -185,5 +185,9 @@ impl Board {
 }
 
 fn missing_capability<C: ?Sized>(device: &dyn Device) -> String {
-    format!("{} has no {} capability", device.name(), std::any::type_name::<C>())
+    format!(
+        "{} has no {} capability",
+        device.name(),
+        std::any::type_name::<C>()
+    )
 }

@@ -391,18 +391,18 @@ impl AvcCodec {
                     || output.slot >= 3
                     || pending.writes
                         != [(physical(output.destination, output.bytes)?, output.bytes)]
-                    || fujimod_emulator_devices::fingerprint::bytes(&saved.blobs()[0])["sha256"]
+                    || fujimod_emulator_devices::state::bytes(&saved.blobs()[0])["base64"]
                         .as_str()
-                        != Some(&output.sha256)
-                    || fujimod_emulator_devices::fingerprint::bytes(
+                        != Some(&output.base64)
+                    || fujimod_emulator_devices::state::bytes(
                         &saved.blobs()[decode_offset + 2],
-                    )["sha256"]
+                    )["base64"]
                         .as_str()
-                        != Some(&output.input_sha256)
+                        != Some(&output.input_base64)
                     || pending
                         .decode_input
                         .as_ref()
-                        .is_none_or(|input| input.sha256 != output.input_sha256))
+                        .is_none_or(|input| input.base64 != output.input_base64))
             {
                 return Err("AVC checkpoint decoded output differs".into());
             }
@@ -457,12 +457,12 @@ impl Device for AvcCodec {
             return Err("Active VideoToolbox sequences have no identical replay fingerprint; select software".into());
         }
         Ok(
-            serde_json::json!({"state":self.state,"payload":fujimod_emulator_devices::fingerprint::bytes(&self.payload),
-            "history":self.history.iter().map(|b|fujimod_emulator_devices::fingerprint::bytes(b)).collect::<Vec<_>>(),
-            "decode_input":fujimod_emulator_devices::fingerprint::bytes(&self.decode_runtime.input),
-            "decode_pending_input":fujimod_emulator_devices::fingerprint::bytes(&self.decode_runtime.pending_input),
-            "decode_parameters":fujimod_emulator_devices::fingerprint::bytes(&self.decode_runtime.parameters),
-            "decode_history":self.decode_runtime.history.iter().map(|b|fujimod_emulator_devices::fingerprint::bytes(b)).collect::<Vec<_>>()}),
+            serde_json::json!({"state":self.state,"payload":fujimod_emulator_devices::state::bytes(&self.payload),
+            "history":self.history.iter().map(|b|fujimod_emulator_devices::state::bytes(b)).collect::<Vec<_>>(),
+            "decode_input":fujimod_emulator_devices::state::bytes(&self.decode_runtime.input),
+            "decode_pending_input":fujimod_emulator_devices::state::bytes(&self.decode_runtime.pending_input),
+            "decode_parameters":fujimod_emulator_devices::state::bytes(&self.decode_runtime.parameters),
+            "decode_history":self.decode_runtime.history.iter().map(|b|fujimod_emulator_devices::state::bytes(b)).collect::<Vec<_>>()}),
         )
     }
     fn read(&mut self, cx: &mut Cx<'_>, a: u64, s: u8) -> u64 {

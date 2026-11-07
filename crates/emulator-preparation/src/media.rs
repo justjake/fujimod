@@ -257,7 +257,7 @@ mod tests {
             .unwrap()
             .build(&assets)
             .unwrap();
-        assert_eq!(restored.fingerprint(), medium.fingerprint());
+        assert_eq!(restored, medium);
         let mut bytes = [0; 2048];
         restored.read(0, &mut bytes).unwrap();
         assert_eq!(bytes, [255; 2048]);
@@ -378,7 +378,7 @@ mod card_tests {
             .unwrap()
             .build(&assets)
             .unwrap();
-        assert_eq!(restored.fingerprint(), card.fingerprint());
+        assert_eq!(restored, card);
         let mut invalid = serde_json::to_value(&card).unwrap();
         invalid["max_dirty"] = serde_json::json!(0);
         assets.insert("saved".into(), serde_json::to_vec(&invalid).unwrap());

@@ -11,6 +11,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+ciborium = "0.2.2"
 fujimod-framebuffer.workspace = true
 fujimod-emulator.workspace = true
 fujimod-emulator-cpu.workspace = true

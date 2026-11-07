@@ -33,7 +33,7 @@ impl Endpoint {
         serde_json::json!({"control":self.control,"interrupt_enable":self.interrupt_enable,
             "interrupt_status":self.interrupt_status,"interrupt_output":self.interrupt_output,
             "tx_released":self.tx_released,
-            "rx1":self.rx1.iter().map(|packet| fujimod_emulator_devices::fingerprint::bytes(packet)).collect::<Vec<_>>(),"commands":self.commands})
+            "rx1":self.rx1.iter().map(|packet| fujimod_emulator_devices::state::bytes(packet)).collect::<Vec<_>>(),"commands":self.commands})
     }
     pub fn interrupt(&self) -> bool {
         self.interrupt_output && self.interrupt_status & self.interrupt_enable != 0

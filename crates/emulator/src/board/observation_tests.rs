@@ -347,7 +347,7 @@ fn a7_watch_is_observation_only() {
     run(&mut watched, 12);
     assert_eq!(records(&watch).len(), 2);
     watched.memory_watch_end(&mut watch).unwrap();
-    assert_eq!(plain.fingerprint().unwrap(), watched.fingerprint().unwrap());
+    assert_eq!(plain.complete_state().unwrap(), watched.complete_state().unwrap());
     assert_eq!(plain.instruction_counts(), watched.instruction_counts());
 }
 

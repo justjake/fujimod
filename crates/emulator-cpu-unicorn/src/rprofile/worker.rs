@@ -295,7 +295,6 @@ enum Operation {
     SetLoopWindow(bool),
     SetExecutionPolicy(ExecutionPolicy),
     CheckpointBackings,
-    Fingerprint,
     SetGuestClock(Clock),
     ReadRegister(Register, usize),
     WriteRegister(Register, Vec<u8>),
@@ -343,7 +342,6 @@ enum WorkerRpcCounter {
     SetLoopWindow,
     SetExecutionPolicy,
     CheckpointBackings,
-    Fingerprint,
     SetGuestClock,
     ReadRegister,
     WriteRegister,
@@ -386,7 +384,6 @@ impl WorkerRpcCounter {
         Self::SetLoopWindow,
         Self::SetExecutionPolicy,
         Self::CheckpointBackings,
-        Self::Fingerprint,
         Self::SetGuestClock,
         Self::ReadRegister,
         Self::WriteRegister,
@@ -428,7 +425,6 @@ impl WorkerRpcCounter {
             Self::SetLoopWindow => "worker_rpc_set_loop_window",
             Self::SetExecutionPolicy => "worker_rpc_set_execution_policy",
             Self::CheckpointBackings => "worker_rpc_checkpoint_backings",
-            Self::Fingerprint => "worker_rpc_fingerprint",
             Self::SetGuestClock => "worker_rpc_set_guest_clock",
             Self::ReadRegister => "worker_rpc_read_register",
             Self::WriteRegister => "worker_rpc_write_register",
@@ -473,7 +469,6 @@ impl Operation {
             Self::SetLoopWindow(_) => WorkerRpcCounter::SetLoopWindow,
             Self::SetExecutionPolicy(_) => WorkerRpcCounter::SetExecutionPolicy,
             Self::CheckpointBackings => WorkerRpcCounter::CheckpointBackings,
-            Self::Fingerprint => WorkerRpcCounter::Fingerprint,
             Self::SetGuestClock(_) => WorkerRpcCounter::SetGuestClock,
             Self::ReadRegister(_, _) => WorkerRpcCounter::ReadRegister,
             Self::WriteRegister(_, _) => WorkerRpcCounter::WriteRegister,
@@ -546,7 +541,6 @@ enum Value {
     Bytes(Vec<u8>),
     Backings(Vec<(usize, usize)>),
     MemoryRegions(Vec<MemoryRegion>),
-    Fingerprint(serde_json::Value),
     Hooks(Vec<HookId>),
     Snapshot(u64),
     Identity(u32),
@@ -936,7 +930,6 @@ fn dispatch(context: &WorkerLoop, cpu: &core::Core, operation: Operation) -> Res
                 .map(|(pointer, bytes)| (pointer.as_ptr() as usize, bytes))
                 .collect(),
         ),
-        Operation::Fingerprint => Value::Fingerprint(cpu.fingerprint()?),
         Operation::SetGuestClock(clock) => {
             cpu.set_guest_clock(clock)?;
             Value::Unit
@@ -1428,12 +1421,6 @@ impl Cpu for CpuWorker {
                 })
                 .collect(),
             _ => Err("R-profile CPU worker returned an unexpected backing list".into()),
-        }
-    }
-    fn fingerprint(&self) -> Result<serde_json::Value, String> {
-        match self.rpc(Operation::Fingerprint)? {
-            Value::Fingerprint(value) => Ok(value),
-            _ => Err("R-profile CPU worker returned an unexpected fingerprint".into()),
         }
     }
     fn exclusive_domain(&self) -> Option<exclusive::Shared> {

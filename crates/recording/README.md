@@ -48,7 +48,7 @@ register/configuration key and a read function. Reuse requires the same key and
 identical bytes at **every** previously addressed span. A changed register,
 buffer or palette causes a new rendering. Refused captures never enter the
 cache. Emulator sessions keep this host cache outside checkpoints and complete
-state fingerprints; it neither drives execution nor acknowledges hardware.
+state; it neither drives execution nor acknowledges hardware.
 
 Python exposes `fujimod.recording.Frame`, `Recorder` and `capture_scanout` through
 the native binding. Guide code receives native frames; only an explicit image

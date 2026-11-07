@@ -2,7 +2,6 @@ import {
   loadEmulatorModule,
   type Camera,
   type DeviceWorkers,
-  type Fingerprint,
 } from 'fujimod/emulator';
 
 interface Status {
@@ -24,7 +23,7 @@ type Entry =
       kind: 'boundary';
       name: string;
       status: Status;
-      fingerprint: Fingerprint;
+      state: Uint8Array;
     }
   | ({ kind: 'command' } & Command)
   | ({ kind: 'observe'; name?: string; result?: unknown; bytesSha256?: string } & Observation)
@@ -327,7 +326,7 @@ owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2; plan: string }>) 
           break;
         }
         case 'boundary':
-          same(session.fingerprint(), entry.fingerprint, `${entry.name} full Session`);
+          same(session.completeState(), entry.state, `${entry.name} full Session`);
           same(status(), entry.status, `${entry.name} status`);
           same(session.deviceWorkers(), selected, 'Stable executor preference');
           boundaries++;
@@ -341,7 +340,7 @@ owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2; plan: string }>) 
       phases.some((p) => p.stage === 'warm'),
       'Replay needs a warmed phase',
     );
-    const fingerprint = session.fingerprint();
+    const state = session.completeState();
     for (const photo of fixture.photos) {
       // An owned copy, transferable to the owner.
       const data = new Uint8Array(session.cardRead(photo.path, undefined, 32 << 20));
@@ -352,7 +351,7 @@ owner.onmessage = async (event: MessageEvent<{ workers: 0 | 2; plan: string }>) 
         [data.buffer],
       );
     }
-    same(session.fingerprint(), fingerprint, 'Card reads are observational');
+    same(session.completeState(), state, 'Card reads are observational');
     owner.postMessage({
       type: 'result',
       result: {

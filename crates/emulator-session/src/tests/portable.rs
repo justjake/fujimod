@@ -154,21 +154,26 @@ fn durable_session_restores_media_sensor_inputs_contacts_and_queued_actions_then
         assert!(source.contact_driver.as_ref().unwrap().busy());
         let saved = source.checkpoint(None).unwrap();
         let bytes = saved.export().unwrap();
-        let before = source.fingerprint().unwrap();
+        let before = source.complete_state().unwrap();
         assert_eq!(saved.export().unwrap(), bytes);
-        assert_eq!(source.fingerprint().unwrap(), before);
+        assert_eq!(source.complete_state().unwrap(), before);
         continue_session(&mut source);
-        (bytes, before, source.fingerprint().unwrap())
+        (bytes, before, source.complete_state().unwrap())
     };
     let mut target = session();
-    let sensor = fujimod_emulator_exr2_images::images_mut(&mut target.resources).unwrap().sensors["scene"].clone();
-    let initial = target.fingerprint().unwrap();
+    let sensor = fujimod_emulator_exr2_images::images_mut(&mut target.resources)
+        .unwrap()
+        .sensors["scene"]
+        .clone();
+    let initial = target.complete_state().unwrap();
     let saved = target.import_snapshot(&bytes).unwrap();
-    assert_eq!(target.fingerprint().unwrap(), initial);
+    assert_eq!(target.complete_state().unwrap(), initial);
     target.restore(&saved).unwrap();
-    assert_eq!(target.fingerprint().unwrap(), before);
+    assert_eq!(target.complete_state().unwrap(), before);
     assert!(Arc::ptr_eq(
-        &fujimod_emulator_exr2_images::images_mut(&mut target.resources).unwrap().sensors["scene"],
+        &fujimod_emulator_exr2_images::images_mut(&mut target.resources)
+            .unwrap()
+            .sensors["scene"],
         &sensor
     ));
     let mut sector = [0; 20];
@@ -179,7 +184,7 @@ fn durable_session_restores_media_sensor_inputs_contacts_and_queued_actions_then
         .unwrap();
     assert_eq!(&sector, b"captured card sector");
     continue_session(&mut target);
-    assert_eq!(target.fingerprint().unwrap(), continued);
+    assert_eq!(target.complete_state().unwrap(), continued);
     assert_eq!(target.board.read_register(0, arm::CORE[0]).unwrap(), 107);
 }
 
@@ -188,20 +193,20 @@ fn incompatible_session_or_corrupt_archive_is_refused_without_changing_live_stat
     let source = session();
     let bytes = source.checkpoint(None).unwrap().export().unwrap();
     let mut target = session();
-    let before = target.fingerprint().unwrap();
+    let before = target.complete_state().unwrap();
     let mut bad = bytes.clone();
     bad.push(0);
     assert!(target.import_snapshot(&bad).is_err());
-    assert_eq!(target.fingerprint().unwrap(), before);
+    assert_eq!(target.complete_state().unwrap(), before);
     target.definition["fixture"] = serde_json::json!("different-constructor");
-    let before = target.fingerprint().unwrap();
+    let before = target.complete_state().unwrap();
     assert!(target.import_snapshot(&bytes).is_err());
-    assert_eq!(target.fingerprint().unwrap(), before);
+    assert_eq!(target.complete_state().unwrap(), before);
     let mut target = session();
     target.nodes.remove("adc");
-    let before = target.fingerprint().unwrap();
+    let before = target.complete_state().unwrap();
     assert!(target.import_snapshot(&bytes).is_err());
-    assert_eq!(target.fingerprint().unwrap(), before);
+    assert_eq!(target.complete_state().unwrap(), before);
 }
 
 #[test]
@@ -222,19 +227,22 @@ fn serialized_checkpoint_resumes_a_fresh_session_and_checks_image_and_graph_iden
         let checkpoint = source.checkpoint(None).unwrap();
         let bytes = checkpoint.export().unwrap();
         let (ticks, counts) = crate::checkpoint::Snapshot::inspect(&bytes).unwrap();
-        assert_eq!((ticks, counts), (checkpoint.now(), checkpoint.instruction_counts().to_vec()));
-        let before = source.fingerprint().unwrap();
+        assert_eq!(
+            (ticks, counts),
+            (checkpoint.now(), checkpoint.instruction_counts().to_vec())
+        );
+        let before = source.complete_state().unwrap();
         source.board.run_for_instructions(200, 17).unwrap();
-        (bytes, before, source.fingerprint().unwrap())
+        (bytes, before, source.complete_state().unwrap())
     };
 
     let mut target = session();
     target.definition = definition.clone();
     let checkpoint = target.import_snapshot(&bytes).unwrap();
     target.restore(&checkpoint).unwrap();
-    assert_eq!(target.fingerprint().unwrap(), before);
+    assert_eq!(target.complete_state().unwrap(), before);
     target.board.run_for_instructions(200, 17).unwrap();
-    assert_eq!(target.fingerprint().unwrap(), after);
+    assert_eq!(target.complete_state().unwrap(), after);
 
     let mut different_image = session();
     different_image.definition = definition.clone();

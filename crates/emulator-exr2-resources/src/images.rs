@@ -83,6 +83,17 @@ pub trait SensorState: Send + Sync {
 }
 #[derive(Clone)]
 pub struct SensorSnapshot(pub Arc<dyn SensorState>);
+impl PartialEq for SensorSnapshot {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.edge() == other.0.edge()
+            && self.0.view() == other.0.view()
+            && self.0.shared() == other.0.shared()
+            && match (self.0.frames(), other.0.frames()) {
+                (Ok(a), Ok(b)) => a == b,
+                _ => false,
+            }
+    }
+}
 
 /// A sensor entry of an exported resource snapshot.
 #[derive(Serialize, Deserialize)]
@@ -95,7 +106,7 @@ pub struct SensorRecord {
 }
 
 /// The image part's captured state.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq)]
 pub struct ImageSnapshot {
     pub wires: BTreeMap<String, Checkpoint>,
     pub images: BTreeMap<String, Checkpoint>,

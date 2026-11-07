@@ -50,9 +50,9 @@ fn execute(cpu: &Core, begin: u64, budget: usize) {
     })
     .unwrap();
 }
-fn state(cpu: &Core) -> (serde_json::Value, u64) {
+fn state(cpu: &Core) -> (fujimod_emulator_cpu::CpuState, u64) {
     (
-        cpu.fingerprint().unwrap(),
+        cpu.state().unwrap(),
         cpu.instruction_progress().unwrap(),
     )
 }

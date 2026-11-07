@@ -438,8 +438,8 @@ export class WasmWorkerRuntime {
         s.replay(new Uint8Array(request.bytes));
         this.afterRestore();
         return;
-      case 'fingerprint':
-        return s.fingerprint();
+      case 'complete_state':
+        return s.completeState();
       case 'rollback': {
         if (!Number.isFinite(request.seconds) || request.seconds <= 0)
           throw Error('Invalid rollback duration.');

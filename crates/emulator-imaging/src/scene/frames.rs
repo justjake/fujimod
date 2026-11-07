@@ -116,7 +116,7 @@ impl Pixels {
     fn fingerprint(&self) -> serde_json::Value {
         match self {
             Self::Packed(p) => {
-                serde_json::json!({"packed":fujimod_emulator_devices::fingerprint::bytes(p)})
+                serde_json::json!({"packed":fujimod_emulator_devices::state::bytes(p)})
             }
             Self::Sensor(image) => serde_json::json!({"sensor":image.fingerprint()}),
         }
@@ -216,7 +216,7 @@ impl ImageFrames {
     pub fn fingerprint(&self) -> serde_json::Value {
         let frame = self.0.lock().unwrap();
         serde_json::json!({"edge":frame.edge,"layout":[frame.layout.width,frame.layout.height,frame.layout.stride],
-            "pixels":frame.pixels.fingerprint(),"prepared":frame.prepared.as_ref().map(|b|fujimod_emulator_devices::fingerprint::bytes(b)),"source":frame.source,
+            "pixels":frame.pixels.fingerprint(),"prepared":frame.prepared.as_ref().map(|b|fujimod_emulator_devices::state::bytes(b)),"source":frame.source,
             "radiance":frame.radiance.as_ref().map(|f|f.fingerprint())})
     }
     pub fn new(layout: ImageLayout) -> Result<Self, String> {
@@ -350,7 +350,7 @@ impl StatisticsFrames {
     pub fn fingerprint(&self) -> serde_json::Value {
         let frame = self.0.lock().unwrap();
         serde_json::json!({"edge":frame.edge,"spans":frame.spans.iter().map(|s|serde_json::json!({
-            "destination":s.destination,"offset":s.offset,"bytes":fujimod_emulator_devices::fingerprint::bytes(&s.bytes)})).collect::<Vec<_>>()})
+            "destination":s.destination,"offset":s.offset,"bytes":fujimod_emulator_devices::state::bytes(&s.bytes)})).collect::<Vec<_>>()})
     }
     pub fn new(spans: Vec<StatisticsSpan>) -> Result<Self, String> {
         let mut total = 0usize;

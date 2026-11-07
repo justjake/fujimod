@@ -3,7 +3,7 @@ mod portable;
 use super::*;
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct ResourceSnapshot {
     wires: BTreeMap<String, Checkpoint>,
     images: ImageSnapshot,
@@ -23,6 +23,158 @@ impl ResourceSnapshot {
             .sum::<usize>()
             + self.media.bytes()
     }
+
+    /// First structural difference between two resource snapshots.
+    pub fn diff(&self, other: &Self) -> Option<String> {
+        for (name, left) in &self.wires {
+            let Some(right) = other.wires.get(name) else {
+                return Some(format!("wires.{name}: only in left state"));
+            };
+            if let Some(message) = left.diff(right) {
+                return Some(format!("wires.{name}/{message}"));
+            }
+        }
+        for name in other.wires.keys().filter(|name| !self.wires.contains_key(*name)) {
+            return Some(format!("wires.{name}: only in right state"));
+        }
+        if let Some(message) = diff_map("images.wires", &self.images.wires, &other.images.wires) {
+            return Some(message);
+        }
+        if let Some(message) = diff_map("images.images", &self.images.images, &other.images.images) {
+            return Some(message);
+        }
+        if let Some(message) = diff_map(
+            "images.statistics",
+            &self.images.statistics,
+            &other.images.statistics,
+        ) {
+            return Some(message);
+        }
+        for (name, left) in &self.images.sensors {
+            let Some(right) = other.images.sensors.get(name) else {
+                return Some(format!("images.sensors.{name}: only in left state"));
+            };
+            if left != right {
+                return Some(format!("images.sensors.{name}: state differs"));
+            }
+        }
+        for name in other
+            .images
+            .sensors
+            .keys()
+            .filter(|name| !self.images.sensors.contains_key(*name))
+        {
+            return Some(format!("images.sensors.{name}: only in right state"));
+        }
+        if let Some(message) = self.media.diff(&other.media) {
+            return Some(format!("media/{message}"));
+        }
+        diff_map("nands", &self.nands, &other.nands)
+    }
+
+    /// Canonical typed encoding for clients that compare states as bytes.
+    pub fn to_checkpoint(&self) -> Result<Checkpoint, String> {
+        let mut children = Vec::new();
+        for (name, state) in &self.wires {
+            children.push(
+                Checkpoint::encode("wire", &name)?.with_children(vec![state.clone()]),
+            );
+        }
+        for (name, state) in &self.images.wires {
+            children.push(
+                Checkpoint::encode("image-wire", &name)?.with_children(vec![state.clone()]),
+            );
+        }
+        for (name, state) in &self.images.images {
+            children.push(
+                Checkpoint::encode("image", &name)?.with_children(vec![state.clone()]),
+            );
+        }
+        for (name, state) in &self.images.statistics {
+            children.push(
+                Checkpoint::encode("statistics", &name)?.with_children(vec![state.clone()]),
+            );
+        }
+        for (name, state) in &self.images.sensors {
+            let frames = state.0.frames()?;
+            children.push(
+                Checkpoint::encode(
+                    "sensor",
+                    &SensorRecord {
+                        name: name.clone(),
+                        edge: state.0.edge(),
+                        view: state.0.view(),
+                        shared: state.0.shared(),
+                    },
+                )?
+                .with_children(frames),
+            );
+        }
+        children.push(self.media.clone());
+        for (name, state) in &self.nands {
+            children.push(
+                Checkpoint::encode("nand", &name)?.with_children(vec![state.clone()]),
+            );
+        }
+        Ok(Checkpoint::encode("resources", &())?.with_children(children))
+    }
+
+    /// Readable direct-state JSON with base64 byte leaves.
+    pub fn to_json(&self) -> Result<serde_json::Value, String> {
+        use serde_json::json;
+        let (cards, files): (
+            BTreeMap<String, Card>,
+            BTreeMap<String, Vec<(String, Vec<u8>)>>,
+        ) = self.media.decode("resource-media")?;
+        let mut wires = self
+            .wires
+            .iter()
+            .map(|(name, state)| (name.clone(), state.fingerprint()))
+            .collect::<BTreeMap<_, _>>();
+        for (name, state) in &self.images.wires {
+            wires.insert(name.clone(), state.fingerprint());
+        }
+        Ok(json!({
+            "wires":wires,
+            "images":self.images.images.iter().map(|(name, state)| (name.clone(), state.fingerprint())).collect::<BTreeMap<_, _>>(),
+            "statistics":self.images.statistics.iter().map(|(name, state)| (name.clone(), state.fingerprint())).collect::<BTreeMap<_, _>>(),
+            "sensors":self.images.sensors.iter().map(|(name, state)| {
+                Ok((name.clone(), json!({
+                    "edge":state.0.edge(),
+                    "view":state.0.view(),
+                    "shared":state.0.shared(),
+                    "frames":state.0.frames()?.iter().map(Checkpoint::fingerprint).collect::<Vec<_>>(),
+                })))
+            }).collect::<Result<BTreeMap<_, _>, String>>()?,
+            "cards":cards.iter().map(|(name, card)| (name.clone(), card.state())).collect::<BTreeMap<_, _>>(),
+            "nands":self.nands.iter().map(|(name, state)| (name.clone(), state.fingerprint())).collect::<BTreeMap<_, _>>(),
+            "files":files.iter().map(|(name, entries)| {
+                (name.clone(), entries.iter().map(|(path, data)| json!({
+                    "path":path,
+                    "contents":fujimod_emulator_devices::state::bytes(data),
+                })).collect::<Vec<_>>())
+            }).collect::<BTreeMap<_, _>>(),
+        }))
+    }
+}
+
+fn diff_map(
+    path: &str,
+    left: &BTreeMap<String, Checkpoint>,
+    right: &BTreeMap<String, Checkpoint>,
+) -> Option<String> {
+    for (name, value) in left {
+        let Some(other) = right.get(name) else {
+            return Some(format!("{path}.{name}: only in left state"));
+        };
+        if let Some(message) = value.diff(other) {
+            return Some(format!("{path}.{name}/{message}"));
+        }
+    }
+    for name in right.keys().filter(|name| !left.contains_key(*name)) {
+        return Some(format!("{path}.{name}: only in right state"));
+    }
+    None
 }
 impl Wire {
     fn checkpoint(&self) -> Result<Checkpoint, String> {

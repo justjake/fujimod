@@ -218,7 +218,7 @@ impl Device for StillProcessor {
     fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
         Ok(
             serde_json::json!({"r":self.r,"cfa":self.cfa,"film":self.film,
-            "source":fujimod_emulator_devices::fingerprint::bytes(&self.source),"dma":self.dma.fingerprint(),
+            "source":fujimod_emulator_devices::state::bytes(&self.source),"dma":self.dma.fingerprint(),
             "raw_dma":self.raw_dma.fingerprint()}),
         )
     }

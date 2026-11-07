@@ -12,10 +12,21 @@ use std::{
 
 pub const PAGE_BYTES: usize = 4096;
 type Page = [u8; PAGE_BYTES];
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Image {
     len: usize,
     pages: Arc<[Arc<Page>]>,
+}
+impl PartialEq for Image {
+    fn eq(&self, other: &Self) -> bool {
+        self.len == other.len
+            && self.pages.len() == other.pages.len()
+            && self
+                .pages
+                .iter()
+                .zip(other.pages.iter())
+                .all(|(left, right)| Arc::ptr_eq(left, right) || left == right)
+    }
 }
 /// Stable bitmap allocation retained until every observing processor is gone.
 /// Native processor threads and the owner may flag pages concurrently.
@@ -44,6 +55,12 @@ impl Image {
             .zip(other.pages.iter())
             .filter(|(a, b)| Arc::ptr_eq(a, b))
             .count()
+    }
+    /// One page's retained bytes, trimmed to the image's final partial page.
+    pub fn page(&self, index: usize) -> Option<&[u8]> {
+        let page = self.pages.get(index)?;
+        let offset = index.checked_mul(PAGE_BYTES)?;
+        Some(&page[..(self.len.saturating_sub(offset)).min(PAGE_BYTES)])
     }
 }
 impl Tracker {
@@ -101,6 +118,43 @@ impl Tracker {
                 pages.push(old.clone());
                 continue;
             }
+            let bytes = unsafe { std::slice::from_raw_parts(pointer.add(offset), size) };
+            let page = if let Some(old) = old.filter(|p| p[..size] == *bytes) {
+                old.clone()
+            } else if bytes == &zero_page[..size] {
+                zero_page.clone()
+            } else {
+                let mut page = [0; PAGE_BYTES];
+                page[..size].copy_from_slice(bytes);
+                fujimod_perf::add_bytes(
+                    fujimod_perf::ByteCounter::CheckpointPagesCopied,
+                    size as u64,
+                );
+                Arc::new(page)
+            };
+            pages.push(page);
+        }
+        let image = Image {
+            len: self.len,
+            pages: pages.into(),
+        };
+        drop(previous);
+        self.set_base(&image);
+        image
+    }
+
+    /// Read every page, reusing an equal previous page or the shared zero
+    /// page. Host writes that bypass dirty tracking are still observed.
+    /// # Safety
+    /// Every page is readable at `pointer`; all CPUs are stopped.
+    pub unsafe fn capture_all(&self, pointer: *const u8) -> Image {
+        let previous = self.base.borrow();
+        let mut pages = Vec::with_capacity(self.len.div_ceil(PAGE_BYTES));
+        let zero_page = zero();
+        for offset in (0..self.len).step_by(PAGE_BYTES) {
+            let index = offset / PAGE_BYTES;
+            let size = PAGE_BYTES.min(self.len - offset);
+            let old = previous.as_ref().and_then(|p| p.pages.get(index));
             let bytes = unsafe { std::slice::from_raw_parts(pointer.add(offset), size) };
             let page = if let Some(old) = old.filter(|p| p[..size] == *bytes) {
                 old.clone()

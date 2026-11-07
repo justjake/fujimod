@@ -3,7 +3,7 @@ mod archive;
 use serde::{Serialize, de::DeserializeOwned};
 use std::sync::Arc;
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Checkpoint {
     kind: std::borrow::Cow<'static, str>,
@@ -56,35 +56,78 @@ impl Checkpoint {
             + self.blobs.iter().map(|b| b.len()).sum::<usize>()
             + self.children.iter().map(Self::bytes).sum::<usize>()
     }
-    /// Content identity of the complete typed state: kind, encoded bytes,
-    /// blobs and children, with no host address or allocation identity.
+    /// Complete typed state: kind, encoded bytes, blobs and children, with no
+    /// host address or allocation identity.
     pub fn fingerprint(&self) -> serde_json::Value {
-        use sha2::{Digest, Sha256};
-        let mut hash = Sha256::new();
-        fn visit(hash: &mut Sha256, state: &Checkpoint) {
-            let section = |hash: &mut Sha256, bytes: &[u8]| {
-                hash.update((bytes.len() as u64).to_le_bytes());
-                hash.update(bytes);
-            };
-            section(hash, state.kind.as_bytes());
-            section(hash, &state.bytes);
-            hash.update((state.blobs.len() as u64).to_le_bytes());
-            for blob in &state.blobs {
-                section(hash, blob);
-            }
-            hash.update((state.children.len() as u64).to_le_bytes());
-            for child in &state.children {
-                visit(hash, child);
+        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        serde_json::json!({
+            "kind":self.kind,
+            "bytes":{"length":self.bytes.len(),"base64":STANDARD.encode(&self.bytes)},
+            "blobs":self.blobs.iter().map(|blob| serde_json::json!({
+                "length":blob.len(),"base64":STANDARD.encode(blob)})).collect::<Vec<_>>(),
+            "children":self.children.iter().map(Self::fingerprint).collect::<Vec<_>>(),
+        })
+    }
+
+    /// First structural difference between two complete typed states.
+    pub fn diff(&self, other: &Self) -> Option<String> {
+        self.diff_at("state", other)
+    }
+
+    fn diff_at(&self, path: &str, other: &Self) -> Option<String> {
+        if self.kind != other.kind {
+            return Some(format!(
+                "{path}: kind {:?} differs from {:?}",
+                self.kind, other.kind
+            ));
+        }
+        if let Some(offset) = first_difference(&self.bytes, &other.bytes) {
+            return Some(format!("{path}/{}: bytes differ at offset {offset}", self.kind));
+        }
+        if self.blobs.len() != other.blobs.len() {
+            return Some(format!(
+                "{path}/{}: blob count {} differs from {}",
+                self.kind,
+                self.blobs.len(),
+                other.blobs.len()
+            ));
+        }
+        for (index, (left, right)) in self.blobs.iter().zip(&other.blobs).enumerate() {
+            if let Some(offset) = first_difference(left, right) {
+                return Some(format!(
+                    "{path}/{}: blob {index} differs at offset {offset}",
+                    self.kind
+                ));
             }
         }
-        visit(&mut hash, self);
-        serde_json::json!({"kind":self.kind,"bytes":self.bytes(),"sha256":format!("{:x}", hash.finalize())})
+        if self.children.len() != other.children.len() {
+            return Some(format!(
+                "{path}/{}: child count {} differs from {}",
+                self.kind,
+                self.children.len(),
+                other.children.len()
+            ));
+        }
+        for (index, (left, right)) in self.children.iter().zip(&other.children).enumerate() {
+            if let Some(message) = left.diff_at(&format!("{path}/{}/child[{index}]", self.kind), right)
+            {
+                return Some(message);
+            }
+        }
+        None
     }
     pub fn share_unchanged(&mut self, previous: &Self) {
         if self.kind == previous.kind && self.bytes == previous.bytes {
             self.bytes = previous.bytes.clone();
         }
     }
+}
+
+fn first_difference(left: &[u8], right: &[u8]) -> Option<usize> {
+    left.iter()
+        .zip(right)
+        .position(|(a, b)| a != b)
+        .or_else(|| (left.len() != right.len()).then_some(left.len().min(right.len())))
 }
 
 /// Complete owned fields. Shared wires use explicit implementations so restore

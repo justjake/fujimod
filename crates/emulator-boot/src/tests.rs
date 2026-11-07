@@ -504,7 +504,7 @@ fn shipped_preparation_opens_the_same_board_as_selected_files() {
             session.board.instruction_counts(),
             session.board.now(),
             Content::identify(&kernel).sha256,
-            session.board.fingerprint().unwrap(),
+            session.board.complete_state().unwrap(),
         )
     };
 

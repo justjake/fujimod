@@ -82,11 +82,6 @@ pub struct InputLog {
     pub entries: usize,
 }
 #[derive(Serialize, Tsify)]
-#[tsify(hashmap_as_object, missing_as_null)]
-pub struct Fingerprint {
-    pub sha256: String,
-}
-#[derive(Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(hashmap_as_object, missing_as_null)]
 pub struct Preview {

@@ -300,7 +300,7 @@ enum Command {
         until: u64,
     },
     State,
-    MemoryFingerprint,
+    MemoryState,
     Progress,
     InstructionPoints { core: usize, addresses: Vec<u64> },
     InstructionEvent { core: usize },
@@ -652,7 +652,7 @@ impl Worker {
                 points.event().map(|address| json!({"core":core,"address":address}))
             }).unwrap_or(Value::Null)),
             Command::State => Ok(self.state()),
-            Command::MemoryFingerprint => self.board.memory_fingerprint(),
+            Command::MemoryState => self.board.memory_state(),
             Command::ReadMemory {
                 core,
                 address,

@@ -6,7 +6,7 @@ use fujimod_emulator_image_codecs::h264::decode::{self as host, Decoder, Sequenc
 pub(super) struct DecodeInput {
     source: u64,
     bytes: usize,
-    pub sha256: String,
+    pub base64: String,
     spans: Vec<(u64, usize)>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -17,8 +17,8 @@ pub(super) struct DecodeOutput {
     pub stride: usize,
     pub packing: String,
     pub bytes: usize,
-    pub sha256: String,
-    pub input_sha256: String,
+    pub base64: String,
+    pub input_base64: String,
     pub completed_tick: u64,
     pub slot: u32,
 }
@@ -150,8 +150,8 @@ impl AvcCodec {
             cx.now(),
             (sequence.width * sequence.height).div_ceil(64) as u64,
         )?;
-        let digest = fujimod_emulator_devices::fingerprint::bytes(&picture.i420);
-        let input_digest = fujimod_emulator_devices::fingerprint::bytes(&packet);
+        let digest = fujimod_emulator_devices::state::bytes(&picture.i420);
+        let input_digest = fujimod_emulator_devices::state::bytes(&packet);
         let output = DecodeOutput {
             destination,
             width: sequence.width,
@@ -159,10 +159,10 @@ impl AvcCodec {
             stride: sequence.width,
             packing: "i420".into(),
             bytes: picture.i420.len(),
-            sha256: digest["sha256"].as_str().unwrap().into(),
+            base64: digest["base64"].as_str().unwrap().into(),
             completed_tick: deadline,
             slot: slot as u32,
-            input_sha256: input_digest["sha256"].as_str().unwrap().into(),
+            input_base64: input_digest["base64"].as_str().unwrap().into(),
         };
         let mut available = self.state.bank_available;
         let mut next_bank = bank;
@@ -181,7 +181,7 @@ impl AvcCodec {
         let receipt = DecodeInput {
             source: bases[bank] + cursor as u64,
             bytes: consumed,
-            sha256: input_digest["sha256"].as_str().unwrap().into(),
+            base64: input_digest["base64"].as_str().unwrap().into(),
             spans,
         };
         self.state.decode.sequence = Some(sequence);

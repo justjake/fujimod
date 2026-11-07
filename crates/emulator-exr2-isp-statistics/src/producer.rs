@@ -825,7 +825,7 @@ impl Device for Block18000 {
             "stop_due":self.stop_due,"ack_due":self.ack_due,"ack_step":self.ack_step,"ack_channel":self.ack_channel,
             "pending":self.pending,"seen_frame":self.seen_frame,"spans":self.spans,
             "raster_result":self.raster_snapshot(),"statistics_grid":self.wiring.grid.is_some(),
-            "histogram":fujimod_emulator_devices::fingerprint::bytes(&self.histogram_bytes)}),
+            "histogram":fujimod_emulator_devices::state::bytes(&self.histogram_bytes)}),
         )
     }
     fn save(&self) -> serde_json::Value {

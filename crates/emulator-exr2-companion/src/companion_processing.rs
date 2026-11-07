@@ -432,7 +432,7 @@ impl Device for Processing {
         "registers":self.registers,"job":self.job.as_ref().map(|j| json!({
             "packet":j.packet,"started":j.started,"due":j.due,"route":j.route,
             "outputs":j.outputs.iter().map(|o|json!({"address":o.address,
-                "bytes":fujimod_emulator_devices::fingerprint::bytes(&o.bytes)})).collect::<Vec<_>>()
+                "bytes":fujimod_emulator_devices::state::bytes(&o.bytes)})).collect::<Vec<_>>()
         })),"completed":self.completed,"last_frame":self.last_frame})
     }
     fn fingerprint(&self) -> Result<Value, String> {

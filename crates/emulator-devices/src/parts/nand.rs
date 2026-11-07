@@ -11,12 +11,12 @@ pub struct Options {
     pub pages_per_block: u32,
     pub spare_bytes: usize,
 }
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Overlay {
     pub offset: u64,
     pub bytes: Arc<[u8]>,
 }
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Nand {
     options: Options,
     base: Arc<[u8]>,
@@ -54,10 +54,20 @@ pub struct Changes {
     written_spare: BTreeMap<u32, Vec<u8>>,
 }
 impl Nand {
+    pub fn state(&self) -> serde_json::Value {
+        let pages = |data: &BTreeMap<u32, Vec<u8>>| {
+            data.iter()
+                .map(|(row, bytes)| (*row, crate::state::bytes(bytes)))
+                .collect::<Vec<_>>()
+        };
+        serde_json::json!({"options":self.options,"base":crate::state::bytes(&self.base),
+            "overlays":self.overlays.iter().map(|o|(o.offset,crate::state::bytes(&o.bytes))).collect::<Vec<_>>(),
+            "spare":pages(&self.spare),"pages":pages(&self.pages),"written_spare":pages(&self.written_spare)})
+    }
     fn immutable_identity(&self) -> serde_json::Value {
-        serde_json::json!({"options":self.options,"base":crate::fingerprint::bytes(&self.base),
-            "overlays":self.overlays.iter().map(|o|(o.offset,crate::fingerprint::bytes(&o.bytes))).collect::<Vec<_>>(),
-            "spare":self.spare.iter().map(|(row,bytes)|(row,crate::fingerprint::bytes(bytes))).collect::<Vec<_>>()})
+        serde_json::json!({"options":self.options,"base":crate::state::bytes(&self.base),
+            "overlays":self.overlays.iter().map(|o|(o.offset,crate::state::bytes(&o.bytes))).collect::<Vec<_>>(),
+            "spare":self.spare.iter().map(|(row,bytes)|(row,crate::state::bytes(bytes))).collect::<Vec<_>>()})
     }
     pub fn changes(&self) -> Changes {
         Changes {
@@ -137,16 +147,6 @@ impl Nand {
         Ok(medium)
     }
 
-    pub fn fingerprint(&self) -> serde_json::Value {
-        let pages = |data: &BTreeMap<u32, Vec<u8>>| {
-            data.iter()
-                .map(|(row, bytes)| (*row, crate::fingerprint::bytes(bytes)))
-                .collect::<Vec<_>>()
-        };
-        serde_json::json!({"options":self.options,"base":crate::fingerprint::bytes(&self.base),
-            "overlays":self.overlays.iter().map(|o|(o.offset,crate::fingerprint::bytes(&o.bytes))).collect::<Vec<_>>(),
-            "spare":pages(&self.spare),"pages":pages(&self.pages),"written_spare":pages(&self.written_spare)})
-    }
     pub fn new(
         options: Options,
         base: Arc<[u8]>,
@@ -472,8 +472,8 @@ mod tests {
         let encoded = serde_json::to_vec(&written.changes()).unwrap();
         let changes: Changes = serde_json::from_slice(&encoded).unwrap();
         let restored = initial.with_changes(&changes).unwrap();
-        assert_eq!(restored.fingerprint(), written.fingerprint());
-        assert_ne!(initial.fingerprint(), written.fingerprint());
+        assert_eq!(restored, written);
+        assert_ne!(initial, written);
         let mut bad = changes.clone();
         bad.pages.insert(500, vec![0; 2048]);
         assert!(initial.with_changes(&bad).is_err());
@@ -539,18 +539,15 @@ mod tests {
         medium
             .program(3, &vec![0x55; 512], &vec![0x33; 16])
             .unwrap();
-        let state = medium.fingerprint();
+        let state = medium.clone();
         let saved = medium.checkpoint().unwrap();
         let envelope = Checkpoint::encode("medium-keyframe", &saved).unwrap();
         let decoded: Checkpoint = envelope.decode("medium-keyframe").unwrap();
-        assert_eq!(
-            Nand::from_checkpoint(&decoded).unwrap().fingerprint(),
-            state
-        );
+        assert_eq!(Nand::from_checkpoint(&decoded).unwrap(), state);
         assert!(Arc::ptr_eq(&base, &saved.blobs()[0]));
         medium.erase(0).unwrap();
         medium = Nand::from_checkpoint(&saved).unwrap();
-        assert_eq!(medium.fingerprint(), state);
+        assert_eq!(medium, state);
         assert!(Arc::ptr_eq(&base, &medium.checkpoint().unwrap().blobs()[0]));
     }
 }

@@ -178,8 +178,8 @@ impl Device for WindowAnalysis {
     fn fingerprint(&self) -> Result<serde_json::Value, String> {
         Ok(
             serde_json::json!({"registers":self.registers.as_slice(),"pending":self.pending,"dma":self.dma.fingerprint(),
-                "first":fujimod_emulator_devices::fingerprint::bytes(&self.first),"second":fujimod_emulator_devices::fingerprint::bytes(&self.second),
-                "features":fujimod_emulator_devices::fingerprint::bytes(&self.features)}),
+                "first":fujimod_emulator_devices::state::bytes(&self.first),"second":fujimod_emulator_devices::state::bytes(&self.second),
+                "features":fujimod_emulator_devices::state::bytes(&self.features)}),
         )
     }
     fn save(&self) -> serde_json::Value {

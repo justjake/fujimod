@@ -119,9 +119,9 @@ mod tests {
         };
         let archive = Encoded::from_bytes(&encoded).unwrap();
         let target = memory();
-        let before = target.fingerprint();
+        let before = target.checkpoint();
         let saved = target.import_checkpoint(&archive).unwrap();
-        assert_eq!(target.fingerprint(), before);
+        assert_eq!(target.checkpoint(), before);
         let domain = exclusive::Shared::default();
         target.restore_checkpoint(&saved, &[], &domain).unwrap();
         let mut bytes = [0; 7];
@@ -140,7 +140,7 @@ mod tests {
         let source = memory();
         let archive = source.checkpoint().export().unwrap();
         let target = memory();
-        let before = target.fingerprint();
+        let before = target.checkpoint();
         let mut metadata: Metadata = archive.decode(KIND).unwrap();
         metadata.regions[0].1 += 1;
         let bad = Encoded::encode(KIND, &metadata)
@@ -170,6 +170,6 @@ mod tests {
                 .import_checkpoint(&archive.with_blobs(blobs))
                 .is_err()
         );
-        assert_eq!(target.fingerprint(), before);
+        assert_eq!(target.checkpoint(), before);
     }
 }

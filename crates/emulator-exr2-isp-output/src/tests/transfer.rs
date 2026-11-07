@@ -48,14 +48,14 @@ fn conversion_latches_i420_planes_and_commits_packed_receipt_dma_before_status_a
     assert_ne!(receipt["source_sha256"], receipt["output_sha256"]);
     assert_eq!(
         receipt["source_sha256"],
-        fujimod_emulator_devices::fingerprint::bytes(&source)["sha256"]
+        fujimod_emulator_devices::state::bytes(&source)["base64"]
     );
     assert_eq!(receipt["source_packing"], "i420");
     assert_eq!(receipt["source_pitch"], 64);
     assert_eq!(receipt["source_bytes"], 384);
     assert_eq!(
         receipt["output_sha256"],
-        fujimod_emulator_devices::fingerprint::bytes(&expected)["sha256"]
+        fujimod_emulator_devices::state::bytes(&expected)["base64"]
     );
     write(&mut d, &mut h, 0xfff6401c, 0x31);
     assert_eq!(h.irqs, [(0, 73)]);
@@ -115,7 +115,7 @@ fn copy_checkpoint_rejects_changed_payload_and_busy_reconfiguration() {
     source[0] ^= 1;
     let mut metadata: serde_json::Value = saved.decode(d.name()).unwrap();
     metadata["pending"]["source_sha256"] =
-        fujimod_emulator_devices::fingerprint::bytes(&source)["sha256"].clone();
+        fujimod_emulator_devices::state::bytes(&source)["base64"].clone();
     let inconsistent =
         fujimod_emulator_devices::checkpoint::Checkpoint::encode(d.name(), &metadata)
             .unwrap()

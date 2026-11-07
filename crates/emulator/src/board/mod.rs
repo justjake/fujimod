@@ -29,6 +29,7 @@ mod observation_tests;
 mod preservation_tests;
 mod observe;
 mod schedule;
+mod state;
 #[cfg(test)]
 mod schedule_tests;
 #[cfg(test)]
@@ -46,6 +47,8 @@ use serde_json::{Value, json};
 use std::cell::{Cell, RefCell};
 use std::ffi::c_void;
 use std::rc::{Rc, Weak};
+
+pub use state::{BoardState, FrameState, ProcessorState};
 
 mod interrupts;
 pub use interrupts::{InterruptMap, InterruptRegisters};
@@ -256,42 +259,6 @@ impl Board {
         state.execution_policy = policy;
         self.slice_left.set(0);
         Ok(())
-    }
-    pub fn fingerprint(&self) -> Result<Value, String> {
-        let state = self
-            .state
-            .try_borrow()
-            .map_err(|_| "fingerprint requires a stopped board")?;
-        if state.active_slice.is_some() || state.parallel.is_some() || state.memory_access {
-            return Err("fingerprint requires a stopped board".into());
-        }
-        let mut runtime = self.state_with_bus(state.bus.fingerprint()?);
-        // accounted is progress relative to the last backend host call. Every
-        // new processor run resets it; it is not future-affecting guest state.
-        runtime["scheduler"] = json!({"deadlines":state.deadlines,"generations":state.generations,
-            "processor_deadlines":state.processor_deadlines,"processor_generations":state.processor_generations,
-            "interrupt_delivery":state.interrupt_delivery,"irq_observations":state.irq_observations,
-            "isolated_core":self.isolated_core.get(),"host_pause":self.host_pause.get()});
-        runtime["records"] = json!(
-            state
-                .records
-                .iter()
-                .map(|r| format!("{r:?}"))
-                .collect::<Vec<_>>()
-        );
-        runtime["console"] = json!(state.console);
-        runtime["frames"] = state
-            .frames
-            .iter()
-            .map(|(output, f)| {
-                json!({"output":output,"sequence":f.sequence,
-            "width":f.width,"height":f.height,"rgba":fujimod_emulator_devices::fingerprint::bytes(&f.rgba)})
-            })
-            .collect();
-        let mut value = json!({"memory":state.memory.fingerprint(),
-            "processors":self.cpus.iter().map(|c|c.fingerprint()).collect::<Result<Vec<_>,_>>()?,"pc_entries":self.pc_entries()});
-        value["runtime"] = runtime;
-        Ok(value)
     }
     pub fn new(
         cpus: Vec<Box<dyn Cpu>>,

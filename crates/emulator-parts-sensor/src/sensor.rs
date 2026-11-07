@@ -559,7 +559,7 @@ impl Sensor {
     pub fn fingerprint(&self) -> serde_json::Value {
         let linear: Vec<u16> = self.linear.iter().flatten().copied().collect();
         serde_json::json!({"width":self.width,"height":self.height,"image_area":self.image_area,"cfa":self.cfa,"black":self.black,
-            "linear":fujimod_emulator_devices::fingerprint::words16(&linear),"radiometry":self.radiometry.as_ref().map(|r|r.0),"frames":self.frames.lock().unwrap().fingerprint(),
+            "linear":fujimod_emulator_devices::state::words16(&linear),"radiometry":self.radiometry.as_ref().map(|r|r.0),"frames":self.frames.lock().unwrap().fingerprint(),
             "projection":self.projection.as_ref().map(|p|p.spec()),"controls":self.controls.as_ref().map(|c|c.fingerprint()),"exposed":self.exposed.as_ref().map(|e|e.fingerprint())})
     }
     pub fn controls(&self) -> serde_json::Value {

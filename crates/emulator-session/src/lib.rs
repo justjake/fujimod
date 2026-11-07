@@ -8,6 +8,7 @@ pub mod history;
 pub mod inputs;
 pub mod nand;
 pub mod scanout;
+pub mod state;
 #[cfg(test)]
 mod tests;
 pub mod usb;
@@ -17,6 +18,8 @@ use fujimod_emulator_devices::parts::card_contacts::Contacts;
 use fujimod_emulator_exr2_resources::{Resources, SensorFrame};
 use std::collections::BTreeMap;
 use fujimod_emulator_devices::capability::{HdmiOutput, SerialStatus};
+
+pub use state::SessionState;
 
 pub struct Session {
     pub definition: serde_json::Value,
@@ -37,14 +40,6 @@ pub struct Session {
     >,
 }
 impl Session {
-    pub fn fingerprint(&self) -> Result<serde_json::Value, String> {
-        let mut value = serde_json::json!({"schema":1,"definition":self.definition,
-            "controls":self.controls.as_ref().map(|p| serde_json::json!({"spec":p.spec(),"positions":p.positions()})),
-            "contact_driver":self.contact_driver.as_ref().map(|d|d.fingerprint()).transpose()?});
-        value["board"] = self.board.fingerprint()?;
-        value["resources"] = self.resources.fingerprint()?;
-        Ok(value)
-    }
     pub fn logic_input(&mut self, name: &str, high: bool) -> Result<(), String> {
         let level = self.resources.logic_level(name)?;
         let users = self.resources.wire_users(name)?;

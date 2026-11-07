@@ -25,6 +25,30 @@ struct Window {
     device: Box<dyn Device>,
     native_dependencies: Vec<usize>,
 }
+
+/// One device's complete typed state and its bus wiring.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DeviceState {
+    pub kind: String,
+    pub mappings: Vec<Mapping>,
+    pub native_dependencies: Vec<usize>,
+    pub checkpoint: fujimod_emulator_devices::checkpoint::Checkpoint,
+}
+
+/// Complete future-affecting bus state, excluding host-only visit stamps.
+#[derive(Clone, Debug, PartialEq)]
+pub struct State {
+    pub mode: Mode,
+    pub unmodeled: Value,
+    pub discovery_shadow: Value,
+    pub continue_refusals: bool,
+    pub frontier: Value,
+    pub skipped_deadlines: BTreeMap<usize, u64>,
+    pub touched: Vec<usize>,
+    pub dirty: Vec<bool>,
+    pub wake_queue: Vec<usize>,
+    pub devices: Vec<DeviceState>,
+}
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Site {
@@ -218,31 +242,63 @@ impl Bus {
         self.wake_generation = saved.wake_generation;
         Ok(())
     }
-    pub(super) fn fingerprint(&self) -> Result<Value, String> {
+    /// Complete typed state for direct comparison. The same fields the
+    /// previous fingerprint covered, with device state retained as typed
+    /// checkpoints instead of digest leaves.
+    pub(super) fn state_capture(&self) -> Result<State, String> {
+        if !self.pending_pcs.is_empty() {
+            return Err("state requires completed discovery PC recording".into());
+        }
         let devices = self
             .windows
             .iter()
             .enumerate()
             .map(|(index, node)| {
-                let mut value = json!({"kind":node.device.name(),"windows":node.mappings,
-                    "native_dependencies":node.native_dependencies});
-                value["state"] = node
-                    .device
-                    .fingerprint()
-                    .map_err(|e| format!("device {index} ({}): {e}", node.device.name()))?;
-                Ok(value)
+                Ok(DeviceState {
+                    kind: node.device.name().to_owned(),
+                    mappings: node.mappings.clone(),
+                    native_dependencies: node.native_dependencies.clone(),
+                    checkpoint: node
+                        .device
+                        .checkpoint()
+                        .map_err(|e| format!("device {index} ({}): {e}", node.device.name()))?,
+                })
             })
             .collect::<Result<Vec<_>, String>>()?;
-        let mut state = self.state_with_devices(Value::Array(devices));
-        state["skipped_deadlines"] = json!(self.skipped_deadlines);
-        // Visit stamps only deduplicate one already-drained worklist. Their
-        // arbitrary identities are accelerator bookkeeping, not pending work.
-        state["wakeups"] = json!({"touched":self.touched,"dirty":self.dirty,
-            "queue":self.wake_queue});
-        if !self.pending_pcs.is_empty() {
-            return Err("fingerprint requires completed discovery PC recording".into());
-        }
-        Ok(state)
+        let mut frontier = self
+            .unknown
+            .iter()
+            .map(|(site, r)| {
+                json!({
+                    "first":r.first,"count":r.count,"tick":r.tick,"pcs":r.pcs,"model":r.model,
+                    "kind":site.kind,"device":site.device,"phase":site.phase,"cpu":site.cpu,
+                    "pc":site.pc,"address":site.address,"size":site.size,"write":site.write,
+                    "value":site.value,"message":site.message,
+                })
+            })
+            .collect::<Vec<_>>();
+        frontier.sort_by_key(|r| r["first"].as_u64().unwrap());
+        Ok(State {
+            mode: self.mode,
+            unmodeled: self
+                .unknown
+                .iter()
+                .filter(|(site, _)| site.kind == "unmodeled-mmio")
+                .map(|(site, r)| {
+                    json!({"address":site.address,"pc":site.pc,"reads":r.reads,"writes":r.writes,
+                        "sizes":r.sizes,"cpus":r.cpus,"values":r.values,
+                        "values_omitted":r.values_omitted,"reasons":r.reasons})
+                })
+                .collect(),
+            discovery_shadow: json!(self.shadow.iter().collect::<Vec<_>>()),
+            continue_refusals: self.continue_refusals,
+            frontier: Value::Array(frontier),
+            skipped_deadlines: self.skipped_deadlines.clone(),
+            touched: self.touched.clone(),
+            dirty: self.dirty.clone(),
+            wake_queue: self.wake_queue.clone(),
+            devices,
+        })
     }
 
     /// Read only the selected native device kind; no access or tick is issued.
@@ -283,7 +339,8 @@ impl Bus {
             .collect()
     }
 
-    pub fn device_fingerprints(&self, kind: &str) -> Result<Vec<Value>, String> {
+    /// Complete device state values without diagnostic summary fallbacks.
+    pub fn device_state_values(&self, kind: &str) -> Result<Vec<Value>, String> {
         self.windows
             .iter()
             .filter(|node| node.device.name() == kind)
@@ -292,7 +349,10 @@ impl Bus {
     }
 
     pub fn device_buffer(&self, kind: &str, name: &str) -> Result<Vec<u8>, String> {
-        let mut devices = self.windows.iter().filter(|node| node.device.name() == kind);
+        let mut devices = self
+            .windows
+            .iter()
+            .filter(|node| node.device.name() == kind);
         let device = devices.next().ok_or("no matching device")?;
         if devices.next().is_some() {
             return Err("buffer observation requires one matching device".into());
@@ -458,11 +518,7 @@ impl Bus {
     /// Published reads that fall inside this CPU's physical MMIO mapping.
     /// Device declarations are relative to their registered windows; return
     /// offsets relative to the requested mapping for the CPU backend.
-    pub(super) fn fast_reads(
-        &self,
-        physical_base: u64,
-        bytes: usize,
-    ) -> Vec<(u64, FastReadValue)> {
+    pub(super) fn fast_reads(&self, physical_base: u64, bytes: usize) -> Vec<(u64, FastReadValue)> {
         let Some(physical_end) = physical_base.checked_add(bytes as u64) else {
             return Vec::new();
         };
@@ -612,11 +668,10 @@ impl Bus {
         if self.transactions.is_some() {
             return Err("Another bus transaction observer is active".into());
         }
-        if ranges.is_empty()
-            || limit == 0
-            || ranges.iter().any(|&(begin, end)| begin >= end)
-        {
-            return Err("Bus transaction watch requires bounded address windows and records".into());
+        if ranges.is_empty() || limit == 0 || ranges.iter().any(|&(begin, end)| begin >= end) {
+            return Err(
+                "Bus transaction watch requires bounded address windows and records".into(),
+            );
         }
         self.transactions = Some(Transactions {
             limit,
@@ -632,7 +687,11 @@ impl Bus {
     }
 
     pub fn transaction_watch_end(&mut self) -> Result<TransactionBatch, String> {
-        if !self.transactions.as_ref().is_some_and(|log| log.ranges.is_some()) {
+        if !self
+            .transactions
+            .as_ref()
+            .is_some_and(|log| log.ranges.is_some())
+        {
             return Err("No scoped bus transaction observer is active".into());
         }
         let log = self.transactions.take().unwrap();
@@ -1130,7 +1189,7 @@ mod tests {
         }
     }
     #[test]
-    fn fingerprint_uses_complete_device_state_without_building_diagnostic_summaries() {
+    fn state_capture_uses_complete_device_state_without_building_diagnostic_summaries() {
         struct Complete;
         impl Device for Complete {
             fn name(&self) -> &'static str {
@@ -1139,8 +1198,11 @@ mod tests {
             fn save(&self) -> Value {
                 panic!("discarded diagnostic allocation")
             }
-            fn fingerprint(&self) -> Result<Value, String> {
-                Ok(json!({"payload":[1,2,3],"pending":7}))
+            fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+                fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+                    "complete",
+                    &json!({"payload":[1,2,3],"pending":7}),
+                )
             }
             fn read(&mut self, _: &mut Cx<'_>, _: u64, _: u8) -> u64 {
                 unreachable!()
@@ -1150,19 +1212,37 @@ mod tests {
             }
         }
         let mut bus = Bus::new(Mode::Strict);
-        let mut expected = bus.state();
         bus.register(0x1000, 4, Box::new(Complete)).unwrap();
-        assert_eq!(bus.device_fingerprints("complete").unwrap(), vec![json!({"payload":[1,2,3],"pending":7})]);
-        assert!(bus.device_fingerprints("absent").unwrap().is_empty());
-        expected["devices"] = json!([{"kind":"complete","windows":bus.windows[0].mappings,
-            "native_dependencies":[],"state":{"payload":[1,2,3],"pending":7}}]);
-        expected["skipped_deadlines"] = json!({});
-        expected["wakeups"] =
-            json!({"touched":bus.touched,"dirty":bus.dirty,"queue":bus.wake_queue});
+        let state = bus.state_capture().unwrap();
+        assert_eq!(state.devices.len(), 1);
+        assert_eq!(state.devices[0].kind, "complete");
         assert_eq!(
-            serde_json::to_vec(&bus.fingerprint().unwrap()).unwrap(),
-            serde_json::to_vec(&expected).unwrap()
+            state.devices[0].checkpoint,
+            fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+                "complete",
+                &json!({"payload":[1,2,3],"pending":7})
+            )
+            .unwrap()
         );
+        assert!(state.skipped_deadlines.is_empty());
+        assert_eq!(state.touched, bus.touched);
+        assert_eq!(state.dirty, bus.dirty);
+        assert_eq!(state.wake_queue, bus.wake_queue);
+
+        struct Incomplete;
+        impl Device for Incomplete {
+            fn name(&self) -> &'static str {
+                "incomplete"
+            }
+            fn read(&mut self, _: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+                unreachable!()
+            }
+            fn write(&mut self, _: &mut Cx<'_>, _: u64, _: u8, _: u64) {
+                unreachable!()
+            }
+        }
+        bus.register(0x2000, 4, Box::new(Incomplete)).unwrap();
+        assert!(bus.state_capture().unwrap_err().contains("incomplete"));
     }
 
     struct Register(u64);

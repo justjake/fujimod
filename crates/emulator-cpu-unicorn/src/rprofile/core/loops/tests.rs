@@ -219,7 +219,7 @@ fn address_stops_and_unbounded_runs_do_not_skip_loops() {
 }
 
 #[test]
-fn counted_loops_preserve_guest_pmu_time_and_complete_cpu_fingerprints() {
+fn counted_loops_preserve_guest_pmu_time_and_complete_cpu_state() {
     let simulate = |mode, budget| {
         let cpu = processor_with_options(&Memory::default(), Options::default());
         cpu.map_zeroed(0, 0x4000, 7).unwrap();
@@ -251,7 +251,7 @@ fn counted_loops_preserve_guest_pmu_time_and_complete_cpu_fingerprints() {
         cpu.set_loop_window(true).unwrap();
         super::super::tests::run(&cpu, 0x1000, budget).unwrap();
         (
-            cpu.fingerprint().unwrap(),
+            cpu.state().unwrap(),
             cpu.instruction_progress(),
             cpu.exit_counters().unwrap()["loop_accelerated_instructions"],
         )

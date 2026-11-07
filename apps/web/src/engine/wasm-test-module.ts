@@ -265,9 +265,9 @@ export function testCameraModule(shared = false) {
       record('replay', {}, log);
       return point();
     }
-    fingerprint() {
-      record('fingerprint');
-      return { sha256: 'a'.repeat(64) };
+    completeState() {
+      record('complete_state');
+      return new Uint8Array();
     }
     profile(limit?: number | null) {
       record('profile', { limit });

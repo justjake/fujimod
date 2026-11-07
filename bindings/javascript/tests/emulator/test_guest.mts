@@ -314,7 +314,7 @@ async function run(scenario: string, jit: boolean, options: RunOptions) {
     advance(12000 / options.ratio, fault);
     const result = {
       error: executionError,
-      fingerprint: camera.fingerprint(),
+      state: camera.completeState(),
       report: camera.errorReport().report,
       output: word(0x18000),
       iterations: word(0x18004),
@@ -345,7 +345,7 @@ async function run(scenario: string, jit: boolean, options: RunOptions) {
       assert(result.output > result.iterations, 'the peer code write did not replace the add');
     camera.restore(saved.id);
     advance(12000 / options.ratio, fault);
-    assert.deepEqual(camera.fingerprint(), result.fingerprint);
+    assert.deepEqual(camera.completeState(), result.state);
     const stats = module.jitStatistics();
     if (jit) {
       assert(stats.enabled);

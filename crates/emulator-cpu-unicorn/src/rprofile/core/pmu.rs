@@ -22,10 +22,6 @@ pub(super) fn selected(r: arm::Coprocessor) -> bool {
                     || (r.crn == 14 && (8..=15).contains(&r.crm)))))
 }
 impl Counter {
-    pub(super) fn fingerprint(self) -> serde_json::Value {
-        serde_json::json!({"control":self.control,"enabled":self.enabled,"interrupts":self.interrupts,
-            "overflow":self.overflow,"frozen":self.frozen,"start":self.start,"observed":self.observed})
-    }
     fn check(crm: u32, opc2: u32) -> Result<(), String> {
         if matches!((crm, opc2), (12, 0..=3) | (13, 0) | (14, 1..=2)) {
             Ok(())

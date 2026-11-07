@@ -6,8 +6,8 @@
 use std::any::Any;
 use std::ffi::c_void;
 use std::ptr::NonNull;
-use std::sync::{Arc, Condvar, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 
 pub mod arm;
 pub mod arm64;
@@ -24,7 +24,7 @@ pub enum Architecture {
     Arm32,
     Arm64,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Model {
     #[serde(rename = "cortex-r5f")]
     CortexR5F,
@@ -344,10 +344,8 @@ mod fast_mmio_read_tests {
 
     #[test]
     fn clocked_reads_are_not_constant_loop_inputs_and_decline_past_validity() {
-        let read = FastMmioRead::clocked_u32(
-            0x20,
-            Arc::new(|tick| (tick < 20).then_some(tick as u32)),
-        );
+        let read =
+            FastMmioRead::clocked_u32(0x20, Arc::new(|tick| (tick < 20).then_some(tick as u32)));
         assert_eq!(read.read(0x20, 4), None);
         assert_eq!(read.read_at(0x20, 4, Some(19)), None);
         read.set_enabled(true);
@@ -652,8 +650,23 @@ pub trait Cpu {
     fn checkpoint_backings(&self) -> Result<Vec<(NonNull<u8>, usize)>, String> {
         Err("processor cannot prove keyframe backing ownership".into())
     }
-    fn fingerprint(&self) -> Result<serde_json::Value, String> {
-        Err("this processor has no complete state fingerprint".into())
+    /// Complete architectural state and external backing geometry for direct
+    /// comparison. The durable snapshot encoding retains banked registers and
+    /// context that plain register reads cannot reconstruct.
+    fn state(&self) -> Result<CpuState, String> {
+        let saved = self.snapshot(None)?;
+        let architecture = saved.export()?;
+        let mut backings = self
+            .checkpoint_backings()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(_, bytes)| bytes)
+            .collect::<Vec<_>>();
+        backings.sort_unstable();
+        Ok(CpuState {
+            architecture,
+            backings,
+        })
     }
     /// Logical reservations shared by processors in one physical address space.
     /// Framework architectural adapters join this domain through checked RAM views.
@@ -887,4 +900,12 @@ pub trait Cpu {
     fn hook_watched(&self, hook: HookId, watched: bool) -> Result<(), String>;
     fn precise_store_pc(&self, on: bool) -> Result<(), String>;
     fn exit_counters(&self) -> Result<std::collections::BTreeMap<&'static str, u64>, String>;
+}
+
+/// Directly comparable processor state. Identity and allocation order are not
+/// part of it; the durable architecture encoding and backing sizes are.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CpuState {
+    pub architecture: Vec<u8>,
+    pub backings: Vec<usize>,
 }

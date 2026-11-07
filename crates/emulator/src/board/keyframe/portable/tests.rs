@@ -10,23 +10,23 @@ fn fresh_board_resumes_the_full_archive_with_pending_dma_and_fractional_slices()
             source.run_until(13, 17).unwrap();
             let point = source.checkpoint(None).unwrap();
             let bytes = point.export().unwrap().to_bytes().unwrap();
-            let before = source.fingerprint().unwrap();
+            let before = source.complete_state().unwrap();
             assert_eq!(point.export().unwrap().to_bytes().unwrap(), bytes);
-            assert_eq!(source.fingerprint().unwrap(), before);
+            assert_eq!(source.complete_state().unwrap(), before);
             source.run_until(120, 17).unwrap();
-            (bytes, before, source.fingerprint().unwrap())
+            (bytes, before, source.complete_state().unwrap())
         };
         let encoded = Encoded::from_bytes(&bytes).unwrap();
         let mut target = board();
-        let initial = target.fingerprint().unwrap();
+        let initial = target.complete_state().unwrap();
         let point = target.import_keyframe(&encoded).unwrap();
-        assert_eq!(target.fingerprint().unwrap(), initial);
+        assert_eq!(target.complete_state().unwrap(), initial);
         target.restore_keyframe(&point).unwrap();
-        assert_eq!(target.fingerprint().unwrap(), before);
+        assert_eq!(target.complete_state().unwrap(), before);
         assert_eq!(point.export().unwrap().to_bytes().unwrap(), bytes);
         target.checkpoint(Some(&point)).unwrap();
         target.run_until(120, 17).unwrap();
-        assert_eq!(target.fingerprint().unwrap(), later);
+        assert_eq!(target.complete_state().unwrap(), later);
     }
 }
 
@@ -60,7 +60,7 @@ fn scheduler_frames_console_and_outputs_are_detached_captured_data() {
                 .unwrap()
                 .to_bytes()
                 .unwrap(),
-            source.fingerprint().unwrap(),
+            source.complete_state().unwrap(),
         )
     };
     let mut target = board();
@@ -68,7 +68,7 @@ fn scheduler_frames_console_and_outputs_are_detached_captured_data() {
         .import_keyframe(&Encoded::from_bytes(&bytes).unwrap())
         .unwrap();
     target.restore_keyframe(&point).unwrap();
-    assert_eq!(target.fingerprint().unwrap(), expected);
+    assert_eq!(target.complete_state().unwrap(), expected);
     assert_eq!(
         target.state.borrow().outputs[&1],
         json!({"sequence":9,"status":"ready"})
@@ -98,7 +98,7 @@ fn event_record_hex_values_keep_their_variant_in_portable_archives() {
                 .unwrap()
                 .to_bytes()
                 .unwrap(),
-            source.fingerprint().unwrap(),
+            source.complete_state().unwrap(),
         )
     };
     let mut target = board();
@@ -106,7 +106,7 @@ fn event_record_hex_values_keep_their_variant_in_portable_archives() {
         .import_keyframe(&Encoded::from_bytes(&bytes).unwrap())
         .unwrap();
     target.restore_keyframe(&checkpoint).unwrap();
-    assert_eq!(target.fingerprint().unwrap(), expected);
+    assert_eq!(target.complete_state().unwrap(), expected);
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn invalid_topology_scheduler_or_mode_is_refused_without_mutating_the_receiver()
     source.run_until(13, 17).unwrap();
     let encoded = source.checkpoint(None).unwrap().export().unwrap();
     let target = board();
-    let before = target.fingerprint().unwrap();
+    let before = target.complete_state().unwrap();
     for corrupt in 0..7 {
         let mut header: Header<Saved, decoder::Checkpoint, observe::Entries> =
             encoded.decode(KIND).unwrap();
@@ -139,16 +139,16 @@ fn invalid_topology_scheduler_or_mode_is_refused_without_mutating_the_receiver()
             .with_blobs(encoded.blobs().to_vec())
             .with_children(encoded.children().to_vec());
         assert!(target.import_keyframe(&bad).is_err());
-        assert_eq!(target.fingerprint().unwrap(), before);
+        assert_eq!(target.complete_state().unwrap(), before);
     }
     assert!(
         target
             .import_keyframe(&encoded.clone().with_blobs(vec![]))
             .is_err()
     );
-    assert_eq!(target.fingerprint().unwrap(), before);
+    assert_eq!(target.complete_state().unwrap(), before);
     let discovery = board_mode(bus::Mode::Discovery);
-    let before = discovery.fingerprint().unwrap();
+    let before = discovery.complete_state().unwrap();
     assert!(discovery.import_keyframe(&encoded).is_err());
-    assert_eq!(discovery.fingerprint().unwrap(), before);
+    assert_eq!(discovery.complete_state().unwrap(), before);
 }
