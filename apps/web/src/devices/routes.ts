@@ -28,17 +28,30 @@ export function bearerToken(header: string | null): string | undefined {
   return header?.match(/^Bearer\s+(\S+)$/i)?.[1];
 }
 
+/** The code being redeemed, read from a JSON or form-encoded body. RFC 8628
+ * clients post a form; Better Auth accepts both, so this wrapper must too. */
+async function redeemingCode(request: Request): Promise<string | undefined> {
+  const copy = request.clone();
+  const type = (copy.headers.get('content-type') ?? '').toLowerCase();
+  try {
+    if (/x-www-form-urlencoded|multipart\/form-data/.test(type)) {
+      const code = (await copy.formData()).get('device_code');
+      return typeof code === 'string' ? code : undefined;
+    }
+    const body = (await copy.json()) as { device_code?: unknown } | null;
+    return typeof body?.device_code === 'string' ? body.device_code : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Wraps the device token exchange so the issued session is remembered as a device. */
 export async function serveDeviceToken(
   request: Request,
   db: D1Database,
   handler: (request: Request) => Promise<Response>,
 ): Promise<Response> {
-  const body = (await request
-    .clone()
-    .json()
-    .catch(() => undefined)) as { device_code?: unknown } | undefined;
-  const code = typeof body?.device_code === 'string' ? body.device_code : undefined;
+  const code = await redeemingCode(request);
   const approved = code ? await approvedCode(db, code) : undefined;
   const response = await handler(request);
   if (!approved || !response.ok) return response;

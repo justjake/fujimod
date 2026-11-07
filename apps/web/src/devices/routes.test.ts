@@ -143,3 +143,25 @@ test('a failed exchange records nothing', async () => {
   expect(response.status).toBe(400);
   expect(statements.filter((sql) => sql.startsWith('insert'))).toEqual([]);
 });
+
+test('a form-encoded token request is still recorded', async () => {
+  const statements: string[] = [];
+  const db = database({ approved: { userId: 'u1', clientId: 'x70-camera' } }, statements);
+  const response = await serveDeviceToken(
+    new Request('https://fujimod.com/api/auth/device/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+        device_code: 'code-form',
+        client_id: 'x70-camera',
+      }).toString(),
+    }),
+    db,
+    async () => new Response(JSON.stringify({ access_token: 'form-token' }), { status: 200 }),
+  );
+  expect(response.status).toBe(200);
+  expect(statements.some((sql) => sql.startsWith('insert or ignore into device_credential'))).toBe(
+    true,
+  );
+});
