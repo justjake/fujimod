@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from 'better-auth';
 import { deviceAuthorization } from 'better-auth/plugins';
 import type { D1Database } from '@cloudflare/workers-types';
+import { isDeviceClient } from '../devices/policy.ts';
 
 export interface AuthEnv {
   AUTH_DB: D1Database;
@@ -46,7 +47,7 @@ export function authOptions(
     account: { encryptOAuthTokens: true },
     trustedOrigins,
     emailAndPassword: { enabled: false },
-    plugins: [deviceAuthorization()],
+    plugins: [deviceAuthorization({ validateClient: isDeviceClient })],
     socialProviders: {
       google: {
         clientId: env.GOOGLE_CLIENT_ID,

@@ -3,6 +3,7 @@ import { releaseRoute, validateReleaseInfo, type ReleaseInfo } from './src/patch
 import { byteRange, otaRoute } from './src/ota/routes.ts';
 import { createAuth } from './src/auth/runtime.ts';
 import type { AuthEnv } from './src/auth/options.ts';
+import { serveDeviceToken, serveGoogleToken, type ProviderTokenApi } from './src/devices/routes.ts';
 
 const repository = 'justjake/fujimod';
 const api = `https://api.github.com/repos/${repository}/releases`;
@@ -44,6 +45,7 @@ interface Env extends AuthEnv {
 }
 interface AuthHandler {
   handler(request: Request): Promise<Response>;
+  api: ProviderTokenApi;
 }
 type AuthFactory = (env: AuthEnv, baseURL: string) => AuthHandler;
 const currentKey = 'current';
@@ -520,8 +522,14 @@ export async function serveRequest(
   makeAuth: AuthFactory = createAuth,
 ): Promise<Response> {
   const url = new URL(request.url);
+  if (url.pathname === '/api/auth/device/token') {
+    const auth = makeAuth(env, url.origin);
+    return serveDeviceToken(request, env.AUTH_DB, (incoming) => auth.handler(incoming));
+  }
   if (url.pathname === '/api/auth' || url.pathname.startsWith('/api/auth/'))
     return makeAuth(env, url.origin).handler(request);
+  if (url.pathname === '/api/devices/google-token')
+    return serveGoogleToken(request, env.AUTH_DB, makeAuth(env, url.origin).api);
   if (url.pathname.startsWith('/releases/'))
     return serveRelease(
       request,

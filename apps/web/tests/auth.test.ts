@@ -12,13 +12,18 @@ const env = {
   GOOGLE_CLIENT_SECRET: 'test-client-secret',
 };
 
+/** The two surfaces the Worker uses from a Better Auth instance. */
+function fakeAuth(handler: (request: Request) => Promise<Response>) {
+  return { handler, api: { getAccessToken: async () => ({ accessToken: null }) } };
+}
+
 test('the google callback reaches the auth handler', async () => {
   const handler = vi.fn(async () => new Response('callback'));
   const response = await serveRequest(
     new Request('https://fujimod.com/api/auth/callback/google?code=abc&state=def'),
     env,
     { waitUntil() {} },
-    () => ({ handler }),
+    () => fakeAuth(handler),
   );
 
   expect(await response.text()).toBe('callback');
@@ -38,7 +43,7 @@ test('www requests sign in through the apex origin', () => {
 
 test('auth routes run before static assets', async () => {
   const handler = vi.fn(async () => new Response('auth'));
-  const makeAuth = vi.fn(() => ({ handler }));
+  const makeAuth = vi.fn(() => fakeAuth(handler));
   const assets = vi.fn(async () => new Response('static'));
   const assetsEnv = { ...env, ASSETS: { fetch: assets } };
 
