@@ -74,6 +74,120 @@ pub struct RestartMechanism {
     /// present only when its locator qualified a callback timer on the same
     /// firmware; delivery and callback placement remain separate mechanisms.
     pub deferred_timer: Option<DeferredTimer>,
+    /// Freestanding restart before the operating system, when located.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub early_boot: Option<EarlyBootMechanism>,
+}
+
+/// A processor-specific freestanding power-controller transport.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
+pub enum EarlyBootMechanism {
+    /// Polled EXR II SPI, persistent packet, wake alarm and power-hold release.
+    Exr2PolledAlarm {
+        /// SPI channel selected by the verified loader descriptor.
+        spi_channel: u32,
+        /// Exact C constants derived from the checked loader and power path.
+        constants: EarlyBootConstants,
+        /// Stock loader ranges establishing the transport.
+        code_checks: Vec<CodeCheck>,
+    },
+}
+
+/// Exact register and command values for this firmware's early restart.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
+pub struct EarlyBootConstants {
+    /// Alarm enable.
+    pub exr2_restart_alarm_enable: u32,
+    /// Alarm high.
+    pub exr2_restart_alarm_high: u32,
+    /// Alarm low.
+    pub exr2_restart_alarm_low: u32,
+    /// Gpio banks.
+    pub exr2_restart_gpio_banks: u32,
+    /// Gpio base.
+    pub exr2_restart_gpio_base: u32,
+    /// Gpio config.
+    pub exr2_restart_gpio_config: u32,
+    /// Gpio inactive mask.
+    pub exr2_restart_gpio_inactive_mask: u32,
+    /// Gpio mode1.
+    pub exr2_restart_gpio_mode1: u32,
+    /// Gpio mode2.
+    pub exr2_restart_gpio_mode2: u32,
+    /// Gpio mode3.
+    pub exr2_restart_gpio_mode3: u32,
+    /// Gpio mode4.
+    pub exr2_restart_gpio_mode4: u32,
+    /// Gpio output.
+    pub exr2_restart_gpio_output: u32,
+    /// Gpio stride.
+    pub exr2_restart_gpio_stride: u32,
+    /// Packet bytes.
+    pub exr2_restart_packet_bytes: u32,
+    /// Packet register.
+    pub exr2_restart_packet_register: u32,
+    /// Power command.
+    pub exr2_restart_power_command: u32,
+    /// Power hold.
+    pub exr2_restart_power_hold: u32,
+    /// Power hold mask.
+    pub exr2_restart_power_hold_mask: u32,
+    /// Power off value.
+    pub exr2_restart_power_off_value: u32,
+    /// Spi base.
+    pub exr2_restart_spi_base: u32,
+    /// Spi busy.
+    pub exr2_restart_spi_busy: u32,
+    /// Spi control.
+    pub exr2_restart_spi_control: u32,
+    /// Spi count mask.
+    pub exr2_restart_spi_count_mask: u32,
+    /// Spi enable.
+    pub exr2_restart_spi_enable: u32,
+    /// Spi fifo control.
+    pub exr2_restart_spi_fifo_control: u32,
+    /// Spi fifo reset.
+    pub exr2_restart_spi_fifo_reset: u32,
+    /// Spi format.
+    pub exr2_restart_spi_format: u32,
+    /// Spi rx.
+    pub exr2_restart_spi_rx: u32,
+    /// Spi rx count.
+    pub exr2_restart_spi_rx_count: u32,
+    /// Spi rx ready.
+    pub exr2_restart_spi_rx_ready: u32,
+    /// Spi status.
+    pub exr2_restart_spi_status: u32,
+    /// Spi status clear.
+    pub exr2_restart_spi_status_clear: u32,
+    /// Spi tx.
+    pub exr2_restart_spi_tx: u32,
+    /// Spi tx count.
+    pub exr2_restart_spi_tx_count: u32,
+    /// Write.
+    pub exr2_restart_write: u32,
+    /// Gpio pin.
+    pub restart_gpio_pin: u32,
+    /// Panel gpio bank.
+    pub restart_panel_gpio_bank: u32,
+    /// Power gpio bank.
+    pub restart_power_gpio_bank: u32,
+    /// Spi format value.
+    pub restart_spi_format_value: u32,
+    /// Spi idle control.
+    pub restart_spi_idle_control: u32,
 }
 
 /// A stock timer that calls a no-argument callback after a millisecond delay.
@@ -318,6 +432,31 @@ impl FirmwareRestart {
         }
         if m.power_off.alarm.seconds.is_empty() {
             return fail("alarm seconds registers are required");
+        }
+        if let Some(EarlyBootMechanism::Exr2PolledAlarm {
+            spi_channel,
+            constants,
+            code_checks,
+        }) = &m.early_boot
+        {
+            if *spi_channel > 3
+                || code_checks.len() != 2
+                || code_checks
+                    .iter()
+                    .any(|check| check.size == 0 || check.sha256.len() != 64)
+                || constants.exr2_restart_spi_base != 0xfff84000 + spi_channel * 0x40
+                || constants.exr2_restart_packet_bytes != 16
+                || Some(constants.exr2_restart_alarm_low)
+                    != m.power_off.alarm.seconds.first().copied()
+                || Some(constants.exr2_restart_alarm_high)
+                    != m.power_off.alarm.seconds.get(1).copied()
+                || constants.exr2_restart_alarm_enable != m.power_off.alarm.enable
+                || constants.restart_gpio_pin >= 16
+                || constants.restart_power_gpio_bank >= 16
+                || constants.restart_panel_gpio_bank >= 16
+            {
+                return fail("invalid early-boot restart mechanism");
+            }
         }
         if let Some(timer) = &m.deferred_timer {
             if timer.kind != "software-timer-callback-v1"
