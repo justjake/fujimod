@@ -10,7 +10,7 @@ import { localReleases } from './scripts/local-releases.ts';
 import { localMedia, previewMedia } from './scripts/local-media.ts';
 import { localReviewFiles } from './scripts/local-review-files.ts';
 import { simulatorReports } from './scripts/local-reports.ts';
-import { bugReportRoute } from './src/bug/route.ts';
+import { directoryRoute } from './src/directory-route.ts';
 import { browserDiagnostics } from './scripts/browser-diagnostics.ts';
 import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
@@ -268,7 +268,8 @@ export default defineConfig(({ mode, command }) => ({
       },
       ssr: true,
     }),
-    bugReportRoute(),
+    directoryRoute('bug'),
+    directoryRoute('device'),
     wasmProofRoute(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
     simulatorReports(),
     browserDiagnostics(),
