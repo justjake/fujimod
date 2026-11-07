@@ -239,12 +239,15 @@ fn connect_host(port: u16) -> Option<TcpStream> {
 
 #[derive(Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[serde(default)]
 pub struct Network {
     guest_mac: Option<[u8; 6]>,
     lease: Option<Lease>,
     connections: Vec<Connection>,
     sequence_counter: u32,
     polls: u64,
+    dns_questions: u64,
+    ntp_requests: u64,
 }
 
 impl Network {
@@ -255,6 +258,8 @@ impl Network {
             "connections": serde_json::to_value(&self.connections).unwrap_or_default(),
             "sequence_counter": self.sequence_counter,
             "polls": self.polls,
+            "dns_questions": self.dns_questions,
+            "ntp_requests": self.ntp_requests,
         })
     }
 
@@ -514,6 +519,7 @@ impl Network {
         source_port: u16,
         payload: &[u8],
     ) -> Vec<Vec<u8>> {
+        self.dns_questions = self.dns_questions.saturating_add(1);
         let Some(mac) = self.guest_mac else {
             return Vec::new();
         };
@@ -579,6 +585,7 @@ impl Network {
         payload: &[u8],
         now_ms: u64,
     ) -> Vec<Vec<u8>> {
+        self.ntp_requests = self.ntp_requests.saturating_add(1);
         let Some(mac) = self.guest_mac else {
             return Vec::new();
         };
