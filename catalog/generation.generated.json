@@ -2211,6 +2211,10 @@
       "version": "1.10",
       "internal_version": "1.39",
       "tables": {
+        "boot-patch": {
+          "status": "available",
+          "errors": []
+        },
         "bulk": {
           "status": "available",
           "errors": []
