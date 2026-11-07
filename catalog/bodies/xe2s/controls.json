@@ -221,7 +221,9 @@
       "manual_page": 60,
       "face": "DRIVE",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-6"
+      ],
       "assignable": false,
       "default_function": "Displays drive options; in playback, zooms in.",
       "role": null,
@@ -230,7 +232,7 @@
         "kind": "button",
         "press": {
           "kind": "debug_key",
-          "name": "DRIVE"
+          "name": "ISO"
         }
       },
       "pushable": true,
