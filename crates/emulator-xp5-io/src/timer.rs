@@ -204,6 +204,14 @@ impl Device for Timer {
                     ) as u64;
                 }
             }
+            // While a general channel runs, word 0 reads its live down-count.
+            // X-T5 4.31 stage0's microsecond delay (0xFF80196C) polls 0x110
+            // after loading 0xFFFFFFFF there and enabling channel 1.
+            if w == 0 && self.general[n].count.enabled {
+                return self.general[n]
+                    .count
+                    .current(Duration::from_nanos(cx.now())) as u64;
+            }
             return self.general[n].words[w] as u64;
         }
         if (0x200..0x200 + self.general_len() as u64 * 4).contains(&offset) {
@@ -476,6 +484,31 @@ mod tests {
         assert_eq!(restored.read(&mut Cx::new(&mut host, 0, 0, 0), 0x190, 4), 4);
         restored.write(&mut Cx::new(&mut host, 0, 0, 0), 0x190, 4, 0);
         assert_eq!(restored.read(&mut Cx::new(&mut host, 0, 0, 0), 0x190, 4), 0);
+    }
+    #[test]
+    fn running_general_word0_reads_the_live_count() {
+        let mut timer = Timer::new(0);
+        let mut host = Host::default();
+        // X-T5 4.31 stage0 delay: clear status, load both words, enable channel 1.
+        for (o, v) in [
+            (0x14, 0x10000),
+            (0x110, u32::MAX),
+            (0x114, u32::MAX),
+            (0, 0x20002),
+        ] {
+            timer.write(&mut Cx::new(&mut host, 0, 0, 0), o, 4, u64::from(v));
+        }
+        host.now = Duration::from_micros(2000);
+        let elapsed = u64::from(u32::MAX) - timer.read(&mut Cx::new(&mut host, 0, 0, 0), 0x110, 4);
+        assert_eq!(elapsed, 2000 * 48);
+        // The reload word and a stopped channel's word 0 still read back as written.
+        assert_eq!(
+            timer.read(&mut Cx::new(&mut host, 0, 0, 0), 0x114, 4),
+            u64::from(u32::MAX)
+        );
+        timer.write(&mut Cx::new(&mut host, 0, 0, 0), 0, 4, 0x20000);
+        timer.write(&mut Cx::new(&mut host, 0, 0, 0), 0x110, 4, 1234);
+        assert_eq!(timer.read(&mut Cx::new(&mut host, 0, 0, 0), 0x110, 4), 1234);
     }
     #[test]
     fn finder_period_expiry_ack_and_cancel() {
