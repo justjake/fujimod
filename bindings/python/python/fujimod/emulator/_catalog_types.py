@@ -475,6 +475,13 @@ class CacheGeometry(TypedDict, total=False):
     l2_bytes: Required[int]
 
 
+class CacheSynchronization(TypedDict, total=False):
+    data_barrier: Required[int]
+    data_clean: Required[int]
+    instruction_barrier: Required[int]
+    instruction_invalidate: Required[int]
+
+
 class CaptureScope(TypedDict, total=False):
     basis: Required[str]
     name: Required[str]
@@ -518,6 +525,9 @@ class CompanionMailbox(TypedDict, total=False):
     status: Required[int]
 
 
+type Configuration = ConfigurationVariant0 | ConfigurationVariant1
+
+
 class ConfigurationCheck(TypedDict, total=False):
     offset: Required[int]
     value: Required[int]
@@ -536,6 +546,16 @@ class ConfigurationLocationVariant0(TypedDict, total=False):
 class ConfigurationLocationVariant1(TypedDict, total=False):
     address: Required[int]
     kind: Required[Literal["direct"]]
+
+
+class ConfigurationVariant0(TypedDict, total=False):
+    address: Required[int]
+    mechanism: Required[Literal["pointer"]]
+
+
+class ConfigurationVariant1(TypedDict, total=False):
+    address: Required[int]
+    mechanism: Required[Literal["fixed"]]
 
 
 class ConfigurationWindow(TypedDict, total=False):
@@ -1387,6 +1407,16 @@ class DecoderSelection(TypedDict, total=False):
     processors: Required[list[str]]
 
 
+class DeferredTimer(TypedDict, total=False):
+    callback_arguments: Required[int]
+    cancel: Required[TimerRoutine]
+    kind: Required[str]
+    one_shot_periodic: Required[int]
+    period_unit: Required[str]
+    periodic_nonzero: Required[bool]
+    start: Required[TimerRoutine]
+
+
 class DeviceGraph(TypedDict, total=False):
     attachment_order: Required[list[str]]
     construction_order: Required[list[str]]
@@ -1540,6 +1570,16 @@ class EventTranslation(TypedDict, total=False):
     rows: Required[list[TranslatedKey]]
     sha256: Required[str]
     stride: Required[int]
+
+
+type ExecutionMechanism = ExecutionMechanismVariant0
+
+
+class ExecutionMechanismVariant0(TypedDict, total=False):
+    allocation: Required[HeapAllocation]
+    cache: Required[CacheSynchronization]
+    code_checks: Required[list[CodeCheck]]
+    kind: Required[Literal["exr2_query_heap"]]
 
 
 Firmware = TypedDict(
@@ -1705,6 +1745,22 @@ class FirmwareDescriptors(TypedDict, total=False):
     sampling: Required[str]
     sha256: Required[str]
     size: Required[int]
+
+
+FirmwareExecution = TypedDict(
+    "FirmwareExecution",
+    {
+        "$schema": Required["str"],
+        "code_alias": Required["int"],
+        "firmware_id": Required["str"],
+        "id": Required["str"],
+        "internal_version": Required["str"],
+        "mechanism": Required["ExecutionMechanism"],
+        "product": Required["str"],
+        "schema": Required["int"],
+    },
+    total=False,
+)
 
 
 FirmwareFacts = TypedDict(
@@ -3088,6 +3144,12 @@ class HardwareXppUsb(TypedDict, total=False):
     transaction_ticks: Required[int]
 
 
+class HeapAllocation(TypedDict, total=False):
+    allocate: Required[int]
+    configuration: Required[Configuration]
+    release: Required[int]
+
+
 class HomeSwitch(TypedDict, total=False):
     side: NotRequired[HomeSwitchSide | None]
     threshold: Required[int]
@@ -4166,6 +4228,7 @@ class ResolvedSelection(TypedDict, total=False):
     bulk: NotRequired[FirmwareBulk | None]
     card_files: NotRequired[FirmwareCard | None]
     control_ids: NotRequired[FirmwareControlIds | None]
+    execution: NotRequired[FirmwareExecution | None]
     firmware: Required[Firmware]
     first_start: NotRequired[FirstStartMenu | None]
     flash: NotRequired[FirmwareFlash | None]
@@ -4175,6 +4238,9 @@ class ResolvedSelection(TypedDict, total=False):
     settings: NotRequired[FirmwareSettings | None]
     soc: Required[Soc]
     state: NotRequired[FirmwareState | None]
+    ui_event_codes: NotRequired[UiEventCodes | None]
+    ui_scene_names: NotRequired[UiSceneNames | None]
+    ui_setting_names: NotRequired[UiSettingNames | None]
 
 
 class Resources(TypedDict, total=False):
@@ -4201,6 +4267,7 @@ class Resources(TypedDict, total=False):
 
 class RestartMechanism(TypedDict, total=False):
     deadline_offset: Required[int]
+    deferred_timer: NotRequired[DeferredTimer | None]
     parameter_bytes: Required[int]
     power_off: Required[PowerOff]
     request: Required[int]
@@ -5455,6 +5522,11 @@ class TcmState(TypedDict, total=False):
     reset_address: Required[int]
 
 
+class TimerRoutine(TypedDict, total=False):
+    address: Required[int]
+    size: Required[int]
+
+
 type TimingOperation = Literal[
     "settle",
     "sample",
@@ -5469,6 +5541,48 @@ type TimingOperation = Literal[
 class TranslatedKey(TypedDict, total=False):
     event: Required[int]
     physical_key: Required[int]
+
+
+UiEventCodes = TypedDict(
+    "UiEventCodes",
+    {
+        "$schema": Required["str"],
+        "firmware_id": Required["str"],
+        "firmware_sha256": Required["str"],
+        "id": Required["str"],
+        "schema": Required["int"],
+        "ui_event_codes": Required["dict[str, int]"],
+    },
+    total=False,
+)
+
+
+UiSceneNames = TypedDict(
+    "UiSceneNames",
+    {
+        "$schema": Required["str"],
+        "firmware_id": Required["str"],
+        "firmware_sha256": Required["str"],
+        "id": Required["str"],
+        "schema": Required["int"],
+        "ui_scene_names": Required["dict[str, int]"],
+    },
+    total=False,
+)
+
+
+UiSettingNames = TypedDict(
+    "UiSettingNames",
+    {
+        "$schema": Required["str"],
+        "firmware_id": Required["str"],
+        "firmware_sha256": Required["str"],
+        "id": Required["str"],
+        "schema": Required["int"],
+        "ui_setting_names": Required["dict[str, int]"],
+    },
+    total=False,
+)
 
 
 class UpdateRange(TypedDict, total=False):
