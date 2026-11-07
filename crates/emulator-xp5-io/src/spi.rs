@@ -570,8 +570,15 @@ mod tests {
         let shared = Pins::shared();
         let mut gpio = Gpio::new(0xff907000, shared.clone(), false, vec![]).unwrap();
         let mut host = RecordingHost::default();
-        let part = fujimod_emulator_parts_io::serial_command_registers::CommandRegisters::new(0, false)
-            .unwrap();
+        use fujimod_emulator_parts_io::serial_command_registers::{CommandRegisters, Wiring};
+        let part = CommandRegisters::new(Wiring {
+            bits: 16,
+            mode: 0,
+            read_flag: Some(0x8000),
+            data_words: Some(1),
+            miso_high: false,
+        })
+        .unwrap();
         let select = Select {
             port: 12,
             pin: 8,
@@ -587,7 +594,7 @@ mod tests {
             pins(&mut gpio, &mut host, false, false);
         }
         let state = &spi.save()["endpoints"][0]["state"]["registers"];
-        assert_eq!(state["registers"], json!({"25": 0x1234, "29": 0x8001}));
+        assert_eq!(state["registers"], json!({"25": [0x1234], "29": [0x8001]}));
         assert_eq!(state["writes"], 2);
     }
     #[test]

@@ -382,7 +382,12 @@ fn register_with_resources(
             if window
                 .options
                 .keys()
-                .any(|k| !matches!(k.as_str(), "input_irqs" | "feedback" | "initial_outputs"))
+                .any(|k| {
+                    !matches!(
+                        k.as_str(),
+                        "input_irqs" | "feedback" | "initial_outputs" | "initial_inputs"
+                    )
+                })
             {
                 return Err("unknown GPIO option".into());
             }
@@ -425,6 +430,19 @@ fn register_with_resources(
                                     serde_json::to_value(v).map_err(|e| e.to_string())?,
                                 )
                                 .map_err(|e| format!("initial GPIO outputs: {e}"))
+                            })
+                            .transpose()?
+                            .unwrap_or_default(),
+                    )?
+                    .with_initial_inputs(
+                        window
+                            .options
+                            .get("initial_inputs")
+                            .map(|v| {
+                                serde_json::from_value(
+                                    serde_json::to_value(v).map_err(|e| e.to_string())?,
+                                )
+                                .map_err(|e| format!("initial GPIO inputs: {e}"))
                             })
                             .transpose()?
                             .unwrap_or_default(),
