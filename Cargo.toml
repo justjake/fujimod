@@ -32,6 +32,7 @@ members = [
   "crates/catalog-settings",
   "crates/crate-graph",
   "crates/emulator",
+  "crates/perf",
   "crates/emulator-boot",
   "crates/emulator-session",
   "crates/emulator-cli",
@@ -153,6 +154,7 @@ fujimod-catalog-schemas = { path = "crates/catalog-schemas", version = "0.1.0" }
 fujimod-catalog-service = { path = "crates/catalog-service", version = "0.1.0" }
 fujimod-catalog-settings = { path = "crates/catalog-settings", version = "0.1.0" }
 fujimod-emulator = { path = "crates/emulator", version = "0.1.0" }
+fujimod-perf = { path = "crates/perf", version = "0.1.0" }
 fujimod-emulator-boot = { path = "crates/emulator-boot", version = "0.1.0" }
 fujimod-emulator-session = { path = "crates/emulator-session", version = "0.1.0" }
 fujimod-emulator-devices = { path = "crates/emulator-devices", version = "0.1.0" }
