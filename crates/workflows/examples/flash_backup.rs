@@ -1,14 +1,19 @@
 //! Save a whole-flash backup using a prepared reader artifact and debug access.
-//! flash_backup ARTIFACT OUTPUT_DIRECTORY [--execute]
+//! flash_backup ARTIFACT OUTPUT_DIRECTORY [--execute] [--service-workflow=FILE]
 //! Without --execute, validate the artifact offline. Live device selection uses
 //! FUJIMOD_USB_DEVICE (bus-port hex) or FUJIMOD_USB_PROXY_URL.
+//! --service-workflow takes the firmware's service-workflow.generated.json and,
+//! in the same USB session, first checks stock service mode and leaves the reset
+//! guard and debug access set in configuration RAM, as Dev Tools does.
 use fujimod_catalog::ReferenceCatalog;
+use fujimod_catalog_firmware_identity::FirmwareIdentity;
+use fujimod_catalog_workflows::WorkflowDefinition;
 use fujimod_usb::{
     connection::{self, Connection, DeviceFilter, TransferOptions},
     ff80::{SessionState, commands::memory::DebugMemoryLimits},
     trace::{Action, Trace},
 };
-use fujimod_workflows::{Limits, flash};
+use fujimod_workflows::{Limits, flash, service_mode};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{
@@ -117,7 +122,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<_> = std::env::args().skip(1).collect();
+    let mut args: Vec<_> = std::env::args().skip(1).collect();
+    let service_workflow = args
+        .iter()
+        .position(|a| a.starts_with("--service-workflow="))
+        .map(|n| args.remove(n)["--service-workflow=".len()..].to_string());
     let diagnostic = match args.get(3).map(String::as_str) {
         None => None,
         Some("--diagnostic=corrected") => Some(flash::NandReadMode::Corrected),
@@ -156,6 +165,19 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         image.len(),
         flash.window.size
     );
+    let service = match service_workflow {
+        None => None,
+        Some(path) => {
+            let identity = FirmwareIdentity::new(
+                artifact.payload.firmware_id(),
+                artifact.payload.firmware_sha256(),
+            )?;
+            let definition = WorkflowDefinition::from_json(&fs::read_to_string(path)?, &identity)?;
+            let setup = definition.setup()?.clone();
+            println!("{}: validated service session setup", flash.firmware_id);
+            Some(setup)
+        }
+    };
     if args.len() == 2 {
         return Ok(());
     }
@@ -246,7 +268,19 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         },
     };
-    let result = if let Some(mode) = diagnostic {
+    let prepared = match &service {
+        Some(setup) => Some(
+            service_mode::prepare_service_session(&mut session, setup, limits, &mut |step| {
+                println!("{step}")
+            })
+            .await
+            .map_err(|e| e.to_string()),
+        ),
+        None => None,
+    };
+    let result = if let Some(Err(error)) = &prepared {
+        Err(error.clone())
+    } else if let Some(mode) = diagnostic {
         flash::diagnose_nand(
             &mut session,
             &bulk,
@@ -260,6 +294,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             &mut callbacks,
         )
         .await
+        .map_err(|e| e.to_string())
     } else {
         flash::backup(
             &mut session,
@@ -271,6 +306,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             &mut callbacks,
         )
         .await
+        .map_err(|e| e.to_string())
     };
     let workflow_seconds = started.elapsed().as_secs_f64();
     let closed = if session.state() == SessionState::Ready {
@@ -292,6 +328,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         "session_closed": closed.as_ref().is_ok_and(|v| *v),
         "session_close_error": closed.as_ref().err(),
         "operation_error": result.as_ref().err().map(ToString::to_string)});
+    if let Some(Ok(armed)) = &prepared {
+        report["service_session"] = serde_json::json!({"guard_was_set": armed.guard_was_set,
+            "debug_flag_before": armed.debug_flag_before});
+    }
     report["performance"] = timings.report();
     report["performance"]["workflow_seconds"] = workflow_seconds.into();
     report["performance"]["progress"] = progress_seconds.into();

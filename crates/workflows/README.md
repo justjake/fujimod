@@ -214,3 +214,6 @@ page. Completed erased ECC bursts flag every covered page; the returned
 command-callback reader uses a 60 KiB buffer inside its 64 KiB executable
 reservation. The native backup example records elapsed workflow time, progress
 and command counts/timings alongside the verified file coverage and hash.
+With `--service-workflow=FILE` it validates that firmware's service workflow
+offline and, live, runs `prepare_service_session` in the same USB session
+before the backup.
