@@ -4,6 +4,16 @@ use fujimod_catalog_remote::Facts;
 
 pub trait Backend {
     fn now(&self) -> u64;
+    /// Begin one observation whose reads are reported once by `read_set_end`.
+    fn read_set_begin(&mut self) -> Result<()> {
+        Ok(())
+    }
+    /// End that observation, returning its whole read set when the transport
+    /// tracks reads natively. Transports that track each read leave it to
+    /// their `memory` implementation.
+    fn read_set_end(&mut self) -> Result<Option<ReadSet>> {
+        Ok(None)
+    }
     fn memory<'a>(
         &'a mut self,
         address: u64,

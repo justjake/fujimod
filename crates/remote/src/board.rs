@@ -40,6 +40,8 @@ pub struct BoardBackend<S> {
     /// Physical inputs currently held or awaiting a checked position result.
     active_inputs: BTreeSet<String>,
     pending_inputs: BTreeSet<String>,
+    /// A whole-observation native read scope owns the read set.
+    defer_reads: bool,
 }
 pub type BoardRemote<S> = Connection<BoardBackend<S>>;
 impl<S: SessionOwner> Connection<BoardBackend<S>> {
@@ -56,6 +58,7 @@ impl<S: SessionOwner> Connection<BoardBackend<S>> {
                 touches: Default::default(),
                 active_inputs: Default::default(),
                 pending_inputs: Default::default(),
+                defer_reads: false,
             },
             facts,
         )
@@ -188,6 +191,21 @@ fn tracked<T>(
     });
     result
 }
+/// Run one complete observation under a single native read scope.
+fn scoped<T>(session: &Session, call: impl FnOnce(&Session) -> Result<T>) -> Result<(T, ReadSet)> {
+    session.board.read_set_begin()?;
+    let result = call(session);
+    let tracked = session.board.read_set_end();
+    let value = result?;
+    let tracked = tracked?;
+    Ok((
+        value,
+        ReadSet {
+            stores: tracked.stores,
+            devices: tracked.devices,
+        },
+    ))
+}
 impl<S: SessionOwner> Backend for BoardBackend<S> {
     fn now(&self) -> u64 {
         self.now
@@ -200,7 +218,13 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
     ) -> LocalFuture<'a, Vec<u8>> {
         Box::pin(async move {
             self.now = self.owner.with_session(|s| Ok(s.board.now()))?;
+            let deferred = self.defer_reads;
             self.owner.with_session(|s| {
+                if deferred {
+                    let mut bytes = vec![0; size];
+                    s.board.read_physical(address, &mut bytes)?;
+                    return Ok(bytes);
+                }
                 tracked(s, reads, |s| {
                     let mut bytes = vec![0; size];
                     s.board.read_physical(address, &mut bytes)?;
@@ -208,6 +232,20 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                 })
             })
         })
+    }
+    fn read_set_begin(&mut self) -> Result<()> {
+        self.owner.with_session(|s| s.board.read_set_begin())?;
+        self.defer_reads = true;
+        Ok(())
+    }
+    fn read_set_end(&mut self) -> Result<Option<ReadSet>> {
+        let tracked = self.owner.with_session(|s| s.board.read_set_end());
+        self.defer_reads = false;
+        let tracked = tracked?;
+        Ok(Some(ReadSet {
+            stores: tracked.stores,
+            devices: tracked.devices,
+        }))
     }
     fn input<'a>(&'a mut self, input: &'a Input, facts: &'a Facts) -> LocalFuture<'a, ()> {
         Box::pin(async move {
@@ -322,45 +360,43 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
     ) -> LocalFuture<'a, Capture> {
         Box::pin(async move {
             let options = &self.options;
-            self.owner
-                .with_session(|s| {
-                    let mut completion_reads = ReadSet::default();
-                    let sequence = tracked(s, &mut completion_reads, |s| {
-                        let counters = s.board.device_states(&options.frame_counter_kind)?;
-                        counters
-                            .pointer(&options.frame_counter_pointer)
-                            .and_then(serde_json::Value::as_u64)
-                            .ok_or_else(|| "Completed frame counter is unavailable".to_string())
-                    })?;
-                    reads.extend(completion_reads.clone());
-                    tracked(s, reads, |s| {
-                        let frame = s
-                            .recording_frame(
-                                &options.scanout_node,
-                                facts.firmware.scanout.instance as usize,
-                                false,
-                            )?
-                            .ok_or("Scanout is inactive")?;
-                        let rgb = frame.rgb.clone().ok_or("Scanout omitted RGB")?;
-                        Ok(Capture {
-                            frame: fujimod_recording::Frame::rgb(
-                                frame.width as u32,
-                                frame.height as u32,
-                                rgb,
-                            )?,
-                            time: s.board.now(),
-                            clock: Clock::GuestTicks,
-                            output: options.output.clone(),
-                            sequence,
-                            reads: ReadSet::default(),
-                            completion_reads,
-                        })
+            self.owner.with_session(|s| {
+                let (sequence, completion_reads) = scoped(s, |s| {
+                    let counters = s.board.device_states(&options.frame_counter_kind)?;
+                    counters
+                        .pointer(&options.frame_counter_pointer)
+                        .and_then(serde_json::Value::as_u64)
+                        .ok_or_else(|| "Completed frame counter is unavailable".to_string())
+                })?;
+                let (mut capture, full_reads) = scoped(s, |s| {
+                    let frame = s
+                        .recording_frame(
+                            &options.scanout_node,
+                            facts.firmware.scanout.instance as usize,
+                            false,
+                        )?
+                        .ok_or("Scanout is inactive")?;
+                    let rgb = frame.rgb.clone().ok_or("Scanout omitted RGB")?;
+                    Ok(Capture {
+                        frame: fujimod_recording::Frame::rgb(
+                            frame.width as u32,
+                            frame.height as u32,
+                            rgb,
+                        )?,
+                        time: s.board.now(),
+                        clock: Clock::GuestTicks,
+                        output: options.output.clone(),
+                        sequence,
+                        reads: ReadSet::default(),
+                        completion_reads: ReadSet::default(),
                     })
-                })
-                .map(|mut capture| {
-                    capture.reads = reads.clone();
-                    capture
-                })
+                })?;
+                capture.reads = full_reads;
+                capture.reads.extend(completion_reads.clone());
+                capture.completion_reads = completion_reads;
+                reads.extend(capture.reads.clone());
+                Ok(capture)
+            })
         })
     }
     fn wait<'a>(&'a mut self, reads: &'a ReadSet, deadline: u64) -> LocalFuture<'a, ()> {

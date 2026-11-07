@@ -7,8 +7,42 @@ pub struct Memory<'a, B> {
     pub backend: &'a mut B,
     pub facts: &'a Facts,
     pub reads: ReadSet,
+    /// One observation owns the backend's native read scope.
+    pub scope: bool,
+    pub(crate) depth: usize,
 }
 impl<B: Backend> Memory<'_, B> {
+    pub(crate) fn begin_observation(&mut self) -> Result<()> {
+        if self.scope {
+            if self.depth == 0 {
+                self.backend.read_set_begin()?;
+            }
+            self.depth += 1;
+        }
+        Ok(())
+    }
+    pub(crate) fn end_observation(&mut self) -> Result<()> {
+        if self.scope {
+            self.depth = self
+                .depth
+                .checked_sub(1)
+                .ok_or("Unbalanced memory observation")?;
+            if self.depth == 0 {
+                if let Some(reads) = self.backend.read_set_end()? {
+                    self.reads = reads;
+                }
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn finish<T>(&mut self, result: Result<T>) -> Result<T> {
+        let ended = self.end_observation();
+        match (result, ended) {
+            (Ok(value), Ok(())) => Ok(value),
+            (Err(error), _) => Err(error),
+            (_, Err(error)) => Err(error),
+        }
+    }
     pub async fn bytes(&mut self, address: u64, size: usize) -> Result<Vec<u8>> {
         if address == 0
             || size == 0
@@ -17,7 +51,9 @@ impl<B: Backend> Memory<'_, B> {
         {
             return Err(format!("Invalid observation range {address:#x}+{size}"));
         }
-        let bytes = self.backend.memory(address, size, &mut self.reads).await?;
+        self.begin_observation()?;
+        let result = self.backend.memory(address, size, &mut self.reads).await;
+        let bytes = self.finish(result)?;
         if bytes.len() != size {
             return Err(format!(
                 "Truncated observation at {address:#x}: {}/{size}",
@@ -45,6 +81,11 @@ impl<B: Backend> Memory<'_, B> {
         }
     }
     pub async fn state(&mut self) -> Result<State> {
+        self.begin_observation()?;
+        let result = self.state_inner().await;
+        self.finish(result)
+    }
+    async fn state_inner(&mut self) -> Result<State> {
         let f = &self.facts.firmware.state;
         let mode = self.word(f.ui_mode).await?;
         let active = self.word(f.menu_active).await? != 0;
@@ -83,6 +124,13 @@ impl<B: Backend> Memory<'_, B> {
     }
     /// Every check that must pass before the firmware accepts a new input.
     pub async fn readiness(&mut self, control: Option<&Control>) -> Result<Readiness> {
+        self.begin_observation()?;
+        let result = self.readiness_inner(control).await;
+        let mut readiness = self.finish(result)?;
+        readiness.reads = self.reads.clone();
+        Ok(readiness)
+    }
+    async fn readiness_inner(&mut self, control: Option<&Control>) -> Result<Readiness> {
         let f = &self.facts.firmware.state;
         let mut pending = vec![];
         let mode_pending = self.word(f.pending_mode).await?;
@@ -199,6 +247,11 @@ impl<B: Backend> Memory<'_, B> {
         })
     }
     pub async fn text(&mut self, resource: u32) -> Result<String> {
+        self.begin_observation()?;
+        let result = self.text_inner(resource).await;
+        self.finish(result)
+    }
+    async fn text_inner(&mut self, resource: u32) -> Result<String> {
         let r = &self.facts.firmware.resources;
         if resource == 0 || resource == 0x7ffffffe {
             return Ok(String::new());

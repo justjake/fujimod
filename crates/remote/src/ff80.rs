@@ -141,6 +141,8 @@ impl<S: BorrowMut<Session>> Backend for Ff80Backend<S> {
                 backend: self,
                 facts,
                 reads: ReadSet::default(),
+                scope: true,
+                depth: 0,
             };
             let before =
                 u64::from(memory.word(scanout.pointer_address).await?) & scanout.address_mask;

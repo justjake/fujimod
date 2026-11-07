@@ -346,6 +346,13 @@ impl<B: Backend> Memory<'_, B> {
         Ok(label)
     }
     pub async fn read_reference(&mut self, reference: &Reference) -> Result<RemoteReadResult> {
+        self.begin_observation()?;
+        let result = self.read_reference_inner(reference).await;
+        let mut value = self.finish(result)?;
+        value.reads = self.reads.clone();
+        Ok(value)
+    }
+    async fn read_reference_inner(&mut self, reference: &Reference) -> Result<RemoteReadResult> {
         let state = self.state().await?;
         if let Reference::Control(control) = reference {
             let id = control.id();

@@ -78,6 +78,8 @@ impl<B: Backend> RemoteReader for View<'_, B> {
                 backend: self.backend,
                 facts: self.facts,
                 reads: ReadSet::default(),
+                scope: true,
+                depth: 0,
             }
             .read_reference(reference)
             .await
@@ -89,6 +91,8 @@ impl<B: Backend> RemoteReader for View<'_, B> {
                 backend: self.backend,
                 facts: self.facts,
                 reads: ReadSet::default(),
+                scope: true,
+                depth: 0,
             };
             let bytes = memory.bytes(address, size).await?;
             Ok(MemoryRead {
@@ -111,6 +115,8 @@ impl<B: Backend> RemoteReader for View<'_, B> {
                 backend: self.backend,
                 facts: self.facts,
                 reads: ReadSet::default(),
+                scope: true,
+                depth: 0,
             }
             .readiness(control)
             .await
