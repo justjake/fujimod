@@ -35,6 +35,8 @@ pub struct BootRom {
     pub filesystem_pointer: BootRomFilesystemPointer,
     /// The power-hold register the loader reasserts.
     pub power_hold: BootRomPowerHold,
+    /// The SD0 host the boot stages clock for card access.
+    pub sd: BootRomSdClocks,
     /// RAM address the boot ROM hands control to.
     pub load_address: u64,
 }
@@ -87,6 +89,19 @@ pub struct BootRomPowerHold {
     pub bit: u32,
 }
 
+/// The SD0 controller base and the two clock dividers the ROM installs on it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct BootRomSdClocks {
+    /// SD0 controller register base.
+    pub host: u64,
+    /// Divider bits installed for card identification.
+    pub initialization_clock: u32,
+    /// Divider bits installed for data transfer.
+    pub transfer_clock: u32,
+}
+
 impl BootRom {
     /// Validate identity, hash and relocated state.
     pub fn validate(&self) -> Result<(), String> {
@@ -106,6 +121,9 @@ impl BootRom {
         }
         if self.power_hold.bit >= 32 {
             return Err("invalid power-hold bit".into());
+        }
+        if !(0xfff0_0000..=0xfff8_ffff).contains(&self.sd.host) {
+            return Err("invalid boot-ROM SD host".into());
         }
         if self.load_address % 4 != 0 {
             return Err("invalid boot-ROM handoff address".into());

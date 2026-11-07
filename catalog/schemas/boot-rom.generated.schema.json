@@ -105,6 +105,36 @@
         "read"
       ],
       "type": "object"
+    },
+    "BootRomSdClocks": {
+      "additionalProperties": false,
+      "description": "The SD0 controller base and the two clock dividers the ROM installs on it.",
+      "properties": {
+        "host": {
+          "description": "SD0 controller register base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "initialization_clock": {
+          "description": "Divider bits installed for card identification.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transfer_clock": {
+          "description": "Divider bits installed for data transfer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "host",
+        "initialization_clock",
+        "transfer_clock"
+      ],
+      "type": "object"
     }
   },
   "$id": "https://fujimod.com/schemas/boot-rom.generated.schema.json",
@@ -149,6 +179,10 @@
       "minimum": 0,
       "type": "integer"
     },
+    "sd": {
+      "$ref": "#/$defs/BootRomSdClocks",
+      "description": "The SD0 host the boot stages clock for card access."
+    },
     "sha256": {
       "description": "SHA-256 of the ROM image.",
       "type": "string"
@@ -163,6 +197,7 @@
     "command_table",
     "filesystem_pointer",
     "power_hold",
+    "sd",
     "load_address"
   ],
   "title": "BootRom",
