@@ -261,7 +261,7 @@ impl Device for Clocks {
                     let result = power.lock().map_err(|_| "power alarm poisoned".to_string())
                         .and_then(|mut alarm| alarm.advance(cx.now()));
                     if let Err(error) = result { cx.fail(error); return; }
-                    if let Err(error) = cx.request_pause() { cx.fail(error); return; }
+                    if let Err(error) = cx.power_off() { cx.fail(error); return; }
                     self.state.power_off_due = None;
                 }
                 Ok(None) => cx.fail(format!(
@@ -333,7 +333,7 @@ mod tests {
         let mut host = TestHost::new();
         write(&mut clock, &mut host, BASE + 0x84, 0);
         advance(&mut clock, &mut host, POWER_HOLD_RELEASE_LIMIT_TICKS);
-        assert_eq!(host.effects, ["pause"]);
+        assert_eq!(host.effects, ["power-off"]);
         assert_eq!(power.lock().unwrap().supply(), Supply::Off);
         assert_eq!(clock.next_deadline(host.now), None);
     }
