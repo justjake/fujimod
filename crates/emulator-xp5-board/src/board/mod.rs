@@ -3,8 +3,8 @@
 use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
 use fujimod_emulator_devices::parts::controls::Controls;
 use fujimod_emulator_xp5_io::{
-    adc, discarded_read, gates, gpio, i2c, mailbox, memory_configuration, reset_handshake, timer,
-    usb_connection_status, write_only_registers,
+    adc, connection_status, discarded_read, gates, gpio, i2c, mailbox, memory_configuration,
+    reset_handshake, timer, write_only_registers,
 };
 use fujimod_emulator_xp5_display::{display, panel_clock, panel_serial};
 use fujimod_emulator_xp5_storage::{flash_storage, flash_storage_controller, flash_storage_dma};
@@ -109,12 +109,39 @@ fn register_with_resources(
             if !window.options.is_empty() {
                 return Err("USB connection-status takes no options".into());
             }
+            // Bit 0 is set while a USB cable or jig is attached.
             bus.register(
                 window.base,
                 window.size,
-                Box::new(usb_connection_status::UsbConnectionStatus::new(
+                Box::new(connection_status::ConnectionStatus::new(
+                    "usb-connection-status",
                     window.base,
                     window.size,
+                    true,
+                )?),
+            )?;
+        }
+        "hdmi-hot-plug-status" => {
+            if window.options.keys().any(|key| key != "connected_level") {
+                return Err("unknown HDMI hot-plug status option".into());
+            }
+            let connected_level = match window
+                .options
+                .get("connected_level")
+                .and_then(toml::Value::as_integer)
+            {
+                Some(0) => false,
+                Some(1) => true,
+                _ => return Err("HDMI hot-plug status requires connected_level 0 or 1".into()),
+            };
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(connection_status::ConnectionStatus::new(
+                    "hdmi-hot-plug-status",
+                    window.base,
+                    window.size,
+                    connected_level,
                 )?),
             )?;
         }
