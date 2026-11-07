@@ -52,6 +52,13 @@ class Camera:
         self.guide.input("selector.right", False, 0.2)
 
 
+class CaptureCamera(Camera):
+    def capture(self) -> Frame:
+        captures = self.guide.report.setdefault("captures", [])
+        captures.append(dict())
+        return self.frame
+
+
 class WalkthroughTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
@@ -67,6 +74,23 @@ class WalkthroughTests(unittest.TestCase):
             title="Test",
             video=video,
         )
+
+    def test_step_records_its_published_capture_index(self) -> None:
+        camera = CaptureCamera()
+        guide = Guide(
+            camera,
+            self.root / "run",
+            identity={"build": "test"},
+            title="Test",
+        )
+
+        def run(camera: CaptureCamera, guide: Guide[CaptureCamera]) -> None:
+            with guide.step("Published frame", hold=0):
+                pass
+
+        report = guide.run(run)
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["steps"][0]["capture_index"], 0)
 
     def test_badge_filter_preserves_every_input_as_coverage_evidence(self) -> None:
         from unittest.mock import Mock, call

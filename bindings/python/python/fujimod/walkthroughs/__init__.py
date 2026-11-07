@@ -145,6 +145,7 @@ class Report(TypedDict):
     still: NotRequired[int]
     hero: NotRequired[list[Hero]]
     steps: list[Step]
+    captures: NotRequired[list[dict[str, object]]]
     inputs: list[Input]
     interactions: list[Interaction]
     fixtures: list[Fixture]
