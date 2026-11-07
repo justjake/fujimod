@@ -23,6 +23,7 @@ pub(super) struct Connection {
 enum Part {
     PowerController { rtc_seconds: u32, rtc_valid: bool },
     SerialCalibrationRegisters { miso_high: bool },
+    SerialCommandRegisters { mode: u8, miso_high: bool },
     BisConfigurationRegisters { revision: [u8; 2], idle_high: bool },
     Lsm6dsConfigurationRegisters,
 }
@@ -111,6 +112,11 @@ fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn E
         Part::SerialCalibrationRegisters { miso_high } => {
             Box::new(CalibrationRegisters::new(miso_high))
         }
+        Part::SerialCommandRegisters { mode, miso_high } => Box::new(
+            fujimod_emulator_parts_io::serial_command_registers::CommandRegisters::new(
+                mode, miso_high,
+            )?,
+        ),
         Part::BisConfigurationRegisters {
             revision,
             idle_high,
