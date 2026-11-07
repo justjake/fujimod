@@ -17,6 +17,7 @@ from pathlib import Path
 from string.templatelib import Template
 from typing import Literal, NotRequired, Protocol, Self, TypedDict, cast
 
+from .. import perf
 from ..recording import Frame
 from .menu import MenuScreen
 from .overlays import CardOverlay, CardSnapshot, DisplayOverlay
@@ -657,10 +658,11 @@ class Guide[C: RecordingCamera]:
                 print("Replaying prerequisite: " + name, flush=True)
                 entry: Prerequisite = dict(walkthrough=name, passed=False)
                 self.report["prerequisites"].append(entry)
-                prepare(self.camera, self)
-                if self._failures:
-                    raise self._failures[0]
-                entry["passed"] = True
+                with perf.span("prerequisite"):
+                    prepare(self.camera, self)
+                    if self._failures:
+                        raise self._failures[0]
+                    entry["passed"] = True
             self.recording.card_panel(None)
             self.recording.display_panel(None)
             self._card_overlay = None
@@ -728,6 +730,7 @@ class Guide[C: RecordingCamera]:
                 if p.is_file() and p.name not in ("guide.json", ".guide.json.tmp")
             }
             self.report["artifacts"] = artifacts
+            self.report["performance"] = perf.end_guide()
             self.save()
         if error is not None:
             raise error

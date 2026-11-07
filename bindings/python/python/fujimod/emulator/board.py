@@ -11,6 +11,7 @@ from os import PathLike, fspath
 from typing import Literal, Protocol, Self, TypedDict, TypeGuard, cast
 
 from fujimod._native import emulator as _native
+from .. import perf as _perf
 
 from .definition import Definition, Xp4Definition
 from .processor import Processor
@@ -270,6 +271,7 @@ class Board:
             Processor(self, core) for core in range(len(native.instructions))
         )
         self._session = Session(self)
+        _perf.attach_board(self)
 
     @staticmethod
     def _identifier(value: str, name: str) -> str:
@@ -505,6 +507,7 @@ class Board:
         """Release the native board; repeated calls are safe."""
         if self._closed:
             return
+        _perf.detach_board(self)
         self._native.close()
         self._closed = True
 
