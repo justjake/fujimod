@@ -791,11 +791,7 @@ fn prepare_exr2(input: &Selection, selected: &ResolvedSelection) -> Result<(Arti
     for range in &ranges {
         let at = num(range, "address")?;
         let size = num(range, "size")?;
-        let unit = if (0x40000..0x50000).contains(&at) {
-            "kernel0"
-        } else {
-            "main"
-        };
+        let unit = text(range, "unit")?;
         check(
             index
                 .read(&selected.firmware.id, unit, at, size.try_into()?)?

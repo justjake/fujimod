@@ -90,7 +90,7 @@ pub fn exr2_execution<L: Lookup>(index: &L, firmware: &str) -> Result<Value, Str
         }
         let r = locator.routine(address)?;
         for &(lo, hi) in &r.header.ranges {
-            checks.push(json!({"address":lo,"size":hi-lo}));
+            checks.push(json!({"unit":"main","address":lo,"size":hi-lo}));
         }
         if depth < 2 {
             for i in &r.code {
@@ -105,8 +105,8 @@ pub fn exr2_execution<L: Lookup>(index: &L, firmware: &str) -> Result<Value, Str
     }
     let (cache, barrier) = cache_primitives(index, firmware)?;
     checks.extend([
-        json!({"address":cache,"size":0x214}),
-        json!({"address":barrier,"size":0x28}),
+        json!({"unit":"kernel0","address":cache,"size":0x214}),
+        json!({"unit":"kernel0","address":barrier,"size":0x28}),
     ]);
     let code_checks: Vec<_> = checks
         .iter()
@@ -114,11 +114,7 @@ pub fn exr2_execution<L: Lookup>(index: &L, firmware: &str) -> Result<Value, Str
         .map(|(ordinal, check)| {
             let address = check["address"].as_u64().ok_or("execution check address")?;
             let size = check["size"].as_u64().ok_or("execution check size")?;
-            let unit = if (0x40000..0x50000).contains(&address) {
-                "kernel0"
-            } else {
-                "main"
-            };
+            let unit = check["unit"].as_str().ok_or("execution check unit")?;
             let bytes = index
                 .read(firmware, unit, address, size as usize)
                 .map_err(|error| error.to_string())?
