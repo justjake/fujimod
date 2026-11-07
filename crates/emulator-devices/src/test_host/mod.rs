@@ -27,6 +27,10 @@ impl Host for TestHost {
     fn now(&self) -> u64 {
         self.now
     }
+    fn request_pause(&mut self) -> Result<(), String> {
+        self.effects.push("pause");
+        Ok(())
+    }
     fn schedule(&mut self, _: usize, _: u64, _: u64) {}
     fn set_irq(&mut self, _: u32, _: bool) {}
     fn raise_irq(&mut self, c: usize, l: u32) -> Result<(), String> {
