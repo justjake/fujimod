@@ -784,6 +784,18 @@ impl Board {
             .rprofile_identity(value)
             .map_err(error)
     }
+    /// Run block accounting through the C hook helper instead of the code the
+    /// translator emits. Measurements use this to compare the two paths in one
+    /// build; the engine refuses the switch while a processor is running.
+    fn set_legacy_block_accounting(&self, enabled: bool) -> PyResult<()> {
+        let board = self.board()?;
+        for core in 0..board.cpu_count() {
+            if let Ok(cpu) = board.cpu(core) {
+                cpu.set_legacy_block_accounting(enabled).map_err(error)?;
+            }
+        }
+        Ok(())
+    }
     fn analog_inputs(&self, node: &str) -> PyResult<AnalogInputs> {
         let session = self.session()?;
         let inputs = session
