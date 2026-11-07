@@ -123,7 +123,14 @@ pub fn build(
         if camera.is_some() {
             return Err(format!("{} has no settings bank", layout.firmware_id));
         }
-        stores.insert("bank", configuration(layout, flash)?);
+        let bank_bytes = match &layout.configuration {
+            Some(window) => configuration(layout, flash)?,
+            // X-Processor 4 RAM journal profile: no flash bank, the header and
+            // journal records live in CPU-virtual RAM. Empty bank store suffices
+            // for settings that reference header/record stores instead.
+            None => vec![],
+        };
+        stores.insert("bank", bank_bytes);
         return profile(layout, &section, requested, stores, None);
     };
     let descriptor = read(&section, layout, &bank.descriptor)?;

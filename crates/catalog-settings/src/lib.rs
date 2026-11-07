@@ -151,6 +151,11 @@ pub struct SettingsProfile {
     /// Stock header defaults. Byte 14 is the marker `0xaa`; byte 15 holds the
     /// checksum that makes the sixteen bytes sum to zero.
     pub header: UpdateRange,
+    /// X-Processor 4 only: the CPU-virtual RAM address where the stock header
+    /// is copied at boot. Absent for X-Processor Pro, whose header goes to
+    /// sub-CPU registers.
+    #[serde(default)]
+    pub ram_address: Option<u64>,
     /// Journal records the stock loader requires, by name.
     pub records: BTreeMap<String, ProfileRecord>,
     /// Fields initialized from the calibration bank or a declared fill.
@@ -394,6 +399,9 @@ impl FirmwareSettings {
                 }
                 window.bytes
             }
+            // X-Processor 4 RAM journal profile: no flash bank, no configuration
+            // window. The header and journal records live in CPU-virtual RAM.
+            (None, None) => 0,
             _ => return fail("settings need exactly one bank or configuration window"),
         };
         let source_end = self.source.address.checked_add(self.source.size);
