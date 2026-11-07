@@ -1024,6 +1024,8 @@ impl Session {
             imaging,
             movdc,
             sd_clocks,
+            sd_host,
+            usb_condition,
             instructions_per_tick,
             usb,
             usb_phy,
@@ -1514,6 +1516,16 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .sd_clocks(&sd_clocks)?;
+        }
+        if !sd_host.is_empty() {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .sd_host(sd_host)?;
+        }
+        if let Some((base, present)) = usb_condition {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .usb_condition(base, present)?;
         }
         if let Some((base, irq, command_ticks, transaction_ticks, speed)) = usb {
             if base != 0xffb00000

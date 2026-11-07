@@ -166,6 +166,12 @@ pub struct Definition {
     pub movdc: Vec<(u64, u32, u64, u64, u8)>,
     #[serde(default)]
     pub sd_clocks: Vec<(u64, u64)>,
+    /// Card-controller register windows, each excluding its clock halfword.
+    #[serde(default)]
+    pub sd_host: Vec<(u64, u64)>,
+    /// The USB condition register `(base, cable present)`, when declared.
+    #[serde(default)]
+    pub usb_condition: Option<(u64, bool)>,
     #[serde(default = "instruction_rate")]
     pub instructions_per_tick: (u64, u64),
     #[serde(default)]

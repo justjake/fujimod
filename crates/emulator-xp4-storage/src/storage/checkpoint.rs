@@ -140,6 +140,8 @@ struct DmaState {
     irq_routes: [u32; 16],
     request_mux: BTreeMap<u64, u32>,
     request_mux_changed: [u64; 16],
+    #[serde(default)]
+    request: BTreeMap<u64, u32>,
 }
 impl DmaController {
     pub(super) fn restore_state(&mut self, value: &Value) -> Result<(), String> {
@@ -153,6 +155,10 @@ impl DmaController {
             || state.request_mux.iter().any(|(a, v)| {
                 !(0xfff4a500..0xfff4a520).contains(a) || a & 3 != 0 || v & !0x3f3f != 0
             })
+            || state
+                .request
+                .keys()
+                .any(|a| !(0xfff4a800..0xfff4a880).contains(a) || a & 3 != 0)
         {
             return Err("Invalid XP4 DMA checkpoint or routes".into());
         }
@@ -162,6 +168,7 @@ impl DmaController {
             .map_err(|_| "Invalid XP4 DMA channel count")?;
         self.mux = state.request_mux;
         self.mux_changed = state.request_mux_changed;
+        self.request = state.request;
         Ok(())
     }
 }

@@ -557,6 +557,8 @@ pub struct DmaController {
     routes: [u32; 16],
     mux: BTreeMap<u64, u32>,
     mux_changed: [u64; 16],
+    /// Per-channel request words at `0xfff4a800 + n*8` (+0 control, +4 selector).
+    request: BTreeMap<u64, u32>,
 }
 impl DmaController {
     pub fn new(port: Shared, routes: [u32; 16]) -> Self {
@@ -566,6 +568,7 @@ impl DmaController {
             routes,
             mux: BTreeMap::new(),
             mux_changed: [0; 16],
+            request: BTreeMap::new(),
         }
     }
     fn ready_time(&self, n: usize) -> Option<u64> {
@@ -633,6 +636,12 @@ impl DmaController {
                 }
             }
             return Ok(u64::from(*self.mux.get(&address).unwrap_or(&0)));
+        }
+        if (0xfff4a800..0xfff4a880).contains(&address) {
+            if write {
+                self.request.insert(address, value);
+            }
+            return Ok(u64::from(*self.request.get(&address).unwrap_or(&0)));
         }
         let rel = address.wrapping_sub(DMA);
         let n = (rel / 0x1000) as usize;
@@ -814,7 +823,7 @@ impl Device for DmaController {
         }
     }
     fn save(&self) -> Value {
-        json!({"channels":self.channels.iter().map(|c|json!({"registers":c.regs.to_vec(),"next":c.due,"submitted":c.submitted,"submitted_at":c.submitted_at,"completed":c.completed})).collect::<Vec<_>>(),"irq_routes":self.routes,"request_mux":self.mux,"request_mux_changed":self.mux_changed})
+        json!({"channels":self.channels.iter().map(|c|json!({"registers":c.regs.to_vec(),"next":c.due,"submitted":c.submitted,"submitted_at":c.submitted_at,"completed":c.completed})).collect::<Vec<_>>(),"irq_routes":self.routes,"request_mux":self.mux,"request_mux_changed":self.mux_changed,"request":self.request})
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         self.restore_state(value)
