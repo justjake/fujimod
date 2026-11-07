@@ -42,7 +42,7 @@ path = "src/agent.rs"
 fskit-rs = "=0.2.0"
 plist = "1"
 async-trait = "0.1"
-tokio = { version = "1", features = ["rt-multi-thread", "signal", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "signal", "macros", "time"] }
 
 [[bin]]
 name = "fujimod-mount"

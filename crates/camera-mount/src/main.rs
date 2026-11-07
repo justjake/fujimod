@@ -102,6 +102,7 @@ async fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
         println!("{}", serde_json::to_string_pretty(&result?)?);
         return Ok(());
     }
+    let fatal = device.fatal();
     let fs = CameraFs::new(device, regions.clone()).map_err(std::io::Error::from_raw_os_error)?;
     let adapter = Adapter::new(fs, metadata.uid(), metadata.gid());
     let cleanup = adapter.clone();
@@ -134,9 +135,28 @@ async fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
         println!("{}", serde_json::to_string_pretty(&result?)?);
         return Ok(());
     }
-    tokio::signal::ctrl_c().await?;
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    let lost = tokio::select! {
+        _ = tokio::signal::ctrl_c() => false,
+        _ = terminate.recv() => true,
+        _ = async {
+            while !fatal.load(std::sync::atomic::Ordering::Relaxed) {
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            }
+        } => {
+            eprintln!("fujimod-mount: camera session lost; unmounting");
+            true
+        }
+    };
     drop(session);
-    cleanup.shutdown().await?;
+    let shutdown = cleanup.shutdown().await;
+    if lost {
+        if let Err(error) = shutdown {
+            eprintln!("fujimod-mount: shutdown after session loss: {error}");
+        }
+        std::process::exit(1);
+    }
+    shutdown?;
     Ok(())
 }
 

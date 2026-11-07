@@ -8,7 +8,7 @@ use std::{
     collections::VecDeque,
     sync::{
         Arc,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
 
@@ -127,6 +127,7 @@ fn client(scripts: Vec<Script>) -> Client<TestSessions> {
         },
         mailbox_hint: None,
         fenced: false,
+        fatal: Arc::new(AtomicBool::new(false)),
         lease: None,
     }
 }
@@ -188,6 +189,7 @@ fn uncertain_completion_never_closes_reacquires_or_reclaims() {
                 .is_err()
         );
         assert!(client.fenced);
+        assert!(client.fatal.load(Ordering::Relaxed));
         assert_eq!(broken.remaining(), 0);
         assert!(matches!(
             client.transaction(Operation::Memory(0x1000, 4)).await,
@@ -319,6 +321,7 @@ fn large_read_bursts_reuse_a_session_but_idle_sync_and_deadlines_release_it() {
             },
             mailbox_hint: None,
             fenced: false,
+            fatal: Arc::new(AtomicBool::new(false)),
             lease: None,
         };
         for _ in 0..2 {
@@ -403,6 +406,7 @@ fn sd_transactions_yield_to_another_ff80_client_and_revalidate_the_descriptor_hi
             },
             mailbox_hint: None,
             fenced: false,
+            fatal: Arc::new(AtomicBool::new(false)),
             lease: None,
         };
         for _ in 0..2 {
