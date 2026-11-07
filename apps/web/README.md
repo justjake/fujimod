@@ -49,7 +49,8 @@ Set `FUJIMOD_WEB_URL` to check another development endpoint.
 ## Camera sign-in
 
 A camera has no browser, so it signs in by device code. It asks for a code,
-shows it to its owner, and polls until the owner approves it at `/device/`:
+shows it to its owner, and polls until the owner approves it at `/device/`. The
+camera client id is `x70-camera`:
 
 ```
 POST /api/auth/device/code      {client_id, scope}
@@ -60,10 +61,11 @@ POST /api/devices/google-token  Authorization: Bearer <access_token>
   -> {accessToken, expiresAt}
 ```
 
-`grant_type` is `urn:ietf:params:oauth:grant-type:device_code`. Poll no faster
-than `interval` seconds, or the token endpoint answers `slow_down`. The Worker
-records the issued session as a device credential and returns a Google token
-only to a device whose policy grants `google.photos.append`.
+`grant_type` is `urn:ietf:params:oauth:grant-type:device_code`, and bodies may
+be JSON or `application/x-www-form-urlencoded`. Poll no faster than `interval`
+seconds, or the token endpoint answers `slow_down`. The Worker records the
+issued session as a device credential and returns a Google token only to a
+device whose policy grants `google.photos.append`.
 
 ## Dev Tools
 
