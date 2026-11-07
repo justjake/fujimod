@@ -442,15 +442,15 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
-    pub fn sd_host(&mut self, windows: Vec<(u64, u64)>) -> Result<(), String> {
+    pub fn register_banks(&mut self, windows: Vec<(u64, u64)>) -> Result<(), String> {
         if windows.iter().any(|&(lo, hi)| {
             self.windows
                 .iter()
                 .any(|&(a, b, _)| lo < b && a < hi)
         }) {
-            return Err("Overlapping XP4 SD host window".into());
+            return Err("Overlapping XP4 register bank window".into());
         }
-        let model = fujimod_emulator_xp4_io::sd_host::SdHost::new(&windows)?;
+        let model = fujimod_emulator_xp4_io::register_bank::RegisterBank::new(&windows)?;
         let id = self.models.len();
         self.windows
             .extend(windows.into_iter().map(|(lo, hi)| (lo, hi, id)));

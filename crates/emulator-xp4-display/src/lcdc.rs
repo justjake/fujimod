@@ -130,7 +130,8 @@ impl Lcdc {
         matches!(
             offset,
             0 | 4 | 8 | 0x10 | 0x14 | 0x18 | 0x1c | 0x20 | 0x24 | 0x2c | 0x600
-        ) || ((0x40..=0x320).contains(&offset) && offset != 0x1c4)
+        ) || (0x28..=0x3c).contains(&offset)
+            || ((0x40..=0x320).contains(&offset) && offset != 0x1c4)
             || (0x400..=0x514).contains(&offset)
     }
 }

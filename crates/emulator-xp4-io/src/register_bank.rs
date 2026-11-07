@@ -1,4 +1,4 @@
-//! X-Processor 4 SD host register bank: the card-controller words the stock
+//! X-Processor 4 peripheral register bank: the card-controller words the stock
 //! driver reads and writes around its clock gates. Reads return the last write;
 //! the clock words are modeled separately (`sdhci::Clocks`), so each window here
 //! excludes them. No card protocol, DMA or interrupt is modeled.
@@ -8,11 +8,11 @@ use std::collections::BTreeMap;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct SdHost {
+pub struct RegisterBank {
     windows: Vec<(u64, u64)>,
     registers: BTreeMap<u64, u32>,
 }
-impl SdHost {
+impl RegisterBank {
     pub fn new(windows: &[(u64, u64)]) -> Result<Self, String> {
         let mut sorted = windows.to_vec();
         sorted.sort_unstable();
@@ -36,9 +36,9 @@ impl SdHost {
             .any(|&(lo, hi)| lo <= address && end <= hi)
     }
 }
-impl Device for SdHost {
+impl Device for RegisterBank {
     fn name(&self) -> &'static str {
-        "xp4-sd-host"
+        "xp4-register-bank"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         if !(1..=4).contains(&size) || !self.owns(address, u64::from(size)) {
@@ -129,7 +129,7 @@ mod tests {
 
     #[test]
     fn words_read_back_their_last_write_and_bytes_merge() {
-        let mut host = SdHost::new(&[
+        let mut host = RegisterBank::new(&[
             (0xfffc4000, 0xfffc402c),
             (0xfffc402e, 0xfffc5000),
             (0xfffc6000, 0xfffc622c),
@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn bytes_merge_and_read_back_their_lane() {
-        let mut host = SdHost::new(&[(0xfffc6000, 0xfffc622c)]).unwrap();
+        let mut host = RegisterBank::new(&[(0xfffc6000, 0xfffc622c)]).unwrap();
         let mut clock = Clock::default();
         host.write(&mut Cx::new(&mut clock, 0, 0, 0), 0xfffc6078, 1, 0x1);
         host.write(&mut Cx::new(&mut clock, 0, 0, 0), 0xfffc6079, 1, 0x2);
@@ -158,8 +158,8 @@ mod tests {
 
     #[test]
     fn overlapping_or_misaligned_windows_refuse() {
-        assert!(SdHost::new(&[(0xfffc4000, 0xfffc5000), (0xfffc4800, 0xfffc6000)]).is_err());
-        assert!(SdHost::new(&[(0xfffc4001, 0xfffc5000)]).is_err());
-        assert!(SdHost::new(&[]).is_err());
+        assert!(RegisterBank::new(&[(0xfffc4000, 0xfffc5000), (0xfffc4800, 0xfffc6000)]).is_err());
+        assert!(RegisterBank::new(&[(0xfffc4001, 0xfffc5000)]).is_err());
+        assert!(RegisterBank::new(&[]).is_err());
     }
 }

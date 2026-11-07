@@ -168,7 +168,7 @@ pub struct Definition {
     pub sd_clocks: Vec<(u64, u64)>,
     /// Card-controller register windows, each excluding its clock halfword.
     #[serde(default)]
-    pub sd_host: Vec<(u64, u64)>,
+    pub register_banks: Vec<(u64, u64)>,
     /// The USB condition register `(base, cable present)`, when declared.
     #[serde(default)]
     pub usb_condition: Option<(u64, bool)>,
