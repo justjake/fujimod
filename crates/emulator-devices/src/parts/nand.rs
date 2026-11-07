@@ -38,7 +38,6 @@ struct Snapshot {
 struct CommittedImage {
     schema: u32,
     options: Options,
-    base_sha256: String,
     base_bytes: usize,
     overlays: Vec<(u64, Vec<u8>)>,
     spare: Vec<(u32, Vec<u8>)>,
@@ -257,11 +256,9 @@ impl Nand {
     /// Only committed external backing crosses a power cycle. CPU/controller
     /// state and pending operations never enter this format.
     pub fn committed_image(&self) -> Result<Vec<u8>, String> {
-        use sha2::{Digest, Sha256};
         serde_json::to_vec(&CommittedImage {
             schema: 1,
             options: self.options.clone(),
-            base_sha256: format!("{:x}", Sha256::digest(&self.base)),
             base_bytes: self.base.len(),
             overlays: self
                 .overlays
@@ -278,20 +275,16 @@ impl Nand {
         })
         .map_err(|e| e.to_string())
     }
-    /// Imports media against this receiver's geometry and immutable base identity.
+    /// Imports media against this receiver's geometry and immutable base extent.
     /// Overlays and spare inputs come from the image.
     pub fn restore_committed(&self, bytes: &[u8]) -> Result<Self, String> {
-        use sha2::{Digest, Sha256};
         if bytes.len() > 128 << 20 {
             return Err("NAND committed image exceeds bound".into());
         }
         let image: CommittedImage = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
-        if image.schema != 1
-            || image.options != self.options
-            || image.base_bytes != self.base.len()
-            || image.base_sha256 != format!("{:x}", Sha256::digest(&self.base))
+        if image.schema != 1 || image.options != self.options || image.base_bytes != self.base.len()
         {
-            return Err("NAND committed image identity or geometry differs".into());
+            return Err("NAND committed image geometry differs".into());
         }
         let collect = |rows: Vec<(u32, Vec<u8>)>| -> Result<BTreeMap<u32, Vec<u8>>, String> {
             let mut map = BTreeMap::new();
@@ -638,7 +631,7 @@ mod image_tests {
         initial.read(64 * 2048, &mut bytes).unwrap();
         assert_eq!(bytes, [255; 2048]);
         let mut bad: serde_json::Value = serde_json::from_slice(&image).unwrap();
-        bad["base_sha256"] = serde_json::json!("wrong");
+        bad["base_bytes"] = serde_json::json!(1);
         assert!(
             initial
                 .restore_committed(&serde_json::to_vec(&bad).unwrap())

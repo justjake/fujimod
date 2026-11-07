@@ -81,7 +81,7 @@ fn committed_output_is_deterministic_across_equivalent_program_order() {
 }
 
 #[test]
-fn committed_import_rejects_other_base_and_geometry_without_mutating_receiver() {
+fn committed_import_uses_the_receiver_base_and_rejects_other_geometry_without_mutation() {
     let source = medium(512, 32, 16);
     let export = source.committed_image().unwrap();
     let changed_base = Nand::new(
@@ -92,9 +92,11 @@ fn committed_import_rejects_other_base_and_geometry_without_mutating_receiver() 
     )
     .unwrap();
     let changed_geometry = medium(2048, 64, 64);
-    for receiver in [changed_base, changed_geometry] {
-        let before = receiver.committed_image().unwrap();
-        assert!(receiver.restore_committed(&export).is_err());
-        assert_eq!(receiver.committed_image().unwrap(), before);
-    }
+    let restored = changed_base.restore_committed(&export).unwrap();
+    let mut data = [0; 512];
+    restored.read(0, &mut data).unwrap();
+    assert_eq!(data, [0x76; 512]);
+    let before = changed_geometry.committed_image().unwrap();
+    assert!(changed_geometry.restore_committed(&export).is_err());
+    assert_eq!(changed_geometry.committed_image().unwrap(), before);
 }

@@ -399,12 +399,12 @@ mod tests {
         let mut host = TestHost::new();
         write(&mut clock, &mut host, clock::BASE + 0x48, 1 << 28);
         let saved = clock.checkpoint().unwrap();
-        let state = clock.fingerprint().unwrap();
+        let state = saved.clone();
         advance(&mut clock, &mut host, 5);
         assert!(output.ready());
         clock.restore_checkpoint(&saved).unwrap();
         assert!(!output.ready());
-        assert_eq!(clock.fingerprint().unwrap(), state);
+        assert_eq!(clock.checkpoint().unwrap(), state);
         advance(&mut clock, &mut host, 4);
         assert!(!output.ready());
         advance(&mut clock, &mut host, 5);
@@ -412,7 +412,7 @@ mod tests {
     }
 
     #[test]
-    fn state_macro_restores_after_validation_and_fingerprints_content() {
+    fn state_macro_restores_after_validation_and_retains_content() {
         use crate::{Cx, Device};
         #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
         struct State {
@@ -460,7 +460,7 @@ mod tests {
             state: State::default(),
         };
         other.restore_checkpoint(&saved).unwrap();
-        assert_eq!(other.fingerprint().unwrap(), probe.fingerprint().unwrap());
+        assert_eq!(other.checkpoint().unwrap(), probe.checkpoint().unwrap());
         assert!(
             other
                 .validate_checkpoint(&saved.clone().with_children(vec![saved.clone()]))

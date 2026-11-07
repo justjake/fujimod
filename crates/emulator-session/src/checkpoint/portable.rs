@@ -5,14 +5,13 @@ use fujimod_emulator::board::keyframe::Keyframe;
 use fujimod_emulator_devices::checkpoint::Checkpoint as Encoded;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-const KIND: &str = "emulator-session-v3";
-#[derive(Serialize, Deserialize, PartialEq, Eq)]
+const KIND: &str = "emulator-session-v4";
+#[derive(Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct Identities {
     firmware_images: Value,
-    device_graph_sha256: String,
+    device_graph: Value,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -24,7 +23,7 @@ struct Header<C, D> {
     controls: C,
     contact_driver: D,
 }
-fn identities(definition: &Value) -> Result<Identities, String> {
+fn identities(definition: &Value) -> Identities {
     let inputs = definition.get("inputs").unwrap_or(&Value::Null);
     let firmware_images = json!({
         "update": inputs.get("update").cloned().unwrap_or(Value::Null),
@@ -39,12 +38,10 @@ fn identities(definition: &Value) -> Result<Identities, String> {
         "devices": definition.get("devices").cloned().unwrap_or(Value::Null),
         "scene": definition.get("scene").cloned().unwrap_or(Value::Null),
     });
-    let serialized = serde_json::to_vec(&device_graph).map_err(|error| error.to_string())?;
-    let device_graph_sha256 = format!("{:x}", Sha256::digest(serialized));
-    Ok(Identities {
+    Identities {
         firmware_images,
-        device_graph_sha256,
-    })
+        device_graph,
+    }
 }
 impl Snapshot {
     /// Validate a portable checkpoint envelope and return its saved counters.
@@ -55,7 +52,7 @@ impl Snapshot {
         if !encoded.blobs().is_empty() || encoded.children().len() != 2 {
             return Err("snapshot session child/blob count differs".into());
         }
-        let expected = identities(&header.definition)?;
+        let expected = identities(&header.definition);
         if expected != header.identities {
             return Err("snapshot firmware or device graph identity differs".into());
         }
@@ -67,7 +64,7 @@ impl Snapshot {
     pub fn export_checkpoint(&self) -> Result<Encoded, String> {
         let header = Header {
             definition: self.definition.clone(),
-            identities: identities(&self.definition)?,
+            identities: identities(&self.definition),
             nodes: self.nodes.clone(),
             contacts: self.contacts.clone(),
             controls: &self.controls,
@@ -109,8 +106,8 @@ impl Session {
         if !encoded.blobs().is_empty() || encoded.children().len() != 2 {
             return Err("snapshot session child/blob count differs".into());
         }
-        if identities(&header.definition)? != header.identities
-            || identities(&self.definition)? != header.identities
+        if identities(&header.definition) != header.identities
+            || identities(&self.definition) != header.identities
         {
             return Err("snapshot firmware or device graph identity differs".into());
         }

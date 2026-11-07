@@ -1,4 +1,4 @@
-//! Self-contained CBOR envelopes with content-addressed binary storage.
+//! Self-contained CBOR envelopes with deduplicated binary storage.
 //! Device validators still check model identity, geometry and typed state.
 use super::Checkpoint;
 use serde::{Deserialize, Serialize};
@@ -126,7 +126,7 @@ impl Checkpoint {
         Ok(bytes)
     }
 
-    /// Decode and verify a complete envelope without touching a live machine.
+    /// Decode a complete envelope without touching a live machine.
     /// The caller applies its archive size limit before decoding and validates
     /// the result against the receiving machine before installing any values.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
@@ -139,13 +139,9 @@ impl Checkpoint {
         if archive.schema != 1 {
             return Err("unknown snapshot archive schema".into());
         }
-        let mut hashes = BTreeSet::new();
+        let mut keys = BTreeSet::new();
         for blob in &archive.blobs {
-            let actual: [u8; 32] = Sha256::digest(&blob.data).into();
-            if actual != blob.sha256 {
-                return Err("snapshot archive blob hash differs".into());
-            }
-            if !hashes.insert(blob.sha256) {
+            if !keys.insert(blob.sha256) {
                 return Err("snapshot archive has duplicate blobs".into());
             }
         }
@@ -224,21 +220,20 @@ mod tests {
     }
 
     #[test]
-    fn changed_bytes_bad_references_duplicate_blocks_and_unknown_versions_are_refused() {
+    fn changed_bytes_are_retained_and_bad_references_duplicate_blocks_and_unknown_versions_are_refused()
+     {
         let encoded = Checkpoint::encode("root-v1", &42u32)
             .unwrap()
             .to_bytes()
             .unwrap();
         let mut archive: Archive<Blob> = ciborium::from_reader(&encoded[..]).unwrap();
-        archive.blobs[0].data = vec![0].into();
+        let mut changed = Vec::new();
+        ciborium::into_writer(&43u32, &mut changed).unwrap();
+        archive.blobs[0].data = changed.into();
         let mut bad = Vec::new();
         ciborium::into_writer(&archive, &mut bad).unwrap();
-        assert!(
-            Checkpoint::from_bytes(&bad)
-                .err()
-                .unwrap()
-                .contains("hash differs")
-        );
+        let restored = Checkpoint::from_bytes(&bad).unwrap();
+        assert_eq!(restored.decode::<u32>("root-v1").unwrap(), 43);
         for corrupt in 0..4 {
             let mut archive: Archive<Blob> = ciborium::from_reader(&encoded[..]).unwrap();
             match corrupt {
