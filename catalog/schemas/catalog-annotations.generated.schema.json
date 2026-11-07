@@ -191,7 +191,7 @@
     },
     "PersistentAsset": {
       "additionalProperties": false,
-      "description": "A bounded source window verified before and after normalization.",
+      "description": "A bounded source window with explicit normalization edits.",
       "properties": {
         "bytes": {
           "description": "Exact source window length in bytes.",
@@ -200,18 +200,18 @@
           "type": "integer"
         },
         "normalized_sha256": {
-          "description": "SHA-256 after applying the declared edits.",
+          "description": "Build/cache identity after applying the edits; unused during preparation.",
           "type": "string"
         },
         "patches": {
-          "description": "Explicit edits applied only to an exact source identity.",
+          "description": "Explicit edits applied to the supplied source window.",
           "items": {
             "$ref": "#/$defs/PersistentPatch"
           },
           "type": "array"
         },
         "sha256": {
-          "description": "SHA-256 of the supplied source window.",
+          "description": "Build/cache identity of the source window; unused during preparation.",
           "type": "string"
         }
       },
@@ -339,7 +339,7 @@
         },
         {
           "additionalProperties": false,
-          "description": "Packet extracted from an identity-checked asset.",
+          "description": "Packet extracted from a bounded asset.",
           "properties": {
             "asset": {
               "description": "Asset identity.",

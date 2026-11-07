@@ -1702,6 +1702,39 @@
       ],
       "type": "object"
     },
+    "CacheSynchronization": {
+      "additionalProperties": false,
+      "description": "Stock CPU0 cache and barrier routines invoked through the borrowed query.",
+      "properties": {
+        "data_barrier": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "data_clean": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "instruction_barrier": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "instruction_invalidate": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "data_clean",
+        "instruction_invalidate",
+        "data_barrier",
+        "instruction_barrier"
+      ],
+      "type": "object"
+    },
     "CaptureScope": {
       "additionalProperties": false,
       "description": "Ranges captured together, such as a quick scope while a control is held\nand a full scope once per session.",
@@ -1910,6 +1943,49 @@
       ],
       "type": "object"
     },
+    "Configuration": {
+      "description": "How the active configuration RAM base is obtained.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "address": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "mechanism": {
+              "const": "pointer",
+              "type": "string"
+            }
+          },
+          "required": [
+            "mechanism",
+            "address"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "address": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "mechanism": {
+              "const": "fixed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "mechanism",
+            "address"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "ConfigurationCheck": {
       "additionalProperties": false,
       "description": "A RAM configuration byte read before any destination is borrowed.",
@@ -2000,7 +2076,7 @@
           "type": "integer"
         },
         "sha256": {
-          "description": "Lowercase hexadecimal SHA-256 of the window.",
+          "description": "Build/cache identity of the window; unused when loading settings.",
           "type": "string"
         }
       },
@@ -5657,6 +5733,54 @@
       ],
       "type": "object"
     },
+    "DeferredTimer": {
+      "additionalProperties": false,
+      "description": "A stock timer that calls a no-argument callback after a millisecond delay.",
+      "properties": {
+        "callback_arguments": {
+          "description": "Number of arguments passed to the callback.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cancel": {
+          "$ref": "#/$defs/TimerRoutine",
+          "description": "Stock routine that cancels the handle returned by `start`."
+        },
+        "kind": {
+          "description": "Normalized ABI identifier.",
+          "type": "string"
+        },
+        "one_shot_periodic": {
+          "description": "Value of the periodic selector for a one-shot callback.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "period_unit": {
+          "description": "Unit accepted by `start`'s first argument.",
+          "type": "string"
+        },
+        "periodic_nonzero": {
+          "description": "Whether nonzero selector values repeat the callback.",
+          "type": "boolean"
+        },
+        "start": {
+          "$ref": "#/$defs/TimerRoutine",
+          "description": "Stock routine that starts a timer."
+        }
+      },
+      "required": [
+        "kind",
+        "period_unit",
+        "one_shot_periodic",
+        "periodic_nonzero",
+        "callback_arguments",
+        "start",
+        "cancel"
+      ],
+      "type": "object"
+    },
     "DeviceGraph": {
       "additionalProperties": false,
       "description": "Declared graph facts.",
@@ -6423,6 +6547,39 @@
         "rows"
       ],
       "type": "object"
+    },
+    "ExecutionMechanism": {
+      "description": "A mechanism that owns an allocation and can publish code as a diagnostic\ncallback after synchronizing its instruction view.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "allocation": {
+              "$ref": "#/$defs/HeapAllocation"
+            },
+            "cache": {
+              "$ref": "#/$defs/CacheSynchronization"
+            },
+            "code_checks": {
+              "items": {
+                "$ref": "#/$defs/CodeCheck"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "exr2_query_heap",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "allocation",
+            "cache",
+            "code_checks"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "Firmware": {
       "additionalProperties": false,
@@ -7236,6 +7393,52 @@
         "sampling",
         "sha256",
         "size"
+      ],
+      "type": "object"
+    },
+    "FirmwareExecution": {
+      "additionalProperties": false,
+      "description": "Located runtime-execution mechanism for one firmware.",
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "code_alias": {
+          "description": "Uncached RAM alias for the runtime allocation and code checks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "firmware_id": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "internal_version": {
+          "type": "string"
+        },
+        "mechanism": {
+          "$ref": "#/$defs/ExecutionMechanism"
+        },
+        "product": {
+          "type": "string"
+        },
+        "schema": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "id",
+        "firmware_id",
+        "product",
+        "internal_version",
+        "code_alias",
+        "mechanism"
       ],
       "type": "object"
     },
@@ -14707,6 +14910,31 @@
       ],
       "type": "object"
     },
+    "HeapAllocation": {
+      "additionalProperties": false,
+      "description": "The stock allocator/release pair and its configuration-owned bootstrap\nscratch. The bootstrap is borrowed only while allocating or releasing.",
+      "properties": {
+        "allocate": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "configuration": {
+          "$ref": "#/$defs/Configuration"
+        },
+        "release": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "allocate",
+        "release",
+        "configuration"
+      ],
+      "type": "object"
+    },
     "HomeSwitch": {
       "additionalProperties": false,
       "description": "A lens home-switch input.",
@@ -17825,7 +18053,7 @@
         },
         {
           "additionalProperties": false,
-          "description": "Packet extracted from an identity-checked asset.",
+          "description": "Packet extracted from a bounded asset.",
           "properties": {
             "asset": {
               "description": "Asset identity.",
@@ -19269,6 +19497,17 @@
           "minimum": 0,
           "type": "integer"
         },
+        "deferred_timer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeferredTimer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional stock timer ABI for an autonomous deferred restart. This is\npresent only when its locator qualified a callback timer on the same\nfirmware; delivery and callback placement remain separate mechanisms."
+        },
         "parameter_bytes": {
           "description": "Bytes of sender parameters.",
           "format": "uint32",
@@ -20244,7 +20483,7 @@
           "type": "integer"
         },
         "sha256": {
-          "description": "Lowercase hexadecimal SHA-256 of the decoded section.",
+          "description": "Build/cache identity of the decoded section; unused when loading settings.",
           "type": "string"
         },
         "size": {
@@ -20933,6 +21172,29 @@
       ],
       "type": "object"
     },
+    "TimerRoutine": {
+      "additionalProperties": false,
+      "description": "A bounded stock routine that Rust verifies before using the timer ABI.",
+      "properties": {
+        "address": {
+          "description": "Entry address before `code_alias`.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Exact routine bytes covered by the matching code check.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size"
+      ],
+      "type": "object"
+    },
     "TranslatedKey": {
       "additionalProperties": false,
       "description": "One physical key and the UI event the firmware delivers for it.",
@@ -21084,7 +21346,7 @@
     },
     "UpdateRange": {
       "additionalProperties": false,
-      "description": "Bytes at a firmware address in the decoded update, identified by SHA-256.",
+      "description": "A bounded range at a firmware address in the decoded update.",
       "properties": {
         "address": {
           "description": "Firmware address.",
@@ -21093,7 +21355,7 @@
           "type": "integer"
         },
         "sha256": {
-          "description": "Lowercase hexadecimal SHA-256 of the stock bytes.",
+          "description": "Build/cache identity of the stock bytes; unused when loading settings.",
           "type": "string"
         },
         "size": {
@@ -21368,6 +21630,18 @@
       ],
       "default": null,
       "description": "The firmware's generated located inputs, when generated."
+    },
+    "execution": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FirmwareExecution"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Stock runtime allocation, cache and callback mechanisms."
     },
     "firmware": {
       "$ref": "#/$defs/Firmware",
