@@ -37,15 +37,16 @@ impl RawView<'_> {
         }
         Ok(())
     }
-    /// PDAF transport restores packed12 to the U14 domain; still color
-    /// consumes the stored U12 value directly through `sample`.
+    /// Packed12 transport restores the stored U12 value to the U14 domain
+    /// for PDAF and still color alike. X30 1.03 programs still black 0x400
+    /// on every CFA slot (0xfff38004..0x10) for packed12 RAW whose stored
+    /// black is 256 (its RAF and LibRaw), and still color clamps at 16383.
     pub fn phase_sample(&self, x: usize, y: usize) -> u16 {
-        let v = self.sample(x, y);
-        if self.packing == Packing::Packed12 {
-            v << 2
-        } else {
-            v
-        }
+        Self::u14(self.packing == Packing::Packed12, self.sample(x, y))
+    }
+    #[inline(always)]
+    fn u14(packed12: bool, v: u16) -> u16 {
+        if packed12 { v << 2 } else { v }
     }
     #[inline]
     pub fn sample(&self, x: usize, y: usize) -> u16 {
@@ -413,9 +414,12 @@ impl Cfa {
                         let sx = usize::from(sample.x);
                         let sy = row_sample.y;
                         let value = (u64::from(
-                            raw.sample_from_offset::<PACKED12>(
-                                row_sample.byte_offset + usize::from(sample.byte_offset),
-                                sx,
+                            RawView::u14(
+                                PACKED12,
+                                raw.sample_from_offset::<PACKED12>(
+                                    row_sample.byte_offset + usize::from(sample.byte_offset),
+                                    sx,
+                                ),
                             )
                             .saturating_sub(black),
                         ) * exposure_gains[c])
@@ -456,7 +460,7 @@ impl Cfa {
                     let w = std::array::from_fn(|c| {
                         let (sx, sy) = positions[c];
                         let value =
-                            (u64::from(raw.sample_as::<PACKED12>(sx, sy).saturating_sub(black))
+                            (u64::from(RawView::u14(PACKED12, raw.sample_as::<PACKED12>(sx, sy)).saturating_sub(black))
                                 * exposure_gains[c])
                                 >> 16;
                         ((value * u64::from(spatial_gain(sx, sy))) >> 11).min(16383) as u16
@@ -526,7 +530,7 @@ mod tests {
                         crop[0] + x * crop[2] / width,
                         crop[1] + y * crop[3] / height,
                     );
-                    let rgb = positions.map(|(x, y)| raw.sample(x, y));
+                    let rgb = positions.map(|(x, y)| raw.phase_sample(x, y));
                     film.develop(std::array::from_fn(|c| {
                         expected_gain_calls
                             .borrow_mut()
@@ -644,7 +648,7 @@ mod tests {
                     crop[0] + x * crop[2] / out_width,
                     crop[1] + y * crop[3] / out_height,
                 );
-                let rgb = positions.map(|(x, y)| raw.sample(x, y));
+                let rgb = positions.map(|(x, y)| raw.phase_sample(x, y));
                 film.develop(std::array::from_fn(|c| {
                     let (sx, sy) = positions[c];
                     expected_gain_calls.borrow_mut().push((sx, sy));
@@ -732,7 +736,8 @@ mod tests {
                             source[i + 1] = (value >> 4) as u8;
                         }
                     }
-                    let v = ((u64::from(value.saturating_sub(127))
+                    let stored = if packing == Packing::Packed12 { value << 2 } else { value };
+                    let v = ((u64::from(stored.saturating_sub(127))
                         * gains[cfa.color(x, y)]
                         * exposure)
                         >> 16)

@@ -95,6 +95,8 @@ pub enum SensorControls {
         projection: Option<serde_json::Value>,
         frame_clock: Option<serde_json::Value>,
     },
+    /// Store-only (register high, register low, value) records; no radiometry.
+    RegisterRecords {},
 }
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]

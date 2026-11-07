@@ -105,10 +105,15 @@ impl Warp {
             src.width, src.height, src.pitch, w, h, last, scale, mode,
         )?;
         fujimod_emulator_imaging::exr2_isp::dma::physical(src.address, source_bytes)?;
+        // X30 1.03 also programs 0x30, 0x40/0x44 (Q12, e.g. 0xfb9), 0x48 and
+        // a monotonic Q16 table from 0x60 (0x10000, 0x10044, ...), which
+        // reads as a radial distortion remap. Its indexing and use are not
+        // derivable from the firmware that copies those words: X30 lens
+        // correction not modeled. The registers stay latched and the remap
+        // is an identity pass-through; the base centered scale still applies.
+        // X70 1.10 leaves 0x30/0x48 zero and 0x40/0x44 at 4096.
         if mode > 2
-            || [0x24, 0x30, 0x48].iter().any(|&o| r[o / 4] != 0)
-            || r[0x40 / 4] != 4096
-            || r[0x44 / 4] != 4096
+            || r[0x24 / 4] != 0
             || r[0x4c / 4] != 0x10001
             || !src.width.is_multiple_of(2)
             || !dst.width.is_multiple_of(2)

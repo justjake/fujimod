@@ -39,8 +39,16 @@ impl StillProcessor {
             irq,
         })
     }
+    /// 0x100..0x10fc holds the X30 1.03 correction block that `0x937284`
+    /// fills from develop parameter `param_1[0x36]` (`0x1109250`): three
+    /// interleaved 1024-byte per-channel tables in four banks, configured by
+    /// 0xd8..0xec and enabled by 0xfff30000 bits 16..17 (`0x936c28`). The
+    /// firmware only copies the tables from a parameter blob, so their
+    /// indexing is not derivable: X30 lens correction not modeled. The words
+    /// are retained and the block is an identity pass-through. X70 1.10 leaves
+    /// bits 16..17 clear and never writes this window.
     fn valid(o: usize) -> bool {
-        matches!(o,0|0xb4..=0xf8|0x1400..=0x4bfc|0x8000..=0x805c|0x10000..=0x100fc|0x11000..=0x11ffc|0x14000..=0x160fc)
+        matches!(o,0|0xb4..=0xf8|0x100..=0x10fc|0x1400..=0x4bfc|0x8000..=0x805c|0x10000..=0x100fc|0x11000..=0x11ffc|0x14000..=0x160fc)
     }
     fn start(&mut self, cx: &Cx<'_>, control: u32) -> Result<(), String> {
         let r = |o: usize| self.r[(0x10000 + o) / 4];

@@ -31,6 +31,11 @@ pub trait Controls: Send {
     ) -> Result<(), String>;
     fn save(&self) -> serde_json::Value;
     fn restore(&mut self, state: &serde_json::Value) -> Result<(), String>;
+    /// Whether a frame that carries a RAW capture publishes its frame edge
+    /// when that RAW readout completes rather than when the frame starts.
+    fn edge_at_raw_readout_end(&self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
@@ -467,8 +472,16 @@ impl Sensor {
         self.controls = Some(controls);
         Ok(())
     }
+    /// Attach controls that have no declared radiometry. Readouts keep the
+    /// declared linear response from the scene frame, as without controls.
+    pub fn attach_register_controls(&mut self, controls: Box<dyn Controls>) {
+        self.controls = Some(controls);
+    }
     pub fn attach_projection(&mut self, projection: fujimod_emulator_image_formation::optics::Projection) {
         self.projection = Some(projection);
+    }
+    pub fn edge_at_raw_readout_end(&self) -> bool {
+        self.controls.as_ref().is_some_and(|c| c.edge_at_raw_readout_end())
     }
     pub fn command(&mut self, bytes: &[u8]) -> Result<(), String> {
         self.controls.as_mut().map_or(Ok(()), |c| c.command(bytes))

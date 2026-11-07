@@ -53,14 +53,20 @@ fn image_input(builder: Builder<'_>, model: Model) -> Result<Built, String> {
                         .cloned()
                         .ok_or_else(|| format!("missing sensor frames {}", s.frames))?,
                 )?;
-                if let Some(fujimod_emulator_exr2_plan::SensorControls::Xtrans16 {
+                match s.controls {
+                None => {}
+                Some(fujimod_emulator_exr2_plan::SensorControls::RegisterRecords {}) => sensor
+                    .attach_register_controls(Box::new(
+                        fujimod_emulator_parts_sensor::register_records::Sensor::default(),
+                    )),
+                Some(fujimod_emulator_exr2_plan::SensorControls::Xtrans16 {
                     options,
                     calibration,
                     exposure,
                     aperture,
                     projection,
                     frame_clock,
-                }) = s.controls
+                }) =>
                 {
                     let exposure = fujimod_emulator_exr2_images::image_wire!(resources, id, exposure, Exposure);
                     let aperture = wire!(resources, id, aperture, Aperture);
@@ -84,6 +90,7 @@ fn image_input(builder: Builder<'_>, model: Model) -> Result<Built, String> {
                             fujimod_emulator_image_formation::optics::Projection::new(p, focus)?,
                         );
                     }
+                }
                 }
                 Ok::<_, String>(sensor)
             })

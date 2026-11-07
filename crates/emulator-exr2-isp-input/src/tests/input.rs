@@ -835,9 +835,11 @@ fn packed_raw_readback_matches_u16_with_independent_row_padding() {
                 let b = a + 70;
                 let at = 0x8000 + y * pitch + packing.row_bytes(x);
                 match packing {
+                    // Packed12 stores U12 samples that still color restores
+                    // to the U14 domain of U16 RAW.
                     Packing::U16 => {
-                        h.ram[at..at + 2].copy_from_slice(&a.to_le_bytes());
-                        h.ram[at + 2..at + 4].copy_from_slice(&b.to_le_bytes());
+                        h.ram[at..at + 2].copy_from_slice(&(a << 2).to_le_bytes());
+                        h.ram[at + 2..at + 4].copy_from_slice(&(b << 2).to_le_bytes());
                     }
                     Packing::Packed12 => h.ram[at..at + 3].copy_from_slice(&[
                         a as u8,
