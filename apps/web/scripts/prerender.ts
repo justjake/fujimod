@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Wizard, toolPath } from '../src/dev-tools/routes.ts';
 const tools = Object.values(Wizard).map(toolPath);
-export const routes = ['/', '/dev-tools/', ...tools, '/bug/', '/recovery/'];
+export const routes = ['/', '/dev-tools/', ...tools, '/bug/', '/recovery/', '/device/'];
 /** Render through start mode's production handler, using the same entries as dev and hydration. */
 export async function prerender(output = 'dist') {
   const { handleRequest } = await import(pathToFileURL(resolve(output, 'server/server.js')).href);
@@ -21,6 +21,7 @@ export async function prerender(output = 'dist') {
           '/dev-tools/': 'Dev Tools',
           '/bug/': 'class="shell bug-report"',
           '/recovery/': 'class="shell recovery"',
+          '/device/': 'class="shell device"',
         }[route];
     if (!html.includes(expected) || !/<script[^>]+type="module"/.test(html))
       throw Error(`Prerender ${route}: missing content or hydration entry`);

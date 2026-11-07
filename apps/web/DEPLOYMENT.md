@@ -131,6 +131,11 @@ users, sessions, linked Google accounts, devices and device codes in the
 `fujimod-auth` D1 database (`AUTH_DB`). `www.fujimod.com` signs in through the
 apex origin, so one Google redirect covers both hostnames.
 
+A camera asks `/api/auth/device/code` for a code and shows it to its owner, who
+approves it at `/device/` after signing in. The approved camera polls
+`/api/auth/device/token` for its session token and sends that token as a bearer
+credential.
+
 The Google OAuth client `FujiMod Web` needs these authorized redirect URIs, and
 the JavaScript origins without the path:
 
