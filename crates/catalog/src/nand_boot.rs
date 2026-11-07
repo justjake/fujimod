@@ -35,8 +35,8 @@ pub struct FirmwareNandBoot {
     pub stage1: NandBootStage1,
     /// Where the bootloader is placed in stage 1.
     pub code_space: NandBootCodeSpace,
-    /// Boot-ROM card routines and the state they relocate.
-    pub rom: NandBootRom,
+    /// SHA-256 of the boot ROM whose card facts this document uses.
+    pub boot_rom: String,
     /// Frozen stage-2 file and RAM range.
     pub load_range: NandBootLoadRange,
 }
@@ -109,73 +109,6 @@ pub struct NandBootCodeSpace {
     pub native_offset: u64,
 }
 
-/// Boot-ROM card routines and relocated state.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-pub struct NandBootRom {
-    /// SHA-256 of the boot ROM the routines come from.
-    pub sha256: String,
-    /// FAT mount, open and read entries.
-    pub routines: NandBootRomRoutines,
-    /// The low-mirror SD command table the bootloader relocates.
-    pub command_table: NandBootCommandTable,
-    /// The ROM's file-system pointer word.
-    pub filesystem_pointer: NandBootFilesystemPointer,
-    /// The power-hold register the bootloader reasserts.
-    pub power_hold: NandBootPowerHold,
-    /// RAM address the boot ROM hands control to.
-    pub load_address: u64,
-}
-
-/// The three ROM file routines the bootloader calls.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-pub struct NandBootRomRoutines {
-    /// Mount entry.
-    pub mount: u64,
-    /// Open entry.
-    pub open: u64,
-    /// Read entry.
-    pub read: u64,
-}
-
-/// SD command table copied over stage-1 bytes while the ROM runs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-pub struct NandBootCommandTable {
-    /// High-mirror source address.
-    pub source: u64,
-    /// Low-mirror destination address.
-    pub destination: u64,
-    /// Bytes copied.
-    pub bytes: u64,
-}
-
-/// The word the ROM file service uses to publish its current volume.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-pub struct NandBootFilesystemPointer {
-    /// Address of the pointer word.
-    pub address: u64,
-    /// Stock value at stage-1 entry.
-    pub entry_value: u32,
-}
-
-/// Power-hold register asserted before any ROM card access.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-pub struct NandBootPowerHold {
-    /// Register address.
-    pub address: u64,
-    /// Bit held high.
-    pub bit: u32,
-}
-
 /// Frozen stage-2 file, address and size.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -187,12 +120,14 @@ pub struct NandBootLoadRange {
     pub address: u64,
     /// Maximum file size.
     pub capacity: u64,
-    /// Uncached alias of the address.
-    pub alias: String,
-    /// Base of the stock network heap.
-    pub heap_base: u64,
-    /// Bytes in the stock network heap.
-    pub heap_bytes: u64,
+    /// Uncached alias of the address, where the body establishes one.
+    pub alias: Option<String>,
+    /// Base of the stock network heap when it owns this range.
+    pub heap_base: Option<u64>,
+    /// Bytes in the stock network heap when it owns this range.
+    pub heap_bytes: Option<u64>,
+    /// Why this range is safe: the stock heap or the frozen EXR II range.
+    pub basis: String,
 }
 
 impl FirmwareNandBoot {
@@ -212,10 +147,9 @@ impl FirmwareNandBoot {
         }
         self.stage1.validate()?;
         self.code_space.validate()?;
-        self.rom.validate()?;
         self.load_range.validate()?;
-        if self.stage1.load_address != self.rom.load_address {
-            return Err("boot-ROM handoff and stage-1 load address differ".into());
+        if self.boot_rom.len() != 64 || !self.boot_rom.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err("nand-boot: invalid boot-ROM reference".into());
         }
         let Some(code) = self
             .code_space
@@ -285,24 +219,6 @@ impl NandBootCodeSpace {
     }
 }
 
-impl NandBootRom {
-    fn validate(&self) -> Result<(), String> {
-        if self.sha256.len() != 64 {
-            return Err("invalid boot-ROM identity".into());
-        }
-        if self.routines.mount == 0 || self.routines.open == 0 || self.routines.read == 0 {
-            return Err("boot-ROM file routines are required".into());
-        }
-        if self.command_table.bytes == 0 || self.command_table.bytes % 8 != 0 {
-            return Err("invalid command table".into());
-        }
-        if self.power_hold.bit >= 32 {
-            return Err("invalid power-hold bit".into());
-        }
-        Ok(())
-    }
-}
-
 impl NandBootLoadRange {
     fn validate(&self) -> Result<(), String> {
         if self.file.is_empty()
@@ -313,11 +229,21 @@ impl NandBootLoadRange {
         {
             return Err("invalid stage-2 file or range".into());
         }
-        if self.heap_base != self.address
-            || self.heap_bytes < self.capacity
-            || self.address.checked_add(self.capacity).is_none()
-        {
-            return Err("stage-2 range is not the start of the located heap".into());
+        if self.address.checked_add(self.capacity).is_none() || self.basis.is_empty() {
+            return Err("invalid stage-2 range".into());
+        }
+        match (self.heap_base, self.heap_bytes) {
+            (Some(base), Some(bytes)) => {
+                if base != self.address || bytes < self.capacity || self.basis != "network-heap" {
+                    return Err("stage-2 heap owner disagrees with the range".into());
+                }
+            }
+            (None, None) => {
+                if self.basis != "frozen-exr2-range" {
+                    return Err("stage-2 range without a heap must state the frozen basis".into());
+                }
+            }
+            _ => return Err("stage-2 heap owner is incomplete".into()),
         }
         Ok(())
     }

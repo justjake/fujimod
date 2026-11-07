@@ -77,7 +77,7 @@
         {
           "id": "nand-boot-facts",
           "title": "EXR II NAND bootloader facts located",
-          "result": "not-run"
+          "result": "pass"
         }
       ]
     },
@@ -93,7 +93,7 @@
         {
           "id": "emulator-nand-boot",
           "title": "NAND bootloader boots stock or the card program",
-          "result": "not-run"
+          "result": "fail"
         },
         {
           "id": "menu",

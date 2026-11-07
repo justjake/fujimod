@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "base": 98304,
+  "base": 256,
   "capacity": 4096,
   "image_bytes": 556,
   "entry": 0,

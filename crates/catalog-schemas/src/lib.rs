@@ -89,6 +89,12 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
+        "boot-rom.generated.schema.json",
+        schema::<fujimod_catalog::boot_rom::BootRom>(
+            fujimod_catalog::boot_rom::BOOT_ROM_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
         "progress.generated.schema.json",
         schema::<fujimod_catalog::progress::FirmwareProgress>(
             fujimod_catalog::progress::PROGRESS_SCHEMA_URI,
