@@ -6,7 +6,8 @@
 //! payloads, completion and IRQs remain unmodeled.
 //! An ordered central reset and guest-owned local stops can cancel an armed
 //! request without creating a result. Local idle status remains the declared
-//! retained zero; reset does not manufacture DMA progress.
+//! retained zero; reset does not manufacture DMA progress. A stopped request
+//! may be followed directly by the next one, as in a burst.
 //! RetainedWords instead exposes all aligned words in the 4 KiB bank, initially
 //! zero and freely reconfigurable, without interpreting requests or DMA fields.
 use fujimod_emulator_devices::{Cx, Device};
@@ -78,6 +79,7 @@ struct DmaAccess {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 struct DmaChannel {
     phase: DmaPhase,
+    initial_phase: DmaPhase,
     initial_registers: BTreeMap<u8, u32>,
     registers: BTreeMap<u8, u32>,
     accepted_registers: BTreeMap<u8, u32>,
@@ -257,12 +259,14 @@ impl FaceDetector {
         if !Self::valid_idle_dma_registers(&state.initial_registers) {
             return false;
         }
-        let mut replay = DmaChannel {
-            initial_registers: state.initial_registers.clone(),
-            registers: state.initial_registers.clone(),
-            accepted_registers: state.initial_registers.clone(),
-            ..DmaChannel::default()
-        };
+        if !matches!(
+            state.initial_phase,
+            DmaPhase::Initial | DmaPhase::Configured
+        ) {
+            return false;
+        }
+        let mut replay =
+            Self::retired_channel(state.initial_registers.clone(), state.initial_phase);
         for access in &state.accesses {
             if !Self::apply_dma_access(&mut replay, access.operation, access.offset, access.value) {
                 return false;
@@ -271,6 +275,17 @@ impl FaceDetector {
         replay.phase == state.phase
             && replay.registers == state.accepted_registers
             && state.registers == state.accepted_registers
+    }
+
+    fn retired_channel(registers: BTreeMap<u8, u32>, phase: DmaPhase) -> DmaChannel {
+        DmaChannel {
+            phase,
+            initial_phase: phase,
+            initial_registers: registers.clone(),
+            accepted_registers: registers.clone(),
+            registers,
+            accesses: Vec::new(),
+        }
     }
 
     fn read_dma(&mut self, cx: &mut Cx<'_>, channel: usize, offset: u8) -> u64 {
@@ -677,13 +692,8 @@ impl FaceDetector {
                     // Keep the real idle register values, including DMA setup;
                     // only the bounded transaction observers begin again.
                     for channel in dma.iter_mut() {
-                        let registers = channel.registers.clone();
-                        *channel = DmaChannel {
-                            initial_registers: registers.clone(),
-                            accepted_registers: registers.clone(),
-                            registers,
-                            ..DmaChannel::default()
-                        };
+                        *channel =
+                            Self::retired_channel(channel.registers.clone(), DmaPhase::Initial);
                     }
                     request.step = 1;
                     registers.insert(offset, value);
@@ -893,7 +903,9 @@ impl FaceDetector {
             && if let Some(request) = &state.request {
                 Self::valid_request(request, &state.registers, &state.dma)
             } else {
-                state.dma.iter().all(Self::valid_dma_channel)
+                state.dma.iter().all(|channel| {
+                    channel.initial_phase == DmaPhase::Initial && Self::valid_dma_channel(channel)
+                })
             }
     }
 }
@@ -960,28 +972,47 @@ impl Device for FaceDetector {
                 cx.fail("face detector request must fit its 12-bit input");
                 return;
             }
-            if self
-                .state
-                .request
-                .as_ref()
-                .is_some_and(|request| request.phase != RequestPhase::Closed || request.step != 1)
-            {
-                cx.fail("face detector request is already retained without a modeled result");
-                return;
+            let mut dma = self.state.dma.clone();
+            match self.state.request.as_ref() {
+                None => {}
+                Some(request) if request.phase == RequestPhase::Closed && request.step == 1 => {}
+                // A burst follows the ordered reset and local stops with the
+                // next request directly. The stopped channels keep their
+                // programmed idle words, so they stay configured without the
+                // close and reconfiguration a single request performs.
+                Some(request) if request.phase == RequestPhase::Stopped => {
+                    if dma
+                        .iter()
+                        .any(|channel| !Self::valid_idle_dma_registers(&channel.registers))
+                    {
+                        cx.fail(
+                            "face detector request requires stopped DMA channels with idle words",
+                        );
+                        return;
+                    }
+                    for channel in dma.iter_mut() {
+                        *channel =
+                            Self::retired_channel(channel.registers.clone(), DmaPhase::Configured);
+                    }
+                }
+                Some(_) => {
+                    cx.fail("face detector request is already retained without a modeled result");
+                    return;
+                }
             }
-            if !Self::configured_for_request(&self.state.registers, &self.state.dma) {
+            if !Self::configured_for_request(&self.state.registers, &dma) {
                 cx.fail("face detector request requires complete configuration and four inactive DMA channels");
                 return;
             }
             let mut request = RequestState {
                 initial_registers: self.state.registers.clone(),
-                initial_dma: self.state.dma.clone(),
+                initial_dma: dma.clone(),
                 ..RequestState::default()
             };
             if !Self::apply_request_access(
                 &mut request,
                 &mut self.state.registers,
-                &mut self.state.dma,
+                &mut dma,
                 DmaOperation::Write,
                 offset,
                 value,
@@ -989,6 +1020,7 @@ impl Device for FaceDetector {
                 cx.fail("face detector request is outside the supported input domain");
                 return;
             }
+            self.state.dma = dma;
             self.state.request = Some(request);
             return;
         }
@@ -1538,6 +1570,83 @@ mod tests {
             assert!(restored.restore(&false_idle).is_err());
             assert_eq!(restored.save(), saved);
         }
+    }
+
+    fn replay(model: &mut FaceDetector, accesses: &[RequestAccess]) {
+        for access in accesses {
+            let offset = u64::from(access.offset);
+            if access.operation == DmaOperation::Write {
+                assert_eq!(write(model, offset, access.value.into()), None);
+            } else {
+                assert_eq!(read(model, offset), None);
+            }
+        }
+    }
+
+    #[test]
+    fn burst_requests_follow_stopped_requests_without_closing() {
+        let mut model = armed();
+        let submission = model.state.request.as_ref().unwrap().accesses.clone();
+        for _ in 0..3 {
+            let stops = stop_accesses(false);
+            for (index, (operation, offset, value)) in stops.iter().copied().enumerate() {
+                // A request cannot start before every local channel stops.
+                if index + 1 < stops.len() {
+                    let saved = model.save();
+                    assert!(write(&mut model, 0x14, 0x0fff).is_some());
+                    assert_eq!(model.save(), saved);
+                }
+                if operation == DmaOperation::Write {
+                    assert_eq!(write(&mut model, offset, value), None);
+                } else {
+                    assert_eq!(read(&mut model, offset), None);
+                }
+            }
+            assert_eq!(
+                model.state.request.as_ref().unwrap().phase,
+                RequestPhase::Stopped
+            );
+            let stopped = model.state.dma.clone();
+            assert!(write(&mut model, 0x14, 0x1000).is_some());
+            replay(&mut model, &submission);
+            let request = model.state.request.as_ref().unwrap();
+            assert_eq!(request.phase, RequestPhase::AwaitingResult);
+            assert_eq!(request.accesses, submission);
+            for (channel, previous) in request.initial_dma.iter().zip(&stopped) {
+                assert_eq!(channel.initial_phase, DmaPhase::Configured);
+                assert_eq!(channel.initial_registers, previous.registers);
+                assert!(channel.accesses.is_empty());
+            }
+            assert_eq!(model.next_deadline(0), None);
+            let saved = model.save();
+            let mut restored = FaceDetector::default();
+            restored.restore(&saved).unwrap();
+            assert_eq!(restored.save(), saved);
+            let mut busy = saved.clone();
+            busy["request"]["initial_dma"][0]["initial_registers"]["4"] = Value::from(1);
+            assert!(FaceDetector::default().restore(&busy).is_err());
+        }
+        // The burst still ends with the single-request close.
+        for close in [false, true] {
+            for (operation, offset, value) in stop_accesses(close) {
+                if operation == DmaOperation::Write {
+                    assert_eq!(write(&mut model, offset, value), None);
+                } else {
+                    assert_eq!(read(&mut model, offset), None);
+                }
+            }
+        }
+        assert_eq!(write(&mut model, 0x10, 0), None);
+        // Without a stopped request, a channel cannot claim configuration it
+        // never performed.
+        let mut idle = FaceDetector::default();
+        initialize(&mut idle, 0);
+        let mut forged = idle.save();
+        let channel = &mut forged["dma"][0];
+        channel["initial_registers"] = channel["registers"].clone();
+        channel["accesses"] = Value::Array(Vec::new());
+        channel["initial_phase"] = Value::from("configured");
+        assert!(FaceDetector::default().restore(&forged).is_err());
     }
 
     #[test]
