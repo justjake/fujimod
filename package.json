@@ -1,13 +1,14 @@
 {
   "name": "fujimod-development",
   "private": true,
+  "packageManager": "pnpm@12.18.0",
   "type": "module",
   "scripts": {
-    "lint": "npm run check:typescript-policy && node scripts/ci/lint.ts",
+    "lint": "pnpm run check:typescript-policy && node scripts/ci/lint.ts",
     "format:check": "vp fmt --check",
     "test:node": "node scripts/ci/node-tests.ts",
     "check:typescript-policy": "node scripts/ci/check-typescript.ts",
-    "check:types": "npm run check:typescript-policy && node scripts/ci/check-types.ts"
+    "check:types": "pnpm run check:typescript-policy && node scripts/ci/check-types.ts"
   },
   "devDependencies": {
     "@types/node": "26.6.6",

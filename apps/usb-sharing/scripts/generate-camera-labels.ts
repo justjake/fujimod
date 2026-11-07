@@ -12,5 +12,5 @@ const names = JSON.parse(await readFile(root('../processor-names.json'), 'utf8')
 const text = JSON.stringify(await cameraLabels(root('../../../catalog'), names), null, 2) + '\n';
 if (process.argv.includes('--check')) {
   if ((await readFile(output, 'utf8').catch(() => '')) !== text)
-    throw Error('camera-labels.generated.json is stale; run npm run generate');
+    throw Error('camera-labels.generated.json is stale; run pnpm run generate');
 } else await writeFile(output, text);

@@ -13,11 +13,10 @@ Wasm standard library and the wasm-bindgen CLI matching `Cargo.lock`:
 
 ```sh
 rustup target add wasm32-unknown-unknown
-cd bindings/javascript
-npm ci
-npm run setup:tooling
-npm run build
-npm test
+pnpm install --frozen-lockfile
+pnpm --filter fujimod run setup:tooling
+pnpm --filter fujimod run build
+pnpm --filter fujimod test
 ```
 
 `setup:tooling` installs the official prebuilt CLI matching `Cargo.lock`, checking
@@ -38,8 +37,8 @@ hardware. An additional headless Chromium check exercises the production package
 in a real browser against that same fake USB API:
 
 ```sh
-npx playwright install chromium
-npm run test:browser
+pnpm --filter fujimod exec playwright install chromium
+pnpm --filter fujimod run test:browser
 ```
 
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` can select an explicitly installed Chromium
@@ -76,16 +75,16 @@ Build and stage the runtime with the pinned Mise toolchain:
 
 ```sh
 mise install
-npm --prefix bindings/javascript run setup:tooling
+pnpm --filter fujimod run setup:tooling
 mise run javascript-emulator-build
 ```
 
 The builder defaults to ignored `target/emulator/` output and stages runtime
 assets under `bindings/javascript/dist/emulator/`. Use
-`npm run build:emulator -- --out DIR` to choose another output directory. The
+`pnpm run build:emulator -- --out DIR` to choose another output directory. The
 generated `build.json` records the toolchain and artifact hashes. Runtime input
 manifests remain the caller's responsibility. Guest conformance scripts can run against a built module with
-`npm run test:emulator:guest` and `npm run test:emulator:devices`; each accepts
+`pnpm run test:emulator:guest` and `pnpm run test:emulator:devices`; each accepts
 an optional path to `camera.mjs`.
 
 The final module is optimized with the pinned SDK's Binaryen, using WebAssembly

@@ -1,6 +1,9 @@
 import { runtimeHeaders } from './src/security.ts';
 import { releaseRoute, validateReleaseInfo, type ReleaseInfo } from './src/patch/releases.ts';
 import { byteRange, otaRoute } from './src/ota/routes.ts';
+import { createAuth } from './src/auth/runtime.ts';
+import type { AuthEnv } from './src/auth/options.ts';
+import { serveDeviceToken, serveGoogleToken, type ProviderTokenApi } from './src/devices/routes.ts';
 
 const repository = 'justjake/fujimod';
 const api = `https://api.github.com/repos/${repository}/releases`;
@@ -35,6 +38,16 @@ export interface ReleaseStore {
   get(key: string, type: 'arrayBuffer'): Promise<ArrayBuffer | null>;
   put(key: string, value: Uint8Array): Promise<unknown>;
 }
+interface Env extends AuthEnv {
+  ASSETS: Assets;
+  RELEASES: ReleaseStore;
+  GITHUB_TOKEN?: string;
+}
+interface AuthHandler {
+  handler(request: Request): Promise<Response>;
+  api: ProviderTokenApi;
+}
+type AuthFactory = (env: AuthEnv, baseURL: string) => AuthHandler;
 const currentKey = 'current';
 const storeBytesKey = (name: string) => `ota/store/${name}`;
 const manifestBytesKey = (firmware: string) => `ota/manifest/${firmware}`;
@@ -502,31 +515,40 @@ async function serveOtaPath(
   }
   return failure(404, 'OTA route not found.');
 }
-export default {
-  async fetch(
-    request: Request,
-    env: { ASSETS: Assets; RELEASES: ReleaseStore; GITHUB_TOKEN?: string },
-    context: Context,
-  ): Promise<Response> {
-    const path = new URL(request.url).pathname;
-    if (path.startsWith('/releases/'))
-      return serveRelease(
-        request,
-        await caches.open('fujimod-releases'),
-        env.RELEASES,
-        context,
-        fetch,
-        env.GITHUB_TOKEN,
-      );
-    if (path.startsWith('/ota/'))
-      return serveOta(
-        request,
-        await caches.open('fujimod-ota'),
-        env.RELEASES,
-        context,
-        fetch,
-        env.GITHUB_TOKEN,
-      );
-    return env.ASSETS.fetch(request);
-  },
-};
+export async function serveRequest(
+  request: Request,
+  env: Env,
+  context: Context,
+  makeAuth: AuthFactory = createAuth,
+): Promise<Response> {
+  const url = new URL(request.url);
+  if (url.pathname === '/api/auth/device/token') {
+    const auth = makeAuth(env, url.origin);
+    return serveDeviceToken(request, env.AUTH_DB, (incoming) => auth.handler(incoming));
+  }
+  if (url.pathname === '/api/auth' || url.pathname.startsWith('/api/auth/'))
+    return makeAuth(env, url.origin).handler(request);
+  if (url.pathname === '/api/devices/google-token')
+    return serveGoogleToken(request, env.AUTH_DB, makeAuth(env, url.origin).api);
+  if (url.pathname.startsWith('/releases/'))
+    return serveRelease(
+      request,
+      await caches.open('fujimod-releases'),
+      env.RELEASES,
+      context,
+      fetch,
+      env.GITHUB_TOKEN,
+    );
+  if (url.pathname.startsWith('/ota/'))
+    return serveOta(
+      request,
+      await caches.open('fujimod-ota'),
+      env.RELEASES,
+      context,
+      fetch,
+      env.GITHUB_TOKEN,
+    );
+  return env.ASSETS.fetch(request);
+}
+
+export default { fetch: serveRequest };

@@ -39,7 +39,7 @@ need a separate generated Python source tree.
 
 ```sh
 cargo test -p fujimod-bindgen
-npm --prefix bindings/javascript test
+pnpm --filter fujimod test
 ```
 
 Session adapters remain handwritten: async ownership, cancellation, error

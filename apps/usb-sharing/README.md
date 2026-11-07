@@ -20,14 +20,14 @@ Use a Cloudflare account with Workers and SQLite Durable Objects available.
 From this directory:
 
 ```sh
-npm ci
+pnpm install --frozen-lockfile
 cf auth login
-npm test
-npm run check
-npm run deploy
+pnpm test
+pnpm run check
+pnpm run deploy
 ```
 
-`npm run deploy` uses the Cloudflare CLI's sign-in (see
+`pnpm run deploy` uses the Cloudflare CLI's sign-in (see
 [`scripts/cloudflare/wrangler.ts`](../../scripts/cloudflare/wrangler.ts)). It fails
 until R2 is enabled for the account, because `wrangler.jsonc` binds the private
 [issue-report](ISSUE_REPORTS.md) bucket.
@@ -78,8 +78,8 @@ Create a Realtime TURN key in the Cloudflare dashboard, then store its key ID an
 API token as Worker secrets using the interactive prompts:
 
 ```sh
-npx wrangler secret put TURN_KEY_ID
-npx wrangler secret put TURN_API_TOKEN
+pnpm exec wrangler secret put TURN_KEY_ID
+pnpm exec wrangler secret put TURN_API_TOKEN
 ```
 
 Do not put either value in Git, static build variables, browser code, or share
@@ -114,10 +114,10 @@ and storage have their own Cloudflare pricing, separate from TURN egress.
 
 ## Test
 
-`npm test` executes the actual Worker under Miniflare/workerd, including room
+`pnpm test` executes the actual Worker under Miniflare/workerd, including room
 ownership, opaque routing, revocation, temporary credential delivery, server
 secret isolation, issuance quotas and failed configuration. The Cloudflare API
-is mocked; these checks incur no Cloudflare charges. `npm run check` bundles a
+is mocked; these checks incur no Cloudflare charges. `pnpm run check` bundles a
 deployment without uploading it.
 
 The browser integration uses the built JS and native Python bindings and a named

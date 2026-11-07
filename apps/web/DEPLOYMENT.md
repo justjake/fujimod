@@ -16,7 +16,7 @@ Generated assets stay outside Git.
 From `apps/web`, use the locally generated asset directories:
 
 ```sh
-FUJIMOD_SIGNAL_URL=wss://share.fujimod.com/usb-proxy/signal npm run deploy -- \
+FUJIMOD_SIGNAL_URL=wss://share.fujimod.com/usb-proxy/signal pnpm run deploy -- \
   --runtime /path/to/runtime \
   --media /path/to/feature-media
 ```
@@ -123,6 +123,51 @@ Verify both HTTPS hostnames, `/dev-tools/`, camera launch controls, an actual
 emulator boot, `/ota/timezone`, a release manifest, and feature media after
 deployment. Firmware DATs are selected locally in the browser and are not
 website assets.
+
+## Accounts
+
+The Worker mounts Better Auth at `/api/auth/*` ahead of static assets and stores
+users, sessions, linked Google accounts, devices and device codes in the
+`fujimod-auth` D1 database (`AUTH_DB`). `www.fujimod.com` signs in through the
+apex origin, so one Google redirect covers both hostnames.
+
+A camera asks `/api/auth/device/code` for a code and shows it to its owner, who
+approves it at `/device/` after signing in. The approved camera polls
+`/api/auth/device/token` for its session token. The Worker stores that token as a
+hashed device credential, and the camera sends it to
+`POST /api/devices/google-token` to receive a Google access token for upload.
+Permissions come from [`src/devices/policy.ts`](src/devices/policy.ts), not from
+the scopes a client asks for, so an unknown client cannot obtain a code and a
+device without `google.photos.append` is refused.
+
+The Google OAuth client `FujiMod Web` needs these authorized redirect URIs, and
+the JavaScript origins without the path:
+
+```text
+https://fujimod.com/api/auth/callback/google
+https://cozycat.tail2b5ca.ts.net:8794/api/auth/callback/google
+```
+
+The Google Auth Platform data access page must list `openid`,
+`userinfo.email`, `userinfo.profile`, `photoslibrary.appendonly`,
+`photoslibrary.readonly.appcreateddata` and `photospicker.mediaitems.readonly`.
+The scope list lives in [`src/auth/options.ts`](src/auth/options.ts).
+
+The Worker needs `GOOGLE_CLIENT_SECRET` and `BETTER_AUTH_SECRET` secrets;
+`GOOGLE_CLIENT_ID` is a plain variable in `wrangler.jsonc`. Local development
+reads them from `.dev.vars` (see `.dev.vars.example`).
+
+Schema changes come from Drizzle: edit `src/db/`, then `pnpm run db:generate`
+and apply the new migration.
+
+```sh
+pnpm run db:migrate:list
+pnpm run db:migrate:remote
+```
+
+Applying migrations uses the Cloudflare CLI (`cf`), which shares this
+repository's sign-in with Wrangler. `pnpm run db:migrate:local` targets the local
+D1 copy instead.
 
 ## DNS and sharing
 

@@ -7,7 +7,7 @@ The description becomes public in `justjake/fujimod`. Issues carry the labels `b
 Processor 2)"). The Worker creates a camera's label with that description the first
 time the camera reports. `camera-labels.generated.json` lists every known
 firmware's label, generated from the catalog and `processor-names.json` by
-`npm run generate`. The archive is stored in
+`pnpm run generate`. The archive is stored in
 R2 and a separate read-only share URL is returned to the uploader. Anyone with
 that URL can download the report. No GitHub account or credential is needed in the browser.
 
@@ -52,9 +52,9 @@ access). Configure `GITHUB_ISSUES_TOKEN` with Issues: write access to
 `justjake/fujimod` under the account that should author the issues, then deploy:
 
 ```sh
-npx wrangler r2 bucket create fujimod-issue-reports
-npx wrangler secret put GITHUB_ISSUES_TOKEN
-npm run deploy
+pnpm exec wrangler r2 bucket create fujimod-issue-reports
+pnpm exec wrangler secret put GITHUB_ISSUES_TOKEN
+pnpm run deploy
 ```
 
 Never reuse a developer's local GitHub credential implicitly. The token stays in
@@ -64,7 +64,7 @@ existing USB sharing objects and TURN secrets remain intact.
 Maintainers can retrieve a report with their Cloudflare credentials:
 
 ```sh
-npx wrangler r2 object get fujimod-issue-reports/REPORT_ID/report.tar --remote --file report.tar
+pnpm exec wrangler r2 object get fujimod-issue-reports/REPORT_ID/report.tar --remote --file report.tar
 ```
 
 Run `node --test worker.test.ts issue-reports.test.ts`. Tests use a real local

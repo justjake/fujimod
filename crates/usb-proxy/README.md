@@ -135,7 +135,7 @@ Transfers are bounded to 8 MiB and USB budgets to 120 seconds. WebUSB cannot can
 an in-flight transfer: a host deadline is not evidence of device completion.
 There is no automatic reconnect, recovery, persistence or hardware validation.
 
-Run `npm ci` from the repository root before building the relay or Wasm target.
+Run `pnpm install --frozen-lockfile` from the repository root before building the relay or Wasm target.
 Cargo type-checks the TypeScript transport, then bundles each browser entry
 (`peer.ts` for the Wasm controller, `exporter.ts` for the relay page) with
 Rolldown into one self-contained module in ignored `web/build/`; generated
@@ -148,6 +148,6 @@ real relay and bindings with a scripted WebUSB device. No test accesses a camera
 
 The browser exporter executes in Rust/Wasm on the same nusb owner used by direct
 local sessions. JavaScript routes wire messages only. Build the JavaScript binding
-before serving the relay page (`npm --prefix bindings/javascript run build`).
+before serving the relay page (`pnpm --filter fujimod run build`).
 The relay serves generated SDK assets from `bindings/javascript/`; deployments
 can set `FUJIMOD_USB_PROXY_BINDINGS` to that built directory.

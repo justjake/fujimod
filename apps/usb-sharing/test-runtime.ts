@@ -1,4 +1,4 @@
-import { Miniflare } from 'miniflare';
+import { Miniflare, type Request as WorkerRequest, type Response as WorkerResponse } from 'miniflare';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
@@ -14,6 +14,13 @@ execFileSync(
 const worker = readFileSync(join(outdir, 'worker.js'), 'utf8');
 rmSync(outdir, { recursive: true });
 const origin = 'https://justjake.github.io';
+/** Miniflare types outbound handlers with the Workers `Response` class. These
+ * harnesses answer with Node's global `Response`, which Miniflare accepts at
+ * runtime and reads only for status, headers and body. */
+type OutboundService = (
+  request: WorkerRequest,
+  miniflare: Miniflare,
+) => WorkerResponse | Promise<WorkerResponse>;
 /** A local Worker with the D1 index schema applied, as `wrangler d1 migrations apply` does. */
 export async function runtime(
   options: {
@@ -82,7 +89,12 @@ export async function runtime(
           },
         },
         dev: options.outboundService
-          ? { outboundService: { type: 'fetcher', handler: options.outboundService } }
+          ? {
+              outboundService: {
+                type: 'fetcher',
+                handler: options.outboundService as unknown as OutboundService,
+              },
+            }
           : {},
       },
     ],
