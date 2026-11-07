@@ -271,7 +271,6 @@ class Board:
             Processor(self, core) for core in range(len(native.instructions))
         )
         self._session = Session(self)
-        _perf.attach_board(self)
 
     @staticmethod
     def _identifier(value: str, name: str) -> str:

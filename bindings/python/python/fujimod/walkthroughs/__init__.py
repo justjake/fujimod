@@ -647,6 +647,7 @@ class Guide[C: RecordingCamera]:
         try:
             self._preparing = True
             self.camera.start_recording(self)
+            perf.snapshot_counters(getattr(self.camera, "board", None))
             # Prerequisites whose end state the camera was resumed from; their
             # own recordings passed, and they are not executed again here.
             for name in restored:
@@ -730,7 +731,7 @@ class Guide[C: RecordingCamera]:
                 if p.is_file() and p.name not in ("guide.json", ".guide.json.tmp")
             }
             self.report["artifacts"] = artifacts
-            self.report["performance"] = perf.end_guide()
+            self.report["performance"] = perf.end_guide(getattr(self.camera, "board", None))
             self.save()
         if error is not None:
             raise error

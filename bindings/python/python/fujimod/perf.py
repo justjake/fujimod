@@ -16,12 +16,14 @@ from typing import Any
 from ._native import perf as _native
 
 _boards: list[Any] = []
+_DEFAULT = object()
 
 
 def attach_board(board: object) -> None:
     """Make the board the guest-progress source until it closes."""
     detach_board(board)
     _boards.append(board)
+    _snapshot_counters(board)
 
 
 def detach_board(board: object) -> None:
@@ -34,8 +36,8 @@ def _board() -> Any | None:
     return _boards[-1] if _boards else None
 
 
-def _guest() -> tuple[int, int]:
-    board = _board()
+def _guest(board: Any = _DEFAULT) -> tuple[int, int]:
+    board = _board() if board is _DEFAULT else board
     if board is None:
         return 0, 0
     try:
@@ -44,8 +46,8 @@ def _guest() -> tuple[int, int]:
         return 0, 0
 
 
-def _snapshot_counters() -> None:
-    board = _board()
+def _snapshot_counters(board: Any = _DEFAULT) -> None:
+    board = _board() if board is _DEFAULT else board
     if board is None:
         return
     try:
@@ -57,12 +59,16 @@ def _snapshot_counters() -> None:
 
 def begin_guide(guide_id: str) -> None:
     _native.begin_guide(guide_id)
-    _snapshot_counters()
 
 
-def end_guide() -> dict[str, object]:
-    _snapshot_counters()
-    instructions, ticks = _guest()
+def snapshot_counters(board: Any = _DEFAULT) -> None:
+    """Capture the board's existing CPU and R-profile counters."""
+    _snapshot_counters(board)
+
+
+def end_guide(board: Any = _DEFAULT) -> dict[str, object]:
+    _snapshot_counters(board)
+    instructions, ticks = _guest(board)
     _native.end_span(instructions, ticks, [])
     summary = json.loads(_native.end_guide())
     if not isinstance(summary, dict):
@@ -75,14 +81,16 @@ def span(
     kind: str,
     wait_kind: str | None = None,
     properties: Mapping[str, int] | None = None,
+    board: Any = _DEFAULT,
 ) -> Iterator[None]:
     """Record one phase span, including guest progress across its body."""
-    instructions, ticks = _guest()
+    selected = _board() if board is _DEFAULT else board
+    instructions, ticks = _guest(selected)
     _native.begin_span(kind, wait_kind, instructions, ticks)
     try:
         yield
     finally:
-        end_instructions, end_ticks = _guest()
+        end_instructions, end_ticks = _guest(selected)
         rows = (
             []
             if properties is None
