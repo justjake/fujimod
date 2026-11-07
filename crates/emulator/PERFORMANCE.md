@@ -62,9 +62,11 @@ processor and drops it whenever a translation dies.
 
 With that cache the same loop runs 326.5 million guest instructions per engine
 CPU second in interactive policy (median of five 30M-instruction passes,
-thread CPU time) against 256.2 before it. A straight-line load/store loop
-reaches 1.37 billion. The helper-accounting path, which shares the lookup,
-goes from 119.3 to 252.9.
+thread CPU time) against 256.2 before it. The helper-accounting path, which
+shares the lookup, goes from 119.3 to 252.9. A straight-line load/store loop
+reaches 1.31-1.37 billion. These rates follow the machine: at a load average
+of 45 the same binary reports 232-299 on the call loop, a little over 1.3x the
+helper path, so compare runs taken back to back.
 
 ## Plan
 
