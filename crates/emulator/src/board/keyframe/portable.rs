@@ -112,6 +112,8 @@ impl Board {
         .any(|v| v.len() != n)
             || saved.pins.len() != n
             || saved.instructions.len() != n
+            || saved.epoch_instructions.len() != n
+            || saved.epoch_instructions.iter().zip(&saved.instructions).any(|(start, now)| start > now)
             || saved.accounted.len() != n
             || saved.mprofile.len() != n
             || saved.aprofile.len() != n

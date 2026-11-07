@@ -6,6 +6,19 @@ use fujimod_emulator_imaging::scene::{Frame, FramePixels, SensorFrames};
 use std::sync::{Arc, Mutex};
 
 #[test]
+fn durable_media_can_be_installed_before_a_continuing_epoch_runs() {
+    let source = card_session();
+    let spec = crate::durable::Spec { cards: vec!["sd".into()], nands: vec![] };
+    let saved = crate::durable::Media::capture(&source, &spec).unwrap();
+    let mut cold = card_session_with_epoch(Some((9000, vec![321])));
+    assert_eq!(cold.board.instruction_counts(), [321]);
+    saved.apply(&mut cold, &spec).unwrap();
+    assert_eq!(cold.board.now(), 9000);
+    cold.board.run_for_instructions(1, 8).unwrap();
+    assert!(saved.apply(&mut cold, &spec).is_err());
+}
+
+#[test]
 fn durable_card_uses_the_new_hosts_allocation_limit_without_changing_saved_files() {
     let mut source = card_session();
     let mut card = source.card_medium("sd").unwrap();
