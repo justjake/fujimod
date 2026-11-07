@@ -281,6 +281,7 @@ pub struct MemorySummary {
     pub footprint_bytes: Option<u64>,
     pub process_peak_rss_bytes: Option<u64>,
     pub sampled_run_peak_rss_bytes: Option<u64>,
+    pub sampled_run_peak_footprint_bytes: Option<u64>,
     pub lifetime_peak_footprint_bytes: Option<u64>,
 }
 

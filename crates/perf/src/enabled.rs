@@ -1,8 +1,11 @@
 //! The recording implementation. Cold paths mutate globals; hot paths only
 //! read two clocks and increment relaxed atomics.
 use crate::types::*;
+#[cfg(not(target_arch = "wasm32"))]
 use fastrace::collector::{Reporter, SpanRecord};
+#[cfg(not(target_arch = "wasm32"))]
 use fastrace::local::{LocalParentGuard, LocalSpan};
+#[cfg(not(target_arch = "wasm32"))]
 use fastrace::prelude::{Span, SpanContext};
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
@@ -86,16 +89,40 @@ static COUNTERS: Mutex<Vec<Result<BTreeMap<String, u64>, String>>> = Mutex::new(
 static RESIDENT: AtomicU64 = AtomicU64::new(0);
 static FOOTPRINT: AtomicU64 = AtomicU64::new(0);
 static SAMPLED_PEAK_RSS: AtomicU64 = AtomicU64::new(0);
+static SAMPLED_PEAK_FOOTPRINT: AtomicU64 = AtomicU64::new(0);
 static LIFETIME_FOOTPRINT: AtomicU64 = AtomicU64::new(0);
+#[cfg(not(target_arch = "wasm32"))]
 static ROOT: Mutex<Option<Span>> = Mutex::new(None);
+#[cfg(not(target_arch = "wasm32"))]
 static REPORTS: Mutex<Vec<SpanRecord>> = Mutex::new(Vec::new());
+#[cfg(not(target_arch = "wasm32"))]
 static LAST_TRACE: Mutex<Vec<SpanRecord>> = Mutex::new(Vec::new());
 
 thread_local! {
+    #[cfg(not(target_arch = "wasm32"))]
     static LOCAL_PARENT: RefCell<Option<LocalParentGuard>> = const { RefCell::new(None) };
     static IS_WORKER: Cell<bool> = const { Cell::new(false) };
     static DEVICE_CONTEXT: Cell<Option<DeviceContext>> = const { Cell::new(None) };
     static PENDING_SPANS: RefCell<Vec<PendingSpan>> = const { RefCell::new(Vec::new()) };
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Default)]
+struct SpanHandle;
+
+#[cfg(not(target_arch = "wasm32"))]
+type SpanHandle = LocalSpan;
+
+fn local_span(name: String) -> SpanHandle {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        LocalSpan::enter_with_local_parent(name)
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = name;
+        SpanHandle
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -175,8 +202,10 @@ pub fn register_devices(names: &[&'static str]) {
     registered.extend(names.iter().take(MAX_DEVICES).map(|name| (*name).to_owned()));
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 struct TraceReporter;
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Reporter for TraceReporter {
     fn report(&mut self, spans: Vec<SpanRecord>) {
         REPORTS
@@ -207,6 +236,7 @@ fn reset_ledger() {
     RESIDENT.store(0, Ordering::Relaxed);
     FOOTPRINT.store(0, Ordering::Relaxed);
     SAMPLED_PEAK_RSS.store(0, Ordering::Relaxed);
+    SAMPLED_PEAK_FOOTPRINT.store(0, Ordering::Relaxed);
     LIFETIME_FOOTPRINT.store(0, Ordering::Relaxed);
     *COUNTER_BASELINE.lock().unwrap_or_else(|e| e.into_inner()) = None;
     COUNTERS
@@ -215,12 +245,16 @@ fn reset_ledger() {
         .clear();
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn install_reporter() {
     static INSTALLED: OnceLock<()> = OnceLock::new();
     INSTALLED.get_or_init(|| {
         fastrace::set_reporter(TraceReporter, fastrace::collector::Config::default());
     });
 }
+
+#[cfg(target_arch = "wasm32")]
+fn install_reporter() {}
 
 pub fn begin_guide(id: &str) {
     reset_ledger();
@@ -231,13 +265,16 @@ pub fn begin_guide(id: &str) {
     ACTIVE.store(true, Ordering::Relaxed);
     sample_memory();
     install_reporter();
-    REPORTS.lock().unwrap_or_else(|e| e.into_inner()).clear();
-    let root = Span::root(id.to_owned(), SpanContext::random());
-    let guard = root.set_local_parent();
-    *ROOT.lock().unwrap_or_else(|e| e.into_inner()) = Some(root);
-    LOCAL_PARENT.with(|slot| {
-        *slot.borrow_mut() = Some(guard);
-    });
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        REPORTS.lock().unwrap_or_else(|e| e.into_inner()).clear();
+        let root = Span::root(id.to_owned(), SpanContext::random());
+        let guard = root.set_local_parent();
+        *ROOT.lock().unwrap_or_else(|e| e.into_inner()) = Some(root);
+        LOCAL_PARENT.with(|slot| {
+            *slot.borrow_mut() = Some(guard);
+        });
+    }
     begin_span(SpanKind::Guide, GuestProgress::default());
 }
 
@@ -326,14 +363,17 @@ pub fn end_guide() -> GuideSummary {
     let counters = counter_deltas();
     let memory = memory_summary();
 
-    let root = ROOT.lock().unwrap_or_else(|e| e.into_inner()).take();
-    LOCAL_PARENT.with(|slot| {
-        slot.borrow_mut().take();
-    });
-    drop(root);
-    fastrace::flush();
-    *LAST_TRACE.lock().unwrap_or_else(|e| e.into_inner()) =
-        std::mem::take(&mut *REPORTS.lock().unwrap_or_else(|e| e.into_inner()));
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let root = ROOT.lock().unwrap_or_else(|e| e.into_inner()).take();
+        LOCAL_PARENT.with(|slot| {
+            slot.borrow_mut().take();
+        });
+        drop(root);
+        fastrace::flush();
+        *LAST_TRACE.lock().unwrap_or_else(|e| e.into_inner()) =
+            std::mem::take(&mut *REPORTS.lock().unwrap_or_else(|e| e.into_inner()));
+    }
 
     GuideSummary {
         schema: 1,
@@ -431,7 +471,7 @@ pub struct SpanGuard {
     index: usize,
     start_raw: u64,
     guest: Option<GuestProgress>,
-    span: Option<LocalSpan>,
+    span: Option<SpanHandle>,
 }
 
 impl SpanGuard {
@@ -461,7 +501,7 @@ pub fn span(kind: SpanKind) -> SpanGuard {
             span: None,
         };
     }
-    let local = LocalSpan::enter_with_local_parent(kind.name());
+    let local = local_span(kind.name().to_owned());
     SpanGuard {
         index: kind.index(),
         start_raw: raw_now(),
@@ -474,7 +514,7 @@ struct PendingSpan {
     index: usize,
     start_raw: u64,
     guest_start: GuestProgress,
-    span: LocalSpan,
+    span: SpanHandle,
 }
 
 pub fn begin_span(kind: SpanKind, guest: GuestProgress) -> bool {
@@ -485,7 +525,7 @@ pub fn begin_span(kind: SpanKind, guest: GuestProgress) -> bool {
         Some(wait) => format!("wait.{}", wait.name()),
         None => kind.name().to_owned(),
     };
-    let span = LocalSpan::enter_with_local_parent(name);
+    let span = local_span(name);
     PENDING_SPANS.with(|pending| {
         pending.borrow_mut().push(PendingSpan {
             index: kind.index(),
@@ -505,6 +545,7 @@ pub fn end_span(guest: GuestProgress, properties: &[(&str, u64)]) {
         return;
     };
     let _ = &pending.span;
+    #[cfg(not(target_arch = "wasm32"))]
     if !properties.is_empty() {
         LocalSpan::add_properties(|| {
             properties
@@ -609,6 +650,7 @@ pub fn add_bytes(counter: ByteCounter, bytes: u64) {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn write_chrome_trace(path: &Path) -> io::Result<()> {
     fastrace::flush();
     let records = LAST_TRACE.lock().unwrap_or_else(|e| e.into_inner());
@@ -654,6 +696,17 @@ pub fn write_chrome_trace(path: &Path) -> io::Result<()> {
     std::fs::rename(temporary, path)
 }
 
+#[cfg(target_arch = "wasm32")]
+pub fn write_chrome_trace(path: &Path) -> io::Result<()> {
+    if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(
+        path,
+        b"{\"displayTimeUnit\":\"ns\",\"traceEvents\":[]}",
+    )
+}
+
 fn memory_summary() -> MemorySummary {
     let fields = sample_memory();
     MemorySummary {
@@ -662,6 +715,8 @@ fn memory_summary() -> MemorySummary {
         process_peak_rss_bytes: peak_rss(),
         sampled_run_peak_rss_bytes: (SAMPLED_PEAK_RSS.load(Ordering::Relaxed) != 0)
             .then(|| SAMPLED_PEAK_RSS.load(Ordering::Relaxed)),
+        sampled_run_peak_footprint_bytes: (SAMPLED_PEAK_FOOTPRINT.load(Ordering::Relaxed) != 0)
+            .then(|| SAMPLED_PEAK_FOOTPRINT.load(Ordering::Relaxed)),
         lifetime_peak_footprint_bytes: fields.lifetime_footprint,
     }
 }
@@ -681,6 +736,7 @@ fn sample_memory() -> MemoryFields {
     }
     if let Some(footprint) = fields.footprint {
         FOOTPRINT.store(footprint, Ordering::Relaxed);
+        SAMPLED_PEAK_FOOTPRINT.fetch_max(footprint, Ordering::Relaxed);
     }
     if let Some(lifetime) = fields.lifetime_footprint {
         LIFETIME_FOOTPRINT.fetch_max(lifetime, Ordering::Relaxed);

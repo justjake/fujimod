@@ -17,12 +17,12 @@ default = []
 perf = []
 
 [dependencies]
-fastrace = { version = "0.7", features = ["enable"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 fujimod-workspace-hack.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+fastrace = { version = "0.7", features = ["enable"] }
 quanta = "0.12"
 
 [target.'cfg(unix)'.dependencies]
