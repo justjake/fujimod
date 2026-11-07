@@ -1,5 +1,6 @@
 import { For, Show, createMemo, createSignal, onSettled } from 'solid-js';
 import { SiteHeader } from '../ui/site-header';
+import { devicePolicy } from '../devices/policy.ts';
 import {
   deviceRequest,
   googleSignInUrl,
@@ -40,7 +41,9 @@ export default function Device() {
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal('');
 
-  const scopes = createMemo(() => (request()?.scope ?? '').split(' ').filter(Boolean));
+  /** What this client is granted, which is the policy, not the scopes it asked for. */
+  const policy = createMemo(() => devicePolicy(request()?.client_id));
+  const permissions = createMemo(() => policy()?.permissions ?? []);
 
   async function review(userCode: string) {
     setError('');
@@ -139,10 +142,10 @@ export default function Device() {
 
         <Show when={request()}>
           <section class="device-request">
-            <h2>{request()!.client_id ?? 'Camera'}</h2>
-            <Show when={scopes().length}>
+            <h2>{policy()?.name ?? request()!.client_id ?? 'Camera'}</h2>
+            <Show when={permissions().length}>
               <ul class="device-scopes">
-                <For each={scopes()}>{(scope) => <li>{scope}</li>}</For>
+                <For each={permissions()}>{(permission) => <li>{permission}</li>}</For>
               </ul>
             </Show>
             <Show
