@@ -243,6 +243,7 @@ pub struct SpanSummary {
     pub wait: Option<String>,
     pub count: u64,
     pub elapsed_ns: u64,
+    pub thread_cpu_ns: u64,
     pub instructions: u64,
     pub ticks: u64,
 }

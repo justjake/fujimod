@@ -56,6 +56,7 @@ impl CellCounts {
 struct SpanCounts {
     count: AtomicU64,
     raw: AtomicU64,
+    thread_cpu: AtomicU64,
     instructions: AtomicU64,
     ticks: AtomicU64,
 }
@@ -65,6 +66,7 @@ impl SpanCounts {
         Self {
             count: AtomicU64::new(0),
             raw: AtomicU64::new(0),
+            thread_cpu: AtomicU64::new(0),
             instructions: AtomicU64::new(0),
             ticks: AtomicU64::new(0),
         }
@@ -219,6 +221,7 @@ fn reset_ledger() {
     for span in &SPANS {
         span.count.store(0, Ordering::Relaxed);
         span.raw.store(0, Ordering::Relaxed);
+        span.thread_cpu.store(0, Ordering::Relaxed);
         span.instructions.store(0, Ordering::Relaxed);
         span.ticks.store(0, Ordering::Relaxed);
     }
@@ -308,6 +311,7 @@ pub fn end_guide() -> GuideSummary {
                 wait: wait.map(str::to_owned),
                 count,
                 elapsed_ns: scale(counts.raw.load(Ordering::Relaxed)),
+                thread_cpu_ns: counts.thread_cpu.load(Ordering::Relaxed),
                 instructions: counts.instructions.load(Ordering::Relaxed),
                 ticks: counts.ticks.load(Ordering::Relaxed),
             })
@@ -470,6 +474,7 @@ pub fn set_cpu_counters(counters: Vec<Result<BTreeMap<String, u64>, String>>) {
 pub struct SpanGuard {
     index: usize,
     start_raw: u64,
+    start_thread_ns: u64,
     guest: Option<GuestProgress>,
     span: Option<SpanHandle>,
 }
@@ -486,8 +491,13 @@ impl Drop for SpanGuard {
             return;
         }
         let elapsed = elapsed_raw(self.start_raw);
+        let thread_cpu_ns = thread_cpu_ns_now().saturating_sub(self.start_thread_ns);
         let guest = self.guest.unwrap_or_default();
-        record_span(self.index, elapsed, guest);
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.span.is_some() {
+            LocalSpan::add_properties(|| [("thread_cpu_ns".to_owned(), thread_cpu_ns.to_string())]);
+        }
+        record_span(self.index, elapsed, thread_cpu_ns, guest);
         self.span.take();
     }
 }
@@ -497,6 +507,7 @@ pub fn span(kind: SpanKind) -> SpanGuard {
         return SpanGuard {
             index: kind.index(),
             start_raw: 0,
+            start_thread_ns: 0,
             guest: None,
             span: None,
         };
@@ -505,6 +516,7 @@ pub fn span(kind: SpanKind) -> SpanGuard {
     SpanGuard {
         index: kind.index(),
         start_raw: raw_now(),
+        start_thread_ns: thread_cpu_ns_now(),
         guest: None,
         span: Some(local),
     }
@@ -513,6 +525,7 @@ pub fn span(kind: SpanKind) -> SpanGuard {
 struct PendingSpan {
     index: usize,
     start_raw: u64,
+    start_thread_ns: u64,
     guest_start: GuestProgress,
     span: SpanHandle,
 }
@@ -530,6 +543,7 @@ pub fn begin_span(kind: SpanKind, guest: GuestProgress) -> bool {
         pending.borrow_mut().push(PendingSpan {
             index: kind.index(),
             start_raw: raw_now(),
+            start_thread_ns: thread_cpu_ns_now(),
             guest_start: guest,
             span,
         });
@@ -545,23 +559,34 @@ pub fn end_span(guest: GuestProgress, properties: &[(&str, u64)]) {
         return;
     };
     let _ = &pending.span;
+    let thread_cpu_ns = thread_cpu_ns_now().saturating_sub(pending.start_thread_ns);
     #[cfg(not(target_arch = "wasm32"))]
-    if !properties.is_empty() {
-        LocalSpan::add_properties(|| {
-            properties
-                .iter()
-                .map(|(key, value)| ((*key).to_owned(), value.to_string()))
-        });
-    }
+    LocalSpan::add_properties(|| {
+        properties
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), value.to_string()))
+            .chain(std::iter::once((
+                "thread_cpu_ns".to_owned(),
+                thread_cpu_ns.to_string(),
+            )))
+    });
     let elapsed = elapsed_raw(pending.start_raw);
-    record_span(pending.index, elapsed, guest.delta(pending.guest_start));
+    record_span(
+        pending.index,
+        elapsed,
+        thread_cpu_ns,
+        guest.delta(pending.guest_start),
+    );
     drop(pending);
 }
 
-fn record_span(index: usize, elapsed_raw: u64, guest: GuestProgress) {
+fn record_span(index: usize, elapsed_raw: u64, thread_cpu_ns: u64, guest: GuestProgress) {
     let counts = &SPANS[index];
     counts.count.fetch_add(1, Ordering::Relaxed);
     counts.raw.fetch_add(elapsed_raw, Ordering::Relaxed);
+    counts
+        .thread_cpu
+        .fetch_add(thread_cpu_ns, Ordering::Relaxed);
     counts
         .instructions
         .fetch_add(guest.instructions, Ordering::Relaxed);
@@ -659,7 +684,17 @@ pub fn write_chrome_trace(path: &Path) -> io::Result<()> {
         .map(|record| {
             let mut args = serde_json::Map::new();
             for (key, value) in &record.properties {
-                args.insert(key.clone().into_owned(), value.clone().into_owned().into());
+                let key = key.clone().into_owned();
+                let value = value.clone().into_owned();
+                let value = if key == "thread_cpu_ns" {
+                    value
+                        .parse::<u64>()
+                        .map(serde_json::Value::from)
+                        .unwrap_or_else(|_| value.into())
+                } else {
+                    value.into()
+                };
+                args.insert(key, value);
             }
             args.insert(
                 "span_id".into(),
@@ -823,9 +858,28 @@ fn thread_cpu_seconds() -> Option<f64> {
     Some(time.tv_sec as f64 + time.tv_nsec as f64 / 1e9)
 }
 
+#[cfg(unix)]
+fn thread_cpu_ns_now() -> u64 {
+    let mut time = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    if unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut time) } != 0 {
+        return 0;
+    }
+    (time.tv_sec as u64)
+        .saturating_mul(1_000_000_000)
+        .saturating_add(time.tv_nsec as u64)
+}
+
 #[cfg(not(unix))]
 fn thread_cpu_seconds() -> Option<f64> {
     None
+}
+
+#[cfg(not(unix))]
+fn thread_cpu_ns_now() -> u64 {
+    0
 }
 
 #[cfg(unix)]
@@ -887,6 +941,7 @@ mod tests {
             .unwrap();
         assert_eq!(guide.count, 1);
         assert_eq!((guide.instructions, guide.ticks), (40, 200));
+        assert!(guide.thread_cpu_ns > 0);
         let wait = summary
             .spans
             .iter()
@@ -895,6 +950,7 @@ mod tests {
         assert_eq!(wait.wait.as_deref(), Some("debounce"));
         assert_eq!(wait.count, 1);
         assert_eq!((wait.instructions, wait.ticks), (25, 60));
+        assert!(wait.thread_cpu_ns > 0);
     }
 
     #[test]
@@ -997,11 +1053,13 @@ mod tests {
         add_bytes(ByteCounter::HashedBytes, 96);
         let _device = device(1, "card", DevicePhase::Event);
         drop(_device);
+        end_span(GuestProgress::default(), &[]);
         let first = end_guide().to_value();
         assert_eq!(first["bytes"]["hashed-bytes"], 4192);
         assert_eq!(first["devices"][0]["calls"], 1);
         assert_eq!(first["schema"], 1);
         assert!(first["clock"].is_string());
+        assert!(first["spans"][0]["thread_cpu_ns"].is_u64());
         begin_guide("reset");
         let second = end_guide();
         assert_eq!(second.bytes["hashed-bytes"], 0);
