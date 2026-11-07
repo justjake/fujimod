@@ -766,8 +766,17 @@ impl Cpu for Core {
                     usize::from(request.until.is_some()),
                 )
             })?;
-            // Address exits are compiled into translation blocks.
-            self.invalidate_code(None)?;
+            // Exits are compiled into the blocks that contain them. Discard
+            // only those blocks when the exit moves; unrelated translations
+            // stay valid.
+            if let Some(old) = self.run_until.get() {
+                let end = old.saturating_add(4);
+                self.invalidate_code(Some((old, end)))?;
+            }
+            if let Some(new) = request.until {
+                let end = new.saturating_add(4);
+                self.invalidate_code(Some((new, end)))?;
+            }
             self.run_until.set(request.until);
         }
         self.callback_error.borrow_mut().take();
@@ -1211,6 +1220,40 @@ mod tests {
             .unwrap_or_else(|e| panic!("{begin:#x}/{until:?}: {e}"));
             assert_eq!(reg(&cpu, arm::CORE[0]), value, "{begin:#x}/{until:?}");
         }
+    }
+    #[test]
+    fn moving_an_address_exit_keeps_unrelated_translations() {
+        let cpu = library().open(Model::CortexR5F, 1024 * 1024).unwrap();
+        for page in [0, 0x2000] {
+            cpu.map_zeroed(page, 0x1000, 7).unwrap();
+            cpu.write_memory(
+                page,
+                &[0xe2800001u32, 0xeafffffdu32]
+                    .into_iter()
+                    .flat_map(u32::to_le_bytes)
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
+        }
+        let run = |begin, until| {
+            cpu.run(Run {
+                begin,
+                until,
+                instructions: Some(1000),
+                watchdog_us: 0,
+            })
+            .unwrap();
+        };
+        run(0, None);
+        run(0x2000, None);
+        let before = cpu.exit_counters().unwrap()["translations"];
+        // The new exit is on page zero. The loop on page two keeps its block.
+        run(0x2000, Some(4));
+        assert_eq!(
+            cpu.exit_counters().unwrap()["translations"],
+            before,
+            "an exit on another page must not retranslate this loop"
+        );
     }
     #[test]
     fn synthetic_arm_runs_through_typed_registers_maps_hooks_and_snapshots() {

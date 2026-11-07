@@ -209,6 +209,9 @@ impl Core {
             return Err("R-profile backing must be mapped through its execution owner".into());
         }
         cpu.set_instruction_counter(true)?;
+        if std::env::var_os("FUJIMOD_LEGACY_BLOCK_ACCOUNTING").is_some() {
+            cpu.set_legacy_block_accounting(true)?;
+        }
         let record = cpu
             .accounting()
             .ok_or("missing R-profile accounting record")?;

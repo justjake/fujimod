@@ -6,11 +6,12 @@ pub mod continuation;
 pub mod decoder;
 #[cfg(test)]
 mod decoder_tests;
+#[cfg(test)]
+mod accounting_equivalence_tests;
 pub mod discovery;
 pub mod factory;
 pub mod harness;
 mod host;
-mod host_profile;
 mod interactive;
 pub mod keyframe;
 mod loops;
