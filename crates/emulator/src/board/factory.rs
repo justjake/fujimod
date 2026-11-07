@@ -72,6 +72,7 @@ pub const TRANSLATION_CACHE_BYTES: u32 = 128 << 20;
 pub struct Options {
     pub engine: Engine,
     translation_cache_size_bytes: Option<u32>,
+    epoch: Option<(u64, Vec<u64>)>,
 }
 
 impl Options {
@@ -79,7 +80,14 @@ impl Options {
         Self {
             engine,
             translation_cache_size_bytes: None,
+            epoch: None,
         }
+    }
+
+    /// Start fresh devices and processors on a continuing virtual timeline.
+    pub fn with_epoch(mut self, tick: u64, previous_instructions: Vec<u64>) -> Self {
+        self.epoch = Some((tick, previous_instructions));
+        self
     }
 
     /// Set a smaller cache for focused tests.
@@ -463,13 +471,19 @@ impl Graph {
             }
         }
         let released = self.processors.iter().map(|p| p.released).collect();
-        let mut board = Board::new(
+        let (start_tick, previous_instructions) = match options.epoch {
+            Some((tick, counts)) => (tick, Some(counts)),
+            None => (0, None),
+        };
+        let mut board = Board::new_at(
             cpus,
             bus,
             self.instructions_per_tick,
             interrupts,
             released,
             ram,
+            start_tick,
+            previous_instructions,
         )?;
         board.translation_cache_size_bytes = translation_cache_size_bytes;
         board.state.borrow_mut().decoders = super::decoder::Decoders::new(self.decoders);

@@ -268,8 +268,28 @@ impl Board {
         released: Vec<bool>,
         memory: memory::Memory,
     ) -> Result<Self, String> {
+        Self::new_at(cpus, bus, ratio, interrupts, released, memory, 0, None)
+    }
+
+    /// Construct fresh processors and devices on a continuing host timeline.
+    pub(crate) fn new_at(
+        cpus: Vec<Box<dyn Cpu>>,
+        bus: Bus,
+        ratio: Ratio,
+        interrupts: Option<InterruptMap>,
+        released: Vec<bool>,
+        memory: memory::Memory,
+        start_tick: u64,
+        previous_instructions: Option<Vec<u64>>,
+    ) -> Result<Self, String> {
         if cpus.is_empty() || cpus.len() != released.len() || !released.iter().any(|r| *r) {
             return Err("invalid released processor set".into());
+        }
+        let instructions = previous_instructions.unwrap_or_else(|| vec![0; cpus.len()]);
+        if instructions.len() != cpus.len()
+            || instructions.iter().try_fold(0u64, |sum, n| sum.checked_add(*n)).is_none()
+        {
+            return Err("invalid prior processor instruction counts".into());
         }
         if let Some(g) = &interrupts {
             g.validate(cpus.len())?;
@@ -303,7 +323,7 @@ impl Board {
             clock_limit: None,
             memory: memory.clone(),
             bus,
-            timeline: Timeline::new(ratio, n)?,
+            timeline: Timeline::new_at(ratio, n, start_tick)?,
             interrupts,
             core_interrupts: (0..n).map(|_| None).collect(),
             interrupt_changed: vec![false; n],
@@ -313,7 +333,7 @@ impl Board {
             events: vec![false; n],
             pins: vec![(false, false); n],
             interrupt_delivery: vec![true; n],
-            instructions: vec![0; n],
+            instructions,
             accounted: vec![0; n],
             deadlines: vec![None; count],
             generations: vec![0; count],
