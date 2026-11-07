@@ -1581,6 +1581,24 @@ pub struct JpegCodec {
     pub size: u64,
 }
 
+/// X-Processor Pro movie H.264 encoder.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareH264Encoder"))]
+pub struct H264Encoder {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Interrupt line of the completion status.
+    pub irq_route: u32,
+    /// Time from a start to the completion of its run, in device ticks.
+    pub run_ticks: u64,
+    /// Declared size.
+    pub size: u64,
+}
+
 /// Declared input buffer facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1928,6 +1946,9 @@ pub struct RegisterLayouts {
     /// Declared X-Processor Pro JPEG decoder.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub jpeg_decoder: Option<JpegCodec>,
+    /// Declared X-Processor Pro movie H.264 encoder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub h264_encoder: Option<H264Encoder>,
     /// Declared HDMI transmitter without a sink.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hdmi_tx: Option<HdmiTransmitter>,

@@ -2624,6 +2624,14 @@ class HardwareGpio(TypedDict, total=False):
     size: Required[int]
 
 
+class HardwareH264Encoder(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    irq_route: Required[int]
+    run_ticks: Required[int]
+    size: Required[int]
+
+
 class HardwareHdmiTransmitter(TypedDict, total=False):
     base: Required[int]
     basis: Required[str]
@@ -2901,6 +2909,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     frame_sync: NotRequired[HardwareFrameSync | None]
     gic: NotRequired[HardwareGic | None]
     gpio: NotRequired[HardwareGpio | None]
+    h264_encoder: NotRequired[HardwareH264Encoder | None]
     hdmi_tx: NotRequired[HardwareHdmiTransmitter | None]
     imaging: NotRequired[HardwareImagingRegisters | None]
     imaging_control: NotRequired[HardwareImagingControl | None]

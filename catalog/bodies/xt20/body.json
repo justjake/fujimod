@@ -84,6 +84,23 @@
     "profiles": {
       "xt20-discovery": {
         "dram_basis": "Camera MMU first-level table (X-T20 2.11, ff80 read of 0x108000, 2026-10-20): virtual 0-0x3fffffff is normal memory over physical 0. The second bank at 0x80000000 is not declared; no RAM population was measured.",
+        "register_maps": {
+          "register_blocks": [
+            {
+              "base": 4294291456,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Register block at 0xfff5b000 of X-T20 2.11 section 5. 0xca1970 reads +0x00 and 0xca1b98 writes +0x00, +0x04, +0x0c and +0x10 from the parameter block at 0x114be2c; no status bit, poll, interrupt or data move is known. The H.264 driver 0x15652c0..0x15663ec never references this page, so it is a separate register block, not a clock or gate for 0xfff5c000. The words read back their last write."
+            }
+          ],
+          "h264_encoder": {
+            "base": 4294295552,
+            "size": 4096,
+            "irq_route": 110,
+            "run_ticks": 800000,
+            "basis": "Movie image/H.264 front-end of X-T20 2.11 at 0xfff5c000 (driver 0x15652c0..0x15663ec; UniH264 wrappers 0x16b72d8/0x16b7318/0x16b74d8). The driver registers source 0x31 at 0x1565430; row 0x31 of table 0xed4720 is GIC line 0x6e (110). Input +0x100/+0x104/+0x108 are context +0x30/+0x38/+0x34 (0x184c9d0); output +0x01c/+0x028/+0x02c are context +0x04/+0x18/+0x1c through config +0x94/+0x98/+0x9c (0x184c8c4, 0x16b74d8, 0x1566200). The only writer of that context, 0x184c9d0, clears 0x44 bytes before storing the input pointers, so a stock recording presents 0/0/0; the model accepts a zero descriptor and keeps the frame in its diagnostic buffer. A non-zero descriptor keeps the model's declared +0x01c base and +0x028 end; +0x02c is stored only, and a base/end/next ring law is not witnessed. This node does not feed the MOV writer: the writer's stream descriptor is 0x1c26dfc {pointer, length, state, flag}, filled by codec callback 0x167aaf4 registered at 0x1bdd024 by 0x1554e30 (writer 0x167bff8). The codec library 0x1555xxx runs the 0xfffcc4xx window, reports the bitstream address at 0xfffcc4ac and sizes at 0xfffccd88/0xfffccd8c (source 0x3e, line 137), and the writer appends NALs at 0x167c354 with a 4-byte big-endian length at 0x167c50c..0x167c5ac. Framing is proved Annex B by parser 0x1553bc0..0x1554234 (00 00 00 01 start codes, SPS/PPS to 0x1a4fbc8/0x1a4fbac). Stock clips key every 60 samples, so GOP is 60. run_ticks 800000 is one 60 Hz frame in 48 MHz timer ticks (MOV rate table 0x167b69c maps selector 5 to 60; stock clips use 60000/1001); the encoder's completion latency within the frame is not measured."
+          }
+        },
         "encoders": [
           {
             "name": "controls-encoder-front",

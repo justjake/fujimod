@@ -1589,6 +1589,48 @@
       ],
       "type": "object"
     },
+    "HardwareH264Encoder": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro movie H.264 encoder.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "irq_route": {
+          "description": "Interrupt line of the completion status.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "run_ticks": {
+          "description": "Time from a start to the completion of its run, in device ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "irq_route",
+        "run_ticks",
+        "size"
+      ],
+      "type": "object"
+    },
     "HardwareHdmiTransmitter": {
       "additionalProperties": false,
       "description": "DesignWare HDMI TX controller with no sink attached.",
@@ -2687,6 +2729,17 @@
             }
           ],
           "description": "Declared gpio."
+        },
+        "h264_encoder": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareH264Encoder"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro movie H.264 encoder."
         },
         "hdmi_tx": {
           "anyOf": [

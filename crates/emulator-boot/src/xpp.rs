@@ -18,7 +18,7 @@ use fujimod_catalog_run_inputs::HardwareReset;
 use fujimod_emulator::board::factory;
 use fujimod_emulator_cpu::Register;
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
+use std::{borrow::Cow, collections::BTreeMap};
 
 /// Performance-counter cycles per board tick of each application core.
 const CYCLES_PER_TICK: u64 = 64;
@@ -135,6 +135,35 @@ fn body_profile<'a>(resolved: &'a ResolvedConfiguration) -> Result<&'a BodyProfi
                 body.id, choice.body_profile_id
             )
         })
+}
+
+/// Add body-specific registers to the shared SoC profile. The shared profile
+/// wins every field it declares; a body may add a register block and the
+/// H.264 layout that block belongs to (X-T20 2.11 is the only such body).
+fn register_maps<'a>(
+    soc: &'a RegisterLayouts,
+    body: Option<&RegisterLayouts>,
+) -> Cow<'a, RegisterLayouts> {
+    let Some(body) = body else {
+        return Cow::Borrowed(soc);
+    };
+    if body.h264_encoder.is_none() && body.register_blocks.is_empty() {
+        return Cow::Borrowed(soc);
+    }
+    let mut maps = soc.clone();
+    if maps.h264_encoder.is_none() {
+        maps.h264_encoder = body.h264_encoder.clone();
+    }
+    for block in &body.register_blocks {
+        if !maps
+            .register_blocks
+            .iter()
+            .any(|existing| existing.base == block.base)
+        {
+            maps.register_blocks.push(block.clone());
+        }
+    }
+    Cow::Owned(maps)
 }
 
 /// Command-dial encoder nodes of the selected body profile. Each declaration
@@ -637,6 +666,15 @@ fn nodes(
             );
         }
     }
+    if let Some(codec) = &maps.h264_encoder {
+        node(
+            "h264-encoder".into(),
+            json!({
+                "kind": "h264", "base": codec.base, "irq": codec.irq_route,
+                "run_ticks": codec.run_ticks,
+            }),
+        );
+    }
     if let Some(hdmi) = &maps.hdmi_tx {
         node("hdmi".into(), json!({ "kind": "hdmi", "base": hdmi.base }));
     }
@@ -871,21 +909,13 @@ fn ram_banks(regions: &[MemoryRegion]) -> Vec<(u64, u64)> {
 
 pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result<Assembly, String> {
     let selection = &resolved.reference;
-    let profile = soc_profile(resolved)?;
-    if profile.runtime_abi != "armv7a-unicorn-v1" || profile.cpu_model != "Cortex-A7" {
+    let soc = soc_profile(resolved)?;
+    if soc.runtime_abi != "armv7a-unicorn-v1" || soc.cpu_model != "Cortex-A7" {
         return Err(format!(
             "SoC profile of {} is not an ARMv7-A Cortex-A7 application profile",
             selection.soc.id
         ));
     }
-    let maps = profile
-        .register_maps
-        .as_ref()
-        .ok_or("X-Processor Pro assembly requires the SoC register maps")?;
-    let gic = maps
-        .gic
-        .as_ref()
-        .ok_or("X-Processor Pro assembly requires the GIC map")?;
     let Some(ApplicationHardware::Armv7a {
         configuration_base,
         caches,
@@ -903,6 +933,16 @@ pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result
         .reset;
     let body = &selection.body;
     let profile = body_profile(resolved)?;
+    let maps = register_maps(
+        soc.register_maps
+            .as_ref()
+            .ok_or("X-Processor Pro assembly requires the SoC register maps")?,
+        profile.register_maps.as_ref(),
+    );
+    let gic = maps
+        .gic
+        .as_ref()
+        .ok_or("X-Processor Pro assembly requires the GIC map")?;
     let (numerator, denominator) = reset
         .execution_clock
         .as_ref()
@@ -920,7 +960,7 @@ pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result
     )?;
     let cores = execution.processors.len() as u64;
     let mut node_list = nodes(
-        maps,
+        maps.as_ref(),
         &reset,
         dram_address_space_limit_bytes,
         &ram_banks(&selection.soc.memory_regions),
@@ -1056,6 +1096,36 @@ mod tests {
     }
 
     #[test]
+    fn only_the_xt20_body_adds_the_h264_layout() {
+        for (configuration, expected) in [
+            ("gfx50r-311", false),
+            ("xt2-441", false),
+            ("xt20-211", true),
+        ] {
+            let resolved = ResolvedConfiguration::bundled(configuration).unwrap();
+            let soc = soc_profile(&resolved)
+                .unwrap()
+                .register_maps
+                .as_ref()
+                .unwrap();
+            let body = body_profile(&resolved).unwrap().register_maps.as_ref();
+            let maps = register_maps(soc, body);
+            assert_eq!(
+                maps.h264_encoder.is_some(),
+                expected,
+                "{configuration} H.264 encoder"
+            );
+            assert_eq!(
+                maps.register_blocks
+                    .iter()
+                    .any(|block| block.base == 0xfff5_b000),
+                expected,
+                "{configuration} H.264 idle block"
+            );
+        }
+    }
+
+    #[test]
     fn x_t20_graph_is_built_from_the_catalog_and_body_inputs() {
         let assets = assets();
         let assembly = xt20(&assets).unwrap();
@@ -1084,6 +1154,15 @@ mod tests {
         assert_eq!(devices["cpus"].as_array().unwrap().len(), 2);
         assert_eq!(devices["cpus"][1]["mpidr"], 0x8000_0001_u64);
         assert_eq!(devices["cpus"][0]["configuration_base"], 0xffff_0000_u64);
+        assert_eq!(node(devices, "h264-encoder")["base"], 0xfff5_c000_u64);
+        assert!(
+            devices["nodes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|node| node["model"]["base"] == 0xfff5_b000_u64),
+            "the body adds the 0xfff5b000 idle register block"
+        );
 
         // Command dials: one encoder node per declared body connection, its pads
         // taken from the connection and its edge pacing from the body profile.
