@@ -1,8 +1,9 @@
-//! MT5931 HIF command/event ABI and one open virtual access point.
+//! MT5931 HIF command/event ABI and one virtual access point, open or WPA2-PSK.
 //! Protocol references are in README.md. The endpoint has no RF peers unless
 //! an access point is configured, and it consumes only register and FIFO
 //! transactions.
 use crate::wifi_module::virtual_network::{AccessPoint, Network};
+use crate::wifi_module::wpa2::{self, Authenticator, Phase};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
@@ -17,6 +18,13 @@ const EVENT_CHANNEL_PRIVILEGE: u8 = 0x18;
 /// WHISR bits 0-2 (TX, RX0 and RX1 done) clear when read in the default
 /// register mode.
 const READ_CLEAR_MASK: u32 = 0x7;
+
+/// X70 board ticks per millisecond (the run configuration's 12 MHz clock).
+const TICKS_PER_MILLISECOND: u64 = 12_000;
+/// How often an open host TCP stream is polled for new data: 10 ms.
+const HOST_POLL_TICKS: u64 = 120_000;
+/// Function-1 block size stock configures before any HIF transfer.
+const SDIO_BLOCK_BYTES: usize = 512;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -66,11 +74,19 @@ pub struct Endpoint {
     rx0: VecDeque<Vec<u8>>,
     rx1: VecDeque<Vec<u8>>,
     station: Station,
+    #[serde(default)]
+    wpa2: Option<Authenticator>,
+    /// A keyed exchange has failed; refuse further station traffic until the
+    /// next authentication attempt resets it.
+    #[serde(default)]
+    wpa2_rejected: bool,
     network: Network,
     wlan_ready: bool,
     ownership: u32,
     commands: u64,
     ticks: u64,
+    #[serde(default)]
+    next_poll: u64,
     last_command: (u8, u8),
 }
 
@@ -127,6 +143,10 @@ impl Endpoint {
             "station": {"channel": self.station.channel, "bssid": self.station.bssid,
                 "address": self.station.address, "selector": self.station.selector,
                 "associated": self.station.associated},
+            "wpa2": self.wpa2.as_ref().map(|state| serde_json::json!({
+                "phase": state.phase, "sequence": state.sequence(),
+            })),
+            "wpa2_rejected": self.wpa2_rejected,
             "network": self.network.fingerprint(),
             "wlan_ready": self.wlan_ready,
             "ownership": self.ownership,
@@ -271,6 +291,37 @@ impl Endpoint {
         }
     }
 
+    /// Poll the host-side TCP streams when the poll interval has elapsed.
+    /// Host replies arrive while the guest is blocked in a receive, so the
+    /// device needs its own deadline instead of waiting for an RX read.
+    pub fn poll_host(&mut self, now: u64) -> bool {
+        if now < self.next_poll || !self.network.has_connections() {
+            return false;
+        }
+        self.next_poll = now.saturating_add(HOST_POLL_TICKS);
+        // Stock lists the receive batch through the request-flag window and
+        // then reads exactly those packet lengths. Leave new frames on the
+        // host stream until the FIFO drains so that listing stays exact.
+        if !self.rx1.is_empty() {
+            return false;
+        }
+        self.ticks = now / TICKS_PER_MILLISECOND;
+        self.poll_network();
+        true
+    }
+
+    /// The board time at which the next host poll is due.
+    pub fn next_host_poll(&self, now: u64) -> Option<u64> {
+        if !self.network.has_connections() {
+            return None;
+        }
+        Some(if self.next_poll > now {
+            self.next_poll
+        } else {
+            now
+        })
+    }
+
     fn push_frame(&mut self, kind: u8, frame: &[u8]) {
         if self.rx1.len() >= 16 {
             return;
@@ -350,7 +401,11 @@ impl Endpoint {
         let frame_kind = if packet_type == 0 {
             if self.access_point.is_some() {
                 let access_point = self.access_point.clone().unwrap();
-                frames = self.network.receive(&access_point, frame, self.ticks);
+                if frame.get(12..14) == Some(&[0x88, 0x8e]) {
+                    frames = self.eapol(&access_point, frame);
+                } else if self.wpa2_ready() {
+                    frames = self.network.receive(&access_point, frame, self.ticks);
+                }
             }
             0
         } else {
@@ -370,6 +425,65 @@ impl Endpoint {
                 frames,
             }),
         ))
+    }
+
+    fn wpa2_ready(&self) -> bool {
+        self.access_point
+            .as_ref()
+            .and_then(|access_point| access_point.wpa2_passphrase.as_ref())
+            .is_none()
+            || self
+                .wpa2
+                .as_ref()
+                .is_some_and(|state| state.phase == Phase::Complete)
+    }
+
+    fn eapol(&mut self, access_point: &AccessPoint, frame: &[u8]) -> Vec<Vec<u8>> {
+        let Some(station) = self.station.address else {
+            return Vec::new();
+        };
+        let Some(state) = self.wpa2.as_mut() else {
+            return Vec::new();
+        };
+        match state.phase {
+            Phase::WaitingForMessage2 => {
+                let Some(message3) = state.message2(frame, station, access_point.bssid) else {
+                    if state.phase == Phase::Failed {
+                        self.wpa2_rejected = true;
+                        return self.deauthenticate(access_point, station);
+                    }
+                    return Vec::new();
+                };
+                vec![message3]
+            }
+            Phase::WaitingForMessage4 => {
+                let complete = state.message4(frame);
+                if complete {
+                    Vec::new()
+                } else if state.phase == Phase::Failed {
+                    self.wpa2_rejected = true;
+                    self.deauthenticate(access_point, station)
+                } else {
+                    Vec::new()
+                }
+            }
+            Phase::Complete => Vec::new(),
+            Phase::Failed => {
+                self.wpa2_rejected = true;
+                Vec::new()
+            }
+        }
+    }
+
+    fn deauthenticate(&mut self, access_point: &AccessPoint, station: [u8; 6]) -> Vec<Vec<u8>> {
+        self.station.associated = false;
+        let mut frame = vec![0u8; 26];
+        frame[..2].copy_from_slice(&0x00c0u16.to_le_bytes());
+        frame[4..10].copy_from_slice(&station);
+        frame[10..16].copy_from_slice(&access_point.bssid);
+        frame[16..22].copy_from_slice(&access_point.bssid);
+        frame[24..26].copy_from_slice(&2u16.to_le_bytes());
+        vec![frame]
     }
 
     fn management(&mut self, frame: &[u8]) -> Vec<Vec<u8>> {
@@ -413,6 +527,11 @@ impl Endpoint {
         reply[28..30].copy_from_slice(&status.to_le_bytes());
         self.station.address = Some(destination);
         self.station.bssid = Some(access_point.bssid);
+        self.wpa2_rejected = false;
+        self.wpa2 = access_point
+            .wpa2_passphrase
+            .as_ref()
+            .and_then(|passphrase| Authenticator::new(passphrase, &access_point.ssid).ok());
         vec![reply]
     }
 
@@ -435,7 +554,15 @@ impl Endpoint {
         self.station.address = Some(destination);
         self.station.bssid = Some(access_point.bssid);
         self.station.associated = status == 0;
-        vec![reply]
+        if status != 0 {
+            return vec![reply];
+        }
+        if let Some(state) = self.wpa2.as_mut() {
+            reply.extend_from_slice(&wpa2::RSN_ELEMENT);
+            vec![reply, state.message1(destination, access_point.bssid)]
+        } else {
+            vec![reply]
+        }
     }
 
     fn probe_response(&mut self, access_point: &AccessPoint, frame: &[u8]) -> Vec<Vec<u8>> {
@@ -756,19 +883,21 @@ fn receive_batch(
         }
         total += packet.len();
         count += 1;
-        if total == quantity {
-            break;
-        }
     }
-    if count == 0 || total != quantity {
+    // Stock asks for the padded lengths of the listed batch and the SDIO
+    // transport rounds that extent up to whole 512-byte blocks.
+    let block_padded =
+        quantity % SDIO_BLOCK_BYTES == 0 && quantity > total && quantity - total < SDIO_BLOCK_BYTES;
+    if count == 0 || (total != quantity && !block_padded) {
         return Err(format!(
             "MT5931 {name} extent {quantity} does not match the queued packets"
         ));
     }
-    let mut data = Vec::with_capacity(total);
+    let mut data = Vec::with_capacity(quantity);
     for packet in queue.iter().take(count) {
         data.extend(packet);
     }
+    data.resize(quantity, 0);
     Ok((data, count))
 }
 
@@ -787,6 +916,10 @@ fn beacon(access_point: &AccessPoint, destination: [u8; 6], control: u16) -> Vec
     elements.extend_from_slice(&[1, 8, 0x82, 0x84, 0x8b, 0x96, 0x0c, 0x12, 0x18, 0x24]);
     elements.extend_from_slice(&[3, 1, access_point.channel]);
     elements.extend_from_slice(&[50, 4, 0x30, 0x48, 0x60, 0x6c]);
+    if access_point.wpa2_passphrase.is_some() {
+        frame[34..36].copy_from_slice(&0x0011u16.to_le_bytes());
+        elements.extend_from_slice(&wpa2::RSN_ELEMENT);
+    }
     frame.extend_from_slice(&elements);
     frame
 }
@@ -807,6 +940,7 @@ mod tests {
             host: [203, 0, 113, 10],
             host_port: 443,
             local_port: 8080,
+            wpa2_passphrase: None,
             ntp: None,
         }
     }
@@ -817,6 +951,12 @@ mod tests {
             access_point: Some(access_point()),
             capability_reply: None,
         }
+    }
+
+    fn wpa2_options() -> Options {
+        let mut options = options();
+        options.access_point.as_mut().unwrap().wpa2_passphrase = Some("password123".into());
+        options
     }
 
     fn endpoint() -> Endpoint {
@@ -971,6 +1111,59 @@ mod tests {
     }
 
     #[test]
+    fn secured_join_waits_for_four_way_keys_and_rejects_bad_mic() {
+        let station = [2, 0, 0, 0, 0, 9];
+        let mut e = Endpoint::new(Some(&wpa2_options()));
+        e.commit(Change::InterruptEnable(0xffffff0f));
+        let association_frame = |frame: &[u8]| {
+            let mut packet = vec![0u8; 16 + frame.len()];
+            let length = (packet.len() as u16) & 0xfff;
+            packet[..2].copy_from_slice(&length.to_le_bytes());
+            packet[3] = 3 << 6;
+            packet[4] = 0x18;
+            packet[16..].copy_from_slice(frame);
+            packet.resize(packet.len().div_ceil(4) * 4, 0);
+            packet
+        };
+        let mut auth = vec![0u8; 30];
+        auth[..2].copy_from_slice(&0x00b0u16.to_le_bytes());
+        auth[4..10].copy_from_slice(&e.access_point.as_ref().unwrap().bssid);
+        auth[10..16].copy_from_slice(&station);
+        auth[16..22].copy_from_slice(&e.access_point.as_ref().unwrap().bssid);
+        let packet = association_frame(&auth);
+        let (_, change) = e.transfer(0x2c, true, &packet, packet.len()).unwrap();
+        e.commit(change.unwrap());
+        while !e.rx1.is_empty() {
+            read_rx1(&mut e);
+        }
+        let mut assoc = vec![0u8; 24];
+        assoc[4..10].copy_from_slice(&e.access_point.as_ref().unwrap().bssid);
+        assoc[10..16].copy_from_slice(&station);
+        assoc[16..22].copy_from_slice(&e.access_point.as_ref().unwrap().bssid);
+        assoc.extend_from_slice(&[1, 0, 10, 0, 0, 10]);
+        assoc.extend_from_slice(b"Camera OTA");
+        let packet = association_frame(&assoc);
+        let (_, change) = e.transfer(0x2c, true, &packet, packet.len()).unwrap();
+        e.commit(change.unwrap());
+        let reply = read_rx1(&mut e);
+        let reply_frame = &reply[12..12 + (u16::from_le_bytes([reply[0], reply[1]]) as usize - 12)];
+        assert!(reply_frame.ends_with(&wpa2::RSN_ELEMENT));
+        let message1 = e.rx1.pop_front().expect("message 1/4 was not queued");
+        assert!(
+            message1[2] == 0 || message1[2] == 3,
+            "message1={:02x?}",
+            message1
+        );
+        while !e.rx1.is_empty() {
+            read_rx1(&mut e);
+        }
+        let dhcp = crate::wifi_module::virtual_network::test_dhcp_discover(station);
+        transmit(&mut e, 0, &dhcp);
+        assert!(e.rx1.iter().all(|packet| packet[4] == EVENT_TX_DONE));
+        assert!(e.network.lease().is_none());
+    }
+
+    #[test]
     fn oscillator_and_basic_config_use_wire_sequence_and_opaque_reserved_bytes() {
         let mut e = endpoint();
         let packet = command(0xf2, true, 0xff, &[0xa5; 8]);
@@ -1071,6 +1264,34 @@ mod tests {
         }
         assert_eq!(kinds, vec![3, 3, 1, 1]);
         assert_eq!(kinds_events, vec![EVENT_SCAN_DONE, EVENT_SCAN_CHANGE]);
+    }
+
+    #[test]
+    fn host_poll_waits_for_an_open_connection() {
+        let mut endpoint = endpoint();
+        assert_eq!(endpoint.next_host_poll(0), None);
+        assert!(!endpoint.poll_host(0));
+        assert_eq!(endpoint.ticks, 0);
+    }
+
+    #[test]
+    fn receive_batch_accepts_the_block_padded_extent_stock_requests() {
+        let mut e = endpoint();
+        // One 1296-byte frame lists 1308 bytes and pads to 1312.
+        e.push_frame(0, &[0u8; 1296]);
+        assert_eq!(e.rx1.front().unwrap().len(), 1312);
+        // Stock reads the padded batch in three 512-byte SDIO blocks.
+        let (data, change) = e.transfer(0x34, false, &[], 1536).unwrap();
+        assert_eq!(data.len(), 1536);
+        assert!(data[1312..].iter().all(|&byte| byte == 0));
+        assert!(matches!(
+            change,
+            Some(Change::Receive { fifo: 1, count: 1 })
+        ));
+        assert!(e.transfer(0x34, false, &[], 1400).is_err());
+        assert_eq!(e.rx1.len(), 1);
+        e.commit(change.unwrap());
+        assert!(e.rx1.is_empty());
     }
 
     #[test]

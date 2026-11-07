@@ -2,6 +2,7 @@
 //! Device behavior consumes only SDIO transactions.
 pub mod mt5931;
 pub mod virtual_network;
+pub mod wpa2;
 use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -94,6 +95,14 @@ impl WifiModule {
     }
     pub fn protocol(&self) -> Protocol {
         self.options.protocol
+    }
+    /// Poll host-side TCP streams when their interval is due.
+    pub fn poll_host(&mut self, now: u64) -> bool {
+        self.endpoint.poll_host(now)
+    }
+    /// The board time at which the next host poll is due.
+    pub fn next_host_poll(&self, now: u64) -> Option<u64> {
+        self.endpoint.next_host_poll(now)
     }
     fn writable(address: u32) -> bool {
         matches!(address, 2 | 4 | 6 | 7 | 0x10 | 0x11 | 0x110 | 0x111)

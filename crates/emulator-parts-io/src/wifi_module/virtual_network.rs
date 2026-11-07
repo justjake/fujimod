@@ -19,7 +19,7 @@ const DNS_PORT: u16 = 53;
 const NTP_PORT: u16 = 123;
 const MAX_CONNECTIONS: usize = 8;
 const TCP_WINDOW: u16 = 8192;
-const TCP_MSS: usize = 1460;
+const TCP_MSS: usize = 1024;
 const DHCP_LEASE_SECONDS: u32 = 3600;
 const HOST_CONNECT_TIMEOUT_MS: u64 = 200;
 const TCP_RETRANSMIT_MS: u64 = 1000;
@@ -52,7 +52,8 @@ impl Ntp {
     }
 }
 
-/// One configured open access point and its attached virtual network.
+/// One configured access point and its attached virtual network. A present
+/// WPA2 passphrase advertises RSN/CCMP; absence advertises an open network.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AccessPoint {
@@ -66,6 +67,8 @@ pub struct AccessPoint {
     pub host: [u8; 4],
     pub host_port: u16,
     pub local_port: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wpa2_passphrase: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ntp: Option<Ntp>,
 }
@@ -102,6 +105,11 @@ impl AccessPoint {
         }
         if self.host_port == 0 || self.local_port == 0 {
             return Err("virtual host and local ports must be nonzero".into());
+        }
+        if let Some(passphrase) = &self.wpa2_passphrase {
+            if !(8..=63).contains(&passphrase.len()) {
+                return Err("virtual WPA2 passphrase must be 8..=63 bytes".into());
+            }
         }
         if let Some(ntp) = &self.ntp {
             ntp.validate()?;
@@ -310,6 +318,11 @@ impl Network {
             }
         }
         frames
+    }
+
+    /// Whether a host TCP connection is still relaying data.
+    pub fn has_connections(&self) -> bool {
+        !self.connections.is_empty()
     }
 
     pub fn next_poll_ms(&self) -> Option<u64> {
@@ -870,7 +883,9 @@ fn acknowledge(connection: &mut Connection, acknowledgement: u32) {
     let acked = acknowledgement.wrapping_sub(connection.server_acked);
     if acked <= TCP_WINDOW as u32 && acked as usize <= connection.pending.len() {
         connection.pending.drain(..acked as usize);
-        connection.unsent = connection.unsent.saturating_sub(acked as usize);
+        // Unsent counts the tail of pending that never went into a segment;
+        // acknowledging already-sent bytes leaves it unchanged.
+        connection.unsent = connection.unsent.min(connection.pending.len());
         connection.server_acked = acknowledgement;
     }
 }
@@ -1171,6 +1186,7 @@ mod tests {
             host: [203, 0, 113, 10],
             host_port: 443,
             local_port: 8080,
+            wpa2_passphrase: None,
             ntp: None,
         }
     }
