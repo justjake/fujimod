@@ -189,6 +189,8 @@ class Board:
         clock_seconds_2000: int | None = None,
         preferred_languages: Sequence[str] = (),
         camera: str | PathLike[str] | None = None,
+        access_point: Mapping[str, object] | None = None,
+        capability_reply: Sequence[int] | None = None,
     ) -> Self:
         """Boot a catalog runtime from files selected by the caller.
 
@@ -213,6 +215,15 @@ class Board:
         ``camera`` is a camera directory holding the ``nand-<section>.bin.zst``
         files a configuration's power-on settings name, such as
         ``catalog/bodies/x70/cameras/reference``.
+
+        ``access_point`` is one virtual MT5931 access point: SSID, BSSID,
+        channel, RCPI, gateway, DNS servers, DNS name, TCP destination, host
+        loopback port and optional NTP server. Absence leaves the endpoint
+        without an RF peer.
+
+        ``capability_reply`` is an explicit 20-byte MT5931 capability body,
+        needed before stock Wi-Fi initialization accepts command 0x80. It is a
+        declared fixture, not a recovered chip reply.
         """
         configuration_id = cls._identifier(configuration_id, "configuration_id")
         if isinstance(overlays, (str, bytes)) or not isinstance(overlays, Sequence):
@@ -227,6 +238,18 @@ class Board:
         nand = None if nand is None else cls._input_path(nand, "nand")
         settings = None if settings is None else cls._input_path(settings, "settings")
         camera = None if camera is None else fspath(camera)
+        access_point_text = None
+        if access_point is not None:
+            if not isinstance(access_point, Mapping):
+                raise TypeError("access_point must be a mapping or None")
+            access_point_text = json.dumps(dict(access_point))
+        capability = None
+        if capability_reply is not None:
+            if isinstance(capability_reply, (str, bytes)):
+                raise TypeError("capability_reply must be a sequence of byte values")
+            capability = bytes(capability_reply)
+            if len(capability) != 20:
+                raise ValueError("capability_reply must contain 20 bytes")
         if isinstance(preferred_languages, (str, bytes)) or not isinstance(preferred_languages, Sequence):
             raise TypeError("preferred_languages must be a sequence of BCP 47 tags")
         if any(not isinstance(tag, str) for tag in preferred_languages):
@@ -246,6 +269,8 @@ class Board:
             clock_seconds_2000=clock_seconds_2000,
             preferred_languages=list(preferred_languages),
             camera=camera,
+            access_point=access_point_text,
+            capability_reply=capability,
         )
         quantum = native.boot_quantum
         if type(quantum) is not int or quantum < 1:
