@@ -22,9 +22,9 @@ if (!values['prepare-only']) {
         FUJIMOD_MEDIA: resolve('public/artifacts/docs'),
       },
     });
-  run('npm', ['run', 'check']);
-  run('npm', ['test']);
-  run('npm', ['run', 'build']);
-  run('npm', ['run', 'test:prerender']);
+  run('pnpm', ['run', 'check']);
+  run('pnpm', ['test']);
+  run('pnpm', ['run', 'build']);
+  run('pnpm', ['run', 'test:prerender']);
   run(process.execPath, ['../../scripts/cloudflare/wrangler.ts', 'deploy']);
 }

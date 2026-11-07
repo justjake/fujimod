@@ -1,5 +1,7 @@
 import { runtimeHeaders } from './src/security.ts';
 import { releaseRoute, type ReleaseInfo } from './src/patch/releases.ts';
+import { createAuth } from './src/auth/runtime.ts';
+import type { AuthEnv } from './src/auth/options.ts';
 
 const repository = 'justjake/fujimod';
 const api = `https://api.github.com/repos/${repository}/releases`;
@@ -29,6 +31,14 @@ export interface ReleaseStore {
   get(key: string, type: 'arrayBuffer'): Promise<ArrayBuffer | null>;
   put(key: string, value: Uint8Array): Promise<unknown>;
 }
+interface Env extends AuthEnv {
+  ASSETS: Assets;
+  RELEASES: ReleaseStore;
+}
+interface AuthHandler {
+  handler(request: Request): Promise<Response>;
+}
+type AuthFactory = (env: AuthEnv, baseURL: string) => AuthHandler;
 const currentKey = 'current';
 class UpstreamError extends Error {
   readonly status: number;
@@ -169,13 +179,17 @@ export async function serveRelease(
     );
   }
 }
-export default {
-  async fetch(
-    request: Request,
-    env: { ASSETS: Assets; RELEASES: ReleaseStore },
-    context: Context,
-  ): Promise<Response> {
-    if (!new URL(request.url).pathname.startsWith('/releases/')) return env.ASSETS.fetch(request);
-    return serveRelease(request, await caches.open('fujimod-releases'), env.RELEASES, context);
-  },
-};
+export async function serveRequest(
+  request: Request,
+  env: Env,
+  context: Context,
+  makeAuth: AuthFactory = createAuth,
+): Promise<Response> {
+  const url = new URL(request.url);
+  if (url.pathname === '/api/auth' || url.pathname.startsWith('/api/auth/'))
+    return makeAuth(env, url.origin).handler(request);
+  if (!url.pathname.startsWith('/releases/')) return env.ASSETS.fetch(request);
+  return serveRelease(request, await caches.open('fujimod-releases'), env.RELEASES, context);
+}
+
+export default { fetch: serveRequest };

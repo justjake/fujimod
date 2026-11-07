@@ -13,9 +13,8 @@ Python wheels.
 Build the two artifacts from the repository root:
 
 ```sh
-npm ci
-npm --prefix bindings/javascript ci
-npm --prefix bindings/javascript run build
+pnpm install --frozen-lockfile
+pnpm --filter fujimod run build
 node bindings/python/scripts/build-web-wheel.ts
 ```
 
@@ -58,9 +57,9 @@ abandonment remains terminal and cannot stop camera execution.
 Run the end-to-end checks after building both artifacts:
 
 ```sh
-npm --prefix bindings/javascript run test:pyodide
-npx --prefix bindings/javascript playwright install chromium
-npm --prefix bindings/javascript run test:pyodide:browser
+pnpm --filter fujimod run test:pyodide
+pnpm --filter fujimod exec playwright install chromium
+pnpm --filter fujimod run test:pyodide:browser
 ```
 
 The Node check caches the runtime's micropip wheel under

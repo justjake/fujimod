@@ -1,0 +1,13 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+  - 'bindings/javascript'
+  - 'crates/simulation/tools'
+
+overrides:
+  '@solidjs/signals': 2.0.0-rc.15
+  vite: npm:@voidzero-dev/vite-plus-core@1.3.0
+
+allowBuilds:
+  esbuild: true
+  workerd: true

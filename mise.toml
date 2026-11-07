@@ -1,5 +1,6 @@
 [tools]
 node = "26.12.0"
+pnpm = "12.18.0"
 python = "3.14.8"
 uv = "0.13.1"
 rust = [
@@ -24,7 +25,7 @@ run = "python scripts/git/install_hooks.py"
 
 [tasks.web-build]
 dir = "{{config_root}}/apps/web"
-run = "npm run build"
+run = "pnpm run build"
 
 [tasks.share]
 description = "Publish a local file and print its public share URL"
@@ -32,23 +33,23 @@ run = "node scripts/cloudflare/share.ts"
 
 [tasks.web-check]
 dir = "{{config_root}}/apps/web"
-run = "npm run check"
+run = "pnpm run check"
 
 [tasks.web-lint]
 dir = "{{config_root}}/apps/web"
-run = "npm run lint"
+run = "pnpm run lint"
 
 [tasks.web-format]
 dir = "{{config_root}}/apps/web"
-run = "npm run format"
+run = "pnpm run format"
 
 [tasks.web-test]
 dir = "{{config_root}}/apps/web"
-run = "npm test"
+run = "pnpm test"
 
 [tasks.web-preview]
 dir = "{{config_root}}/apps/web"
-run = "npm run preview -- --mode local-preview --port 5190 --strictPort"
+run = "pnpm run preview -- --mode local-preview --port 5190 --strictPort"
 
 [tasks.rust-test]
 run = "cargo test --workspace --all-features --locked"
@@ -69,19 +70,19 @@ run = 'PATH="$PWD/target/tooling/bin:$PATH" cargo test -p fujimod-usb -p fujimod
 
 [tasks.javascript-build]
 dir = "{{config_root}}/bindings/javascript"
-run = "npm run build"
+run = "pnpm run build"
 
 [tasks.javascript-emulator-build]
 dir = "{{config_root}}/bindings/javascript"
-run = "npm run stage:emulator"
+run = "pnpm run stage:emulator"
 
 [tasks.javascript-test]
 dir = "{{config_root}}/bindings/javascript"
-run = "npm test"
+run = "pnpm test"
 
 [tasks.javascript-browser-test]
 dir = "{{config_root}}/bindings/javascript"
-run = "npm run test:browser"
+run = "pnpm run test:browser"
 
 [tasks.python-lint]
 run = "uv run --locked ruff check ."
@@ -94,7 +95,7 @@ run = ["mise run python-binding-types", "uv run --locked ty check --error-on-war
 
 [tasks.python-binding-types]
 run = [
-  "npm --prefix bindings/javascript run build",
+  "pnpm --filter fujimod run build",
   "node scripts/ci/javascript-python-types.ts",
   "cargo run --locked -p fujimod-bindgen -- --python-types target/python-types",
   "mise run catalog-types-check",
@@ -121,13 +122,13 @@ run = ["mise run python-build-test", "mise run python-pytest"]
 run = "uv run --locked pytest --cov --cov-report=term-missing --cov-report=xml --cov-report=html --junitxml=target/coverage/python/junit.xml"
 
 [tasks.javascript-lint]
-run = "npm run lint"
+run = "pnpm run lint"
 
 [tasks.javascript-format-check]
-run = "npm run format:check"
+run = "pnpm run format:check"
 
 [tasks.javascript-node-test]
-run = "npm run test:node"
+run = "pnpm run test:node"
 
 [tasks.rust-format-check]
 run = "cargo fmt --all -- --check"
@@ -137,4 +138,4 @@ run = "cargo llvm-cov --workspace --all-features --locked --no-report"
 
 [tasks.web-coverage]
 dir = "{{config_root}}/apps/web"
-run = "npm test -- --coverage --coverage.reportOnFailure --coverage.provider=v8 --coverage.reporter=text --coverage.reporter=lcov --coverage.reporter=html --coverage.reporter=json-summary --coverage.reportsDirectory=../../target/coverage/web --coverage.include='src/**/*.{ts,tsx}' --coverage.include='devices/**/*.ts' --coverage.include='scripts/**/*.ts' --coverage.exclude='**/*.test.*' --coverage.exclude='**/*.d.ts' --coverage.exclude='**/*.fixture.*'"
+run = "pnpm test -- --coverage --coverage.reportOnFailure --coverage.provider=v8 --coverage.reporter=text --coverage.reporter=lcov --coverage.reporter=html --coverage.reporter=json-summary --coverage.reportsDirectory=../../target/coverage/web --coverage.include='src/**/*.{ts,tsx}' --coverage.include='devices/**/*.ts' --coverage.include='scripts/**/*.ts' --coverage.exclude='**/*.test.*' --coverage.exclude='**/*.d.ts' --coverage.exclude='**/*.fixture.*'"

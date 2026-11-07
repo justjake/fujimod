@@ -9,7 +9,7 @@ build directories. Keep types in the implementation rather than handwritten
 Every TypeScript configuration must explicitly disable `allowJs`, including
 inherited effective settings. Never pass `--allowJs` to tooling. Check source,
 scripts and tests without `@ts-nocheck`, `@ts-ignore`, blanket `any` or weakened
-compiler checks. Run `npm run check:typescript-policy` and the affected type
+compiler checks. Run `pnpm run check:typescript-policy` and the affected type
 checks and tests before committing. The policy check runs in CI.
 
 Checked-in generated files carry `.generated` before their extension

@@ -64,9 +64,9 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           javascript: 'true'
-      - run: npm run check:typescript-policy
-      - run: npm run check:types
-      - run: npm --prefix bindings/javascript run build
+      - run: pnpm run check:typescript-policy
+      - run: pnpm run check:types
+      - run: pnpm --filter fujimod run build
       - run: mise run javascript-lint
       - if: ${{ !cancelled() }}
         run: mise run web-check
@@ -140,7 +140,7 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           javascript: 'true'
-      - run: npm --prefix apps/web exec -- playwright install --with-deps chromium webkit
+      - run: pnpm --filter fujimod-web exec -- playwright install --with-deps chromium webkit
       - run: mise run javascript-node-test
       - if: ${{ !cancelled() }}
         run: mise run rust-wasm-test
@@ -150,7 +150,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           node bindings/python/scripts/build-web-wheel.ts --out target/web-wheels
-          npm --prefix bindings/javascript run test:pyodide:browser
+          pnpm --filter fujimod run test:pyodide:browser
       - if: ${{ !cancelled() }}
         run: mise run web-coverage
       - if: ${{ !cancelled() }}
@@ -159,7 +159,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: node scripts/ci/package-tests.ts apps/web
       - if: ${{ !cancelled() }}
-        run: npm --prefix apps/usb-sharing run check
+        run: pnpm --filter fujimod-usb-sharing run check
       - name: Coverage summary
         if: always()
         run: uv run --locked python scripts/ci/coverage_summary.py >> "$GITHUB_STEP_SUMMARY"
