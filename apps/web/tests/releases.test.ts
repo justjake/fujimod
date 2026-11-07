@@ -1,4 +1,5 @@
 import { test, expect, vi } from 'vite-plus/test';
+import type { D1Database } from '@cloudflare/workers-types';
 import worker, { serveRelease, type ReleaseCache, type ReleaseStore } from '../worker.ts';
 function harness(fetcher: typeof fetch, known = new Map<string, Uint8Array>()) {
   const stored = new Map<string, Response>();
@@ -159,7 +160,14 @@ test('ordinary routes pass to the static asset binding', async () => {
   const fetcher = vi.fn(async () => new Response('static'));
   const response = await worker.fetch(
     new Request('https://fujimod.com/'),
-    { ASSETS: { fetch: fetcher }, RELEASES: { get: async () => null, put: async () => {} } },
+    {
+      ASSETS: { fetch: fetcher },
+      RELEASES: { get: async () => null, put: async () => {} },
+      AUTH_DB: {} as D1Database,
+      BETTER_AUTH_SECRET: 'test-secret-test-secret-test-secret',
+      GOOGLE_CLIENT_ID: 'test-client-id',
+      GOOGLE_CLIENT_SECRET: 'test-client-secret',
+    },
     { waitUntil() {} },
   );
   expect(await response.text()).toBe('static');

@@ -12,7 +12,7 @@ interface CameraLabel {
   name: string;
   description: string;
 }
-/** Generated from the catalog by `npm run generate`. */
+/** Generated from the catalog by `pnpm run generate`. */
 const CAMERA_LABELS: Record<string, CameraLabel> = cameraLabelTable;
 const GITHUB = 'https://api.github.com/repos/justjake/fujimod';
 const github = (token: string) => ({

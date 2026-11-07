@@ -24,15 +24,13 @@ attribution remains in [the web app's license](../../apps/web/third_party/lucide
 From the repository root:
 
 ```sh
-npm ci
-npm --prefix packages/emulator-ui ci
-npm --prefix apps/web ci
-npm --prefix apps/web run check
-npm --prefix apps/web test
+pnpm install --frozen-lockfile
+pnpm --filter fujimod-web run check
+pnpm --filter fujimod-web test
 ```
 
-Running `npm test` in this package runs its unit and Solid component tests. The
-web app's `npm test` runs this package's tests and then the app tests. Each
+Running `pnpm test` in this package runs its unit and Solid component tests. The
+web app's `pnpm test` runs this package's tests and then the app tests. Each
 package's Vite configuration discovers tests only under its own source tree.
 Browser integration checks remain in `apps/web/`, alongside the frontend they
 exercise.

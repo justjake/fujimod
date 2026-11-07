@@ -67,10 +67,10 @@ Create `fujimod-shared-files` once with the authenticated Wrangler wrapper's
 
 ```sh
 node ../../scripts/cloudflare/wrangler.ts d1 migrations apply fujimod-reports --remote
-npm test
-npm run test:media:browser
-npm run check
-npm run deploy
+pnpm test
+pnpm run test:media:browser
+pnpm run check
+pnpm run deploy
 ```
 
 Worker tests exercise local R2 and D1, including media ranges, metadata escaping,

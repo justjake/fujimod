@@ -26,7 +26,7 @@ contexts stay volatile. Camera firmware is retained separately in IndexedDB.
 `tests/engine-storage.browser.ts` checks real worker OPFS publication, stale
 revisions, quota failures, generation cleanup and reload in Chromium and WebKit.
 
-Run store and component tests with `npm test`. Check lazy startup independently
+Run store and component tests with `pnpm test`. Check lazy startup independently
 in Chromium and WebKit with a development server:
 
 ```sh

@@ -62,7 +62,7 @@ To prepare a fresh authorized Sketchfab download, extract its glTF archive and
 run the pinned offline asset tool:
 
 ```sh
-npm ci --prefix crates/simulation/tools
+pnpm install --frozen-lockfile
 node crates/simulation/tools/prepare-photogrammetry.ts SOURCE/scene.gltf FRESH_RUNTIME.glb
 python3 crates/simulation/environments/crouch-end-station/prepare.py DOWNLOAD.zip \
   --runtime-scene FRESH_RUNTIME.glb --output FRESH_ENVIRONMENT \
@@ -103,7 +103,7 @@ From the FujiMod repository, use its Mise toolchain:
 ```sh
 cargo test --locked --manifest-path crates/simulation/Cargo.toml --lib
 cargo check --locked --manifest-path crates/simulation/Cargo.toml --examples
-npm ci --prefix crates/simulation/tools
+pnpm install --frozen-lockfile
 node crates/simulation/build-web.ts
 python3 crates/simulation/environments/crouch-end-station/test_prepare.py
 ```
@@ -165,7 +165,7 @@ all authored control nodes, materials, dial labels and pivots are retained.
 `tools/prepare-camera.ts SOURCE.glb FRESH_RUNTIME.glb` reproduces that reduction
 from the original asset (SHA-256 `1e6c2c6a30c47a9b30540682db5457c4fb51a7a7d9ffcc3a09d8c2f15c72306e`,
 the version tracked before this optimization). Both tools use the same pinned
-`tools/package-lock.json`.
+`pnpm-lock.yaml`.
 
 On the development preview (2026-10-17, desktop Chromium, WebGL2, station plus
 X70), the renderer's linear-memory high-water mark fell from 329,711,616 to

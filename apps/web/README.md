@@ -19,16 +19,16 @@ remain separate from the Solid components that display their state. The
 [emulator UI package](../../packages/emulator-ui/README.md) owns the reusable
 session and workspace; `src/home/controller.ts` owns homepage policy.
 
-`npm run build` renders `/`, `/dev-tools/` and `/bug/` through start mode's
+`pnpm run build` renders `/`, `/dev-tools/` and `/bug/` through start mode's
 production request handler. Deploy **`dist/client/`**, which contains the full
 page HTML, CSS and browser assets; static hosting needs no running SSR server.
-`dist/server/` is a build-time renderer. `npm run build:local-preview` uses
+`dist/server/` is a build-time renderer. `pnpm run build:local-preview` uses
 `dist-local-preview/{client,server}`. Both build commands fail if a page cannot
 be prerendered. The initial camera catalog enters the build from installed public artifacts.
 The browser refreshes the catalog and loads release metadata after mounting.
 Firmware selection and execution remain browser operations.
 
-`npm run test:prerender` checks the production static files in Chromium and
+`pnpm run test:prerender` checks the production static files in Chromium and
 WebKit, with and without JavaScript. It asserts page content, hydration of the
 existing homepage nodes, Features and Feedback, and the report page's
 absence of development reporting hooks. The web workflow runs this after build.
@@ -74,10 +74,10 @@ IDs; Save exports the captured log. The Rust queue and browser log are bounded,
 and discarded entries are reported. Long rows scroll inside the log on mobile.
 
 ```sh
-npm run build
-npm run test:dev-tools:browser
+pnpm run build
+pnpm run test:dev-tools:browser
 # Or check an existing server:
-FUJIMOD_WEB_URL=https://your-host.ts.net/ npm run test:dev-tools:browser
+FUJIMOD_WEB_URL=https://your-host.ts.net/ pnpm run test:dev-tools:browser
 ```
 
 This checks production Wasm against a simulated WebUSB device in desktop/mobile
@@ -188,12 +188,9 @@ Use the Node version in the repository's `mise.toml` (`mise install`),
 
 ```sh
 rustup target add wasm32-unknown-unknown
-npm --prefix ../.. ci
-npm --prefix ../../packages/emulator-ui ci
-npm --prefix ../../bindings/javascript ci
-npm --prefix ../../bindings/javascript run setup:tooling
-npm ci
-npm run dev -- --port 5190
+pnpm install --frozen-lockfile
+pnpm --filter fujimod run setup:tooling
+pnpm run dev -- --port 5190
 ```
 
 The web commands build the local Rust USB bindings before starting. The tooling
@@ -242,9 +239,9 @@ the viewer remains a DAT drop target. Public builds omit the automatic DAT fetch
 opt-in mount and is never copied into any build artifact.
 
 ```sh
-npm run check
-npm test
-npm run build
+pnpm run check
+pnpm test
+pnpm run build
 FUJIMOD_WEB_URL=https://your-host.ts.net:port node tests/wasm.browser.ts
 FUJIMOD_WEB_URL=https://your-host.ts.net:port node tests/wasm-camera.browser.ts
 node tests/speed.browser.ts --url 'https://your-host.ts.net:port/?scenario=x70-lcd#workspace' \
@@ -267,18 +264,18 @@ The ordinary `?scenario=x70-lcd#workspace` development route loads the configure
 local DAT into live REC with deterministic RTC input and normal Engine calls.
 It executes the real guest; no screen state or peripheral result is synthesized.
 
-Tests stay next to the code they cover. `npm test` runs the emulator UI package
+Tests stay next to the code they cover. `pnpm test` runs the emulator UI package
 tests and then the web app tests. `.test.tsx` tests use jsdom, and `.test.ts`
 tests use Node. Import test APIs from `vite-plus/test`; call Solid 2 `flush()`
-before asserting batched UI changes. Use `npm run format -- path/to/file.tsx`
+before asserting batched UI changes. Use `pnpm run format -- path/to/file.tsx`
 for selected files. The runtime and DOM package are pinned to Solid 2.0.0-rc.15.
 See [the engine contract](src/engine/WASM.md) for transport and history behavior.
 
 ### Local production preview
 
 ```sh
-npm run build:local-preview
-npm run preview -- --mode local-preview --port 5190 --strictPort
+pnpm run build:local-preview
+pnpm run preview -- --mode local-preview --port 5190 --strictPort
 ```
 
 This serves `dist-local-preview/` and enables the configured local DAT. Public
@@ -293,7 +290,7 @@ state starts fresh at each cold boot.
 The Web checks workflow runs lint, type checks, tests and the public build on
 web changes in pull requests and on main. It does not deploy.
 
-`npm run deploy -- --runtime DIRECTORY --media DIRECTORY`
+`pnpm run deploy -- --runtime DIRECTORY --media DIRECTORY`
 validates locally generated assets, runs checks and tests, builds the website,
 and uploads it directly to Cloudflare. Runtime bundles and feature media remain
 in ignored generated directories. GitHub Releases contain mod patches and their

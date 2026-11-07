@@ -65,7 +65,7 @@ between multipart creation and saving its ID can leave an orphan upload.
 
 ## Local checks
 
-`npm --prefix apps/usb-sharing test` bundles and runs the real Worker with local
+`pnpm --filter fujimod-usb-sharing test` bundles and runs the real Worker with local
 Miniflare Durable Objects and R2, without cloud credentials. Run
-`npm --prefix apps/usb-sharing run check` for Worker/test type checks and a
+`pnpm --filter fujimod-usb-sharing run check` for Worker/test type checks and a
 Wrangler deployment dry run. Browser protocol tests live beside `contribute.ts`.

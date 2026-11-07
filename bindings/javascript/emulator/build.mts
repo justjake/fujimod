@@ -138,7 +138,7 @@ export function options(args: string[], base = root): BuildOptions {
   };
 }
 
-/** The wasm-bindgen CLI matching Cargo.lock; `npm run setup:tooling` installs it. */
+/** The wasm-bindgen CLI matching Cargo.lock; `pnpm run setup:tooling` installs it. */
 export function wasmBindgen(source: NodeJS.ProcessEnv): string {
   return source.WASM_BINDGEN ?? resolve(root, '../../target/tooling/bin/wasm-bindgen');
 }
@@ -481,7 +481,7 @@ export function build(selected: BuildOptions) {
   try {
     accessSync(wasmBindgen(process.env), constants.X_OK);
   } catch {
-    throw new Error('wasm-bindgen is required; run `npm run setup:tooling`.');
+    throw new Error('wasm-bindgen is required; run `pnpm run setup:tooling`.');
   }
   validateToolchain(pinned);
 

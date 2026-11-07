@@ -13,11 +13,12 @@ jobs:
       WRANGLER_SEND_METRICS: 'false'
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v7
         with:
           node-version: '26.12.0'
-          cache: npm
-          cache-dependency-path: apps/usb-sharing/package-lock.json
-      - run: npm ci
-      - run: npm test
-      - run: npm run check
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter fujimod-usb-sharing test
+      - run: pnpm --filter fujimod-usb-sharing run check
