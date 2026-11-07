@@ -1,8 +1,8 @@
 //! X-Processor Pro topology on the shared native execution graph.
 //! The caller supplies checked wiring, assets, and physical contact inputs.
 use crate::{
-    adc, blocks, boot, clocks, display, dram, encoder, face, flash, i2c, imaging, jpeg, keys, lens,
-    power, resets, sd, serial, shutter, statistics, sync, timer,
+    adc, blocks, boot, clocks, display, dram, encoder, face, flash, h264, i2c, imaging, jpeg, keys,
+    lens, power, resets, sd, serial, shutter, statistics, sync, timer,
 };
 use fujimod_emulator::board::{
     self, Board, InterruptMap, InterruptRegisters,
@@ -18,6 +18,11 @@ use fujimod_emulator_ip_arm::{gicv2, pl330};
 use serde::Deserialize;
 use serde_json::Value;
 use std::{collections::BTreeMap, sync::Arc};
+
+/// The X-Processor Pro audio interface's DMA window. Its samples read silent
+/// until a codec is modeled; the words follow the register block at the same
+/// address.
+const AUDIO_SOURCE: (u64, u64) = (0xfff1_b000, 0x100);
 
 #[derive(Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -279,6 +284,11 @@ pub enum Model {
         run_ticks: u64,
     },
     JpegDecoder {
+        base: u64,
+        irq: u32,
+        run_ticks: u64,
+    },
+    H264 {
         base: u64,
         irq: u32,
         run_ticks: u64,
@@ -573,6 +583,13 @@ pub fn build(
             _ => None,
         })
         .transpose()?;
+    // The audio block's words are also a read-only PL330 source, so the movie
+    // channel's DMALDP from 0xfff1b020 reads zeros instead of refusing.
+    let audio_words = spec
+        .nodes
+        .iter()
+        .any(|n| matches!(&n.model, Model::RegisterBlock { base, .. } if *base == AUDIO_SOURCE.0))
+        .then(blocks::Published::default);
     // The color unit and the still tone unit a development engine reads,
     // published by their blocks.
     let color = spec.nodes.iter().find_map(|n| match &n.model {
@@ -838,6 +855,11 @@ pub fn build(
                     period: f.period_ticks,
                 });
                 let mut model = blocks::Block::new(base, size, idle, frames)?;
+                if base == AUDIO_SOURCE.0
+                    && let Some(words) = &audio_words
+                {
+                    model = model.with_published(words.clone());
+                }
                 if let Some(j) = job {
                     model = model.with_job(blocks::Job {
                         start: j.start,
@@ -1042,6 +1064,15 @@ pub fn build(
                 base,
                 jpeg::WINDOW,
                 Box::new(jpeg::Decoder::new(base, irq, run_ticks)?),
+            )?,
+            Model::H264 {
+                base,
+                irq,
+                run_ticks,
+            } => devices.register(
+                base,
+                h264::WINDOW,
+                Box::new(h264::Encoder::new(base, irq, run_ticks)?),
             )?,
             Model::Hdmi { base } => devices.register(
                 base,
@@ -1331,16 +1362,23 @@ pub fn build(
                     ],
                     Box::new(flash),
                 )?;
+                let mut sources: Vec<Arc<dyn pl330::Source>> = vec![Arc::new(Source(source))];
+                if let Some(words) = &audio_words {
+                    sources.push(Arc::new(blocks::SourceWindow::new_writable(
+                        AUDIO_SOURCE.0,
+                        AUDIO_SOURCE.1,
+                        words.clone(),
+                    )?));
+                }
+                sources.extend(
+                    lens_link
+                        .iter()
+                        .map(|link| Arc::new(link.clone()) as Arc<dyn pl330::Source>),
+                );
                 let engine = pl330::Pl330::new(
                     dma,
                     irq_routes,
-                    std::iter::once(Arc::new(Source(source)) as Arc<dyn pl330::Source>)
-                        .chain(
-                            lens_link
-                                .iter()
-                                .map(|link| Arc::new(link.clone()) as Arc<dyn pl330::Source>),
-                        )
-                        .collect(),
+                    sources,
                     pl330::Throughput {
                         setup_ticks,
                         bytes_per_tick,
@@ -1388,10 +1426,10 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn graph() -> factory::Graph {
+    fn graph_at(pc: u64) -> factory::Graph {
         serde_json::from_value(json!({
             "processors": [{"model": "cortex-a7", "released": true, "mprofile": null,
-                            "rprofile": null, "registers": [["Pc", 0], ["Pstate", 0xd3]]}],
+                            "rprofile": null, "registers": [["Pc", pc], ["Pstate", 0xd3]]}],
             "ram": [{"base": 0, "size": 0x10000}],
             "mappings": [{"core": 0, "address": 0, "physical": 0, "size": 0x10000,
                           "permissions": 7}],
@@ -1403,6 +1441,9 @@ mod tests {
         }))
         .unwrap()
     }
+    fn graph() -> factory::Graph {
+        graph_at(0)
+    }
     fn build_nodes(nodes: Value) -> Result<Built, String> {
         let spec = serde_json::from_value(json!({
             "kind": "xpp",
@@ -1413,6 +1454,169 @@ mod tests {
         }))
         .map_err(|e| e.to_string())?;
         build(graph(), spec, &BTreeMap::new(), Mode::Strict)
+    }
+
+    #[test]
+    fn the_audio_register_block_is_a_pl330_source() {
+        let nodes = json!([
+            {"name": "audio", "model": {"kind": "register-block", "base": 0xfff1b000_u64,
+                                        "size": 0x1000, "idle": []}},
+            {"name": "flash", "model": {
+                "kind": "flash", "controller": 0xfff14000_u64, "aperture": 0xf0000000_u64,
+                "size": 0x1000, "asset": "flash", "irq": 35, "dma": 0xfff18000_u64,
+                "irq_routes": [207, 208, 209, 210, 211, 212, 213, 214],
+                "setup_ticks": 16, "bytes_per_tick": 16, "transfer_ticks": 1, "nor": []}}
+        ]);
+        let spec = serde_json::from_value(json!({
+            "kind": "xpp",
+            "cpus": [{"mpidr": 0x80000000_u32, "configuration_base": 0xffff0000_u32,
+                      "cycles_per_tick": 64}],
+            "gic": {"distributor": 0xffff1000_u64, "cpu_interface": 0xffff2000_u64, "lines": 512},
+            "nodes": nodes
+        }))
+        .unwrap();
+        let assets = BTreeMap::from([("flash".to_string(), vec![0xff; 0x1000])]);
+        let mut built = build(graph_at(0x200), spec, &assets, Mode::Strict).unwrap();
+        // CPU stores: audio +0x20 = 0x11223344, then DMAGO channel 0 with the
+        // program at 0x100, then spin.
+        let stub: [u8; 0x60] = [
+            0x3c, 0x00, 0x9f, 0xe5, 0x3c, 0x10, 0x9f, 0xe5, 0x00, 0x10, 0x80, 0xe5, 0x38, 0x00,
+            0x9f, 0xe5, 0x38, 0x10, 0x9f, 0xe5, 0x00, 0x10, 0x80, 0xe5, 0x34, 0x00, 0x9f, 0xe5,
+            0x34, 0x10, 0x9f, 0xe5, 0x00, 0x10, 0x80, 0xe5, 0x30, 0x00, 0x9f, 0xe5, 0x00, 0x10,
+            0xa0, 0xe3, 0x00, 0x10, 0x80, 0xe5, 0xfe, 0xff, 0xff, 0xea, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0x20, 0xb0, 0xf1, 0xff, 0x44, 0x33, 0x22, 0x11, 0x0c, 0x8d, 0xf1,
+            0xff, 0x00, 0x01, 0x00, 0x00, 0x08, 0x8d, 0xf1, 0xff, 0x00, 0x00, 0xa2, 0x00, 0x04,
+            0x8d, 0xf1, 0xff,
+        ];
+        // DMAMOV SAR, 0xfff1b020; DAR, 0x4000; CCR 16-byte bursts;
+        // DMALDP 0; DMAST; DMAEND.
+        let program = [
+            0xbc, 0, 0x20, 0xb0, 0xf1, 0xff, 0xbc, 2, 0x00, 0x40, 0x00, 0x00, 0xbc, 1, 0x17, 0xc0,
+            0x05, 0x00, 0x25, 0x00, 0x08, 0x00,
+        ];
+        built.board.write_physical(0x100, &program).unwrap();
+        built.board.write_physical(0x200, &stub).unwrap();
+        built.board.run_until(40, 1).unwrap();
+        let mut bytes = [0xff; 16];
+        built.board.read_physical(0x4000, &mut bytes).unwrap();
+        assert_eq!(bytes[..4], 0x1122_3344_u32.to_le_bytes());
+        assert_eq!(bytes[4..], [0; 12]);
+    }
+
+    #[test]
+    fn strict_board_encodes_an_h264_frame_and_routes_line_110() {
+        // The X-T20 movie block at 0xfff5c000; line 110 is row 0x31 of 0xed4720.
+        let spec = serde_json::from_value(json!({
+            "kind": "xpp",
+            "cpus": [{"mpidr": 0x80000000_u32, "configuration_base": 0xffff0000_u32,
+                      "cycles_per_tick": 64}],
+            "gic": {"distributor": 0xffff1000_u64, "cpu_interface": 0xffff2000_u64, "lines": 512},
+            "nodes": [
+                {"name": "h264", "model": {
+                    "kind": "h264", "base": 0xfff5c000_u64, "irq": 110, "run_ticks": 10}},
+                {"name": "movie-registers", "model": {
+                    "kind": "register-block", "base": 0xfff5b000_u64,
+                    "size": 0x1000, "idle": []}}
+            ]
+        }))
+        .unwrap();
+        let mut built = build(graph_at(0x200), spec, &BTreeMap::new(), Mode::Strict).unwrap();
+        let id = built.nodes["h264"];
+        let registers = built.nodes["movie-registers"];
+        let mut packed = Vec::with_capacity(16 * 16 * 2);
+        for _ in 0..16 {
+            for column in 0..16 {
+                let pair = if column < 8 { 40 } else { 200 };
+                packed.extend_from_slice(&[pair, pair, 96, 160]);
+            }
+        }
+        built.board.write_physical(0x2000, &packed).unwrap();
+        // Allow the frame to finish, then save the status word, GIC ISPENDR3
+        // (line 110 is bit 14) and the adjacent 0xfff5b000 block. The pool
+        // holds 0x5000, 0xfff5c204, 0xffff120c and 0xfff5b000.
+        let stub: [u8; 144] = [
+            0x78, 0x40, 0x9f, 0xe5, 0x78, 0x00, 0x9f, 0xe5, 0x78, 0x20, 0x9f, 0xe5, 0x78, 0x50,
+            0x9f, 0xe5, 0x00, 0x00, 0xa0, 0xe1, 0x00, 0x00, 0xa0, 0xe1, 0x00, 0x00, 0xa0, 0xe1,
+            0x00, 0x00, 0xa0, 0xe1, 0x00, 0x00, 0xa0, 0xe1, 0x00, 0x00, 0xa0, 0xe1, 0x00, 0x00,
+            0xa0, 0xe1, 0x00, 0x00, 0xa0, 0xe1, 0x00, 0x00, 0xa0, 0xe1, 0x00, 0x00, 0xa0, 0xe1,
+            0x00, 0x00, 0xa0, 0xe1, 0x00, 0x00, 0xa0, 0xe1, 0x00, 0x00, 0xa0, 0xe1, 0x00, 0x00,
+            0xa0, 0xe1, 0x00, 0x00, 0xa0, 0xe1, 0x00, 0x00, 0xa0, 0xe1, 0x00, 0x00, 0xa0, 0xe1,
+            0x00, 0x00, 0xa0, 0xe1, 0x00, 0x00, 0xa0, 0xe1, 0x00, 0x00, 0xa0, 0xe1, 0x00, 0x00,
+            0xa0, 0xe1, 0x00, 0x10, 0x90, 0xe5, 0x00, 0x10, 0x84, 0xe5, 0x00, 0x30, 0x92, 0xe5,
+            0x04, 0x30, 0x84, 0xe5, 0x00, 0x30, 0x95, 0xe5, 0x08, 0x30, 0x84, 0xe5, 0xfe, 0xff,
+            0xff, 0xea, 0x00, 0x50, 0x00, 0x00, 0x04, 0xc2, 0xf5, 0xff, 0x0c, 0x12, 0xff, 0xff,
+            0x00, 0xb0, 0xf5, 0xff,
+        ];
+        built.board.write_physical(0x200, &stub).unwrap();
+        built
+            .board
+            .device_input::<blocks::Block, _>(registers, |block, cx| {
+                block.write(cx, 0xfff5b000, 4, 0x5a5a_5a5a);
+                Ok(())
+            })
+            .unwrap();
+        built
+            .board
+            .device_input::<h264::Encoder, _>(id, |device, cx| {
+                for (offset, value) in [
+                    (0x000, 0),
+                    (0x008, 0x21),
+                    (0x018, 16 << 16 | 16),
+                    (0x208, 0x0400_0400),
+                    (0x01C, 0x8000),
+                    (0x028, 0x10000),
+                    (0x02C, 0x9000),
+                    (0x100, 0x2000),
+                    (0x104, 0x3000),
+                    (0x108, 0x4000),
+                    (0x200, 0x10001),
+                ] {
+                    device.write(cx, 0xfff5c000 + offset, 4, value);
+                }
+                Ok(())
+            })
+            .unwrap();
+        built.board.run_until(100, 1).unwrap();
+        let saved = built.board.device_save(id).unwrap();
+        assert_eq!(saved["frames"], 1);
+        assert_eq!(saved["irq"], true);
+        let mut saved_words = [0u8; 12];
+        built.board.read_physical(0x5000, &mut saved_words).unwrap();
+        assert_eq!(
+            u32::from_le_bytes(saved_words[..4].try_into().unwrap()) & 0x10000,
+            0x10000,
+            "status reads ready"
+        );
+        assert_eq!(
+            u32::from_le_bytes(saved_words[4..8].try_into().unwrap()),
+            1 << 14,
+            "pending line 110"
+        );
+        assert_eq!(
+            u32::from_le_bytes(saved_words[8..].try_into().unwrap()),
+            0x5a5a_5a5a,
+            "the adjacent block keeps its own window"
+        );
+        let mut frame = [0u8; 80];
+        built.board.read_physical(0x8000, &mut frame).unwrap();
+        assert_eq!(&frame[..5], [0, 0, 0, 1, 0x67], "SPS at the output base");
+
+        // The stock movie path leaves +0x01c/+0x028/+0x02c zero because the
+        // only context writer (0x184c9d0) clears them. A second start with the
+        // stock descriptor must complete without a zero-span refusal.
+        built
+            .board
+            .device_input::<h264::Encoder, _>(id, |device, cx| {
+                for (offset, value) in [(0x01C, 0), (0x028, 0), (0x02C, 0), (0x200, 0x10001)] {
+                    device.write(cx, 0xfff5c000 + offset, 4, value);
+                }
+                Ok(())
+            })
+            .unwrap();
+        built.board.run_until(200, 1).unwrap();
+        let saved = built.board.device_save(id).unwrap();
+        assert_eq!(saved["frames"], 2, "zero-span frame completes");
+        assert_eq!(saved["irq"], true);
     }
 
     #[test]

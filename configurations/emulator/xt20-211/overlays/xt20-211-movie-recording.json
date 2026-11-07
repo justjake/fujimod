@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xt20-211-movie-recording",
+  "configuration_id": "xt20-211",
+  "change": {
+    "kind": "preset",
+    "preset": {
+      "factory_options": {
+        "video_encoder_backend": "software"
+      }
+    }
+  }
+}
