@@ -659,7 +659,7 @@ class Guide[C: RecordingCamera]:
                 print("Replaying prerequisite: " + name, flush=True)
                 entry: Prerequisite = dict(walkthrough=name, passed=False)
                 self.report["prerequisites"].append(entry)
-                with perf.span("prerequisite"):
+                with perf.span("prerequisite", board=getattr(self.camera, "board", None)):
                     prepare(self.camera, self)
                     if self._failures:
                         raise self._failures[0]
