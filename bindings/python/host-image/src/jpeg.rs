@@ -75,6 +75,14 @@ pub fn jpeg_decode_yycbcr<'py>(
                     .into_owned(),
             ))
         } else {
+            fujimod_perf::add_bytes(
+                fujimod_perf::ByteCounter::HostJpegDecodeIn,
+                encoded.len() as u64,
+            );
+            fujimod_perf::add_bytes(
+                fujimod_perf::ByteCounter::HostJpegDecodeOut,
+                capacity.unwrap() as u64,
+            );
             Ok(())
         }
     })

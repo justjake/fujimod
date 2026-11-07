@@ -15,6 +15,7 @@ doctest = false
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-image-processing.workspace = true
 fujimod-virtual-scene.workspace = true
+fujimod-perf.workspace = true
 pyo3.workspace = true
 serde.workspace = true
 serde_json.workspace = true

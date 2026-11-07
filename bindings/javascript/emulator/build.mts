@@ -33,6 +33,7 @@ export interface BuildOptions {
   stagePackage: boolean;
   incremental: boolean;
   profiling: boolean;
+  perf: boolean;
   rustSimd128: boolean;
   cSimd128: boolean;
   lto?: string;
@@ -100,6 +101,7 @@ export function options(args: string[], base = root): BuildOptions {
       'stage-package': { type: 'boolean', default: false },
       incremental: { type: 'boolean', default: false },
       profiling: { type: 'boolean', default: false },
+      perf: { type: 'boolean', default: false },
       'rust-simd128': { type: 'boolean', default: false },
       'c-simd128': { type: 'boolean', default: false },
       lto: { type: 'string' },
@@ -129,6 +131,7 @@ export function options(args: string[], base = root): BuildOptions {
     stagePackage: values['stage-package'],
     incremental,
     profiling: values.profiling,
+    perf: values.perf,
     rustSimd128: values['rust-simd128'],
     cSimd128: values['c-simd128'],
     lto: values.lto ?? (incremental ? 'off' : undefined),
@@ -273,6 +276,7 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
     '--profile',
     'dist',
     '--lib',
+    ...(selected.perf ? ['--features', 'perf'] : []),
     '--target',
     'wasm32-unknown-emscripten',
     '--manifest-path',
@@ -608,6 +612,7 @@ export function build(selected: BuildOptions) {
     rust: pinned.nightly,
     emscripten: pinned.emsdk,
     profiling: selected.profiling,
+    perf: selected.perf,
     rust_profile: {
       lto: plan.env.CARGO_PROFILE_DIST_LTO ?? 'thin',
       codegen_units: Number(plan.env.CARGO_PROFILE_DIST_CODEGEN_UNITS ?? '16'),
@@ -635,7 +640,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const args = process.argv.slice(2);
   if (args.includes('--help') || args.includes('-h')) {
     console.log(
-      'Usage: node emulator/build.mts [--out DIR] [--stage-package] [--incremental] [--profiling] [--rust-simd128] [--c-simd128] [--lto thin|fat|off] [--opt-level 0|1|2|3|s|z] [--codegen-units N] [--allocator dlmalloc|emmalloc]',
+      'Usage: node emulator/build.mts [--out DIR] [--stage-package] [--incremental] [--profiling] [--perf] [--rust-simd128] [--c-simd128] [--lto thin|fat|off] [--opt-level 0|1|2|3|s|z] [--codegen-units N] [--allocator dlmalloc|emmalloc]',
     );
   } else {
     build(options(args));

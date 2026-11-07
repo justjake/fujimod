@@ -90,7 +90,6 @@ struct Transactions {
     ranges: Option<Vec<TransactionRange>>,
 }
 pub struct Bus {
-    host_profile: Option<super::host_profile::Profile>,
     transactions: Option<Transactions>,
     continuation: Option<std::rc::Rc<std::cell::RefCell<super::continuation::Stops>>>,
     windows: Vec<Window>,
@@ -333,11 +332,16 @@ impl Bus {
         for (device, sources) in dependencies {
             bus.native_dependencies(device, sources)?;
         }
+        let names = bus
+            .windows
+            .iter()
+            .map(|window| window.device.name())
+            .collect::<Vec<_>>();
+        fujimod_perf::register_devices(&names);
         Ok(bus)
     }
     pub fn new(mode: Mode) -> Self {
         Self {
-            host_profile: None,
             transactions: None,
             continuation: None,
             windows: vec![],
@@ -354,52 +358,6 @@ impl Bus {
             wake_queue: vec![],
             visited: vec![],
             wake_generation: 0,
-        }
-    }
-    pub(super) fn start_host_profile(
-        &mut self,
-        baseline: Vec<super::host_profile::CpuCounters>,
-    ) -> Result<(), String> {
-        self.host_profile = Some(super::host_profile::Profile::new(baseline)?);
-        Ok(())
-    }
-    pub(super) fn profile_begin_run(&mut self) -> Option<super::host_profile::Stamp> {
-        self.host_profile.as_mut().map(|p| p.begin_run())
-    }
-    pub(super) fn profile_finish_run(&mut self, stamp: Option<super::host_profile::Stamp>) {
-        if let (Some(p), Some(stamp)) = (&mut self.host_profile, stamp) {
-            p.finish_run(stamp);
-        }
-    }
-    pub(super) fn profile_begin_engine(&self) -> Option<super::host_profile::Stamp> {
-        self.host_profile.as_ref().map(|p| p.start())
-    }
-    pub(super) fn profile_finish_engine(
-        &mut self,
-        core: usize,
-        stamp: Option<super::host_profile::Stamp>,
-    ) {
-        if let (Some(p), Some(stamp)) = (&mut self.host_profile, stamp) {
-            p.record_engine(core, stamp);
-        }
-    }
-    pub(super) fn host_profile(
-        &self,
-        counters: impl FnOnce() -> Vec<Result<super::host_profile::CpuCounters, String>>,
-    ) -> Value {
-        self.host_profile
-            .as_ref()
-            .map(|p| p.report(|id| self.windows[id].device.name(), &counters()))
-            .unwrap_or(Value::Null)
-    }
-    fn record_host_time(
-        &mut self,
-        id: usize,
-        phase: &'static str,
-        start: Option<super::host_profile::Stamp>,
-    ) {
-        if let (Some(profile), Some(start)) = (&mut self.host_profile, start) {
-            profile.record(id, phase, start);
         }
     }
     pub fn inputs_changed(&mut self, device: usize) -> Result<(), String> {
@@ -754,7 +712,15 @@ impl Bus {
         let mut continuation = None;
         if let Some(id) = index {
             let publication = self.publication_before(id);
-            let started = self.host_profile.as_ref().map(|p| p.start());
+            let started = fujimod_perf::device(
+                u16::try_from(id).unwrap_or(u16::MAX),
+                self.windows[id].device.name(),
+                if value.is_some() {
+                    fujimod_perf::DevicePhase::AdvanceWrite
+                } else {
+                    fujimod_perf::DevicePhase::AdvanceRead
+                },
+            );
             self.touch(id);
             let device = &mut self.windows[id].device;
             let mut phase = "advance";
@@ -798,15 +764,7 @@ impl Bus {
                 }
                 Ok(supported)
             })();
-            self.record_host_time(
-                id,
-                if value.is_some() {
-                    "advance-and-write"
-                } else {
-                    "advance-and-read"
-                },
-                started,
-            );
+            drop(started);
             self.publication_after(id, publication);
             supported = match outcome {
                 Ok(supported) => supported,
@@ -893,8 +851,16 @@ impl Bus {
         let due = self
             .deadline(device, host.now())
             .is_some_and(|t| t <= host.now());
+        let started = fujimod_perf::device(
+            u16::try_from(device).unwrap_or(u16::MAX),
+            self.windows[device].device.name(),
+            if token.is_some() {
+                fujimod_perf::DevicePhase::Event
+            } else {
+                fujimod_perf::DevicePhase::Deadline
+            },
+        );
         let w = &mut self.windows[device];
-        let started = self.host_profile.as_ref().map(|p| p.start());
         let mut cx = Cx::new(host, usize::MAX, 0, device);
         if let Some(token) = token {
             w.device.event(&mut cx, token);
@@ -909,12 +875,8 @@ impl Bus {
             detail.clone().map_or(Ok(true), Err)
         };
         drop(cx);
+        drop(started);
         self.publication_after(device, publication);
-        self.record_host_time(
-            device,
-            if token.is_some() { "event" } else { "deadline" },
-            started,
-        );
         if outcome != Ok(true) {
             self.skip_refusal(
                 host.now(),
@@ -1010,11 +972,15 @@ impl Bus {
                     .is_some_and(|t| t <= host.now())
                 {
                     let mut cx = Cx::new(host, usize::MAX, 0, id);
-                    let started = self.host_profile.as_ref().map(|p| p.start());
+                    let started = fujimod_perf::device(
+                        u16::try_from(id).unwrap_or(u16::MAX),
+                        self.windows[id].device.name(),
+                        fujimod_perf::DevicePhase::Dependency,
+                    );
                     self.windows[id].device.advance(&mut cx);
                     let outcome = Self::outcome(&mut cx);
                     drop(cx);
-                    self.record_host_time(id, "dependency", started);
+                    drop(started);
                     if outcome != Ok(true) {
                         self.skip_refusal(
                             host.now(),
@@ -1326,17 +1292,12 @@ mod tests {
     }
 
     #[test]
-    fn host_profiling_is_observational_and_never_enters_guest_state() {
+    fn device_dispatch_observations_never_enter_guest_or_device_state() {
         let mut plain = Bus::new(Mode::Strict);
         let mut observed = Bus::new(Mode::Strict);
         for bus in [&mut plain, &mut observed] {
             bus.register(0x1000, 4, Box::new(Register(5))).unwrap();
         }
-        assert_eq!(
-            observed.host_profile(|| panic!("inactive profiler queried CPU")),
-            Value::Null
-        );
-        observed.start_host_profile(Vec::new()).unwrap();
         for value in [None, Some(19), None] {
             assert_eq!(
                 plain.access(&mut Services, 0, 0, 0x1000, 4, value),
@@ -1344,19 +1305,6 @@ mod tests {
             );
             assert_eq!(plain.state(), observed.state());
         }
-        let before = observed.state();
-        let report = observed.host_profile(Vec::new);
-        assert_eq!(report["devices"].as_array().unwrap().len(), 2);
-        assert_eq!(
-            report["devices"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|v| v["calls"].as_u64().unwrap())
-                .sum::<u64>(),
-            3
-        );
-        assert_eq!(before, observed.state());
     }
 
     #[test]

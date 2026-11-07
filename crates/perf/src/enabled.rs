@@ -98,21 +98,40 @@ thread_local! {
     static PENDING_SPANS: RefCell<Vec<PendingSpan>> = const { RefCell::new(Vec::new()) };
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn clock() -> &'static quanta::Clock {
     static CLOCK: OnceLock<quanta::Clock> = OnceLock::new();
     CLOCK.get_or_init(quanta::Clock::new)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn raw_now() -> u64 {
     clock().raw()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn scale(raw: u64) -> u64 {
     if raw == 0 {
         0
     } else {
         clock().delta_as_nanos(0, raw)
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn raw_now() -> u64 {
+    // Emscripten's monotonic browser clock, already in nanoseconds.
+    unsafe { (emscripten_get_now() * 1_000_000.0) as u64 }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn scale(raw: u64) -> u64 {
+    raw
+}
+
+#[cfg(target_arch = "wasm32")]
+unsafe extern "C" {
+    fn emscripten_get_now() -> f64;
 }
 
 fn elapsed_raw(start: u64) -> u64 {
@@ -219,6 +238,7 @@ pub fn begin_guide(id: &str) {
     LOCAL_PARENT.with(|slot| {
         *slot.borrow_mut() = Some(guard);
     });
+    begin_span(SpanKind::Guide, GuestProgress::default());
 }
 
 pub fn end_guide() -> GuideSummary {
@@ -387,14 +407,14 @@ fn counter_deltas() -> Vec<CoreCounters> {
 
 /// Snapshot existing CPU and R-profile exit counters. The first snapshot after
 /// `begin_guide` is the baseline; later snapshots are the guide's end value.
-pub fn set_cpu_counters(counters: Vec<Result<BTreeMap<&'static str, u64>, String>>) {
+pub fn set_cpu_counters(counters: Vec<Result<BTreeMap<String, u64>, String>>) {
     let converted = counters
         .into_iter()
         .map(|values| {
             values.map(|values| {
                 values
                     .into_iter()
-                    .map(|(name, value)| (name.to_owned(), value))
+                    .map(|(name, value)| (name, value))
                     .collect()
             })
         })
@@ -479,7 +499,7 @@ pub fn begin_span(kind: SpanKind, guest: GuestProgress) -> bool {
 
 /// Close the innermost span opened by `begin_span`. Optional integer
 /// properties become fastrace properties for the trace only.
-pub fn end_span(guest: GuestProgress, properties: &[(&'static str, u64)]) {
+pub fn end_span(guest: GuestProgress, properties: &[(&str, u64)]) {
     let pending = PENDING_SPANS.with(|pending| pending.borrow_mut().pop());
     let Some(pending) = pending else {
         return;
@@ -489,7 +509,7 @@ pub fn end_span(guest: GuestProgress, properties: &[(&'static str, u64)]) {
         LocalSpan::add_properties(|| {
             properties
                 .iter()
-                .map(|(key, value)| (*key, value.to_string()))
+                .map(|(key, value)| ((*key).to_owned(), value.to_string()))
         });
     }
     let elapsed = elapsed_raw(pending.start_raw);
@@ -671,12 +691,11 @@ fn sample_memory() -> MemoryFields {
 #[cfg(target_os = "macos")]
 fn platform_memory() -> MemoryFields {
     let mut info: libc::rusage_info_v4 = unsafe { std::mem::zeroed() };
-    let mut pointer = &mut info as *mut libc::rusage_info_v4 as libc::rusage_info_t;
     let result = unsafe {
         libc::proc_pid_rusage(
             libc::getpid(),
             libc::RUSAGE_INFO_V4,
-            &mut pointer,
+            &mut info as *mut libc::rusage_info_v4 as *mut libc::rusage_info_t,
         )
     };
     if result != 0 {
@@ -938,14 +957,14 @@ mod tests {
     fn counters_report_guide_deltas_from_existing_snapshots() {
         let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         begin_guide("counters");
-        set_cpu_counters(vec![Ok(BTreeMap::from([
-            ("translations", 40),
-            ("loop_instructions", 900),
-        ]))]);
-        set_cpu_counters(vec![Ok(BTreeMap::from([
-            ("translations", 47),
-            ("loop_instructions", 950),
-        ]))]);
+    set_cpu_counters(vec![Ok(BTreeMap::from([
+        ("translations".to_owned(), 40),
+        ("loop_instructions".to_owned(), 900),
+    ]))]);
+    set_cpu_counters(vec![Ok(BTreeMap::from([
+        ("translations".to_owned(), 47),
+        ("loop_instructions".to_owned(), 950),
+    ]))]);
         let summary = end_guide();
         assert_eq!(summary.counters[0].delta["translations"], Some(7));
         assert_eq!(summary.counters[0].delta["loop_instructions"], Some(50));

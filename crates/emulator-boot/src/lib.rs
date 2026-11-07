@@ -1383,6 +1383,21 @@ fn setup_calendar(
 /// Run a named runtime to REC or an explicit stopped frontier. First-start menus
 /// use calibrated UP/DOWN and MENU/OK ADC presses, never RAM writes.
 pub fn to_rec(session: &mut Session, instruction_limit: u64) -> Result<RecReport, String> {
+    let mut span = fujimod_perf::span(fujimod_perf::SpanKind::Boot);
+    let start = boot_progress(session);
+    let result = to_rec_inner(session, instruction_limit);
+    span.guest(start, boot_progress(session));
+    result
+}
+
+fn boot_progress(session: &Session) -> fujimod_perf::GuestProgress {
+    fujimod_perf::GuestProgress {
+        instructions: session.board.instruction_counts().iter().sum(),
+        ticks: session.board.now(),
+    }
+}
+
+fn to_rec_inner(session: &mut Session, instruction_limit: u64) -> Result<RecReport, String> {
     if instruction_limit == 0 {
         return Err("instruction limit must be positive".into());
     }

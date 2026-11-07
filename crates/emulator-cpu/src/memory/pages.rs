@@ -109,6 +109,10 @@ impl Tracker {
             } else {
                 let mut page = [0; PAGE_BYTES];
                 page[..size].copy_from_slice(bytes);
+                fujimod_perf::add_bytes(
+                    fujimod_perf::ByteCounter::CheckpointPagesCopied,
+                    size as u64,
+                );
                 Arc::new(page)
             };
             pages.push(page);
@@ -146,6 +150,10 @@ impl Tracker {
                 continue;
             }
             unsafe { std::ptr::copy_nonoverlapping(page.as_ptr(), pointer.add(offset), size) };
+            fujimod_perf::add_bytes(
+                fujimod_perf::ByteCounter::CheckpointPagesCopied,
+                size as u64,
+            );
             if let Some((start, bytes)) = changed.last_mut()
                 && *start + *bytes == offset
             {

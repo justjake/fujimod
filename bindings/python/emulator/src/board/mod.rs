@@ -1184,16 +1184,31 @@ impl Board {
         if let Some(Backend::Xp4(session)) = &self.backend {
             let address = u32::try_from(address)
                 .map_err(|_| PyValueError::new_err("ARMv7-A virtual address exceeds 32 bits"))?;
-            return session.read_virtual(py, core, address, size);
+            let result = session.read_virtual(py, core, address, size)?;
+            fujimod_perf::add_bytes(
+                fujimod_perf::ByteCounter::GuestToPythonBytes,
+                size as u64,
+            );
+            return Ok(result);
         }
-        PyBytes::new_with(py, size, |out| {
+        let result = PyBytes::new_with(py, size, |out| {
             self.board()?.read_memory(core, address, out).map_err(error)
-        })
+        })?;
+        fujimod_perf::add_bytes(
+            fujimod_perf::ByteCounter::GuestToPythonBytes,
+            size as u64,
+        );
+        Ok(result)
     }
     fn mem_write(&self, core: usize, address: u64, bytes: &[u8]) -> PyResult<()> {
         self.board()?
             .write_memory(core, address, bytes)
-            .map_err(error)
+            .map_err(error)?;
+        fujimod_perf::add_bytes(
+            fujimod_perf::ByteCounter::PythonToGuestBytes,
+            bytes.len() as u64,
+        );
+        Ok(())
     }
     fn physical_read<'py>(
         &self,
@@ -1205,11 +1220,21 @@ impl Board {
         if let Some(Backend::Xp4(session)) = &self.backend {
             let address = usize::try_from(address)
                 .map_err(|_| PyValueError::new_err("Physical address exceeds host size"))?;
-            return session.read(py, address, size);
+            let result = session.read(py, address, size)?;
+            fujimod_perf::add_bytes(
+                fujimod_perf::ByteCounter::GuestToPythonBytes,
+                size as u64,
+            );
+            return Ok(result);
         }
-        PyBytes::new_with(py, size, |out| {
+        let result = PyBytes::new_with(py, size, |out| {
             self.board()?.read_physical(address, out).map_err(error)
-        })
+        })?;
+        fujimod_perf::add_bytes(
+            fujimod_perf::ByteCounter::GuestToPythonBytes,
+            size as u64,
+        );
+        Ok(result)
     }
     /// Read physical memory that an active wait observes but does not depend on.
     fn physical_inspect<'py>(
@@ -1251,9 +1276,19 @@ impl Board {
         if let Some(Backend::Xp4(session)) = &self.backend {
             let address = usize::try_from(address)
                 .map_err(|_| PyValueError::new_err("Physical address exceeds host size"))?;
-            return session.write(address, bytes);
+            session.write(address, bytes)?;
+            fujimod_perf::add_bytes(
+                fujimod_perf::ByteCounter::PythonToGuestBytes,
+                bytes.len() as u64,
+            );
+            return Ok(());
         }
-        self.board()?.write_physical(address, bytes).map_err(error)
+        self.board()?.write_physical(address, bytes).map_err(error)?;
+        fujimod_perf::add_bytes(
+            fujimod_perf::ByteCounter::PythonToGuestBytes,
+            bytes.len() as u64,
+        );
+        Ok(())
     }
     fn input_level(&mut self, name: &str, high: bool) -> PyResult<()> {
         self.session_mut()?.logic_input(name, high).map_err(error)
@@ -1292,12 +1327,6 @@ impl Board {
     }
     fn guest_profile(&self) -> PyResult<String> {
         serde_json::to_string(&self.board()?.guest_profile()).map_err(|e| error(e.to_string()))
-    }
-    fn start_host_profile(&self) -> PyResult<()> {
-        self.board()?.start_host_profile().map_err(error)
-    }
-    fn host_profile(&self) -> PyResult<String> {
-        serde_json::to_string(&self.board()?.host_profile()).map_err(|e| error(e.to_string()))
     }
     fn encoder_cycles(&mut self, name: &str, cycles: i32) -> PyResult<()> {
         self.session_mut()?.rotate(name, cycles).map_err(error)

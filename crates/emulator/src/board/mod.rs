@@ -464,6 +464,13 @@ impl Board {
     pub fn instruction_counts(&self) -> Vec<u64> {
         self.state.borrow().instructions.clone()
     }
+    /// Existing CPU backend counters, including the R-profile set when used.
+    /// These are observations and never enter guest state.
+    pub fn exit_counters(
+        &self,
+    ) -> Vec<Result<std::collections::BTreeMap<&'static str, u64>, String>> {
+        self.cpus.iter().map(|cpu| cpu.exit_counters()).collect()
+    }
     /// Serviced board MMIO callbacks, indexed by processor.
     pub fn mmio_trap_callback_counts(&self) -> Vec<u64> {
         self.mmio_callback_counts.borrow().clone()
@@ -486,15 +493,6 @@ impl Board {
     }
     pub fn now(&self) -> u64 {
         self.state.borrow().timeline.now()
-    }
-    /// Begin host observations while all processors are stopped.
-    pub fn start_host_profile(&self) -> Result<(), String> {
-        let baseline = self
-            .cpus
-            .iter()
-            .map(|cpu| cpu.exit_counters())
-            .collect::<Result<_, _>>()?;
-        self.state.borrow_mut().bus.start_host_profile(baseline)
     }
     /// Begin block-level guest observations while all processors are stopped.
     pub fn start_guest_profile(&self) -> Result<(), String> {
@@ -535,13 +533,6 @@ impl Board {
             },
             "cores": cores
         })
-    }
-    /// Observe phase costs while all processors are stopped after a board run.
-    pub fn host_profile(&self) -> Value {
-        self.state
-            .borrow()
-            .bus
-            .host_profile(|| self.cpus.iter().map(|cpu| cpu.exit_counters()).collect())
     }
     /// Set the phase used for subsequent optional guest profile entries.
     pub fn set_guest_profile_phase(&self, phase: GuestProfilePhase) -> Result<(), String> {
@@ -817,10 +808,8 @@ impl Board {
         if end <= start {
             return Ok(());
         }
-        let profile_run = self.state.borrow_mut().bus.profile_begin_run();
         let result = self.run_inner(until, Some(end), pause_after, quantum);
         self.state.borrow_mut().clock_limit = None;
-        self.state.borrow_mut().bus.profile_finish_run(profile_run);
         if let Err(error) = &result {
             self.state.borrow_mut().fail(error.clone());
         }
@@ -1017,7 +1006,7 @@ impl Board {
             // or runnable-peer turn; those boundaries end the stable window.
             cpu.set_loop_window(self.state.borrow().loop_window())?;
             let pc = scalar(&**cpu, Register::Pc)?;
-            let profile_engine = self.state.borrow().bus.profile_begin_engine();
+            let engine_guard = fujimod_perf::engine(u8::try_from(core).unwrap_or(u8::MAX));
             let result = cpu.run(Run {
                 begin: if cpu.model() == fujimod_emulator_cpu::Model::CortexM4
                     || matches!(
@@ -1035,7 +1024,7 @@ impl Board {
                 instructions: Some(budget),
             });
             let mut s = self.state.borrow_mut();
-            s.bus.profile_finish_engine(core, profile_engine);
+            drop(engine_guard);
             s.active_slice = None;
             s.sync(&**cpu, core)?;
             if let Some(error) = s.error.take() {

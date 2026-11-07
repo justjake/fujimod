@@ -38,25 +38,44 @@ impl Snapshot {
 }
 impl Session {
     pub fn checkpoint(&self, previous: Option<&Snapshot>) -> Result<Snapshot, String> {
-        let resources = self.resources.checkpoint()?;
-        let board = self.board.checkpoint(previous.map(|p| &p.board))?;
-        Ok(Snapshot {
-            definition: self.definition.clone(),
-            nodes: self.nodes.clone(),
-            contacts: self.contacts.keys().cloned().collect(),
-            board,
-            resources,
-            controls: self.controls.clone(),
-            contact_driver: self.contact_driver.clone(),
-        })
+        let mut span = fujimod_perf::span(fujimod_perf::SpanKind::Checkpoint);
+        let start = progress(&self.board);
+        let result = (|| {
+            let resources = self.resources.checkpoint()?;
+            let board = self.board.checkpoint(previous.map(|p| &p.board))?;
+            Ok(Snapshot {
+                definition: self.definition.clone(),
+                nodes: self.nodes.clone(),
+                contacts: self.contacts.keys().cloned().collect(),
+                board,
+                resources,
+                controls: self.controls.clone(),
+                contact_driver: self.contact_driver.clone(),
+            })
+        })();
+        span.guest(start, progress(&self.board));
+        result
     }
     pub fn restore(&mut self, saved: &Snapshot) -> Result<(), String> {
-        self.validate_snapshot(saved)?;
-        self.board.restore_keyframe(&saved.board)?;
-        self.resources.restore_checkpoint(&saved.resources)?;
-        self.controls = saved.controls.clone();
-        self.contact_driver = saved.contact_driver.clone();
-        self.recording_frames.borrow_mut().clear();
-        Ok(())
+        let mut span = fujimod_perf::span(fujimod_perf::SpanKind::Restore);
+        let start = progress(&self.board);
+        let result = (|| {
+            self.validate_snapshot(saved)?;
+            self.board.restore_keyframe(&saved.board)?;
+            self.resources.restore_checkpoint(&saved.resources)?;
+            self.controls = saved.controls.clone();
+            self.contact_driver = saved.contact_driver.clone();
+            self.recording_frames.borrow_mut().clear();
+            Ok(())
+        })();
+        span.guest(start, progress(&self.board));
+        result
+    }
+}
+
+fn progress(board: &fujimod_emulator::board::Board) -> fujimod_perf::GuestProgress {
+    fujimod_perf::GuestProgress {
+        instructions: board.instruction_counts().iter().sum(),
+        ticks: board.now(),
     }
 }

@@ -11,6 +11,9 @@ doctest = false
 name = "fujimod_emulator_javascript"
 crate-type = ["staticlib", "rlib"]
 
+[features]
+perf = ["fujimod-emulator/perf"]
+
 [dependencies]
 fujimod-framebuffer.workspace = true
 fujimod-emulator-session.workspace = true

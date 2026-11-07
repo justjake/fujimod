@@ -12,7 +12,8 @@ name = "fujimod_perf"
 
 [features]
 default = []
-# Browser builds record accumulators and counters only unless this is passed.
+# Browser builds record spans only when this is passed. Native builds are
+# always on; published browser builds never pass it.
 perf = []
 
 [dependencies]

@@ -1,6 +1,8 @@
 //! Python bindings for emulator boards, run configurations, input assets and settings headers.
 #[cfg(not(target_os = "emscripten"))]
 pub mod board;
+#[cfg(not(target_os = "emscripten"))]
+mod perf;
 mod settings;
 
 use fujimod_python_base::error;
@@ -162,6 +164,8 @@ pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
     fujimod_python_base::board_session::install(board::borrow_session);
     let module = binding::_PYO3_DEF.make_module(py)?;
     parent.add_submodule(module.bind(py))?;
+    #[cfg(not(target_os = "emscripten"))]
+    perf::register(py, parent)?;
     let modules = py
         .import("sys")?
         .getattr("modules")?

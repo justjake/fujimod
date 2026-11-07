@@ -23,7 +23,7 @@ pub fn end_guide() -> GuideSummary {
     GuideSummary::empty()
 }
 
-pub fn set_cpu_counters(_counters: Vec<Result<BTreeMap<&'static str, u64>, String>>) {}
+pub fn set_cpu_counters(_counters: Vec<Result<BTreeMap<String, u64>, String>>) {}
 
 pub struct SpanGuard;
 
@@ -39,7 +39,7 @@ pub fn begin_span(_kind: SpanKind, _guest: GuestProgress) -> bool {
     false
 }
 
-pub fn end_span(_guest: GuestProgress, _properties: &[(&'static str, u64)]) {}
+pub fn end_span(_guest: GuestProgress, _properties: &[(&str, u64)]) {}
 
 pub struct AccumulatorGuard;
 

@@ -30,6 +30,7 @@ pub(super) fn rows<T: Send>(
     let rows_per_chunk = row_count.div_ceil(workers);
     let first_length = rows_per_chunk * row_length;
     let (first, remaining) = values.split_at_mut(first_length);
+    let context = fujimod_perf::capture_context();
     thread::scope(|scope| {
         let mut jobs = Vec::with_capacity(workers - 1);
         for (index, chunk) in remaining
@@ -39,7 +40,9 @@ pub(super) fn rows<T: Send>(
             let start = (index + 1) * rows_per_chunk;
             let end = start + chunk.len() / row_length;
             let compute = &compute;
-            jobs.push(scope.spawn(move || compute(start..end, chunk)));
+            jobs.push(scope.spawn(move || {
+                fujimod_perf::run_on_worker(context, || compute(start..end, chunk))
+            }));
         }
         compute(0..first.len() / row_length, first);
         let mut failed = false;

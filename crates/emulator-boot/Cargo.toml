@@ -19,6 +19,7 @@ fujimod-emulator-cpu-unicorn.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-exr2-plan.workspace = true
 fujimod-emulator-preparation.workspace = true
+fujimod-perf.workspace = true
 fujimod-catalog.workspace = true
 fujimod-catalog-configuration.workspace = true
 fujimod-catalog-resolution.workspace = true

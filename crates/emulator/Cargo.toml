@@ -10,11 +10,15 @@ doctest = false
 name = "fujimod_emulator"
 crate-type = ["rlib"]
 
+[features]
+perf = ["fujimod-perf/perf"]
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 fujimod-emulator-devices = { path = "../emulator-devices" }
 fujimod-emulator-cpu = { path = "../emulator-cpu" }
 fujimod-emulator-cpu-unicorn = { path = "../emulator-cpu-unicorn" }
+fujimod-perf.workspace = true
 serde_json = "1"
 toml = "1.1"
 sha2 = "0.10"
@@ -39,3 +43,4 @@ fujimod-emulator-cpu-hvf = { path = "../emulator-cpu-hvf" }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+

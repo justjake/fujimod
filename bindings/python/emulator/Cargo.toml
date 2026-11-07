@@ -24,6 +24,7 @@ fujimod-emulator-cpu.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-storage.workspace = true
 fujimod-emulator-preparation.workspace = true
+fujimod-perf.workspace = true
 fujimod-emulator-exr2-plan.workspace = true
 fujimod-catalog-assets.workspace = true
 fujimod-catalog-settings.workspace = true

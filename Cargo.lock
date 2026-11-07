@@ -1772,6 +1772,7 @@ dependencies = [
  "fujimod-emulator-exr2-system",
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-models",
+ "fujimod-perf",
  "fujimod-workspace-hack",
  "libc",
  "serde",
@@ -1803,6 +1804,7 @@ dependencies = [
  "fujimod-emulator-preparation",
  "fujimod-emulator-session",
  "fujimod-emulator-xpp",
+ "fujimod-perf",
  "fujimod-recording",
  "fujimod-settings",
  "fujimod-workspace-hack",
@@ -1844,6 +1846,7 @@ dependencies = [
 name = "fujimod-emulator-cpu"
 version = "0.1.0"
 dependencies = [
+ "fujimod-perf",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -1888,6 +1891,7 @@ dependencies = [
  "fujimod-emulator-image-codecs",
  "fujimod-emulator-imaging",
  "fujimod-framebuffer",
+ "fujimod-perf",
  "fujimod-workspace-hack",
  "futures-lite",
  "libm",
@@ -2239,6 +2243,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-imaging",
+ "fujimod-perf",
  "fujimod-workspace-hack",
  "libm",
  "serde_json",
@@ -2482,6 +2487,7 @@ dependencies = [
  "fujimod-emulator-ip",
  "fujimod-emulator-storage",
  "fujimod-framebuffer",
+ "fujimod-perf",
  "fujimod-recording",
  "fujimod-workspace-hack",
  "serde",
@@ -2853,6 +2859,7 @@ dependencies = [
  "fujimod-emulator-xp5-board",
  "fujimod-emulator-xpp",
  "fujimod-framebuffer",
+ "fujimod-perf",
  "fujimod-python-base",
  "fujimod-settings",
  "fujimod-workspace-hack",
@@ -2886,6 +2893,7 @@ dependencies = [
  "cc",
  "fujimod-emulator-devices",
  "fujimod-emulator-image-processing",
+ "fujimod-perf",
  "fujimod-virtual-scene",
  "fujimod-workspace-hack",
  "pkg-config",
