@@ -9,10 +9,17 @@ use std::collections::BTreeSet;
 
 fn cache_primitives<L: Lookup>(index: &L, firmware: &str) -> Result<(u64, u64), String> {
     const KERNEL0: u64 = 0x40000;
-    const KERNEL0_BYTES: usize = 56224;
-    let kernel = index
-        .read(firmware, "kernel0", KERNEL0, KERNEL0_BYTES)
-        .map_err(|error| error.to_string())?
+    let units = index
+        .units(firmware, Some("kernel0"))
+        .map_err(|error| error.to_string())?;
+    let kernel = units
+        .iter()
+        .find_map(|unit| {
+            unit.regions.iter().find_map(|region| {
+                let offset = KERNEL0.checked_sub(region.address)?;
+                region.bytes.get(usize::try_from(offset).ok()?..)
+            })
+        })
         .ok_or("missing EXR II CPU0 kernel")?;
     let mut primitives = Vec::new();
     for (size, hash) in [
