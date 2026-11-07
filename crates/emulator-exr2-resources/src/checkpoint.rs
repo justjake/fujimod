@@ -3,12 +3,23 @@ mod portable;
 use super::*;
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct ResourceSnapshot {
     wires: BTreeMap<String, Checkpoint>,
     images: ImageSnapshot,
     media: Checkpoint,
     nands: BTreeMap<String, Checkpoint>,
+    /// Readable values captured with the typed state. Equality and canonical
+    /// archives use the typed checkpoints above; this is diagnostic output.
+    readable: Option<serde_json::Value>,
+}
+impl PartialEq for ResourceSnapshot {
+    fn eq(&self, other: &Self) -> bool {
+        self.wires == other.wires
+            && self.images == other.images
+            && self.media == other.media
+            && self.nands == other.nands
+    }
 }
 impl ResourceSnapshot {
     /// Encoded mutable resource state; shared sensor rasters remain external inputs.
@@ -121,6 +132,13 @@ impl ResourceSnapshot {
 
     /// Readable direct-state JSON with base64 byte leaves.
     pub fn to_json(&self) -> Result<serde_json::Value, String> {
+        if let Some(readable) = &self.readable {
+            return Ok(readable.clone());
+        }
+        self.checkpoint_json()
+    }
+
+    fn checkpoint_json(&self) -> Result<serde_json::Value, String> {
         use serde_json::json;
         let (cards, files): (
             BTreeMap<String, Card>,
@@ -283,6 +301,7 @@ impl Resources {
                 .iter()
                 .map(|(k, v)| Ok((k.clone(), v.checkpoint()?)))
                 .collect::<Result<_, String>>()?,
+            readable: Some(self.fingerprint()?),
         })
     }
     pub fn validate_checkpoint(&self, saved: &ResourceSnapshot) -> Result<(), String> {

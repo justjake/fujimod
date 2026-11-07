@@ -120,6 +120,7 @@ impl Resources {
             },
             media,
             nands,
+            readable: None,
         })
     }
 }
