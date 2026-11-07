@@ -2577,6 +2577,7 @@ pub struct ReferenceCatalog {
     bulk: BTreeMap<String, fujimod_catalog_bulk::FirmwareBulk>,
     execution: BTreeMap<String, fujimod_catalog_execution::FirmwareExecution>,
     nand_boot: BTreeMap<String, crate::nand_boot::FirmwareNandBoot>,
+    boot_patch: BTreeMap<String, crate::boot_patch::FirmwareBootPatch>,
     boot_roms: BTreeMap<String, crate::boot_rom::BootRom>,
     restart: BTreeMap<String, fujimod_catalog_restart::FirmwareRestart>,
     card_files: BTreeMap<String, fujimod_catalog_card::FirmwareCard>,
@@ -2781,6 +2782,18 @@ impl ReferenceCatalog {
         self.nand_boot.get(firmware_id)
     }
 
+    /// Located boot-patch facts, independent of a body or execution profile.
+    pub fn boot_patch_profiles(
+        &self,
+    ) -> impl Iterator<Item = &crate::boot_patch::FirmwareBootPatch> {
+        self.boot_patch.values()
+    }
+
+    /// Return the boot-patch facts for a firmware release.
+    pub fn boot_patch(&self, firmware_id: &str) -> Option<&crate::boot_patch::FirmwareBootPatch> {
+        self.boot_patch.get(firmware_id)
+    }
+
     /// Located boot-ROM card facts, keyed by the ROM's SHA-256.
     pub fn boot_rom(&self, sha256: &str) -> Option<&crate::boot_rom::BootRom> {
         self.boot_roms.get(sha256)
@@ -2868,6 +2881,11 @@ impl ReferenceCatalog {
                 let value: crate::nand_boot::FirmwareNandBoot = decode(bytes, path)?;
                 value.validate()?;
                 insert_unique(&mut self.nand_boot, value.firmware_id.clone(), value, path)
+            }
+            ReferenceKind::BootPatch => {
+                let value: crate::boot_patch::FirmwareBootPatch = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(&mut self.boot_patch, value.firmware_id.clone(), value, path)
             }
             ReferenceKind::BootRom => {
                 let value: crate::boot_rom::BootRom = decode(bytes, path)?;
@@ -2960,6 +2978,7 @@ impl ReferenceCatalog {
             .bulk
             .keys()
             .chain(self.nand_boot.keys())
+            .chain(self.boot_patch.keys())
             .chain(self.restart.keys())
             .chain(self.card_files.keys())
         {
@@ -2986,6 +3005,19 @@ impl ReferenceCatalog {
                     "NAND-boot facts for {firmware_id} disagree with boot ROM {} on the handoff address",
                     facts.boot_rom
                 ));
+            }
+        }
+        for (firmware_id, facts) in &self.boot_patch {
+            let firmware = self.firmwares.get(firmware_id).ok_or_else(|| {
+                format!("boot-patch facts refer to missing firmware {firmware_id}")
+            })?;
+            if let Some(update) = &firmware.update {
+                if update.sha256 != facts.update_sha256 {
+                    return Err(format!(
+                        "boot-patch facts for {firmware_id} name update {} instead of {}",
+                        facts.update_sha256, update.sha256
+                    ));
+                }
             }
         }
         for (body_id, controls) in &self.physical_controls {
@@ -3535,6 +3567,7 @@ enum ReferenceKind {
     Bulk,
     Execution,
     NandBoot,
+    BootPatch,
     BootRom,
     CardFiles,
     Restart,
@@ -3563,6 +3596,7 @@ impl ReferenceKind {
             Some("bulk.generated.json") => Ok(Self::Bulk),
             Some("execution.generated.json") => Ok(Self::Execution),
             Some("nand-boot.generated.json") => Ok(Self::NandBoot),
+            Some("boot-patch.generated.json") => Ok(Self::BootPatch),
             Some("card-files.generated.json") => Ok(Self::CardFiles),
             Some("restart.generated.json") => Ok(Self::Restart),
             Some("settings.generated.json") => Ok(Self::Settings),
