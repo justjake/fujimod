@@ -441,6 +441,13 @@ impl FirmwareSettings {
         // Store extents, each with the offsets its fields and settings occupy.
         let mut stores: BTreeMap<&str, (u64, BTreeSet<u64>)> = BTreeMap::new();
         stores.insert("bank", (bank_bytes, BTreeSet::new()));
+        if self.bank.is_none() && self.configuration.is_none() {
+            // X-Processor 4: the RAM configuration store the stock initializer
+            // zero-fills (0x480000 bytes) and repopulates from the defaults
+            // table. A profile layout names it for configuration-byte settings
+            // such as the debug gate; the profile builder does not place it.
+            stores.insert("ram", (0x48_0000, BTreeSet::new()));
+        }
         if let Some(profile) = profile {
             if profile.header.size != 16 {
                 return fail("profile header is not sixteen bytes");

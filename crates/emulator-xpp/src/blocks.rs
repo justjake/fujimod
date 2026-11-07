@@ -743,18 +743,21 @@ impl Block {
         let offset = address.checked_sub(self.base)?;
         (size == 4 && offset & 3 == 0 && offset < self.size).then_some(offset)
     }
-}
-impl Device for Block {
-    fn name(&self) -> &'static str {
-        "xpp-register-block"
+    /// Any 1/2/4-byte aligned offset within the block. Sub-word accesses reach
+    /// the same word storage as a four-byte access.
+    fn access_offset(&self, address: u64, size: u8) -> Option<u64> {
+        let offset = address.checked_sub(self.base)?;
+        let width = u64::from(size);
+        ((1..=4).contains(&size)
+            && offset % width == 0
+            && offset.checked_add(width)? <= self.size)
+            .then_some(offset)
     }
-    fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
-        let Some(offset) = self.offset(address, size) else {
-            cx.unmodeled();
-            return 0;
-        };
+    /// The four-byte word at a four-byte-aligned offset, with its fixed, idle
+    /// and frame-stop bits applied.
+    fn read_word(&self, offset: u64) -> u32 {
         if let Some(&(_, value)) = self.fixed.iter().find(|(o, _)| *o == offset) {
-            return u64::from(value);
+            return value;
         }
         let mut idle = self
             .idle
@@ -762,7 +765,7 @@ impl Device for Block {
             .filter(|(o, _)| *o == offset)
             .fold(0, |bits, (_, mask)| bits | mask);
         if let Some((_, mask)) = self.job.and_then(|j| j.status).filter(|s| s.0 == offset) {
-            return u64::from(self.state.status & mask | idle);
+            return self.state.status & mask | idle;
         }
         if let Some(frames) = self.frames.filter(|f| f.stopped.0 == offset) {
             idle = idle & !frames.stopped.1
@@ -772,11 +775,42 @@ impl Device for Block {
                     frames.stopped.1
                 };
         }
-        u64::from(
-            self.state.words.get(&offset).copied().unwrap_or(0) & !self.stopped_mask(offset) | idle,
-        )
+        self.state.words.get(&offset).copied().unwrap_or(0) & !self.stopped_mask(offset) | idle
+    }
+}
+impl Device for Block {
+    fn name(&self) -> &'static str {
+        "xpp-register-block"
+    }
+    fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
+        let Some(offset) = self.access_offset(address, size) else {
+            cx.unmodeled();
+            return 0;
+        };
+        if size == 4 {
+            return u64::from(self.read_word(offset));
+        }
+        let shift = (offset & 3) * 8;
+        let width = u32::from(size) * 8;
+        (u64::from(self.read_word(offset & !3)) >> shift) & ((1u64 << width) - 1)
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
+        if size != 4 {
+            let Some(offset) = self.access_offset(address, size) else {
+                return cx.unmodeled();
+            };
+            let base = offset & !3;
+            let shift = (offset & 3) * 8;
+            let width = u32::from(size) * 8;
+            let mask = ((1u32 << width) - 1) << shift;
+            let merged = (self.read_word(base) & !mask) | (((value as u32) << shift) & mask);
+            if merged == 0 {
+                self.state.words.remove(&base);
+            } else {
+                self.state.words.insert(base, merged);
+            }
+            return;
+        }
         if let (Some(job), Some(offset), Ok(value)) =
             (self.job, self.offset(address, size), u32::try_from(value))
         {
@@ -941,6 +975,29 @@ mod tests {
     use fujimod_emulator_devices::test_host::{TestHost, read, write};
 
     const BASE: u64 = 0xfff55000;
+
+    #[test]
+    fn byte_accesses_merge_into_the_word() {
+        let mut unit = Block::new(BASE, 0x200, vec![], None).unwrap();
+        let mut h = TestHost::new();
+        // A byte store writes one lane and leaves the others; a byte read
+        // returns just that lane. 108d8e4 writes gate words this way.
+        {
+            let mut cx = h.cx();
+            unit.write(&mut cx, BASE + 0x18, 1, 0x5a);
+            assert_eq!(cx.refusal(), None);
+        }
+        assert_eq!(read(&mut unit, &mut h, BASE + 0x18), 0x5a);
+        {
+            let mut cx = h.cx();
+            unit.write(&mut cx, BASE + 0x19, 1, 0xa5);
+            assert_eq!(cx.refusal(), None);
+        }
+        assert_eq!(read(&mut unit, &mut h, BASE + 0x18), 0xa55a);
+        let mut cx = h.cx();
+        assert_eq!(unit.read(&mut cx, BASE + 0x19, 1), 0xa5);
+        assert_eq!(cx.refusal(), None);
+    }
 
     #[test]
     fn words_read_back_and_idle_bits_read_set() {

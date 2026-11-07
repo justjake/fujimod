@@ -124,13 +124,18 @@ pub fn build(
             return Err(format!("{} has no settings bank", layout.firmware_id));
         }
         let bank_bytes = match &layout.configuration {
-            Some(window) => configuration(layout, flash)?,
+            Some(_window) => configuration(layout, flash)?,
             // X-Processor 4 RAM journal profile: no flash bank, the header and
             // journal records live in CPU-virtual RAM. Empty bank store suffices
             // for settings that reference header/record stores instead.
             None => vec![],
         };
         stores.insert("bank", bank_bytes);
+        if layout.bank.is_none() && layout.configuration.is_none() {
+            // The RAM configuration store a profile layout may name for
+            // configuration-byte settings (the debug gate). Not placed.
+            stores.insert("ram", vec![0; 0x48_0000]);
+        }
         return profile(layout, &section, requested, stores, None);
     };
     let descriptor = read(&section, layout, &bank.descriptor)?;

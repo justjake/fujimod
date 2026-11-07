@@ -435,8 +435,10 @@ impl Devices {
     pub fn requests(&mut self, inputs: Vec<(u64, u64)>) -> Result<(), String> {
         let id = self.models.len();
         let model = fujimod_emulator_xp4_io::requests::Requests::new(&inputs)?;
+        // Each request word is the `+0x80` word of a block; own the whole block
+        // so its command, gate and completion words are modeled too.
         self.windows
-            .extend(inputs.iter().map(|&(a, _)| (a, a + 4, id)));
+            .extend(inputs.iter().map(|&(a, _)| (a - 0x80, a - 0x80 + 0x100, id)));
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
