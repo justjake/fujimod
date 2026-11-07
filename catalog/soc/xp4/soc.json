@@ -822,7 +822,45 @@
             "clock": "one 54 MHz timer cycle per aggregate CPU instruction; synthetic ratio",
             "layout": "xp4",
             "basis": "Declared catalog input."
-          }
+          },
+          "register_blocks": [
+            {
+              "base": 4285591552,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "X-T3 5.11 writes a 16-register gate bank at 0xff70f000..0xff70f03c (address table 0x13ea340, mask table 0x13ea3f8, set/clear helper 0x108d4c4). Reads return the last write; no arbitration is modeled."
+            },
+            {
+              "base": 4285571072,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "X-T3 5.11 reads/writes 0xff70a000..0xff70a040. Reads return the last write; no arbitration is modeled."
+            },
+            {
+              "base": 4294213632,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "X-T3 5.11 reads/writes 0xfff48000..0xfff48700. Reads return the last write; no arbitration is modeled."
+            },
+            {
+              "base": 4294172672,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "X-T3 5.11 reads/writes 0xfff3e000..0xfff3e018. Reads return the last write; no arbitration is modeled."
+            },
+            {
+              "base": 4285575168,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "X-T3 5.11 gate registers at 0xff70b000.. (table descriptors {register,0,0x1ff,base}). Reads return the last write; no arbitration is modeled."
+            },
+            {
+              "base": 4285579264,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "X-T3 5.11 gate registers at 0xff70c000.. (table descriptors {register,0,0x1ff,base}). Reads return the last write; no arbitration is modeled."
+            }
+          ]
         },
         "limits": [],
         "cache_basis": "Declared catalog input."

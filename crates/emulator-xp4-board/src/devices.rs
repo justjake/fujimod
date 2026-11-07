@@ -435,8 +435,39 @@ impl Devices {
     pub fn requests(&mut self, inputs: Vec<(u64, u64)>) -> Result<(), String> {
         let id = self.models.len();
         let model = fujimod_emulator_xp4_io::requests::Requests::new(&inputs)?;
+        // Each request word is the `+0x80` word of a block; own the whole block
+        // so its command, gate and completion words are modeled too.
         self.windows
-            .extend(inputs.iter().map(|&(a, _)| (a, a + 4, id)));
+            .extend(inputs.iter().map(|&(a, _)| (a - 0x80, a - 0x80 + 0x100, id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
+    pub fn register_banks(&mut self, windows: Vec<(u64, u64)>) -> Result<(), String> {
+        if windows.iter().any(|&(lo, hi)| {
+            self.windows
+                .iter()
+                .any(|&(a, b, _)| lo < b && a < hi)
+        }) {
+            return Err("Overlapping XP4 register bank window".into());
+        }
+        let model = fujimod_emulator_xp4_io::register_bank::RegisterBank::new(&windows)?;
+        let id = self.models.len();
+        self.windows
+            .extend(windows.into_iter().map(|(lo, hi)| (lo, hi, id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
+    pub fn usb_condition(&mut self, base: u64, present: bool) -> Result<(), String> {
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base + 4)
+        {
+            return Err("Overlapping XP4 USB condition register".into());
+        }
+        let model = fujimod_emulator_xp4_io::usb_condition::UsbCondition::new(base, present)?;
+        let id = self.models.len();
+        self.windows.push((base, base + 4, id));
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
@@ -674,6 +705,7 @@ impl Devices {
                 (storage::FLASH, storage::FLASH + storage::FLASH_SIZE, 0),
                 (storage::DMA, storage::DMA + 0x10000, 1),
                 (0xfff4a500, 0xfff4a520, 1),
+                (0xfff4a800, 0xfff4a880, 1),
             ],
         })
     }

@@ -1,0 +1,82 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "xt3-511-settings",
+  "firmware_id": "xt3-511",
+  "source": {
+    "flash_offset": 2490368,
+    "address": 15863808,
+    "size": 6191112,
+    "sha256": "7cd5f9f8cce57fc3d9100bf303ac01ae74735e5daa7392138ef73759a343d673"
+  },
+  "defaults": {
+    "address": 21469436,
+    "size": 576,
+    "sha256": "473a752f759ac2530da9cf5c2affce2718d12e613b4d680924b07d907b157b18"
+  },
+  "fields": [],
+  "profile": {
+    "header": {
+      "address": 21471204,
+      "size": 16,
+      "sha256": "2e99e8c30aeb4434dcd0fe83deea0a22c5631b5aa35eeec16a45be91ddd44856"
+    },
+    "ram_address": 26028208,
+    "records": {
+      "main": {
+        "block": 23650828,
+        "bytes": 32768,
+        "defaults": {
+          "address": 21651456,
+          "size": 31444,
+          "sha256": "88c46a9ac5d5757cb5cc76847be594da1977f252e9c096d9292d10ab9cfec4ce"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 31740,
+        "fields": [
+          {
+            "offset": 31736,
+            "bytes": [
+              5,
+              17
+            ],
+            "basis": "Stock journal writer 0x11244b4 stamps the configuration version bytes at 0x14798f6/0x14798f7 into main record +0x7bf8/+0x7bf9."
+          }
+        ]
+      }
+    }
+  },
+  "settings": {
+    "debug": {
+      "store": "ram",
+      "offset": 247,
+      "values": {
+        "off": [
+          0
+        ],
+        "on": [
+          1
+        ]
+      }
+    },
+    "setup": {
+      "store": "header",
+      "offset": 12,
+      "values": {
+        "done": [
+          30
+        ]
+      }
+    },
+    "language": {
+      "store": "main",
+      "offset": 713,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    }
+  },
+  "sections": []
+}

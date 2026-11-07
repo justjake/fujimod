@@ -480,7 +480,7 @@
     },
     "SettingsProfile": {
       "additionalProperties": false,
-      "description": "The stock user profile: a sixteen-byte header kept by the power controller\nand journal records in managed flash blocks. Firmware that finds no valid\nheader and records resets the profile to its defaults at startup.",
+      "description": "The stock user profile: a sixteen-byte header kept by the power controller\nand journal records in managed flash blocks. Firmware that finds no valid\nheader and records resets the profile to its defaults at startup. X-Processor\n4 bodies keep the header and journal in RAM instead of a settings bank; the\nheader's RAM destination is declared in `ram_address`.",
       "properties": {
         "derived_fields": {
           "default": [],
@@ -493,6 +493,12 @@
         "header": {
           "$ref": "#/$defs/UpdateRange",
           "description": "Stock header defaults. Byte 14 is the marker `0xaa`; byte 15 holds the\nchecksum that makes the sixteen bytes sum to zero."
+        },
+        "ram_address": {
+          "description": "X-Processor 4 only: the CPU-virtual RAM address where the stock header is\ncopied at boot. Absent for X-Processor Pro, whose header goes to sub-CPU\nregisters.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
         },
         "records": {
           "additionalProperties": {

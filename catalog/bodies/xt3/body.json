@@ -3,7 +3,7 @@
   "schema": 1,
   "id": "xt3",
   "soc_id": "xp4",
-  "dram_bytes": 536870912,
+  "dram_bytes": 1073741824,
   "nand": null,
   "sensor": null,
   "lens": null,
@@ -109,7 +109,7 @@
     ],
     "profiles": {
       "xt3-discovery": {
-        "dram_basis": "Declared catalog input."
+        "dram_basis": "1 GiB. The guarded JIG RAM capture (CPU-virtual 0x0..0x40000000, sha256 2773ac81bc202c2a02888873914382d75ead20c5e013a33889aded643a6bdd2b) is populated with real content through the top of the window (strings and structures up to at least 0x3e1b6b04), so the earlier declared 512 MiB was too small."
       }
     }
   }
