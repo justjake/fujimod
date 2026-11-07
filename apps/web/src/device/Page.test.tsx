@@ -58,7 +58,7 @@ test('a signed-in visitor approves the code the camera shows', async () => {
   const { host, dispose } = await mount('/device/?user_code=2GK5QTNV');
   try {
     expect(deviceRequest).toHaveBeenCalledWith('2GK5QTNV');
-    expect(host.querySelector('h2')?.textContent).toBe('x70-camera');
+    expect(host.querySelector('h2')?.textContent).toBe('Fujifilm camera');
     expect(host.querySelector('.device-scopes')?.textContent).toBe('google.photos.append');
 
     button(host, 'Approve')!.click();
