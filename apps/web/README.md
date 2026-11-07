@@ -46,6 +46,25 @@ checks mobile Chromium and WebKit against a running development server, includin
 a retained stale unversioned page response, repeated visits, and working inputs.
 Set `FUJIMOD_WEB_URL` to check another development endpoint.
 
+## Camera sign-in
+
+A camera has no browser, so it signs in by device code. It asks for a code,
+shows it to its owner, and polls until the owner approves it at `/device/`:
+
+```
+POST /api/auth/device/code      {client_id, scope}
+  -> {device_code, user_code, verification_uri, verification_uri_complete, expires_in, interval}
+POST /api/auth/device/token     {grant_type, device_code, client_id}
+  -> {access_token, token_type, expires_in, scope}   or authorization_pending
+POST /api/devices/google-token  Authorization: Bearer <access_token>
+  -> {accessToken, expiresAt}
+```
+
+`grant_type` is `urn:ietf:params:oauth:grant-type:device_code`. Poll no faster
+than `interval` seconds, or the token endpoint answers `slow_down`. The Worker
+records the issued session as a device credential and returns a Google token
+only to a device whose policy grants `google.photos.append`.
+
 ## Dev Tools
 
 `/dev-tools/` is a Solid 2 USB console using the public `fujimod` JavaScript/Wasm
