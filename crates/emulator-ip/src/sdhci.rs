@@ -281,3 +281,4 @@ mod tests {
 
 pub mod host;
 pub mod registers;
+pub mod uhs2;

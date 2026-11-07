@@ -51,6 +51,7 @@ fn register_with_resources(
             bus.register(window.base,window.size,Box::new(fujimod_emulator_xp5_io::sd_interface::Interface::new(window.base)?))?;
         }
         "sdhci" => sd::register(bus, window, &mut resources.sd)?,
+        "sdhci-uhs2" => sd::register_uhs2(bus, window, &resources.sd)?,
         "boot-control" => {
             if window.base != 0xff90e000 || window.size != 4 {
                 return Err("invalid boot-control source window".into());

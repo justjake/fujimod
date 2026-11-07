@@ -507,7 +507,7 @@ impl Worker {
                         Ok(())
                     }
                 })?;
-                if !resources.sd.is_empty() { return Err("unused SD media configuration".into()); }
+                xp5_board::sd::require_hosts(&resources.sd)?;
                 if !resources.displays.is_empty() {
                     return Err("unused scanout configuration".into());
                 }
