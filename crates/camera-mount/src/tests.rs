@@ -389,3 +389,23 @@ fn display_files_are_read_only_and_chunk_reads_share_one_open_snapshot() {
             .all(|(name, _, _)| !name.starts_with("write"))
     );
 }
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn adapter_splits_reads_larger_than_one_device_exchange() {
+    let length = (64 << 20) + 4096;
+    let fs = CameraFs::new(
+        TestDevice::default(),
+        vec![Region {
+            name: "ram".into(),
+            address: 0,
+            size: length as u64,
+        }],
+    )
+    .unwrap();
+    let mut adapter = crate::fskit::Adapter::new(fs, 0, 0);
+    let data = fskit_rs::Filesystem::read(&mut adapter, MEMORY, 0, length as i64)
+        .await
+        .unwrap();
+    assert_eq!(data.len(), length);
+}

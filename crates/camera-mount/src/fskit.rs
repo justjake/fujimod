@@ -330,11 +330,10 @@ impl<D: Device + 'static> Filesystem for Adapter<D> {
     async fn read(&mut self, id: u64, offset: i64, length: i64) -> Result<Vec<u8>> {
         let offset = u64::try_from(offset).map_err(|_| Error::Posix(libc::EINVAL))?;
         let length = usize::try_from(length).map_err(|_| Error::Posix(libc::EINVAL))?;
-        if length > MEMORY_IO_BYTES {
-            return Err(Error::Posix(libc::EINVAL));
-        }
         self.work(move |fs| {
             let mut data = Vec::with_capacity(length);
+            // FSKit may hand us any read length; split the device exchange at
+            // the bounded per-request cap instead of rejecting the caller.
             while data.len() < length {
                 let limit = if id == MEMORY {
                     MEMORY_IO_BYTES
