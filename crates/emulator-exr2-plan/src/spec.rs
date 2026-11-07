@@ -115,6 +115,11 @@ pub enum SerialEndpoint {
     Registers {
         options: serde_json::Value,
     },
+    WakeRegisters {
+        options: serde_json::Value,
+        clock: String,
+        ticks_per_second: u64,
+    },
     Panel {
         options: serde_json::Value,
     },

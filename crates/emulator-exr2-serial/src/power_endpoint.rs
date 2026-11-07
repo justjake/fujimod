@@ -12,6 +12,20 @@ pub struct PowerEndpoint {
 }
 impl PowerEndpoint {
     pub fn new(options: RegisterOptions, power: Power) -> Result<Self, String> {
+        for register in [0x68, 0x69, 0x6a] {
+            if !options
+                .registers
+                .iter()
+                .any(|(address, _)| *address == register)
+                || options.status_registers.contains(&register)
+                || options
+                    .clock
+                    .as_ref()
+                    .is_some_and(|clock| clock.registers.contains(&register))
+            {
+                return Err("wake registers must be writable command registers".into());
+            }
+        }
         Ok(Self {
             registers: RegisterFile::new(options)?,
             power,
@@ -103,6 +117,15 @@ mod tests {
         )
         .unwrap();
         let mut host = TestHost::new();
+        let mut clock = fujimod_emulator_devices::exr2::clock::Clocks::new(
+            fujimod_emulator_devices::exr2::clock::Options {
+                output_settle_ticks: 2,
+                reset_ready: true,
+            },
+            (),
+        )
+        .unwrap();
+        clock.output().attach_power(power.clone()).unwrap();
         for (at, word) in [(1, 0xe901), (2, 0xea00), (3, 0xe801)] {
             let mut cx = Cx::new(&mut host, 0, 0, 0);
             part.transfer(
@@ -116,9 +139,15 @@ mod tests {
             )
             .unwrap();
         }
+        host.now = 4;
+        fujimod_emulator_devices::test_host::write(
+            &mut clock,
+            &mut host,
+            fujimod_emulator_devices::exr2::clock::BASE + 0x84,
+            0,
+        );
         {
             let mut state = power.lock().unwrap();
-            state.hold(4, false).unwrap();
             state.advance(14).unwrap();
             assert_eq!(state.supply(), Supply::Off);
             state.advance(103).unwrap();
