@@ -65,36 +65,6 @@
       ],
       "type": "object"
     },
-    "NandBootCommandTable": {
-      "additionalProperties": false,
-      "description": "SD command table copied over stage-1 bytes while the ROM runs.",
-      "properties": {
-        "bytes": {
-          "description": "Bytes copied.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "destination": {
-          "description": "Low-mirror destination address.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "source": {
-          "description": "High-mirror source address.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "source",
-        "destination",
-        "bytes"
-      ],
-      "type": "object"
-    },
     "NandBootEntry": {
       "additionalProperties": false,
       "description": "The reset vector and the first instruction behind its literal.",
@@ -144,29 +114,6 @@
       ],
       "type": "object"
     },
-    "NandBootFilesystemPointer": {
-      "additionalProperties": false,
-      "description": "The word the ROM file service uses to publish its current volume.",
-      "properties": {
-        "address": {
-          "description": "Address of the pointer word.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "entry_value": {
-          "description": "Stock value at stage-1 entry.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "address",
-        "entry_value"
-      ],
-      "type": "object"
-    },
     "NandBootLoadRange": {
       "additionalProperties": false,
       "description": "Frozen stage-2 file, address and size.",
@@ -178,7 +125,14 @@
           "type": "integer"
         },
         "alias": {
-          "description": "Uncached alias of the address.",
+          "description": "Uncached alias of the address, where the body establishes one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "basis": {
+          "description": "Why this range is safe: the stock heap or the frozen EXR II range.",
           "type": "string"
         },
         "capacity": {
@@ -192,119 +146,29 @@
           "type": "string"
         },
         "heap_base": {
-          "description": "Base of the stock network heap.",
+          "description": "Base of the stock network heap when it owns this range.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "heap_bytes": {
-          "description": "Bytes in the stock network heap.",
+          "description": "Bytes in the stock network heap when it owns this range.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       },
       "required": [
         "file",
         "address",
         "capacity",
-        "alias",
-        "heap_base",
-        "heap_bytes"
-      ],
-      "type": "object"
-    },
-    "NandBootPowerHold": {
-      "additionalProperties": false,
-      "description": "Power-hold register asserted before any ROM card access.",
-      "properties": {
-        "address": {
-          "description": "Register address.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "bit": {
-          "description": "Bit held high.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "address",
-        "bit"
-      ],
-      "type": "object"
-    },
-    "NandBootRom": {
-      "additionalProperties": false,
-      "description": "Boot-ROM card routines and relocated state.",
-      "properties": {
-        "command_table": {
-          "$ref": "#/$defs/NandBootCommandTable",
-          "description": "The low-mirror SD command table the bootloader relocates."
-        },
-        "filesystem_pointer": {
-          "$ref": "#/$defs/NandBootFilesystemPointer",
-          "description": "The ROM's file-system pointer word."
-        },
-        "load_address": {
-          "description": "RAM address the boot ROM hands control to.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "power_hold": {
-          "$ref": "#/$defs/NandBootPowerHold",
-          "description": "The power-hold register the bootloader reasserts."
-        },
-        "routines": {
-          "$ref": "#/$defs/NandBootRomRoutines",
-          "description": "FAT mount, open and read entries."
-        },
-        "sha256": {
-          "description": "SHA-256 of the boot ROM the routines come from.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "sha256",
-        "routines",
-        "command_table",
-        "filesystem_pointer",
-        "power_hold",
-        "load_address"
-      ],
-      "type": "object"
-    },
-    "NandBootRomRoutines": {
-      "additionalProperties": false,
-      "description": "The three ROM file routines the bootloader calls.",
-      "properties": {
-        "mount": {
-          "description": "Mount entry.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "open": {
-          "description": "Open entry.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "read": {
-          "description": "Read entry.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "mount",
-        "open",
-        "read"
+        "basis"
       ],
       "type": "object"
     },
@@ -374,6 +238,10 @@
       "description": "Stable schema identifier for this document.",
       "type": "string"
     },
+    "boot_rom": {
+      "description": "SHA-256 of the boot ROM whose card facts this document uses.",
+      "type": "string"
+    },
     "code_space": {
       "$ref": "#/$defs/NandBootCodeSpace",
       "description": "Where the bootloader is placed in stage 1."
@@ -389,10 +257,6 @@
     "load_range": {
       "$ref": "#/$defs/NandBootLoadRange",
       "description": "Frozen stage-2 file and RAM range."
-    },
-    "rom": {
-      "$ref": "#/$defs/NandBootRom",
-      "description": "Boot-ROM card routines and the state they relocate."
     },
     "schema": {
       "description": "Document version.",
@@ -417,7 +281,7 @@
     "update_sha256",
     "stage1",
     "code_space",
-    "rom",
+    "boot_rom",
     "load_range"
   ],
   "title": "FirmwareNandBoot",

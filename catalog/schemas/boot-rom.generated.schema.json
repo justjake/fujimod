@@ -1,0 +1,170 @@
+{
+  "$defs": {
+    "BootRomCommandTable": {
+      "additionalProperties": false,
+      "description": "SD command table copied over stage-1 bytes while the ROM runs.",
+      "properties": {
+        "bytes": {
+          "description": "Bytes copied.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "destination": {
+          "description": "Low-mirror destination address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "description": "High-mirror source address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source",
+        "destination",
+        "bytes"
+      ],
+      "type": "object"
+    },
+    "BootRomFilesystemPointer": {
+      "additionalProperties": false,
+      "description": "The word the ROM file service uses to publish its current volume.",
+      "properties": {
+        "address": {
+          "description": "Address of the pointer word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "entry_value": {
+          "description": "Stock value at stage-1 entry.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "entry_value"
+      ],
+      "type": "object"
+    },
+    "BootRomPowerHold": {
+      "additionalProperties": false,
+      "description": "Power-hold register asserted before any ROM card access.",
+      "properties": {
+        "address": {
+          "description": "Register address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "bit": {
+          "description": "Bit held high.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "bit"
+      ],
+      "type": "object"
+    },
+    "BootRomRoutines": {
+      "additionalProperties": false,
+      "description": "The three ROM file routines the NAND bootloader calls.",
+      "properties": {
+        "mount": {
+          "description": "Mount entry.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "open": {
+          "description": "Open entry.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "read": {
+          "description": "Read entry.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mount",
+        "open",
+        "read"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/boot-rom.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Card facts for one boot ROM image.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/boot-rom.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "command_table": {
+      "$ref": "#/$defs/BootRomCommandTable",
+      "description": "The low-mirror SD command table the loader relocates."
+    },
+    "filesystem_pointer": {
+      "$ref": "#/$defs/BootRomFilesystemPointer",
+      "description": "The ROM's file-system pointer word."
+    },
+    "id": {
+      "description": "Stable document identity.",
+      "type": "string"
+    },
+    "load_address": {
+      "description": "RAM address the boot ROM hands control to.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "power_hold": {
+      "$ref": "#/$defs/BootRomPowerHold",
+      "description": "The power-hold register the loader reasserts."
+    },
+    "routines": {
+      "$ref": "#/$defs/BootRomRoutines",
+      "description": "FAT mount, open and read entries."
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "sha256": {
+      "description": "SHA-256 of the ROM image.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "sha256",
+    "routines",
+    "command_table",
+    "filesystem_pointer",
+    "power_hold",
+    "load_address"
+  ],
+  "title": "BootRom",
+  "type": "object"
+}

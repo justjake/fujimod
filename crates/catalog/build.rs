@@ -27,6 +27,7 @@ fn main() {
         ("soc", "Soc"),
         ("parts", "Part"),
         ("bodies", "Body"),
+        ("boot-roms", "BootRom"),
         ("firmware", "Firmware"),
     ];
     let mut files = Vec::new();
@@ -62,6 +63,7 @@ fn main() {
             ("Firmware", "ui-event-codes.generated.json") => "UiEventCodes",
             ("Firmware", "bulk.generated.json") => "Bulk",
             ("Firmware", "nand-boot.generated.json") => "NandBoot",
+            ("BootRom", _) => "BootRom",
             ("Firmware", "card-files.generated.json") => "CardFiles",
             ("Firmware", "execution.generated.json") => "Execution",
             ("Firmware", "restart.generated.json") => "Restart",
