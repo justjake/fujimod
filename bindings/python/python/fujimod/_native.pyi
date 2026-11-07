@@ -71,6 +71,8 @@ class emulator:
             clock_seconds_2000: int | None = None,
             preferred_languages: Sequence[str] = ...,
             camera: str | PathLike[str] | None = None,
+            access_point: str | None = None,
+            capability_reply: bytes | None = None,
         ) -> emulator.Board: ...
         def boot_to_rec(
             self, /, instruction_limit: SupportsIndex = ...
