@@ -38,10 +38,12 @@ packet and commit its dequeue only when the transfer completes. The retained
 host convention drains a function block with zero empty-latch words after the
 wire bytes; that convention and transfer latency remain declared model inputs.
 
-An `access_point` option configures one open network: SSID, BSSID, channel,
-RCPI, gateway, two DNS servers, a DNS name, and a TCP destination plus host
-loopback port. Without it, commands that need a peer are accepted only where
-the stock driver has no peer exchange; scan and join produce no RF traffic.
+An `access_point` option configures one network: SSID, BSSID, channel, RCPI,
+gateway, two DNS servers, a DNS name, and a TCP destination plus host loopback
+port. An optional `wpa2_passphrase` (8 to 63 bytes) makes it a WPA2-PSK
+network; without it the network is open. Without an access point, commands that
+need a peer are accepted only where the stock driver has no peer exchange; scan
+and join produce no RF traffic.
 
 ## Initialization, scan and join
 
@@ -60,7 +62,9 @@ Scan requests (CID 0x1E and 0x04) produce a beacon and probe response for the
 configured SSID and channel, followed by event 0x0F with a 0x60-byte body and
 event 0x15, whose body starts with the scan request's sequence byte, then the
 sparse-valid flag, band and channel. Management authentication and association
-requests for the configured BSSID receive open-network responses. Data frames
+requests for the configured BSSID receive responses; a secured access point
+advertises RSN and, after association, starts the authenticator's 4-way
+handshake over the EAPOL frames the chip transports. Data frames
 use the 16-byte HIF TX header and may arrive through WTDR0 or WTDR1; commands
 and management frames use WTDR1. Received frames carry the 12-byte receive
 header; events remain the eight-byte WIFI_EVENT_T packets required by the
@@ -76,6 +80,22 @@ calibration fields are compiled in. An extended 20-byte body is not defined
 there; the fixture exists so stock initialization can be exercised without
 claiming recovered capability values. Ownership handoff/wakeup timing is
 stored as WHLPCR bits 8 and 9 without a timing model.
+
+## WPA2-PSK
+
+With a configured passphrase the beacons and probe responses carry an RSN
+element selecting CCMP with PSK authentication, and the association response
+adds the same element before the endpoint sends EAPOL-Key message 1/4. The
+endpoint is the authenticator: it derives the PMK from the passphrase and SSID
+with PBKDF2-HMAC-SHA1 (4096 iterations), checks the station's message 2/4 MIC
+against the PTK from the IEEE 802.11i PRF, and answers with message 3/4 whose
+key data holds the RSN element and a group-key KDE wrapped with AES key wrap
+(RFC 3394). A message 4/4 with the right MIC and replay counter completes the
+handshake. A wrong passphrase fails the MIC check and the endpoint
+deauthenticates the station. Station data frames are dropped until the
+handshake completes, and the chip model still performs CCMP on the wire, so the
+endpoint neither encrypts nor decrypts data frames. Nonces and the GTK are
+fixed per exchange so a checkpoint resumes the same handshake.
 
 ## Virtual network
 
@@ -96,5 +116,5 @@ stratum-2 server reply whose time is the configured UTC instant plus the
 network's elapsed milliseconds. ARP answers every configured local address.
 TCP connects to `127.0.0.1:<local_port>` when the station sends a SYN to
 `<host>:<host_port>`; a connection is polled from RX FIFO reads and from the
-endpoint's data path. WPA2/EAPOL remains unmodeled. Unsupported command IDs and
-malformed register/FIFO extents refuse before effects.
+endpoint's data path. Unsupported command IDs and malformed register/FIFO
+extents refuse before effects.
