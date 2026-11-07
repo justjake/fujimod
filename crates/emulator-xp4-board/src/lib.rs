@@ -2046,7 +2046,7 @@ impl Session {
         }
         let mut exit = cpu.run(Run {
             begin: u64::from(start),
-            until: Some(u64::MAX),
+            until: None,
             watchdog_us: 0,
             instructions: Some(budget),
         });
