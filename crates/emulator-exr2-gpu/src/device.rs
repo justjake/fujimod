@@ -3,7 +3,7 @@
 use super::{CommandProcessor, IRQ, Inputs, Profile, recording};
 use fujimod_emulator_devices::{Action, Cx, Device, Unsupported, bus::HostRequest};
 use serde::Deserialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 #[derive(Clone, Deserialize)]
@@ -31,6 +31,7 @@ pub struct VectorGpu {
     state: CommandProcessor,
     controllers: [Option<fujimod_emulator_devices::exr2::irq::Inputs>; 2],
     due: BTreeMap<u64, u64>,
+    due_order: BTreeSet<(u64, u64)>,
     recording: Option<recording::Recorder>,
     next_host_request: u64,
     host_request: Option<HostRequest>,
@@ -102,14 +103,15 @@ impl VectorGpu {
             state,
             controllers,
             due: BTreeMap::new(),
+            due_order: BTreeSet::new(),
             recording,
             next_host_request: 0,
             host_request: None,
             host_request_published: false,
         })
     }
-    fn actions(&mut self, cx: &mut Cx<'_>, actions: Vec<Action>) -> Result<(), String> {
-        for action in actions {
+    fn actions(&mut self, cx: &mut Cx<'_>, actions: &mut Vec<Action>) -> Result<(), String> {
+        for action in actions.drain(..) {
             match action {
                 Action::Log(record) | Action::Record(record) => cx.record(record),
                 Action::QueueIrq(core, line) => cx.raise_irq(core.into(), line.into())?,
@@ -118,38 +120,40 @@ impl VectorGpu {
                         .now()
                         .checked_add(delay)
                         .ok_or("vector engine completion time overflow")?;
-                    if delay == 0 || self.due.insert(token, at).is_some() {
+                    if delay == 0 || self.due.contains_key(&token) {
                         return Err("invalid vector engine completion token".into());
                     }
+                    self.due.insert(token, at);
+                    self.due_order.insert((at, token));
                 }
             }
         }
         Ok(())
     }
     fn settle(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
-        let mut ready: Vec<_> = self
-            .due
-            .iter()
-            .filter(|(_, at)| **at <= cx.now())
-            .map(|(&token, &at)| (at, token))
-            .collect();
-        ready.sort_unstable();
-        for (_, token) in ready {
-            let (_, outputs) = self.state.output(token).map_err(|e| e.0)?;
-            for (address, bytes) in &outputs {
-                cx.ram_write(*address, bytes)?;
+        let now = cx.now();
+        let mut actions = Vec::new();
+        while let Some(&(at, token)) = self.due_order.first() {
+            if at > now {
+                break;
             }
-            if let Some(recording) = &mut self.recording {
-                recording
-                    .completion(cx.now(), token, &outputs)
-                    .map_err(|error| format!("could not write vector GPU recording: {error}"))?;
+            {
+                let outputs = self.state.output(token).map_err(|e| e.0)?;
+                for (address, bytes) in outputs {
+                    cx.ram_write(*address, bytes)?;
+                }
+                if let Some(recording) = &mut self.recording {
+                    recording.completion(now, token, outputs).map_err(|error| {
+                        format!("could not write vector GPU recording: {error}")
+                    })?;
+                }
             }
-            let mut actions = Vec::new();
             self.state
-                .complete(token, cx.now(), &mut actions)
+                .complete(token, now, &mut actions)
                 .map_err(|e| e.0)?;
             self.due.remove(&token);
-            self.actions(cx, actions)?;
+            self.due_order.remove(&(at, token));
+            self.actions(cx, &mut actions)?;
         }
         Ok(())
     }
@@ -254,9 +258,11 @@ impl Inputs for Connected<'_, '_> {
     }
 }
 impl Device for VectorGpu {
-    fujimod_emulator_devices::checkpoint_fields!(state: CommandProcessor, due: BTreeMap<u64,u64>);
+    fujimod_emulator_devices::checkpoint_fields!(state: CommandProcessor, due: BTreeMap<u64,u64>, due_order: BTreeSet<(u64,u64)>);
     fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
-        Ok(serde_json::json!({"engine":self.state,"deadlines":self.due}))
+        Ok(
+            serde_json::json!({"engine":self.state,"deadlines":self.due,"deadline_order":self.due_order}),
+        )
     }
 
     fn name(&self) -> &'static str {
@@ -375,7 +381,7 @@ impl Device for VectorGpu {
         }
         // A rejected hardware command does not acquire a completion or DMA.
         // Preserve any diagnostic records emitted before the refusal.
-        if let Err(error) = self.actions(cx, actions) {
+        if let Err(error) = self.actions(cx, &mut actions) {
             cx.fail(error);
             return;
         }
@@ -387,7 +393,7 @@ impl Device for VectorGpu {
         self.state.read(address, size.into()).is_ok()
     }
     fn next_deadline(&self, _now: u64) -> Option<u64> {
-        self.due.values().copied().min()
+        self.due_order.first().map(|(at, _)| *at)
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         if self
@@ -428,7 +434,7 @@ impl Device for VectorGpu {
             .map_err(|error| error.0)?;
         self.host_request = None;
         self.host_request_published = false;
-        self.actions(cx, actions)
+        self.actions(cx, &mut actions)
     }
     fn save(&self) -> serde_json::Value {
         // Host presentation samples this on every continuation. Pending DMA

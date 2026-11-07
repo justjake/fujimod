@@ -95,6 +95,25 @@ fn setup_with_options(options: Options) -> (VectorGpu, Ram, [irq::InterruptContr
         controllers,
     )
 }
+#[test]
+fn next_deadline_tracks_the_earliest_scheduled_completion() {
+    let (mut gpu, mut host, _) = setup();
+    let now = host.now;
+    let mut actions = vec![
+        Action::Schedule {
+            delay: 20,
+            token: 2,
+        },
+        Action::Schedule {
+            delay: 10,
+            token: 1,
+        },
+    ];
+    gpu.actions(&mut Cx::new(&mut host, 0, 0, 0), &mut actions)
+        .unwrap();
+    assert!(actions.is_empty());
+    assert_eq!(gpu.next_deadline(now), Some(now + 10));
+}
 fn dmp_pair(words: &mut Vec<u32>, index: u16, value: u32) {
     words.extend([value, 0xf0000 | u32::from(index)]);
 }
@@ -214,6 +233,7 @@ fn stock_gles_submit_register_executes_uniform_shader_draw() {
     assert_eq!(host.writes, 0);
     host.now = deadline;
     gpu.advance(&mut Cx::new(&mut host, 0, 0, 2));
+    assert_eq!(gpu.next_deadline(host.now), None);
     assert_eq!(host.effects, [(1, IRQ.into())]);
     assert!(host.writes > 0);
     assert_eq!(

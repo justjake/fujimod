@@ -190,7 +190,7 @@ pub fn run(path: impl AsRef<Path>) -> Result<(), String> {
                 }
 
                 let start = Instant::now();
-                let (_, output) = state.output(completion.token).map_err(|error| error.0)?;
+                let output = state.output(completion.token).map_err(|error| error.0)?;
                 summary.operation_time += start.elapsed();
                 if output.len() != completion.outputs.len() {
                     return Err(format!(
@@ -202,7 +202,8 @@ pub fn run(path: impl AsRef<Path>) -> Result<(), String> {
                 }
 
                 for ((address, bytes), expected) in output.iter().zip(&completion.outputs) {
-                    if *address != expected.address || bytes.as_slice() != expected.bytes.as_slice() {
+                    if *address != expected.address || bytes.as_slice() != expected.bytes.as_slice()
+                    {
                         return Err(format!(
                             "GPU replay output location or bytes differ for token {}",
                             completion.token
