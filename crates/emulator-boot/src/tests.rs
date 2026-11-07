@@ -520,6 +520,8 @@ fn shipped_preparation_opens_the_same_board_as_selected_files() {
             clock_seconds_2000: None,
             preferred_languages: vec![],
             camera: Some(reference_camera()),
+            access_point: None,
+            capability_reply: None,
         })
         .unwrap(),
     );

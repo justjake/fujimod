@@ -55,6 +55,12 @@ pub struct Options {
     /// Directory of the camera's zstd-compressed NAND sections
     /// (`nand-<section>.bin.zst`), for a run whose settings name a camera.
     pub camera: Option<PathBuf>,
+    /// One virtual access point for the MT5931 endpoint, as its serialized
+    /// device option. Absence leaves the endpoint without an RF peer.
+    pub access_point: Option<Value>,
+    /// Explicit 20-byte MT5931 capability fixture for a run that exercises
+    /// stock Wi-Fi initialization. Absence refuses the capability query.
+    pub capability_reply: Option<[u8; 20]>,
 }
 
 /// Largest compressed camera NAND section accepted from the caller.
@@ -808,7 +814,10 @@ impl Prepared {
 /// Construct an unexecuted strict board from explicitly selected files.
 /// No directory search, downloaded image, captured default or firmware patch is used.
 pub fn open(options: Options) -> Result<Session, String> {
-    let prepared = prepare(&options.configuration_id, &options.overlays)?;
+    let mut prepared = prepare(&options.configuration_id, &options.overlays)?;
+    if options.access_point.is_some() || options.capability_reply.is_some() {
+        prepared.set_mt5931(options.access_point, options.capability_reply)?;
+    }
     let update = checked(&options.update, &prepared.update)?;
     let boot_rom = checked(&options.boot_rom, &prepared.boot_rom.content)?;
     let inputs = InputBytes {
@@ -834,6 +843,41 @@ pub fn open(options: Options) -> Result<Session, String> {
             .unwrap_or_default(),
     };
     open_prepared(prepared, inputs)
+}
+
+impl Prepared {
+    fn set_mt5931(
+        &mut self,
+        access_point: Option<Value>,
+        capability_reply: Option<[u8; 20]>,
+    ) -> Result<(), String> {
+        let nodes = self
+            .devices_value
+            .get_mut("nodes")
+            .and_then(Value::as_array_mut)
+            .ok_or("prepared devices have no node list")?;
+        let sdio = nodes
+            .iter_mut()
+            .find(|node| node.get("name").and_then(Value::as_str) == Some("sdio"))
+            .ok_or("run has no MT5931 endpoint")?;
+        let module = sdio
+            .pointer_mut("/model/module")
+            .ok_or("run has no MT5931 module")?;
+        if module.get("protocol").and_then(Value::as_str) != Some("mt5931") {
+            return Err("run MT5931 module is not in endpoint mode".into());
+        }
+        let mt5931 = module
+            .get_mut("mt5931")
+            .and_then(Value::as_object_mut)
+            .ok_or("run has no MT5931 options")?;
+        if let Some(access_point) = access_point {
+            mt5931.insert("access_point".into(), access_point);
+        }
+        if let Some(capability_reply) = capability_reply {
+            mt5931.insert("capability_reply".into(), json!(capability_reply));
+        }
+        Ok(())
+    }
 }
 
 /// The camera's compressed NAND sections in `directory`: one

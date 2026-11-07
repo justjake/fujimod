@@ -36,7 +36,7 @@ impl<'a> Owner<'a> {
 #[pymethods]
 impl Board {
     #[staticmethod]
-    #[pyo3(signature=(*, configuration_id, update, boot_rom, overlays=Vec::new(), nand=None, settings=None, clock_seconds_2000=None, preferred_languages=Vec::new(), camera=None))]
+    #[pyo3(signature=(*, configuration_id, update, boot_rom, overlays=Vec::new(), nand=None, settings=None, clock_seconds_2000=None, preferred_languages=Vec::new(), camera=None, access_point=None, capability_reply=None))]
     fn from_inputs(
         configuration_id: String,
         update: PathBuf,
@@ -47,6 +47,8 @@ impl Board {
         clock_seconds_2000: Option<u32>,
         preferred_languages: Vec<String>,
         camera: Option<PathBuf>,
+        access_point: Option<String>,
+        capability_reply: Option<Vec<u8>>,
     ) -> PyResult<Self> {
         let session = boot()?
             .open(Inputs {
@@ -59,6 +61,8 @@ impl Board {
             clock_seconds_2000,
             preferred_languages,
             camera,
+            access_point,
+            capability_reply,
             })
             .map_err(error)?;
         let graph: factory::Graph = serde_json::from_value(session.definition["execution"].clone())
