@@ -155,6 +155,14 @@ impl Core {
             .ok_or("CPU backend has no block-entry exit control")?;
         check(&self.api, unsafe { set(self.raw, enabled) })
     }
+    pub(crate) fn set_legacy_block_accounting(&self, enabled: bool) -> Result<(), String> {
+        let set = self
+            .api
+            .extensions
+            .set_legacy_block_accounting
+            .ok_or("CPU backend has no selectable block accounting path")?;
+        check(&self.api, unsafe { set(self.raw, enabled) })
+    }
     pub(crate) fn set_instruction_counter(&self, enabled: bool) -> Result<(), String> {
         let set = self
             .api

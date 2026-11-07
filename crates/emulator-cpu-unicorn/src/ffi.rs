@@ -11,6 +11,7 @@ pub const FEATURE_PARALLEL_TCG: u32 = 1 << 4;
 pub const FEATURE_REPLACED_INSTRUCTIONS: u32 = 1 << 5;
 pub const FEATURE_AARCH64_ACCOUNTING: u32 = 1 << 6;
 pub const FEATURE_INLINE_INSTRUCTION_COUNTER: u32 = 1 << 7;
+pub const FEATURE_INLINE_BLOCK_ACCOUNTING: u32 = 1 << 8;
 pub const fn ctl(kind: u32, count: u32, direction: u32) -> u32 {
     kind | (count << 26) | (direction << 30)
 }
@@ -52,6 +53,8 @@ pub struct Extensions {
     /// Test exit requests inline at block entry and after memory accesses.
     pub set_block_exits: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub set_instruction_counter: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
+    /// Select the pre-inline per-block accounting helper for equivalence tests.
+    pub set_legacy_block_accounting: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub reset_instruction_counter: Option<unsafe extern "C" fn(Engine) -> Error>,
     pub instruction_counter: Option<unsafe extern "C" fn(Engine) -> u64>,
     // uc_embedder_features bits (0 without the export): 1 = block hook size bit 31
@@ -115,6 +118,11 @@ impl Extensions {
             (
                 self.features & FEATURE_REPLACED_INSTRUCTIONS != 0,
                 "uc_embedder_features (replaced ARM instructions)",
+            ),
+            (
+                self.set_legacy_block_accounting.is_some()
+                    && self.features & FEATURE_INLINE_BLOCK_ACCOUNTING != 0,
+                "uc_embedder_set_legacy_block_accounting",
             ),
         ]
         .into_iter()
@@ -222,6 +230,7 @@ mod linked {
         fn uc_embedder_set_parallel_cpus(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_block_exits(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_instruction_counter(engine: Engine, enabled: bool) -> Error;
+        fn uc_embedder_set_legacy_block_accounting(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_reset_instruction_counter(engine: Engine) -> Error;
         fn uc_embedder_instruction_counter(engine: Engine) -> u64;
         fn uc_embedder_accounting(engine: Engine) -> *mut Accounting;
@@ -242,6 +251,7 @@ mod linked {
             set_parallel_cpus: Some(uc_embedder_set_parallel_cpus),
             set_block_exits: Some(uc_embedder_set_block_exits),
             set_instruction_counter: Some(uc_embedder_set_instruction_counter),
+            set_legacy_block_accounting: Some(uc_embedder_set_legacy_block_accounting),
             reset_instruction_counter: Some(uc_embedder_reset_instruction_counter),
             instruction_counter: Some(uc_embedder_instruction_counter),
             accounting: Some(uc_embedder_accounting),
