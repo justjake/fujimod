@@ -1026,6 +1026,21 @@ class DriverHarness:
     def clear_breakpoints(self) -> None:
         self._breakpoints.clear()
 
+    def reset(self) -> None:
+        """Forget per-call Python state after restoring a native checkpoint.
+
+        The native checkpoint owns CPU, memory and device state. Breakpoints,
+        hit reports and stop diagnostics live in this wrapper and must be
+        cleared before the next call installs its own observers.
+        """
+        self.clear_breakpoints()
+        self._hits.clear()
+        self._stopped_at = None
+        self._stop_info = None
+        self._hit_limit = 0
+        self._calls = 0
+        self.board.failure = None
+
     def _breakpoint(self, cpu: Processor, core: int, address: int) -> None:
         board, record = self.board, self._breakpoints.get(address)
         if record is None:
