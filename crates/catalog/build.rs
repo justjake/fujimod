@@ -62,6 +62,7 @@ fn main() {
             ("Firmware", "ui-event-codes.generated.json") => "UiEventCodes",
             ("Firmware", "bulk.generated.json") => "Bulk",
             ("Firmware", "card-files.generated.json") => "CardFiles",
+            ("Firmware", "execution.generated.json") => "Execution",
             ("Firmware", "restart.generated.json") => "Restart",
             ("Firmware", "settings.generated.json") => "Settings",
             ("Firmware", "flash.generated.json") => "Flash",

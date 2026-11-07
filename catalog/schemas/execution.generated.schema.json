@@ -1,0 +1,220 @@
+{
+  "$defs": {
+    "CacheSynchronization": {
+      "additionalProperties": false,
+      "description": "Stock CPU0 cache and barrier routines invoked through the borrowed query.",
+      "properties": {
+        "data_barrier": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "data_clean": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "instruction_barrier": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "instruction_invalidate": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "data_clean",
+        "instruction_invalidate",
+        "data_barrier",
+        "instruction_barrier"
+      ],
+      "type": "object"
+    },
+    "CodeCheck": {
+      "additionalProperties": false,
+      "description": "Stock code bytes identified by their SHA-256.",
+      "properties": {
+        "address": {
+          "description": "First address, before `code_alias`.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Routine or region name.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Lowercase hexadecimal SHA-256 of the stock bytes.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "Configuration": {
+      "description": "How the active configuration RAM base is obtained.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "address": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "mechanism": {
+              "const": "pointer",
+              "type": "string"
+            }
+          },
+          "required": [
+            "mechanism",
+            "address"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "address": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "mechanism": {
+              "const": "fixed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "mechanism",
+            "address"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ExecutionMechanism": {
+      "description": "A mechanism that owns an allocation and can publish code as a diagnostic\ncallback after synchronizing its instruction view.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "allocation": {
+              "$ref": "#/$defs/HeapAllocation"
+            },
+            "cache": {
+              "$ref": "#/$defs/CacheSynchronization"
+            },
+            "code_checks": {
+              "items": {
+                "$ref": "#/$defs/CodeCheck"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "exr2_query_heap",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "allocation",
+            "cache",
+            "code_checks"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "HeapAllocation": {
+      "additionalProperties": false,
+      "description": "The stock allocator/release pair and its configuration-owned bootstrap\nscratch. The bootstrap is borrowed only while allocating or releasing.",
+      "properties": {
+        "allocate": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "configuration": {
+          "$ref": "#/$defs/Configuration"
+        },
+        "release": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "allocate",
+        "release",
+        "configuration"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/execution.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Located runtime-execution mechanism for one firmware.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/execution.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "code_alias": {
+      "description": "Uncached RAM alias for the runtime allocation and code checks.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "firmware_id": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string"
+    },
+    "internal_version": {
+      "type": "string"
+    },
+    "mechanism": {
+      "$ref": "#/$defs/ExecutionMechanism"
+    },
+    "product": {
+      "type": "string"
+    },
+    "schema": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "firmware_id",
+    "product",
+    "internal_version",
+    "code_alias",
+    "mechanism"
+  ],
+  "title": "FirmwareExecution",
+  "type": "object"
+}

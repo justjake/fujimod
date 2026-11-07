@@ -799,39 +799,6 @@ fn prepare_exr2(input: &Selection, selected: &ResolvedSelection) -> Result<(Arti
             "execution locator index differs from update source",
         )?;
     }
-    // The EXR II CPU0 kernel's cache and barrier entrypoints are qualified as
-    // complete immutable spans, including the shared cache helpers' literals.
-    let kernel = units
-        .iter()
-        .find(|u| u.address == 0x40000)
-        .ok_or("missing CPU0 kernel")?;
-    let mut primitives = Vec::new();
-    for (size, hash) in [
-        (
-            0x214,
-            "10aad5ca7b798181283de15647d4cae836a2feaf0ce7363f23b430a0855d316c",
-        ),
-        (
-            0x28,
-            "4f5e46f3fcacb11933fd0f5e8fc33ae5837f738e38902a0e475c040ac5897890",
-        ),
-    ] {
-        let matches: Vec<_> = kernel
-            .bytes
-            .windows(size)
-            .enumerate()
-            .step_by(4)
-            .filter(|(_, b)| sha256(b) == hash)
-            .map(|(i, _)| kernel.address + i as u64)
-            .collect();
-        check(
-            matches.len() == 1,
-            "missing or ambiguous EXR II kernel execution primitive",
-        )?;
-        let address = matches[0];
-        ranges.push(json!({"address":address,"size":size}));
-        primitives.push(address);
-    }
     for range in &flash.code_ranges {
         ranges.push(json!({"address":range.address,"size":range.size}));
     }
@@ -856,10 +823,10 @@ fn prepare_exr2(input: &Selection, selected: &ResolvedSelection) -> Result<(Arti
         allocate: num(&execution, "allocate")?.try_into()?,
         release: num(&execution, "release")?.try_into()?,
         configuration: serde_json::from_value(execution["configuration"].clone())?,
-        cache_clean: (primitives[0] + 0x18).try_into()?,
-        instruction_invalidate: (primitives[0] + 0xfc).try_into()?,
-        barrier: primitives[1].try_into()?,
-        instruction_barrier: primitives[0].try_into()?,
+        cache_clean: num(&execution["cache"], "data_clean")?.try_into()?,
+        instruction_invalidate: num(&execution["cache"], "instruction_invalidate")?.try_into()?,
+        barrier: num(&execution["cache"], "data_barrier")?.try_into()?,
+        instruction_barrier: num(&execution["cache"], "instruction_barrier")?.try_into()?,
         checks: code_checks(&units, &ranges)?,
         control_sha256: sha256(control),
         update_size,

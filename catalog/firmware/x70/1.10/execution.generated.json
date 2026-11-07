@@ -1,0 +1,94 @@
+{
+  "$schema": "https://fujimod.com/schemas/execution.generated.schema.json",
+  "schema": 1,
+  "id": "x70-110-execution",
+  "firmware_id": "x70-110",
+  "product": "X70",
+  "internal_version": "1.39",
+  "code_alias": 1073741824,
+  "mechanism": {
+    "kind": "exr2_query_heap",
+    "allocation": {
+      "allocate": 12420356,
+      "release": 12420388,
+      "configuration": {
+        "mechanism": "pointer",
+        "address": 12466684
+      }
+    },
+    "cache": {
+      "data_clean": 271932,
+      "instruction_invalidate": 272160,
+      "data_barrier": 277300,
+      "instruction_barrier": 271908
+    },
+    "code_checks": [
+      {
+        "name": "exr2_execution_0",
+        "address": 9721104,
+        "size": 32,
+        "sha256": "aa5f999611eb8642e1cd50b48b05a2c8ba32ad7b3d94ca8a33cf42d04df416a4"
+      },
+      {
+        "name": "exr2_execution_1",
+        "address": 12420388,
+        "size": 28,
+        "sha256": "bbd034cdaf3726d053f665af6313bae837209cc33b7559b5b34be67026176656"
+      },
+      {
+        "name": "exr2_execution_2",
+        "address": 12440628,
+        "size": 592,
+        "sha256": "d386fc4405f72a299e8d9c76a0d96ad737a20cfdaaf87242f22e1e158a3b846c"
+      },
+      {
+        "name": "exr2_execution_3",
+        "address": 12440376,
+        "size": 240,
+        "sha256": "fe392a720b27d6a9eff5abca1b4a2cffc3d69f13d3dc7bcb71e2e4bdbef989d0"
+      },
+      {
+        "name": "exr2_execution_4",
+        "address": 10260380,
+        "size": 68,
+        "sha256": "07fb6a43c3c0791461d2efd46cf9750fb940177046ee0eccd6522dc8b6334656"
+      },
+      {
+        "name": "exr2_execution_5",
+        "address": 10260276,
+        "size": 104,
+        "sha256": "01a464ec1dfed70a8123dbd0db122d8612d71dcbbd0f725161f5b2829ccdcfee"
+      },
+      {
+        "name": "exr2_execution_6",
+        "address": 12420356,
+        "size": 28,
+        "sha256": "a4f2cfba02320758d129137ea243d424373290ec2e22ef54d4544bbb8264bd54"
+      },
+      {
+        "name": "exr2_execution_7",
+        "address": 12420420,
+        "size": 1800,
+        "sha256": "698b418d43de6fecd863b3f375262ba8742989abaef676011b0dd80a3e662ff1"
+      },
+      {
+        "name": "exr2_execution_8",
+        "address": 10260192,
+        "size": 84,
+        "sha256": "434461f57b77298009d61647b4ee4b4ff3cadb241822356d47675255259ed6b7"
+      },
+      {
+        "name": "exr2_execution_9",
+        "address": 271908,
+        "size": 532,
+        "sha256": "10aad5ca7b798181283de15647d4cae836a2feaf0ce7363f23b430a0855d316c"
+      },
+      {
+        "name": "exr2_execution_10",
+        "address": 277300,
+        "size": 40,
+        "sha256": "4f5e46f3fcacb11933fd0f5e8fc33ae5837f738e38902a0e475c040ac5897890"
+      }
+    ]
+  }
+}

@@ -1478,6 +1478,7 @@ dependencies = [
  "fujimod-catalog-card",
  "fujimod-catalog-construction",
  "fujimod-catalog-controls",
+ "fujimod-catalog-execution",
  "fujimod-catalog-identity",
  "fujimod-catalog-remote",
  "fujimod-catalog-restart",
@@ -1578,6 +1579,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-catalog-execution"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-bulk",
+ "fujimod-catalog-identity",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "fujimod-catalog-firmware-identity"
 version = "0.1.0"
 dependencies = [
@@ -1669,6 +1684,7 @@ dependencies = [
  "fujimod-catalog-configuration",
  "fujimod-catalog-construction",
  "fujimod-catalog-controls",
+ "fujimod-catalog-execution",
  "fujimod-catalog-remote",
  "fujimod-catalog-resolution",
  "fujimod-catalog-restart",

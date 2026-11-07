@@ -16,6 +16,7 @@ members = [
   "crates/catalog",
   "crates/catalog-bulk",
   "crates/catalog-card",
+  "crates/catalog-execution",
   "crates/catalog-restart",
   "crates/catalog-workflows",
   "crates/catalog-firmware-identity",
@@ -140,6 +141,7 @@ fujimod-catalog = { path = "crates/catalog", version = "0.1.0" }
 fujimod-catalog-bulk = { path = "crates/catalog-bulk", version = "0.1.0" }
 fujimod-catalog-restart = { path = "crates/catalog-restart", version = "0.1.0" }
 fujimod-catalog-card = { path = "crates/catalog-card", version = "0.1.0" }
+fujimod-catalog-execution = { path = "crates/catalog-execution", version = "0.1.0" }
 fujimod-catalog-workflows = { path = "crates/catalog-workflows", version = "0.1.0" }
 fujimod-catalog-firmware-identity = { path = "crates/catalog-firmware-identity", version = "0.1.0" }
 fujimod-catalog-configuration = { path = "crates/catalog-configuration", version = "0.1.0" }

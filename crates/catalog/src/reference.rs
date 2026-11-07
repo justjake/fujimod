@@ -2538,6 +2538,9 @@ pub struct ResolvedSelection {
     /// Stock diagnostic bulk reads, when located for this firmware.
     #[serde(default)]
     pub bulk: Option<fujimod_catalog_bulk::FirmwareBulk>,
+    /// Stock runtime allocation, cache and callback mechanisms.
+    #[serde(default)]
+    pub execution: Option<fujimod_catalog_execution::FirmwareExecution>,
     /// Stock restart over debug USB, when located for this firmware.
     #[serde(default)]
     pub restart: Option<fujimod_catalog_restart::FirmwareRestart>,
@@ -2572,6 +2575,7 @@ pub struct ReferenceCatalog {
     ui_setting_names: BTreeMap<String, crate::ui_setting_names::UiSettingNames>,
     ui_event_codes: BTreeMap<String, crate::ui_event_codes::UiEventCodes>,
     bulk: BTreeMap<String, fujimod_catalog_bulk::FirmwareBulk>,
+    execution: BTreeMap<String, fujimod_catalog_execution::FirmwareExecution>,
     restart: BTreeMap<String, fujimod_catalog_restart::FirmwareRestart>,
     card_files: BTreeMap<String, fujimod_catalog_card::FirmwareCard>,
     settings: BTreeMap<String, fujimod_catalog_settings::FirmwareSettings>,
@@ -2675,6 +2679,7 @@ impl ReferenceCatalog {
             ui_setting_names: self.ui_setting_names.get(&firmware.id).cloned(),
             ui_event_codes: self.ui_event_codes.get(&firmware.id).cloned(),
             bulk: self.bulk.get(&firmware.id).cloned(),
+            execution: self.execution.get(&firmware.id).cloned(),
             restart: self.restart.get(&firmware.id).cloned(),
             card_files: self.card_files.get(&firmware.id).cloned(),
             settings: self.settings.get(&firmware.id).cloned(),
@@ -2744,6 +2749,21 @@ impl ReferenceCatalog {
     /// Return the bulk profile for a firmware release.
     pub fn bulk(&self, firmware_id: &str) -> Option<&fujimod_catalog_bulk::FirmwareBulk> {
         self.bulk.get(firmware_id)
+    }
+
+    /// Runtime execution profiles, independent of a feature using them.
+    pub fn execution_profiles(
+        &self,
+    ) -> impl Iterator<Item = &fujimod_catalog_execution::FirmwareExecution> {
+        self.execution.values()
+    }
+
+    /// Return the runtime-execution profile for a firmware release.
+    pub fn execution(
+        &self,
+        firmware_id: &str,
+    ) -> Option<&fujimod_catalog_execution::FirmwareExecution> {
+        self.execution.get(firmware_id)
     }
 
     /// Located restart profiles, independent of a body or execution profile.
@@ -2818,6 +2838,11 @@ impl ReferenceCatalog {
                 let value: fujimod_catalog_bulk::FirmwareBulk = decode(bytes, path)?;
                 value.validate()?;
                 insert_unique(&mut self.bulk, value.firmware_id.clone(), value, path)
+            }
+            ReferenceKind::Execution => {
+                let value: fujimod_catalog_execution::FirmwareExecution = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(&mut self.execution, value.firmware_id.clone(), value, path)
             }
             ReferenceKind::Restart => {
                 let value: fujimod_catalog_restart::FirmwareRestart = decode(bytes, path)?;
@@ -3463,6 +3488,7 @@ enum ReferenceKind {
     UiSettingNames,
     UiEventCodes,
     Bulk,
+    Execution,
     CardFiles,
     Restart,
     Settings,
@@ -3488,6 +3514,7 @@ impl ReferenceKind {
             Some("ui-setting-names.generated.json") => Ok(Self::UiSettingNames),
             Some("ui-event-codes.generated.json") => Ok(Self::UiEventCodes),
             Some("bulk.generated.json") => Ok(Self::Bulk),
+            Some("execution.generated.json") => Ok(Self::Execution),
             Some("card-files.generated.json") => Ok(Self::CardFiles),
             Some("restart.generated.json") => Ok(Self::Restart),
             Some("settings.generated.json") => Ok(Self::Settings),

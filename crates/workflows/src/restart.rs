@@ -354,4 +354,24 @@ mod tests {
     fn stub_refuses_a_sender_beyond_direct_branch_range() {
         assert!(console_stub(0x200000, 0x2000_0000, &[0; 8]).is_err());
     }
+
+    #[test]
+    fn deferred_guard_contract_uses_the_published_timer_and_wake_abi() {
+        let restart: FirmwareRestart = serde_json::from_str(include_str!(
+            "../../../catalog/firmware/x70/1.10/restart.generated.json"
+        ))
+        .unwrap();
+        let contract = deferred_guard_contract(&restart, 600_000).unwrap();
+        let words: Vec<u32> = contract
+            .chunks_exact(4)
+            .map(|bytes| u32::from_le_bytes(bytes.try_into().unwrap()))
+            .collect();
+        assert_eq!(words.len(), 7);
+        assert_eq!(words[0], 0x93d4bc);
+        assert_eq!(words[1], 0x93d6b4);
+        assert_eq!(words[2], restart.mechanism.sender as u32);
+        assert_eq!(words[3], restart.mechanism.request);
+        assert_eq!(words[4], WAKE_DEADLINE);
+        assert_eq!(words[5..], [0, 0]);
+    }
 }
