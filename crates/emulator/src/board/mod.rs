@@ -650,8 +650,9 @@ impl Board {
         if self.cpu(core)?.model() != fujimod_emulator_cpu::Model::CortexR5F {
             return Err("per-core interrupt device requires an R-profile processor".into());
         }
+        let unexecuted = self.epoch_is_unexecuted();
         let mut s = self.state.borrow_mut();
-        if s.instructions.iter().any(|n| *n != 0)
+        if !unexecuted
             || s.core_interrupts[core].is_some()
             || s.core_interrupts
                 .iter()

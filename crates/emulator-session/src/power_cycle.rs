@@ -17,6 +17,7 @@ pub trait ColdBoot {
 pub struct PowerCycle {
     clock: String,
     media: durable::Spec,
+    logic_inputs: Vec<String>,
     builder: Box<dyn ColdBoot>,
     retained: Option<durable::Media>,
 }
@@ -25,9 +26,15 @@ impl PowerCycle {
         Self {
             clock,
             media,
+            logic_inputs: Vec::new(),
             builder,
             retained: None,
         }
+    }
+    /// Preserve the declared external input levels across loss of power.
+    pub fn with_logic_inputs(mut self, inputs: Vec<String>) -> Self {
+        self.logic_inputs = inputs;
+        self
     }
     pub(crate) fn clear_retained(&mut self) {
         self.retained = None;
@@ -38,6 +45,10 @@ impl Session {
     pub fn configure_power_cycle(&mut self, cycle: PowerCycle) -> Result<(), String> {
         if self.power_cycle.is_some() || !self.board.epoch_is_unexecuted() {
             return Err("power cycle must be configured before execution".into());
+        }
+        for name in &cycle.logic_inputs {
+            self.resources.logic_level(name)?;
+            self.resources.wire_users(name)?;
         }
         let power = self
             .resources
@@ -102,6 +113,9 @@ impl Session {
                 state.packet().ok_or("power packet is unavailable")?
             };
             let counts = self.board.instruction_counts();
+            let inputs = cycle.logic_inputs.iter().map(|name| {
+                Ok((name.clone(), self.resources.logic_level(name)?.high()))
+            }).collect::<Result<Vec<_>, String>>()?;
             let mut next = cycle.builder.build(target, counts.clone(), packet)?;
             if next.power_cycle.is_some()
                 || next.board.now() != target
@@ -129,6 +143,9 @@ impl Session {
                 .as_ref()
                 .unwrap()
                 .apply(&mut next, &cycle.media)?;
+            for (name, high) in inputs {
+                next.logic_input(&name, high)?;
+            }
             cycle.retained = None;
             *self = next;
             Ok(true)

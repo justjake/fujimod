@@ -511,6 +511,29 @@ pub fn prepare(configuration_id: &str, overlays: &[String]) -> Result<Prepared, 
 }
 
 impl Prepared {
+    fn duplicate(&self) -> Result<Self, String> {
+        Ok(Self {
+            resolved: self.resolved.clone(),
+            execution: serde_json::from_value(self.execution_value.clone())
+                .map_err(|e| e.to_string())?,
+            execution_value: self.execution_value.clone(),
+            plan: Plan::parse(
+                &serde_json::to_vec(&self.devices_value).map_err(|e| e.to_string())?,
+            )?,
+            devices_value: self.devices_value.clone(),
+            scene: self.scene.clone(),
+            execution_policy: self.execution_policy.clone(),
+            quantum: self.quantum,
+            update: self.update.clone(),
+            flash_offset: self.flash_offset,
+            boot_rom: self.boot_rom.clone(),
+            generated_assets: self.generated_assets.clone(),
+            reset_coprocessors: self.reset_coprocessors.clone(),
+            mcu: self.mcu.clone(),
+            observation: self.observation.clone(),
+            first_start: self.first_start.clone(),
+        })
+    }
     /// Produce the stable JSON projection used by the native Python adapter.
     pub fn to_json(&self) -> Value {
         json!({
@@ -909,10 +932,43 @@ fn camera_sections(
     Ok(sections)
 }
 
+struct RestartBuilder {
+    prepared: Prepared,
+    inputs: InputBytes,
+}
+impl fujimod_emulator_session::power_cycle::ColdBoot for RestartBuilder {
+    fn build(&mut self, tick: u64, counts: Vec<u64>, packet: [u8; 16]) -> Result<Session, String> {
+        open_prepared_epoch(
+            self.prepared.duplicate()?, self.inputs.clone(), Some((tick, counts, packet)),
+        )
+    }
+}
+
 /// Construct an unexecuted strict board from a prepared run and byte inputs.
-/// The engine is linked into the crate. A prepared run opens one board; prepare
-/// again for another.
 pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, String> {
+    let cycle = if prepared.resolved.reference.firmware.id == "x70-110" {
+        Some(RestartBuilder { prepared: prepared.duplicate()?, inputs: inputs.clone() })
+    } else {
+        None
+    };
+    let mut session = open_prepared_epoch(prepared, inputs, None)?;
+    if let Some(builder) = cycle {
+        let media = fujimod_emulator_session::durable::Spec {
+            cards: session.contacts.keys().cloned().collect(),
+            nands: vec!["nand".into()],
+        };
+        session.configure_power_cycle(fujimod_emulator_session::power_cycle::PowerCycle::new(
+            "clocks".into(), media, Box::new(builder),
+        ).with_logic_inputs(vec!["usb_cable".into()]))?;
+    }
+    Ok(session)
+}
+
+fn open_prepared_epoch(
+    prepared: Prepared,
+    inputs: InputBytes,
+    epoch: Option<(u64, Vec<u64>, [u8; 16])>,
+) -> Result<Session, String> {
     prepared
         .update
         .check(&inputs.update)
@@ -1060,9 +1116,14 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
             assets.insert("nand_image".into(), bytes);
         }
     }
+    if let Some((_, _, packet)) = &epoch {
+        settings_packet(&mut devices, &prepared.mcu, packet)?;
+    }
     let graph = prepared.execution;
     graph.validate()?;
-    let plan = if settings.is_some() || header_applied || clock_seconds_2000.is_some() {
+    let plan = if settings.is_some() || header_applied || clock_seconds_2000.is_some()
+        || epoch.is_some()
+    {
         Plan::parse(&serde_json::to_vec(&devices).map_err(|e| e.to_string())?)?
     } else {
         prepared.plan
@@ -1092,7 +1153,7 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
     let resources = serde_json::from_value::<preparation::Spec>(scene.clone())
         .map_err(|e| e.to_string())?
         .build(&assets)?;
-    let built = plan.build(resources, 0, &mut RefuseAdapters)?;
+    let built = plan.build(resources, epoch.as_ref().map_or(0, |e| e.0), &mut RefuseAdapters)?;
     let bus_mode = match prepared.execution_policy.mode {
         RunExecutionMode::Strict => Mode::Strict,
     };
@@ -1101,8 +1162,12 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
         RunEngine::Hypervisor => factory::Engine::Hypervisor,
     };
     let bus = Bus::from_graph(bus_mode, built.graph)?;
+    let mut options = factory::Options::new(engine);
+    if let Some((tick, counts, _)) = epoch {
+        options = options.with_epoch(tick, counts);
+    }
     let mut board = graph.build(
-        factory::Options::new(engine),
+        options,
         bus,
         None,
     )?;
