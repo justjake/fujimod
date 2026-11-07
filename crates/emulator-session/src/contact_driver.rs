@@ -584,11 +584,17 @@ impl Session {
         pause_after: Option<u64>,
         until: Option<u64>,
     ) -> Result<(), String> {
-        self.pump_contacts()?;
+        if !self.board.is_powered_off() { self.pump_contacts()?; }
         if end <= self.total_instructions()? {
+            if self.board.is_powered_off() { return Ok(()); }
             return self.board.run_window(end, quantum, pause_after, until);
         }
         loop {
+            if self.board.is_powered_off() {
+                if until.is_some_and(|t| self.board.now() >= t) { return Ok(()); }
+                if !self.advance_power_cycle(until)? { return Ok(()); }
+                self.pump_contacts()?;
+            }
             let current = self.total_instructions()?;
             if current >= end || until.is_some_and(|t| self.board.now() >= t) {
                 return Ok(());
@@ -605,6 +611,7 @@ impl Session {
             };
             let before = (self.board.now(), current);
             self.board.run_window(end, quantum, pause_after, horizon)?;
+            if self.board.is_powered_off() { continue; }
             self.pump_contacts()?;
             let after = (self.board.now(), self.total_instructions()?);
             if after == before

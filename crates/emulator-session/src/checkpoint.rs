@@ -38,6 +38,9 @@ impl Snapshot {
 }
 impl Session {
     pub fn checkpoint(&self, previous: Option<&Snapshot>) -> Result<Snapshot, String> {
+        if self.board.is_powered_off() {
+            return Err("cannot checkpoint during power-off reconstruction".into());
+        }
         let mut span = fujimod_perf::span(fujimod_perf::SpanKind::Checkpoint);
         let start = progress(&self.board);
         let result = (|| {
@@ -66,6 +69,9 @@ impl Session {
             self.controls = saved.controls.clone();
             self.contact_driver = saved.contact_driver.clone();
             self.recording_frames.borrow_mut().clear();
+            if let Some(cycle) = &mut self.power_cycle {
+                cycle.clear_retained();
+            }
             Ok(())
         })();
         span.guest(start, progress(&self.board));
