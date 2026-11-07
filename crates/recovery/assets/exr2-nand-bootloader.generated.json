@@ -2,9 +2,10 @@
   "schema": 1,
   "base": 256,
   "capacity": 4096,
-  "image_bytes": 556,
+  "image_bytes": 584,
   "entry": 0,
-  "config": 500,
-  "save": 548,
+  "firmware_id": 512,
+  "config": 528,
+  "save": 576,
   "command_table_save_bytes": 128
 }

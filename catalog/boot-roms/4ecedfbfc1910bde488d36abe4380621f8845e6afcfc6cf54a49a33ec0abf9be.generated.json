@@ -21,5 +21,10 @@
     "address": 4294475908,
     "bit": 0
   },
+  "sd": {
+    "host": 4294246400,
+    "initialization_clock": 1088,
+    "transfer_clock": 1280
+  },
   "load_address": 0
 }
