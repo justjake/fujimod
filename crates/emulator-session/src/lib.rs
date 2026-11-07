@@ -7,6 +7,7 @@ pub mod durable;
 pub mod history;
 pub mod inputs;
 pub mod nand;
+pub mod power_cycle;
 pub mod scanout;
 pub mod state;
 #[cfg(test)]
@@ -29,6 +30,7 @@ pub struct Session {
     pub resources: Resources,
     pub nodes: BTreeMap<String, usize>,
     pub contacts: BTreeMap<String, Contacts>,
+    pub power_cycle: Option<power_cycle::PowerCycle>,
     /// Host rendering memo; excluded from checkpoints, fingerprints and modeled state.
     pub recording_frames: std::cell::RefCell<
         BTreeMap<

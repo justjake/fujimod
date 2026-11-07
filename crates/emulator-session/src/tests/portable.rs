@@ -290,3 +290,46 @@ fn serialized_checkpoint_resumes_a_fresh_session_and_checks_image_and_graph_iden
     different_graph.definition["devices"]["nodes"][0]["kind"] = serde_json::json!("other");
     assert!(different_graph.import_snapshot(&bytes).is_err());
 }
+
+#[test]
+fn power_cycle_retains_card_and_packet_and_runs_no_instructions_while_off() {
+    use crate::power_cycle::{ColdBoot, PowerCycle};
+    use fujimod_emulator_devices::exr2::{clock, wake_alarm::WakeAlarm};
+    struct Builder;
+    impl ColdBoot for Builder {
+        fn build(&mut self, tick: u64, counts: Vec<u64>, packet: [u8; 16]) -> Result<Session, String> {
+            let power = Arc::new(Mutex::new(WakeAlarm::new(1_000_000, clock::POWER_HOLD_RELEASE_LIMIT_TICKS)?));
+            power.lock().unwrap().initialize_packet(packet)?;
+            Ok(card_session_with_power(Some((tick, counts)), Some(power)))
+        }
+    }
+    let power = Arc::new(Mutex::new(WakeAlarm::new(1_000_000, clock::POWER_HOLD_RELEASE_LIMIT_TICKS).unwrap()));
+    {
+        let mut p = power.lock().unwrap();
+        p.initialize_packet([0x5a; 16]).unwrap();
+        p.write(0, 0x69, 1).unwrap();
+        p.write(0, 0x6a, 0).unwrap();
+        p.write(0, 0x68, 1).unwrap();
+    }
+    let mut session = card_session_with_power(None, Some(power));
+    session.configure_power_cycle(PowerCycle::new("clocks".into(),
+        crate::durable::Spec { cards: vec!["sd".into()], nands: vec![] }, Box::new(Builder))).unwrap();
+    // Guest store releases power hold, followed by a self-loop.
+    session.board.write_physical(0, &0xe5801000u32.to_le_bytes()).unwrap();
+    session.board.write_physical(4, &0xeafffffeu32.to_le_bytes()).unwrap();
+    session.board.write_register(0, arm::CORE[0], 0xfff88084).unwrap();
+    session.board.write_register(0, arm::CORE[1], 0).unwrap();
+    session.run_with_limits(10_000_000, 128, None, Some(200_000)).unwrap();
+    assert!(session.board.is_powered_off());
+    assert_eq!(session.board.now(), 200_000);
+    let counts = session.board.instruction_counts();
+    assert!(session.checkpoint(None).is_err());
+    session.run_with_limits(10_000_000, 128, None, Some(1_000_000)).unwrap();
+    assert!(!session.board.is_powered_off());
+    assert_eq!(session.board.now(), 1_000_000);
+    assert_eq!(session.board.instruction_counts(), counts);
+    assert!(session.board.epoch_is_unexecuted());
+    assert_eq!(session.resources.clock("clocks").unwrap().power_alarm().unwrap().unwrap().lock().unwrap().packet(), Some([0x5a; 16]));
+    let revision = session.card_state("sd").unwrap().revision;
+    assert_eq!(session.card_read("sd", "/DCIM/100_FUJI/A.JPG", revision, 100).unwrap(), b"card bytes");
+}

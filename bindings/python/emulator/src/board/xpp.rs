@@ -57,6 +57,7 @@ impl Board {
                 resources,
                 nodes: built.nodes,
                 contacts: built.contacts,
+                power_cycle: None,
                 recording_frames: Default::default(),
             })),
             objects: BTreeMap::new(),

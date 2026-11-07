@@ -1127,6 +1127,7 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
         resources: built.resources,
         nodes: built.node_ids,
         contacts: built.contacts,
+        power_cycle: None,
         recording_frames: Default::default(),
     })
 }
@@ -1232,7 +1233,7 @@ fn advance(
         return Err("instruction limit reached during first-start input".into());
     }
     let tick = session.board.now();
-    session.board.run_with_limits(
+    session.run_with_limits(
         end - now,
         spec.quantum,
         Some(now.saturating_add(1_000_000).min(end)),

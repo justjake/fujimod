@@ -322,6 +322,7 @@ impl Session {
                 resources: Default::default(),
                 nodes: Default::default(),
                 contacts: Default::default(),
+                power_cycle: None,
                 recording_frames: Default::default(),
             },
             owner: next_owner(),
