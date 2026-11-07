@@ -4175,6 +4175,9 @@ class ResolvedSelection(TypedDict, total=False):
     settings: NotRequired[FirmwareSettings | None]
     soc: Required[Soc]
     state: NotRequired[FirmwareState | None]
+    ui_event_codes: NotRequired[UiEventCodes | None]
+    ui_scene_names: NotRequired[UiSceneNames | None]
+    ui_setting_names: NotRequired[UiSettingNames | None]
 
 
 class Resources(TypedDict, total=False):
@@ -4351,6 +4354,9 @@ type RunExecutionScope = Literal[
 type RunFaceRegisterMode = Literal["retained_words"]
 
 
+type RunFaceResultProfile = Literal["empty", "box64x20", "box172x120"]
+
+
 type RunFaceStopProfile = Literal["declared-armed-face-dma-idle-abort-unmeasured"]
 
 
@@ -4368,6 +4374,7 @@ class RunFactoryOptions(TypedDict, total=False):
     display_frame_ticks: NotRequired[int | None]
     entry: NotRequired[RunEntry | None]
     face_register_mode: NotRequired[RunFaceRegisterMode | None]
+    face_result_profile: NotRequired[RunFaceResultProfile | None]
     face_stop_profile: NotRequired[RunFaceStopProfile | None]
     graphics_profile: NotRequired[RunGraphicsProfile | None]
     hdmi_sink: NotRequired[RunHdmiSink | None]
@@ -5469,6 +5476,48 @@ type TimingOperation = Literal[
 class TranslatedKey(TypedDict, total=False):
     event: Required[int]
     physical_key: Required[int]
+
+
+UiEventCodes = TypedDict(
+    "UiEventCodes",
+    {
+        "$schema": Required["str"],
+        "firmware_id": Required["str"],
+        "firmware_sha256": Required["str"],
+        "id": Required["str"],
+        "schema": Required["int"],
+        "ui_event_codes": Required["dict[str, int]"],
+    },
+    total=False,
+)
+
+
+UiSceneNames = TypedDict(
+    "UiSceneNames",
+    {
+        "$schema": Required["str"],
+        "firmware_id": Required["str"],
+        "firmware_sha256": Required["str"],
+        "id": Required["str"],
+        "schema": Required["int"],
+        "ui_scene_names": Required["dict[str, int]"],
+    },
+    total=False,
+)
+
+
+UiSettingNames = TypedDict(
+    "UiSettingNames",
+    {
+        "$schema": Required["str"],
+        "firmware_id": Required["str"],
+        "firmware_sha256": Required["str"],
+        "id": Required["str"],
+        "schema": Required["int"],
+        "ui_setting_names": Required["dict[str, int]"],
+    },
+    total=False,
+)
 
 
 class UpdateRange(TypedDict, total=False):
