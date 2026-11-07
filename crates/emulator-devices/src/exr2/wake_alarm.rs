@@ -18,6 +18,7 @@ pub struct WakeAlarm {
     ticks_per_second: u64,
     hold_release_ticks: u64,
     seconds: [u8; 2],
+    packet: Option<[u8; 16]>,
     alarm_due: Option<u64>,
     release_due: Option<u64>,
     supply: Supply,
@@ -32,11 +33,32 @@ impl WakeAlarm {
             ticks_per_second,
             hold_release_ticks,
             seconds: [0; 2],
+            packet: None,
             alarm_due: None,
             release_due: None,
             supply: Supply::On,
             now: 0,
         })
+    }
+    /// The controller's persistent packet, when its complete register bank is wired.
+    pub fn packet(&self) -> Option<[u8; 16]> {
+        self.packet
+    }
+    pub fn initialize_packet(&mut self, packet: [u8; 16]) -> Result<(), String> {
+        if self.packet.is_some() {
+            return Err("power packet already initialized".into());
+        }
+        self.packet = Some(packet);
+        Ok(())
+    }
+    pub fn write_packet(&mut self, at: u64, index: usize, value: u8) -> Result<(), String> {
+        self.advance(at)?;
+        let packet = self.packet.as_mut().ok_or("power packet is not wired")?;
+        let byte = packet
+            .get_mut(index)
+            .ok_or("power packet offset out of range")?;
+        *byte = value;
+        Ok(())
     }
     pub fn supply(&self) -> Supply {
         self.supply

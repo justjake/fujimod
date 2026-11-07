@@ -26,10 +26,44 @@ impl PowerEndpoint {
                 return Err("wake registers must be writable command registers".into());
             }
         }
-        Ok(Self {
-            registers: RegisterFile::new(options)?,
-            power,
-        })
+        let packet_count = options
+            .registers
+            .iter()
+            .filter(|(address, _)| (0x50..=0x5f).contains(address))
+            .count();
+        if packet_count != 0
+            && (packet_count != 16
+                || options
+                    .status_registers
+                    .iter()
+                    .any(|address| (0x50..=0x5f).contains(address))
+                || options.clock.as_ref().is_some_and(|clock| {
+                    clock
+                        .registers
+                        .iter()
+                        .any(|address| (0x50..=0x5f).contains(address))
+                }))
+        {
+            return Err("power packet requires sixteen writable registers".into());
+        }
+        let packet = (0x50..=0x5f)
+            .map(|address| {
+                options
+                    .registers
+                    .iter()
+                    .find(|(key, _)| *key == address)
+                    .map(|(_, value)| *value)
+            })
+            .collect::<Option<Vec<_>>>();
+        let registers = RegisterFile::new(options)?;
+        if let Some(packet) = packet {
+            let bytes: [u8; 16] = packet.try_into().map_err(|_| "invalid power packet")?;
+            power
+                .lock()
+                .map_err(|_| "power alarm poisoned")?
+                .initialize_packet(bytes)?;
+        }
+        Ok(Self { registers, power })
     }
 }
 impl Endpoint for PowerEndpoint {
@@ -76,11 +110,15 @@ impl Endpoint for PowerEndpoint {
     fn transfer(&mut self, cx: &mut Cx<'_>, shift: Shift, at: u64) -> Result<u16, String> {
         self.registers.validate(shift)?;
         let register = (shift.word >> 8 & 0x7f) as u8;
-        if shift.word & 0x8000 != 0 && matches!(register, 0x68..=0x6a) {
+        if shift.word & 0x8000 != 0 && matches!(register, 0x50..=0x5f | 0x68..=0x6a) {
             let mut power = self.power.lock().map_err(|_| "power alarm poisoned")?;
             // Validate the whole effect before changing either owner.
             let mut next = power.clone();
-            next.write(at, register, shift.word as u8)?;
+            if (0x50..=0x5f).contains(&register) {
+                next.write_packet(at, usize::from(register - 0x50), shift.word as u8)?;
+            } else {
+                next.write(at, register, shift.word as u8)?;
+            }
             let reply = self.registers.transfer(cx, shift, at)?;
             *power = next;
             Ok(reply)
@@ -108,7 +146,10 @@ mod tests {
         let power = Arc::new(Mutex::new(WakeAlarm::new(100, 10).unwrap()));
         let mut part = PowerEndpoint::new(
             RegisterOptions {
-                registers: vec![(0x68, 0), (0x69, 0), (0x6a, 0)],
+                registers: (0x50..=0x5f)
+                    .map(|register| (register, register))
+                    .chain([(0x68, 0), (0x69, 0), (0x6a, 0)])
+                    .collect(),
                 readable: true,
                 status_registers: vec![],
                 clock: None,
@@ -126,7 +167,7 @@ mod tests {
         )
         .unwrap();
         clock.output().attach_power(power.clone()).unwrap();
-        for (at, word) in [(1, 0xe901), (2, 0xea00), (3, 0xe801)] {
+        for (at, word) in [(0, 0xd5ab), (1, 0xe901), (2, 0xea00), (3, 0xe801)] {
             let mut cx = Cx::new(&mut host, 0, 0, 0);
             part.transfer(
                 &mut cx,
@@ -148,10 +189,15 @@ mod tests {
         );
         {
             let mut state = power.lock().unwrap();
+            let packet = state.packet().unwrap();
+            assert_eq!(packet[5], 0xab);
+            assert_eq!(packet[4], 0x54);
             state.advance(14).unwrap();
             assert_eq!(state.supply(), Supply::Off);
             state.advance(103).unwrap();
             assert_eq!(state.supply(), Supply::Wake);
+            state.acknowledge_wake().unwrap();
+            assert_eq!(state.packet().unwrap(), packet);
         }
     }
 }
