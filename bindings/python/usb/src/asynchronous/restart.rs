@@ -8,6 +8,17 @@ use fujimod_workflows::{
 
 #[pymethods]
 impl AsyncSession {
+    /// Serialize the validated timer/wake facts into the portable ARM32
+    /// queue-auto-restart guard contract. This performs no USB I/O.
+    fn deferred_restart_contract(&self, profile: String, milliseconds: u32) -> PyResult<Vec<u8>> {
+        let restart: FirmwareRestart =
+            serde_json::from_str(&profile).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        restart::deferred_guard_contract(&restart, milliseconds).map_err(|failure| match failure {
+            BulkError::Usb(source) => error(source),
+            other => PyValueError::new_err(other.to_string()),
+        })
+    }
+
     /// Request a restart with the firmware's `restart.generated.json` profile
     /// (`fujimod.catalog.restart_profiles()`). Returns "accepted" when the
     /// query returned, or "session-ended" when the camera cut power before
