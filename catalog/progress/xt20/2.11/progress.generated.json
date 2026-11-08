@@ -5,8 +5,8 @@
   "model": "X-T20",
   "version": "2.11",
   "facts": {
-    "located": 30,
-    "total": 30
+    "located": 33,
+    "total": 33
   },
   "boot_rom": null,
   "tracks": [
@@ -37,12 +37,12 @@
         {
           "id": "bulk-source",
           "title": "Bulk read source located",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "flash-reader",
           "title": "Flash reader located",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "state-regions",
@@ -93,7 +93,7 @@
         {
           "id": "stock",
           "title": "Stock features reproduced",
-          "result": "partial"
+          "result": "not-run"
         },
         {
           "id": "emulator-sd-boot",
@@ -103,7 +103,7 @@
         {
           "id": "emulator-updater",
           "title": "The stock updater installs an update from the card",
-          "result": "not-run"
+          "result": "pass"
         }
       ]
     },
@@ -243,7 +243,7 @@
   ],
   "stock": {
     "record-picture": {
-      "result": "pass",
+      "result": "stale",
       "passed": 1,
       "total": 1
     },
@@ -263,7 +263,7 @@
       "result": "not-run"
     },
     "playback-picture": {
-      "result": "pass",
+      "result": "stale",
       "passed": 4,
       "total": 4
     },
@@ -274,7 +274,7 @@
       "result": "not-run"
     },
     "sd": {
-      "result": "pass",
+      "result": "stale",
       "passed": 2,
       "total": 2
     },
@@ -296,6 +296,7 @@
     "film-sims": "not-run",
     "card-films": "not-run",
     "film-editor": "not-run",
+    "film-grain": "not-run",
     "highlight-meter": "not-run",
     "raw-view": "not-run",
     "f-log": "not-run",
@@ -312,6 +313,7 @@
     "af-scene-capture": "not-run",
     "bug-report": "not-run",
     "sd-volume-name": "not-run",
-    "date-folders": "not-run"
+    "date-folders": "not-run",
+    "software-nd": "not-run"
   }
 }

@@ -1608,9 +1608,11 @@
       "type": "string"
     },
     "RunFaceResultProfile": {
-      "description": "Declared face detector results.",
+      "description": "Closed selection of external face detector results.",
       "enum": [
-        "empty"
+        "empty",
+        "box64x20",
+        "box172x120"
       ],
       "type": "string"
     },
@@ -1769,7 +1771,7 @@
               "type": "null"
             }
           ],
-          "description": "Declared face detector results. Absence leaves requests unanswered."
+          "description": "External face detector results supplied by the scene."
         },
         "face_stop_profile": {
           "anyOf": [

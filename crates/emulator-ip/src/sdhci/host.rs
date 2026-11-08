@@ -199,7 +199,10 @@ impl SdHost {
         contacts: Contacts,
         irq: Option<InterruptLine>,
     ) -> Result<Self, String> {
-        if options.base & 0xfff != 0
+        // The X-T5 slot hosts keep a second SDHCI register set at +0x200 of
+        // their vendor page (0xff9b2200), so only word alignment is required;
+        // the window size still bounds the decode.
+        if options.base & 0x3 != 0
             || options.base > 0xffffe000
             || options.transfer_ticks == 0
             || options.rca == 0
@@ -1175,7 +1178,10 @@ impl SdHost {
             // (UHS-II) are SDHCI 4 UHS-II selections; GFX 50R 0xcac788 probes
             // them. A default-speed card has no UHS-II lanes, so they select
             // nothing; other UHS modes and tuning still refuse.
-            || offset == 0x3e && value & !0x100 != 0 && value & !0x107 != 0
+            // Bit 12 (Host Version 4 Enable, the X-T5 slot driver writes 0x1100)
+            // and bits 4-5 (driver strength select, 0x30 after CMD6) are stored
+            // with no effect: they select nothing on the modeled lanes.
+            || offset == 0x3e && value & !0x1130 != 0 && value & !0x1137 != 0
             || offset == 0x3e && value & 7 != 0 && value & 7 != 7
             || offset == 0x100 && value & !7 != 0
             || offset == 0x104 && value != 0
@@ -1502,6 +1508,23 @@ mod tests {
         assert_eq!(m.status_reads[1].load(Ordering::Acquire), 0);
         assert_eq!(read(&mut m, &mut h, 0x34, 4), 0);
         assert_eq!(read(&mut m, &mut h, 0x2c, 4), 0);
+    }
+    #[test]
+    fn version_4_enable_and_driver_strength_are_stored_and_other_uhs_bits_refused() {
+        let mut m = host(Protocol::Sdhc);
+        let mut h = Ram::new(0x10000);
+        for value in [0x1100, 0x1130, 0x30] {
+            write(&mut m, &mut h, 0x3e, 2, value);
+            assert_eq!(read(&mut m, &mut h, 0x3e, 2), value);
+        }
+        let mut cx = h.cx();
+        m.write(&mut cx, BASE + 0x3e, 2, 0x1400);
+        assert!(cx.refusal().is_some());
+    }
+    #[test]
+    fn a_word_aligned_base_inside_a_page_is_accepted() {
+        let m = host_at(Protocol::Sdhc, BASE + 0x200);
+        assert_eq!(m.options.base, BASE + 0x200);
     }
     fn host(protocol: Protocol) -> SdHost {
         host_at(protocol, BASE)

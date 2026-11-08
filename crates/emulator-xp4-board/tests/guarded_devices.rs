@@ -108,7 +108,7 @@ fn halfword_exclusive_writes_are_recorded_only_on_success_and_respect_the_bound(
                 ]
             );
         }
-        session.driver_guard_end();
+        session.driver_guard_end().unwrap();
     }
 
     let session = session();
@@ -161,7 +161,7 @@ fn modeled_register_access_requires_explicit_policy_and_checks_before_dispatch()
             assert!(observed.failure.unwrap().contains("rejected write"));
             assert!(observed.mmio_accesses.is_empty());
         }
-        session.driver_guard_end();
+        session.driver_guard_end().unwrap();
         if !write {
             // Read the actual model register in a second admitted call: the
             // denied store must have left it at its cold zero value.
@@ -196,7 +196,7 @@ fn modeled_register_access_requires_explicit_policy_and_checks_before_dispatch()
                 0
             );
             assert!(session.driver_guard_state().unwrap().returned);
-            session.driver_guard_end();
+            session.driver_guard_end().unwrap();
         }
     }
     let session = session();
@@ -299,6 +299,6 @@ fn guarded_storage_model_transfers_pattern_and_denies_out_of_bounds_dma_before_c
             assert!(observed.model_writes.is_empty());
             assert_eq!(actual, [0xa5; 64]);
         }
-        session.driver_guard_end();
+        session.driver_guard_end().unwrap();
     }
 }

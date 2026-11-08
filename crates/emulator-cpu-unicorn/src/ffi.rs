@@ -12,6 +12,33 @@ pub const FEATURE_REPLACED_INSTRUCTIONS: u32 = 1 << 5;
 pub const FEATURE_AARCH64_ACCOUNTING: u32 = 1 << 6;
 pub const FEATURE_INLINE_INSTRUCTION_COUNTER: u32 = 1 << 7;
 pub const FEATURE_INLINE_BLOCK_ACCOUNTING: u32 = 1 << 8;
+pub const FEATURE_TLBI_OWNER: u32 = 1 << 9;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TlbiEvent {
+    pub owner: u64,
+    pub sequence: u64,
+    pub vttbr: u64,
+    pub hcr: u64,
+    pub cpsr: u32,
+    pub scr: u32,
+    pub nsacr: u32,
+    pub actlr: u32,
+    pub exception_level: u32,
+    pub secure: u32,
+    pub selector: u32,
+    pub operand: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TlbiInfo {
+    pub owner: u64,
+    pub next_sequence: u64,
+    pub pending: u32,
+    pub poison: u32,
+    pub front: TlbiEvent,
+    pub failed: TlbiEvent,
+}
 pub const fn ctl(kind: u32, count: u32, direction: u32) -> u32 {
     kind | (count << 26) | (direction << 30)
 }
@@ -37,6 +64,9 @@ pub struct MemRegion {
 /// Acceleration exports added by the pinned Unicorn source build.
 /// Missing exports require the explicit slow-Unicorn opt-in before loading.
 pub struct Extensions {
+    pub tlbi_attach: Option<unsafe extern "C" fn(Engine, u32, u64) -> Error>,
+    pub tlbi_status: Option<unsafe extern "C" fn(Engine, u32, *mut TlbiInfo) -> Error>,
+    pub tlbi_ack: Option<unsafe extern "C" fn(Engine, u32, u64, u64) -> Error>,
     pub replace_backing: Option<unsafe extern "C" fn(Engine, u64, u64, u32, *mut c_void) -> Error>,
     pub write_hook_pc_sync: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub page_hooks: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
@@ -200,6 +230,9 @@ api! {
 mod linked {
     use super::*;
     unsafe extern "C" {
+        fn uc_embedder_tlbi_attach(engine: Engine, abi: u32, owner: u64) -> Error;
+        fn uc_embedder_tlbi_status(engine: Engine, abi: u32, info: *mut TlbiInfo) -> Error;
+        fn uc_embedder_tlbi_ack(engine: Engine, abi: u32, owner: u64, sequence: u64) -> Error;
         fn uc_embedder_replace_backing(
             engine: Engine,
             address: u64,
@@ -235,6 +268,9 @@ mod linked {
     }
     pub fn extensions() -> Extensions {
         Extensions {
+            tlbi_attach: Some(uc_embedder_tlbi_attach),
+            tlbi_status: Some(uc_embedder_tlbi_status),
+            tlbi_ack: Some(uc_embedder_tlbi_ack),
             replace_backing: Some(uc_embedder_replace_backing),
             write_hook_pc_sync: Some(uc_embedder_set_write_hook_pc_sync),
             page_hooks: Some(uc_embedder_set_page_hooks),

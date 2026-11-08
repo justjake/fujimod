@@ -57,12 +57,12 @@ pub struct RunFactoryOptions {
     /// Selected face register mode. Absence preserves the base selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub face_register_mode: Option<RunFaceRegisterMode>,
-    /// Declared face detector results. Absence leaves requests unanswered.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub face_result_profile: Option<RunFaceResultProfile>,
     /// Declared face DMA stop policy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub face_stop_profile: Option<RunFaceStopProfile>,
+    /// External face detector results supplied by the scene.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub face_result_profile: Option<RunFaceResultProfile>,
     /// Selected graphics profile. Absence preserves the base selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub graphics_profile: Option<RunGraphicsProfile>,
@@ -342,19 +342,6 @@ pub enum RunEntry {
 pub enum RunFaceRegisterMode {
     #[serde(rename = "retained_words")]
     RetainedWords,
-}
-
-/// Declared face detector results.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(
-    all(target_arch = "wasm32", not(target_os = "emscripten")),
-    derive(tsify::Tsify),
-    tsify(hashmap_as_object, missing_as_null)
-)]
-pub enum RunFaceResultProfile {
-    #[serde(rename = "empty")]
-    Empty,
 }
 
 /// Closed selection for graphics profile.
@@ -835,6 +822,23 @@ pub enum RunFaceStopProfile {
     DeclaredArmedFaceDmaIdleAbortUnmeasured,
 }
 
+/// Closed selection of external face detector results.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum RunFaceResultProfile {
+    #[serde(rename = "empty")]
+    Empty,
+    #[serde(rename = "box64x20")]
+    Box64x20,
+    #[serde(rename = "box172x120")]
+    Box172x120,
+}
+
 /// Explicit constructor policy selected by a run.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -859,4 +863,29 @@ pub enum RunLensContinuationProfile {
 pub enum RunAudioInputProfile {
     /// Constant zero, 48 kHz, stereo signed 16-bit PCM.
     DeclaredSilentStereoPcm48000,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RunFactoryOptions, RunFaceResultProfile};
+
+    #[test]
+    fn face_result_profile_accepts_known_profiles_and_rejects_unknown() {
+        for (name, expected) in [
+            ("empty", RunFaceResultProfile::Empty),
+            ("box64x20", RunFaceResultProfile::Box64x20),
+            ("box172x120", RunFaceResultProfile::Box172x120),
+        ] {
+            let options: RunFactoryOptions = serde_json::from_value(serde_json::json!({
+                "face_result_profile": name
+            }))
+            .unwrap();
+            assert_eq!(options.face_result_profile, Some(expected));
+        }
+
+        assert!(serde_json::from_value::<RunFactoryOptions>(serde_json::json!({
+            "face_result_profile": "not-a-profile"
+        }))
+        .is_err());
+    }
 }

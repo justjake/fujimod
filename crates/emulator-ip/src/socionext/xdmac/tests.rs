@@ -368,3 +368,26 @@ fn exhausted_counter_cannot_restart_until_the_guest_programs_a_new_count() {
     assert_eq!(&h.ram[64..67], &[8, 9, 10]);
     assert_eq!(read(&mut d, &mut h, BASE + 0x30), 8);
 }
+#[test]
+fn full_burst_shape_copies_like_the_unburst_shape() {
+    let routing = Arc::new(Mutex::new(Routing::default()));
+    routing.lock().unwrap().set_request(0, 63).unwrap();
+    let mut d = pair(routing, BTreeMap::new());
+    let mut h = RecordingHost {
+        ram: (0..128).collect(),
+        ..Default::default()
+    };
+    configure(&mut d, &mut h, 0, 8, 72, [0x30f00; 2], 32);
+    write(&mut d, &mut h, BASE, ENABLE as u64);
+    write(
+        &mut d,
+        &mut h,
+        BASE + 0x28,
+        (ENABLE | SOFTWARE | 0x100000 | 3) as u64,
+    );
+    for _ in 0..4 {
+        advance(&mut d, &mut h);
+    }
+    assert_eq!(&h.ram[72..104], &(8..40).collect::<Vec<u8>>());
+    assert_eq!(read(&mut d, &mut h, BASE + 0x30), 8);
+}

@@ -137,6 +137,12 @@ impl Device for Dma {
     fn fingerprint(&self) -> Result<Value, String> {
         Ok(self.save())
     }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            "test-physical-dma",
+            &*self.reads.lock().unwrap(),
+        )
+    }
 
     fn name(&self) -> &'static str {
         "test-physical-dma"

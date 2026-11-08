@@ -7,6 +7,15 @@ pub mod requests;
 pub mod rtc;
 pub mod register_bank;
 pub mod spi;
+pub mod system_control;
 pub mod temperature;
 pub mod usb_condition;
 pub mod usb_phy;
+
+pub mod configuration_request;
+
+pub mod selection_special;
+
+pub mod base_parameter;
+
+pub mod i2c;
