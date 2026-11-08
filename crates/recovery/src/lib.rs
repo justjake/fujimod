@@ -332,6 +332,15 @@ impl Recipe {
         require(matches!(self.generation, Generation::Xp5), "Card storage requires XP5")?;
         self.startup_inputs(source, options, Some(storage))
     }
+    /// Identifies the `FFSYS.BIN` that `build_ota_startup` writes, without the
+    /// update: firmwares with the same value share one card's boot files.
+    pub fn ota_startup_header(&self) -> Option<String> {
+        let packaging = self.packaging.as_ref()?;
+        matches!(self.generation, Generation::Exr2).then(|| {
+            let identity = serde_json::json!([packaging.header_sha256, packaging.edits]);
+            fujimod_firmware::sha256(identity.to_string().as_bytes())
+        })
+    }
     /// Build an EXR II card entry that loads stage 1 from NAND, then stage 2.
     /// The board's memory setup header comes from the supplied update; the two
     /// executable files are identical for every EXR II firmware.
@@ -490,6 +499,8 @@ pub struct Availability {
     pub firmware_update: Option<serde_json::Value>,
     /// The system card turns the green lamp on during SD startup.
     pub system_startup_lamp: bool,
+    /// See `Recipe::ota_startup_header`.
+    pub ota_startup_header: Option<String>,
 }
 pub fn availability(firmware_id: &str) -> Result<Availability> {
     let id = firmware_id;
@@ -526,6 +537,7 @@ pub fn availability(firmware_id: &str) -> Result<Availability> {
     let system_startup_lamp = recipe
         .as_ref()
         .is_some_and(|r| !matches!(r.generation, Generation::Xp5));
+    let ota_startup_header = recipe.as_ref().and_then(Recipe::ota_startup_header);
     Ok(Availability {
         firmware_id: id.into(),
         generation: recipe.map(|r| r.generation),
@@ -535,6 +547,7 @@ pub fn availability(firmware_id: &str) -> Result<Availability> {
         output_filenames,
         sd_boot,
         firmware_update,
+        ota_startup_header,
     })
 }
 

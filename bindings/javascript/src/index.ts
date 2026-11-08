@@ -138,6 +138,7 @@ export const recovery = Object.freeze({
   availability: native.recoveryAvailability,
   build: native.buildRecoveryCard,
   buildGreenLed: native.buildGreenLedCard,
+  buildOtaStartup: native.buildOtaStartupCard,
 });
 export const usb = Object.freeze({
   Device: native.Device,
