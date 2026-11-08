@@ -1,7 +1,6 @@
 """Native emulator package and board execution contracts."""
 
 import gc
-import hashlib
 import importlib
 import struct
 import weakref
@@ -25,13 +24,11 @@ from fujimod.emulator.board import Session, _boot_report
 NATIVE_EXPORTS = frozenset({
     "prepare_configuration",
     "load_input_assets",
-    "verify_input_assets",
-    "Sha256",
-    "sha256_many",
     "NativeError",
     "Board",
     "Checkpoint",
     "Xp4",
+    "xpp_definition",
     "AnalogInputs",
     "CardMedium",
     "NandMedium",
@@ -45,6 +42,7 @@ NATIVE_EXPORTS = frozenset({
     "FrontierEntry",
     "Intervention",
     "gpu_ui_render",
+    "prepare_host_gpu",
     "UiBatch",
     "ui_batch",
     "ui_initialize",
@@ -82,7 +80,7 @@ NATIVE_EXPORTS = frozenset({
 
 
 def test_emulator_is_a_nested_native_module_with_complete_exports() -> None:
-    assert len(NATIVE_EXPORTS) == 55
+    assert len(NATIVE_EXPORTS) == 54
     importlib.import_module("fujimod")
     assert importlib.import_module("fujimod.catalog") is catalog
     assert importlib.import_module("fujimod.usb") is usb
@@ -147,7 +145,7 @@ def _device_plan() -> dict[str, object]:
 
 def test_board_runs_authored_program_and_releases_native_state() -> None:
     program = struct.pack("<II", 0xE3A0002A, 0xEAFFFFFE)
-    asset = Asset("program", len(program), hashlib.sha256(program).hexdigest())
+    asset = Asset("program", len(program))
     definition = Definition(
         execution=_execution_graph(),
         devices=_device_plan(),
@@ -174,17 +172,14 @@ def test_board_runs_authored_program_and_releases_native_state() -> None:
 
 
 def test_asset_and_image_validate_inputs_before_board_construction() -> None:
-    digest = "0" * 64
-    assert Asset("program", 0, digest).manifest() == {
+    assert Asset("program", 0).manifest() == {
         "id": "program",
-        "content": {"size": 0, "sha256": digest},
+        "content": {"size": 0},
     }
     with pytest.raises(ValueError, match="Asset id"):
-        Asset("../program", 1, digest)
+        Asset("../program", 1)
     with pytest.raises(ValueError, match="Asset size"):
-        Asset("program", True, digest)
-    with pytest.raises(ValueError, match="SHA-256"):
-        Asset("program", 1, "A" * 64)
+        Asset("program", True)
     with pytest.raises(ValueError, match="Image address"):
         Image("program", -1)
     with pytest.raises(ValueError, match="Image core"):

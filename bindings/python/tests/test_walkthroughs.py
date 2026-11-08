@@ -52,6 +52,13 @@ class Camera:
         self.guide.input("selector.right", False, 0.2)
 
 
+class CaptureCamera(Camera):
+    def capture(self) -> Frame:
+        captures = self.guide.report.setdefault("captures", [])
+        captures.append(dict())
+        return self.frame
+
+
 class WalkthroughTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
@@ -67,6 +74,23 @@ class WalkthroughTests(unittest.TestCase):
             title="Test",
             video=video,
         )
+
+    def test_step_records_its_published_capture_index(self) -> None:
+        camera = CaptureCamera()
+        guide = Guide(
+            camera,
+            self.root / "run",
+            identity={"build": "test"},
+            title="Test",
+        )
+
+        def run(camera: CaptureCamera, guide: Guide[CaptureCamera]) -> None:
+            with guide.step("Published frame", hold=0):
+                pass
+
+        report = guide.run(run)
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["steps"][0]["capture_index"], 0)
 
     def test_badge_filter_preserves_every_input_as_coverage_evidence(self) -> None:
         from unittest.mock import Mock, call
@@ -264,7 +288,7 @@ class WalkthroughTests(unittest.TestCase):
         guide.input("selector.right", True, 0)
         for n in range(101):
             guide.frame(camera.frame, n / 100)
-        self.assertEqual(guide.recording.frames, 15)
+        self.assertEqual(guide.recording.frames, 30)
 
     def test_nonmonotonic_video_time_refused(self) -> None:
         camera, guide = self.guide()
@@ -500,13 +524,13 @@ class WalkthroughTests(unittest.TestCase):
         ]:
             recording.frame(Frame.from_png(image), time)
         self.assertAlmostEqual(recording.skipped_seconds, 3.3)
-        self.assertEqual(recording.frames, 12)
+        self.assertEqual(recording.frames, 24)
         self.assertEqual(json.loads(recording.metrics())["changed_frames"], 2)
 
     def test_explicit_holds_are_not_compressed(self) -> None:
         camera, guide = self.guide()
         guide.recording.still(camera.frame, 2)
-        self.assertEqual(guide.recording.frames, 30)
+        self.assertEqual(guide.recording.frames, 60)
 
     def test_action_holds_only_present_the_result_and_replay_has_no_hold(self) -> None:
         from unittest.mock import Mock
@@ -515,14 +539,14 @@ class WalkthroughTests(unittest.TestCase):
         camera.capture = Mock(return_value=camera.frame)
         with guide.action(navigation=True):
             pass
-        self.assertEqual(guide.recording.frames, 1)
+        self.assertEqual(guide.recording.frames, 3)
         with guide.action():
             pass
-        self.assertEqual(guide.recording.frames, 8)
+        self.assertEqual(guide.recording.frames, 17)
         guide._preparing = True
         with guide.action():
             pass
-        self.assertEqual(guide.recording.frames, 8)
+        self.assertEqual(guide.recording.frames, 17)
         self.assertEqual(camera.capture.call_count, 2)
 
     def test_failed_action_never_adds_a_presentation_hold(self) -> None:

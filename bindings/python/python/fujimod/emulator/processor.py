@@ -1,5 +1,6 @@
 """Paused CPU inspection for host debuggers and isolated driver callers."""
 
+import functools
 import json
 import weakref
 from enum import Enum, auto
@@ -41,33 +42,44 @@ def _register(identifier: RegisterIdentifier) -> RegisterIdentifier:
     return registers[identifier]
 
 
+@functools.cache
+def _named_register(identifier: int | str) -> str:
+    """Encode each register's native identifier once per process."""
+    return json.dumps(_register(identifier))
+
+
+def _register_name(identifier: RegisterIdentifier) -> str:
+    if isinstance(identifier, dict):
+        return json.dumps(identifier)
+    return _named_register(identifier)
+
+
+@functools.cache
+def _coprocessor_name(
+    cp: int, opc1: int, crn: int, crm: int, opc2: int, secure: int, wide: bool
+) -> str:
+    return json.dumps(
+        dict(cp=cp, opc1=opc1, crn=crn, crm=crm, opc2=opc2, secure=secure, wide=wide)
+    )
+
+
 class Processor:
     def __init__(self, board: Board, core: int) -> None:
         self.board: Board = weakref.proxy(board)
         self.core = core
 
     def reg_read(self, register: RegisterIdentifier) -> int:
-        return self.board.native.reg_read(self.core, json.dumps(_register(register)))
+        return self.board.native.reg_read(self.core, _register_name(register))
 
     def reg_write(self, register: RegisterIdentifier, value: int) -> None:
-        self.board.native.reg_write(self.core, json.dumps(_register(register)), value)
+        self.board.native.reg_write(self.core, _register_name(register), value)
 
     def cpr_read(
         self, cp: int, opc1: int, crn: int, crm: int, opc2: int, secure: int, wide: bool
     ) -> int:
         return self.board.native.coprocessor(
             self.core,
-            json.dumps(
-                dict(
-                    cp=cp,
-                    opc1=opc1,
-                    crn=crn,
-                    crm=crm,
-                    opc2=opc2,
-                    secure=secure,
-                    wide=wide,
-                )
-            ),
+            _coprocessor_name(cp, opc1, crn, crm, opc2, secure, wide),
             None,
         )
 
@@ -84,17 +96,7 @@ class Processor:
     ) -> int:
         return self.board.native.coprocessor(
             self.core,
-            json.dumps(
-                dict(
-                    cp=cp,
-                    opc1=opc1,
-                    crn=crn,
-                    crm=crm,
-                    opc2=opc2,
-                    secure=secure,
-                    wide=wide,
-                )
-            ),
+            _coprocessor_name(cp, opc1, crn, crm, opc2, secure, wide),
             value,
         )
 

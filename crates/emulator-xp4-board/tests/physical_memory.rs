@@ -81,7 +81,7 @@ fn guarded_high_rom_call_records_its_sparse_sram_store() {
     assert!(guard.returned);
     assert!(guard.failure.is_none());
     assert_eq!(guard.stores, vec![(0, 0xfff00004, 0xfff10000, 4, 42)]);
-    session.driver_guard_end();
+    session.driver_guard_end().unwrap();
 }
 
 #[test]

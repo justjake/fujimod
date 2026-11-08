@@ -72,16 +72,15 @@ fn expand(value: u32, bits: u32) -> u32 {
 
 fn texture_color(x: u32, y: u32) -> vec4<u32> {
     let width = params[23];
-    let height = params[24];
     let matrix = 32u;
     let px = f32(x) + 0.5;
     let py = f32(y) + 0.5;
     let tx = (bitcast<f32>(params[matrix]) * px
         + bitcast<f32>(params[matrix + 1u]) * py
-        + bitcast<f32>(params[matrix + 2u])) * f32(width);
+        + bitcast<f32>(params[matrix + 2u])) * f32(params[25]);
     let ty = (bitcast<f32>(params[matrix + 3u]) * px
         + bitcast<f32>(params[matrix + 4u]) * py
-        + bitcast<f32>(params[matrix + 5u])) * f32(height);
+        + bitcast<f32>(params[matrix + 5u])) * f32(params[26]);
     if tx < 0.0 || ty < 0.0 || tx >= f32(params[25]) || ty >= f32(params[26]) {
         return vec4<u32>(0u);
     }

@@ -153,6 +153,18 @@ struct Client<F> {
     lease: Option<ReadLease>,
 }
 const READ_IDLE: Duration = Duration::from_millis(20);
+
+fn classify_open(error: fujimod_usb::Error) -> fujimod_usb::Error {
+    let text = error.to_string();
+    if text.contains("completion unknown") || text.contains("disconnected") {
+        fujimod_usb::Error::CompletionUnknown
+    } else if text.contains("in use by another session") {
+        fujimod_usb::Error::SessionAlreadyOpen
+    } else {
+        error
+    }
+}
+
 struct ReadLease {
     session: Session,
     mapping: Option<fujimod_workflows::bulk::BulkMapping>,
@@ -222,13 +234,17 @@ impl<F: Sessions> Client<F> {
                     lease.service_checked,
                 )
             } else {
-                (
-                    self.sessions.open().await?,
-                    None,
-                    std::time::Instant::now(),
-                    0,
-                    false,
-                )
+                let session = match self.sessions.open().await {
+                    Ok(session) => session,
+                    Err(error) => {
+                        let error = classify_open(error);
+                        if matches!(error, fujimod_usb::Error::CompletionUnknown) {
+                            self.fence();
+                        }
+                        return Err(error);
+                    }
+                };
+                (session, None, std::time::Instant::now(), 0, false)
             };
         let acquisition_seconds = acquisition.elapsed().as_secs_f64();
         let started = std::time::Instant::now();

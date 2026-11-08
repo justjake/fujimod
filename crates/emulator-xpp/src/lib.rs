@@ -14,6 +14,7 @@ pub mod dram;
 pub mod encoder;
 pub mod face;
 pub mod flash;
+pub mod h264;
 pub mod i2c;
 pub mod imaging;
 pub mod jpeg;

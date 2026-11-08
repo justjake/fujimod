@@ -67,6 +67,81 @@ use std::{
 /// Words a block publishes: its current register file.
 pub type Published = Arc<Mutex<BTreeMap<u64, u32>>>;
 
+/// A block's published words as a PL330 source. A DMA load reads the same
+/// words the block returns to the CPU, zero where nothing was written. The
+/// audio register window also accepts DMA stores; other windows stay
+/// read-only.
+pub struct SourceWindow {
+    base: u64,
+    size: u64,
+    words: Published,
+    writable: bool,
+}
+impl SourceWindow {
+    pub fn new(base: u64, size: u64, words: Published) -> Result<Self, String> {
+        Self::with_writable(base, size, words, false)
+    }
+    pub fn new_writable(base: u64, size: u64, words: Published) -> Result<Self, String> {
+        Self::with_writable(base, size, words, true)
+    }
+    fn with_writable(
+        base: u64,
+        size: u64,
+        words: Published,
+        writable: bool,
+    ) -> Result<Self, String> {
+        if base & 0xfff != 0 || size == 0 || size > 0x1000 {
+            return Err("Invalid X-Processor Pro block source window".into());
+        }
+        Ok(Self {
+            base,
+            size,
+            words,
+            writable,
+        })
+    }
+}
+impl fujimod_emulator_ip_arm::pl330::Source for SourceWindow {
+    fn contains(&self, address: u64, len: usize) -> bool {
+        address >= self.base
+            && address
+                .checked_add(len as u64)
+                .is_some_and(|end| end <= self.base + self.size)
+    }
+    fn read(&self, address: u64, len: usize) -> Result<Vec<u8>, String> {
+        let words = self
+            .words
+            .lock()
+            .map_err(|_| "Register block words poisoned")?;
+        let start = address - self.base;
+        Ok((start..start + len as u64)
+            .map(|offset| {
+                let word = words.get(&(offset & !3)).copied().unwrap_or(0);
+                (word >> (8 * (offset & 3))) as u8
+            })
+            .collect())
+    }
+    fn writable(&self) -> bool {
+        self.writable
+    }
+    fn write(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
+        if !self.writable {
+            return Err("PL330 store into a read-only source".into());
+        }
+        let mut words = self
+            .words
+            .lock()
+            .map_err(|_| "Register block words poisoned")?;
+        for (index, byte) in bytes.iter().enumerate() {
+            let offset = address + index as u64 - self.base;
+            let word = words.entry(offset & !3).or_insert(0);
+            let shift = 8 * (offset & 3);
+            *word = (*word & !(0xffu32 << shift)) | ((*byte as u32) << shift);
+        }
+        Ok(())
+    }
+}
+
 /// Frame law of a block: (offset, mask) of the start and stopped bits, the
 /// interrupt line and the frame period in ticks.
 #[derive(Clone, Copy, Debug)]
@@ -1665,6 +1740,77 @@ mod tests {
         let mut other = dram(vec![enter, leave]).unwrap();
         other.restore(&saved).unwrap();
         assert_eq!(read(&mut other, &mut h, base + 0xbc), 0x120);
+    }
+
+    #[test]
+    fn the_audio_window_reads_the_blocks_words_and_accepts_stores() {
+        use fujimod_emulator_ip_arm::pl330::Source;
+        let words = Published::default();
+        let mut block = Block::new(0xfff1b000, 0x1000, vec![], None)
+            .unwrap()
+            .with_published(words.clone());
+        let mut h = TestHost::new();
+        write(&mut block, &mut h, 0xfff1b020, 0x1122_3344);
+        let window = SourceWindow::new_writable(0xfff1b000, 0x100, words).unwrap();
+        assert!(window.contains(0xfff1b020, 4));
+        assert!(!window.contains(0xfff1afff, 2));
+        assert!(!window.contains(0xfff1b0ff, 2));
+        assert_eq!(
+            window.read(0xfff1b020, 4).unwrap(),
+            [0x44, 0x33, 0x22, 0x11]
+        );
+        // A word the CPU never wrote reads silent, so the movie channel's
+        // load from +0x20 succeeds before an audio codec exists.
+        assert_eq!(window.read(0xfff1b030, 4).unwrap(), [0; 4]);
+        assert!(window.writable());
+        window.write(0xfff1b020, &[0xaa, 0xbb, 0xcc, 0xdd]).unwrap();
+        assert_eq!(
+            window.read(0xfff1b020, 4).unwrap(),
+            [0xaa, 0xbb, 0xcc, 0xdd]
+        );
+        // The DMA store updates the published window. The audio block's
+        // private register state is not synchronized until a codec model
+        // exists; the movie path only needs the store to complete.
+    }
+
+    #[test]
+    fn a_pl330_load_from_the_audio_window_copies_its_words() {
+        use fujimod_emulator_ip_arm::pl330::{Pl330, Throughput};
+        let words = Published::default();
+        let mut block = Block::new(0xfff1b000, 0x1000, vec![], None)
+            .unwrap()
+            .with_published(words.clone());
+        let mut h = TestHost::new();
+        write(&mut block, &mut h, 0xfff1b020, 0x1122_3344);
+        let window = SourceWindow::new(0xfff1b000, 0x100, words).unwrap();
+        let mut dma = Pl330::new(
+            0xfff18000,
+            vec![207],
+            vec![Arc::new(window)],
+            Throughput {
+                setup_ticks: 1,
+                bytes_per_tick: 1,
+            },
+        )
+        .unwrap();
+        // DMAMOV SAR, 0xfff1b020; DAR, 0x1000; CCR 16-byte bursts;
+        // DMALDP 0; DMAST; DMAEND.
+        let program = [
+            0xbc, 0, 0x20, 0xb0, 0xf1, 0xff, 0xbc, 2, 0x00, 0x10, 0x00, 0x00, 0xbc, 1, 0x17, 0xc0,
+            0x05, 0x00, 0x25, 0x00, 0x08, 0x00,
+        ];
+        h.ram[0x100..0x100 + program.len()].copy_from_slice(&program);
+        write(&mut dma, &mut h, 0xfff18000 + 0xd0c, 0x100);
+        write(&mut dma, &mut h, 0xfff18000 + 0xd08, 0xa2_0000);
+        write(&mut dma, &mut h, 0xfff18000 + 0xd04, 0);
+        h.now = 17;
+        {
+            let mut cx = h.cx();
+            dma.event(&mut cx, 0);
+            assert_eq!(cx.refusal(), None);
+        }
+        assert_eq!(h.ram[0x1000..0x1004], 0x1122_3344_u32.to_le_bytes());
+        assert_eq!(h.ram[0x1004..0x1010], [0; 12]);
     }
 
     #[test]

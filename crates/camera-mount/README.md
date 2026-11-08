@@ -27,6 +27,8 @@ requests that FSKit inhibit kernel offloaded I/O; applications should use
 `pread` or seek/read and handle I/O errors. A regular address-indexed file is
 the POSIX interface here: no privileged character-device driver is needed.
 The current adapter does not provide a custom `mmap` interface.
+Reads may be any length; the adapter splits them into bounded device exchanges
+at the memory and card request limits, so callers do not need to cap `read(2)`.
 
 ## Run
 

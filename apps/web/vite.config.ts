@@ -254,6 +254,7 @@ export default defineConfig(({ mode, command }) => ({
     localReleases({
       artifacts: loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_PATCHES,
       notes: loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_RELEASE_NOTES,
+      card: loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_CARD_FILES,
     }),
     watchWorkspacePackages(),
     solid({

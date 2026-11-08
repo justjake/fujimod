@@ -10,6 +10,7 @@ fn configured(core: usize, control: u32, period: u32) -> (PulseUnit, TestHost) {
             timer_channels: vec![11],
             one_shot_channels: vec![],
             counter_readback_channels: vec![],
+            mirrored_irqs: vec![],
             quadrature: false,
             initial_phase: 0,
             capture_channel: None,
@@ -90,6 +91,7 @@ fn invalid_channel11_configuration_or_absent_irq_refuses_before_enable() {
                 timer_channels: vec![11],
                 one_shot_channels: vec![],
                 counter_readback_channels: vec![],
+                mirrored_irqs: vec![],
                 quadrature: false,
                 initial_phase: 0,
                 capture_channel: None
@@ -110,6 +112,7 @@ fn counter_readback_reports_the_running_down_count_only_when_declared() {
                 timer_channels: vec![7],
                 one_shot_channels: vec![],
                 counter_readback_channels: if readback { vec![7] } else { vec![] },
+                mirrored_irqs: vec![],
                 quadrature: false,
                 initial_phase: 0,
                 capture_channel: None,
@@ -128,4 +131,38 @@ fn counter_readback_reports_the_running_down_count_only_when_declared() {
         let expected = if readback { 0x7530 - 10 } else { 0x7530 };
         assert_eq!(read(&mut device, &mut host, channel + 8), expected);
     }
+}
+#[test]
+fn mirrored_irq_raises_the_second_core_with_the_primary_output() {
+    let mut irqs = [None; 12];
+    irqs[11] = Some(InterruptLine::Core { core: 0, line: 31 });
+    let options = |mirrored_irqs| Options {
+        counter_channels: vec![],
+        timer_channels: vec![11],
+        one_shot_channels: vec![],
+        counter_readback_channels: vec![],
+        mirrored_irqs,
+        quadrature: false,
+        initial_phase: 0,
+        capture_channel: None,
+    };
+    let mirror = MirroredIrq { channel: 11, core: 1, line: 31 };
+    let mut device = PulseUnit::new(options(vec![mirror]), Wiring { irqs }).unwrap();
+    let mut host = TestHost::new();
+    host.now = 100;
+    for (offset, value) in [(0, 0xc000), (4, 0), (8, 6000), (12, 5999), (16, 0)] {
+        write(&mut device, &mut host, CHANNEL_BASE + 11 * 0x100 + offset, value);
+    }
+    write(&mut device, &mut host, BASE, 0x08000800);
+    advance(&mut device, &mut host, 6100);
+    assert_eq!(host.irqs, [(0, 31), (1, 31)]);
+    // A mirror needs a declared interval-timer channel.
+    let stray = MirroredIrq { channel: 3, core: 1, line: 23 };
+    assert!(PulseUnit::new(options(vec![stray]), Wiring { irqs }).is_err());
+    // Existing configurations without the field still deserialize.
+    let o: Options = serde_json::from_str(
+        r#"{"counter_channels":[],"timer_channels":[11],"quadrature":false,"initial_phase":0,"capture_channel":null}"#,
+    )
+    .unwrap();
+    assert!(o.mirrored_irqs.is_empty());
 }

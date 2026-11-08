@@ -743,12 +743,12 @@ impl CommandProcessor {
     /// DMA must succeed before this method commits status and logs/raises IRQ.
     /// The runtime applies output() first, then complete(), preserving the
     /// memory-write-before-state order, including callback failures.
-    pub fn output(&self, token: u64) -> Result<(i64, DmaOutput)> {
+    pub fn output(&self, token: u64) -> Result<&DmaOutput> {
         let c = self
             .completions
             .get(&token)
             .ok_or_else(|| Unsupported("Unknown graphics completion token".into()))?;
-        Ok((c.cpu, c.output.clone()))
+        Ok(&c.output)
     }
     pub fn complete_webgpu_request(
         &mut self,

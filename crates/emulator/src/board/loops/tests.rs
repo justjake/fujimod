@@ -51,6 +51,12 @@ impl Device for Flag {
     fn fingerprint(&self) -> Result<Value, String> {
         Ok(self.save())
     }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            "test-stable-flag",
+            &self.save(),
+        )
+    }
 }
 fn board(mmio: bool, declared: bool, peer: bool, irq: bool, mode: LoopMode) -> Board {
     let library = Library::linked().unwrap();

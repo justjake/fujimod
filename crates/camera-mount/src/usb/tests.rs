@@ -199,6 +199,25 @@ fn uncertain_completion_never_closes_reacquires_or_reclaims() {
     });
 }
 
+#[test]
+fn owner_fence_errors_are_classified_before_opening_a_session() {
+    let fenced = fujimod_usb::Error::Proxy(fujimod_usb_proxy::Error(
+        "USB completion unknown; reconnect the device".into(),
+    ));
+    assert!(matches!(
+        classify_open(fenced),
+        fujimod_usb::Error::CompletionUnknown
+    ));
+    let busy = fujimod_usb::Error::Proxy(fujimod_usb_proxy::Error(
+        "Camera is in use by another session. Wait for its controller to release the device."
+            .into(),
+    ));
+    assert!(matches!(
+        classify_open(busy),
+        fujimod_usb::Error::SessionAlreadyOpen
+    ));
+}
+
 #[derive(Default)]
 struct MailboxState {
     memory: std::collections::BTreeMap<u32, u8>,

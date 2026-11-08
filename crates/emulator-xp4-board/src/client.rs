@@ -21,7 +21,9 @@ impl Session {
         register: Register,
         value: u64,
     ) -> Result<(), String> {
-        self.inner.cpu(core)?;
+        // The instruction observer may change registers while its core is live.
+        // A failed board never accepts a host repair through that capability.
+        self.inner.host_register_mutation(core)?;
         let value = u32::try_from(value)
             .map_err(|_| "ARMv7-A scalar register exceeds 32 bits".to_owned())?;
         self.inner.write_reg(core, register, value)
@@ -32,6 +34,9 @@ impl Session {
         selector: arm::Coprocessor,
         value: Option<u64>,
     ) -> Result<u64, String> {
+        if value.is_some() {
+            self.inner.host_register_mutation(core)?;
+        }
         self.inner.cpu(core)?;
         if selector.cp == 15 && !selector.wide && selector.secure == 0 && value.is_none() {
             self.inner.cp(
@@ -46,9 +51,7 @@ impl Session {
         }
     }
     pub fn run_board(&self, limit: u64, quantum: usize) -> Result<(), String> {
-        if self.inner.running.get() {
-            return Err("Reentrant ARMv7-A execution".to_owned());
-        }
+        self.inner.host_mutation()?;
         if quantum == 0 {
             return Err("Board quantum must be positive".to_owned());
         }
@@ -56,8 +59,9 @@ impl Session {
             .checked_add(limit)
             .ok_or_else(|| "Instruction budget overflows".to_owned())?;
         loop {
+            self.inner.healthy()?;
             let state = unsafe { &*self.inner.state.get() };
-            if state.instructions >= target || state.failure.is_some() {
+            if state.instructions >= target {
                 return Ok(());
             }
             let remaining = target - state.instructions;
@@ -71,6 +75,7 @@ impl Session {
                 if self.idle() {
                     continue;
                 }
+                self.inner.healthy()?;
                 self.quiescent.set(true);
                 return Ok(());
             }

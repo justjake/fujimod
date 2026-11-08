@@ -11,6 +11,7 @@ fn unit(quadrature: bool) -> PulseUnit {
             timer_channels: vec![],
             one_shot_channels: vec![],
             counter_readback_channels: vec![],
+            mirrored_irqs: vec![],
             quadrature,
             initial_phase: 0,
             capture_channel: (!quadrature).then_some(1),
@@ -97,4 +98,34 @@ fn running_quadrature_counters_accept_preload_and_terminal_updates() {
     // Channel 1 counts one rising A edge per cycle; the second exceeds terminal 1.
     assert_eq!(host.irqs, [(0, 21)]);
     assert_eq!(read(&mut device, &mut host, CHANNEL_BASE + 0x10c), 2);
+}
+
+#[test]
+fn channel_eleven_counts_through_the_high_input_route() {
+    let mut irqs = [None; 12];
+    irqs[11] = Some(InterruptLine::Core { core: 0, line: 31 });
+    let mut device = PulseUnit::new(
+        Options {
+            counter_channels: vec![11],
+            timer_channels: vec![11],
+            one_shot_channels: vec![],
+            counter_readback_channels: vec![],
+            mirrored_irqs: vec![],
+            quadrature: false,
+            initial_phase: 0,
+            capture_channel: None,
+        },
+        Wiring { irqs },
+    )
+    .unwrap();
+    let pins = device.pins();
+    let mut host = crate::test_host::TestHost::new();
+    // high_route: +0x18 nibble 3 is channel 11, routed to its own input as on EXR Pro (0x7a5ad8 writes 0xb000).
+    crate::test_host::write(&mut device, &mut host, BASE + 0x18, 0xb000);
+    for (offset, value) in [(0, 0x208b), (4, 0), (8, 0), (12, 0), (16, 0xffff)] {
+        crate::test_host::write(&mut device, &mut host, CHANNEL_BASE + 11 * 0x100 + offset, value);
+    }
+    crate::test_host::write(&mut device, &mut host, BASE, 0x08000800);
+    assert!(pins.counter_wired(11));
+    assert_eq!(crate::test_host::read(&mut device, &mut host, BASE + 0x18), 0xb000);
 }

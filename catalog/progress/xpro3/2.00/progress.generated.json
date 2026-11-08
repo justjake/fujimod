@@ -1,0 +1,313 @@
+{
+  "$schema": "https://fujimod.com/schemas/progress.generated.schema.json",
+  "schema": 2,
+  "firmware_id": "xpro3-200",
+  "model": "X-Pro3",
+  "version": "2.00",
+  "facts": {
+    "located": 15,
+    "total": 22
+  },
+  "boot_rom": null,
+  "tracks": [
+    {
+      "id": "static",
+      "title": "Static analysis",
+      "stages": [
+        {
+          "id": "research",
+          "title": "Update file registered, unpacked and its corpus exported",
+          "result": "not-run"
+        },
+        {
+          "id": "analysis",
+          "title": "Function index built and facts located",
+          "result": "not-run"
+        },
+        {
+          "id": "catalog",
+          "title": "Catalog firmware record published",
+          "result": "pass"
+        },
+        {
+          "id": "service-facts",
+          "title": "Service-mode entry, debug gate and FF80 memory access located",
+          "result": "pass"
+        },
+        {
+          "id": "bulk-source",
+          "title": "Bulk read source located",
+          "result": "pass"
+        },
+        {
+          "id": "flash-reader",
+          "title": "Flash reader located",
+          "result": "not-run"
+        },
+        {
+          "id": "state-regions",
+          "title": "State-dump regions located",
+          "result": "not-run"
+        },
+        {
+          "id": "restart-facts",
+          "title": "USB restart request located",
+          "result": "not-run"
+        },
+        {
+          "id": "card-files",
+          "title": "Optional card file access located",
+          "result": "pass"
+        },
+        {
+          "id": "controls",
+          "title": "Physical controls mapped to firmware inputs",
+          "result": "not-run"
+        },
+        {
+          "id": "settings-layout",
+          "title": "Settings layout located",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-facts",
+          "title": "SD-boot load map and packaging located",
+          "result": "pass"
+        }
+      ]
+    },
+    {
+      "id": "emulator",
+      "title": "Emulator",
+      "stages": [
+        {
+          "id": "rec",
+          "title": "Boots to the shooting screen",
+          "result": "not-run"
+        },
+        {
+          "id": "menu",
+          "title": "Menus respond to remote control",
+          "result": "not-run"
+        },
+        {
+          "id": "stock",
+          "title": "Stock features reproduced",
+          "result": "not-run"
+        },
+        {
+          "id": "emulator-sd-boot",
+          "title": "Our SD card of the stock firmware boots",
+          "result": "not-run"
+        },
+        {
+          "id": "emulator-updater",
+          "title": "The stock updater installs an update from the card",
+          "result": "not-run"
+        }
+      ]
+    },
+    {
+      "id": "camera",
+      "title": "Camera",
+      "stages": [
+        {
+          "id": "camera-identity",
+          "title": "Identified over FF80 in service mode",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-read-gate",
+          "title": "Debug read gate enabled in RAM",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-code",
+          "title": "Uploaded code runs in RAM and is cleaned up",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-bulk",
+          "title": "Bulk reads at 1 MiB/s or more",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-backup",
+          "title": "Internal flash backed up",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-snapshot",
+          "title": "Camera state dumped (RAM at least)",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-fast-memory",
+          "title": "Memory capture measured at 8 MiB/s or more",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-fast-flash",
+          "title": "Flash capture measured at 8 MiB/s or more",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-debug",
+          "title": "Debug mode saved persistently",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-normal",
+          "title": "FF80 answers in normal mode",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-restart",
+          "title": "Restarts itself on a USB request",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-menu",
+          "title": "Menus driven over FF80",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-mods",
+          "title": "FujiMod runs from RAM",
+          "result": "not-run"
+        }
+      ]
+    },
+    {
+      "id": "fujimod",
+      "title": "FujiMod",
+      "stages": [
+        {
+          "id": "mod-target",
+          "title": "Mod target generated from facts",
+          "result": "not-run"
+        },
+        {
+          "id": "mod-build",
+          "title": "Every shipped mod built",
+          "result": "not-run"
+        },
+        {
+          "id": "walkthroughs",
+          "title": "Mod walkthroughs pass",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-image",
+          "title": "Dual-boot SD image built",
+          "result": "not-run"
+        },
+        {
+          "id": "flash-update",
+          "title": "Flashable update built",
+          "result": "not-run"
+        }
+      ]
+    },
+    {
+      "id": "sd",
+      "title": "SD card and install",
+      "stages": [
+        {
+          "id": "sd-select",
+          "title": "The boot ROM loads a green-LED card",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-stock-boot",
+          "title": "Our card dual-boots the stock firmware",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-recovery",
+          "title": "A flash-free card applies an official update",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-boot",
+          "title": "FujiMod boots from the card",
+          "result": "not-run"
+        },
+        {
+          "id": "full-install",
+          "title": "FujiMod installed as a firmware update",
+          "result": "not-run"
+        }
+      ]
+    }
+  ],
+  "stock": {
+    "record-picture": {
+      "result": "not-run"
+    },
+    "record-movie": {
+      "result": "not-run"
+    },
+    "control-input": {
+      "result": "not-run"
+    },
+    "focus": {
+      "result": "not-run"
+    },
+    "lens": {
+      "result": "not-run"
+    },
+    "film-simulations": {
+      "result": "not-run"
+    },
+    "playback-picture": {
+      "result": "not-run"
+    },
+    "playback-movie": {
+      "result": "not-run"
+    },
+    "develop-raw": {
+      "result": "not-run"
+    },
+    "sd": {
+      "result": "not-run"
+    },
+    "control-layout": {
+      "result": "not-run"
+    }
+  },
+  "mods": {
+    "af": "not-run",
+    "fujimod": "not-run",
+    "aspect-ratio": "not-run",
+    "raw-teleconverter": "not-run",
+    "surround-view": "not-run",
+    "desqueeze": "not-run",
+    "desqueeze-jpeg": "not-run",
+    "jpeg-max": "not-run",
+    "noise-reduction": "not-run",
+    "framing-guideline": "not-run",
+    "film-sims": "not-run",
+    "card-films": "not-run",
+    "film-editor": "not-run",
+    "film-grain": "not-run",
+    "highlight-meter": "not-run",
+    "raw-view": "not-run",
+    "f-log": "not-run",
+    "raw-exposure": "not-run",
+    "hdmi-rec": "not-run",
+    "controls": "not-run",
+    "menu-theme": "not-run",
+    "overlay-opacity": "not-run",
+    "menu-tap": "not-run",
+    "glgui": "not-run",
+    "recipes": "not-run",
+    "snap-focus": "not-run",
+    "usb-debug": "not-run",
+    "af-scene-capture": "not-run",
+    "bug-report": "not-run",
+    "sd-volume-name": "not-run",
+    "date-folders": "not-run",
+    "software-nd": "not-run"
+  }
+}

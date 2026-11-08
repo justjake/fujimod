@@ -333,6 +333,10 @@ pub enum Model {
     Block86000 {
         options: pulse::block86000::Options,
     },
+    #[serde(rename = "register-stub")]
+    RegisterStub {
+        options: fujimod_emulator_devices::exr::register_stub::Options,
+    },
     ExrAdc {
         options: fujimod_emulator_devices::exr::adc::Options,
     },
@@ -529,6 +533,7 @@ impl Model {
             Model::Encoder { .. } => "encoder",
             Model::I2cMotorBridge { .. } => "i2c-motor-bridge",
             Model::Block86000 { .. } => "block86000",
+            Model::RegisterStub { .. } => "register-stub",
             Model::ExrAdc { .. } => "exr-adc",
             Model::ExrCommandGpu { .. } => "exr-command-gpu",
             Model::ExrDisplayPipe { .. } => "exr-display-pipe",

@@ -7,6 +7,20 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub const PROGRESS_SCHEMA_URI: &str = "https://fujimod.com/schemas/progress.generated.schema.json";
+pub const PROGRESS_OVERRIDE_SCHEMA_URI: &str =
+    "https://fujimod.com/schemas/progress-override.generated.schema.json";
+
+/// A maintainer's decision to publish a firmware's progress differently from
+/// its recorded result.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct ProgressOverride {
+    /// Firmware identity the override applies to.
+    pub firmware_id: String,
+    /// Show every phase and step as complete.
+    pub complete: bool,
+}
 
 /// Bring-up progress toward FujiMod on one firmware.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

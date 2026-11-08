@@ -3,8 +3,8 @@
 use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
 use fujimod_emulator_devices::parts::controls::Controls;
 use fujimod_emulator_xp5_io::{
-    adc, discarded_read, gates, gpio, i2c, mailbox, memory_configuration, reset_handshake, timer,
-    usb_connection_status, write_only_registers,
+    adc, connection_status, discarded_read, gates, gpio, i2c, mailbox, memory_configuration,
+    reset_handshake, timer, write_only_registers,
 };
 use fujimod_emulator_xp5_display::{display, panel_clock, panel_serial};
 use fujimod_emulator_xp5_storage::{flash_storage, flash_storage_controller, flash_storage_dma};
@@ -51,6 +51,7 @@ fn register_with_resources(
             bus.register(window.base,window.size,Box::new(fujimod_emulator_xp5_io::sd_interface::Interface::new(window.base)?))?;
         }
         "sdhci" => sd::register(bus, window, &mut resources.sd)?,
+        "sdhci-uhs2" => sd::register_uhs2(bus, window, &resources.sd)?,
         "boot-control" => {
             if window.base != 0xff90e000 || window.size != 4 {
                 return Err("invalid boot-control source window".into());
@@ -108,12 +109,39 @@ fn register_with_resources(
             if !window.options.is_empty() {
                 return Err("USB connection-status takes no options".into());
             }
+            // Bit 0 is set while a USB cable or jig is attached.
             bus.register(
                 window.base,
                 window.size,
-                Box::new(usb_connection_status::UsbConnectionStatus::new(
+                Box::new(connection_status::ConnectionStatus::new(
+                    "usb-connection-status",
                     window.base,
                     window.size,
+                    true,
+                )?),
+            )?;
+        }
+        "hdmi-hot-plug-status" => {
+            if window.options.keys().any(|key| key != "connected_level") {
+                return Err("unknown HDMI hot-plug status option".into());
+            }
+            let connected_level = match window
+                .options
+                .get("connected_level")
+                .and_then(toml::Value::as_integer)
+            {
+                Some(0) => false,
+                Some(1) => true,
+                _ => return Err("HDMI hot-plug status requires connected_level 0 or 1".into()),
+            };
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(connection_status::ConnectionStatus::new(
+                    "hdmi-hot-plug-status",
+                    window.base,
+                    window.size,
+                    connected_level,
                 )?),
             )?;
         }
@@ -354,7 +382,12 @@ fn register_with_resources(
             if window
                 .options
                 .keys()
-                .any(|k| !matches!(k.as_str(), "input_irqs" | "feedback" | "initial_outputs"))
+                .any(|k| {
+                    !matches!(
+                        k.as_str(),
+                        "input_irqs" | "feedback" | "initial_outputs" | "initial_inputs"
+                    )
+                })
             {
                 return Err("unknown GPIO option".into());
             }
@@ -397,6 +430,19 @@ fn register_with_resources(
                                     serde_json::to_value(v).map_err(|e| e.to_string())?,
                                 )
                                 .map_err(|e| format!("initial GPIO outputs: {e}"))
+                            })
+                            .transpose()?
+                            .unwrap_or_default(),
+                    )?
+                    .with_initial_inputs(
+                        window
+                            .options
+                            .get("initial_inputs")
+                            .map(|v| {
+                                serde_json::from_value(
+                                    serde_json::to_value(v).map_err(|e| e.to_string())?,
+                                )
+                                .map_err(|e| format!("initial GPIO inputs: {e}"))
                             })
                             .transpose()?
                             .unwrap_or_default(),

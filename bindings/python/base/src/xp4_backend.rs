@@ -59,14 +59,14 @@ pub trait Xp4Backend {
     fn usb_consume_reply(&self, id: u64) -> PyResult<()>;
     fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError>;
     fn __clear__(&self);
-    fn set_pc_handler(&self, callback: Option<Py<PyAny>>);
+    fn set_pc_handler(&self, callback: Option<Py<PyAny>>) -> PyResult<()>;
     fn ram_bytes(&self) -> usize;
     fn instructions(&self) -> Vec<u64>;
     fn now(&self) -> u64;
     fn quiescent(&self) -> bool;
-    fn driver_guard_end(&self);
+    fn driver_guard_end(&self) -> PyResult<()>;
     fn driver_guard_state<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>>;
-    fn function_watch_end(&self);
+    fn function_watch_end(&self) -> PyResult<()>;
     fn function_watch_state<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>>;
     fn memory_watch_enabled(&self) -> bool;
     fn memory_watch_state(&self) -> String;
@@ -90,6 +90,7 @@ pub trait Xp4Backend {
     fn device_state_json(&self) -> BTreeMap<String, String>;
     fn interrupt_state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>>;
     fn device_records<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>>;
+    fn translation_maintenance_state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>>;
     fn state<'py>(&self, py: Python<'py>, observations: bool) -> PyResult<Bound<'py, PyDict>>;
     fn frontier(&self, by_count: bool) -> Vec<FrontierEntry>;
     fn discovery_shadow(&self) -> Vec<(u64, u8)>;

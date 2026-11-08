@@ -201,6 +201,11 @@
               "name": "jpegdecoder",
               "kind": "JPEGDecodeControl",
               "refs": {}
+            },
+            {
+              "name": "imagecombination",
+              "kind": "ImageCombination",
+              "refs": {}
             }
           ],
           "construction_order": [
@@ -238,7 +243,8 @@
             "imagewarp",
             "jpegencoder",
             "rawreadback",
-            "jpegdecoder"
+            "jpegdecoder",
+            "imagecombination"
           ],
           "attachment_order": [
             "bootcontrols",
@@ -275,7 +281,8 @@
             "imagewarp",
             "jpegencoder",
             "rawreadback",
-            "jpegdecoder"
+            "jpegdecoder",
+            "imagecombination"
           ]
         },
         "controllers": {
@@ -673,6 +680,11 @@
               "name": "displayformatter",
               "kind": "DisplayFormatter",
               "refs": {}
+            },
+            {
+              "name": "imagecombination",
+              "kind": "ImageCombination",
+              "refs": {}
             }
           ],
           "construction_order": [
@@ -702,7 +714,8 @@
             "graphicsaccelerator",
             "displayscanout",
             "displaytiming",
-            "displayformatter"
+            "displayformatter",
+            "imagecombination"
           ],
           "attachment_order": [
             "bootcontrols",
@@ -731,7 +744,8 @@
             "graphicsaccelerator",
             "displayscanout",
             "displaytiming",
-            "displayformatter"
+            "displayformatter",
+            "imagecombination"
           ]
         },
         "controllers": {

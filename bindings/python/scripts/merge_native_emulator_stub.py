@@ -53,6 +53,7 @@ TYPE_OVERRIDES = {
     ("Xp4", "interrupt_state", "return"): "list[dict[str, int | bool]]",
     ("Xp4", "scanout_frames", "return"): "list[dict[str, object]]",
     ("Xp4", "state", "return"): "dict[str, object]",
+    ("Xp4", "translation_maintenance_state", "return"): "dict[str, object]",
 }
 
 

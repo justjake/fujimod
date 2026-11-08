@@ -1,0 +1,22 @@
+{
+  "$id": "https://fujimod.com/schemas/progress-override.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A maintainer's decision to publish a firmware's progress differently from\nits recorded result.",
+  "properties": {
+    "complete": {
+      "description": "Show every phase and step as complete.",
+      "type": "boolean"
+    },
+    "firmware_id": {
+      "description": "Firmware identity the override applies to.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "firmware_id",
+    "complete"
+  ],
+  "title": "ProgressOverride",
+  "type": "object"
+}

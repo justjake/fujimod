@@ -11,6 +11,7 @@ pub fn register_interface_models(constructors: &mut Constructors) {
     constructors.add("gpio", gpio);
     constructors.add("exr2-pulse", pulse_unit);
     constructors.add("block86000", block86000);
+    constructors.add("register-stub", register_stub);
     constructors.add("exr-adc", exr_adc);
     constructors.add("exr-command-gpu", exr_command_gpu);
     constructors.add("exr-display-pipe", exr_display_pipe);
@@ -164,6 +165,15 @@ fn block86000(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
     Ok(Built::Device(Box::new(pulse::block86000::Block86000::new(
         options,
     ))))
+}
+
+fn register_stub(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
+    let Model::RegisterStub { options } = model else {
+        return Err("constructor called for another model kind".into());
+    };
+    Ok(Built::Device(Box::new(
+        fujimod_emulator_devices::exr::register_stub::RegisterStub::new(options)?,
+    )))
 }
 
 fn exr_adc(_builder: Builder<'_>, model: Model) -> Result<Built, String> {

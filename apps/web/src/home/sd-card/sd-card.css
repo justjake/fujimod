@@ -1,0 +1,270 @@
+.sd-download {
+  max-width: var(--content-width);
+  margin: 0 auto 56px;
+  scroll-margin-top: 24px;
+}
+.sd-download > .section-heading {
+  margin-bottom: 12px;
+}
+
+/* Round selection marks, as in iOS lists. */
+.sd-check {
+  appearance: none;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgb(235 235 245 / 35%);
+  background: transparent;
+  cursor: pointer;
+}
+.sd-check:checked,
+.sd-check:indeterminate {
+  border-color: #0a84ff;
+  background: #0a84ff;
+}
+.sd-check:checked::after {
+  content: '';
+  width: 5px;
+  height: 9px;
+  margin-top: -2px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.sd-check:indeterminate::after {
+  content: '';
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+  background: #fff;
+}
+.sd-check:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.sd-check:focus-visible {
+  outline: 2px solid #0a84ff;
+  outline-offset: 2px;
+}
+
+/* The camera checklist floats over the card's top edge. */
+.sd-cameras {
+  position: relative;
+  z-index: 1;
+  width: min(100% - 32px, 440px);
+  margin: 0 auto -44px;
+  border-radius: 14px;
+  background: rgb(44 44 46 / 92%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 0 0 0.5px rgb(255 255 255 / 12%),
+    0 18px 48px rgb(0 0 0 / 60%);
+  overflow: hidden;
+}
+.sd-camera {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 16px 6px 14px;
+  cursor: pointer;
+}
+.sd-camera + .sd-camera {
+  box-shadow: inset 0 0.5px rgb(84 84 88 / 65%);
+}
+.sd-camera.blocked {
+  cursor: default;
+  color: rgb(235 235 245 / 35%);
+}
+.sd-camera-name {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+}
+.sd-camera-name b {
+  font-weight: 600;
+}
+.sd-camera-name span,
+.sd-camera-version,
+.sd-camera-mods {
+  font-size: 12px;
+  color: rgb(235 235 245 / 55%);
+  white-space: nowrap;
+}
+.sd-camera-version,
+.sd-camera-mods {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.sd-camera-mods {
+  min-width: 4.5em;
+  text-align: right;
+  color: rgb(235 235 245 / 80%);
+}
+
+.sd-card {
+  position: relative;
+  isolation: isolate;
+  padding: 84px 48px 92px 64px;
+}
+.sd-shape {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: visible;
+  filter: drop-shadow(0 24px 60px rgb(0 0 0 / 70%));
+}
+.sd-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 22px;
+  padding: 0 0 16px;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: rgb(235 235 245 / 45%);
+}
+.sd-label img {
+  image-rendering: pixelated;
+}
+
+.sd-tree {
+  --file-dim: rgb(235 235 245 / 45%);
+  --file-line: rgb(255 255 255 / 9%);
+  font-size: 13.5px;
+}
+.sd-tree .sd-row {
+  gap: 7px;
+}
+.sd-tree .sd-row.dim > :not(.sd-slot),
+.sd-tree .sd-row.dim .fold > * {
+  opacity: 0.38;
+}
+.sd-tree .sd-slot {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+}
+.sd-tree .sd-row .n {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 12.5px;
+}
+.sd-tree .folder .n {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+.sd-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  font-size: 12.5px;
+  color: var(--file-dim);
+}
+.sd-note {
+  max-width: 62ch;
+  /* Aligned with the file icons: the selection slot, the chevron column and their gaps. */
+  margin: 18px 0 6px 48px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgb(235 235 245 / 60%);
+}
+.sd-note:first-child {
+  margin-top: 0;
+}
+.sd-note b {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgb(235 235 245 / 85%);
+}
+.sd-note p {
+  margin: 0;
+}
+.sd-note p + p {
+  margin-top: 0.6em;
+}
+.sd-git {
+  display: block;
+  cursor: pointer;
+}
+.sd-tree .sd-git .n {
+  flex: none;
+}
+.sd-git-label {
+  margin-left: 6px;
+  font-size: 13px;
+  color: #c7c7cc;
+  opacity: 1;
+}
+.sd-tree .sd-row.dim .sd-git-label {
+  opacity: 1;
+}
+
+.sd-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 36px;
+}
+.sd-download-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 22px;
+  background: #0a84ff;
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sd-download-button span {
+  font-weight: 400;
+  color: rgb(255 255 255 / 75%);
+  font-variant-numeric: tabular-nums;
+}
+.sd-download-button:hover:not(:disabled) {
+  background: #409cff;
+}
+.sd-download-button:disabled {
+  background: rgb(118 118 128 / 24%);
+  color: rgb(235 235 245 / 35%);
+  cursor: default;
+}
+.sd-download-button:focus-visible {
+  outline: 2px solid #0a84ff;
+  outline-offset: 3px;
+}
+.sd-problem {
+  margin: 0;
+  font-size: 13px;
+  color: #ff9f0a;
+  text-align: center;
+}
+
+@media (max-width: 620px) {
+  .sd-card {
+    padding: 76px 16px 80px 22px;
+  }
+  .sd-detail {
+    display: none;
+  }
+}

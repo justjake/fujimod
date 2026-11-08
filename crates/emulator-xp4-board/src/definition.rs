@@ -6,9 +6,33 @@ fn instruction_rate() -> (u64, u64) {
     (1, 1)
 }
 
+/// Explicit discovery-only receiver input; no physical register model.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DiscoveryTxReceiver {
+    pub address: u32,
+    pub request: u8,
+    pub capacity: usize,
+    pub offer_at: u64,
+    pub offer_bytes: usize,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StandaloneDma {
+    pub irq_routes: Vec<u32>,
+    pub reset_profile: String,
+    pub timing_profile: String,
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Definition {
+    #[serde(default)]
+    pub discovery_tx_receiver: Option<DiscoveryTxReceiver>,
+    /// Explicit byte I2C controllers and their declared external peers.
+    #[serde(default)]
+    pub byte_i2c: Vec<ByteI2c>,
     pub ram_size: usize,
     pub cores: usize,
     pub discovery: bool,
@@ -20,6 +44,9 @@ pub struct Definition {
     pub labels: Vec<u32>,
     #[serde(default)]
     pub cbar: Option<u32>,
+    /// Explicit initial GIC registers; omitted preserves reset state.
+    #[serde(default)]
+    pub gic_initial: Option<GicInitial>,
     #[serde(default)]
     pub timer_base: Option<u32>,
     #[serde(default)]
@@ -28,12 +55,21 @@ pub struct Definition {
     pub timer_routes: Vec<(usize, usize)>,
     #[serde(default)]
     pub storage_jedec: Option<u32>,
+    /// Immutable executable prefix of the connected XP4 NOR array.
+    #[serde(default)]
+    pub storage_immutable_prefix: Option<NorImmutablePrefix>,
+    /// DMA-only connection with explicitly declared reset and timing hypotheses.
+    #[serde(default)]
+    pub standalone_dma: Option<StandaloneDma>,
     #[serde(default)]
     pub storage_dma_routes: Vec<u32>,
     #[serde(default)]
     pub spi_inputs: Vec<(u64, bool)>,
     #[serde(default)]
     pub control_requests: Vec<(u64, u64)>,
+    /// Explicit, unmeasured functional hypotheses; absent keeps strict refusal.
+    #[serde(default)]
+    pub xp4_functional_system_control: Option<fujimod_emulator_xp4_io::system_control::Config>,
     #[serde(default)]
     pub storage_geometry: Option<(usize, usize, u64, u64)>,
     #[serde(default)]
@@ -143,6 +179,9 @@ pub struct Definition {
     pub temperature: Option<(i32, u64)>,
     #[serde(default)]
     pub power_spi: Option<(u64, bool, usize, usize, bool, BTreeMap<u8, u16>, u64)>,
+    /// Optional exact uninterpreted output; requires the power SPI peer.
+    #[serde(default)]
+    pub power_spi_command_output: Option<fujimod_emulator_xp4_io::power_serial::ExactCommandOutput>,
     #[serde(default)]
     pub checksum_power_spi: Option<(
         u64,
@@ -425,4 +464,52 @@ pub struct XppBoot {
     /// Memory window shown at physical 0 until the guest selects the remap.
     #[serde(default)]
     pub low_alias: Option<u64>,
+}
+
+/// Explicit immutable NOR aperture policy.
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NorImmutablePrefix { pub bytes: usize }
+
+/// Initial values supported by the modeled GIC register interface.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GicInitial {
+    pub distributor_control: u32,
+    pub cpu_interfaces: Vec<GicCpuInitial>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GicCpuInitial {
+    pub control: u32,
+    pub priority_mask: u32,
+    pub binary_point: u32,
+}
+
+impl GicInitial {
+    pub(super) fn apply(self, gic: &mut Gic, cores: usize) -> Result<(), String> {
+        if self.distributor_control > 1 || self.cpu_interfaces.len() != cores
+            || self.cpu_interfaces.iter().any(|cpu| cpu.control > 1
+                || cpu.priority_mask > 255 || cpu.binary_point > 7) {
+            return Err("Invalid initial GIC registers or CPU interface count".into());
+        }
+        gic.access(0, true, 0, 4, true, self.distributor_control)?;
+        for (core, cpu) in self.cpu_interfaces.into_iter().enumerate() {
+            for (offset, value) in [(0, cpu.control), (4, cpu.priority_mask), (8, cpu.binary_point)] {
+                gic.access(core, false, offset, 4, true, value)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// One byte I2C controller with an explicit reset/timing fixture and peer.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ByteI2c {
+    pub base: u64,
+    pub irq: u32,
+    pub profile: fujimod_emulator_xp4_io::i2c::Profile,
+    pub peer: fujimod_emulator_xp4_io::i2c::Peer,
 }

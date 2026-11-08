@@ -829,25 +829,36 @@ impl Registers {
                 "Stationary endpoint7 self-test/reset/nonzero offsets are unsupported",
             );
         }
-        let counts = [1024_u16, 512, 256][data_cfg as usize];
+        let counts_per_g = [1024_i32, 512, 256][data_cfg as usize];
+        let gravity = p.gravity_g;
+        let counts = gravity.map(|axis| {
+            (axis * f64::from(counts_per_g))
+                .round()
+                .clamp(-2048.0, 2047.0) as i32
+        });
         p.sensor_sample = parts::dict(vec![
             (
                 "axes_g",
-                Value::List(vec![Value::int(0), Value::int(0), Value::int(1)]),
+                Value::List(gravity.into_iter().map(Value::Float).collect()),
             ),
             (
                 "counts",
-                Value::List(vec![Value::int(0), Value::int(0), Value::int(counts)]),
+                Value::List(counts.into_iter().map(|count| Value::int(i64::from(count))).collect()),
             ),
             ("full_scale_g", Value::int([2, 4, 8][data_cfg as usize])),
             ("resolution_bits", Value::int(12)),
             (
                 "interpretation",
-                Value::str("inferred MMA8452Q-compatible registers; unmeasured +Z pose"),
+                Value::str(
+                    "externally supplied gravity in sensor axes; inferred MMA8452Q-compatible registers",
+                ),
             ),
         ]);
-        let last = (counts << 4).to_be_bytes();
-        Ok(vec![0, 0, 0, 0, last[0], last[1]])
+        let mut sample = Vec::with_capacity(6);
+        for count in counts {
+            sample.extend_from_slice(&((count as u16 & 0x0fff) << 4).to_be_bytes());
+        }
+        Ok(sample)
     }
     pub fn write_primary(
         &mut self,

@@ -1,6 +1,5 @@
 """XP5 construction and physical inputs through the ordinary native board owner."""
 
-import hashlib
 import struct
 
 import pytest
@@ -104,7 +103,7 @@ def scenario() -> tuple[Definition, dict[str, bytes]]:
             interrupts=None,
             aprofile=[],
         ),
-        assets=(Asset("rom", len(rom), hashlib.sha256(rom).hexdigest()),),
+        assets=(Asset("rom", len(rom)),),
         images=(Image("rom", 0xFFF00000),),
     ), {"rom": rom}
 
@@ -178,7 +177,7 @@ def ladder_scenario() -> tuple[Definition, dict[str, bytes]]:
             interrupts=None,
             aprofile=[],
         ),
-        assets=(Asset("rom", len(rom), hashlib.sha256(rom).hexdigest()),),
+        assets=(Asset("rom", len(rom)),),
         images=(Image("rom", 0xFFF00000),),
     ), {"rom": rom}
 

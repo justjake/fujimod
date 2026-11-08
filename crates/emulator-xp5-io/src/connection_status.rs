@@ -1,4 +1,9 @@
-//! External USB cable/jig connection status input.
+//! External cable connection level read as bit 0 of one status word.
+//!
+//! The mechanism is the same for every connector: the guest reads a word whose
+//! bit 0 follows one external line, and the run decides whether a cable is
+//! attached. Which level that line takes while a cable is attached is a board
+//! fact, so the caller declares it with the window.
 use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -10,16 +15,27 @@ struct State {
     connected: bool,
 }
 
-pub struct UsbConnectionStatus {
+pub struct ConnectionStatus {
+    name: &'static str,
+    connected_level: bool,
     state: State,
 }
 
-impl UsbConnectionStatus {
-    pub fn new(base: u64, size: u64) -> Result<Self, String> {
+impl ConnectionStatus {
+    /// A status word that starts disconnected. `connected_level` is the value of
+    /// bit 0 while a cable is attached; the other level is read without one.
+    pub fn new(
+        name: &'static str,
+        base: u64,
+        size: u64,
+        connected_level: bool,
+    ) -> Result<Self, String> {
         if base & 3 != 0 || size != 4 {
-            return Err("invalid USB connection-status window".into());
+            return Err(format!("invalid {name} window"));
         }
         Ok(Self {
+            name,
+            connected_level,
             state: State {
                 base,
                 connected: false,
@@ -35,6 +51,10 @@ impl UsbConnectionStatus {
         self.state.connected = connected;
     }
 
+    fn level(&self) -> bool {
+        self.state.connected == self.connected_level
+    }
+
     fn valid_read(&self, address: u64, size: u8) -> bool {
         address == self.state.base && address & 3 == 0 && size == 4
     }
@@ -43,14 +63,14 @@ impl UsbConnectionStatus {
         if state.base == self.state.base {
             Ok(())
         } else {
-            Err("USB connection-status checkpoint window differs".into())
+            Err(format!("{} checkpoint window differs", self.name))
         }
     }
 }
 
-impl Device for UsbConnectionStatus {
+impl Device for ConnectionStatus {
     fn name(&self) -> &'static str {
-        "usb-connection-status"
+        self.name
     }
 
     fn checkpoint(&self) -> Result<Checkpoint, String> {
@@ -73,6 +93,7 @@ impl Device for UsbConnectionStatus {
         Ok(json!({
             "base": self.state.base,
             "connected": self.state.connected,
+            "connected_level": self.connected_level,
         }))
     }
 
@@ -81,7 +102,7 @@ impl Device for UsbConnectionStatus {
             cx.unmodeled();
             return 0;
         }
-        u64::from(self.state.connected)
+        u64::from(self.level())
     }
 
     fn write(&mut self, cx: &mut Cx<'_>, _: u64, _: u8, _: u64) {
@@ -98,7 +119,7 @@ impl Device for UsbConnectionStatus {
 
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone())
-            .map_err(|error| format!("invalid USB connection-status state: {error}"))?;
+            .map_err(|error| format!("invalid {} state: {error}", self.name))?;
         self.validate_state(&state)?;
         self.state = state;
         Ok(())
@@ -111,10 +132,11 @@ mod tests {
     use fujimod_emulator_devices::test_host::recording::RecordingHost;
 
     #[test]
-    fn external_connection_defaults_disconnected_and_is_checkpointed() {
+    fn active_high_line_defaults_disconnected_and_is_checkpointed() {
         let mut host = RecordingHost::default();
         let mut cx = Cx::new(&mut host, 0, 0, 0);
-        let mut status = UsbConnectionStatus::new(0xff90e300, 4).unwrap();
+        let mut status =
+            ConnectionStatus::new("usb-connection-status", 0xff90e300, 4, true).unwrap();
 
         assert_eq!(status.read(&mut cx, 0xff90e300, 4), 0);
         assert!(!status.connected());
@@ -129,5 +151,41 @@ mod tests {
         status.restore_checkpoint(&checkpoint).unwrap();
         assert_eq!(status.read(&mut cx, 0xff90e300, 4), 1);
         assert_eq!(cx.refusal(), None);
+    }
+
+    #[test]
+    fn active_low_line_reads_one_without_a_cable() {
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        let mut status =
+            ConnectionStatus::new("hdmi-hot-plug-status", 0xff90e200, 4, false).unwrap();
+
+        assert_eq!(status.name(), "hdmi-hot-plug-status");
+        assert_eq!(status.read(&mut cx, 0xff90e200, 4), 1);
+        status.set_connected(true);
+        assert_eq!(status.read(&mut cx, 0xff90e200, 4), 0);
+        assert_eq!(cx.refusal(), None);
+
+        let checkpoint = status.checkpoint().unwrap();
+        let usb = ConnectionStatus::new("usb-connection-status", 0xff90e200, 4, true).unwrap();
+        assert!(usb.validate_checkpoint(&checkpoint).is_err());
+    }
+
+    #[test]
+    fn only_aligned_word_reads_of_the_status_word_are_modeled() {
+        let mut host = RecordingHost::default();
+        let mut status =
+            ConnectionStatus::new("hdmi-hot-plug-status", 0xff90e200, 4, false).unwrap();
+        assert!(ConnectionStatus::new("hdmi-hot-plug-status", 0xff90e202, 4, false).is_err());
+        assert!(ConnectionStatus::new("hdmi-hot-plug-status", 0xff90e200, 8, false).is_err());
+
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        status.read(&mut cx, 0xff90e200, 2);
+        assert!(cx.is_unmodeled());
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        status.write(&mut cx, 0xff90e200, 4, 0);
+        assert!(cx.is_unmodeled());
+        assert!(status.pollable(0xff90e200, 4));
+        assert!(!status.pollable(0xff90e200, 1));
     }
 }

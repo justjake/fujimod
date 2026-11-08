@@ -3147,7 +3147,7 @@
         },
         {
           "additionalProperties": false,
-          "description": "Packet extracted from an identity-checked asset.",
+          "description": "Packet extracted from a bounded asset.",
           "properties": {
             "asset": {
               "description": "Asset identity.",
