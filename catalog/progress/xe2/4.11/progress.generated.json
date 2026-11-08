@@ -93,7 +93,7 @@
         {
           "id": "stock",
           "title": "Stock features reproduced",
-          "result": "partial"
+          "result": "not-run"
         },
         {
           "id": "emulator-sd-boot",
@@ -195,7 +195,7 @@
         {
           "id": "walkthroughs",
           "title": "Mod walkthroughs pass",
-          "result": "partial"
+          "result": "not-run"
         },
         {
           "id": "sd-image",
@@ -243,7 +243,7 @@
   ],
   "stock": {
     "record-picture": {
-      "result": "pass",
+      "result": "stale",
       "passed": 1,
       "total": 1
     },
@@ -263,7 +263,7 @@
       "result": "not-run"
     },
     "playback-picture": {
-      "result": "pass",
+      "result": "stale",
       "passed": 4,
       "total": 4
     },
@@ -282,18 +282,19 @@
   },
   "mods": {
     "af": "not-run",
-    "fujimod": "fail",
+    "fujimod": "not-run",
     "aspect-ratio": "not-run",
     "raw-teleconverter": "not-run",
-    "surround-view": "pass",
-    "desqueeze": "fail",
-    "desqueeze-jpeg": "pass",
+    "surround-view": "stale",
+    "desqueeze": "not-run",
+    "desqueeze-jpeg": "stale",
     "jpeg-max": "not-run",
     "noise-reduction": "not-run",
     "framing-guideline": "not-run",
-    "film-sims": "pass",
-    "card-films": "pass",
+    "film-sims": "stale",
+    "card-films": "stale",
     "film-editor": "not-run",
+    "film-grain": "not-run",
     "highlight-meter": "not-run",
     "raw-view": "not-run",
     "f-log": "not-run",
@@ -301,12 +302,12 @@
     "hdmi-rec": "not-run",
     "controls": "not-run",
     "menu-theme": "not-run",
-    "overlay-opacity": "pass",
+    "overlay-opacity": "stale",
     "menu-tap": "not-run",
     "glgui": "not-run",
-    "recipes": "pass",
+    "recipes": "stale",
     "snap-focus": "not-run",
-    "usb-debug": "pass",
+    "usb-debug": "stale",
     "af-scene-capture": "not-run",
     "bug-report": "not-run",
     "sd-volume-name": "not-run",
