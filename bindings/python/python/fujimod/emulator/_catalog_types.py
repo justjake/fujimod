@@ -5405,7 +5405,7 @@ class SettingsField(TypedDict, total=False):
 class SettingsProfile(TypedDict, total=False):
     derived_fields: NotRequired[list[ProfileField]]
     header: Required[UpdateRange]
-    ram_address: NotRequired[int | None]
+    loader_offset: NotRequired[int | None]
     records: Required[dict[str, ProfileRecord]]
 
 

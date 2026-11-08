@@ -1546,12 +1546,15 @@ impl Devices {
 
 impl Cluster {
     pub fn devices_due(&self) -> Result<(), String> {
+        if unsafe { (*self.state.get()).ticks < (*self.state.get()).device_scan_at } {
+            return Ok(());
+        }
         let devices = unsafe { (*self.state.get()).devices.take() };
         if let Some(mut devices) = devices {
             let result = devices.due(self);
-            unsafe {
-                (*self.state.get()).devices = Some(devices);
-            }
+            let state = unsafe { &mut *self.state.get() };
+            state.device_scan_at = devices.next_deadline(state.ticks).unwrap_or(u64::MAX);
+            state.devices = Some(devices);
             result?;
         }
         Ok(())
@@ -1571,6 +1574,7 @@ impl Cluster {
         let result = devices.access(self, core, address, size, write, value);
         unsafe {
             (*self.state.get()).devices = Some(devices);
+            (*self.state.get()).device_scan_at = 0;
         }
         result
     }
