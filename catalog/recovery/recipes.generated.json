@@ -6174,7 +6174,13 @@
         }
       ]
     },
-    "firmware_update": null,
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
+    },
     "updater": {
       "public_version": [
         1,
@@ -6224,7 +6230,24 @@
         "sha256": "753d02f5a7c85a98c9e3963275a33443314966fd305ac7b0bfbe632f8dde3726"
       }
     },
-    "missing": []
+    "missing": [],
+    "loader_footer": {
+      "check": {
+        "address": 7400,
+        "size": 72,
+        "sha256": "b3994f04054eb21c5ea0d3ea724b8b10ef14eec0c70b4f9c4663185dbc03ef1b"
+      },
+      "read_call": 7428,
+      "read_target": 8648,
+      "flash_offset": 53084160,
+      "source": {
+        "dat_offset": 53084764,
+        "size": 32,
+        "compression": "raw",
+        "decoded_size": 32,
+        "sha256": "8094d4dc918f5e2d99b61c46d90088bb51ca13d0db4c7e794435d26a08ac9e85"
+      }
+    }
   },
   {
     "firmware_id": "xe3-132",
