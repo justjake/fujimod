@@ -21503,6 +21503,15 @@
       ],
       "type": "string"
     },
+    "RunFaceResultProfile": {
+      "description": "Closed selection of external face detector results.",
+      "enum": [
+        "empty",
+        "box64x20",
+        "box172x120"
+      ],
+      "type": "string"
+    },
     "RunFaceStopProfile": {
       "description": "Explicit constructor policy selected by a run.",
       "enum": [
@@ -21648,6 +21657,17 @@
             }
           ],
           "description": "Selected face register mode. Absence preserves the base selection."
+        },
+        "face_result_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunFaceResultProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "External face detector results supplied by the scene."
         },
         "face_stop_profile": {
           "anyOf": [
