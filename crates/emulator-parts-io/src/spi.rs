@@ -25,10 +25,16 @@ pub trait Endpoint: Send {
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         Err(format!("{} has no binary snapshot", self.name()))
     }
-    fn validate_checkpoint(&self, _: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        _: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         Err(format!("{} has no binary snapshot", self.name()))
     }
-    fn restore_checkpoint(&mut self, _: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        _: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         Err(format!("{} has no binary snapshot", self.name()))
     }
 
@@ -255,11 +261,17 @@ impl Endpoint for FixedInput {
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.0)
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let _: FixedOptions = saved.decode(self.name())?;
         Ok(())
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.0 = saved.decode(self.name())?;
         Ok(())
     }

@@ -36,8 +36,7 @@ pub struct Wiring {
     pub ram_bytes: u64,
 }
 /// Bus progress observed by a host, without DMA payloads.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[derive(tsify::Tsify)]
+#[derive(Clone, Debug, Deserialize, Serialize, tsify::Tsify)]
 #[tsify(hashmap_as_object, missing_as_null)]
 pub struct BusStatus {
     pub options: EndpointOptions,
@@ -857,7 +856,10 @@ mod tests {
         }
         assert_eq!(device.tx[2].packets.len(), 65);
         assert_eq!(device.dropped_status, 15);
-        assert_eq!(device.host_in(&mut host.cx(), 0x83, 64).unwrap(), vec![1, 2]);
+        assert_eq!(
+            device.host_in(&mut host.cx(), 0x83, 64).unwrap(),
+            vec![1, 2]
+        );
         device.tx[0].bytes.extend(vec![0; 4096]);
         device.tx[0].packets.push_back(4096);
         write(&mut device, &mut host, CORE + 0x111c, 4, 0xe0000);
