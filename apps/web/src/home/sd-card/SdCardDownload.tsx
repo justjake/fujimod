@@ -329,8 +329,9 @@ export function SdCardDownload(props: { release?: LoadedRelease; catalog: readon
                         <Note title="SD card bootloader (Stage 1)">
                           <p>
                             Your camera’s built-in boot ROM is the first code that runs when you
-                            turn your camera on. If you turn your camera on while holding a special
-                            key combination, the boot ROM will execute this file.
+                            turn your camera on. Hold the special key combination only while turning
+                            the power switch on. Once the switch is in the ON position, release the
+                            keys; the boot ROM will execute this file.
                           </p>
                           <p>
                             This file is the same for all cameras with the {boot().name} processor.
