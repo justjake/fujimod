@@ -1,0 +1,46 @@
+{
+  "$schema": "https://fujimod.com/schemas/memory-reservations.generated.schema.json",
+  "schema": 1,
+  "id": "xq2-101-memory-reservations",
+  "firmware_id": "xq2-101",
+  "dram_size": 268435456,
+  "reservations": [
+    {
+      "name": "main_heap",
+      "address": 11565248,
+      "size": 1572864
+    },
+    {
+      "name": "graphics_heap",
+      "address": 38651904,
+      "size": 4718592
+    },
+    {
+      "name": "language_fonts",
+      "address": 4980736,
+      "size": 1441792
+    }
+  ],
+  "locator_failures": [
+    {
+      "locator": "font_library",
+      "reason": "ov48b_initialize_font_library: 0 candidates, 0 verified results"
+    },
+    {
+      "locator": "usb_debug_ring",
+      "reason": "register_usb_debug_callbacks: 1 candidates, 0 verified results (0x6ac114: Initializer lacks one constant external-buffer clear)"
+    },
+    {
+      "locator": "dispatch_packet",
+      "reason": "dispatch_initialize_packet: 0 candidates, 0 verified results"
+    },
+    {
+      "locator": "configuration",
+      "reason": "initialize_cfgdata_ram: 0 candidates, 0 verified results"
+    },
+    {
+      "locator": "face",
+      "reason": "initialize_face_recognition_resources: 0 candidates, 0 verified results"
+    }
+  ]
+}

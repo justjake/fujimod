@@ -1,0 +1,46 @@
+{
+  "$schema": "https://fujimod.com/schemas/memory-reservations.generated.schema.json",
+  "schema": 1,
+  "id": "x20-103-memory-reservations",
+  "firmware_id": "x20-103",
+  "dram_size": 268435456,
+  "reservations": [
+    {
+      "name": "main_heap",
+      "address": 10715680,
+      "size": 917504
+    },
+    {
+      "name": "graphics_heap",
+      "address": 34326528,
+      "size": 5603328
+    },
+    {
+      "name": "language_fonts",
+      "address": 4571136,
+      "size": 1343488
+    }
+  ],
+  "locator_failures": [
+    {
+      "locator": "font_library",
+      "reason": "ov48b_initialize_font_library: 0 candidates, 0 verified results"
+    },
+    {
+      "locator": "usb_debug_ring",
+      "reason": "register_usb_debug_callbacks: 1 candidates, 0 verified results (0x641a40: Initializer lacks one constant external-buffer clear)"
+    },
+    {
+      "locator": "dispatch_packet",
+      "reason": "dispatch_initialize_packet: 0 candidates, 0 verified results"
+    },
+    {
+      "locator": "configuration",
+      "reason": "initialize_cfgdata_ram: 0 candidates, 0 verified results"
+    },
+    {
+      "locator": "face",
+      "reason": "initialize_face_recognition_resources: 0 candidates, 0 verified results"
+    }
+  ]
+}

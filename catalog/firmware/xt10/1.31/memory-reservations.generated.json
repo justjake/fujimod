@@ -1,0 +1,50 @@
+{
+  "$schema": "https://fujimod.com/schemas/memory-reservations.generated.schema.json",
+  "schema": 1,
+  "id": "xt10-131-memory-reservations",
+  "firmware_id": "xt10-131",
+  "dram_size": 536870912,
+  "reservations": [
+    {
+      "name": "main_heap",
+      "address": 14652672,
+      "size": 1572864
+    },
+    {
+      "name": "graphics_heap",
+      "address": 51671040,
+      "size": 5242880
+    },
+    {
+      "name": "font_library",
+      "address": 39837696,
+      "size": 1048576
+    },
+    {
+      "name": "language_fonts",
+      "address": 7208960,
+      "size": 1441792
+    },
+    {
+      "name": "usb_debug_ring",
+      "address": 60059648,
+      "size": 512000
+    },
+    {
+      "name": "dispatch_packet",
+      "address": 33964032,
+      "size": 16384
+    },
+    {
+      "name": "configuration",
+      "address": 33980416,
+      "size": 4325376
+    },
+    {
+      "name": "face",
+      "address": 41773056,
+      "size": 460800
+    }
+  ],
+  "locator_failures": []
+}
