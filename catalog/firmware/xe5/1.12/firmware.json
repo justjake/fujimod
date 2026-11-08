@@ -1,0 +1,64 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xe5-112",
+  "body_id": "xe5",
+  "version": "1.12",
+  "update": {
+    "size": 110561552,
+    "sha256": "0982ffa51332e148134df378ecd3e485e798eeb4ce91738509bfa0b6629e1e52"
+  },
+  "boot_rom": {
+    "address": 4290772992,
+    "content": {
+      "size": 262144,
+      "sha256": "151bc5d7863a4028a315eebf361f1db986d64f55076929351d207c23c027b165"
+    }
+  },
+  "installation": {
+    "flash_offset": 700,
+    "entry_labels": {
+      "0x15fb874": "camera-app (C) entry",
+      "0x2dc4fa4": "recording app (D) entry"
+    },
+    "loader_validation": null,
+    "image_sections": [
+      {
+        "name": "unit-0",
+        "address": 8916992,
+        "size": 2121808,
+        "sha256": "04537ca068bde0e863c8828e4b3272e3b6eeee9385c2dc02088632914d9cdfa9"
+      },
+      {
+        "name": "camera-app",
+        "address": 18616320,
+        "size": 29141040,
+        "sha256": "eb627807dbca12cb156a5cbcb049277e1a93632f120a930a6a549a5ba7e331e2"
+      },
+      {
+        "name": "recording-app",
+        "address": 47710208,
+        "size": 23044096,
+        "sha256": "367659ef25e14edd8d8abd2cdd96ad458093765d030953be5bece8dbbf5f913f"
+      },
+      {
+        "name": "ui-overlays",
+        "address": 101257216,
+        "size": 15835136,
+        "sha256": "730dfeaa6aa0ed54d10f52bb424c8abce3f0d26594ccff04c0d94b370e9dfd21"
+      },
+      {
+        "name": "attribute-table-f",
+        "address": 6819840,
+        "size": 9091032,
+        "sha256": "47e73ae58661b8d76a5978f98529143ac006ac131ed1d8124c76688643dd66de"
+      },
+      {
+        "name": "attribute-table-g",
+        "address": 1029701632,
+        "size": 2073600,
+        "sha256": "c1d24530880f3ce12bf3c8f11dec51d347a858ec48a1fb16ca5c51d1cc4a8fca"
+      }
+    ]
+  }
+}
