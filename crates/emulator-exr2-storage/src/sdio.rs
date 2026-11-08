@@ -166,7 +166,8 @@ impl SdioHost {
                     || pio && (write || block || quantity % 4 != 0)
                     || !pio && word != expected
                     || block
-                        && (![3, 5].contains(&count)
+                        && (count == 0
+                            || count > 5
                             || self.regs.get(4) != 512
                             || self.regs.get(6) as u32 != count
                             || self.module.block_size() != 512)
@@ -486,6 +487,11 @@ impl Device for SdioHost {
         if let Err(e) = self.complete(cx) {
             cx.fail(e);
         }
+        if self.module.poll_host(cx.now())
+            && let Err(e) = self.signal(cx)
+        {
+            cx.fail(e);
+        }
     }
     fn event(&mut self, cx: &mut Cx<'_>, _: u64) {
         self.advance(cx);
@@ -496,6 +502,7 @@ impl Device for SdioHost {
             .and_then(|r| r.due)
             .into_iter()
             .chain(self.clocks.next_deadline(now))
+            .chain(self.module.next_host_poll(now))
             .min()
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
