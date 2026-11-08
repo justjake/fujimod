@@ -147,7 +147,7 @@ export default function Home() {
                 entry.name,
                 state.release?.firmwares.find(
                   (firmware) => firmware.sha256 === state.firmware?.sha256,
-                )?.downloads,
+                ),
               )
             }
             onLayoutChange={(panel) => runtime()?.saveLayout(panel)}

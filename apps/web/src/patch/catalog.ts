@@ -19,6 +19,8 @@ export interface PatchFirmware {
   patch_sha256: string;
   patch_bytes: number;
   boot_instructions: string[];
+  /** The body's stock update file name, required for installable downloads. */
+  update_filename?: string;
   /** The mods built into this firmware's release. */
   mods: string[];
 }
@@ -139,6 +141,13 @@ export function validateIndex(value: unknown): PatchIndex {
         (downloads.installable !== undefined && typeof downloads.installable !== 'boolean'))
     )
       throw new Error('The release download switches are invalid.');
+    if (
+      (entry.update_filename !== undefined &&
+        (typeof entry.update_filename !== 'string' ||
+          !/^[A-Z0-9]{1,8}\.DAT$/.test(entry.update_filename))) ||
+      (downloads?.installable && entry.update_filename === undefined)
+    )
+      throw new Error('The release update file name is invalid.');
     firmwares.push({
       ...entry,
       downloads: {

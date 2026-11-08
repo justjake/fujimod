@@ -36,8 +36,10 @@ visitor), but not release files: every download path ends at
 unless the release sets them:
 
 - `sd_card`: offer FujiMod SD boot for this body.
-- `installable`: offer FujiMod installable (SD boot files plus `FPUPDATE.DAT`).
-  Accepted only when the release contains that body's `FPUPDATE.DAT` output.
+- `installable`: offer FujiMod installable (SD boot files plus the update DAT).
+  Accepted only when the release contains that body's update DAT output and the
+  entry's `update_filename`, the name the body's updater looks for
+  (`FPUPDATE.DAT`, `FWUP0009.DAT`, …).
 
 Each firmware entry lists the mods built into its release in `mods`; the
 SD card download orders its cameras by that count.
@@ -133,7 +135,7 @@ SVG beside this instruction.
 - **FujiMod SD boot:** 1. Download the SD card files, with the disclaimer
   below and a blue button. 2. Copy them to a FAT32 SD card (`ffsys.bin`,
   `ffboot.bin`). 3. Boot from the SD card with the `sd` combination only.
-- **FujiMod installable:** 1. Download the files, orange button. 2. Copy all files including `FPUPDATE.DAT`. 3. Try it from the SD card first
+- **FujiMod installable:** 1. Download the files, orange button. 2. Copy all files including the update DAT. 3. Try it from the SD card first
   (`sd` combination) and shoot normally until satisfied. 4. Install it: turn
   the camera OFF, remove and reinsert the battery, then power on holding the
   `firmware_update` combination. 5. Optional: SET-UP → FUJIMOD DEVTOOLS → BUILD OVERLAY → OFF.
@@ -173,4 +175,4 @@ The model is lowercase with hyphens instead of spaces; firmware versions retain
 periods, and the build is the website's eight-character Git commit SHA.
 For example: `fujimod-recovery-sd-boot-x-t1-5.52-build-1234abcd.zip`.
 Camera-required filenames inside each archive stay intact. Modified installable
-archives include the SD boot files and `FPUPDATE.DAT`.
+archives include the SD boot files and the body's `update_filename` DAT.

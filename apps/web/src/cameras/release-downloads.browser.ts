@@ -90,6 +90,7 @@ for (const engine of [chromium, webkit].filter(
         patch_sha256: await sha256(patch),
         patch_bytes: patch.length,
         boot_instructions: ['Copy files.'],
+        update_filename: 'FPUPDATE.DAT',
         mods: [],
         downloads: { sd_card: true, installable: false },
       };
