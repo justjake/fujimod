@@ -9,7 +9,8 @@ The official DAT is included unchanged at its required card-root name.
 
 Switch the camera OFF, then remove and reinsert the battery before switching it
 on with the model's SD boot buttons held. Follow the body's USB connection
-instructions too.
+instructions too. Hold the buttons only while turning the power switch on;
+once the switch is in the ON position, release them.
 
 High-performance modes can leave a camera asleep after the OFF
 switch is used. Resuming from that state can skip SD card boot. This has been
@@ -89,8 +90,9 @@ to the stock LED driver. ROM loading precedes this marker.
 XP4 recovery cards (`Recipe::build`) contain `ffinit.bin`, one full RAM image
 in `ffboot.bin` and the update file. This is the layout that has booted X-S10,
 X100V and X-Pro3 cameras from the card. The stock loader's GPIO table holds the
-green lamp on, so it lights once `ffboot.bin` has loaded and the loader starts;
-then hold DISP/BACK until the update screen appears.
+green lamp on, so it lights once `ffboot.bin` has loaded and the loader starts.
+Switch ON while holding DISP/BACK, then release it once the switch is in the ON
+position; the update screen appears when the updater starts.
 
 X-T1 5.52 also supplies the loader's footer header from the verified update
 embedded in the SD image. Only the footer checker's read call is redirected;

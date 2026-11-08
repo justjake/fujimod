@@ -114,7 +114,10 @@ export function DownloadModal(props: {
             <BatteryCycleIcon />
             Switch the camera OFF, then remove and reinsert the battery.
           </p>
-          <p>Hold these while switching it on, and keep holding until the screen lights:</p>
+          <p>
+            Hold these only while turning the power switch on. Once the switch is in the ON
+            position, release them. The screen lights while the card starts:
+          </p>
           <Show when={controls()}>
             {(physical) => <PowerComboKeys controls={physical()} modes={['sd']} />}
           </Show>
@@ -131,7 +134,8 @@ export function DownloadModal(props: {
               Switch the camera OFF, then remove and reinsert the battery.
             </p>
             <p>
-              Hold this while switching it on, then follow the camera’s firmware update prompts:
+              Hold these only while turning the power switch on. Once the switch is in the ON
+              position, release them, then follow the camera’s firmware update prompts:
             </p>
             <Show when={controls()}>
               {(physical) => <PowerComboKeys controls={physical()} modes={['firmware_update']} />}

@@ -198,10 +198,12 @@ export default function Recovery() {
                         fallback={
                           <>
                             <p>
-                              Hold these while switching it on, and keep holding until{' '}
+                              Hold these only while turning the power switch on. Once the switch is
+                              in the ON position, release them. The{' '}
                               {downloadType() === 'green-led'
-                                ? 'the green LED lights:'
-                                : 'the screen lights:'}
+                                ? 'green LED lights'
+                                : 'screen lights'}{' '}
+                              while the card starts:
                             </p>
                             {keys(
                               downloadType() === 'green-led' ? ['sd'] : ['sd', 'firmware_update'],
@@ -209,11 +211,13 @@ export default function Recovery() {
                           </>
                         }
                       >
-                        <p>Hold these while switching it on, until the green LED lights:</p>
+                        <p>
+                          Hold these only while turning the power switch on. Once the switch is in
+                          the ON position, release them. The green LED lights while the card starts:
+                        </p>
                         {keys(['sd'])}
                         <p>
-                          Then release them and hold this until the screen lights, which can take a
-                          few minutes:
+                          Then hold this until the screen lights, which can take a few minutes:
                         </p>
                         {keys(['firmware_update'])}
                       </Show>

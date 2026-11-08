@@ -105,7 +105,7 @@ for (const engine of engines) {
           await page.getByRole('heading', { name: 'Flash the firmware as usual' }).count(),
           0,
         );
-        assert.ok((await page.locator('main').innerText()).includes('the green LED lights:'));
+        assert.ok((await page.locator('main').innerText()).includes('green LED lights'));
         if (status.canBuild) {
           const pendingSystem = Promise.race([
             page.waitForEvent('download'),
