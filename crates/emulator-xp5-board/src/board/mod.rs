@@ -7,10 +7,15 @@ use fujimod_emulator_xp5_io::{
     reset_handshake, timer, write_only_registers,
 };
 use fujimod_emulator_xp5_display::{display, panel_clock, panel_serial};
-use fujimod_emulator_xp5_storage::{flash_storage, flash_storage_controller, flash_storage_dma};
+use fujimod_emulator_xp5_storage::{
+    flash_storage,
+    flash_storage_controller,
+    flash_storage_dma,
+    nand_controller,
+};
 use fujimod_emulator_xp5_imaging::serial_sink;
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 pub mod clocks;
 pub mod general_dma;
 pub mod i2c;
@@ -31,7 +36,7 @@ pub struct Resources {
     pub clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks,
     pub companion: Option<Companion>,
     /// Verified and decoded image backing, shared by aperture, controller and DMA.
-    pub storage: Option<Arc<Mutex<flash_storage::Storage>>>,
+    pub storage: Option<flash_storage::Medium>,
     pub displays: BTreeMap<u64, display::Config>,
 }
 fn register_with_resources(
@@ -481,7 +486,7 @@ pub fn register_all(
         }
         if w.options
             .keys()
-            .any(|k| !matches!(k.as_str(), "erased_tail" | "seed"))
+            .any(|k| !matches!(k.as_str(), "erased_tail" | "seed" | "medium"))
         {
             return Err("unknown flash storage option".into());
         }
@@ -495,12 +500,20 @@ pub fn register_all(
         if number("erased_tail")? != 255 {
             return Err("only explicit erased_tail=255 is supported".into());
         }
-        let mut s = resources
+        let medium_name = w
+            .options
+            .get("medium")
+            .and_then(toml::Value::as_str)
+            .unwrap_or("nor");
+        let storage = resources
             .storage
             .as_ref()
-            .ok_or("aperture requires explicit flash storage")?
-            .lock()
-            .unwrap();
+            .ok_or("aperture requires explicit flash storage")?;
+        match (medium_name, storage) {
+            ("nor", flash_storage::Medium::Nor(_)) => {}
+            ("serial-nand", flash_storage::Medium::Nand(_)) => {}
+            _ => return Err("flash storage medium differs from the declared storage".into()),
+        }
         if let Some(seeds) = w.options.get("seed").and_then(toml::Value::as_array) {
             for seed in seeds {
                 let offset = seed
@@ -513,14 +526,13 @@ pub fn register_all(
                     .and_then(toml::Value::as_integer)
                     .and_then(|n| u8::try_from(n).ok())
                     .ok_or("invalid flash storage seed byte")?;
-                s.seed(offset, value)?;
+                storage.seed(offset, value)?;
             }
         }
-        drop(s);
         bus.register(
             w.base,
             w.size,
-            Box::new(flash_storage::Aperture(resources.storage.clone().unwrap())),
+            Box::new(flash_storage::Aperture(storage.clone())),
         )?;
         aperture = true;
     }
@@ -563,21 +575,34 @@ pub fn register_all(
                     .and_then(|n| u32::try_from(n).ok())
                     .filter(|n| *n <= 0xffffff)
                     .ok_or("flash storage-controller requires jedec_id")?;
-                // Current opcode geometry comes from the 20bb20 descriptor.
-                if jedec != 0x20bb20 {
-                    return Err("only 0x20bb20 flash geometry is supported".into());
+                match resources
+                    .storage
+                    .clone()
+                    .ok_or("controller requires flash storage aperture")?
+                {
+                    flash_storage::Medium::Nor(storage) => {
+                        // Current opcode geometry comes from the 20bb20 descriptor.
+                        if jedec != 0x20bb20 {
+                            return Err("only 0x20bb20 flash geometry is supported".into());
+                        }
+                        bus.register(
+                            w.base,
+                            w.size,
+                            Box::new(flash_storage_controller::Controller::new(storage, jedec)),
+                        )?;
+                    }
+                    flash_storage::Medium::Nand(storage) => {
+                        // The X-E5 part identifies as W25N01JW-family 0xEFDC21.
+                        if jedec != 0xefdc21 {
+                            return Err("only 0xefdc21 serial-NAND geometry is supported".into());
+                        }
+                        bus.register(
+                            w.base,
+                            w.size,
+                            Box::new(nand_controller::NandController::new(storage, jedec)),
+                        )?;
+                    }
                 }
-                bus.register(
-                    w.base,
-                    w.size,
-                    Box::new(flash_storage_controller::Controller::new(
-                        resources
-                            .storage
-                            .clone()
-                            .ok_or("controller requires flash storage aperture")?,
-                        jedec,
-                    )),
-                )?;
             }
             "flash-storage-dma" => {
                 if w.base != 0xff939000 || w.size != 0x1000 {

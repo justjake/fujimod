@@ -21,7 +21,9 @@ fn medium(page_bytes: usize, pages_per_block: u32, spare_bytes: usize) -> Nand {
 
 #[test]
 fn committed_state_cold_import_preserves_inputs_programs_and_erases_for_board_geometries() {
-    for (page_bytes, pages_per_block, spare_bytes) in [(512, 32, 16), (2048, 64, 512)] {
+    for (page_bytes, pages_per_block, spare_bytes) in
+        [(512, 32, 16), (2048, 64, 512), (4096, 64, 128)]
+    {
         let mut written = medium(page_bytes, pages_per_block, spare_bytes);
         written.erase(pages_per_block).unwrap();
         written

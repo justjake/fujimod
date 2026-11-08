@@ -1,0 +1,15 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "xe5-serial-nand",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "serial-nand-flash",
+      "jedec_id": 15718433,
+      "page_bytes": 4096,
+      "pages_per_block": 64,
+      "spare_bytes": 128
+    }
+  }
+}

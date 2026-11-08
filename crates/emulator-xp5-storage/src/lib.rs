@@ -4,3 +4,5 @@ pub mod flash_storage;
 pub mod flash_storage_controller;
 pub mod flash_storage_dma;
 pub mod general_dma;
+pub mod nand_controller;
+pub mod nand_storage;

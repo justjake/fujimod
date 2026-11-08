@@ -176,7 +176,7 @@ impl Nand {
     ) -> Result<Self, String> {
         if options.bytes == 0
             || options.bytes > 0x100000000
-            || !matches!(options.page_bytes, 512 | 2048)
+            || !matches!(options.page_bytes, 512 | 2048 | 4096)
             || !matches!(options.pages_per_block, 32 | 64)
             || options.spare_bytes < 16
             || options.spare_bytes > 512
@@ -418,7 +418,7 @@ impl Nand {
         if bytes.len() != self.options.page_bytes || spare.len() > self.options.spare_bytes {
             return Err("NAND program geometry mismatch".into());
         }
-        let mut old = [0; 2048];
+        let mut old = [0; 4096];
         self.read(
             row as u64 * self.options.page_bytes as u64,
             &mut old[..bytes.len()],

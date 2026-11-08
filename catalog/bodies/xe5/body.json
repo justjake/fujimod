@@ -13,8 +13,8 @@
  "card_slot": null,
  "control_bus_chips": [],
  "connections": [],
- "parts": [],
- "wiring": [],
+ "parts": ["xe5-serial-nand"],
+ "wiring": [{"source_id": "flash", "target_id": "xe5-serial-nand", "signal": "storage"}],
  "hardware": {
   "serial_attachments": [],
   "gpio_feedback": [],
