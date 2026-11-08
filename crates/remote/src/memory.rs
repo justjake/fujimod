@@ -11,6 +11,24 @@ pub struct Memory<'a, B> {
     pub scope: bool,
     pub(crate) depth: usize,
 }
+
+pub(crate) fn checked_address(base: u64, offset: u64) -> Result<u64> {
+    base.checked_add(offset)
+        .ok_or_else(|| "menu memory address overflow".into())
+}
+
+pub(crate) fn checked_indexed_address(
+    base: u64,
+    index: u64,
+    stride: u64,
+    offset: u64,
+) -> Result<u64> {
+    let indexed = index
+        .checked_mul(stride)
+        .ok_or("menu record offset overflow")?;
+    checked_address(checked_address(base, indexed)?, offset)
+}
+
 impl<B: Backend> Memory<'_, B> {
     pub(crate) fn begin_observation(&mut self) -> Result<()> {
         if self.scope {
@@ -44,10 +62,11 @@ impl<B: Backend> Memory<'_, B> {
         }
     }
     pub async fn bytes(&mut self, address: u64, size: usize) -> Result<Vec<u8>> {
+        let size_u64 = u64::try_from(size).map_err(|_| "Observation size exceeds 64 bits")?;
         if address == 0
             || size == 0
             || size > 64 * 1024 * 1024
-            || address.checked_add(size as u64).is_none()
+            || address.checked_add(size_u64).is_none()
         {
             return Err(format!("Invalid observation range {address:#x}+{size}"));
         }
@@ -71,6 +90,10 @@ impl<B: Backend> Memory<'_, B> {
         word[..size].copy_from_slice(&bytes);
         Ok(u64::from_le_bytes(word))
     }
+    pub async fn uint32(&mut self, address: u64, width: u8) -> Result<u32> {
+        u32::try_from(self.uint(address, usize::from(width)).await?)
+            .map_err(|_| "Menu scalar exceeds 32 bits".into())
+    }
     pub async fn word(&mut self, address: u64) -> Result<u32> {
         Ok(self.uint(address, 4).await? as u32)
     }
@@ -86,31 +109,34 @@ impl<B: Backend> Memory<'_, B> {
         self.finish(result)
     }
     async fn state_inner(&mut self) -> Result<State> {
+        let menus = &self.facts.firmware.menus;
+        menus.layout.validate()?;
         let f = &self.facts.firmware.state;
         let mode = u32::try_from(self.uint(f.ui_mode, f.widths.ui_mode).await?)
             .map_err(|_| "UI mode exceeds 32 bits")?;
         let active = self.uint(f.menu_active, f.widths.menu_active).await? != 0;
         let node = self.uint(f.menu_node, f.widths.menu_node).await?;
-        let cursor = self
-            .word(
-                self.facts.firmware.menus.cursor_address
-                    + u64::from(self.facts.firmware.menus.cursor.fields.cursor),
-            )
-            .await?;
+        let cursor_address = checked_address(
+            menus.cursor_address,
+            u64::from(menus.cursor.fields.cursor),
+        )?;
+        let cursor = self.word(cursor_address).await?;
         let current_key = if active && node != 0 && cursor < 1024 {
-            let l = &self.facts.firmware.menus.layout;
-            let array = self.word(node + u64::from(l.fields.item_array)).await?;
+            let l = &menus.layout;
+            let array_address = checked_address(node, u64::from(l.fields.item_array))?;
+            let array = self
+                .uint(array_address, usize::from(l.field_widths.item_array))
+                .await?;
             if array == 0 {
                 None
             } else {
-                Some(
-                    self.word(
-                        u64::from(array)
-                            + u64::from(cursor) * u64::from(l.row_size)
-                            + u64::from(l.row_key),
-                    )
-                    .await?,
-                )
+                let key_address = checked_indexed_address(
+                    array,
+                    u64::from(cursor),
+                    u64::from(l.row_size),
+                    u64::from(l.row_key),
+                )?;
+                Some(self.uint32(key_address, l.row_key_width).await?)
             }
         } else {
             None

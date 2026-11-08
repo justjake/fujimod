@@ -39,7 +39,17 @@ aligned, nonoverlapping and contained in their stride. Duplicate live keys and
 overflowing table extents refuse observation. Padding beside a key is not part
 of its value. Descriptor `menu_id` must decode a declared root key; a separate
 packed identifier must not be substituted merely because it occupies the same
-record. This root layout does not add packed descriptor or cursor decoding.
+record.
+
+Menu descriptor field widths default to four bytes. `layout.field_widths` can
+declare each descriptor field as 1, 2, 4 or 8 bytes; `row_key_width` and
+`row_child_width` do the same for row keys and child pointers. IDs, kinds,
+counts and keys must fit in 32 bits; pointers retain their full declared value.
+Every field must fit its record, align to its width and avoid overlap. The row
+stride must preserve each row field's alignment, and a narrow row key's sentinel
+must fit its width. Smaller descriptor and row records are accepted when their
+declared fields form a complete valid layout. Cursor decoding retains its
+existing layout.
 
 Build `Facts` with `Facts::from_selection(&selection, manifest)`. A reference is
 resolved on every use; duplicate or missing rows and option names produce an

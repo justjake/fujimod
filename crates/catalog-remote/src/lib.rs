@@ -366,14 +366,23 @@ pub struct MenuNavigation {
 pub struct MenuLayout {
     /// Node byte size.
     pub size: u32,
-    /// Node word offsets.
+    /// Node field offsets.
     pub fields: MenuFields,
+    /// Width of each node field in bytes. Omission retains four-byte fields.
+    #[serde(default)]
+    pub field_widths: MenuFieldWidths,
     /// Row size.
     pub row_size: u32,
     /// Row key.
     pub row_key: u32,
+    /// Width of the row key in bytes.
+    #[serde(default = "default_menu_field_width")]
+    pub row_key_width: u8,
     /// Row child.
     pub row_child: u32,
+    /// Width of the row child pointer in bytes.
+    #[serde(default = "default_menu_field_width")]
+    pub row_child_width: u8,
     /// Caption words.
     pub caption_words: u32,
     /// Sentinel.
@@ -384,7 +393,121 @@ pub struct MenuLayout {
     pub nowrap_flags: u32,
 }
 
-/// Native menu descriptor word offsets.
+fn default_menu_field_width() -> u8 {
+    4
+}
+
+/// Width of each native menu descriptor field, in bytes.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(default, deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct MenuFieldWidths {
+    /// Width of the root key decoded from the descriptor.
+    pub menu_id: u8,
+    /// Width of the descriptor type code.
+    pub type_code: u8,
+    /// Width of the setting identifier.
+    pub setting_id: u8,
+    /// Width of the rows-per-page count.
+    pub rows_per_page: u8,
+    /// Width of the flags field.
+    pub flags_word: u8,
+    /// Width of the parent pointer.
+    pub parent_pointer: u8,
+    /// Width of the item-array pointer.
+    pub item_array: u8,
+    /// Width of the handlers pointer.
+    pub handlers_pointer: u8,
+}
+
+impl Default for MenuFieldWidths {
+    fn default() -> Self {
+        Self {
+            menu_id: 4,
+            type_code: 4,
+            setting_id: 4,
+            rows_per_page: 4,
+            flags_word: 4,
+            parent_pointer: 4,
+            item_array: 4,
+            handlers_pointer: 4,
+        }
+    }
+}
+
+impl MenuLayout {
+    /// Validate complete field extents, alignment, overlap, and record bounds.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.size == 0 || self.size > 256 || self.row_size == 0 || self.row_size > 256 {
+            return Err("invalid remote menu record extent".into());
+        }
+        let f = &self.fields;
+        let w = &self.field_widths;
+        validate_menu_fields(
+            self.size,
+            &[
+                ("menu_id", f.menu_id, w.menu_id),
+                ("type_code", f.type_code, w.type_code),
+                ("setting_id", f.setting_id, w.setting_id),
+                ("rows_per_page", f.rows_per_page, w.rows_per_page),
+                ("flags_word", f.flags_word, w.flags_word),
+                ("parent_pointer", f.parent_pointer, w.parent_pointer),
+                ("item_array", f.item_array, w.item_array),
+                ("handlers_pointer", f.handlers_pointer, w.handlers_pointer),
+            ],
+        )?;
+        validate_menu_fields(
+            self.row_size,
+            &[
+                ("row_key", self.row_key, self.row_key_width),
+                ("row_child", self.row_child, self.row_child_width),
+            ],
+        )?;
+        if self.row_size % u32::from(self.row_key_width) != 0
+            || self.row_size % u32::from(self.row_child_width) != 0
+        {
+            return Err("remote menu row stride misaligns a field".into());
+        }
+        let sentinel_fits = match self.row_key_width {
+            1 => self.sentinel <= u8::MAX.into(),
+            2 => self.sentinel <= u16::MAX.into(),
+            4 | 8 => true,
+            _ => false,
+        };
+        if !sentinel_fits {
+            return Err("remote menu row sentinel exceeds its key width".into());
+        }
+        Ok(())
+    }
+}
+
+fn validate_menu_fields(size: u32, fields: &[(&str, u32, u8)]) -> Result<(), String> {
+    let mut extents = Vec::with_capacity(fields.len());
+    for (name, offset, width) in fields {
+        if !matches!(*width, 1 | 2 | 4 | 8) || *offset % u32::from(*width) != 0 {
+            return Err(format!("invalid remote menu field width or alignment: {name}"));
+        }
+        let end = (*offset)
+            .checked_add(u32::from(*width))
+            .ok_or_else(|| format!("remote menu field extent overflow: {name}"))?;
+        if end > size {
+            return Err(format!("remote menu field exceeds its record: {name}"));
+        }
+        extents.push((*offset, end, *name));
+    }
+    extents.sort_unstable_by_key(|(start, _, _)| *start);
+    if extents.windows(2).any(|pair| pair[0].1 > pair[1].0) {
+        return Err("remote menu fields overlap".into());
+    }
+    Ok(())
+}
+
+/// Native menu descriptor field offsets.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -1164,15 +1287,14 @@ impl FirmwareFacts {
             identity.validate()?;
         }
         let m = &self.menus;
-        if m.layout.size < 32
-            || m.layout.row_size < 8
-            || m.cursor.size < 32
+        if m.cursor.size < 32
             || m.cursor_address == 0
             || m.q_grid.rows == 0
             || m.q_grid.columns == 0
         {
             return Err("invalid remote menu layout or roots".into());
         }
+        m.layout.validate()?;
         m.checked_root_table_extent()?;
         match &m.root_layout {
             RootLayout::PointerArray if m.roles.values().any(|index| *index >= m.root_count) => {
@@ -1197,39 +1319,19 @@ impl FirmwareFacts {
             }
             _ => {}
         }
-        let node = &m.layout.fields;
         let cursor = &m.cursor.fields;
-        for (width, offsets) in [
-            (
-                m.layout.size,
-                vec![
-                    node.menu_id,
-                    node.type_code,
-                    node.setting_id,
-                    node.rows_per_page,
-                    node.flags_word,
-                    node.parent_pointer,
-                    node.item_array,
-                    node.handlers_pointer,
-                ],
-            ),
-            (
-                m.cursor.size,
-                vec![
-                    cursor.pointer,
-                    cursor.cursor,
-                    cursor.subcursor,
-                    cursor.visible_count,
-                    cursor.value_cursor,
-                    cursor.raw_count,
-                    cursor.filtered_count,
-                ],
-            ),
-            (
-                m.layout.row_size,
-                vec![m.layout.row_key, m.layout.row_child],
-            ),
-        ] {
+        for (width, offsets) in [(
+            m.cursor.size,
+            vec![
+                cursor.pointer,
+                cursor.cursor,
+                cursor.subcursor,
+                cursor.visible_count,
+                cursor.value_cursor,
+                cursor.raw_count,
+                cursor.filtered_count,
+            ],
+        )] {
             let unique: BTreeSet<_> = offsets.iter().copied().collect();
             if width < 4
                 || unique.len() != offsets.len()

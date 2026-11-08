@@ -2,11 +2,35 @@
 use crate::{
     ControlSnapshot, Menu, MenuSnapshot, Reference, RemoteReadResult, Result, Value,
     backend::Backend,
-    memory::{Memory, word},
+    memory::{Memory, checked_indexed_address, word},
 };
 use fujimod_catalog_controls::InputTarget;
 use fujimod_catalog_remote::RootLayout;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
+
+fn field_u64(bytes: &[u8], offset: u32, width: u8) -> Result<u64> {
+    if !matches!(width, 1 | 2 | 4 | 8) {
+        return Err("Unsupported menu field width".into());
+    }
+    let start = usize::try_from(offset).map_err(|_| "Menu field offset exceeds host address space")?;
+    let end = start
+        .checked_add(usize::from(width))
+        .ok_or("Menu field extent overflow")?;
+    let field = bytes
+        .get(start..end)
+        .ok_or("Menu field exceeds its descriptor")?;
+    Ok(field
+        .iter()
+        .enumerate()
+        .fold(0u64, |value, (index, byte)| {
+            value | (u64::from(*byte) << (index * 8))
+        }))
+}
+
+fn field_u32(bytes: &[u8], offset: u32, width: u8) -> Result<u32> {
+    u32::try_from(field_u64(bytes, offset, width)?)
+        .map_err(|_| "Menu scalar exceeds 32 bits".into())
+}
 
 fn root_key(bytes: &[u8], offset: usize, width: u8) -> Result<u32> {
     if !matches!(width, 1 | 2 | 4) {
@@ -47,26 +71,29 @@ struct Node {
 impl<B: Backend> Memory<'_, B> {
     async fn node(&mut self, pointer: u64, roots: &BTreeMap<u32, u64>) -> Result<Node> {
         let l = &self.facts.firmware.menus.layout;
-        if !(32..=256).contains(&l.size) || !(8..=256).contains(&l.row_size) {
-            return Err("Unsupported menu descriptor extent".into());
-        }
+        l.validate()?;
         let raw = self.bytes(pointer, l.size as usize).await?;
-        let code = word(&raw, l.fields.menu_id)?;
-        if !roots.contains_key(&code)
-            || word(&raw, l.fields.type_code)? > l.max_kind
-            || word(&raw, l.fields.rows_per_page)? > 1024
-        {
+        let code = field_u32(&raw, l.fields.menu_id, l.field_widths.menu_id)?;
+        let type_code = field_u32(&raw, l.fields.type_code, l.field_widths.type_code)?;
+        let _setting_id = field_u32(&raw, l.fields.setting_id, l.field_widths.setting_id)?;
+        let rows_per_page = field_u32(&raw, l.fields.rows_per_page, l.field_widths.rows_per_page)?;
+        let _flags_word = field_u32(&raw, l.fields.flags_word, l.field_widths.flags_word)?;
+        if !roots.contains_key(&code) || type_code > l.max_kind || rows_per_page > 1024 {
             return Err(format!("Invalid menu descriptor at {pointer:#x}"));
         }
-        let array = u64::from(word(&raw, l.fields.item_array)?);
+        let array = field_u64(&raw, l.fields.item_array, l.field_widths.item_array)?;
         let mut rows = vec![];
         if array != 0 {
             for index in 0..=1024 {
-                let raw = self
-                    .bytes(array + u64::from(index * l.row_size), l.row_size as usize)
-                    .await?;
-                let key = word(&raw, l.row_key)?;
-                let child = u64::from(word(&raw, l.row_child)?);
+                let row_address = checked_indexed_address(
+                    array,
+                    u64::from(index),
+                    u64::from(l.row_size),
+                    0,
+                )?;
+                let raw = self.bytes(row_address, l.row_size as usize).await?;
+                let key = field_u32(&raw, l.row_key, l.row_key_width)?;
+                let child = field_u64(&raw, l.row_child, l.row_child_width)?;
                 if key == l.sentinel && child == 0 {
                     break;
                 }
@@ -79,13 +106,14 @@ impl<B: Backend> Memory<'_, B> {
         Ok(Node {
             pointer,
             code,
-            parent: u64::from(word(&raw, l.fields.parent_pointer)?),
-            captions: u64::from(word(&raw, l.fields.handlers_pointer)?),
+            parent: field_u64(&raw, l.fields.parent_pointer, l.field_widths.parent_pointer)?,
+            captions: field_u64(&raw, l.fields.handlers_pointer, l.field_widths.handlers_pointer)?,
             rows,
         })
     }
     async fn graph(&mut self) -> Result<(BTreeMap<u32, u64>, BTreeMap<u64, Node>)> {
         let m = &self.facts.firmware.menus;
+        m.layout.validate()?;
         if m.root_count > 4096 {
             return Err("Menu root bound exceeded".into());
         }
@@ -159,6 +187,11 @@ impl<B: Backend> Memory<'_, B> {
             nodes.insert(pointer, node);
         }
         Ok((roots, nodes))
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn validate_graph(&mut self) -> Result<()> {
+        self.graph().await.map(|_| ())
     }
     fn root_id(&self, code: u32) -> String {
         self.facts
@@ -374,6 +407,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn wide_pointer_values_are_preserved_and_scalars_are_checked() {
+        let pointer = 0x0102_0304_0506_0708u64.to_le_bytes();
+        assert_eq!(field_u64(&pointer, 0, 8).unwrap(), 0x0102_0304_0506_0708);
+        assert!(field_u32(&pointer, 0, 8).is_err());
+    }
+
+    #[test]
     fn malformed_root_layouts_refuse_before_reading_memory() {
         futures_lite::future::block_on(async {
             let mut bad_width = crate::testing::facts();
@@ -437,7 +477,12 @@ impl<B: Backend> Memory<'_, B> {
         }
         let raw = self
             .bytes(
-                node.captions + u64::from(row.index * width) * 4,
+                checked_indexed_address(
+                    node.captions,
+                    u64::from(row.index),
+                    u64::from(width) * 4,
+                    0,
+                )?,
                 width as usize * 4,
             )
             .await?;
@@ -553,9 +598,12 @@ impl<B: Backend> Memory<'_, B> {
         let status = if let Some(row) = row.filter(|_| active) {
             let c = &self.facts.firmware.menus;
             self.uint(
-                c.cursor_address
-                    + u64::from(c.cursor.status_offset)
-                    + u64::from(row.index * c.cursor.status_stride),
+                checked_indexed_address(
+                    c.cursor_address,
+                    u64::from(row.index),
+                    u64::from(c.cursor.status_stride),
+                    u64::from(c.cursor.status_offset),
+                )?,
                 c.cursor.status_width as usize,
             )
             .await? as u32

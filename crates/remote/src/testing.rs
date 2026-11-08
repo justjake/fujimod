@@ -2,6 +2,8 @@ use super::*;
 use crate::backend::Backend;
 #[cfg(test)]
 use crate::connection::Connection;
+#[cfg(test)]
+use fujimod_catalog_remote::{MenuFieldWidths, MenuFields};
 use fujimod_catalog_remote::{RootLayout, RootRoute};
 use serde_json::json;
 
@@ -134,6 +136,175 @@ fn keyed_backend(
     );
     backend
 }
+
+#[cfg(test)]
+fn packed_menu_facts() -> Facts {
+    let mut facts = keyed_facts(0x20, 8, 0, 1, 4);
+    let menus = &mut facts.firmware.menus;
+    menus.roles.insert("secondary".into(), 0x80);
+    menus.root_routes.insert(
+        0x80,
+        RootRoute {
+            entry: "secondary_menu".into(),
+            tab: None,
+        },
+    );
+    let layout = &mut menus.layout;
+    layout.size = 28;
+    layout.fields = MenuFields {
+        menu_id: 0,
+        type_code: 1,
+        setting_id: 2,
+        rows_per_page: 4,
+        flags_word: 8,
+        parent_pointer: 12,
+        item_array: 16,
+        handlers_pointer: 20,
+    };
+    layout.field_widths = MenuFieldWidths {
+        menu_id: 1,
+        type_code: 1,
+        setting_id: 2,
+        rows_per_page: 4,
+        flags_word: 4,
+        parent_pointer: 4,
+        item_array: 4,
+        handlers_pointer: 4,
+    };
+    layout.row_size = 8;
+    layout.row_key = 0;
+    layout.row_key_width = 1;
+    layout.row_child = 4;
+    layout.row_child_width = 4;
+    layout.sentinel = 0xff;
+    facts
+}
+
+#[cfg(test)]
+fn write_packed_node(
+    backend: &mut Synthetic,
+    address: usize,
+    code: u8,
+    parent: u32,
+    rows: u32,
+    captions: u32,
+) {
+    backend.bytes[address..address + 28].fill(0xa5);
+    backend.bytes[address] = code;
+    backend.bytes[address + 1] = 1;
+    backend.bytes[address + 2..address + 4].copy_from_slice(&0x5aa5u16.to_le_bytes());
+    backend.word(address + 4, 7);
+    backend.word(address + 8, 0xa55a_1234);
+    backend.word(address + 12, parent);
+    backend.word(address + 16, rows);
+    backend.word(address + 20, captions);
+}
+
+#[cfg(test)]
+fn write_packed_row(backend: &mut Synthetic, address: usize, key: u8, child: u32) {
+    backend.bytes[address..address + 8].fill(0xa5);
+    backend.bytes[address] = key;
+    backend.word(address + 4, child);
+}
+
+#[cfg(test)]
+fn packed_menu_backend() -> Synthetic {
+    let mut backend = Synthetic::new();
+    write_packed_node(&mut backend, 4096, 0x20, 0, 8192, 12288);
+    write_packed_node(&mut backend, 4352, 0x80, 4096, 8448, 12544);
+    write_packed_row(&mut backend, 8192, 10, 4352);
+    write_packed_row(&mut backend, 8200, 0xff, 0);
+    write_packed_row(&mut backend, 8448, 7, 0);
+    write_packed_row(&mut backend, 8456, 0xff, 0);
+    for (address, pointer) in [(12288, 28672), (12292, 28688), (12544, 28704), (12548, 28720)] {
+        backend.word(address, pointer);
+    }
+    for (address, label) in [(28672, "FIRST"), (28688, "SETTING"), (28704, "OFF"), (28720, "ON")] {
+        backend.bytes[address..address + label.len()].copy_from_slice(label.as_bytes());
+    }
+    write_keyed_roots(&mut backend, &[(0x20, 4096), (0x80, 4352)], 8, 0, 1, 4);
+    backend
+}
+
+#[cfg(test)]
+fn wide_pointer_menu_facts() -> Facts {
+    let mut facts = packed_menu_facts();
+    let layout = &mut facts.firmware.menus.layout;
+    layout.size = 40;
+    layout.fields = MenuFields {
+        menu_id: 0,
+        type_code: 1,
+        setting_id: 2,
+        rows_per_page: 4,
+        flags_word: 8,
+        parent_pointer: 16,
+        item_array: 24,
+        handlers_pointer: 32,
+    };
+    layout.field_widths = MenuFieldWidths {
+        menu_id: 1,
+        type_code: 1,
+        setting_id: 2,
+        rows_per_page: 4,
+        flags_word: 4,
+        parent_pointer: 8,
+        item_array: 8,
+        handlers_pointer: 8,
+    };
+    layout.row_size = 16;
+    layout.row_key = 0;
+    layout.row_key_width = 1;
+    layout.row_child = 8;
+    layout.row_child_width = 8;
+    facts
+}
+
+#[cfg(test)]
+fn write_wide_node(
+    backend: &mut Synthetic,
+    address: usize,
+    code: u8,
+    parent: u64,
+    rows: u64,
+    captions: u64,
+) {
+    backend.bytes[address..address + 40].fill(0xa5);
+    backend.bytes[address] = code;
+    backend.bytes[address + 1] = 1;
+    backend.bytes[address + 2..address + 4].copy_from_slice(&0x5aa5u16.to_le_bytes());
+    backend.word(address + 4, 7);
+    backend.word(address + 8, 0xa55a_1234);
+    for (offset, pointer) in [(16, parent), (24, rows), (32, captions)] {
+        backend.bytes[address + offset..address + offset + 8]
+            .copy_from_slice(&pointer.to_le_bytes());
+    }
+}
+
+#[cfg(test)]
+fn write_wide_row(backend: &mut Synthetic, address: usize, key: u8, child: u64) {
+    backend.bytes[address..address + 16].fill(0xa5);
+    backend.bytes[address] = key;
+    backend.bytes[address + 8..address + 16].copy_from_slice(&child.to_le_bytes());
+}
+
+#[cfg(test)]
+fn wide_pointer_menu_backend() -> Synthetic {
+    let mut backend = Synthetic::new();
+    write_wide_node(&mut backend, 4096, 0x20, 0, 8192, 12288);
+    write_wide_node(&mut backend, 4352, 0x80, 4096, 8448, 12544);
+    write_wide_row(&mut backend, 8192, 10, 4352);
+    write_wide_row(&mut backend, 8208, 0xff, 0);
+    write_wide_row(&mut backend, 8448, 7, 0);
+    write_wide_row(&mut backend, 8464, 0xff, 0);
+    for (address, pointer) in [(12288, 28672), (12292, 28688), (12544, 28704), (12548, 28720)] {
+        backend.word(address, pointer);
+    }
+    for (address, label) in [(28672, "FIRST"), (28688, "SETTING"), (28704, "OFF"), (28720, "ON")] {
+        backend.bytes[address..address + label.len()].copy_from_slice(label.as_bytes());
+    }
+    write_keyed_roots(&mut backend, &[(0x20, 4096), (0x80, 4352)], 8, 0, 1, 4);
+    backend
+}
 /// Synthetic facts with a touch surface whose decoded report sits at 1536.
 pub fn touch_facts() -> Facts {
     let mut facts = facts();
@@ -156,6 +327,8 @@ pub fn touch_facts() -> Facts {
 }
 pub struct Synthetic {
     bytes: Vec<u8>,
+    #[cfg(test)]
+    memory_requests: Vec<(u64, usize)>,
     now: u64,
     sequence: u64,
     edges: Vec<Input>,
@@ -174,6 +347,8 @@ impl Synthetic {
     pub fn new() -> Self {
         let mut s = Self {
             bytes: vec![0; 65536],
+            #[cfg(test)]
+            memory_requests: vec![],
             now: 0,
             sequence: 0,
             edges: vec![],
@@ -244,6 +419,8 @@ impl Backend for Synthetic {
         reads: &'a mut ReadSet,
     ) -> LocalFuture<'a, Vec<u8>> {
         Box::pin(async move {
+            #[cfg(test)]
+            self.memory_requests.push((a, n));
             reads.stores.push((a, a + n as u64));
             self.bytes
                 .get(a as usize..a as usize + n)
@@ -450,6 +627,230 @@ fn sparse_keyed_roots_resolve_independently_of_entry_order() {
             assert_eq!(result.menu().unwrap().node, 4096);
             assert!(result.menu().unwrap().selected);
         }
+    });
+}
+
+#[test]
+fn packed_descriptor_and_byte_rows_traverse_sparse_keyed_roots() {
+    futures_lite::future::block_on(async {
+        let facts = packed_menu_facts();
+        facts.firmware.validate().unwrap();
+        let mut backend = packed_menu_backend();
+        backend.active(4096, 0);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let root = remote.read(&menu("shooting").into()).await.unwrap();
+        assert_eq!(root.state.current_key, Some(10));
+        assert_eq!(root.menu().unwrap().node, 4096);
+
+        let nested = menu("secondary")
+            .with_key(7)
+            .via(menu("shooting").with_key(10));
+        let result = remote.read(&nested.into()).await.unwrap();
+        let snapshot = result.menu().unwrap();
+        assert_eq!(snapshot.node, 4352);
+        assert_eq!(snapshot.key, Some(7));
+        assert_eq!(snapshot.index, Some(0));
+        assert_eq!(snapshot.root, "shooting");
+    });
+}
+
+#[test]
+fn eight_byte_descriptor_and_row_pointers_keep_their_declared_width() {
+    futures_lite::future::block_on(async {
+        let facts = wide_pointer_menu_facts();
+        facts.firmware.validate().unwrap();
+        let mut backend = wide_pointer_menu_backend();
+        backend.active(4096, 0);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let root = remote.read(&menu("shooting").into()).await.unwrap();
+        assert_eq!(root.state.current_key, Some(10));
+        let nested = menu("secondary")
+            .with_key(7)
+            .via(menu("shooting").with_key(10));
+        let result = remote.read(&nested.into()).await.unwrap();
+        let snapshot = result.menu().unwrap();
+        assert_eq!(snapshot.node, 4352);
+        assert_eq!(snapshot.key, Some(7));
+        assert_eq!(snapshot.index, Some(0));
+    });
+}
+
+#[test]
+fn wide_item_array_and_handlers_pointers_do_not_alias_low_addresses() {
+    futures_lite::future::block_on(async {
+        let high_rows = 0x1_0000_2000u64;
+        let mut backend = wide_pointer_menu_backend();
+        backend.bytes[4096 + 24..4096 + 32].copy_from_slice(&high_rows.to_le_bytes());
+        let mut remote = Connection::connect(backend, wide_pointer_menu_facts()).unwrap();
+        assert!(remote.read(&menu("shooting").into()).await.is_err());
+        assert!(remote.backend.memory_requests.iter().any(|(address, _)| *address == high_rows));
+        assert!(!remote.backend.memory_requests.iter().any(|(address, _)| *address == 8192));
+
+        let high_captions = 0x1_0000_3000u64;
+        let mut backend = wide_pointer_menu_backend();
+        backend.bytes[4096 + 32..4096 + 40].copy_from_slice(&high_captions.to_le_bytes());
+        let mut remote = Connection::connect(backend, wide_pointer_menu_facts()).unwrap();
+        assert!(remote
+            .read(&menu("shooting").with_key(10).into())
+            .await
+            .is_err());
+        assert!(remote.backend.memory_requests.iter().any(|(address, _)| *address == high_captions));
+        assert!(!remote.backend.memory_requests.iter().any(|(address, _)| *address == 12288));
+    });
+}
+
+#[test]
+fn wide_parent_pointer_is_not_truncated_when_resolving_ambiguous_ancestry() {
+    futures_lite::future::block_on(async {
+        let high_parent = 0x1_0000_1000u64;
+        let mut facts = wide_pointer_menu_facts();
+        facts.firmware.menus.root_count = 3;
+        facts.firmware.menus.roles.insert("third".into(), 0x90);
+        facts.firmware.menus.root_routes.remove(&0x80);
+        facts.firmware.menus.root_routes.insert(
+            0x90,
+            RootRoute {
+                entry: "third_menu".into(),
+                tab: None,
+            },
+        );
+        let mut backend = wide_pointer_menu_backend();
+        write_wide_node(&mut backend, 4352, 0x80, high_parent, 8448, 12544);
+        write_wide_node(&mut backend, 4608, 0x90, 0, 8704, 12544);
+        write_wide_row(&mut backend, 8704, 11, 4352);
+        write_wide_row(&mut backend, 8720, 0xff, 0);
+        write_keyed_roots(
+            &mut backend,
+            &[(0x20, 4096), (0x80, 4352), (0x90, 4608)],
+            8,
+            0,
+            1,
+            4,
+        );
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let error = remote.read(&menu("secondary").with_key(7).into()).await.unwrap_err();
+        assert!(error.contains("found 2 opening rows"), "{error}");
+    });
+}
+
+#[test]
+fn wide_row_child_pointer_is_not_truncated_to_a_low_address() {
+    futures_lite::future::block_on(async {
+        let high_child = 0x1_0000_6000u64;
+        let mut backend = wide_pointer_menu_backend();
+        backend.bytes[8192 + 8..8192 + 16].copy_from_slice(&high_child.to_le_bytes());
+        let mut remote = Connection::connect(backend, wide_pointer_menu_facts()).unwrap();
+        remote.read(&menu("shooting").into()).await.unwrap();
+        assert!(remote.backend.memory_requests.iter().any(|(address, _)| *address == high_child));
+        assert!(!remote.backend.memory_requests.iter().any(|(address, _)| *address == 24576));
+    });
+}
+
+#[test]
+fn eight_byte_menu_scalars_above_u32_are_rejected() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        let layout = &mut facts.firmware.menus.layout;
+        layout.size = 40;
+        layout.fields = MenuFields {
+            menu_id: 0,
+            type_code: 8,
+            setting_id: 12,
+            rows_per_page: 16,
+            flags_word: 20,
+            parent_pointer: 24,
+            item_array: 32,
+            handlers_pointer: 36,
+        };
+        layout.field_widths = MenuFieldWidths {
+            menu_id: 8,
+            type_code: 1,
+            setting_id: 4,
+            rows_per_page: 4,
+            flags_word: 4,
+            parent_pointer: 8,
+            item_array: 4,
+            handlers_pointer: 4,
+        };
+        let mut backend = Synthetic::new();
+        backend.bytes[4096..4104].copy_from_slice(&(u64::from(u32::MAX) + 1).to_le_bytes());
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let error = remote.read(&menu("shooting").into()).await.unwrap_err();
+        assert!(error.contains("Menu scalar exceeds 32 bits"), "{error}");
+    });
+}
+
+#[test]
+fn menu_field_width_validation_rejects_bad_widths_overlaps_ends_and_overflow() {
+    let mut invalid_width = packed_menu_facts();
+    invalid_width.firmware.menus.layout.field_widths.type_code = 3;
+    assert!(invalid_width.firmware.validate().is_err());
+
+    let mut overlapping_fields = packed_menu_facts();
+    overlapping_fields.firmware.menus.layout.fields.item_array = 12;
+    assert!(overlapping_fields.firmware.validate().is_err());
+
+    let mut field_past_end = packed_menu_facts();
+    field_past_end.firmware.menus.layout.size = 23;
+    assert!(field_past_end.firmware.validate().is_err());
+
+    let mut row_past_end = packed_menu_facts();
+    row_past_end.firmware.menus.layout.row_size = 7;
+    assert!(row_past_end.firmware.validate().is_err());
+
+    let mut misaligned_stride = packed_menu_facts();
+    misaligned_stride.firmware.menus.layout.row_key = 8;
+    misaligned_stride.firmware.menus.layout.row_child = 0;
+    misaligned_stride.firmware.menus.layout.row_child_width = 8;
+    misaligned_stride.firmware.menus.layout.row_size = 12;
+    assert!(misaligned_stride.firmware.validate().is_err());
+
+    let mut impossible_sentinel = packed_menu_facts();
+    impossible_sentinel.firmware.menus.layout.sentinel = u32::MAX;
+    assert!(impossible_sentinel.firmware.validate().is_err());
+
+    let mut overflowing_field = packed_menu_facts();
+    overflowing_field.firmware.menus.layout.fields.handlers_pointer = u32::MAX - 3;
+    assert!(overflowing_field.firmware.validate().is_err());
+}
+
+#[test]
+fn menu_layout_rejects_before_memory_reads_when_facts_validation_is_bypassed() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.layout.field_widths.menu_id = 3;
+        let mut backend = Synthetic::new();
+        let mut memory = crate::memory::Memory {
+            backend: &mut backend,
+            facts: &facts,
+            reads: ReadSet::default(),
+            scope: false,
+            depth: 0,
+        };
+        assert!(memory.validate_graph().await.is_err());
+        assert!(memory.reads.stores.is_empty());
+    });
+}
+
+#[test]
+fn memory_state_rejects_wrapping_node_fields_before_followup_read() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.state.widths.menu_node = 8;
+        let mut backend = Synthetic::new();
+        backend.word(776, 1);
+        backend.bytes[784..792].copy_from_slice(&u64::MAX.to_le_bytes());
+        let mut memory = crate::memory::Memory {
+            backend: &mut backend,
+            facts: &facts,
+            reads: ReadSet::default(),
+            scope: false,
+            depth: 0,
+        };
+        let error = memory.state().await.unwrap_err();
+        assert!(error.contains("overflow"), "{error}");
+        assert!(memory.reads.stores.iter().all(|(start, _)| *start >= 512));
     });
 }
 

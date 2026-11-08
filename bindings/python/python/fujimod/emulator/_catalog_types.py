@@ -3428,6 +3428,17 @@ class MemoryRegion(TypedDict, total=False):
     size: Required[RegionSize]
 
 
+class MenuFieldWidths(TypedDict, total=False):
+    flags_word: NotRequired[int]
+    handlers_pointer: NotRequired[int]
+    item_array: NotRequired[int]
+    menu_id: NotRequired[int]
+    parent_pointer: NotRequired[int]
+    rows_per_page: NotRequired[int]
+    setting_id: NotRequired[int]
+    type_code: NotRequired[int]
+
+
 class MenuFields(TypedDict, total=False):
     flags_word: Required[int]
     handlers_pointer: Required[int]
@@ -3448,11 +3459,14 @@ class MenuKeys(TypedDict, total=False):
 
 class MenuLayout(TypedDict, total=False):
     caption_words: Required[int]
+    field_widths: NotRequired[MenuFieldWidths]
     fields: Required[MenuFields]
     max_kind: Required[int]
     nowrap_flags: Required[int]
     row_child: Required[int]
+    row_child_width: NotRequired[int]
     row_key: Required[int]
+    row_key_width: NotRequired[int]
     row_size: Required[int]
     sentinel: Required[int]
     size: Required[int]

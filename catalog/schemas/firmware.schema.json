@@ -2776,9 +2776,80 @@
       ],
       "type": "object"
     },
+    "MenuFieldWidths": {
+      "additionalProperties": false,
+      "description": "Width of each native menu descriptor field, in bytes.",
+      "properties": {
+        "flags_word": {
+          "default": 4,
+          "description": "Width of the flags field.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "handlers_pointer": {
+          "default": 4,
+          "description": "Width of the handlers pointer.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_array": {
+          "default": 4,
+          "description": "Width of the item-array pointer.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_id": {
+          "default": 4,
+          "description": "Width of the root key decoded from the descriptor.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parent_pointer": {
+          "default": 4,
+          "description": "Width of the parent pointer.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows_per_page": {
+          "default": 4,
+          "description": "Width of the rows-per-page count.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setting_id": {
+          "default": 4,
+          "description": "Width of the setting identifier.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type_code": {
+          "default": 4,
+          "description": "Width of the descriptor type code.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
     "MenuFields": {
       "additionalProperties": false,
-      "description": "Native menu descriptor word offsets.",
+      "description": "Native menu descriptor field offsets.",
       "properties": {
         "flags_word": {
           "description": "Flags word.",
@@ -2880,9 +2951,23 @@
           "minimum": 0,
           "type": "integer"
         },
+        "field_widths": {
+          "$ref": "#/$defs/MenuFieldWidths",
+          "default": {
+            "flags_word": 4,
+            "handlers_pointer": 4,
+            "item_array": 4,
+            "menu_id": 4,
+            "parent_pointer": 4,
+            "rows_per_page": 4,
+            "setting_id": 4,
+            "type_code": 4
+          },
+          "description": "Width of each node field in bytes. Omission retains four-byte fields."
+        },
         "fields": {
           "$ref": "#/$defs/MenuFields",
-          "description": "Node word offsets."
+          "description": "Node field offsets."
         },
         "max_kind": {
           "description": "Max kind.",
@@ -2902,9 +2987,25 @@
           "minimum": 0,
           "type": "integer"
         },
+        "row_child_width": {
+          "default": 4,
+          "description": "Width of the row child pointer in bytes.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
         "row_key": {
           "description": "Row key.",
           "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row_key_width": {
+          "default": 4,
+          "description": "Width of the row key in bytes.",
+          "format": "uint8",
+          "maximum": 255,
           "minimum": 0,
           "type": "integer"
         },
