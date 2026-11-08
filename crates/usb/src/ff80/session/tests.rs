@@ -162,7 +162,7 @@ fn checked_close_bad_length_or_transport_failure_never_retries() {
 }
 
 #[test]
-fn cancelled_checked_close_remains_fenced() {
+fn canceled_checked_close_remains_fenced() {
     let (mut core, steps) = opened(vec![
         Step::Control(envelope(RequestKind::Close, 2, 0x1234)),
         Step::PendingRead,

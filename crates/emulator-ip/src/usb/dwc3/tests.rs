@@ -756,7 +756,7 @@ fn idle_running_core_reset_finishes_at_deadline_and_keeps_the_physical_link() {
 }
 
 #[test]
-fn core_reset_refuses_pending_operations_without_cancelling_them() {
+fn core_reset_refuses_pending_operations_without_canceling_them() {
     let (mut d, mut b) = ready(0x11111110);
     d.transaction(b.now, 0, true, Some(vec![0; 8])).unwrap();
     let before = d.save();

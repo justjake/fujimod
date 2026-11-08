@@ -427,7 +427,7 @@ fn checked_close_transfer_errors_drop_resources_without_cleanup_or_retry() {
 }
 
 #[test]
-fn cancelled_checked_close_drops_resources_without_another_camera_command() {
+fn canceled_checked_close_drops_resources_without_another_camera_command() {
     let mut provider = Provider::new();
     let session = open(&mut provider, 128);
     let expected = session.info().id.to_le_bytes();
@@ -608,7 +608,7 @@ fn pending_transfers_have_deadlines_and_fence_session() {
 }
 
 #[test]
-fn failed_cancelled_and_invalid_completions_preserve_error_and_fence() {
+fn failed_canceled_and_invalid_completions_preserve_error_and_fence() {
     for behavior in [
         ReadBehavior::Disconnected,
         ReadBehavior::Cancelled,
@@ -783,7 +783,7 @@ fn claim_and_release_failures_and_deadlines_release_resources() {
 }
 
 #[test]
-fn cancelled_claim_and_session_open_release_resources() {
+fn canceled_claim_and_session_open_release_resources() {
     let mut provider = Provider::new();
     provider.model.try_lock().unwrap().claim_behavior = ResourceBehavior::Pending;
     let mut claim = Box::pin(Connection::open_emulated(
