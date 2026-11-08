@@ -411,7 +411,7 @@
           "description": "Polled EXR II SPI, persistent packet, wake alarm and power-hold release.",
           "properties": {
             "code_checks": {
-              "description": "Stock loader ranges establishing the transport.",
+              "description": "The stock endpoint-table reader and power cut establishing the transport.",
               "items": {
                 "$ref": "#/$defs/CodeCheck"
               },
@@ -419,14 +419,14 @@
             },
             "constants": {
               "$ref": "#/$defs/EarlyBootConstants",
-              "description": "Exact C constants derived from the checked loader and power path."
+              "description": "Exact C constants derived from the endpoint table and power path."
             },
             "kind": {
               "const": "exr2_polled_alarm",
               "type": "string"
             },
             "spi_channel": {
-              "description": "SPI channel selected by the verified loader descriptor.",
+              "description": "SPI channel of the power controller's serial endpoint.",
               "format": "uint32",
               "minimum": 0,
               "type": "integer"

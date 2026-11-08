@@ -90,11 +90,11 @@ pub struct RestartMechanism {
 pub enum EarlyBootMechanism {
     /// Polled EXR II SPI, persistent packet, wake alarm and power-hold release.
     Exr2PolledAlarm {
-        /// SPI channel selected by the verified loader descriptor.
+        /// SPI channel of the power controller's serial endpoint.
         spi_channel: u32,
-        /// Exact C constants derived from the checked loader and power path.
+        /// Exact C constants derived from the endpoint table and power path.
         constants: EarlyBootConstants,
-        /// Stock loader ranges establishing the transport.
+        /// The stock endpoint-table reader and power cut establishing the transport.
         code_checks: Vec<CodeCheck>,
     },
 }

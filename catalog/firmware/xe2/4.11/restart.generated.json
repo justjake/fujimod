@@ -111,6 +111,66 @@
       "deadline_parameter": 0,
       "rollover_parameter": 13
     },
+    "early_boot": {
+      "kind": "exr2_polled_alarm",
+      "spi_channel": 1,
+      "constants": {
+        "exr2_restart_spi_base": 4294459456,
+        "exr2_restart_spi_control": 0,
+        "exr2_restart_spi_format": 4,
+        "exr2_restart_spi_fifo_control": 8,
+        "exr2_restart_spi_status": 12,
+        "exr2_restart_spi_rx_count": 16,
+        "exr2_restart_spi_tx_count": 20,
+        "exr2_restart_spi_rx": 24,
+        "exr2_restart_spi_tx": 28,
+        "exr2_restart_spi_enable": 128,
+        "exr2_restart_spi_busy": 1,
+        "exr2_restart_spi_fifo_reset": 268435456,
+        "exr2_restart_spi_status_clear": 13073,
+        "exr2_restart_spi_rx_ready": 512,
+        "exr2_restart_spi_count_mask": 31,
+        "exr2_restart_gpio_base": 4294479872,
+        "exr2_restart_gpio_stride": 64,
+        "exr2_restart_gpio_banks": 16,
+        "exr2_restart_gpio_output": 0,
+        "exr2_restart_gpio_mode1": 4,
+        "exr2_restart_gpio_mode2": 8,
+        "exr2_restart_gpio_mode3": 12,
+        "exr2_restart_gpio_mode4": 16,
+        "exr2_restart_gpio_config": 24,
+        "exr2_restart_gpio_inactive_mask": 4294901760,
+        "exr2_restart_power_hold": 4294475908,
+        "exr2_restart_power_hold_mask": 1,
+        "exr2_restart_write": 32768,
+        "exr2_restart_packet_register": 80,
+        "exr2_restart_packet_bytes": 16,
+        "exr2_restart_alarm_low": 105,
+        "exr2_restart_alarm_high": 106,
+        "exr2_restart_alarm_enable": 104,
+        "exr2_restart_power_command": 96,
+        "exr2_restart_power_off_value": 240,
+        "restart_spi_idle_control": 96,
+        "restart_spi_format_value": 6,
+        "restart_power_gpio_bank": 12,
+        "restart_gpio_pin": 3,
+        "restart_panel_gpio_bank": 11
+      },
+      "code_checks": [
+        {
+          "name": "descriptor_open",
+          "address": 9531156,
+          "size": 1632,
+          "sha256": "ddb600cf6838c7fffb4ad4c8296ba585516e1bacaad0b79810f8b087e9a2128b"
+        },
+        {
+          "name": "power_cut",
+          "address": 9554004,
+          "size": 100,
+          "sha256": "6e6f550e527d01107ecdda894f1c97c9144740aacfa4b44e65b0913cd5099cb3"
+        }
+      ]
+    },
     "deferred_timer": {
       "kind": "software-timer-callback-v1",
       "period_unit": "milliseconds",
