@@ -758,6 +758,15 @@
       "additionalProperties": false,
       "description": "Declared windows options facts.",
       "properties": {
+        "byte_ns": {
+          "description": "Declared virtual time from an I2C byte command to its completion.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "command_latency_us": {
           "description": "Declared command latency us.",
           "format": "uint64",
@@ -787,6 +796,15 @@
         },
         "configuration_word": {
           "description": "Declared read-only clock configuration input.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "interrupt": {
+          "description": "Declared interrupt line of the block.",
           "format": "uint32",
           "minimum": 0,
           "type": [

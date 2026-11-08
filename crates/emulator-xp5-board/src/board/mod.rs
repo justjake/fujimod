@@ -3,7 +3,7 @@
 use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
 use fujimod_emulator_devices::parts::controls::Controls;
 use fujimod_emulator_xp5_io::{
-    adc, connection_status, discarded_read, gates, gpio, i2c, mailbox, memory_configuration,
+    adc, connection_status, discarded_read, gates, gpio, mailbox, memory_configuration,
     reset_handshake, timer, write_only_registers,
 };
 use fujimod_emulator_xp5_display::{display, panel_clock, panel_serial};
@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 pub mod clocks;
 pub mod general_dma;
+pub mod i2c;
 pub mod imaging;
 pub mod lz;
 pub mod renderer;
@@ -145,14 +146,11 @@ fn register_with_resources(
                 )?),
             )?;
         }
-        "battery-i2c" => {
-            if window.base != 0xff925000 || window.size != 0x1000 {
-                return Err("invalid battery I2C1 window".into());
-            }
+        "i2c-controller" => {
             bus.register(
                 window.base,
                 window.size,
-                Box::new(i2c::BatteryI2c::default()),
+                Box::new(i2c::build(window.base, window.size, &window.options)?),
             )?;
         }
         "soc-temperature" => {

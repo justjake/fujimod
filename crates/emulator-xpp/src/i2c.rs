@@ -8,7 +8,7 @@
 //! is unsupported. Addresses without a part are NACKed. Written values read
 //! back; no part behavior beyond the register file is modeled. The last
 //! transfers are kept for inspection.
-use fujimod_emulator_ip::dw_i2c::Bus;
+use fujimod_emulator_devices::parts::i2c::Bus;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, VecDeque};
@@ -114,20 +114,21 @@ impl Bus for Parts {
         });
         s.active.is_some()
     }
-    fn write(&mut self, byte: u8) {
+    fn write(&mut self, byte: u8) -> Result<(), String> {
         self.log(byte);
         let Some(index) = self.state.active else {
-            return;
+            return Ok(());
         };
         let part = self.parts[index].clone();
         let Some(register) = self.state.selected else {
             self.state.selected = Some(byte & part.select_mask);
-            return;
+            return Ok(());
         };
         let shift = Self::shift(&part, self.state.byte);
         let value = self.state.registers[index].entry(register).or_default();
         *value = *value & !(0xff << shift) | u16::from(byte) << shift;
         self.next_byte(&part);
+        Ok(())
     }
     fn read(&mut self) -> Result<u8, String> {
         let Some(index) = self.state.active else {
@@ -212,7 +213,7 @@ mod tests {
         let mut parts = gauge();
         assert!(!parts.start(0x37, false));
         assert!(parts.start(0x36, false));
-        parts.write(0x10);
+        parts.write(0x10).unwrap();
         assert!(parts.start(0x36, true));
         assert_eq!(parts.read(), Ok(0x34));
         assert_eq!(parts.read(), Ok(0x12));
@@ -221,10 +222,10 @@ mod tests {
         let saved = parts.save();
         assert!(parts.start(0x36, false));
         for byte in [0x18, 0xbb, 0x03] {
-            parts.write(byte);
+            parts.write(byte).unwrap();
         }
         assert!(parts.start(0x36, false));
-        parts.write(0x18);
+        parts.write(0x18).unwrap();
         assert!(parts.start(0x36, true));
         assert_eq!(parts.read(), Ok(0xbb));
         assert_eq!(parts.read(), Ok(0x03));
@@ -255,7 +256,7 @@ mod tests {
         }])
         .unwrap();
         assert!(parts.start(0x39, false));
-        parts.write(0xb8);
+        parts.write(0xb8).unwrap();
         assert!(parts.start(0x39, true));
         assert_eq!(parts.read(), Ok(0x34));
         assert_eq!(parts.read(), Ok(0x02));

@@ -1,6 +1,6 @@
 [package]
 name = "fujimod-emulator-ip"
-description = "SDHCI clocks, masked GPIO, Socionext XDMAC and DWC3 USB controller blocks"
+description = "SDHCI clocks, masked GPIO, Socionext XDMAC and I2C, DesignWare I2C and DWC3 USB controller blocks"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

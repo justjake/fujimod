@@ -234,9 +234,10 @@ mod tests {
     }
 }
 
-/// Battery-gauge endpoint on I2C1, address 0x36. Register 4 holds a declared
-/// charge word read most-significant byte first. No chip identity or behavior
-/// for unmodeled registers is implied; I2C controller behavior is separate.
+/// Battery fuel gauge behind the I2C register-pointer protocol. Register 4
+/// holds a declared charge word read most-significant byte first. No chip
+/// identity or behavior for unmodeled registers is implied; I2C controller
+/// behavior is separate.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct FuelGauge {
     registers: Vec<u8>,
@@ -248,7 +249,6 @@ impl Default for FuelGauge {
     }
 }
 impl FuelGauge {
-    pub const ADDRESS: u8 = 0x36;
     pub fn new() -> Self {
         let mut s = Self {
             registers: vec![0; 256],
@@ -302,6 +302,29 @@ impl FuelGauge {
         for (n, value) in bytes.iter().enumerate() {
             self.write(register.wrapping_add(n as u8), *value)?;
         }
+        Ok(())
+    }
+}
+
+impl crate::i2c::Registers for FuelGauge {
+    fn name(&self) -> &'static str {
+        "fuel-gauge"
+    }
+    fn write(&mut self, register: u8, value: u8) -> Result<(), String> {
+        FuelGauge::write(self, register, value)
+    }
+    fn read(&mut self, register: u8) -> Result<u8, String> {
+        FuelGauge::read(self, register)
+    }
+    fn save(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap()
+    }
+    fn restore(&mut self, state: &serde_json::Value) -> Result<(), String> {
+        let restored: Self = serde_json::from_value(state.clone()).map_err(|e| e.to_string())?;
+        if restored.registers.len() != 256 || restored.known.len() != 256 {
+            return Err("invalid fuel-gauge checkpoint".into());
+        }
+        *self = restored;
         Ok(())
     }
 }

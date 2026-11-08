@@ -2145,6 +2145,12 @@ pub struct BlockParameters {
     /// Declared companion irq base.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub companion_irq_base: Option<u64>,
+    /// Declared virtual time from an I2C byte command to its completion.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub byte_ns: Option<u64>,
+    /// Declared interrupt line of the block.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interrupt: Option<u32>,
     /// Declared receive request.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receive_request: Option<u64>,

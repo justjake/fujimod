@@ -1,12 +1,13 @@
 //! Handles that board parts, their controllers, plans and sessions share: pins, GPIO,
-//! controls, analog samples, card contacts, encoder inputs, lens bridge registers and
-//! HDMI sinks.
+//! controls, analog samples, card contacts, encoder inputs, lens bridge registers, I2C
+//! buses and HDMI sinks.
 pub mod analog;
 pub mod card_contacts;
 pub mod controls;
 pub mod encoder_input;
 pub mod gpio;
 pub mod hdmi_sink;
+pub mod i2c;
 pub mod lens_bridge;
 pub mod micron_nor;
 pub mod nand;
