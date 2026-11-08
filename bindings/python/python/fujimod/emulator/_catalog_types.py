@@ -4427,6 +4427,9 @@ type RunExecutionScope = Literal[
 type RunFaceRegisterMode = Literal["retained_words"]
 
 
+type RunFaceResultProfile = Literal["empty"]
+
+
 type RunFaceStopProfile = Literal["declared-armed-face-dma-idle-abort-unmeasured"]
 
 
@@ -4444,6 +4447,7 @@ class RunFactoryOptions(TypedDict, total=False):
     display_frame_ticks: NotRequired[int | None]
     entry: NotRequired[RunEntry | None]
     face_register_mode: NotRequired[RunFaceRegisterMode | None]
+    face_result_profile: NotRequired[RunFaceResultProfile | None]
     face_stop_profile: NotRequired[RunFaceStopProfile | None]
     graphics_profile: NotRequired[RunGraphicsProfile | None]
     hdmi_sink: NotRequired[RunHdmiSink | None]

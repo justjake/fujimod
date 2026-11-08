@@ -1607,6 +1607,13 @@
       ],
       "type": "string"
     },
+    "RunFaceResultProfile": {
+      "description": "Declared face detector results.",
+      "enum": [
+        "empty"
+      ],
+      "type": "string"
+    },
     "RunFaceStopProfile": {
       "description": "Explicit constructor policy selected by a run.",
       "enum": [
@@ -1752,6 +1759,17 @@
             }
           ],
           "description": "Selected face register mode. Absence preserves the base selection."
+        },
+        "face_result_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunFaceResultProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared face detector results. Absence leaves requests unanswered."
         },
         "face_stop_profile": {
           "anyOf": [
