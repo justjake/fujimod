@@ -2,6 +2,7 @@
 //! Time, attached wire inputs and actual IRQ register outputs are the only
 //! capabilities. Discovery continuation is selected by the runtime bus.
 use super::{Channel, Registers, RouteBank, Routes, options::Options};
+use fujimod_emulator_devices::capability::GravityInput;
 use fujimod_emulator_devices::{Action, Cx, Device};
 use std::collections::BTreeMap;
 
@@ -19,6 +20,11 @@ pub struct I2cController {
     cable_expected: Option<bool>,
 }
 impl I2cController {
+    fn has_gravity_sensor(&self) -> bool {
+        self.engine.channel == Channel::Primary
+            && self.engine.parts.sensor_address.is_some()
+            && (self.engine.sensor_profile() || self.engine.parts.stationary)
+    }
     pub fn touch_period(&self) -> Result<u64, String> {
         self.engine
             .parts
@@ -260,7 +266,32 @@ impl I2cController {
         self.settle_touch(cx)
     }
 }
+impl GravityInput for I2cController {
+    fn gravity_g(&self) -> [f64; 3] {
+        self.engine.parts.gravity_g
+    }
+
+    fn set_gravity_g(&mut self, gravity: [f64; 3]) -> Result<(), String> {
+        if !self.has_gravity_sensor() {
+            return Err("bus has no modeled accelerometer".into());
+        }
+        if gravity
+            .iter()
+            .any(|value| !value.is_finite() || value.abs() > 2.0)
+        {
+            return Err("accelerometer gravity must be finite and within -2..2 g per axis".into());
+        }
+        self.engine.parts.gravity_g = gravity;
+        Ok(())
+    }
+}
 impl Device for I2cController {
+    fn gravity_input(&self) -> Option<&(dyn GravityInput + 'static)> {
+        self.has_gravity_sensor().then_some(self)
+    }
+    fn gravity_input_mut(&mut self) -> Option<&mut (dyn GravityInput + 'static)> {
+        self.has_gravity_sensor().then_some(self)
+    }
     fn touch_panel(&self) -> Option<&(dyn fujimod_emulator_devices::capability::TouchPanel + 'static)> {
         Some(self)
     }

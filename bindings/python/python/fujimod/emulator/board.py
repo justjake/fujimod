@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 import weakref
 from collections.abc import Buffer, Mapping, Sequence
@@ -644,6 +645,28 @@ class Session:
         if any(type(value) is not int or not 0 <= value <= 0xFFFF for value in values):
             raise ValueError("ADC samples must be unsigned 16-bit integers")
         self._native_board().set_adc_samples(self._node(node), list(values))
+
+    def gravity_g(self, node: str) -> tuple[float, float, float]:
+        """Return the external gravity input at an attached accelerometer."""
+        x, y, z = self._native_board().gravity_g(self._node(node))
+        return x, y, z
+
+    def set_gravity_g(self, node: str, gravity: Sequence[float]) -> None:
+        """Replace the accelerometer's external gravity vector in sensor axes."""
+        if isinstance(gravity, (str, bytes, bytearray)) or not isinstance(
+            gravity, Sequence
+        ):
+            raise TypeError("gravity must be a sequence of three finite numbers")
+        values = tuple(gravity)
+        if len(values) != 3:
+            raise ValueError("gravity must contain three components")
+        if any(
+            isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            for value in values
+        ):
+            raise ValueError("gravity components must be finite numbers")
+        self._native_board().set_gravity_g(self._node(node), [float(value) for value in values])
 
     def input_graph(self) -> dict[str, object]:
         """Return input-capable nodes and their checked graph mappings."""
