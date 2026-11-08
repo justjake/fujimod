@@ -113,12 +113,13 @@ impl MappedPayload {
 /// Whole-device backups retain their recorded qualification sequence. File
 /// ranges borrow publication state without generating diagnostic scratch.
 #[derive(Clone, Copy)]
-pub(super) enum Selection {
+pub(super) enum Selection<'a> {
     Whole,
     Range(BulkRange),
     DiagnosticNand(BulkRange, NandReadMode),
+    Spare(&'a SpareReader, &'a [u64]),
 }
-impl Selection {
+impl Selection<'_> {
     fn range(self, flash: &FirmwareFlash) -> BulkRange {
         match self {
             Self::Whole => BulkRange {
@@ -126,6 +127,10 @@ impl Selection {
                 size: flash.window.size,
             },
             Self::Range(range) | Self::DiagnosticNand(range, _) => range,
+            Self::Spare(_, offsets) => BulkRange {
+                address: 0,
+                size: offsets.len() as u64 * 16,
+            },
         }
     }
     fn controller_mode(self) -> u32 {
@@ -186,6 +191,82 @@ pub async fn diagnose_nand(
         callbacks,
     )
     .await
+}
+
+/// Stock routine returning the first 16 spare bytes of one NAND page,
+/// `(page, output, event_mode, timeout) -> status`, and the checks pinning it.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SpareReader {
+    pub entry: u64,
+    pub checks: Vec<CodeCheck>,
+}
+
+/// Read the first 16 spare bytes of the page at each offset, in order, through
+/// the EXR II reader under the stock driver lock. Like main-area reads it never
+/// programs or erases; the corrected control read still runs first.
+pub async fn read_spare(
+    session: &mut Session,
+    bulk: &FirmwareBulk,
+    flash: &FirmwareFlash,
+    payload: &Payload,
+    image: &[u8],
+    limits: Limits,
+    spare: &SpareReader,
+    offsets: &[u64],
+) -> bulk::Result<Vec<[u8; 16]>> {
+    let Payload::Exr2Query(p) = payload else {
+        return Err(bulk::BulkError::Check(
+            "Selected reader has no spare mode".into(),
+        ));
+    };
+    let page = flash
+        .reader
+        .as_ref()
+        .map_or(0, |reader| u64::from(reader.alignment));
+    if offsets.is_empty()
+        || offsets.len() > 256
+        || offsets
+            .iter()
+            .any(|&at| page == 0 || at % page != 0 || at >= flash.window.size)
+        || !spare.checks.iter().any(|c| c.address == spare.entry)
+        || spare.entry > u64::from(u32::MAX)
+        || !spare.checks.iter().all(|c| valid_hash(&c.sha256))
+    {
+        return Err(bulk::BulkError::Check(
+            "Spare request or reader pin is invalid".into(),
+        ));
+    }
+    let mut spares = vec![None; offsets.len()];
+    let mut chunk = |at: u64, bytes: Vec<u8>| {
+        let index = offsets
+            .iter()
+            .position(|&o| o == at)
+            .ok_or("Unrequested spare")?;
+        let bytes: [u8; 16] = bytes.try_into().map_err(|_| "Spare size differs")?;
+        spares[index]
+            .replace(bytes)
+            .map_or(Ok(()), |_| Err("Repeated spare".into()))
+    };
+    let mut progress = |_, _| Ok(());
+    exr2::read(
+        session,
+        bulk,
+        flash,
+        p,
+        image,
+        limits,
+        Selection::Spare(spare, offsets),
+        &mut Callbacks {
+            chunk: &mut chunk,
+            progress: &mut progress,
+        },
+    )
+    .await?;
+    spares
+        .into_iter()
+        .collect::<Option<_>>()
+        .ok_or_else(|| bulk::BulkError::Check("Incomplete spare read".into()))
 }
 
 pub async fn backup(

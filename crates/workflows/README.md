@@ -184,6 +184,12 @@ located DMA and geometry state, restores query outputs after every callback,
 and frees the allocation and restores the compiled bootstrap only after known
 completion and verified ownership.
 
+`flash::read_spare` uses the same EXR II payload to return the first 16 spare
+bytes of each requested page. The caller supplies the stock register reader
+`(page, output, event_mode, timeout)` and code checks that pin it; they are
+verified with the payload's checks before any callback is published. The
+`flash_backup` example reads them with `--execute --spare=REQUEST`.
+
 JavaScript exposes `Session.prepareServiceSession`, `backupFlash` and
 `dumpState`; each holds the session lease for the complete workflow, including
 chunk callbacks and cleanup. `flash_reader_plan` validates a built artifact
