@@ -119,7 +119,8 @@ impl ByteI2c {
                 return Err("Invalid synthetic I2C peer address or register count".into());
             }
         }
-        let factory = fujimod_emulator_devices::fingerprint::bytes(&serde_json::to_vec(&peer).unwrap());
+        // The declared peer itself binds checkpoints to this factory.
+        let factory = serde_json::to_value(&peer).unwrap();
         let r = &profile.reset;
         let state = State { ccr:r.ccr, adr:r.adr, csr:r.csr, fsr:r.fsr, bcr:0, bsr:0, dar:0,
             staged:false, rx_ready:false, low_drives:0, phase:Phase::Idle, pending:None,
