@@ -1,6 +1,7 @@
 //! Save a whole-flash backup using a prepared reader artifact and debug access.
-//! flash_backup ARTIFACT OUTPUT_DIRECTORY [--execute]
-//! Without --execute, validate the artifact offline. Live device selection uses
+//! flash_backup ARTIFACT OUTPUT_DIRECTORY [--execute [--spare=REQUEST]]
+//! Without --execute, validate the artifact offline. --spare reads only the
+//! first 16 spare bytes of the pages a JSON `{reader, offsets}` request names. Live device selection uses
 //! FUJIMOD_USB_DEVICE (bus-port hex) or FUJIMOD_USB_PROXY_URL.
 use fujimod_catalog::ReferenceCatalog;
 use fujimod_usb::{
@@ -19,6 +20,13 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant, SystemTime},
 };
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SpareRequest {
+    reader: flash::SpareReader,
+    offsets: Vec<u64>,
+}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -118,10 +126,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    let mut spare = None;
     let diagnostic = match args.get(3).map(String::as_str) {
         None => None,
         Some("--diagnostic=corrected") => Some(flash::NandReadMode::Corrected),
         Some("--diagnostic=uncorrected") => Some(flash::NandReadMode::Uncorrected),
+        Some(option) if option.starts_with("--spare=") => {
+            let request: SpareRequest = serde_json::from_slice(&fs::read(&option[8..])?)?;
+            spare = Some(request);
+            None
+        }
         _ => return Err("Unknown diagnostic mode".into()),
     };
     if !(args.len() == 2 || (args.len() == 3 || args.len() == 4) && args[2] == "--execute") {
@@ -186,6 +200,19 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     let output = PathBuf::from(&args[1]);
     fs::create_dir(&output)?;
+    if let Some(request) = spare {
+        return read_spare(
+            &devices[0],
+            interfaces[0],
+            &bulk,
+            &flash,
+            &artifact,
+            &image,
+            &request,
+            &output,
+        )
+        .await;
+    }
     let file = OpenOptions::new()
         .create_new(true)
         .read(true)
@@ -315,6 +342,75 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     closed?;
     fs::rename(output.join("flash.partial"), output.join("flash.bin"))?;
     println!("Saved {}", output.join("result.json").display());
+    Ok(())
+}
+
+async fn read_spare(
+    device: &connection::Device,
+    interface: connection::InterfaceSelection,
+    bulk: &fujimod_catalog_bulk::FirmwareBulk,
+    flash: &fujimod_catalog::capture::FirmwareFlash,
+    artifact: &Artifact,
+    image: &[u8],
+    request: &SpareRequest,
+    output: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let connection = Connection::open(
+        device,
+        interface,
+        TransferOptions {
+            timeout: Duration::from_secs(10),
+            max_reply_bytes: NonZeroU32::new(8 * 1024 * 1024).unwrap(),
+        },
+    )
+    .await?;
+    connection.set_tool("NAND spare read".into());
+    let mut session = connection.begin_session(None).await?;
+    let result = flash::read_spare(
+        &mut session,
+        bulk,
+        flash,
+        &artifact.payload,
+        image,
+        Limits {
+            memory: DebugMemoryLimits {
+                read: NonZeroU32::new(256).unwrap(),
+                write: NonZeroU32::new(256).unwrap(),
+            },
+            configuration: NonZeroU32::new(256).unwrap(),
+        },
+        &request.reader,
+        &request.offsets,
+    )
+    .await;
+    let closed = if session.state() == SessionState::Ready {
+        session.close().await.map(|_| ()).map_err(|e| e.to_string())
+    } else {
+        Err("Session completion unknown; close withheld".into())
+    };
+    let spares = result.as_ref().ok().map(|spares| {
+        request
+            .offsets
+            .iter()
+            .zip(spares)
+            .map(|(offset, bytes)| {
+                serde_json::json!({"offset": format!("{offset:#x}"),
+                    "spare": bytes.iter().map(|b| format!("{b:02x}")).collect::<String>()})
+            })
+            .collect::<Vec<_>>()
+    });
+    let report = serde_json::json!({"complete": result.is_ok() && closed.is_ok(),
+        "firmware_id": flash.firmware_id, "firmware_sha256": artifact.payload.firmware_sha256(),
+        "spare_reader": request.reader, "spares": spares,
+        "session_close_error": closed.as_ref().err(),
+        "operation_error": result.as_ref().err().map(ToString::to_string)});
+    fs::write(
+        output.join("result.json"),
+        serde_json::to_vec_pretty(&report)?,
+    )?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    result?;
+    closed?;
     Ok(())
 }
 

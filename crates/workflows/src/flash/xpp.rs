@@ -238,7 +238,7 @@ pub(crate) async fn read(
     payload: &Payload,
     image: &[u8],
     limits: Limits,
-    selection: super::Selection,
+    selection: super::Selection<'_>,
     callbacks: &mut super::Callbacks<'_>,
 ) -> bulk::Result<super::Backup> {
     payload.validate(flash, bulk, image)?;

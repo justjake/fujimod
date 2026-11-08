@@ -293,7 +293,7 @@ pub(crate) async fn read(
     payload: &Payload,
     image: &[u8],
     limits: Limits,
-    selection: super::Selection,
+    selection: super::Selection<'_>,
     callbacks: &mut super::Callbacks<'_>,
 ) -> bulk::Result<Backup> {
     payload.validate(flash, bulk, image)?;
@@ -341,6 +341,10 @@ pub(crate) async fn read(
         target,
         selection.controller_mode(),
         selection.allows_uncorrectable(),
+        match selection {
+            super::Selection::Spare(spare, offsets) => Some((spare, offsets)),
+            _ => None,
+        },
         callbacks,
     )
     .await;
@@ -381,12 +385,14 @@ async fn execute(
     target: BulkRange,
     controller_mode: u32,
     allow_uncorrectable: bool,
+    spare: Option<(&super::SpareReader, &[u64])>,
     callbacks: &mut super::Callbacks<'_>,
 ) -> bulk::Result<Backup> {
     // Stock code is read through its uncached view before publishing any callback.
     let checks: Vec<_> = p
         .checks
         .iter()
+        .chain(spare.iter().flat_map(|(s, _)| &s.checks))
         .map(|c| CodeCheck {
             address: c.address | bulk.code_alias,
             ..c.clone()
@@ -533,6 +539,7 @@ async fn execute(
                 base + u64::from(p.observer_offset - p.reader_offset),
                 lease,
                 0,
+                None,
             )
             .await?;
             require(
@@ -543,6 +550,49 @@ async fn execute(
                 bulk::hex(&sha256_bytes(&control)) == p.control_sha256,
                 "Control chunk differs from update; no backup read",
             )?;
+            if let Some((spare, offsets)) = spare {
+                let page = u64::from(
+                    flash
+                        .reader
+                        .as_ref()
+                        .and_then(|reader| reader.nand.as_ref())
+                        .expect("validated NAND ABI")
+                        .page_bytes,
+                );
+                let mut all = Vec::new();
+                for &offset in offsets {
+                    let bytes = read_chunk(
+                        reader,
+                        bulk,
+                        flash,
+                        base,
+                        BulkRange {
+                            address: offset,
+                            size: page,
+                        },
+                        &mut calls,
+                        &mut uncorrectable_page_offsets,
+                        &mut nand_read_stats,
+                        base + u64::from(p.observer_offset - p.reader_offset),
+                        lease,
+                        2,
+                        Some(spare.entry as u32),
+                    )
+                    .await?;
+                    all.extend_from_slice(&bytes);
+                    (callbacks.chunk)(offset, bytes).map_err(BulkError::Check)?;
+                    (callbacks.progress)(all.len() as u64, target.size)
+                        .map_err(BulkError::Check)?;
+                }
+                return Ok(Backup {
+                    device: flash.device.clone(),
+                    size: all.len() as u64,
+                    sha256: bulk::hex(&sha256_bytes(&all)),
+                    uncorrectable_page_offsets,
+                    nand_read_stats: Some(nand_read_stats),
+                    uncorrectable_granularity_bytes: 0,
+                });
+            }
             let mut digest = super::xp5::OrderedDigest::default();
             let mut done = 0;
             for (offset, size) in
@@ -563,6 +613,7 @@ async fn execute(
                     base + u64::from(p.observer_offset - p.reader_offset),
                     lease,
                     controller_mode,
+                    None,
                 )
                 .await?;
                 require(
@@ -664,16 +715,22 @@ async fn read_chunk(
     observer: u64,
     lease: &CallbackLease,
     controller_mode: u32,
+    spare_entry: Option<u32>,
 ) -> bulk::Result<Vec<u8>> {
     let (offset, size) = (target.address, target.size);
     let stock_reader = flash.reader.as_ref().expect("validated stock reader");
     let nand = stock_reader.nand.as_ref().expect("validated NAND ABI");
-    let stock = flash
-        .code_ranges
-        .iter()
-        .find(|r| r.name == stock_reader.symbol)
-        .expect("validated reader")
-        .address;
+    let stock = spare_entry.map_or_else(
+        || {
+            flash
+                .code_ranges
+                .iter()
+                .find(|r| r.name == stock_reader.symbol)
+                .expect("validated reader")
+                .address
+        },
+        u64::from,
+    );
     let request = (base + REQUEST) | bulk.code_alias;
     let buffer = (base + BUFFER) | bulk.code_alias;
     let values = [
@@ -702,7 +759,8 @@ async fn read_chunk(
             .ok_or_else(|| BulkError::Check("NAND correction restoration entry is missing".into()))?
             .address as u32,
     ];
-    if *calls == 0 {
+    // Spare requests replace the stock entry, so each is written in full.
+    if *calls == 0 || spare_entry.is_some() {
         write(reader, request, &words(&values)).await?;
     } else {
         // Only source/length change during a capture; result echoes and the
@@ -758,7 +816,11 @@ async fn read_chunk(
     reader
         .read(BulkRange {
             address: buffer,
-            size,
+            size: if spare_entry.is_some() {
+                size / u64::from(nand.page_bytes) * 16
+            } else {
+                size
+            },
         })
         .await
 }
