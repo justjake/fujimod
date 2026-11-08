@@ -146,6 +146,26 @@ struct State {
     generation: u64,
     pending: Option<Vec<[u8; 8]>>,
     deadline: Option<u64>,
+    /// Trigger channels 0x280 + n * 0x40 (n < 6): the busy-until deadline of
+    /// each channel whose start bit (+4) is set.
+    #[serde(default)]
+    channels: BTreeMap<u64, u64>,
+}
+/// Trigger channel blocks: X-T5 4.31 programs 0x288 (0x100), 0x28c (a count),
+/// 0x290/0x294 (1) and starts the channel with 0x284 = 1, then its REC task
+/// polls 0x284 bit 0 (p5 0x2eb7bc0 loop through image 4 0x1356ae0) until it
+/// clears before it continues the live-view start; the same for 0x2c0. The
+/// blocks have the shape of the 0x200 command block. Only the start/busy bit
+/// is modeled: it clears after the command latency. What the channels drive
+/// on the sensor (likely trigger/sync lines) is unknown.
+const CHANNEL_BASE: u64 = 0x280;
+const CHANNEL_STRIDE: u64 = 0x40;
+const CHANNEL_COUNT: u64 = 6;
+const CHANNEL_TOKEN: u64 = 1 << 62;
+fn channel(o: u64) -> Option<u64> {
+    (CHANNEL_BASE..CHANNEL_BASE + CHANNEL_STRIDE * CHANNEL_COUNT)
+        .contains(&o)
+        .then(|| (o - CHANNEL_BASE) / CHANNEL_STRIDE * CHANNEL_STRIDE + CHANNEL_BASE)
 }
 pub struct Command {
     base: u64,
@@ -241,6 +261,14 @@ impl Device for Command {
                 u64::from(self.reg(o))
             }
             0x224..=0x240 => u64::from(self.state.response[((0x240 - o) / 4) as usize]),
+            _ if channel(o).is_some() => {
+                let block = channel(o).unwrap();
+                if o == block + 4 {
+                    u64::from(self.state.channels.contains_key(&block))
+                } else {
+                    u64::from(self.reg(o))
+                }
+            }
             _ => {
                 cx.unmodeled();
                 0
@@ -295,18 +323,41 @@ impl Device for Command {
                     self.state.registers.insert(o, value);
                 }
             }
+            _ if channel(o).is_some() => {
+                let block = channel(o).unwrap();
+                if o == block + 4 {
+                    if value & 1 != 0 {
+                        let Some(at) = cx.now().checked_add(self.latency_ticks) else {
+                            cx.fail("sensor channel deadline overflow");
+                            return;
+                        };
+                        self.state.channels.insert(block, at);
+                        cx.schedule(at, CHANNEL_TOKEN | block);
+                    } else {
+                        self.state.channels.remove(&block);
+                    }
+                } else {
+                    self.state.registers.insert(o, value);
+                }
+            }
             _ => cx.unmodeled(),
         }
     }
     fn event(&mut self, cx: &mut Cx<'_>, token: u64) {
-        if token == self.state.generation {
+        if token == self.state.generation || token & CHANNEL_TOKEN != 0 {
             self.advance(cx);
         }
     }
     fn next_deadline(&self, _: u64) -> Option<u64> {
-        self.state.deadline
+        self.state
+            .deadline
+            .into_iter()
+            .chain(self.state.channels.values().copied())
+            .min()
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
+        let now = cx.now();
+        self.state.channels.retain(|_, at| *at > now);
         if !self.state.deadline.is_some_and(|at| at <= cx.now()) {
             return;
         }
@@ -499,5 +550,40 @@ mod tests {
             4 << 16
         );
         assert_eq!(sensor.0.lock().unwrap().reads, 1);
+    }
+    #[test]
+    fn trigger_channel_start_bit_clears_after_the_command_latency() {
+        let sensor = Sensor::new(None, (0x51, 8));
+        let mut command = Command::new(0xfff6c000, sensor, 17).unwrap();
+        let mut host = RecordingHost::default();
+        let base = 0xfff6c000 + 0x2c0;
+        command.write(&mut Cx::new(&mut host, 1, 0, 0), base + 8, 4, 0x100);
+        command.write(&mut Cx::new(&mut host, 1, 0, 0), base + 4, 4, 1);
+        assert_eq!(
+            command.read(&mut Cx::new(&mut host, 1, 0, 0), base + 4, 4),
+            1
+        );
+        assert_eq!(
+            command.read(&mut Cx::new(&mut host, 1, 0, 0), base + 8, 4),
+            0x100
+        );
+        let &(_, at, token) = host.events.last().unwrap();
+        assert_eq!(at, 17);
+        host.now = 16;
+        command.event(&mut Cx::new(&mut host, 0, 0, 0), token);
+        assert_eq!(
+            command.read(&mut Cx::new(&mut host, 1, 0, 0), base + 4, 4),
+            1
+        );
+        host.now = 17;
+        command.event(&mut Cx::new(&mut host, 0, 0, 0), token);
+        assert_eq!(
+            command.read(&mut Cx::new(&mut host, 1, 0, 0), base + 4, 4),
+            0
+        );
+        // Offsets past the six channel blocks stay unmodeled.
+        let mut cx = Cx::new(&mut host, 1, 0, 0);
+        command.read(&mut cx, 0xfff6c000 + 0x400, 4);
+        assert!(cx.is_unmodeled());
     }
 }
