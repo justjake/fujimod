@@ -101,6 +101,8 @@ fn parse(
         clock_seconds_2000: None,
         preferred_languages,
         camera: None,
+        access_point: None,
+        capability_reply: None,
     };
     let options = Options {
         nand: values.remove("--nand").map(PathBuf::from),

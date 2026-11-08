@@ -6850,6 +6850,334 @@
       ],
       "type": "object"
     },
+    "EarlyBootConstants": {
+      "additionalProperties": false,
+      "description": "Exact register and command values for this firmware's early restart.",
+      "properties": {
+        "exr2_restart_alarm_enable": {
+          "description": "Alarm enable.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_alarm_high": {
+          "description": "Alarm high.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_alarm_low": {
+          "description": "Alarm low.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_gpio_banks": {
+          "description": "Gpio banks.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_gpio_base": {
+          "description": "Gpio base.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_gpio_config": {
+          "description": "Gpio config.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_gpio_inactive_mask": {
+          "description": "Gpio inactive mask.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_gpio_mode1": {
+          "description": "Gpio mode1.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_gpio_mode2": {
+          "description": "Gpio mode2.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_gpio_mode3": {
+          "description": "Gpio mode3.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_gpio_mode4": {
+          "description": "Gpio mode4.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_gpio_output": {
+          "description": "Gpio output.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_gpio_stride": {
+          "description": "Gpio stride.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_packet_bytes": {
+          "description": "Packet bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_packet_register": {
+          "description": "Packet register.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_power_command": {
+          "description": "Power command.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_power_hold": {
+          "description": "Power hold.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_power_hold_mask": {
+          "description": "Power hold mask.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_power_off_value": {
+          "description": "Power off value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_spi_base": {
+          "description": "Spi base.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_spi_busy": {
+          "description": "Spi busy.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_spi_control": {
+          "description": "Spi control.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_spi_count_mask": {
+          "description": "Spi count mask.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_spi_enable": {
+          "description": "Spi enable.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_spi_fifo_control": {
+          "description": "Spi fifo control.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_spi_fifo_reset": {
+          "description": "Spi fifo reset.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_spi_format": {
+          "description": "Spi format.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_spi_rx": {
+          "description": "Spi rx.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_spi_rx_count": {
+          "description": "Spi rx count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_spi_rx_ready": {
+          "description": "Spi rx ready.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_spi_status": {
+          "description": "Spi status.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_spi_status_clear": {
+          "description": "Spi status clear.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_spi_tx": {
+          "description": "Spi tx.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_spi_tx_count": {
+          "description": "Spi tx count.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exr2_restart_write": {
+          "description": "Write.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "restart_gpio_pin": {
+          "description": "Gpio pin.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "restart_panel_gpio_bank": {
+          "description": "Panel gpio bank.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "restart_power_gpio_bank": {
+          "description": "Power gpio bank.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "restart_spi_format_value": {
+          "description": "Spi format value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "restart_spi_idle_control": {
+          "description": "Spi idle control.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "exr2_restart_alarm_enable",
+        "exr2_restart_alarm_high",
+        "exr2_restart_alarm_low",
+        "exr2_restart_gpio_banks",
+        "exr2_restart_gpio_base",
+        "exr2_restart_gpio_config",
+        "exr2_restart_gpio_inactive_mask",
+        "exr2_restart_gpio_mode1",
+        "exr2_restart_gpio_mode2",
+        "exr2_restart_gpio_mode3",
+        "exr2_restart_gpio_mode4",
+        "exr2_restart_gpio_output",
+        "exr2_restart_gpio_stride",
+        "exr2_restart_packet_bytes",
+        "exr2_restart_packet_register",
+        "exr2_restart_power_command",
+        "exr2_restart_power_hold",
+        "exr2_restart_power_hold_mask",
+        "exr2_restart_power_off_value",
+        "exr2_restart_spi_base",
+        "exr2_restart_spi_busy",
+        "exr2_restart_spi_control",
+        "exr2_restart_spi_count_mask",
+        "exr2_restart_spi_enable",
+        "exr2_restart_spi_fifo_control",
+        "exr2_restart_spi_fifo_reset",
+        "exr2_restart_spi_format",
+        "exr2_restart_spi_rx",
+        "exr2_restart_spi_rx_count",
+        "exr2_restart_spi_rx_ready",
+        "exr2_restart_spi_status",
+        "exr2_restart_spi_status_clear",
+        "exr2_restart_spi_tx",
+        "exr2_restart_spi_tx_count",
+        "exr2_restart_write",
+        "restart_gpio_pin",
+        "restart_panel_gpio_bank",
+        "restart_power_gpio_bank",
+        "restart_spi_format_value",
+        "restart_spi_idle_control"
+      ],
+      "type": "object"
+    },
+    "EarlyBootMechanism": {
+      "description": "A processor-specific freestanding power-controller transport.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Polled EXR II SPI, persistent packet, wake alarm and power-hold release.",
+          "properties": {
+            "code_checks": {
+              "description": "Stock loader ranges establishing the transport.",
+              "items": {
+                "$ref": "#/$defs/CodeCheck"
+              },
+              "type": "array"
+            },
+            "constants": {
+              "$ref": "#/$defs/EarlyBootConstants",
+              "description": "Exact C constants derived from the checked loader and power path."
+            },
+            "kind": {
+              "const": "exr2_polled_alarm",
+              "type": "string"
+            },
+            "spi_channel": {
+              "description": "SPI channel selected by the verified loader descriptor.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "spi_channel",
+            "constants",
+            "code_checks"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "ElectricalInput": {
       "description": "Located electrical meaning, separate from scanner table operands.",
       "oneOf": [
@@ -21021,6 +21349,17 @@
             }
           ],
           "description": "Optional stock timer ABI for an autonomous deferred restart. This is\npresent only when its locator qualified a callback timer on the same\nfirmware; delivery and callback placement remain separate mechanisms."
+        },
+        "early_boot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EarlyBootMechanism"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Freestanding restart before the operating system, when located."
         },
         "parameter_bytes": {
           "description": "Bytes of sender parameters.",
