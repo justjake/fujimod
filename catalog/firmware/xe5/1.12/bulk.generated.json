@@ -1,0 +1,155 @@
+{
+  "$schema": "https://fujimod.com/schemas/bulk.generated.schema.json",
+  "schema": 1,
+  "id": "xe5-112-bulk",
+  "firmware_id": "xe5-112",
+  "product": "X-E5",
+  "internal_version": "1.63",
+  "code_alias": 0,
+  "source": {
+    "mechanism": "pattern_zero_base",
+    "registered_buffer": 71257128,
+    "source_state": 77073128,
+    "configuration_pointer": 36281016,
+    "configuration_bytes": 9830400,
+    "system_mode_address": 45089952,
+    "capacity": 65536
+  },
+  "window": {
+    "address": 47710208,
+    "size": 23044096
+  },
+  "code_checks": [
+    {
+      "name": "bulk_3078120",
+      "address": 50823456,
+      "size": 180,
+      "sha256": "f09821de0d0d6f33edc60073ae3b48f57d8e91584d24a64677b65f51a363f244"
+    },
+    {
+      "name": "bulk_3078b54",
+      "address": 50826068,
+      "size": 184,
+      "sha256": "84b6f1c890075102690f85e92e9d881c12ff56dfd69d1f6eea3d5f1a6c971b0e"
+    },
+    {
+      "name": "bulk_3079a70",
+      "address": 50829936,
+      "size": 196,
+      "sha256": "4a233c9220c1ac0de2958b01ad157c8103fb85d658584cebb7e3eba360381d5c"
+    },
+    {
+      "name": "bulk_3078e0c",
+      "address": 50826764,
+      "size": 80,
+      "sha256": "2b51e537ba2514198b0780962637acd9f092049b9a708711a81555d3a42c24b3"
+    },
+    {
+      "name": "bulk_3079d28",
+      "address": 50830632,
+      "size": 388,
+      "sha256": "9bb04e409ec271186834035c936261c2019d91d159f27b6badc99a64ac2926a6"
+    },
+    {
+      "name": "bulk_3078440",
+      "address": 50824256,
+      "size": 36,
+      "sha256": "d84cb594b6917f6172a73179c8b78d01d459981d2db215af71b255dfdcdffa5d"
+    },
+    {
+      "name": "bulk_3078464",
+      "address": 50824292,
+      "size": 36,
+      "sha256": "6ad82f4c0c4380a3a90369f25b5f5e1e94a58a3ade0d16e2589f9b90e4907361"
+    },
+    {
+      "name": "bulk_3078420",
+      "address": 50824224,
+      "size": 32,
+      "sha256": "d2653c02c4c4f50b3f302cea05c6b6a943b41a084e799fd5542caccc58b4b11f"
+    },
+    {
+      "name": "bulk_1618260",
+      "address": 23167584,
+      "size": 12,
+      "sha256": "5c624ca9b5490d48bbcf9bc7c33c86660ff9f607d30706c28f49e89796b93918"
+    },
+    {
+      "name": "bulk_3114338",
+      "address": 51462968,
+      "size": 224,
+      "sha256": "3f56c46b591fb06e816e3e1bc83930d048a73d09e2d3293480d71fbc2bba5296"
+    },
+    {
+      "name": "bulk_15b57b0",
+      "address": 22763440,
+      "size": 40,
+      "sha256": "2d497e8c9688b9ef808a098e77117c59eb07b5e3b85c76201c2ce8b8ecc93e2a"
+    },
+    {
+      "name": "bulk_15b5994",
+      "address": 22763924,
+      "size": 44,
+      "sha256": "f668a6a967924fc383d750f72ad6bb1fd95f89c2b66f60fc29c164c6cc1abf43"
+    },
+    {
+      "name": "bulk_15b5724",
+      "address": 22763300,
+      "size": 84,
+      "sha256": "ba437c578f54a5512d2232780a3bdbbf1ecfb8b4e3e6de0ff31295638c892a6a"
+    },
+    {
+      "name": "bulk_15bc24c",
+      "address": 22790732,
+      "size": 284,
+      "sha256": "9fdacfb30090d09aa489db2032d1aace243044777c3d9ce52c6a7a98a871b56e"
+    },
+    {
+      "name": "bulk_32519d4",
+      "address": 52763092,
+      "size": 56,
+      "sha256": "1d4b1823be2e9bf9cd2339d95abe5d73ca8ea827c6d71ba5402190bdf858c6dc"
+    },
+    {
+      "name": "bulk_144e0a4",
+      "address": 21291172,
+      "size": 108,
+      "sha256": "e0669fa57bdfa86be0b2ac8b6358c2e3513f8f4ceca1014bb914c4d4255c7fec"
+    },
+    {
+      "name": "bulk_144e110",
+      "address": 21291280,
+      "size": 108,
+      "sha256": "62e2e7ddbe2ba5256e39e8cfc87e6ac532b30a93a2a908eed184f83dcd6b48b8"
+    }
+  ],
+  "probes": [
+    {
+      "address": 50823456,
+      "size": 128
+    },
+    {
+      "address": 50826068,
+      "size": 128
+    }
+  ],
+  "mapped_probe": {
+    "name": "bulk_mapped_probe",
+    "address": 50823168,
+    "size": 4096,
+    "sha256": "49f7fc8215848211aed811b17b39719f4ffc5d60a86bd0561661a230bf825716"
+  },
+  "scopes": [
+    {
+      "name": "quick",
+      "basis": "Initialized firmware section containing the checked bulk probes; other RAM extents are not established.",
+      "ranges": [
+        {
+          "name": "firmware",
+          "address": 47710208,
+          "size": 23044096
+        }
+      ]
+    }
+  ]
+}
