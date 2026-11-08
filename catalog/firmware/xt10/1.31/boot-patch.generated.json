@@ -1,0 +1,207 @@
+{
+  "$schema": "https://fujimod.com/schemas/boot-patch.generated.schema.json",
+  "schema": 1,
+  "id": "xt10-131-boot-patch",
+  "firmware_id": "xt10-131",
+  "update_sha256": "aa58f0ff3878b5ced79bb53a2e85dea3946be169dbc7416f0c896d4c5d7f4a8b",
+  "isa": "arm32",
+  "units": [
+    {
+      "name": "boot",
+      "address": 0,
+      "size": 131072,
+      "dat_offset": 262748,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "0c954e9cbf21f2ef3a40aad470988b569ced57bad06eaa398a193590dd94af40"
+    },
+    {
+      "name": "kernel0",
+      "address": 262144,
+      "size": 56224,
+      "dat_offset": 524892,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "399c48c26c1b09e8dafcf666fe0efa62619f9cdcaa27166fb8f6d864a3d8d6f0"
+    },
+    {
+      "name": "kernel1",
+      "address": 851968,
+      "size": 56192,
+      "dat_offset": 655964,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "6db7ca9ec6d87124d830acbbf452c9f2d57fb26089766c2a88e0c5503d7de128"
+    },
+    {
+      "name": "resources2",
+      "address": 1245184,
+      "size": 2202272,
+      "dat_offset": 17433180,
+      "compression": "raw",
+      "executable": false,
+      "sha256": "977fa28356053bad0bb57f19998caeea133726c037ee5821fa85ce8002832f4a"
+    },
+    {
+      "name": "resources3",
+      "address": 6553600,
+      "size": 531820,
+      "dat_offset": 23462492,
+      "compression": "raw",
+      "executable": false,
+      "sha256": "b5b4b1c3cf52bca6b3b59e41599d3a0bcb1fe550456898ef690ee622470a6204"
+    },
+    {
+      "name": "section_table",
+      "address": 9043968,
+      "size": 1024,
+      "dat_offset": 1311324,
+      "compression": "raw",
+      "executable": false,
+      "sha256": "af21ae6af6b955d920ab3509d1d3a37407b6b2a93c5cb0ee1caa535f1a5eed4b"
+    },
+    {
+      "name": "section4",
+      "address": 9044992,
+      "size": 3522720,
+      "dat_offset": 1442396,
+      "compression": "method4",
+      "executable": true,
+      "sha256": "8b8e0cfc5729523da8078a4fc311265fd0ba0c87ed79837fd6da78751075d9c4"
+    },
+    {
+      "name": "section5",
+      "address": 16225536,
+      "size": 6054336,
+      "dat_offset": 3277404,
+      "compression": "method4",
+      "executable": true,
+      "sha256": "733e26645bd47ee93dc8fa15df9d3c3ddacd8e055a4c9e2733b9ea83c856d1ba"
+    },
+    {
+      "name": "overlay48",
+      "address": 27000832,
+      "size": 3039456,
+      "dat_offset": 6685276,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "02d1ed5abf7635709389f27112ad4383ad98d1a88f92b4e0df04bd86fe7e71d8"
+    },
+    {
+      "name": "overlay4a",
+      "address": 30146560,
+      "size": 119520,
+      "dat_offset": 9831004,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "5d06272cd6c773fd4b88564d72f43316ac45eb0d58a80c855a53b9a3deee5f97"
+    },
+    {
+      "name": "overlay4b",
+      "address": 30277632,
+      "size": 2597280,
+      "dat_offset": 9962076,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "0e31995d8159d4e4bf208abada1362b9e6009ecd4876eec460d9e949a72a6429"
+    }
+  ],
+  "triggers": [
+    {
+      "name": "section4-decoded",
+      "site": 7556,
+      "expected": 3942646075,
+      "kind": "once",
+      "units": [
+        "boot",
+        "kernel0",
+        "kernel1",
+        "section_table",
+        "section4"
+      ]
+    },
+    {
+      "name": "section5-loaded",
+      "site": 9738080,
+      "expected": 3808886824,
+      "kind": "once",
+      "units": [
+        "boot",
+        "kernel0",
+        "kernel1",
+        "section_table",
+        "section4",
+        "section5"
+      ]
+    },
+    {
+      "name": "overlay-block",
+      "site": 10217936,
+      "expected": 3766485001,
+      "kind": "range",
+      "base_register": "r0",
+      "length_register": "r9",
+      "address_mask": 3221225471,
+      "units": [
+        "boot",
+        "kernel0",
+        "kernel1",
+        "section_table",
+        "section4",
+        "section5",
+        "overlay48",
+        "overlay4a",
+        "overlay4b"
+      ]
+    }
+  ],
+  "clears": [
+    {
+      "address": 17728,
+      "size": 4416,
+      "done_after": "section4-decoded",
+      "name": "stage1-primary-entry"
+    },
+    {
+      "address": 87200,
+      "size": 32,
+      "done_after": "section4-decoded",
+      "name": "stage1-secondary-entry"
+    },
+    {
+      "name": "kernel0-bss",
+      "address": 318368,
+      "size": 84768,
+      "done_after": "section5-loaded"
+    },
+    {
+      "name": "kernel1-bss",
+      "address": 908160,
+      "size": 84768,
+      "done_after": "section5-loaded"
+    },
+    {
+      "name": "section4-bss",
+      "address": 12567712,
+      "size": 3657824,
+      "done_after": "section4-decoded"
+    },
+    {
+      "name": "section5-bss",
+      "address": 22279872,
+      "size": 4688512,
+      "done_after": "section5-loaded"
+    }
+  ],
+  "trampoline_space": {
+    "address": 589824,
+    "size": 4096
+  },
+  "resident_space": {
+    "address": 486801408,
+    "size": 3014656
+  },
+  "stage3_resident": [
+    "boot"
+  ]
+}
