@@ -480,6 +480,8 @@ pub enum Model {
     },
     FaceDetector {
         options: serde_json::Value,
+        #[serde(default)]
+        routes: Option<String>,
     },
     FaceResults {
         profile: serde_json::Value,

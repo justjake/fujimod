@@ -8,13 +8,18 @@ pub fn register(constructors: &mut Constructors) {
     constructors.add("face-results", face_results);
 }
 
-fn face_detector(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
-    let Model::FaceDetector { options } = model else {
+fn face_detector(builder: Builder<'_>, model: Model) -> Result<Built, String> {
+    let Builder { id, resources, .. } = builder;
+    let Model::FaceDetector { options, routes } = model else {
         return Err("constructor called for another model kind".into());
     };
     let options = decode(options)?;
+    let routes = match routes {
+        Some(routes) => Some(wire!(resources, id, routes, IrqRoutes)),
+        None => None,
+    };
     Ok(Built::Device(Box::new(
-        crate::face_detector::FaceDetector::new(options),
+        crate::face_detector::FaceDetector::new(options, routes)?,
     )))
 }
 

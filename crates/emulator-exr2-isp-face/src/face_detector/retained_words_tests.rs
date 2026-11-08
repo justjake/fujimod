@@ -39,9 +39,14 @@ fn write(model: &mut FaceDetector, address: u64, size: u8, value: u64) -> Option
     cx.take_refusal()
 }
 fn bank() -> FaceDetector {
-    FaceDetector::new(Options {
-        mode: Mode::RetainedWords,
-    })
+    FaceDetector::new(
+        Options {
+            mode: Mode::RetainedWords,
+            results: None,
+        },
+        None,
+    )
+    .unwrap()
 }
 
 #[test]
