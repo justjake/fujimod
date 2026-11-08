@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/state.generated.schema.json",
+  "schema": 1,
+  "id": "gfx100s-213-state",
+  "firmware_id": "gfx100s-213",
+  "regions": [
+    {
+      "name": "boot-rom",
+      "address": 4293918720,
+      "size": 32768,
+      "constant": true
+    }
+  ]
+}
