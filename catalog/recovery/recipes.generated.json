@@ -6247,6 +6247,82 @@
         "decoded_size": 32,
         "sha256": "8094d4dc918f5e2d99b61c46d90088bb51ca13d0db4c7e794435d26a08ac9e85"
       }
+    },
+    "configuration_defaults": {
+      "check": {
+        "address": 9719332,
+        "size": 312,
+        "sha256": "c58d85e07e3583669fd07d87dccdbd9e01760ece380f2182f90f61255c8f5ce5"
+      },
+      "offset_load": 9719492,
+      "read_call": 9719500,
+      "read_target": 9739488,
+      "copy": {
+        "address": 10278492,
+        "size": 408,
+        "sha256": "5b043b04a71be3f2e379046c071b7d0548157e9a6fb2d0ffa0bd22f024ec8297"
+      },
+      "staging": 33030144,
+      "source": {
+        "dat_offset": 918108,
+        "size": 270336,
+        "compression": "raw",
+        "decoded_size": 270336,
+        "sha256": "04f59f9d7e151a28797deb428c8541fc3f6cce6a5d83cb9e1e42ed9f0e90d4ac"
+      }
+    },
+    "startup_reads": {
+      "check": {
+        "address": 10385232,
+        "size": 628,
+        "sha256": "7c014f717995c7014eed970b4afffb6d77bc4f90fc4be9453487b485e1602374"
+      },
+      "reads": [
+        {
+          "what": "English message bank (language slot 1)",
+          "call": 10385480,
+          "target": 9742184,
+          "row": 11578176,
+          "flash_offset": 24379392,
+          "destination": 6291456,
+          "source": {
+            "dat_offset": 24379996,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "3952cba0a0411ff8e1ed57ba2465640609e48040ad0fe6b8ec6bee8b55dc4be5"
+          }
+        },
+        {
+          "what": "FDL font overlay 5",
+          "call": 10385548,
+          "target": 9742460,
+          "row": 11578680,
+          "flash_offset": 39190528,
+          "destination": 7208960,
+          "source": {
+            "dat_offset": 39191132,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "66e609053533fb297898fbcc85214cc789fbc07d40da2fd3cfeac75b466ca60b"
+          }
+        }
+      ],
+      "reloads": [
+        {
+          "what": "section 2 (resident module)",
+          "call": 10385336,
+          "target": 9742096,
+          "section": 2
+        },
+        {
+          "what": "section 3 (resident resources)",
+          "call": 10385348,
+          "target": 9742372,
+          "section": 3
+        }
+      ]
     }
   },
   {
