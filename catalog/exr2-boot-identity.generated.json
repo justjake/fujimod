@@ -1,0 +1,88 @@
+{
+  "$schema": "https://fujimod.com/schemas/exr2-boot-identity.generated.schema.json",
+  "schema": 1,
+  "id": "exr2-boot-identity",
+  "section_table_bytes": 1024,
+  "firmwares": [
+    {
+      "firmware_id": "X100S-121",
+      "section_table_native_offset": 950272,
+      "section_table_sha256": "b22111ab5d6e98b6f7d927262c6ec72bf1071484c08278997991f66f3af0fea0"
+    },
+    {
+      "firmware_id": "X100T-111",
+      "section_table_native_offset": 1310720,
+      "section_table_sha256": "a63bae5142afd2813ac91c5527c176024a71d29179e0f6c02f693ad709a9dd30"
+    },
+    {
+      "firmware_id": "X20-103",
+      "section_table_native_offset": 950272,
+      "section_table_sha256": "61b656424d5405075f31621c43964a2ae1a56afd75beab9f1821501fae3ff1b0"
+    },
+    {
+      "firmware_id": "X30-103",
+      "section_table_native_offset": 1310720,
+      "section_table_sha256": "281cacae8874510bcf4e6a28075b047a1a62c81004384e6b8bbeaf05710f62ff"
+    },
+    {
+      "firmware_id": "X70-110",
+      "section_table_native_offset": 1310720,
+      "section_table_sha256": "6f44765ca78458df5a7de219105745b6eccf701a5fbb533de020fceef2633f7d"
+    },
+    {
+      "firmware_id": "XA1-150",
+      "section_table_native_offset": 1310720,
+      "section_table_sha256": "e68d31e06c436454b8e853572999339d99372887ad3d79fd7a994f301be09301"
+    },
+    {
+      "firmware_id": "XA2-130",
+      "section_table_native_offset": 1310720,
+      "section_table_sha256": "ab79bc97961f9696d4251451210afb997449a8bb362d06004bef89921edac1e0"
+    },
+    {
+      "firmware_id": "XE2-411",
+      "section_table_native_offset": 1310720,
+      "section_table_sha256": "6d93dedb73df96ff32b8fa9d9cd0cd16b8edf4261b0b86b09ef91d588238f0eb"
+    },
+    {
+      "firmware_id": "XE2S-111",
+      "section_table_native_offset": 1310720,
+      "section_table_sha256": "68d01bcde2e88c2b55860b429e46a71ffd78a9439440cfe4b4e1ef710ba0f723"
+    },
+    {
+      "firmware_id": "XM1-101",
+      "section_table_native_offset": 1310720,
+      "section_table_sha256": "9f64132250aab2b2f8bfb3dc5d7577f241ce714b0ac27f16f9aac43b68c41a5a"
+    },
+    {
+      "firmware_id": "XM1-120",
+      "section_table_native_offset": 1310720,
+      "section_table_sha256": "64429fe1de0db3f2dc889b1be0f9445870e37ac77b2f07ed74b2b205ebc793a5"
+    },
+    {
+      "firmware_id": "XM1-150",
+      "section_table_native_offset": 1310720,
+      "section_table_sha256": "aa9216fb44c6d46d7ef17a23dc2ddca04d0402e7a23e93a44e798aa58284a25c"
+    },
+    {
+      "firmware_id": "XQ1-121",
+      "section_table_native_offset": 1310720,
+      "section_table_sha256": "fd1f0ebbf19d4b59ac3f80fdca8c513cc7215464137e6d658d60c8df0571ebd2"
+    },
+    {
+      "firmware_id": "XQ2-101",
+      "section_table_native_offset": 1310720,
+      "section_table_sha256": "8882078ec8d0c74937d4c83ef8acdb950ea4db92aea9951196ef3c6196a17a82"
+    },
+    {
+      "firmware_id": "XT1-552",
+      "section_table_native_offset": 1310720,
+      "section_table_sha256": "2aef9759f4bdc4895231745107969465aafb79baf2f41659e6eb57b849cfe1e1"
+    },
+    {
+      "firmware_id": "XT10-131",
+      "section_table_native_offset": 1310720,
+      "section_table_sha256": "af21ae6af6b955d920ab3509d1d3a37407b6b2a93c5cb0ee1caa535f1a5eed4b"
+    }
+  ]
+}

@@ -53,6 +53,43 @@
       ],
       "type": "object"
     },
+    "BootRomNand": {
+      "additionalProperties": false,
+      "description": "The four NAND entries the universal SD-boot stage 1 calls.",
+      "properties": {
+        "initialize": {
+          "description": "Controller initialize entry.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "load_blocks_dma": {
+          "description": "Bulk block read entry.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "probe_block_markers": {
+          "description": "Block-marker probe entry.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "read_512_bytes": {
+          "description": "One 512-byte small-page read entry.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "initialize",
+        "probe_block_markers",
+        "read_512_bytes",
+        "load_blocks_dma"
+      ],
+      "type": "object"
+    },
     "BootRomPowerHold": {
       "additionalProperties": false,
       "description": "Power-hold register asserted before any ROM card access.",
@@ -165,6 +202,10 @@
       "minimum": 0,
       "type": "integer"
     },
+    "nand": {
+      "$ref": "#/$defs/BootRomNand",
+      "description": "The NAND entries the universal SD-boot stage 1 calls."
+    },
     "power_hold": {
       "$ref": "#/$defs/BootRomPowerHold",
       "description": "The power-hold register the loader reasserts."
@@ -198,6 +239,7 @@
     "filesystem_pointer",
     "power_hold",
     "sd",
+    "nand",
     "load_address"
   ],
   "title": "BootRom",

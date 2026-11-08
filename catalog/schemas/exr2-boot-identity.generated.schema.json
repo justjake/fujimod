@@ -1,0 +1,73 @@
+{
+  "$defs": {
+    "Exr2BootIdentityEntry": {
+      "additionalProperties": false,
+      "description": "One body's section-table hash and where the table sits in NAND.",
+      "properties": {
+        "firmware_id": {
+          "description": "Release identity the identified body reports.",
+          "type": "string"
+        },
+        "section_table_native_offset": {
+          "description": "Native-flash offset of the section table.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "section_table_sha256": {
+          "description": "SHA-256 of the section table.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "firmware_id",
+        "section_table_native_offset",
+        "section_table_sha256"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/exr2-boot-identity.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Section-table identity table for the registered EXR II bodies.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/exr2-boot-identity.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "firmwares": {
+      "description": "One row per registered EXR II body.",
+      "items": {
+        "$ref": "#/$defs/Exr2BootIdentityEntry"
+      },
+      "type": "array"
+    },
+    "id": {
+      "description": "Stable document identity.",
+      "type": "string"
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "section_table_bytes": {
+      "description": "Bytes hashed from each named NAND offset.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "section_table_bytes",
+    "firmwares"
+  ],
+  "title": "Exr2BootIdentity",
+  "type": "object"
+}

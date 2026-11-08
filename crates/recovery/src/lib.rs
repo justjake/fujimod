@@ -332,6 +332,36 @@ impl Recipe {
         require(matches!(self.generation, Generation::Xp5), "Card storage requires XP5")?;
         self.startup_inputs(source, options, Some(storage))
     }
+    /// Build an EXR II card entry that loads stage 1 from NAND, then stage 2.
+    /// The board's memory setup header comes from the supplied update; the two
+    /// executable files are identical for every EXR II firmware.
+    pub fn build_ota_startup(&self, source: &[u8]) -> Result<Vec<File>> {
+        require(
+            matches!(self.generation, Generation::Exr2),
+            "OTA startup requires EXR II",
+        )?;
+        require(
+            source.len() == self.source_size,
+            "Update size differs from recipe",
+        )?;
+        image::hash(source, &self.source_sha256)?;
+        let packaging = self
+            .packaging
+            .as_ref()
+            .ok_or_else(|| image::Error::Invalid("Missing SD header packaging".into()))?;
+        let inverted = fujimod_firmware::invert(source);
+        let mut files = packaging.package_bytes(
+            &inverted,
+            packaging.entry,
+            include_bytes!("../assets/exr2-sd-boot.generated.bin").to_vec(),
+        )?;
+        files.push(File::new(
+            "FM_EXR2.BIN",
+            include_bytes!("../assets/exr2-stage2.generated.bin").to_vec(),
+        )?);
+        Ok(files)
+    }
+
     fn startup_inputs(&self, source: &[u8], options: StartupOptions, storage: Option<&[u8]>)
         -> Result<Vec<File>> {
         require(

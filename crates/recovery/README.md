@@ -256,3 +256,13 @@ ordinary LED writes then take control without an interrupt, timer or persistent
 LED override. Recipes with completion-controlled startup indication retain that
 handoff instead. Terminal LED cards continue to hold green without booting the
 system.
+
+## EXR II release startup
+
+`ota-startup FIRMWARE DAT NEW_DIRECTORY` constructs the board's `ffsys.bin`,
+one universal `ffboot.bin`, and `FM_EXR2.BIN`. The first executable loads stage
+1 from NAND with the ROM's routines, then calls stage 2 without a firmware
+identity. Stage 2 identifies the installed firmware from the SHA-256 of its
+1 KiB NAND section table and selects the release's stage 3 from the card.
+Unknown tables resume stock. Add the A/B manifests and their store files to
+the resulting card directory before use.

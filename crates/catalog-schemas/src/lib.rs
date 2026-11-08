@@ -113,6 +113,12 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
+        "exr2-boot-identity.generated.schema.json",
+        schema::<fujimod_catalog::boot_identity::Exr2BootIdentity>(
+            fujimod_catalog::boot_identity::EXR2_BOOT_IDENTITY_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
         "progress.generated.schema.json",
         schema::<fujimod_catalog::progress::FirmwareProgress>(
             fujimod_catalog::progress::PROGRESS_SCHEMA_URI,
