@@ -64,6 +64,7 @@ fn main() {
             ("Firmware", "card-files.generated.json") => "CardFiles",
             ("Firmware", "execution.generated.json") => "Execution",
             ("Firmware", "restart.generated.json") => "Restart",
+            ("Firmware", "memory-reservations.generated.json") => "MemoryReservations",
             ("Firmware", "settings.generated.json") => "Settings",
             ("Firmware", "flash.generated.json") => "Flash",
             ("Firmware", "state.generated.json") => "State",

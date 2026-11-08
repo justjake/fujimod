@@ -1,0 +1,107 @@
+{
+  "$defs": {
+    "LocatorFailure": {
+      "additionalProperties": false,
+      "description": "A fixed reservation that its locator could not resolve.",
+      "properties": {
+        "locator": {
+          "description": "Stock name of the reservation whose locator failed.",
+          "type": "string"
+        },
+        "reason": {
+          "description": "Why the stock code did not verify.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "locator",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "Reservation": {
+      "additionalProperties": false,
+      "description": "One fixed DRAM reservation.",
+      "properties": {
+        "address": {
+          "description": "Physical DRAM address of the first byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Stock name of the reservation, such as `language_fonts`.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Bytes reserved.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "size"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/memory-reservations.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Located fixed reservations of one firmware.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/memory-reservations.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "dram_size": {
+      "description": "DRAM window, in bytes, that every reservation lies within.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "firmware_id": {
+      "description": "Firmware whose stock code owns these reservations.",
+      "type": "string"
+    },
+    "id": {
+      "description": "Stable document identity.",
+      "type": "string"
+    },
+    "locator_failures": {
+      "description": "Fixed reservations whose locator failed; each is absent from `reservations`.",
+      "items": {
+        "$ref": "#/$defs/LocatorFailure"
+      },
+      "type": "array"
+    },
+    "reservations": {
+      "description": "Located reservations, by stock name.",
+      "items": {
+        "$ref": "#/$defs/Reservation"
+      },
+      "type": "array"
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "firmware_id",
+    "dram_size",
+    "reservations",
+    "locator_failures"
+  ],
+  "title": "FirmwareMemoryReservations",
+  "type": "object"
+}

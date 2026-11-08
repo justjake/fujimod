@@ -1480,6 +1480,7 @@ dependencies = [
  "fujimod-catalog-controls",
  "fujimod-catalog-execution",
  "fujimod-catalog-identity",
+ "fujimod-catalog-memory-reservations",
  "fujimod-catalog-remote",
  "fujimod-catalog-restart",
  "fujimod-catalog-settings",
@@ -1608,6 +1609,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-catalog-memory-reservations"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-identity",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "fujimod-catalog-remote"
 version = "0.1.0"
 dependencies = [
@@ -1685,6 +1699,7 @@ dependencies = [
  "fujimod-catalog-construction",
  "fujimod-catalog-controls",
  "fujimod-catalog-execution",
+ "fujimod-catalog-memory-reservations",
  "fujimod-catalog-remote",
  "fujimod-catalog-resolution",
  "fujimod-catalog-restart",

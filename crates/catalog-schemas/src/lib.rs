@@ -89,6 +89,12 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
+        "memory-reservations.generated.schema.json",
+        schema::<fujimod_catalog_memory_reservations::FirmwareMemoryReservations>(
+            fujimod_catalog_memory_reservations::MEMORY_RESERVATIONS_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
         "progress-override.generated.schema.json",
         schema::<fujimod_catalog::progress::ProgressOverride>(
             fujimod_catalog::progress::PROGRESS_OVERRIDE_SCHEMA_URI,

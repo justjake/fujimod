@@ -2577,6 +2577,7 @@ pub struct ReferenceCatalog {
     bulk: BTreeMap<String, fujimod_catalog_bulk::FirmwareBulk>,
     execution: BTreeMap<String, fujimod_catalog_execution::FirmwareExecution>,
     restart: BTreeMap<String, fujimod_catalog_restart::FirmwareRestart>,
+    memory_reservations: BTreeMap<String, fujimod_catalog_memory_reservations::FirmwareMemoryReservations>,
     card_files: BTreeMap<String, fujimod_catalog_card::FirmwareCard>,
     settings: BTreeMap<String, fujimod_catalog_settings::FirmwareSettings>,
     flash: BTreeMap<String, crate::capture::FirmwareFlash>,
@@ -2849,6 +2850,17 @@ impl ReferenceCatalog {
                 value.validate()?;
                 insert_unique(&mut self.restart, value.firmware_id.clone(), value, path)
             }
+            ReferenceKind::MemoryReservations => {
+                let value: fujimod_catalog_memory_reservations::FirmwareMemoryReservations =
+                    decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(
+                    &mut self.memory_reservations,
+                    value.firmware_id.clone(),
+                    value,
+                    path,
+                )
+            }
             ReferenceKind::CardFiles => {
                 let value: fujimod_catalog_card::FirmwareCard = decode(bytes, path)?;
                 value.validate()?;
@@ -2930,6 +2942,7 @@ impl ReferenceCatalog {
             .bulk
             .keys()
             .chain(self.restart.keys())
+            .chain(self.memory_reservations.keys())
             .chain(self.card_files.keys())
         {
             if !self.firmwares.contains_key(firmware_id)
@@ -3491,6 +3504,7 @@ enum ReferenceKind {
     Execution,
     CardFiles,
     Restart,
+    MemoryReservations,
     Settings,
     Flash,
     State,
@@ -3517,6 +3531,7 @@ impl ReferenceKind {
             Some("execution.generated.json") => Ok(Self::Execution),
             Some("card-files.generated.json") => Ok(Self::CardFiles),
             Some("restart.generated.json") => Ok(Self::Restart),
+            Some("memory-reservations.generated.json") => Ok(Self::MemoryReservations),
             Some("settings.generated.json") => Ok(Self::Settings),
             Some("flash.generated.json") => Ok(Self::Flash),
             Some("state.generated.json") => Ok(Self::State),
