@@ -32,6 +32,7 @@ fujimod-emulator-exr2-isp-testing.workspace = true
 fujimod-emulator-exr2-codecs.workspace = true
 fujimod-emulator-exr2-isp-input.workspace = true
 fujimod-emulator-exr2-isp-statistics.workspace = true
+sha2.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 openh264 = "=0.9.9"
