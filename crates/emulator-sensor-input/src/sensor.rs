@@ -132,7 +132,7 @@ impl Sensor {
     }
     fn image_supported(&self, offset: u64) -> bool {
         self.1
-            .is_some_and(|r| matches!(offset, 0x140 | 0x144) || r.dma.is_some())
+            .is_some_and(|r| matches!(offset, 0x4..=0x34 | 0x140 | 0x144) || r.dma.is_some())
     }
     pub fn streaming(&self) -> bool {
         let s = self.0.lock().unwrap();

@@ -158,16 +158,16 @@
       },
       "code_checks": [
         {
-          "name": "serial_exchange",
-          "address": 76280,
-          "size": 720,
-          "sha256": "b6c420be0cfc4a83e2b36350cd22c1e34c432e02e5c120800671763577d184b5"
+          "name": "descriptor_open",
+          "address": 9534284,
+          "size": 1632,
+          "sha256": "d1edd3be3d29b4bc73f0da0a08074cbd080e91e9993633aecb4d86b67483e580"
         },
         {
-          "name": "packet_reader",
-          "address": 78356,
-          "size": 244,
-          "sha256": "b261c645e050996c3348c0346d9772e91cd3d35700020e4fe7993f18716a18c5"
+          "name": "power_cut",
+          "address": 9557132,
+          "size": 100,
+          "sha256": "a436210813f376af5588287dbe5671b062c7be6a2da893269a5c749d9207472e"
         }
       ]
     },

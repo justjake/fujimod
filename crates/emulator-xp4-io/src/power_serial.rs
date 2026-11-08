@@ -87,7 +87,7 @@ impl PowerSerial {
             || pin >= 16
             || inputs
                 .keys()
-                .any(|k| !matches!(*k, 0..=6 | 16 | 24 | 32 | 34 | 35))
+                .any(|k| !matches!(*k, 0..=6 | 16 | 21 | 24 | 27 | 32 | 34 | 35))
             || [0, 1, 2, 3, 32, 34, 35]
                 .iter()
                 .any(|n| !inputs.contains_key(n))
@@ -144,7 +144,7 @@ impl PowerSerial {
         }
     }
     fn writable(register: u8) -> bool {
-        matches!(register, 2 | 18 | 32 | 34 | 35 | 38 | 48..=55)
+        matches!(register, 2 | 13 | 14 | 18 | 20 | 32 | 34 | 35 | 37 | 38 | 48..=55)
     }
 }
 impl Input for PowerSerial {

@@ -68,11 +68,17 @@ CRC32 before entering the stock RAM image. The extra file avoids the ROM's
 checked against `ffuser.bin`. The runtime indexed reader opens this same file
 and reads the firmware namespace appended after its initialized RAM image.
 
-EXR II's remaining preloaded section-5 read uses the source bytes appended to
-`ffboot.bin`. Construction checks the section selector, callback-free call,
-16 KiB or 128 KiB block geometry, section descriptor, and code reservation before
-redirecting that call. The stock indexed reader and per-camera storage calls
-retain their original code.
+EXR II's preloaded section-5 read keeps only its status, so the card replaces
+the call with success after checking the section selector, callback-free call
+and 16 KiB or 128 KiB block geometry. A recipe can also name startup reads the
+card serves itself, each checked against its code, table row and update bytes:
+flash-loader service reads (the message bank and font) whose bytes the card
+places at their RAM destinations, service reloads of sections the image already
+holds, and the configuration-defaults fallback, which copies the update's
+defaults appended after the image. The flash-loader reads
+always load the recipe's bank and font, so the card's interface uses that
+language. The stock indexed reader and per-camera storage calls retain their
+original code.
 
 X-T1 5.52 cards light the green status LED at entry to the SD-loaded image,
 before the stock loader starts. Checked GPIO defaults and endpoint-call hooks
