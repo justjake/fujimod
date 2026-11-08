@@ -44,11 +44,14 @@ struct CommittedImage {
     pages: Vec<(u32, Vec<u8>)>,
     written_spare: Vec<(u32, Vec<u8>)>,
 }
-/// Portable programmed pages relative to the checked immutable medium inputs.
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+/// What a NAND chip keeps across loss of power, relative to its checked base
+/// image: the declared input overlays and spare tags it was given, and every
+/// page programmed since. The base itself is identified, not copied.
+#[derive(Clone)]
 pub struct Changes {
     identity: serde_json::Value,
+    overlays: Vec<Overlay>,
+    spare: BTreeMap<u32, Vec<u8>>,
     pages: BTreeMap<u32, Vec<u8>>,
     written_spare: BTreeMap<u32, Vec<u8>>,
 }
@@ -63,20 +66,22 @@ impl Nand {
             "overlays":self.overlays.iter().map(|o|(o.offset,crate::state::bytes(&o.bytes))).collect::<Vec<_>>(),
             "spare":pages(&self.spare),"pages":pages(&self.pages),"written_spare":pages(&self.written_spare)})
     }
-    fn immutable_identity(&self) -> serde_json::Value {
-        serde_json::json!({"options":self.options,"base":crate::state::bytes(&self.base),
-            "overlays":self.overlays.iter().map(|o|(o.offset,crate::state::bytes(&o.bytes))).collect::<Vec<_>>(),
-            "spare":self.spare.iter().map(|(row,bytes)|(row,crate::state::bytes(bytes))).collect::<Vec<_>>()})
+    fn base_identity(&self) -> serde_json::Value {
+        serde_json::json!({"options":self.options,"base":crate::state::bytes(&self.base)})
     }
     pub fn changes(&self) -> Changes {
         Changes {
-            identity: self.immutable_identity(),
+            identity: self.base_identity(),
+            overlays: self.overlays.clone(),
+            spare: self.spare.clone(),
             pages: self.pages.clone(),
             written_spare: self.written_spare.clone(),
         }
     }
+    /// The same chip after a cold reconstruction: this medium's base and
+    /// geometry, carrying the retained medium's inputs and programmed pages.
     pub fn with_changes(&self, changes: &Changes) -> Result<Self, String> {
-        if changes.identity != self.immutable_identity() {
+        if changes.identity != self.base_identity() {
             return Err("NAND durable input identity differs".into());
         }
         let rows = self.options.bytes / self.options.page_bytes as u64;
@@ -91,7 +96,12 @@ impl Nand {
         {
             return Err("NAND durable page extent differs".into());
         }
-        let mut medium = self.clone();
+        let mut medium = Self::new(
+            self.options.clone(),
+            self.base.clone(),
+            changes.overlays.clone(),
+            changes.spare.clone(),
+        )?;
         medium.pages = changes.pages.clone();
         medium.written_spare = changes.written_spare.clone();
         Ok(medium)
@@ -447,7 +457,7 @@ pub fn managed_tag(index: u16) -> Result<[u8; 16], String> {
 mod tests {
     use super::*;
     #[test]
-    fn portable_changes_bind_immutable_inputs_and_preserve_programmed_pages() {
+    fn retained_changes_bind_the_base_and_preserve_inputs_and_programmed_pages() {
         let initial = Nand::new(
             Options {
                 bytes: 0x40000,
@@ -460,13 +470,25 @@ mod tests {
             BTreeMap::new(),
         )
         .unwrap();
-        let mut written = initial.clone();
+        // Inputs layered on after construction (a patched stage-1 block) are
+        // part of the chip and survive a cold reconstruction from the base.
+        let mut written = initial
+            .with_inputs(
+                vec![Overlay {
+                    offset: 0x20000,
+                    bytes: Arc::from([0x5a; 2048]),
+                }],
+                BTreeMap::new(),
+            )
+            .unwrap();
         written.program(0, &[42; 2048], &[17; 64]).unwrap();
-        let encoded = serde_json::to_vec(&written.changes()).unwrap();
-        let changes: Changes = serde_json::from_slice(&encoded).unwrap();
+        let changes = written.changes();
         let restored = initial.with_changes(&changes).unwrap();
         assert_eq!(restored, written);
         assert_ne!(initial, written);
+        let mut retained = [0; 2048];
+        restored.read(0x20000, &mut retained).unwrap();
+        assert_eq!(retained, [0x5a; 2048]);
         let mut bad = changes.clone();
         bad.pages.insert(500, vec![0; 2048]);
         assert!(initial.with_changes(&bad).is_err());

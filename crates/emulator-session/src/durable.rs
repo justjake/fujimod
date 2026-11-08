@@ -17,8 +17,7 @@ struct CardMedium {
     present: bool,
     protected: bool,
 }
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone)]
 pub struct Media {
     cards: BTreeMap<String, CardMedium>,
     nands: BTreeMap<String, nand::Changes>,
