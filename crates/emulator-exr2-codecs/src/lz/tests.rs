@@ -1006,6 +1006,52 @@ fn packed_luma_half_resize_latches_source_preserves_padding_and_completes_before
 }
 
 #[test]
+fn packed_luma_half_admits_builder_rounded_destination_widths() {
+    // 640x480 to 320x240, as the X30 Dynamic Tone preview requests it. The
+    // request builder rounds the packed destination width up to twice its
+    // 64-byte block: 384. Columns past the half width replicate the right
+    // edge; wider destinations still refuse.
+    let resize = |width: u32| {
+        let (mut d, mut h, mut c) = setup();
+        reset(&mut d, &mut h);
+        enabled(&mut c, &mut h, 0, true);
+        for y in 0..480 {
+            for x in (0..640).step_by(2) {
+                let at = 0x10000 + y * 2048 + x * 2;
+                h.bytes[at..at + 4]
+                    .copy_from_slice(&[(x / 8 + y / 4) as u8, (x / 8 + y / 4) as u8, 128, 128]);
+            }
+        }
+        let mut words = luma_conversion_words();
+        words[3] = 480 << 16 | 640;
+        words[5] = 640;
+        words[6] = 240 << 16 | width;
+        configure_luma(&mut d, &mut h, words);
+        put(&mut d, &mut h, 4, 1)?;
+        let due = d.next_deadline(h.now).unwrap();
+        tick(&mut d, &mut h, due).unwrap();
+        assert_eq!(h.irqs, [(0, IRQ)]);
+        Ok::<_, String>(
+            (0..240)
+                .map(|y| h.bytes[0x180000 + y * 640..0x180000 + y * 640 + 640].to_vec())
+                .collect::<Vec<_>>(),
+        )
+    };
+    let half = resize(320).unwrap();
+    let rounded = resize(384).unwrap();
+    for (half, rounded) in half.iter().zip(&rounded) {
+        assert_eq!(rounded[..320], half[..320]);
+        assert!(rounded[320..384].iter().all(|&value| value == rounded[320]));
+        assert!(rounded[320] >= half[319]);
+        assert!(half[320..].iter().all(|&byte| byte == 0xcc));
+        assert!(rounded[384..].iter().all(|&byte| byte == 0xcc));
+    }
+    for width in [312, 392, 448] {
+        assert!(resize(width).is_err(), "{width}");
+    }
+}
+
+#[test]
 fn luma_conversion_rejects_unknown_packing_geometry_and_flags_without_dma() {
     for (offset, value) in [
         (8, 0x11),

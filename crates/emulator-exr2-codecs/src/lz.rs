@@ -420,7 +420,10 @@ impl Decompressor {
         // The packing controls select packed 422 input and byte-plane output.
         // Register 80 describes 128/64 transfer blocks, not sample formats.
         // This law shares the declared replicated-edge FIR and half-size
-        // pixel-center sampling, retaining only the luma component.
+        // pixel-center sampling, retaining only the luma component. The
+        // request builder rounds a packed raster's width up to twice its
+        // transfer block's byte count, so the destination may extend to the
+        // half width rounded that way; those columns replicate the right edge.
         if r(8) == 0x10
             && r(0x30) == 0x40
             && r(0x34) == 0x082030
@@ -428,8 +431,10 @@ impl Decompressor {
             && r(0x3c) == 0x01000200
             && r(0x80) == 0x20003000
             && (16..=1024).contains(&sw)
+            && sw % 2 == 0
             && (2..=480).contains(&sh)
-            && dw * 2 == sw
+            && dw >= sw / 2
+            && dw <= (sw / 2).next_multiple_of(2 * (16 << (r(0x80) >> 28 & 3)))
             && dh * 2 == sh
             && r(0x14) >= sw * 2
             && r(0x14) <= 2048
