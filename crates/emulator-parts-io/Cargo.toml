@@ -1,6 +1,6 @@
 [package]
 name = "fujimod-emulator-parts-io"
-description = "Serial, SPI, USB endpoint, HDMI and audio sink parts"
+description = "Serial, SPI, I2C, USB endpoint, HDMI and audio sink parts"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

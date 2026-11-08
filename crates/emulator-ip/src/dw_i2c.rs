@@ -13,6 +13,7 @@
 //! IC_ENABLE.ABORT aborts with ABRT_USER_ABRT. Configuration words read back
 //! their last write; reset values, slave mode, 10-bit addressing, high speed,
 //! DMA and data NACKs are not modeled. TX_EMPTY asserts only while enabled.
+use fujimod_emulator_devices::parts::i2c::Bus;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -75,33 +76,6 @@ const ENABLED: u32 = 1;
 const ABORT: u32 = 1 << 1;
 const ABRT_7B_ADDR_NOACK: u32 = 1;
 const ABRT_USER_ABRT: u32 = 1 << 16;
-
-/// Targets on the wires of one controller.
-pub trait Bus: Send + 'static {
-    /// The address byte of a start or repeated start; `false` is a NACK.
-    fn start(&mut self, address: u16, read: bool) -> bool;
-    fn write(&mut self, byte: u8);
-    fn read(&mut self) -> Result<u8, String>;
-    fn stop(&mut self);
-    fn save(&self) -> Value;
-    fn restore(&mut self, value: &Value) -> Result<(), String>;
-    /// Complete typed target state; targets without one refuse.
-    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
-        Err("DesignWare I2C bus has no exact checkpoint implementation".into())
-    }
-    fn validate_checkpoint(
-        &self,
-        _: &fujimod_emulator_devices::checkpoint::Checkpoint,
-    ) -> Result<(), String> {
-        Err("DesignWare I2C bus has no exact checkpoint implementation".into())
-    }
-    fn restore_checkpoint(
-        &mut self,
-        _: &fujimod_emulator_devices::checkpoint::Checkpoint,
-    ) -> Result<(), String> {
-        Err("DesignWare I2C bus has no exact checkpoint implementation".into())
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Options {
@@ -257,8 +231,8 @@ impl<B: Bus> Controller<B> {
                             0
                         }
                     });
-                } else {
-                    self.bus.write(value as u8);
+                } else if let Err(reason) = self.bus.write(value as u8) {
+                    cx.unsupported(reason);
                 }
             }
             if command.stop && self.state.open {
@@ -506,7 +480,7 @@ mod tests {
             }
             address == 0x1c
         }
-        fn write(&mut self, byte: u8) {
+        fn write(&mut self, byte: u8) -> Result<(), String> {
             match self.pointer {
                 None => self.pointer = Some(byte),
                 Some(p) => {
@@ -514,6 +488,7 @@ mod tests {
                     self.pointer = Some(p + 1);
                 }
             }
+            Ok(())
         }
         fn read(&mut self) -> Result<u8, String> {
             let p = self.pointer.unwrap_or(0);

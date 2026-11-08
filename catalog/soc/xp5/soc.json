@@ -1147,7 +1147,11 @@
             "name": "i2c1",
             "base": 4287778816,
             "size": 4096,
-            "kind": "battery-i2c"
+            "kind": "i2c-controller",
+            "options": {
+              "interrupt": 289,
+              "byte_ns": 1000000
+            }
           },
           {
             "name": "lz",
