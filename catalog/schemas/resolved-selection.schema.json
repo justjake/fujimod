@@ -20527,6 +20527,16 @@
           "$ref": "#/$defs/UpdateRange",
           "description": "Stock header defaults. Byte 14 is the marker `0xaa`; byte 15 holds the\nchecksum that makes the sixteen bytes sum to zero."
         },
+        "ram_address": {
+          "default": null,
+          "description": "X-Processor 4 only: the CPU-virtual RAM address where the stock header\nis copied at boot. Absent for X-Processor Pro, whose header goes to\nsub-CPU registers.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "records": {
           "additionalProperties": {
             "$ref": "#/$defs/ProfileRecord"
