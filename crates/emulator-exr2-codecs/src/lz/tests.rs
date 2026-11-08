@@ -617,6 +617,64 @@ fn scalar_half_fir_refuses_other_filters_geometry_and_alias_overlap_before_dma()
 }
 
 #[test]
+fn scalar_half_fir_transfer_blocks_change_no_pixels_and_refuse_partial_rows() {
+    // 640x480 scalar to 320x240 with 1280-byte pitches, as an ADV filter
+    // preview programs it: 32-byte transfer blocks for both rasters.
+    let resize = |transfer: u32| {
+        let (mut d, mut h, mut c) = setup();
+        reset(&mut d, &mut h);
+        enabled(&mut c, &mut h, 0, true);
+        for y in 0..480 {
+            for x in 0..640 {
+                let at = 0x10000 + y * 1280 + x * 2;
+                h.bytes[at..at + 2].copy_from_slice(&((3 * x + 37 * y) as u16).to_le_bytes());
+            }
+        }
+        configure(
+            &mut d,
+            &mut h,
+            [0x500, 0x01e00280, 0x500, 0x00f00140, 0x00400080, transfer],
+            3,
+        );
+        put(&mut d, &mut h, 4, 1).unwrap();
+        let due = d.next_deadline(h.now).unwrap();
+        tick(&mut d, &mut h, due).unwrap();
+        assert_eq!(h.irqs, [(0, IRQ)]);
+        h.bytes[0x100000..0x100000 + 1280 * 240].to_vec()
+    };
+    let unblocked = resize(0);
+    assert_ne!(unblocked, vec![0xcc; unblocked.len()]);
+    assert_eq!(resize(0x1000_1000), unblocked);
+    assert_eq!(resize(0x3000_3000), unblocked);
+
+    // 720x480 to 368x240: 1440-byte source rows and 736-byte destination
+    // rows are whole 32-byte blocks but not whole 64-byte blocks. Other
+    // register 80 fields remain unmodeled.
+    for (transfer, ok) in [
+        (0x1000_1000, true),
+        (0x0000_2000, false),
+        (0x2000_0000, false),
+        (0x1000_1001, false),
+        (0x1100_1000, false),
+        (0x1000_1100, false),
+    ] {
+        let mut regs = vec![0; 36];
+        let values = [
+            0x1000, 0x10000, 0x5a0, 0x01e002d0, 0x100000, 0x5a0, 0x00f00170, 0x40, 0x082030,
+            0x081e3844, 0x00400080, transfer,
+        ];
+        for (register, word) in ORDER.into_iter().zip(values) {
+            regs[register / 4] = word;
+        }
+        assert_eq!(
+            Decompressor::raster_kind_for(&regs).is_ok(),
+            ok,
+            "{transfer:#x}"
+        );
+    }
+}
+
+#[test]
 fn scalar_half_fir_interleaves_output_in_source_row_padding() {
     // A subsequent ADV request uses the configured source address and
     // destination 0x524d6160: +736, exactly after each 368-pixel scalar row.

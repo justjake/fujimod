@@ -306,6 +306,17 @@ impl Decompressor {
     fn raster_kind(&self) -> Result<RasterKind, String> {
         Self::raster_kind_for(&self.state.regs)
     }
+    /// Register 80 holds one two-bit DMA transfer-block selector per raster,
+    /// blocks of 16 << selector bytes: bits 12-13 for the source and 28-29
+    /// for the destination. The driver pads each row to whole blocks, so a
+    /// selector changes transfer granularity only. Rows that are not whole
+    /// blocks and every other register 80 field stay unmodeled.
+    fn whole_transfer_blocks(word: u32, source_row: u32, destination_row: u32) -> bool {
+        let block = |shift: u32| 16 << ((word >> shift) & 3);
+        word & !0x3000_3000 == 0
+            && source_row % block(12) == 0
+            && destination_row % block(28) == 0
+    }
     fn raster_kind_for(regs: &[u32]) -> Result<RasterKind, String> {
         let r = |o: usize| regs[o / 4];
         let stage = [r(0x14), r(0x18), r(0x24), r(0x28), r(0x3c), r(0x80)];
@@ -384,12 +395,13 @@ impl Decompressor {
         // destination may include up to 15 replicated columns for alignment.
         // Format/control and both normalized kernels remain explicit; an
         // arbitrary new descriptor does not acquire a completion law.
+        // Register 80 may select DMA transfer blocks for either raster.
         if r(8) == 0x1000
             && r(0x30) == 0x40
             && r(0x34) == 0x082030
             && r(0x38) == 0x081e3844
             && r(0x3c) == 0x00400080
-            && r(0x80) == 0
+            && Self::whole_transfer_blocks(r(0x80), sw * 2, dw * 2)
             && (1..=720).contains(&sw)
             && (1..=480).contains(&sh)
             && dh > 0
@@ -565,7 +577,6 @@ impl Decompressor {
         let (sw, sh) = (self.r(0x18) as usize & 8191, (self.r(0x18) >> 16) as usize);
         let (w, h) = (self.r(0x28) as usize & 8191, (self.r(0x28) >> 16) as usize);
         let (sp, pitch) = (self.r(0x14) as usize, self.r(0x24) as usize);
-        let (sf, df) = (self.r(0x80) >> 12 & 3, self.r(0x80) >> 28 & 3);
         if let RasterKind::PyramidLuma { packed, smooth } = kind {
             // Cache pure pixel results by active DMA bytes and arithmetic
             // controls. Addresses, padding and program state cannot select a
@@ -639,10 +650,20 @@ impl Decompressor {
                 RasterKind::BoxHalf | RasterKind::PyramidLuma { .. } => unreachable!(),
             };
             use fujimod_emulator_image_processing::separable::Samples;
-            let input = if sf == 0 && df == 0 {
-                Samples::Scalar16
-            } else {
-                Samples::YyCbCr422
+            // Register 80 selects transfer blocks, so the admitted
+            // descriptor fixes the sample layout. The fitted final level of
+            // the filtered-rational table reads scalar16 samples; its
+            // earlier levels read packed 422.
+            let input = match kind {
+                RasterKind::ScalarFilteredHalf
+                | RasterKind::ScalarWeightedHalf
+                | RasterKind::ScalarThresholdedHalf => Samples::Scalar16,
+                RasterKind::FilteredRational
+                    if self.r(0x14) == FILTERED[3][0] && self.r(0x18) == FILTERED[3][1] =>
+                {
+                    Samples::Scalar16
+                }
+                _ => Samples::YyCbCr422,
             };
             let output = if kind == RasterKind::LumaFilteredHalf {
                 Samples::Luma8
