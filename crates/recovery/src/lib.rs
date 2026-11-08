@@ -378,7 +378,7 @@ impl Recipe {
                     })?;
                     let mut ram = image::transform(&inverted, plan)?;
                     if matches!(self.generation, Generation::Exr2) {
-                        exr2::install(&inverted, plan, &mut ram)?;
+                        exr2::install(plan, &mut ram)?;
                         if let Some(footer) = &self.loader_footer {
                             footer.install(&inverted, plan, &mut ram)?;
                         }
