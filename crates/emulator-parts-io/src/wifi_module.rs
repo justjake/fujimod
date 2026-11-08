@@ -93,6 +93,15 @@ impl WifiModule {
             endpoint,
         })
     }
+    /// The supply was removed: every register, the download and the chip's
+    /// endpoint state return to their power-on state; the access point's
+    /// network does not.
+    pub fn power_off(&mut self) {
+        self.endpoint.power_off(self.options.mt5931.as_ref());
+        let endpoint = std::mem::replace(&mut self.endpoint, mt5931::Endpoint::new(None));
+        *self = Self::new(self.options.clone()).expect("options were validated at construction");
+        self.endpoint = endpoint;
+    }
     pub fn protocol(&self) -> Protocol {
         self.options.protocol
     }

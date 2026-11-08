@@ -399,10 +399,19 @@ impl SdioHost {
         {
             return Err("Unsupported SDIO host configuration".into());
         }
+        let powered = self.regs.get(0x28) & 0x100 != 0;
         if size == 4 {
             self.regs.put_word(o, value);
         } else {
             self.regs.set(o, value as u16);
+        }
+        // SD Bus Power (Power Control bit 0, register 0x29) going off removes
+        // the card's supply: it returns to the idle state and the module
+        // loses its downloaded firmware. Stock clears it after the CCCR I/O
+        // reset when it stops Wi-Fi, and restarts from CMD5.
+        if powered && self.regs.get(0x28) & 0x100 == 0 {
+            self.state = State::Idle;
+            self.module.power_off();
         }
         self.signal(cx)
     }
