@@ -153,6 +153,9 @@ pub struct Board {
     progress_observer: Option<Box<dyn FnMut(u64)>>,
     guest_profile_active: Cell<bool>,
     isolated_core: Cell<Option<usize>>,
+    // Host run control and its outcome; excluded from modeled state.
+    idle_stop: Cell<bool>,
+    idle_stopped: Cell<bool>,
     continuation: Option<Box<continuation::StoreWatch>>,
     /// Processor address views of RAM, from the checked graph.
     mappings: Vec<factory::MemoryMap>,
@@ -371,6 +374,8 @@ impl Board {
             progress_observer: None,
             guest_profile_active: Cell::new(false),
             isolated_core: Cell::new(None),
+            idle_stop: Cell::new(false),
+            idle_stopped: Cell::new(false),
             continuation: None,
             mappings: vec![],
             read_set: RefCell::new(None),
@@ -497,6 +502,16 @@ impl Board {
     /// Whether a connected device has removed the board supply.
     pub fn is_powered_off(&self) -> bool {
         self.state.borrow().power_off
+    }
+    /// Opt in to ending a run once a device deadline passes with every
+    /// released core still waiting, instead of skipping further idle time.
+    pub fn set_idle_stop(&self, enabled: bool) {
+        self.idle_stop.set(enabled);
+    }
+    /// Whether the last run ended with every released core waiting and either
+    /// no pending deadline or, under `set_idle_stop`, a deadline that woke none.
+    pub fn idle_stopped(&self) -> bool {
+        self.idle_stopped.get()
     }
     /// Advance only the unpowered interval. Old CPU and device events cannot run.
     pub fn advance_unpowered(&mut self, at: u64) -> Result<(), String> {
@@ -856,6 +871,8 @@ impl Board {
         }
         self.state.borrow_mut().code_run = None;
         self.state.borrow_mut().clock_limit = until;
+        self.idle_stopped.set(false);
+        let mut idle_mark = None;
         let mut completed_slice = None;
         let mut next_progress = 0;
         loop {
@@ -955,7 +972,19 @@ impl Board {
                 .find(|&c| s.released[c] && !s.waiting[c]);
             let Some(core) = core else {
                 if until.is_none() && s.timeline.next_event().is_none() {
+                    self.idle_stopped.set(true);
                     return Ok(());
+                }
+                // Opt-in: a device deadline already passed while every
+                // released core stayed in its architectural wait. Return
+                // instead of skipping guest time to further deadlines.
+                if self.idle_stop.get() {
+                    let executed = s.total_instructions()?;
+                    if idle_mark == Some(executed) {
+                        self.idle_stopped.set(true);
+                        return Ok(());
+                    }
+                    idle_mark = Some(executed);
                 }
                 s.timeline.advance_waiting(true, until)?;
                 continue;

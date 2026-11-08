@@ -1031,6 +1031,16 @@ impl Board {
         }
         Ok(self.board()?.now())
     }
+    /// Opt in to ending a run when a device deadline passes and every released
+    /// core is still waiting; `idle_stopped` reports that outcome.
+    fn set_idle_stop(&self, enabled: bool) -> PyResult<()> {
+        self.board()?.set_idle_stop(enabled);
+        Ok(())
+    }
+    #[getter]
+    fn idle_stopped(&self) -> PyResult<bool> {
+        Ok(self.board()?.idle_stopped())
+    }
     #[getter]
     fn quiescent(&self) -> PyResult<bool> {
         if let Some(Backend::Xp4(session)) = &self.backend {
