@@ -57,6 +57,7 @@ const release: LoadedRelease = {
       patch_sha256: 'patch',
       patch_bytes: 1,
       boot_instructions: ['SD'],
+      mods: [],
       downloads: { sd_card: true, installable: false },
     },
   ],

@@ -91,6 +91,7 @@ for (const engine of [chromium, webkit].filter(
         patch_bytes: patch.length,
         boot_instructions: ['Copy files.'],
         update_filename: 'FPUPDATE.DAT',
+        mods: [],
         downloads: { sd_card: true, installable: false },
       };
       const index: PatchIndex = {

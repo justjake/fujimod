@@ -27,6 +27,21 @@ impl Capability for dyn AnalogInputs {
     }
 }
 
+/// Externally supplied gravity at an attached accelerometer, in sensor axes
+/// expressed as multiples of standard gravity.
+pub trait GravityInput {
+    fn gravity_g(&self) -> [f64; 3];
+    fn set_gravity_g(&mut self, gravity: [f64; 3]) -> Result<(), String>;
+}
+impl Capability for dyn GravityInput {
+    fn of(device: &dyn Device) -> Option<&Self> {
+        device.gravity_input()
+    }
+    fn of_mut(device: &mut dyn Device) -> Option<&mut Self> {
+        device.gravity_input_mut()
+    }
+}
+
 /// Status registers of serial endpoints that external inputs drive.
 pub trait SerialStatus {
     fn status_value(&self, route: usize, register: u8) -> Result<u8, String>;

@@ -1,12 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { Plugin, Connect } from 'vite';
-import { validateIndex } from '../src/patch/catalog.ts';
+import { validateIndex, type CardFile } from '../src/patch/catalog.ts';
 import { releaseRoute } from '../src/patch/releases.ts';
 
 interface LocalReleaseOptions {
   artifacts?: string;
   notes?: string;
+  /** A directory holding `card.json` and its assets; its card files join the local release. */
+  card?: string;
 }
 
 /** Editable notes are served directly from source on every request. */
@@ -28,9 +30,15 @@ export function localReleaseMiddleware(options: LocalReleaseOptions): Connect.Ne
       return;
     }
     try {
-      const index = validateIndex(
-        JSON.parse(await readFile(resolve(options.artifacts, 'patches.json'), 'utf8')),
-      );
+      const card: CardFile[] | undefined = options.card
+        ? JSON.parse(await readFile(resolve(options.card, 'card.json'), 'utf8'))
+        : undefined;
+      const raw = {
+        ...JSON.parse(await readFile(resolve(options.artifacts, 'patches.json'), 'utf8')),
+        ...(card ? { card } : {}),
+      };
+      const index = validateIndex(raw);
+      const cardAssets = new Set(card?.map((file) => file.asset));
       let data: Buffer;
       if (route.kind === 'current') {
         data = Buffer.from(
@@ -48,6 +56,7 @@ export function localReleaseMiddleware(options: LocalReleaseOptions): Connect.Ne
           !new Set([
             'patches.json',
             ...Object.values(index.patches),
+            ...cardAssets,
             ...(index.notes ? [index.notes.name] : []),
           ]).has(route.file)
         ) {
@@ -55,7 +64,11 @@ export function localReleaseMiddleware(options: LocalReleaseOptions): Connect.Ne
           response.end();
           return;
         }
-        if (options.notes && route.file === index.notes?.name) {
+        if (route.file === 'patches.json' && card) {
+          data = Buffer.from(JSON.stringify(raw));
+        } else if (cardAssets.has(route.file)) {
+          data = await readFile(resolve(options.card!, route.file));
+        } else if (options.notes && route.file === index.notes?.name) {
           data = await readFile(resolve(options.notes, `${index.release}.md`));
         } else {
           data = await readFile(resolve(options.artifacts, route.file));

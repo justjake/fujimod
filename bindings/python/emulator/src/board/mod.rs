@@ -803,6 +803,17 @@ impl Board {
             .set_adc_samples(node, &samples)
             .map_err(error)
     }
+    fn gravity_g(&self, node: &str) -> PyResult<Vec<f64>> {
+        Ok(self.session()?.gravity_g(node).map_err(error)?.to_vec())
+    }
+    fn set_gravity_g(&mut self, node: &str, gravity: Vec<f64>) -> PyResult<()> {
+        let gravity: [f64; 3] = gravity
+            .try_into()
+            .map_err(|_| error("accelerometer gravity requires three components".into()))?;
+        self.session_mut()?
+            .set_gravity_g(node, gravity)
+            .map_err(error)
+    }
     fn configure_controls(&mut self, spec: &str) -> PyResult<()> {
         self.session_mut()?
             .configure_controls(json(spec)?)

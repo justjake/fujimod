@@ -4,7 +4,7 @@ use super::contact_driver::{ControlChoice, ControlInput, QueueState};
 use fujimod_emulator_devices::parts::pins::Pin;
 use fujimod_emulator_devices::parts::switch_panel::{Signal, Spec, SwitchPanel};
 use std::collections::BTreeMap;
-use fujimod_emulator_devices::capability::{AnalogInputs, SerialStatus, TouchPanel};
+use fujimod_emulator_devices::capability::{AnalogInputs, GravityInput, SerialStatus, TouchPanel};
 
 /// Host-visible controls and their current positions.
 #[derive(Clone, Debug, serde::Serialize)]
@@ -33,6 +33,18 @@ impl Session {
                     adc.set_sample(channel, value)?;
                 }
                 Ok(())
+            })
+    }
+    pub fn gravity_g(&self, node: &str) -> Result<[f64; 3], String> {
+        self.board
+            .inspect_capability::<dyn GravityInput, _>(self.node(node)?, |sensor| {
+                Ok(sensor.gravity_g())
+            })
+    }
+    pub fn set_gravity_g(&mut self, node: &str, gravity: [f64; 3]) -> Result<(), String> {
+        self.board
+            .edit_capability::<dyn GravityInput, _>(self.node(node)?, |sensor| {
+                sensor.set_gravity_g(gravity)
             })
     }
     pub fn configure_controls(&mut self, spec: Spec) -> Result<(), String> {

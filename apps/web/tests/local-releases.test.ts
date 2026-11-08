@@ -8,7 +8,11 @@ import { loadRelease } from '../src/patch/release.ts';
 
 test('development routes serve the configured release, observe edits, and refuse other files/tags', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'local-release-'));
-  const options = { artifacts: directory, notes: undefined as string | undefined };
+  const options = {
+    artifacts: directory,
+    notes: undefined as string | undefined,
+    card: undefined as string | undefined,
+  };
   const middleware = localReleaseMiddleware(options);
   const server = createServer((request, response) =>
     middleware(request, response, () => {
@@ -36,6 +40,7 @@ test('development routes serve the configured release, observe edits, and refuse
             patch_sha256: digest,
             patch_bytes: 4,
             boot_instructions: ['Copy files.'],
+            mods: [],
           },
         ],
       };
@@ -89,6 +94,26 @@ test('development routes serve the configured release, observe edits, and refuse
     // A missing configured source refuses the request instead of showing the old copy.
     await rm(source);
     expect((await fetch(`${base}/releases/v2/notes.md`)).status).toBe(404);
+
+    // A card file directory joins the release index and its assets.
+    options.notes = undefined;
+    options.card = join(directory, 'card');
+    await mkdir(options.card);
+    const recipe = '{"name":"Test"}';
+    const card = [
+      {
+        path: 'FUJIMOD/RECIPES/TEST.JSN',
+        asset: 'ABCDEF01.234',
+        sha256: 'b'.repeat(64),
+        bytes: recipe.length,
+        title: 'Test',
+      },
+    ];
+    await writeFile(join(options.card, 'card.json'), JSON.stringify(card));
+    await writeFile(join(options.card, 'ABCDEF01.234'), recipe);
+    expect((await loadRelease(base))?.card).toEqual(card);
+    expect(await (await fetch(`${base}/releases/v2/ABCDEF01.234`)).text()).toBe(recipe);
+    expect((await fetch(`${base}/releases/v2/card.json`)).status).toBe(404);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await rm(directory, { recursive: true, force: true });

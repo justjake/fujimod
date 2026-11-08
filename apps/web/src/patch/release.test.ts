@@ -46,6 +46,7 @@ async function fixture(installable = false, fpupdate = false) {
         patch_bytes: patch.length,
         boot_instructions: ['Copy files.'],
         update_filename: 'FWUP0009.DAT',
+        mods: [],
         downloads: { sd_card: true, installable },
       },
     ],

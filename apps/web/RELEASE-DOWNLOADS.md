@@ -41,6 +41,20 @@ unless the release sets them:
   entry's `update_filename`, the name the body's updater looks for
   (`FPUPDATE.DAT`, `FWUP0009.DAT`, …).
 
+Each firmware entry lists the mods built into its release in `mods`; the
+SD card download orders its cameras by that count.
+
+An optional `card` list names the files the release offers for the SD card.
+Each entry has the card `path` in upper-case 8.3 names
+(`FUJIMOD/RECIPES/AGFAOPT.JSN`), the release `asset` that holds it, its
+`sha256` and `bytes`, and optionally `title` and `author`. Entries with a
+`processor` (a catalog processor name such as `EXR Processor II`) are that
+processor's SD boot files at the card root (`FFBOOT.BIN`, `FFSYS.BIN`,
+`FM_EXR2.BIN`) and are written only for its cameras; the others are optional
+files the user may leave out. Local development adds a card file directory
+(`card.json` and its assets) to the configured release with
+`FUJIMOD_CARD_FILES`.
+
 An optional `notes.md` (one per release, not per body) is referenced from
 `patches.json` by filename. Without it no notes are shown. The
 site renders it with a restricted Markdown renderer: headings, lists,
@@ -135,6 +149,24 @@ Disclaimer, in bold above each download button:
 
 Followed by: "[Recovery tools](/recovery/) are available in the very unlikely
 event this bricks your camera."
+
+## SD card download
+
+The homepage section after the feature catalog builds one card for any set of
+release cameras. A floating checklist lists every release camera by mod count;
+cameras whose root boot files differ from a chosen camera's are disabled. The
+section is drawn as an SD card holding the card's file tree, with notes above
+the files they describe. Optional card files and `FUJIMOD/.git` (Track
+changes with Git) have include boxes; excluded files are dimmed.
+
+Choosing a camera loads `/ota/<FIRMWARE>/latest.json`, the camera update
+release whose store files fill `FUJIMOD/SYSTEM/STORE/`. The download writes
+the processor's boot files, the chosen card files, each camera's first-install
+`A.JSN` (generation 1) and `STATE.JSN`, and every store file once, checks each
+fetched file's size and SHA-256, and zips the card's root as
+`fujimod-sd-card-<release>.zip`. With Git tracking, `FUJIMOD/.git` holds one
+commit of every file under `FUJIMOD/` and an index, so `git status` starts
+clean.
 
 ## Download filenames
 
