@@ -290,6 +290,7 @@
     "film-sims": "not-run",
     "card-films": "not-run",
     "film-editor": "not-run",
+    "film-grain": "not-run",
     "highlight-meter": "not-run",
     "raw-view": "not-run",
     "f-log": "not-run",
@@ -306,6 +307,7 @@
     "af-scene-capture": "not-run",
     "bug-report": "not-run",
     "sd-volume-name": "not-run",
-    "date-folders": "not-run"
+    "date-folders": "not-run",
+    "software-nd": "not-run"
   }
 }
