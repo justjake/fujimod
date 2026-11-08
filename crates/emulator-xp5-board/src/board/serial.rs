@@ -21,11 +21,52 @@ pub(super) struct Connection {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 enum Part {
-    PowerController { rtc_seconds: u32, rtc_valid: bool },
+    PowerController {
+        rtc_seconds: u32,
+        rtc_valid: bool,
+        /// xt5-bringup: initial register overrides (address -> value), for
+        /// example register 0 bit 7, which the X-T5 stage1 polls at boot.
+        #[serde(default)]
+        registers: std::collections::BTreeMap<String, u16>,
+    },
     SerialCalibrationRegisters { miso_high: bool },
     SerialCommandRegisters(fujimod_emulator_parts_io::serial_command_registers::Wiring),
     BisConfigurationRegisters { revision: [u8; 2], idle_high: bool },
     Lsm6dsConfigurationRegisters,
+    /// xt5-bringup: an unidentified chip. Accepts every frame, records the
+    /// last words written and answers with a fixed MISO level.
+    GenericSink { miso_high: bool },
+}
+/// xt5-bringup: endpoint for bring-up of bodies whose serial parts are not yet identified.
+struct GenericSink {
+    miso_high: bool,
+    transfers: u64,
+    last: Vec<u16>,
+}
+impl Endpoint for GenericSink {
+    fn name(&self) -> &'static str {
+        "generic-sink"
+    }
+    fn validate(&self, _: fujimod_emulator_parts_io::serial::Frame) -> Result<(), String> {
+        Ok(())
+    }
+    fn reset_transaction(&mut self) {}
+    fn transfer(&mut self, frame: fujimod_emulator_parts_io::serial::Frame, _: u64) -> u16 {
+        self.transfers += 1;
+        self.last.push(frame.word);
+        if self.last.len() > 16 {
+            self.last.remove(0);
+        }
+        if self.miso_high { u16::MAX } else { 0 }
+    }
+    fn save(&self) -> serde_json::Value {
+        serde_json::json!({"miso_high": self.miso_high, "transfers": self.transfers, "last": self.last})
+    }
+    fn restore(&mut self, state: &serde_json::Value) -> Result<(), String> {
+        self.transfers = state["transfers"].as_u64().unwrap_or(0);
+        self.last = state["last"].as_array().map(|a| a.iter().filter_map(|v| v.as_u64().map(|v| v as u16)).collect()).unwrap_or_default();
+        Ok(())
+    }
 }
 /// A power controller whose key-ladder registers are driven by the body's
 /// controls. Their value is refreshed before every transfer, so the guest reads
@@ -90,9 +131,15 @@ fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn E
         Part::PowerController {
             rtc_seconds,
             rtc_valid,
+            registers,
         } => {
             let mut part = PowerController::new();
             part.configure_rtc(rtc_seconds, rtc_valid);
+            for (address, value) in registers {
+                let address = u8::from_str_radix(address.trim_start_matches("0x"), 16)
+                    .map_err(|e| format!("power-controller register {address}: {e}"))?;
+                part.set_register(address, value);
+            }
             match controls
                 .map(|controls| (controls.register_ladders(), controls))
                 .filter(|(registers, _)| !registers.is_empty())
@@ -124,6 +171,7 @@ fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn E
         Part::Lsm6dsConfigurationRegisters => {
             Box::new(fujimod_emulator_parts_io::lsm6ds::Registers::default())
         }
+        Part::GenericSink { miso_high } => Box::new(GenericSink { miso_high, transfers: 0, last: vec![] }),
     })
 }
 fn attachments(
@@ -203,6 +251,7 @@ mod tests {
     fn attach(controls: Arc<dyn Controls>) -> Box<dyn Endpoint> {
         endpoint(
             Part::PowerController {
+                registers: Default::default(),
                 rtc_seconds: 0,
                 rtc_valid: true,
             },
