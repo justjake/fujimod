@@ -55,6 +55,9 @@ struct RunState {
     instructions: u64,
     ticks: u64,
     tick_phase: u64,
+    /// Tick at which device deadlines must next be scanned; zero after any
+    /// device state change, so the scan runs on the next instruction.
+    device_scan_at: u64,
     per_core: Vec<u64>,
     waiting: Vec<u8>, // 0 runnable, 1 WFI, 2 WFE
     events: Vec<bool>,
@@ -211,6 +214,7 @@ impl Cluster {
         let result = action(&mut devices, now);
         unsafe {
             (*self.state.get()).devices = Some(devices);
+            (*self.state.get()).device_scan_at = 0;
         }
         result
     }
@@ -1600,6 +1604,7 @@ impl Session {
                 instructions: 0,
                 ticks: 0,
                 tick_phase: 0,
+                device_scan_at: 0,
                 per_core: vec![0; cores],
                 waiting: vec![0; cores],
                 events: vec![false; cores],
@@ -2134,11 +2139,13 @@ impl Session {
         let result = devices.set_adc_input(c, channel, sample);
         unsafe {
             (*c.state.get()).devices = Some(devices);
+            (*c.state.get()).device_scan_at = 0;
         }
         result
     }
     pub fn set_gpio_input(&self, port: usize, pin: usize, high: bool) -> Result<(), String> {
         let state = unsafe { &mut *self.inner.state.get() };
+        state.device_scan_at = 0;
         if state.driver_guard.is_some() {
             return Err("Guarded routine cannot change external GPIO inputs".to_owned());
         }

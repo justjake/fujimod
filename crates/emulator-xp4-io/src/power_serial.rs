@@ -76,7 +76,7 @@ impl PowerSerial {
             || pin >= 16
             || inputs
                 .keys()
-                .any(|k| !matches!(*k, 0..=6 | 16 | 24 | 32 | 34 | 35))
+                .any(|k| !matches!(*k, 0..=6 | 16 | 21 | 24 | 27 | 32 | 34 | 35))
             || [0, 1, 2, 3, 32, 34, 35]
                 .iter()
                 .any(|n| !inputs.contains_key(n))
@@ -109,7 +109,7 @@ impl PowerSerial {
         })
     }
     fn writable(register: u8) -> bool {
-        matches!(register, 2 | 18 | 32 | 34 | 35 | 38 | 48..=55)
+        matches!(register, 2 | 13 | 14 | 17 | 18 | 20 | 23 | 32 | 34 | 35 | 37 | 38 | 48..=55)
     }
 }
 impl Input for PowerSerial {
@@ -174,7 +174,7 @@ impl Input for PowerSerial {
                 if self.header & 1 != 0 {
                     let register = self.header >> 2;
                     let value = u16::from(self.high) << 8 | u16::from(tx);
-                    if register == 23 {
+                    if register == 23 && self.inputs.contains_key(&24) {
                         if !self.inputs.contains_key(&24) || self.header & 2 != 0 || value != 0x0400
                         {
                             return Err("Unsupported provisional power probe payload".into());
