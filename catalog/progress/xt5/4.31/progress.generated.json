@@ -5,7 +5,7 @@
   "model": "X-T5",
   "version": "4.31",
   "facts": {
-    "located": 16,
+    "located": 17,
     "total": 18
   },
   "boot_rom": null,
@@ -22,7 +22,7 @@
         {
           "id": "analysis",
           "title": "Function index built and facts located",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "catalog",
