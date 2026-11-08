@@ -1096,7 +1096,7 @@ mod tests {
     }
 
     #[test]
-    fn only_the_xt20_body_adds_the_h264_layout() {
+    fn only_the_xt20_body_adds_the_h264_and_playback_registers() {
         for (configuration, expected) in [
             ("gfx50r-311", false),
             ("xt2-441", false),
@@ -1121,6 +1121,13 @@ mod tests {
                     .any(|block| block.base == 0xfff5_b000),
                 expected,
                 "{configuration} H.264 idle block"
+            );
+            assert_eq!(
+                maps.register_blocks
+                    .iter()
+                    .any(|block| block.base == 0xfffd_5000),
+                expected,
+                "{configuration} playback display block"
             );
         }
     }
@@ -1201,6 +1208,14 @@ mod tests {
         // Still capture: development engines, the second DRAM controller's
         // commands, the read-out unit, the JPEG codecs and the second DRAM bank.
         let engine = |base: u64| blocks.clone().find(|m| m["base"] == base).unwrap();
+        // Playback display engine: the completed descriptor's scanout raises
+        // source 0x43 / GIC line 143, and +0x064 acknowledges the job.
+        assert_eq!(
+            engine(0xfffd_5000)["job"],
+            json!({"start": [0, 1], "status": [0x64, 1], "stop": null, "irq": 143, "ticks": 100000})
+        );
+        assert_eq!(engine(0xfffd_5000)["idle"], json!([[0, 0x8000_0000u32]]));
+        assert_eq!(engine(0xfffd_5000)["fixed"], json!([[0x60, 1]]));
         assert_eq!(
             engine(0xfff9_8000)["job"],
             json!({"start": [4, 1], "status": null, "stop": [0, 1], "irq": 130, "ticks": 144000})

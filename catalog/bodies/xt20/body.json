@@ -91,6 +91,35 @@
               "size": 4096,
               "idle_bits": [],
               "basis": "Register block at 0xfff5b000 of X-T20 2.11 section 5. 0xca1970 reads +0x00 and 0xca1b98 writes +0x00, +0x04, +0x0c and +0x10 from the parameter block at 0x114be2c; no status bit, poll, interrupt or data move is known. The H.264 driver 0x15652c0..0x15663ec never references this page, so it is a separate register block, not a clock or gate for 0xfff5c000. The words read back their last write."
+            },
+            {
+              "base": 4294791168,
+              "size": 4096,
+              "idle_bits": [
+                {
+                  "offset": 0,
+                  "mask": 2147483648
+                }
+              ],
+              "job": {
+                "start": {
+                  "offset": 0,
+                  "mask": 1
+                },
+                "status": {
+                  "offset": 100,
+                  "mask": 1
+                },
+                "irq_route": 143,
+                "ticks": 100000
+              },
+              "fixed_words": [
+                {
+                  "offset": 96,
+                  "value": 1
+                }
+              ],
+              "basis": "Playback display engine of X-T20 2.11 at 0xfffd5000. 0xc542d8 configures it and registers 0xc5421c for source 0x43 (descriptor row 0xed4a44, GIC line 0x8f = 143) with data 0x109f9b4. +0x000 bit 31 is ready and bit 0 starts a scanout; +0x008/+0x00c are the luma/chroma bases, +0x010 width, +0x014 pitch and +0x018 height in bits 16..31 (the stock path writes 1920, 1920 and 0x04400080 for a 1920x1088 frame). Completion status is +0x060 (bits 8/4/0), the mirror is +0x064, and +0x068 is final control; the handler reads +0x060, writes +0x064 and calls the queued callback, which posts 0x12c2. The 3-slot queue at 0x109f9b4 is guest RAM: byte +4 initialized, byte +5 running, word +0x0c slot count 3 and word +0x10 pending; 0xc54708/0xc54784 and the descriptor slots are guest writes, not modeled here. The job is one declared 100000-tick completion per start with status +0x064 bit 0 on IRQ 143; the real latency is not measured."
             }
           ],
           "h264_encoder": {

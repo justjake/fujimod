@@ -11,6 +11,7 @@ pub struct TestHost {
     pub effects: Vec<&'static str>,
     pub irqs: Vec<(usize, u32)>,
     pub levels: std::collections::BTreeMap<(usize, u32), bool>,
+    pub scanouts: Vec<crate::graphics::scanout::Frame>,
 }
 impl TestHost {
     pub fn new() -> Self {
@@ -57,6 +58,10 @@ impl Host for TestHost {
             .ok_or("unmapped write")?
             .copy_from_slice(b);
         self.effects.push("dma");
+        Ok(())
+    }
+    fn scanout(&mut self, frame: crate::graphics::scanout::Frame) -> Result<(), String> {
+        self.scanouts.push(frame);
         Ok(())
     }
     fn record(&mut self, _: Record) {}
