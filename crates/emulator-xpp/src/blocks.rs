@@ -56,9 +56,14 @@
 //! A block may publish its words for another block to read: the development
 //! engine reads the color unit 0xfff47000 this way when its film law is
 //! declared ([`crate::development::FILM_PROFILE`]).
+//!
+//! A job may declare a [`MovieOutput`]: when it finishes, the padded I420 frame
+//! its registers point at is converted to RGBA and published to one host
+//! scanout (the X-T20 2.11 playback display engine 0xfffd5000).
+use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
@@ -162,6 +167,23 @@ pub struct Job {
     pub irq: u32,
     pub ticks: u64,
 }
+/// X-T20 2.11 movie display engine: a job that scans a padded I420 frame to a
+/// host output when it finishes. The frame planes are the luma and chroma
+/// bases; the programmed width and height are padded up to the engine's
+/// 16-line alignment.
+#[derive(Clone, Copy, Debug)]
+pub struct MovieOutput {
+    pub output: usize,
+}
+/// X-T20 2.11 playback display engine register window.
+pub const MOVIE_OUTPUT_BASE: u64 = 0xfffd_5000;
+/// Host output index of the movie display, separate from the panel OSD output.
+pub const MOVIE_OUTPUT: usize = 1;
+const MOVIE_LUMA: u64 = 0x008;
+const MOVIE_CHROMA: u64 = 0x00c;
+const MOVIE_WIDTH: u64 = 0x010;
+const MOVIE_PITCH: u64 = 0x014;
+const MOVIE_GEOMETRY: u64 = 0x018;
 /// Command law of a block: writing `value` to `word` sets the bits `mask` of
 /// the status word `status` to `state`.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -229,6 +251,38 @@ fn whole(scene: fujimod_virtual_scene::Scene) -> fujimod_virtual_scene::Crop {
         height: scene.height,
     }
 }
+/// Tightly packed I420 (Y, Cb, Cr) to RGBA, BT.601 limited range, in the host
+/// scanout's red-first byte order.
+fn i420_to_rgba(width: usize, height: usize, y_plane: &[u8], uv: &[u8]) -> Result<Vec<u8>, String> {
+    let pixels = width
+        .checked_mul(height)
+        .ok_or("Movie frame size overflows")?;
+    let chroma = pixels / 4;
+    if width & 1 != 0 || height & 1 != 0 || y_plane.len() != pixels || uv.len() != chroma * 2 {
+        return Err("Invalid X-Processor Pro movie I420 frame".into());
+    }
+    let (cb, cr) = uv.split_at(chroma);
+    let cw = width / 2;
+    let clamp = |value: i32| value.clamp(0, 255) as u8;
+    let mut rgba = Vec::with_capacity(pixels * 4);
+    for row in 0..height {
+        let y_row = &y_plane[row * width..][..width];
+        let c_row = (row / 2) * cw;
+        for column in 0..width {
+            let y = i32::from(y_row[column]);
+            let u = i32::from(cb[c_row + column / 2]) - 128;
+            let v = i32::from(cr[c_row + column / 2]) - 128;
+            let c = 298 * (y - 16);
+            rgba.extend_from_slice(&[
+                clamp((c + 409 * v + 128) >> 8),
+                clamp((c - 100 * u - 208 * v + 128) >> 8),
+                clamp((c + 516 * u + 128) >> 8),
+                255,
+            ]);
+        }
+    }
+    Ok(rgba)
+}
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -242,6 +296,8 @@ struct State {
     status: u32,
     #[serde(default, skip_serializing_if = "is_zero")]
     jobs: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    movie_frames: u64,
 }
 const BUFFER: u64 = 0xc0;
 const WIDTH: u64 = 0xc4;
@@ -259,6 +315,7 @@ pub struct Block {
     frames: Option<Frames>,
     job: Option<Job>,
     work: Option<Work>,
+    movie: Option<MovieOutput>,
     /// Lines and the Y0 Y1 Cb Cr pixel pair of a uniform live-view image.
     image: Option<(u32, Picture)>,
     /// (offset, value) of words that read a fixed value whatever is written.
@@ -322,6 +379,7 @@ impl Block {
             frames,
             job: None,
             work: None,
+            movie: None,
             image: None,
             fixed: Vec::new(),
             commands: Vec::new(),
@@ -356,6 +414,14 @@ impl Block {
             return Err("Invalid X-Processor Pro register block job".into());
         }
         self.job = Some(job);
+        Ok(self)
+    }
+    /// Scan the job's padded I420 frame to `output` when it finishes.
+    pub fn with_movie_output(mut self, output: usize) -> Result<Self, String> {
+        if self.job.is_none() || self.size <= MOVIE_GEOMETRY || output > 8 {
+            return Err("Invalid X-Processor Pro movie output".into());
+        }
+        self.movie = Some(MovieOutput { output });
         Ok(self)
     }
     /// Data the job moves when it finishes.
@@ -852,6 +918,48 @@ impl Block {
         }
         self.state.words.get(&offset).copied().unwrap_or(0) & !self.stopped_mask(offset) | idle
     }
+    /// Publish the movie engine's padded I420 frame as one host scanout.
+    fn scan_movie(&mut self, cx: &mut Cx<'_>, movie: MovieOutput) -> Result<(), String> {
+        let word = |offset| self.state.words.get(&offset).copied().unwrap_or(0);
+        let width = u64::from(word(MOVIE_WIDTH));
+        let pitch = u64::from(word(MOVIE_PITCH));
+        let height = u64::from(word(MOVIE_GEOMETRY) >> 16);
+        if width == 0 || height == 0 {
+            return Ok(());
+        }
+        if width > 0x2000 || height > 0x2000 || pitch != width {
+            return Err("Invalid X-Processor Pro movie geometry".into());
+        }
+        // The descriptor aligns the frame height up to the engine's 16-line
+        // block; the player buffer holds the padded planes.
+        let lines = (height + 0xf) & !0xf;
+        let pixels = width
+            .checked_mul(lines)
+            .ok_or("Movie frame size overflows")?;
+        let luma = u64::from(word(MOVIE_LUMA));
+        let chroma = u64::from(word(MOVIE_CHROMA));
+        let y = cx.ram_bytes(luma, pixels as usize)?;
+        let uv = cx.ram_bytes(chroma, (pixels / 2) as usize)?;
+        let rgba = i420_to_rgba(width as usize, lines as usize, &y, &uv)?;
+        self.state.movie_frames += 1;
+        let sequence = self.state.movie_frames;
+        cx.output_status(
+            movie.output,
+            json!({
+                "active": true, "format": "rgba8888-premultiplied",
+                "width": width, "height": lines, "sequence": sequence,
+                "source": format!("0x{luma:x}"), "chroma": format!("0x{chroma:x}"),
+                "capture": "movie-i420",
+            }),
+        )?;
+        cx.scanout(Frame {
+            output: movie.output,
+            sequence,
+            width: width as u32,
+            height: lines as u32,
+            rgba,
+        })
+    }
 }
 impl Device for Block {
     fn name(&self) -> &'static str {
@@ -952,6 +1060,11 @@ impl Device for Block {
                 {
                     return cx.fail(e);
                 }
+                if let Some(movie) = self.movie
+                    && let Err(e) = self.scan_movie(cx, movie)
+                {
+                    return cx.fail(e);
+                }
                 self.state.jobs += 1;
                 self.state.status |= job.status.map_or(1, |(_, mask)| mask);
                 cx.set_irq(job.irq, true);
@@ -1027,6 +1140,7 @@ impl Block {
             || self.frames.is_some() && started != state.due.is_some()
             || self.frames.is_none() && self.job.is_none() && state.due.is_some()
             || self.job.is_none() && (state.status != 0 || state.jobs != 0)
+            || self.movie.is_none() && state.movie_frames != 0
             || self.job.is_some_and(|j| match j.status {
                 Some((offset, mask)) => {
                     state.status & !mask != 0 || state.words.contains_key(&offset)
@@ -1050,6 +1164,69 @@ mod tests {
     use fujimod_emulator_devices::test_host::{TestHost, read, write};
 
     const BASE: u64 = 0xfff55000;
+
+    #[test]
+    fn i420_converts_black_and_gray_with_bt601_limited_range() {
+        // 2 x 2: black luma, neutral chroma.
+        let rgba = i420_to_rgba(2, 2, &[16, 16, 16, 16], &[128, 128]).unwrap();
+        assert_eq!(
+            rgba,
+            [0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255]
+        );
+        // Mid luma keeps the neutral chroma gray.
+        let rgba = i420_to_rgba(2, 2, &[128, 128, 128, 128], &[128, 128]).unwrap();
+        assert_eq!(rgba, [130, 130, 130, 255].repeat(4));
+        assert!(i420_to_rgba(3, 2, &[0; 6], &[128; 3]).is_err());
+    }
+
+    #[test]
+    fn a_movie_job_scans_its_padded_i420_frame_to_the_declared_output() {
+        use fujimod_emulator_devices::test_host::advance;
+        let mut unit = Block::new(MOVIE_OUTPUT_BASE, 0x1000, vec![(0, 0x8000_0000)], None)
+            .unwrap()
+            .with_job(Job {
+                start: (0, 1),
+                status: Some((0x64, 1)),
+                stop: None,
+                irq: 143,
+                ticks: 100,
+            })
+            .unwrap()
+            .with_fixed(vec![(0x60, 1)])
+            .unwrap()
+            .with_movie_output(MOVIE_OUTPUT)
+            .unwrap();
+        assert!(
+            Block::new(MOVIE_OUTPUT_BASE, 0x1000, vec![], None)
+                .unwrap()
+                .with_movie_output(MOVIE_OUTPUT)
+                .is_err()
+        );
+        let mut h = TestHost::new();
+        // 2 x 2 black frame padded to the engine's 16-line block.
+        h.ram[0x1000..0x1020].fill(16);
+        h.ram[0x2000..0x2010].fill(128);
+        write(&mut unit, &mut h, MOVIE_OUTPUT_BASE + MOVIE_LUMA, 0x1000);
+        write(&mut unit, &mut h, MOVIE_OUTPUT_BASE + MOVIE_CHROMA, 0x2000);
+        write(&mut unit, &mut h, MOVIE_OUTPUT_BASE + MOVIE_WIDTH, 2);
+        write(&mut unit, &mut h, MOVIE_OUTPUT_BASE + MOVIE_PITCH, 2);
+        write(
+            &mut unit,
+            &mut h,
+            MOVIE_OUTPUT_BASE + MOVIE_GEOMETRY,
+            (2 << 16) | 0x80,
+        );
+        write(&mut unit, &mut h, MOVIE_OUTPUT_BASE, 1);
+        advance(&mut unit, &mut h, 100);
+        assert_eq!(read(&mut unit, &mut h, MOVIE_OUTPUT_BASE + 0x64) & 1, 1);
+        assert_eq!(unit.state.movie_frames, 1);
+        assert_eq!(h.scanouts.len(), 1);
+        let frame = &h.scanouts[0];
+        assert_eq!(frame.output, MOVIE_OUTPUT);
+        assert_eq!((frame.width, frame.height), (2, 16));
+        assert_eq!(frame.rgba.len(), 2 * 16 * 4);
+        assert_eq!(&frame.rgba[..4], &[0, 0, 0, 255]);
+    }
 
     #[test]
     fn byte_accesses_merge_into_the_word() {

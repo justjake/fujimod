@@ -869,6 +869,9 @@ pub fn build(
                         ticks: j.ticks,
                     })?;
                 }
+                if base == blocks::MOVIE_OUTPUT_BASE {
+                    model = model.with_movie_output(blocks::MOVIE_OUTPUT)?;
+                }
                 if let Some(work) = work {
                     let film = color.is_some();
                     let (profile, law, reads_color) = match work {
