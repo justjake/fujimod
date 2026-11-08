@@ -26,9 +26,11 @@ const KEY_MIC_OFFSET: usize = EAPOL_HEADER + 77;
 const KEY_DATA_OFFSET: usize = EAPOL_HEADER + KEY_BODY;
 
 /// RSN element for CCMP pairwise and group ciphers and PSK authentication.
+/// RSN element: version 1, group CCMP, one pairwise suite (CCMP), one AKM
+/// suite (PSK), capabilities 0.
 pub const RSN_ELEMENT: [u8; 22] = [
-    48, 20, 1, 0, 0x00, 0x0f, 0xac, 4, 0x00, 0x0f, 0xac, 4, 1, 0, 0x00, 0x0f, 0xac, 2, 0x00, 0x00,
-    0x00, 0x00,
+    48, 20, 1, 0, 0x00, 0x0f, 0xac, 4, 1, 0, 0x00, 0x0f, 0xac, 4, 1, 0, 0x00, 0x0f, 0xac, 2, 0x00,
+    0x00,
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Deserialize, Serialize)]
@@ -86,7 +88,7 @@ impl Authenticator {
         }
         let mut frame = self.key_frame(key_info, 0, &self.anonce, &[0; 16], &[]);
         if key_info & KEY_MIC != 0 {
-            let mic = eapol_mic(&self.kck, &frame[EAPOL_HEADER..]);
+            let mic = eapol_mic(&self.kck, &frame);
             frame[KEY_MIC_OFFSET..KEY_MIC_OFFSET + 16].copy_from_slice(&mic);
         }
         ethernet(access_point, station, &frame)
@@ -105,16 +107,10 @@ impl Authenticator {
         }
         let eapol = eapol_payload(frame)?;
         let key_info = u16::from_be_bytes([eapol[5], eapol[6]]);
-        if eapol[1] != EAPOL_KEY {
-            eprintln!("bad type");
-            return None;
-        }
-        if key_info & 7 != DESCRIPTOR_VERSION {
-            eprintln!("bad desc {key_info:#x}");
-            return None;
-        }
-        if key_info & (KEY_ACK | KEY_MIC) != KEY_MIC {
-            eprintln!("bad bits {key_info:#x}");
+        if eapol[1] != EAPOL_KEY
+            || key_info & 7 != DESCRIPTOR_VERSION
+            || key_info & (KEY_ACK | KEY_MIC) != KEY_MIC
+        {
             return None;
         }
         self.snonce
@@ -132,12 +128,12 @@ impl Authenticator {
             return None;
         }
 
-        // The RSN element must match the beacon exactly. The group-key KDE
-        // carries its own two reserved bytes before the GTK, then the key
-        // data is padded to an eight-byte boundary before AES key wrap.
+        // The RSN element must match the beacon exactly. The GTK KDE is the
+        // OUI, data type 1, key ID 1 (not for transmit), a reserved byte and
+        // the 16-byte GTK; the key data is padded to an eight-byte boundary
+        // before AES key wrap.
         let mut key_data = RSN_ELEMENT.to_vec();
-        let mut kde = vec![221, 22, 0x00, 0x0f, 0xac, 4, 1, 0];
-        kde.extend_from_slice(&[0; 6]);
+        let mut kde = vec![221, 22, 0x00, 0x0f, 0xac, 1, 1, 0];
         kde.extend_from_slice(&self.gtk);
         key_data.extend_from_slice(&kde);
         while !key_data.len().is_multiple_of(8) {
@@ -153,8 +149,8 @@ impl Authenticator {
             | KEY_ENCRYPTED;
         self.sequence = 1;
         increment(&mut self.replay_counter);
-        let mut reply = self.key_frame(key_info, 16, &self.anonce, &[0; 8], &wrapped);
-        let mic = eapol_mic(&self.kck, &reply[EAPOL_HEADER..]);
+        let mut reply = self.key_frame(key_info, 16, &self.anonce, &[0; 16], &wrapped);
+        let mic = eapol_mic(&self.kck, &reply);
         reply[KEY_MIC_OFFSET..KEY_MIC_OFFSET + 16].copy_from_slice(&mic);
         self.phase = Phase::WaitingForMessage4;
         Some(ethernet(access_point, station, &reply))
@@ -198,7 +194,7 @@ impl Authenticator {
         key_info: u16,
         key_length: u16,
         nonce: &[u8; 32],
-        iv: &[u8],
+        iv: &[u8; 16],
         key_data: &[u8],
     ) -> Vec<u8> {
         let mut body = vec![2];

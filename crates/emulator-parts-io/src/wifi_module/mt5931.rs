@@ -11,6 +11,7 @@ const EVENT_COMMAND_RESULT: u8 = 0x01;
 const EVENT_CAPABILITY: u8 = 0x02;
 const EVENT_LINK_QUALITY: u8 = 0x05;
 const EVENT_BASIC_CONFIG: u8 = 0x09;
+const EVENT_ACTIVATE_STA_REC: u8 = 0x0b;
 const EVENT_SCAN_DONE: u8 = 0x0f;
 const EVENT_SCAN_CHANGE: u8 = 0x15;
 const EVENT_TX_DONE: u8 = 0x17;
@@ -110,11 +111,12 @@ pub enum Change {
         fifo: u8,
         count: usize,
     },
+    /// Frames carry their RX packet kind: 0 data (Ethernet-format, such as
+    /// EAPOL and IP), 3 management.
     Response {
         class: u8,
-        frame_kind: u8,
         events: Vec<Vec<u8>>,
-        frames: Vec<Vec<u8>>,
+        frames: Vec<(u8, Vec<u8>)>,
     },
 }
 
@@ -398,20 +400,21 @@ impl Endpoint {
         let class = (packet[3] >> 2) & 0xf;
         let selector = packet[10];
         let mut frames = Vec::new();
-        let frame_kind = if packet_type == 0 {
+        if packet_type == 0 {
             if self.access_point.is_some() {
                 let access_point = self.access_point.clone().unwrap();
-                if frame.get(12..14) == Some(&[0x88, 0x8e]) {
-                    frames = self.eapol(&access_point, frame);
+                let data = if frame.get(12..14) == Some(&[0x88, 0x8e]) {
+                    self.eapol(&access_point, frame)
                 } else if self.wpa2_ready() {
-                    frames = self.network.receive(&access_point, frame, self.ticks);
-                }
+                    self.network.receive(&access_point, frame, self.ticks)
+                } else {
+                    Vec::new()
+                };
+                frames = data.into_iter().map(|frame| (0, frame)).collect();
             }
-            0
         } else {
             frames = self.management(frame);
-            3
-        };
+        }
         let mut body = [0u8; 16];
         body[0] = selector;
         body[1] = 0;
@@ -420,7 +423,6 @@ impl Endpoint {
             Vec::new(),
             Some(Change::Response {
                 class,
-                frame_kind,
                 events: vec![event],
                 frames,
             }),
@@ -486,7 +488,7 @@ impl Endpoint {
         vec![frame]
     }
 
-    fn management(&mut self, frame: &[u8]) -> Vec<Vec<u8>> {
+    fn management(&mut self, frame: &[u8]) -> Vec<(u8, Vec<u8>)> {
         let Some(access_point) = self.access_point.clone() else {
             return Vec::new();
         };
@@ -494,10 +496,11 @@ impl Endpoint {
             return Vec::new();
         }
         let control = u16::from_le_bytes([frame[0], frame[1]]);
+        let management = |frames: Vec<Vec<u8>>| frames.into_iter().map(|frame| (3, frame)).collect();
         match control & 0xfc {
-            0xb0 => self.authentication(&access_point, frame),
+            0xb0 => management(self.authentication(&access_point, frame)),
             0x00 => self.association(&access_point, frame),
-            0x40 => self.probe_response(&access_point, frame),
+            0x40 => management(self.probe_response(&access_point, frame)),
             0xc0 => {
                 self.station.associated = false;
                 Vec::new()
@@ -535,7 +538,9 @@ impl Endpoint {
         vec![reply]
     }
 
-    fn association(&mut self, access_point: &AccessPoint, frame: &[u8]) -> Vec<Vec<u8>> {
+    /// The association response, then for WPA2 the EAPOL message 1 as a
+    /// data frame.
+    fn association(&mut self, access_point: &AccessPoint, frame: &[u8]) -> Vec<(u8, Vec<u8>)> {
         if frame.len() < 28 {
             return Vec::new();
         }
@@ -555,13 +560,13 @@ impl Endpoint {
         self.station.bssid = Some(access_point.bssid);
         self.station.associated = status == 0;
         if status != 0 {
-            return vec![reply];
+            return vec![(3, reply)];
         }
         if let Some(state) = self.wpa2.as_mut() {
             reply.extend_from_slice(&wpa2::RSN_ELEMENT);
-            vec![reply, state.message1(destination, access_point.bssid)]
+            vec![(3, reply), (0, state.message1(destination, access_point.bssid))]
         } else {
-            vec![reply]
+            vec![(3, reply)]
         }
     }
 
@@ -592,9 +597,8 @@ impl Endpoint {
                     Vec::new(),
                     Some(Change::Response {
                         class: 4,
-                        frame_kind: 3,
                         events,
-                        frames,
+                        frames: frames.into_iter().map(|frame| (3, frame)).collect(),
                     }),
                 ));
             }
@@ -625,7 +629,18 @@ impl Endpoint {
             }
             0x17 if body.len() == 40 => {
                 self.station.selector = body[0];
-                events.push(Self::command_result(cid, sequence));
+                // UPDATE_STA_RECORD with its activate byte set is answered
+                // with ACTIVATE_STA_REC: the record's address and index.
+                // Stock marks the peer ready from it, and holds frames sent
+                // through the control path (EAPOL) until then.
+                if body[34] != 0 {
+                    let mut activated = [0u8; 8];
+                    activated[..6].copy_from_slice(&body[2..8]);
+                    activated[6] = body[0];
+                    events.push(Self::event(EVENT_ACTIVATE_STA_REC, sequence, &activated));
+                } else {
+                    events.push(Self::command_result(cid, sequence));
+                }
             }
             0x18 if body.len() == 8 => {
                 self.station.associated = false;
@@ -670,9 +685,8 @@ impl Endpoint {
                     Vec::new(),
                     Some(Change::Response {
                         class: 4,
-                        frame_kind: 3,
                         events,
-                        frames,
+                        frames: frames.into_iter().map(|frame| (3, frame)).collect(),
                     }),
                 ));
             }
@@ -725,7 +739,6 @@ impl Endpoint {
             Vec::new(),
             Some(Change::Response {
                 class: 4,
-                frame_kind: 0,
                 events,
                 frames: Vec::new(),
             }),
@@ -835,7 +848,6 @@ impl Endpoint {
             }
             Change::Response {
                 class,
-                frame_kind,
                 events,
                 frames,
             } => {
@@ -845,8 +857,8 @@ impl Endpoint {
                     *credit = credit.saturating_add(1);
                 }
                 self.interrupt_status |= 1;
-                for frame in frames {
-                    self.push_frame(frame_kind, &frame);
+                for (kind, frame) in frames {
+                    self.push_frame(kind, &frame);
                 }
                 for event in events {
                     self.push_event(event);
