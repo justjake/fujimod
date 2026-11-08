@@ -51,6 +51,9 @@ struct Model {
     memory: std::collections::BTreeMap<u32, u8>,
     callback_disconnect: bool,
     triggered: bool,
+    close_reply: Option<[u8; 2]>,
+    close_controls: usize,
+    release_attempts: usize,
 }
 struct Provider {
     descriptors: Vec<InterfaceDescriptor>,
@@ -154,8 +157,10 @@ impl Endpoints for ModelEndpoints {
                 }
                 0xc4 => {
                     assert!(model.session_open);
+                    assert_eq!(&data[10..12], &42u16.to_be_bytes());
+                    model.close_controls += 1;
                     model.session_open = false;
-                    model.reply = vec![0, 0];
+                    model.reply = model.close_reply.unwrap_or([0, 0]).to_vec();
                 }
                 0xd0 => model.reply.clear(),
                 0xd1 => {}
@@ -265,11 +270,11 @@ impl Endpoints for ModelEndpoints {
     }
     fn release(&mut self) -> EndpointFuture<'_, Result<(), TransferError>> {
         Box::pin(async move {
-            let behavior = self
-                .0
-                .try_lock()
-                .expect("serialized endpoint state")
-                .release_behavior;
+            let behavior = {
+                let mut model = self.0.try_lock().expect("serialized endpoint state");
+                model.release_attempts += 1;
+                model.release_behavior
+            };
             match behavior {
                 ResourceBehavior::Normal => {
                     self.0
@@ -331,6 +336,134 @@ fn external_provider_runs_existing_commands_and_explicit_close() {
         .expect("serialized endpoint state");
     assert!(!model.claimed);
     assert!(!model.session_open);
+}
+
+#[test]
+fn checked_close_validates_reply_before_explicit_host_release() {
+    let mut provider = Provider::new();
+    let session = open(&mut provider, 128);
+    let expected = session.info().id.to_le_bytes();
+    provider.model.try_lock().unwrap().close_reply = Some(expected);
+    assert_eq!(block_on(session.close_checked(expected)).unwrap(), expected);
+    let model = provider.model.try_lock().unwrap();
+    assert_eq!((model.close_controls, model.release_attempts), (1, 1));
+    assert!(!model.claimed && !model.session_open);
+}
+
+#[test]
+fn checked_close_wrong_reply_consumes_session_and_only_drops_host_resources() {
+    for reply in [[0, 0], [43, 0], [0, 42]] {
+        let mut provider = Provider::new();
+        let session = open(&mut provider, 128);
+        let expected = session.info().id.to_le_bytes();
+        provider.model.try_lock().unwrap().close_reply = Some(reply);
+        assert!(matches!(
+            block_on(session.close_checked(expected)),
+            Err(Error::Protocol(ProtocolError::ExpectationMismatch))
+        ));
+        let model = provider.model.try_lock().unwrap();
+        assert_eq!((model.close_controls, model.release_attempts), (1, 0));
+        assert!(!model.claimed);
+        // The test peer completed C4 before supplying an invalid reply. The
+        // caller must still report failure rather than infer that completion.
+        assert!(!model.session_open);
+    }
+}
+
+#[test]
+fn checked_close_mismatch_is_recorded_as_a_protocol_failure() {
+    let mut provider = Provider::new();
+    let trace = fujimod_usb::trace::Trace::new(
+        NonZeroU32::new(64).unwrap(),
+        NonZeroU32::new(4096).unwrap(),
+    );
+    let connection = block_on(Connection::open_emulated(
+        &mut provider,
+        SELECTION,
+        options(128),
+    ))
+    .unwrap();
+    let session = block_on(connection.begin_session(Some(trace.clone()))).unwrap();
+    let expected = session.info().id.to_le_bytes();
+    assert!(matches!(
+        block_on(session.close_checked(expected)),
+        Err(Error::Protocol(ProtocolError::ExpectationMismatch))
+    ));
+    let batch = trace.drain();
+    assert!(batch.protocol_events.iter().any(|event| {
+        event.command == 0xc4
+            && matches!(
+                &event.action,
+                fujimod_usb::trace::Action::Failed {
+                    data,
+                    failure: fujimod_usb::trace::Failure::Other(_),
+                    ..
+                } if data == &[0, 0]
+            )
+    }));
+}
+
+#[test]
+fn checked_close_transfer_errors_drop_resources_without_cleanup_or_retry() {
+    for behavior in [
+        ReadBehavior::Disconnected,
+        ReadBehavior::Cancelled,
+        ReadBehavior::Short,
+        ReadBehavior::Pending,
+    ] {
+        let mut provider = Provider::new();
+        let session = open(&mut provider, 128);
+        let expected = session.info().id.to_le_bytes();
+        {
+            let mut model = provider.model.try_lock().unwrap();
+            model.close_reply = Some(expected);
+            model.read_behavior = behavior;
+        }
+        assert!(block_on(session.close_checked(expected)).is_err());
+        let model = provider.model.try_lock().unwrap();
+        assert_eq!((model.close_controls, model.release_attempts), (1, 0));
+        assert!(!model.claimed);
+    }
+}
+
+#[test]
+fn cancelled_checked_close_drops_resources_without_another_camera_command() {
+    let mut provider = Provider::new();
+    let session = open(&mut provider, 128);
+    let expected = session.info().id.to_le_bytes();
+    provider.model.try_lock().unwrap().read_behavior = ReadBehavior::Pending;
+    let mut close = Box::pin(session.close_checked(expected));
+    assert!(block_on(poll_once(close.as_mut())).is_none());
+    drop(close);
+    let model = provider.model.try_lock().unwrap();
+    assert_eq!((model.close_controls, model.release_attempts), (1, 0));
+    assert!(!model.claimed);
+}
+
+#[test]
+fn checked_close_reports_release_failure_without_repeating_verified_close() {
+    for behavior in [ResourceBehavior::Pending, ResourceBehavior::Disconnected] {
+        let mut provider = Provider::new();
+        let session = open(&mut provider, 128);
+        let expected = session.info().id.to_le_bytes();
+        {
+            let mut model = provider.model.try_lock().unwrap();
+            model.close_reply = Some(expected);
+            model.release_behavior = behavior;
+        }
+        let error = block_on(session.close_checked(expected)).unwrap_err();
+        assert!(matches!(
+            error,
+            Error::EmulatorResourceTimeout(ResourceOperation::Release)
+                | Error::EmulatorResource {
+                    operation: ResourceOperation::Release,
+                    ..
+                }
+        ));
+        let model = provider.model.try_lock().unwrap();
+        assert_eq!((model.close_controls, model.release_attempts), (1, 1));
+        assert!(!model.claimed && !model.session_open);
+    }
 }
 
 #[test]
