@@ -148,12 +148,21 @@ impl Pair {
         // SA serializes each source access before its destination access.
         // Every beat here already performs that ordered data movement.
         // The request-descriptor option sets bit 0 in both shape registers.
+        // The burst-length field (bits 8-11) only groups beats on the bus, and
+        // the modeled transfer moves every beat in order. Only the all-ones
+        // value is accepted: X-T5 4.31 stage0 programs 0x30f00 in both shape
+        // registers for its memory-to-memory copies. Other burst values stay
+        // unproved and refuse.
+        const BURST: u32 = 0xf00;
         let shape_mask = if c.control & REQUEST_OPTION != 0 {
-            0x30005
+            0x30005 | BURST
         } else {
-            0x30004
+            0x30004 | BURST
         };
+        let burst_ok = |shape: u32| matches!(shape & BURST, 0 | BURST);
         if c.counter_exhausted
+            || !burst_ok(c.source_shape)
+            || !burst_ok(c.destination_shape)
             || c.control
                 & !(ENABLE | SOFTWARE | 0xf00000 | SERIAL_ACCESS | REQUEST_OPTION | BLOCK | ACK_WRITE | 3)
                 != 0

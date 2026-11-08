@@ -104,8 +104,7 @@
             },
             "lower": {
               "description": "Byte offset of the inclusive lower sample value.",
-              "format": "uint16",
-              "maximum": 65535,
+              "format": "uint32",
               "minimum": 0,
               "type": "integer"
             },
@@ -118,8 +117,7 @@
             },
             "upper": {
               "description": "Byte offset of the inclusive upper sample value.",
-              "format": "uint16",
-              "maximum": 65535,
+              "format": "uint32",
               "minimum": 0,
               "type": "integer"
             },
@@ -143,6 +141,25 @@
           "type": "object"
         }
       ]
+    },
+    "AdcTerm": {
+      "additionalProperties": false,
+      "description": "One ADC connection and the band required by a compound callback.",
+      "properties": {
+        "connection_id": {
+          "description": "Body connection carrying this sample.",
+          "type": "string"
+        },
+        "interval": {
+          "$ref": "#/$defs/AdcInterval",
+          "description": "Unconditional interval tested on this sample."
+        }
+      },
+      "required": [
+        "connection_id",
+        "interval"
+      ],
+      "type": "object"
     },
     "AdditionalUiModes": {
       "additionalProperties": false,
@@ -6836,6 +6853,42 @@
     "ElectricalInput": {
       "description": "Located electrical meaning, separate from scanner table operands.",
       "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A callback whose Boolean result is the conjunction of several ADC bands.",
+          "properties": {
+            "callback": {
+              "description": "Located callback evaluating all terms.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "expected_result": {
+              "description": "Callback result interpreted as an active input.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "adc_conjunction",
+              "type": "string"
+            },
+            "terms": {
+              "description": "Every term must hold for the callback to return one.",
+              "items": {
+                "$ref": "#/$defs/AdcTerm"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "terms",
+            "callback",
+            "expected_result"
+          ],
+          "type": "object"
+        },
         {
           "additionalProperties": false,
           "description": "Analog input interpreted using located sample bands or calibration offsets.",
@@ -21503,6 +21556,15 @@
       ],
       "type": "string"
     },
+    "RunFaceResultProfile": {
+      "description": "Closed selection of external face detector results.",
+      "enum": [
+        "empty",
+        "box64x20",
+        "box172x120"
+      ],
+      "type": "string"
+    },
     "RunFaceStopProfile": {
       "description": "Explicit constructor policy selected by a run.",
       "enum": [
@@ -21648,6 +21710,17 @@
             }
           ],
           "description": "Selected face register mode. Absence preserves the base selection."
+        },
+        "face_result_profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunFaceResultProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "External face detector results supplied by the scene."
         },
         "face_stop_profile": {
           "anyOf": [
@@ -25557,6 +25630,16 @@
         "header": {
           "$ref": "#/$defs/UpdateRange",
           "description": "Stock header defaults. Byte 14 is the marker `0xaa`; byte 15 holds the\nchecksum that makes the sixteen bytes sum to zero."
+        },
+        "ram_address": {
+          "default": null,
+          "description": "X-Processor 4 only: the CPU-virtual RAM address where the stock header\nis copied at boot. Absent for X-Processor Pro, whose header goes to\nsub-CPU registers.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "records": {
           "additionalProperties": {

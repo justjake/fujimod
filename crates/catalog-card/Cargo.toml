@@ -7,6 +7,9 @@ rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[lib]
+test = false
+
 [dependencies]
 fujimod-catalog-bulk.workspace = true
 serde = { workspace = true, features = ["derive"] }

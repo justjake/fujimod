@@ -2,7 +2,7 @@
 //! Only architectural registers, instruction operands and page tables are
 //! inputs. This never maps a page, repairs a descriptor or calls a device.
 use super::{Cluster, ExceptionEntry};
-use fujimod_emulator_cpu::{Access, arm};
+use fujimod_emulator_cpu::{Access, Cpu, arm};
 
 struct Mmu {
     sctlr: u32,

@@ -177,7 +177,7 @@ fn create_policy(
         .as_array_mut()
         .unwrap()
         .push(json!({"core":0,"address":0xfff70000u64,"physical":0xfff70000u64,"size":4096}));
-    config["graph"]["devices"]["nodes"].as_array_mut().unwrap().push(json!({"name":"sd","boot_entries":["loader"],"windows":[{"base":0xfff70000u64,"size":0x108}],"dependencies":[],"model":{"kind":"sd-host","options":{"protocol":"sdhc","transfer_ticks":2,"clock_ticks":2,"rca":4660,"ram_bytes":0x14000},"card":{"kind":"formatted","options":format,"files":"sd_files"},"present":true,"protected":false,"irq":{"Core":{"core":0,"line":80}}}}));
+    config["graph"]["devices"]["nodes"].as_array_mut().unwrap().push(json!({"name":"sd","boot_entries":["loader"],"windows":[{"base":0xfff70000u64,"size":0x108}],"dependencies":[],"model":{"kind":"sd-host","options":{"base":0xfff70000u64,"protocol":"sdhc","transfer_ticks":2,"clock_ticks":2,"rca":4660,"ram_bytes":0x14000},"card":{"kind":"formatted","options":format,"files":"sd_files"},"present":true,"protected":false,"irq":{"Core":{"core":0,"line":80}}}}));
     config["graph"]["card"] = json!({"node":"sd","format":format});
     config["graph"]["scene"]["files"] = json!({"sd_files":{"KEEP.TXT":"file"}});
     config["graph"]["assets"] = json!({"file":{"kind":"bytes","bytes":[1,2,3]}});

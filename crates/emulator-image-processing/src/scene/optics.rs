@@ -146,27 +146,26 @@ mod tests {
             .1;
         assert!(blurred < sharp);
         assert_eq!(retained_sharp.as_ref(), bytes.as_slice());
-        let saved = optics.fingerprint();
+        let checkpoint = optics.checkpoint().unwrap();
         let pixels = frame.pixels.render(l, 0).unwrap();
         optics.render(&mut frame, false).unwrap();
         assert_eq!(pixels, frame.pixels.render(l, 0).unwrap());
-        assert_eq!(saved, optics.fingerprint());
-        let checkpoint = optics.checkpoint().unwrap();
+        assert_eq!(optics.checkpoint().unwrap(), checkpoint);
         let corrupt = checkpoint.clone().with_blobs(vec![Arc::from([0u8; 4])]);
         assert!(
             optics
                 .restore_checkpoint(&corrupt, l.bytes().unwrap())
                 .is_err()
         );
-        assert_eq!(optics.fingerprint(), saved);
+        assert_eq!(optics.checkpoint().unwrap(), checkpoint);
         frame.pixels = Pixels::Packed(vec![128; bytes.len()].into());
         optics.render(&mut frame, true).unwrap();
-        assert_ne!(optics.fingerprint(), saved);
+        assert_ne!(optics.checkpoint().unwrap(), checkpoint);
         optics
             .restore_checkpoint(&checkpoint, l.bytes().unwrap())
             .unwrap();
         frame.pixels = Pixels::Packed(pixels);
-        assert_eq!(optics.fingerprint(), saved);
+        assert_eq!(optics.checkpoint().unwrap(), checkpoint);
         position.publish(0);
         optics.render(&mut frame, false).unwrap();
         assert_eq!(

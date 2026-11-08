@@ -13,6 +13,11 @@ const DSTS: u32 = 0xc70c;
 const ACTIVE: u32 = 1 << 10;
 const RESET: u32 = 1 << 30;
 const RUN: u32 = 1 << 31;
+const U1_U2_ENABLE: u32 = 0x1e00;
+/// DCTL ULSTCHNGREQ: NO_ACTION (0) or RX_DETECT (5). Other encodings are
+/// unmodeled link states.
+const LINK_REQUEST: u32 = 0x1e0;
+const LINK_REQUEST_RX_DETECT: u32 = 5 << 5;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -298,7 +303,15 @@ impl Dwc3 {
         setup: bool,
         out: Option<Vec<u8>>,
     ) -> Result<Reply, String> {
-        if !self.state.running || !self.state.connected || self.reg(0xc720) & (1 << ep) == 0 {
+        if !self.state.running
+            || !self.state.connected
+            || self.reg(0xc720) & (1 << ep) == 0
+            || self
+                .state
+                .pending
+                .iter()
+                .any(|p| matches!(p.operation, Operation::Reset))
+        {
             return Ok(Reply::Nak);
         }
         if setup {
@@ -596,14 +609,19 @@ impl Device for Dwc3 {
                     self.state.registers.insert(offset, value);
                 }
                 DCTL => {
-                    if value & !(RUN | RESET | 0x1e00) != 0 {
+                    let request = value & LINK_REQUEST;
+                    if value & !(RUN | RESET | U1_U2_ENABLE | LINK_REQUEST) != 0
+                        || !matches!(request, 0 | LINK_REQUEST_RX_DETECT)
+                        || (request != 0 && self.state.connected)
+                    {
                         return Err("Unsupported DWC3 power, test or link-state request".into());
                     }
                     let old = self.reg(offset);
                     if value & RESET != 0 {
-                        if self.state.running || value & RUN != 0 || !self.state.pending.is_empty()
-                        {
-                            return Err("Unsupported active DWC3 core reset".into());
+                        // CSFTRST resets a running device too. Only an idle queue
+                        // is qualified here; cancellation of in-flight commands is not.
+                        if !self.state.pending.is_empty() {
+                            return Err("DWC3 core reset with pending operations".into());
                         }
                         self.queue(cx.now(), self.config.command_ticks, Operation::Reset)?;
                     } else if (old ^ value) & RUN != 0 {
@@ -621,7 +639,13 @@ impl Device for Dwc3 {
                             Operation::Run(value & RUN != 0),
                         )?;
                     }
-                    self.state.registers.insert(offset, value);
+                    // This model performs no link transition, so the accepted
+                    // RX_DETECT request is handled at the write: the one-shot
+                    // field reads back as NO_ACTION (Linux clears the field
+                    // before each request and notes that current cores clear
+                    // it after handling), and a later physical connect is
+                    // unaffected.
+                    self.state.registers.insert(offset, value & !LINK_REQUEST);
                 }
                 0xc714 => {
                     if value & !0x40f != 0
@@ -832,7 +856,8 @@ impl Dwc3 {
             || ring_size & 3 != 0
             || reg(0xc408) & !0x8000fffc != 0
             || reg(0xc708) & !7 != 0
-            || reg(DCTL) & !(RUN | RESET | 0x1e00) != 0
+            // An accepted link request is consumed, so no saved state holds one.
+            || reg(DCTL) & !(RUN | RESET | U1_U2_ENABLE) != 0
             || reg(0xc400) & 3 != 0
             || reg(0xc40c) & 3 != 0
             || reg(0xc40c) > ring_size
@@ -846,7 +871,7 @@ impl Dwc3 {
             || (reg(0xc714) & ACTIVE != 0) != (global_commands == 1)
             || resets > 1
             || (reg(DCTL) & RESET != 0) != (resets == 1)
-            || (reg(DCTL) & RUN != 0) != running
+            || resets == 0 && (reg(DCTL) & RUN != 0) != running
         {
             return Err("Invalid DWC3 checkpoint or changed physical wiring".into());
         }

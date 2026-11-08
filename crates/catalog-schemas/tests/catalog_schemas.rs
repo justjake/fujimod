@@ -46,7 +46,9 @@ fn reference_and_run_configuration_documents_validate_generated_schemas() {
         files.extend(json_files(&catalog.join(layer)).into_iter().filter(|path| {
             // Publishing overrides have a separate web type contract.
             layer != "progress"
-                || path.file_name().is_some_and(|name| name == "progress.generated.json")
+                || path
+                    .file_name()
+                    .is_some_and(|name| name == "progress.generated.json")
         }));
     }
     files.extend(json_files(&package.join("../../configurations/emulator")));
@@ -113,6 +115,66 @@ fn bundled_reference_records_resolve_by_identity() {
             .resolve(body, firmware)
             .unwrap_or_else(|error| panic!("{body} / {firmware}: {error}"));
     }
+}
+
+#[test]
+fn xt30_control_records_validate_physical_ownership_and_local_shutter_levels() {
+    use fujimod_catalog_controls::{ElectricalInput, FirmwareControlIds, PhysicalControls};
+    use std::collections::BTreeSet;
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../catalog");
+    let read = |path: &str| -> Value {
+        serde_json::from_slice(&fs::read(root.join(path)).unwrap()).unwrap()
+    };
+    let body = read("bodies/xt30/body.json");
+    let physical = PhysicalControls::decode_document(
+        &read("bodies/xt30/controls.json"),
+        "xt30 physical controls",
+    )
+    .unwrap();
+    let ids = FirmwareControlIds::decode_document(
+        &read("firmware/xt30/2.01/control-ids.generated.json"),
+        "xt30 control IDs",
+    )
+    .unwrap();
+    let connections: BTreeSet<&str> = body["connections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["id"].as_str().unwrap())
+        .collect();
+    ids.validate(&physical, &connections).unwrap();
+    assert!(body["dram_bytes"].is_null());
+    for key in ["S1", "S2", "K_PLAY", "VIEW", "DELETE"] {
+        assert!(
+            ids.inputs
+                .iter()
+                .any(|input| input.debug_key.as_deref() == Some(key)
+                    && matches!(
+                        &input.electrical,
+                        Some(ElectricalInput::Gpio {
+                            expected_level: false,
+                            ..
+                        })
+                    ))
+        );
+    }
+    let terms = ids
+        .inputs
+        .iter()
+        .find_map(|input| match &input.electrical {
+            Some(ElectricalInput::AdcConjunction { terms, .. }) => Some(terms),
+            _ => None,
+        })
+        .expect("focus-stick press conjunction");
+    assert_eq!(terms.len(), 2);
+    let mut missing = physical.clone();
+    missing
+        .controls
+        .get_mut("focus_stick")
+        .unwrap()
+        .connection_ids
+        .retain(|id| id != &terms[1].connection_id);
+    assert!(ids.validate(&missing, &connections).is_err());
 }
 
 #[test]

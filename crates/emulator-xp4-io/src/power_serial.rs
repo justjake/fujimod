@@ -46,6 +46,14 @@ impl Rtc {
         Ok(())
     }
 }
+/// One explicitly declared uninterpreted external command output.
+/// Acceptance supplies no register readback or device-state effect.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExactCommandOutput { pub bank: bool, pub register: u8, pub value: u16 }
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AcceptedOutput { command: ExactCommandOutput, count: u64 }
 pub struct PowerSerial {
     pins: SharedPins,
     port: usize,
@@ -60,6 +68,8 @@ pub struct PowerSerial {
     high: u8,
     response: u16,
     rtc: Rtc,
+    command_output: Option<ExactCommandOutput>,
+    accepted_output: Option<AcceptedOutput>,
 }
 impl PowerSerial {
     pub fn new(
@@ -70,6 +80,7 @@ impl PowerSerial {
         idle: bool,
         inputs: BTreeMap<u8, u16>,
         rtc_ticks_per_second: u64,
+        command_output: Option<ExactCommandOutput>,
     ) -> Result<Self, String> {
         if inputs.iter().any(|(k, v)| (3..=6).contains(k) && *v > 1023)
             || port >= 16
@@ -87,12 +98,19 @@ impl PowerSerial {
                 "Power SPI needs explicit ADC/status inputs and a physical chip select".into(),
             );
         }
+        if command_output.as_ref().is_some_and(|c| c.register >= 64
+            || Self::writable(c.register) || inputs.contains_key(&c.register)
+            || matches!(c.register, 23 | 24)) {
+            return Err("Command output overlaps a register protocol or input".into());
+        }
         let rtc = Rtc(Counter::new(
             u32::from(inputs[&34]) | u32::from(inputs[&35]) << 16,
             inputs[&32] != 0,
             rtc_ticks_per_second,
         )?);
         Ok(Self {
+            command_output,
+            accepted_output: None,
             pins,
             port,
             pin,
@@ -107,6 +125,23 @@ impl PowerSerial {
             response: 0,
             rtc,
         })
+    }
+    fn output_header(&self, header: u8) -> bool {
+        header & 1 != 0 && self.command_output.as_ref().is_some_and(|c|
+            c.register == header >> 2 && c.bank == (header & 2 != 0))
+    }
+    fn admitted_header(&self, header: u8) -> bool {
+        let register = header >> 2;
+        let bank = header & 2 != 0;
+        let probe = self.inputs.contains_key(&24);
+        if bank && (matches!(register, 32 | 34 | 35) || probe && matches!(register, 23 | 24)) {
+            return false;
+        }
+        if header & 1 != 0 {
+            Self::writable(register) || probe && register == 23 || self.output_header(header)
+        } else {
+            Self::writable(register) || self.inputs.contains_key(&register)
+        }
     }
     fn writable(register: u8) -> bool {
         matches!(register, 2 | 18 | 32 | 34 | 35 | 38 | 48..=55)
@@ -145,7 +180,7 @@ impl Input for PowerSerial {
                     return Err("Provisional power probe supports bank zero only".into());
                 }
                 if tx & 1 != 0 {
-                    if !Self::writable(register) && !(probe && register == 23) {
+                    if !Self::writable(register) && !(probe && register == 23) && !self.output_header(tx) {
                         return Err(format!("Unsupported power SPI write register{register}"));
                     }
                     self.response = 0;
@@ -174,7 +209,13 @@ impl Input for PowerSerial {
                 if self.header & 1 != 0 {
                     let register = self.header >> 2;
                     let value = u16::from(self.high) << 8 | u16::from(tx);
-                    if register == 23 {
+                    if self.output_header(self.header) {
+                        let command = self.command_output.as_ref().unwrap();
+                        if value != command.value { return Err("Unsupported command output payload".into()); }
+                        let count = self.accepted_output.as_ref().map_or(0, |o| o.count)
+                            .checked_add(1).ok_or("Command output count overflow")?;
+                        self.accepted_output = Some(AcceptedOutput { command: command.clone(), count });
+                    } else if register == 23 {
                         if !self.inputs.contains_key(&24) || self.header & 2 != 0 || value != 0x0400
                         {
                             return Err("Unsupported provisional power probe payload".into());
@@ -184,6 +225,9 @@ impl Input for PowerSerial {
                     } else if matches!(register, 32 | 34 | 35) {
                         self.rtc.write(register, value, tick)?;
                     } else {
+                        if !Self::writable(register) {
+                            return Err("Unsupported power SPI write completion".into());
+                        }
                         if register == 38 && value & 0x8000 != 0 {
                             return Err("Power RTC alarm interrupt is not modeled".into());
                         }
@@ -199,12 +243,17 @@ impl Input for PowerSerial {
     fn save(&self) -> Value {
         json!({"kind":"power-registers","port":self.port,"pin":self.pin,"active_high":self.active_high,
         "idle":self.idle,"inputs":self.inputs,"registers":self.registers.iter().map(|(&(b,r),&v)|(b,r,v)).collect::<Vec<_>>(),
+        "command_output":self.command_output,"accepted_output":self.accepted_output,
         "phase":self.phase,"header":self.header,"high":self.high,"response":self.response,"edge":self.edge,"rtc":self.rtc})
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         #[derive(serde::Deserialize)]
         #[serde(deny_unknown_fields)]
         struct State {
+            #[serde(default)]
+            command_output: Option<ExactCommandOutput>,
+            #[serde(default)]
+            accepted_output: Option<AcceptedOutput>,
             kind: String,
             port: usize,
             pin: usize,
@@ -225,7 +274,11 @@ impl Input for PowerSerial {
             .iter()
             .map(|(b, r, v)| ((*b, *r), *v))
             .collect();
-        if state.kind != "power-registers"
+        if state.phase != 0 && (!self.admitted_header(state.header)
+                || state.header & 1 != 0 && state.response != 0)
+            || state.command_output != self.command_output
+            || state.accepted_output.as_ref().is_some_and(|o| o.count == 0 || Some(&o.command) != self.command_output.as_ref())
+            || state.kind != "power-registers"
             || state.port != self.port
             || state.pin != self.pin
             || state.active_high != self.active_high
@@ -240,6 +293,7 @@ impl Input for PowerSerial {
         {
             return Err("Invalid power SPI checkpoint or physical input".into());
         }
+        self.accepted_output = state.accepted_output;
         self.registers = registers;
         self.phase = state.phase;
         self.header = state.header;
@@ -280,6 +334,97 @@ mod tests {
         fn record(&mut self, _: Record) {}
     }
     #[test]
+    fn exact_output_is_opt_in_full_frame_only_and_has_no_register_effects() {
+        let pins = Pins::new([0; 16]);
+        let mut gpio = Gpio::new(BASE, pins.clone()).unwrap();
+        gpio.write(&mut Cx::new(&mut Clock, 3, 0x1234, 0), BASE + 12 * 64, 4, (1 << 21) | (1 << 5));
+        let policy = ExactCommandOutput { bank: false, register: 17, value: 0x1000 };
+        let make = |policy| PowerSerial::new(pins.clone(), 12, 5, true, false,
+            [(0,0),(1,0),(2,0),(3,0),(32,0),(34,0),(35,0)].into(), 54_000_000, policy).unwrap();
+        assert!(make(None).exchange(8, 0x45, 0).is_err());
+        let mut peer = make(Some(policy.clone()));
+        let before = peer.save();
+        assert!(peer.exchange(8, 0x44, 0).is_err()); // No readback.
+        assert!(peer.exchange(8, 0x47, 0).is_err()); // Other bank.
+        assert!(peer.exchange(16, 0x45, 0).is_err());
+        peer.exchange(8, 0x45, 0).unwrap(); peer.exchange(8, 0x10, 1).unwrap();
+        let partial = peer.save();
+        assert!(peer.exchange(8, 1, 2).is_err());
+        assert_eq!(peer.save()["accepted_output"], Value::Null);
+        for field in ["inputs", "rtc", "registers"] { assert_eq!(peer.save()[field], before[field]); }
+        peer.exchange(8, 0, 2).unwrap();
+        assert_eq!(peer.save()["accepted_output"], json!({"command":policy,"count":1}));
+        assert_eq!(peer.save()["registers"], json!([]));
+        let mut resumed = make(Some(policy.clone())); resumed.restore(&partial).unwrap();
+        resumed.exchange(8, 0, 2).unwrap(); assert_eq!(resumed.save(), peer.save());
+        let good = peer.save();
+        for changed in [None, Some(ExactCommandOutput { value: 7, ..policy.clone() })] {
+            assert!(peer.restore(&make(changed).save()).is_err()); assert_eq!(peer.save(), good);
+        }
+        for count in [0, u64::MAX] {
+            let mut edited = good.clone(); edited["accepted_output"]["count"] = json!(count);
+            if count == 0 { assert!(peer.restore(&edited).is_err()); assert_eq!(peer.save(), good); }
+            else {
+                peer.restore(&edited).unwrap(); peer.exchange(8, 0x45, 0).unwrap(); peer.exchange(8, 0x10, 1).unwrap();
+                let before = peer.save(); assert!(peer.exchange(8, 0, 2).is_err()); assert_eq!(peer.save(), before);
+            }
+        }
+        let mut edited = good.clone(); edited["accepted_output"]["command"]["value"] = json!(7);
+        let before = peer.save(); assert!(peer.restore(&edited).is_err()); assert_eq!(peer.save(), before);
+        for register in [2, 18, 23, 24, 32, 38, 64] {
+            assert!(PowerSerial::new(pins.clone(),12,5,true,false,
+                [(0,0),(1,0),(2,0),(3,0),(32,0),(34,0),(35,0)].into(),54_000_000,
+                Some(ExactCommandOutput { register, ..policy.clone() })).is_err());
+        }
+    }
+    #[test]
+    fn pending_output_restore_rechecks_header_and_write_response_atomically() {
+        let pins=Pins::new([0;16]);let mut gpio=Gpio::new(BASE,pins.clone()).unwrap();
+        gpio.write(&mut Cx::new(&mut Clock,0,0,0),BASE+12*64,4,(1<<21)|(1<<5));
+        let policy=ExactCommandOutput {bank:false,register:17,value:4096};
+        let make=|policy| PowerSerial::new(pins.clone(),12,5,true,false,
+            [(0,0),(1,0),(2,0),(3,0),(32,0),(34,0),(35,0)].into(),54_000_000,policy).unwrap();
+        let mut peer=make(Some(policy.clone()));
+        peer.exchange(8,0x45,0).unwrap();peer.exchange(8,0x10,1).unwrap();
+        let partial=peer.save();
+        for phase in [1,2] {
+            for header in [0x47,0x44,0xfd] {
+                let mut changed=partial.clone();changed["phase"]=json!(phase);changed["header"]=json!(header);
+                assert!(peer.restore(&changed).is_err());assert_eq!(peer.save(),partial);
+            }
+            let mut changed=partial.clone();changed["phase"]=json!(phase);changed["response"]=json!(1);
+            assert!(peer.restore(&changed).is_err());assert_eq!(peer.save(),partial);
+            let mut disabled=make(None);let before=disabled.save();
+            let mut changed=partial.clone();changed["phase"]=json!(phase);changed["command_output"]=Value::Null;
+            assert!(disabled.restore(&changed).is_err());assert_eq!(disabled.save(),before);
+        }
+        peer.exchange(8,0,2).unwrap();
+        assert_eq!(peer.accepted_output.as_ref().unwrap().count,1);
+        assert!(peer.registers.is_empty());assert_eq!(peer.inputs,make(Some(policy)).inputs);
+        assert_eq!(peer.save()["rtc"],partial["rtc"]);
+    }
+    #[test]
+    fn output_partial_frame_is_aborted_by_selection_and_repeat_count_is_exact() {
+        for (core,pc) in [(0,0),(3,0x123456)] {
+            let pins=Pins::new([0;16]); let mut gpio=Gpio::new(BASE,pins.clone()).unwrap();
+            let select=|gpio: &mut Gpio, high: bool| gpio.write(&mut Cx::new(&mut Clock,core,pc,0),
+                BASE+12*64,4,(1<<21)|if high {1<<5} else {0});
+            select(&mut gpio,true);
+            let mut peer=PowerSerial::new(pins,12,5,true,false,
+                [(0,0),(1,0),(2,0),(3,0),(32,0),(34,0),(35,0)].into(),54_000_000,
+                Some(ExactCommandOutput {bank:false,register:17,value:4096})).unwrap();
+            peer.exchange(8,0x45,0).unwrap();peer.exchange(8,0x10,1).unwrap();
+            select(&mut gpio,false);peer.exchange(8,0,2).unwrap();
+            assert!(peer.accepted_output.is_none());select(&mut gpio,true);
+            for count in 1..=2 {
+                for byte in [0x45,0x10,0] { peer.exchange(8,byte,3).unwrap(); }
+                assert_eq!(peer.accepted_output.as_ref().unwrap().count,count);
+            }
+            assert!(peer.registers.is_empty());assert_eq!(peer.rtc.counter(100).unwrap(),0);
+            assert!(!peer.rtc.0.running);
+        }
+    }
+    #[test]
     fn rtc_counter_stop_load_start_wrap_and_observation() {
         let mut rtc = Rtc(Counter::new(0, false, 10).unwrap());
         rtc.write(34, 0xfffe, 4).unwrap();
@@ -303,7 +448,7 @@ mod tests {
         let pins = Pins::new([0; 16]);
         let inputs = [(0, 0), (1, 0), (2, 0), (3, 512), (32, 0), (34, 0), (35, 0)].into();
         let mut source =
-            PowerSerial::new(pins.clone(), 12, 5, true, false, inputs, 54_000_000).unwrap();
+            PowerSerial::new(pins.clone(), 12, 5, true, false, inputs, 54_000_000, None).unwrap();
         let mut resumed = PowerSerial::new(
             pins.clone(),
             12,
@@ -312,6 +457,7 @@ mod tests {
             false,
             source.inputs.clone(),
             54_000_000,
+            None,
         )
         .unwrap();
         let mut gpio = Gpio::new(BASE, pins).unwrap();
@@ -357,6 +503,7 @@ mod tests {
             false,
             [(0, 0), (1, 0), (2, 0), (3, 512), (32, 0), (34, 0), (35, 0)].into(),
             54_000_000,
+            None,
         )
         .unwrap();
         assert_eq!(peer.exchange(8, 12, 0).unwrap(), 0); // Unselected wire is low.
@@ -412,7 +559,7 @@ mod tests {
             if let Some(status) = status {
                 inputs.insert(24, status);
             }
-            PowerSerial::new(pins.clone(), 12, 5, true, false, inputs, 54_000_000).unwrap()
+            PowerSerial::new(pins.clone(), 12, 5, true, false, inputs, 54_000_000, None).unwrap()
         };
         let mut host = Clock;
         let mut cx = Cx::new(&mut host, 3, 0, 0);

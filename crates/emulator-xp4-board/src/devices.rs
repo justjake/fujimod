@@ -1,6 +1,7 @@
 //! Common Device/Host adapter owned by the Unicorn application CPU profile.
 //! Devices receive physical RAM, guest time and IRQ lines, never CPU state.
 use super::Cluster;
+use fujimod_emulator_cpu::Cpu;
 use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_devices::{Cx, Device, Host, Record};
 use fujimod_emulator_ip::usb::dwc3::{self, Dwc3};
@@ -141,6 +142,21 @@ impl Host for PhysicalHost<'_> {
     }
 }
 impl Devices {
+    pub fn byte_i2c(&mut self, input: super::definition::ByteI2c) -> Result<(), String> {
+        if !(32..512).contains(&input.irq) || input.base.checked_add(0x20).is_none_or(|end| end > 1 << 32) {
+            return Err("Invalid ARM32 byte I2C wiring".into());
+        }
+        let model = fujimod_emulator_xp4_io::i2c::ByteI2c::new(input.base, input.irq, input.profile, input.peer)?;
+        let ranges = model.windows();
+        if ranges.iter().any(|&(a,b)| self.windows.iter().any(|&(lo,hi,_)| a < hi && lo < b)) {
+            return Err("Overlapping byte I2C window".into());
+        }
+        let id = self.models.len();
+        self.windows.extend(ranges.into_iter().map(|(a,b)| (a,b,id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
+
     pub fn set_adc_input(
         &mut self,
         c: &Cluster,
@@ -224,6 +240,7 @@ impl Devices {
         active_high: bool,
         inputs: BTreeMap<u8, u16>,
         rtc_ticks: u64,
+        command_output: Option<fujimod_emulator_xp4_io::power_serial::ExactCommandOutput>,
     ) -> Result<(), String> {
         let pins = self
             .pins
@@ -238,6 +255,7 @@ impl Devices {
             idle,
             inputs,
             rtc_ticks,
+            command_output,
         )?;
         self.spi_input(base, Box::new(part))
     }
@@ -432,7 +450,23 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
+    pub fn functional_system_control(
+        &mut self, config: fujimod_emulator_xp4_io::system_control::Config,
+    ) -> Result<(), String> {
+        let model = fujimod_emulator_xp4_io::system_control::SystemControl::new(config)?;
+        let windows = model.windows();
+        if windows.iter().any(|&(a, b)| self.windows.iter().any(|&(lo, hi, _)| a < hi && lo < b)) {
+            return Err("Overlapping XP4 functional system-control window".into());
+        }
+        let id = self.models.len();
+        self.windows.extend(windows.into_iter().map(|(a, b)| (a, b, id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
     pub fn requests(&mut self, inputs: Vec<(u64, u64)>) -> Result<(), String> {
+        if inputs.iter().any(|&(a, _)| self.windows.iter().any(|&(lo, hi, _)| a < hi && lo < a.saturating_add(4))) {
+            return Err("Overlapping XP4 control request window".into());
+        }
         let id = self.models.len();
         let model = fujimod_emulator_xp4_io::requests::Requests::new(&inputs)?;
         // Each request word is the `+0x80` word of a block; own the whole block
@@ -620,20 +654,30 @@ impl Devices {
             outputs: BTreeMap::new(),
         }
     }
-    pub fn io_groups(&mut self, base: u64) {
+    pub fn io_groups(&mut self, base: u64) -> Result<(), String> {
+        let end = base.checked_add(0xa0).ok_or("Invalid XP4 IO-group extent")?;
+        if self.windows.iter().any(|&(lo, hi, _)| base < hi && lo < end) {
+            return Err("Overlapping XP4 IO-group window".into());
+        }
         let id = self.models.len();
         self.models.push(Some(Box::new(
             fujimod_emulator_devices::keyed_io::KeyedIoGroup::new(base),
         )));
-        self.windows.push((base, base + 0xa0, id));
+        self.windows.push((base, end, id));
+        Ok(())
     }
-    pub fn decompressor(&mut self, base: u64, irq: u32) {
+    pub fn decompressor(&mut self, base: u64, irq: u32) -> Result<(), String> {
+        let end = base.checked_add(0x6c).ok_or("Invalid decompressor extent")?;
+        if self.windows.iter().any(|&(lo, hi, _)| base < hi && lo < end) {
+            return Err("Overlapping decompressor window".into());
+        }
         let id = self.models.len();
         let high = std::sync::Arc::new(std::sync::Mutex::new([0; 2]));
         self.models.push(Some(Box::new(
             fujimod_emulator_devices::lz_osd::Decompressor::new(base, irq, high, None),
         )));
-        self.windows.push((base, base + 0x6c, id));
+        self.windows.push((base, end, id));
+        Ok(())
     }
     pub fn spi(&mut self, base: u64, miso: bool) -> Result<(), String> {
         self.spi_input(base, Box::new(fujimod_emulator_xp4_io::spi::FixedPin(miso)))
@@ -660,13 +704,36 @@ impl Devices {
         self.windows.push((base, base + 0x28, id));
         Ok(())
     }
+    pub fn standalone_dma(&mut self, input: super::definition::StandaloneDma) -> Result<(), String> {
+        let routes: [u32; 16] = input.irq_routes.try_into()
+            .map_err(|_| "Standalone XP4 DMA requires 16 explicit IRQ routes")?;
+        let model = DmaController::standalone(routes, &input.reset_profile, &input.timing_profile)?;
+        let windows = [(storage::DMA, storage::DMA + 0x10000), (0xfff4a500, 0xfff4a520), (0xfff4a800, 0xfff4a880)];
+        if windows.iter().any(|&(a, b)| self.windows.iter().any(|&(lo, hi, _)| a < hi && lo < b)) {
+            return Err("Overlapping standalone XP4 DMA window".into());
+        }
+        let id = self.models.len();
+        self.windows.extend(windows.into_iter().map(|(a, b)| (a, b, id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
+    pub fn partition_nor_prefix(&mut self, bytes: usize) {
+        for (lo, hi, _) in &mut self.windows {
+            if *lo == storage::FLASH && *hi == storage::FLASH + storage::FLASH_SIZE {
+                *lo += bytes as u64;
+            }
+        }
+        self.windows.retain(|(lo, hi, _)| lo < hi);
+    }
     pub fn storage(
         jedec: u32,
         routes: Vec<u32>,
         image: Vec<u8>,
         geometry: (usize, usize, u64, u64),
         irq: u32,
-    ) -> Result<Self, String> {
+        receiver_input: Option<super::definition::DiscoveryTxReceiver>,
+        prefix: Option<storage::ImmutablePrefix>,
+    ) -> Result<(Self, Option<storage::ImmutableView>), String> {
         let routes: [u32; 16] = routes
             .try_into()
             .map_err(|_| "XP4 DMA requires 16 physical IRQ routes")?;
@@ -676,7 +743,7 @@ impl Devices {
         if !(32..512).contains(&irq) {
             return Err("Invalid XP4 serial-flash IRQ".into());
         }
-        let port = storage::port(
+        let mut nor = storage::Nor::new(
             image,
             jedec,
             storage::Geometry {
@@ -686,10 +753,23 @@ impl Devices {
                 page_ticks: geometry.3,
             },
         )?;
-        Ok(Self {
+        if let Some(prefix) = prefix { nor = nor.with_immutable_prefix(prefix)?; }
+        let view = nor.immutable_view();
+        let port = storage::port_from_nor(nor);
+        let mut dma = DmaController::new(port.clone(), routes);
+        if let Some(input) = receiver_input {
+            if input.address < 0xff000000 {
+                return Err("Discovery transmit receiver requires a peripheral destination".into());
+            }
+            let mut receiver = fujimod_emulator_xp4_storage::tx_receiver::TxReceiver::new(input.address, input.request, input.capacity)?;
+            receiver.offer(input.offer_at, input.offer_bytes)?;
+            dma = dma.with_receiver(std::sync::Arc::new(std::sync::Mutex::new(receiver)));
+        }
+
+        Ok((Self {
             models: vec![
                 Some(Box::new(SerialFlashController::new(port.clone(), irq))),
-                Some(Box::new(DmaController::new(port, routes))),
+                Some(Box::new(dma)),
             ],
             events: Default::default(),
             log: Vec::new(),
@@ -707,7 +787,7 @@ impl Devices {
                 (0xfff4a500, 0xfff4a520, 1),
                 (0xfff4a800, 0xfff4a880, 1),
             ],
-        })
+        }, view))
     }
     /// X-Processor Pro flash controller, its read aperture and the PL330 that
     /// copies from it. The flash contents are an explicit board input.
@@ -1444,11 +1524,23 @@ impl Devices {
         Err("ARMv7-A device made no deadline progress".into())
     }
     pub fn snapshots(&self) -> std::collections::BTreeMap<String, String> {
-        self.models
-            .iter()
-            .flatten()
-            .map(|m| (m.name().into(), m.save().to_string()))
-            .collect()
+        let mut counts = BTreeMap::new();
+        for model in self.models.iter().flatten() {
+            *counts.entry(model.name()).or_insert(0usize) += 1;
+        }
+        let mut indices = BTreeMap::new();
+        self.models.iter().flatten().map(|model| {
+            let name = model.name();
+            let key = if counts[name] == 1 {
+                name.to_owned()
+            } else {
+                let index = indices.entry(name).or_insert(0usize);
+                let key = format!("{name}#{index}");
+                *index += 1;
+                key
+            };
+            (key, model.save().to_string())
+        }).collect()
     }
 }
 
@@ -1511,5 +1603,41 @@ impl Cluster {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod io_group_admission_tests {
+    use super::*;
+    #[test]
+    fn overflow_and_duplicate_windows_refuse_before_mutating_devices() {
+        let mut devices=Devices::empty();
+        let before=(devices.models.len(),devices.windows.clone(),devices.snapshots());
+        assert!(devices.io_groups(u64::MAX-0x9f).is_err());
+        assert_eq!((devices.models.len(),devices.windows.clone(),devices.snapshots()),before);
+        devices.io_groups(0xfff42000).unwrap();
+        let before=(devices.models.len(),devices.windows.clone(),devices.snapshots());
+        for base in [0xfff42000,0xfff41fff,0xfff4209f] {
+            assert!(devices.io_groups(base).is_err());
+            assert_eq!((devices.models.len(),devices.windows.clone(),devices.snapshots()),before);
+        }
+    }
+}
+
+#[cfg(test)]
+mod decompressor_admission_tests {
+    use super::*;
+    #[test]
+    fn overflow_and_overlap_refuse_before_mutation() {
+        let mut devices=Devices::empty();
+        let before=(devices.models.len(),devices.windows.clone(),devices.snapshots());
+        assert!(devices.decompressor(u64::MAX-0x6b,128).is_err());
+        assert_eq!((devices.models.len(),devices.windows.clone(),devices.snapshots()),before);
+        devices.decompressor(0xfff79000,128).unwrap();
+        let before=(devices.models.len(),devices.windows.clone(),devices.snapshots());
+        for base in [0xfff79000,0xfff78fff,0xfff7906b] {
+            assert!(devices.decompressor(base,128).is_err());
+            assert_eq!((devices.models.len(),devices.windows.clone(),devices.snapshots()),before);
+        }
     }
 }

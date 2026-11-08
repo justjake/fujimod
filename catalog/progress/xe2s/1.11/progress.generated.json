@@ -55,6 +55,11 @@
           "result": "pass"
         },
         {
+          "id": "card-files",
+          "title": "Optional card file access located",
+          "result": "not-run"
+        },
+        {
           "id": "controls",
           "title": "Physical controls mapped to firmware inputs",
           "result": "pass"
@@ -137,6 +142,16 @@
           "result": "not-run"
         },
         {
+          "id": "camera-fast-memory",
+          "title": "Memory capture measured at 8 MiB/s or more",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-fast-flash",
+          "title": "Flash capture measured at 8 MiB/s or more",
+          "result": "not-run"
+        },
+        {
           "id": "camera-debug",
           "title": "Debug mode saved persistently",
           "result": "not-run"
@@ -170,12 +185,12 @@
         {
           "id": "mod-target",
           "title": "Mod target generated from facts",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "mod-build",
           "title": "Every shipped mod built",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "walkthroughs",
@@ -185,7 +200,7 @@
         {
           "id": "sd-image",
           "title": "Dual-boot SD image built",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "flash-update",
@@ -275,6 +290,7 @@
     "af": "not-run",
     "fujimod": "not-run",
     "aspect-ratio": "not-run",
+    "raw-teleconverter": "not-run",
     "surround-view": "not-run",
     "desqueeze": "not-run",
     "desqueeze-jpeg": "not-run",
@@ -284,6 +300,7 @@
     "film-sims": "not-run",
     "card-films": "not-run",
     "film-editor": "not-run",
+    "film-grain": "not-run",
     "highlight-meter": "not-run",
     "raw-view": "not-run",
     "f-log": "not-run",
@@ -293,12 +310,14 @@
     "menu-theme": "not-run",
     "overlay-opacity": "not-run",
     "menu-tap": "not-run",
+    "glgui": "not-run",
     "recipes": "not-run",
     "snap-focus": "not-run",
     "usb-debug": "not-run",
     "af-scene-capture": "not-run",
     "bug-report": "not-run",
     "sd-volume-name": "not-run",
-    "date-folders": "not-run"
+    "date-folders": "not-run",
+    "software-nd": "not-run"
   }
 }
