@@ -1,0 +1,48 @@
+{
+  "$schema": "https://fujimod.com/schemas/memory-reservations.generated.schema.json",
+  "schema": 1,
+  "id": "xt1-552-memory-reservations",
+  "firmware_id": "xt1-552",
+  "dram_size": 1073741824,
+  "reservations": [
+    {
+      "name": "main_heap",
+      "address": 14151968,
+      "size": 1572864
+    },
+    {
+      "name": "graphics_heap",
+      "address": 50055168,
+      "size": 5242880
+    },
+    {
+      "name": "font_library",
+      "address": 38221824,
+      "size": 1048576
+    },
+    {
+      "name": "language_fonts",
+      "address": 6029312,
+      "size": 1441792
+    },
+    {
+      "name": "usb_debug_ring",
+      "address": 58443776,
+      "size": 1048576
+    }
+  ],
+  "locator_failures": [
+    {
+      "locator": "dispatch_packet",
+      "reason": "dispatch_initialize_packet: 1 candidates, 0 verified results (0x90a368: Initializer lacks one constant external-buffer clear)"
+    },
+    {
+      "locator": "configuration",
+      "reason": "initialize_cfgdata_ram: 0 candidates, 0 verified results"
+    },
+    {
+      "locator": "face",
+      "reason": "initialize_face_recognition_resources: 0 candidates, 0 verified results"
+    }
+  ]
+}

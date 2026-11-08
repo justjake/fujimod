@@ -1,0 +1,48 @@
+{
+  "$schema": "https://fujimod.com/schemas/memory-reservations.generated.schema.json",
+  "schema": 1,
+  "id": "xa1-150-memory-reservations",
+  "firmware_id": "xa1-150",
+  "dram_size": 536870912,
+  "reservations": [
+    {
+      "name": "main_heap",
+      "address": 10951104,
+      "size": 1572864
+    },
+    {
+      "name": "graphics_heap",
+      "address": 40374272,
+      "size": 5910528
+    },
+    {
+      "name": "font_library",
+      "address": 33961984,
+      "size": 1048576
+    },
+    {
+      "name": "language_fonts",
+      "address": 4571136,
+      "size": 1441792
+    },
+    {
+      "name": "configuration",
+      "address": 28104704,
+      "size": 4325376
+    }
+  ],
+  "locator_failures": [
+    {
+      "locator": "usb_debug_ring",
+      "reason": "register_usb_debug_callbacks: 1 candidates, 0 verified results (0x647398: Initializer lacks one constant external-buffer clear)"
+    },
+    {
+      "locator": "dispatch_packet",
+      "reason": "dispatch_initialize_packet: 1 candidates, 0 verified results (0x7262cc: Initializer lacks one constant external-buffer clear)"
+    },
+    {
+      "locator": "face",
+      "reason": "initialize_face_recognition_resources: 0 candidates, 0 verified results"
+    }
+  ]
+}

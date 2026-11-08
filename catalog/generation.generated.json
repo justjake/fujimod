@@ -1571,6 +1571,10 @@
           "status": "available",
           "errors": []
         },
+        "memory-reservations": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
@@ -1680,6 +1684,10 @@
           ]
         },
         "flash": {
+          "status": "available",
+          "errors": []
+        },
+        "memory-reservations": {
           "status": "available",
           "errors": []
         },
@@ -1995,6 +2003,10 @@
           "status": "available",
           "errors": []
         },
+        "memory-reservations": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
@@ -2107,6 +2119,10 @@
           "status": "available",
           "errors": []
         },
+        "memory-reservations": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
@@ -2180,6 +2196,10 @@
           "errors": []
         },
         "flash": {
+          "status": "available",
+          "errors": []
+        },
+        "memory-reservations": {
           "status": "available",
           "errors": []
         },
@@ -2270,6 +2290,10 @@
           ]
         },
         "flash": {
+          "status": "available",
+          "errors": []
+        },
+        "memory-reservations": {
           "status": "available",
           "errors": []
         },
@@ -2505,6 +2529,10 @@
           ]
         },
         "flash": {
+          "status": "available",
+          "errors": []
+        },
+        "memory-reservations": {
           "status": "available",
           "errors": []
         },
@@ -3222,6 +3250,10 @@
           "status": "available",
           "errors": []
         },
+        "memory-reservations": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
@@ -3301,6 +3333,10 @@
           ]
         },
         "flash": {
+          "status": "available",
+          "errors": []
+        },
+        "memory-reservations": {
           "status": "available",
           "errors": []
         },
@@ -4587,6 +4623,15 @@
             }
           ]
         },
+        "memory-reservations": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "memory-reservations",
+              "reason": "TypeError: '<=' not supported between instances of 'NoneType' and 'int'"
+            }
+          ]
+        },
         "progress": {
           "status": "unavailable",
           "errors": [
@@ -4758,6 +4803,15 @@
             }
           ]
         },
+        "memory-reservations": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "memory-reservations",
+              "reason": "TypeError: '<=' not supported between instances of 'NoneType' and 'int'"
+            }
+          ]
+        },
         "progress": {
           "status": "unavailable",
           "errors": [
@@ -4895,6 +4949,10 @@
           ]
         },
         "flash": {
+          "status": "available",
+          "errors": []
+        },
+        "memory-reservations": {
           "status": "available",
           "errors": []
         },
@@ -5588,6 +5646,10 @@
           "status": "available",
           "errors": []
         },
+        "memory-reservations": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
@@ -5709,6 +5771,10 @@
           ]
         },
         "flash": {
+          "status": "available",
+          "errors": []
+        },
+        "memory-reservations": {
           "status": "available",
           "errors": []
         },
@@ -6222,6 +6288,10 @@
           "status": "available",
           "errors": []
         },
+        "memory-reservations": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
@@ -6301,6 +6371,10 @@
           ]
         },
         "flash": {
+          "status": "available",
+          "errors": []
+        },
+        "memory-reservations": {
           "status": "available",
           "errors": []
         },
