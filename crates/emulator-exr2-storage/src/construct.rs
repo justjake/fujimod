@@ -1,11 +1,11 @@
 //! EXR II board constructors for this crate's models.
 use crate::{nand, sdio};
-use fujimod_emulator_ip::sdhci::host as sdhc;
 use fujimod_emulator_devices::parts::sd_card;
 use fujimod_emulator_exr2_plan::{
     Card, Model,
     construction::{Builder, Built, Constructors, decode, line},
 };
+use fujimod_emulator_ip::sdhci::host as sdhc;
 use fujimod_emulator_parts_io::wifi_module::WifiModule;
 use fujimod_emulator_storage::fat;
 

@@ -1,5 +1,6 @@
 //! The reference catalog of SoCs, parts, bodies and firmware and their hardware profiles.
 pub mod assembly;
+pub mod boot_identity;
 pub mod boot_patch;
 pub mod boot_rom;
 pub mod capture;

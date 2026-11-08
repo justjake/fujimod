@@ -26,5 +26,11 @@
     "initialization_clock": 1088,
     "transfer_clock": 1280
   },
+  "nand": {
+    "initialize": 2147486580,
+    "probe_block_markers": 2147486764,
+    "read_512_bytes": 2147486984,
+    "load_blocks_dma": 2147487212
+  },
   "load_address": 0
 }

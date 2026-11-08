@@ -51,7 +51,10 @@ fn medium() -> Nand {
 }
 fn model(small: bool) -> NandController {
     NandController::new(
-        Options { erase_ticks: 64, base: BASE },
+        Options {
+            erase_ticks: 64,
+            base: BASE,
+        },
         Nand::new(
             fujimod_emulator_devices::parts::nand::Options {
                 bytes: 0x40000,
@@ -377,7 +380,14 @@ fn small_page_erase_decodes_packed_row_and_commits_only_its_32_page_block() {
 }
 #[test]
 fn register_base_is_an_option_and_must_be_page_aligned() {
-    let mut m = NandController::new(Options { erase_ticks: 64, base: 0xfff46000 }, medium()).unwrap();
+    let mut m = NandController::new(
+        Options {
+            erase_ticks: 64,
+            base: 0xfff46000,
+        },
+        medium(),
+    )
+    .unwrap();
     let mut h = TestHost::new();
     let mut cx = h.cx();
     m.write(&mut cx, 0xfff46000 + 0x10, 4, 0x1234);
@@ -386,5 +396,34 @@ fn register_base_is_an_option_and_must_be_page_aligned() {
     assert_eq!(m.read(&mut cx, 0xfff46000 + 0x10, 4), 0x1234);
     let mut cx = h.cx();
     assert_eq!(m.read(&mut cx, BASE + 0x10, 4), 0);
-    assert!(NandController::new(Options { erase_ticks: 64, base: 0xfff46004 }, medium()).is_err());
+    assert!(
+        NandController::new(
+            Options {
+                erase_ticks: 64,
+                base: 0xfff46004
+            },
+            medium()
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn rom_dma_reads_two_sectors_without_touching_the_rest_of_the_page() {
+    let mut m = model(false);
+    let mut h = TestHost::new();
+    h.ram.ram_write(0x1000, &[0x55; 2048]).unwrap();
+    for (offset, value) in [
+        (0, 1), (0xe8, 0x10003), (0x1c, 0x300002), (0x18, 0x8003),
+        (0x20, 0), (0x24, 0), (0x58, 512), (0x884, 0x10001),
+        (0x8a0, 0x401000), (0x8a4, 0x1000), (0x8a8, 1024),
+        (0x08, 0x8013b3),
+    ] {
+        write(&mut m, &mut h, offset, value);
+    }
+    tick(&mut m, &mut h, 2);
+    let mut output = [0; 2048];
+    h.ram.ram_read(0x1000, &mut output).unwrap();
+    assert_eq!(&output[..1024], &[255; 1024]);
+    assert_eq!(&output[1024..], &[0x55; 1024]);
 }

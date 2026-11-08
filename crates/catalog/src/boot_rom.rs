@@ -37,6 +37,8 @@ pub struct BootRom {
     pub power_hold: BootRomPowerHold,
     /// The SD0 host the boot stages clock for card access.
     pub sd: BootRomSdClocks,
+    /// The NAND entries the universal SD-boot stage 1 calls.
+    pub nand: BootRomNand,
     /// RAM address the boot ROM hands control to.
     pub load_address: u64,
 }
@@ -102,6 +104,21 @@ pub struct BootRomSdClocks {
     pub transfer_clock: u32,
 }
 
+/// The four NAND entries the universal SD-boot stage 1 calls.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct BootRomNand {
+    /// Controller initialize entry.
+    pub initialize: u64,
+    /// Block-marker probe entry.
+    pub probe_block_markers: u64,
+    /// One 512-byte small-page read entry.
+    pub read_512_bytes: u64,
+    /// Bulk block read entry.
+    pub load_blocks_dma: u64,
+}
+
 impl BootRom {
     /// Validate identity, hash and relocated state.
     pub fn validate(&self) -> Result<(), String> {
@@ -124,6 +141,13 @@ impl BootRom {
         }
         if !(0xfff0_0000..=0xfff8_ffff).contains(&self.sd.host) {
             return Err("invalid boot-ROM SD host".into());
+        }
+        if self.nand.initialize == 0
+            || self.nand.probe_block_markers == 0
+            || self.nand.read_512_bytes == 0
+            || self.nand.load_blocks_dma == 0
+        {
+            return Err("boot-ROM NAND routines are required".into());
         }
         if self.load_address % 4 != 0 {
             return Err("invalid boot-ROM handoff address".into());

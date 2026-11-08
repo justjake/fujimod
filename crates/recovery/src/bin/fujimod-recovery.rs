@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Some(
             command @ ("build" | "green-led" | "startup" | "card-startup" | "stage-one"
-            | "rescue-baseline"),
+            | "rescue-baseline" | "ota-startup"),
         ) => {
             let mut inputs = args[1..].to_vec();
             let storage = if command == "card-startup" {
@@ -80,6 +80,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 fujimod_recovery::green_led::build(&recipe, &source)?
             } else if command == "rescue-baseline" {
                 recipe.build_rescue_baseline(&source)?
+            } else if command == "ota-startup" {
+                recipe.build_ota_startup(&source)?
             } else if command == "stage-one" {
                 recipe.build_stage_one_with_options(&source, options)?
             } else {
@@ -96,7 +98,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             return Err(
-                "Usage: fujimod-recovery list | build|green-led|startup|stage-one|rescue-baseline FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N] | card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
+                "Usage: fujimod-recovery list | build|green-led|startup|stage-one|rescue-baseline|ota-startup FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N] | card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
                     .into(),
             );
         }
