@@ -3,7 +3,7 @@
   "schema": 1,
   "id": "xt5",
   "soc_id": "xp5",
-  "dram_bytes": null,
+  "dram_bytes": 1610612736,
   "nand": null,
   "sensor": null,
   "lens": null,
@@ -78,7 +78,7 @@
     "profiles": {
       "xt5": {
         "limits": [],
-        "dram_basis": "Run configuration declares the address-space limit; installed capacity is unknown."
+        "dram_basis": "The firmware memory map and the supplied Linux device tree end at 1.5 GiB (Linux 256 MiB from 1 GiB, then the shared arenas); installed capacity is unmeasured."
       }
     }
   }
