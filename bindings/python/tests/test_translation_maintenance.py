@@ -1,6 +1,5 @@
 """Stopped XP4 maintenance diagnostics preserve outcomes without advancing CPUs."""
 
-import hashlib
 import json
 import struct
 from collections.abc import Iterator
@@ -67,7 +66,7 @@ def machine(
     cores: int, words: tuple[int, ...] = (0xEE080F13, 0xE1A00000)
 ) -> Iterator[tuple[Board, native.Xp4]]:
     program = struct.pack("<" + "I" * len(words), *words)
-    asset = Asset("program", len(program), hashlib.sha256(program).hexdigest())
+    asset = Asset("program", len(program))
     board = make_board(
         Xp4Definition(
             options={
