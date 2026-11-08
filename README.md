@@ -29,9 +29,10 @@ pnpm run dev
 
 The root `web-build`, `web-test` and `web-preview` mise tasks run from that
 application directory. `web-test` runs both `@fujimod/emulator-ui` tests and the
-web app tests through `apps/web`'s `pnpm test`. A maintainer deploys `fujimod.com`
-by hand from `main` ([apps/web/DEPLOYMENT.md](apps/web/DEPLOYMENT.md)); merging does
-not deploy it.
+web app tests through `apps/web`'s `pnpm test`. The Web deploy workflow deploys `main`
+to `fujimod.com` nightly when it changed, reusing the deployed emulator runtimes and
+media; a maintainer deploys new runtimes by hand
+([apps/web/DEPLOYMENT.md](apps/web/DEPLOYMENT.md)). Merging does not deploy.
 
 ## Rust libraries
 

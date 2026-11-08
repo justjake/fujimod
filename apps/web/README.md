@@ -8,7 +8,7 @@ below from that directory.
 
 Try camera firmware and build SD boot files in your browser. Firmware is
 identified by its complete SHA-256 and never uploaded. The web app is developed
-on review branches; a maintainer deploys `main` by hand ([DEPLOYMENT.md](DEPLOYMENT.md)).
+on review branches; `main` is deployed nightly and by hand ([DEPLOYMENT.md](DEPLOYMENT.md)).
 
 ## Rendering and static hosting
 
@@ -313,7 +313,8 @@ started by hand. It does not deploy.
 
 `pnpm run deploy -- --runtime DIRECTORY --media DIRECTORY`
 validates locally generated assets, runs checks and tests, builds the website,
-and uploads it directly to Cloudflare. Runtime bundles and feature media remain
+and uploads it directly to Cloudflare. `--carry-from ORIGIN` reuses a deployed
+site's verified assets instead; the nightly Web deploy workflow uses it. Runtime bundles and feature media remain
 in ignored generated directories. GitHub Releases contain mod patches and their
 index; publishing a mod does not deploy the website.
 

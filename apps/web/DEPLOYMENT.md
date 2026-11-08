@@ -7,9 +7,10 @@ serves `share.fujimod.com`; its signaling endpoint is
 
 ## Deploy
 
-Website deployment is independent of mod publication and of merging to `main`:
-`fujimod.com` shows the camera progress in `catalog/progress/` as of its last
-deploy. GitHub Releases contain
+Website deployment is independent of mod publication. Merging to `main` does not
+deploy: `fujimod.com` shows the site code and the camera progress in
+`catalog/progress/` as of its last deploy, which is a maintainer's manual deploy
+or the [nightly deploy](#nightly-deploy). GitHub Releases contain
 `patches.json`, mod patches, and optional `notes.md`. Generated emulator runtimes, the camera
 catalog, and feature media are uploaded directly to Cloudflare with the website.
 Generated assets stay outside Git.
@@ -41,6 +42,34 @@ builds the website, and deploys `dist/client` using `wrangler.jsonc`. Staging fa
 before replacing installed assets if a required file or qualification is missing.
 Use `--prepare-only` to stage assets without building or deploying. The generated
 `site-assets.json` records file sizes and SHA-256 hashes for deployment verification.
+Every deploy also publishes `deployment.json` with the deployed commit and whether
+the checkout had uncommitted changes to tracked files.
+
+### Nightly deploy
+
+The [Web deploy](../../.github/workflows/web-deploy.yml) workflow runs nightly and
+when started by hand. It deploys `main` unless `fujimod.com/deployment.json`
+already names `main`'s commit from a clean checkout; the manual run's `force`
+input deploys anyway. It runs the Web checks workflow first, then:
+
+```sh
+pnpm run deploy -- --carry-from https://fujimod.com/
+```
+
+CI cannot rebuild emulator runtimes or feature media, because their inputs stay
+outside Git. `--carry-from` downloads the assets the site already serves instead:
+it reads the site's `site-assets.json`, downloads every file it lists, and checks
+each file's size and SHA-256 and each runtime loader against this checkout's
+Camera API before running the same checks, tests, build and upload as a manual
+deploy. A size or hash mismatch, or a runtime missing a Camera method, stops the
+deploy. When the bindings change the Camera API, a maintainer deploys
+fresh runtimes with `--runtime` and `--media`, and the nightly deploy then
+carries those forward.
+
+The workflow needs the repository secret `CLOUDFLARE_API_TOKEN`: a Cloudflare API
+token from the "Edit Cloudflare Workers" template, limited to the account in
+`wrangler.jsonc` and the `fujimod.com` zone. Its `deploy` job runs in the
+`production` environment, where required reviewers or a branch rule can gate it.
 A mod release never triggers or supplies a website deployment. The Worker
 selects the newest published GitHub release with `patches.json`, including
 prereleases, through unauthenticated API requests. `/releases/current` returns
