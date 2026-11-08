@@ -1529,6 +1529,15 @@
       "version": "1.21",
       "internal_version": "2.33",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: x100s-121: the stage-2 range at 0x1d000000 is not the base of the stock network heap (not located); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -1671,6 +1680,15 @@
       "version": "1.11",
       "internal_version": "1.56",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: x100t-111: the stage-2 range at 0x1d000000 is not the base of the stock network heap (0x1e000000+0x322280); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -1979,6 +1997,15 @@
       "version": "1.03",
       "internal_version": "2.19",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: x20-103: the stage-2 range at 0x1d000000 is not the base of the stock network heap (not located); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -2121,6 +2148,15 @@
       "version": "1.03",
       "internal_version": "1.53",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: x30-103: the stage-2 range at 0x1d000000 is not the base of the stock network heap (0x1e100000+0x322280); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -2299,6 +2335,15 @@
       "version": "1.50",
       "internal_version": "1.78",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: xa1-150: the stage-2 range at 0x1d000000 is not the base of the stock network heap (0x1e7f4900+0x322280); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -2547,6 +2592,15 @@
       "version": "1.30",
       "internal_version": "1.31",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: xa2-130: the stage-2 range at 0x1d000000 is not the base of the stock network heap (0x1e7f4900+0x322280); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -3287,6 +3341,10 @@
       "version": "4.11",
       "internal_version": "3.05",
       "tables": {
+        "boot-patch": {
+          "status": "available",
+          "errors": []
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -3382,6 +3440,10 @@
       "version": "1.11",
       "internal_version": "1.19",
       "tables": {
+        "boot-patch": {
+          "status": "available",
+          "errors": []
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -4634,6 +4696,15 @@
       "version": "1.01",
       "internal_version": "1.61",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: xm1-101: the stage-2 range at 0x1d000000 is not the base of the stock network heap (not located); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "unavailable",
           "errors": [
@@ -4823,6 +4894,15 @@
       "version": "1.20",
       "internal_version": "1.73",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: xm1-120: the stage-2 range at 0x1d000000 is not the base of the stock network heap (not located); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "unavailable",
           "errors": [
@@ -5012,6 +5092,15 @@
       "version": "1.50",
       "internal_version": "1.78",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: xm1-150: the stage-2 range at 0x1d000000 is not the base of the stock network heap (0x1e7f4900+0x322280); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -5711,6 +5800,15 @@
       "version": "1.21",
       "internal_version": "1.81",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: xq1-121: the stage-2 range at 0x1d000000 is not the base of the stock network heap (not located); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -5848,6 +5946,15 @@
       "version": "1.01",
       "internal_version": "1.09",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: xq2-101: the stage-2 range at 0x1d000000 is not the base of the stock network heap (not located); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -6371,6 +6478,15 @@
       "version": "5.52",
       "internal_version": "2.39",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: xt1-552: the stage-2 range at 0x1d000000 is not the base of the stock network heap (not located); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -6483,6 +6599,10 @@
       "version": "1.31",
       "internal_version": "1.52",
       "tables": {
+        "boot-patch": {
+          "status": "available",
+          "errors": []
+        },
         "bulk": {
           "status": "available",
           "errors": []
