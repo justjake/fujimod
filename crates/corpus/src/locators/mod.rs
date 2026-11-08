@@ -32,6 +32,12 @@ pub fn boot_rom(processor: &str) -> Result<StateRegion, String> {
             size: 0x4000,
             constant: true,
         }),
+        "xp5" => Ok(StateRegion {
+            name: "boot-rom".into(),
+            address: 0xFFC0_0000,
+            size: 0x4_0000,
+            constant: true,
+        }),
         _ => Err(format!(
             "{processor}: no established safely readable boot ROM extent"
         )),
@@ -48,7 +54,12 @@ mod tests {
             (rom.address, rom.size, rom.constant),
             (0x80000000, 16384, true)
         );
-        for generation in ["exr", "exrpro", "xpp", "xp4", "xp5", "unknown"] {
+        let rom = boot_rom("xp5").unwrap();
+        assert_eq!(
+            (rom.address, rom.size, rom.constant),
+            (0xFFC00000, 262144, true)
+        );
+        for generation in ["exr", "exrpro", "xpp", "xp4", "unknown"] {
             assert!(boot_rom(generation).is_err());
         }
     }
