@@ -12,6 +12,8 @@ pub use exr::Exr;
 mod exr2;
 pub use exr2::lamp::StartupLamp;
 pub use exr2::footer::LoaderFooter;
+pub use exr2::defaults::ConfigurationDefaults;
+pub use exr2::startup_reads::StartupReads;
 pub mod xpp;
 mod xp4;
 mod xp5;
@@ -126,6 +128,10 @@ pub struct Recipe {
     pub startup_lamp: Option<StartupLamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loader_footer: Option<LoaderFooter>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configuration_defaults: Option<ConfigurationDefaults>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub startup_reads: Option<StartupReads>,
     pub setup: Option<Setup>,
     pub xp5: Option<Xp5Setup>,
     pub cold_start: Option<ColdStart>,
@@ -423,6 +429,12 @@ impl Recipe {
                         }
                         if let Some(lamp) = &self.startup_lamp {
                             lamp.install(plan, &mut ram)?;
+                        }
+                        if let Some(reads) = &self.startup_reads {
+                            reads.install(&inverted, plan, &mut ram)?;
+                        }
+                        if let Some(defaults) = &self.configuration_defaults {
+                            defaults.install(&inverted, plan, &mut ram)?;
                         }
                     } else {
                         xpp::install(&inverted, plan, &mut ram)?;
