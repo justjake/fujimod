@@ -445,10 +445,10 @@ pub(super) async fn prepare<'a>(
             .step_by(32)
             .filter(|&i| matches(&raw[i..i + 64]))
             .collect();
-        require(
-            found.len() == 1,
-            "No unique matching installed file service",
-        )?;
+        require(found.len() < 2, "Several matching installed file services")?;
+        if found.is_empty() {
+            return Err(Error::NoFileService);
+        }
         (
             start + found[0] as u32,
             raw[found[0]..found[0] + 64].to_vec(),

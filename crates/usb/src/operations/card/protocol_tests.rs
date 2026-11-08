@@ -499,6 +499,31 @@ fn installed_report_service_uses_the_same_file_operations_and_preserves_source_p
 }
 
 #[test]
+fn camera_without_installed_file_service_reports_no_file_service() {
+    block_on(async {
+        let camera = camera();
+        let mut p = profile();
+        p.mechanism = Mechanism::Mailbox {
+            search_address: 0x40000,
+            search_bytes: 0x4000,
+            address_alias: 0,
+            build: Some(123),
+        };
+        let mut session = peer_session(Endpoint(camera), 8192, None).await.unwrap();
+        let result = execute(
+            &mut session,
+            limits(),
+            &p,
+            Request::List {
+                pattern: "A:\\*.*".into(),
+            },
+        )
+        .await;
+        assert!(matches!(result, Err(Error::NoFileService)));
+    });
+}
+
+#[test]
 fn owned_range_read_is_one_operation_and_preserves_eof_and_closed_handles() {
     block_on(async {
         let camera = camera();

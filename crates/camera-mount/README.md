@@ -42,13 +42,16 @@ The pinned 0.1.0 host has a profile valid through October 25, 2043 and uses the
 same wire protocol as the Rust crate. The 0.2.0 host archive has an expired
 profile and cannot launch; rebooting does not repair that profile.
 Building requires Rust, `protoc`, Clang with ARM support, and LLD
-(`brew install protobuf llvm`). `CLANG` and `LD_LLD` select build tools.
+(`brew install protobuf lld` with Xcode's Clang). `CLANG` and `LD_LLD` select
+build tools.
 The camera helper is compiled into the mount executable; mounting runs no compiler.
 
 The camera must already provide an available ff80 debug service. Select a
 firmware with readable memory facts in the bundled catalog. The `sd/` subtree
 is present when that firmware also has a card capability. The command verifies
 camera identity and the selected code checks before starting the mount.
+When the card capability's file service is not installed in camera RAM, as on
+stock firmware, the command exits with status 3 instead of 1.
 
 ```sh
 mkdir -p /tmp/fuji

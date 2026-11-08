@@ -485,7 +485,7 @@ impl UsbDevice {
         device_id: Option<String>,
         limits: DebugMemoryLimits,
         flash_reader: Option<std::path::PathBuf>,
-    ) -> std::result::Result<(Self, Vec<Region>), String> {
+    ) -> std::result::Result<(Self, Vec<Region>), Box<dyn std::error::Error + Send + Sync>> {
         let catalog = ReferenceCatalog::bundled()?;
         let firmware = if firmware == "auto" {
             automatic_firmware(device_id.clone(), &catalog)?
@@ -538,7 +538,7 @@ impl UsbDevice {
                     let target = match target {
                         Ok(target) => target,
                         Err(error) => {
-                            let _ = ready_tx.send(Err(error));
+                            let _ = ready_tx.send(Err(error.into()));
                             return;
                         }
                     };
@@ -567,7 +567,7 @@ impl UsbDevice {
                         if !client.fenced {
                             let _ = client.transaction(Operation::Close).await;
                         }
-                        let _ = ready_tx.send(Err(error.to_string()));
+                        let _ = ready_tx.send(Err(error.into()));
                         return;
                     }
                     if ready_tx.send(Ok(())).is_err() {

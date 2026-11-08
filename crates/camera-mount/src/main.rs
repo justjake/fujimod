@@ -4,6 +4,9 @@ use std::{num::NonZeroU32, path::PathBuf};
 const USAGE: &str = "Usage: fujimod-mount --firmware ID [--device BUS-OR-SERIAL] [--read-limit BYTES] [--write-limit BYTES] [--flash-reader ARTIFACT] [--benchmark | --benchmark-usb] MOUNTPOINT\nRequires macOS 15.4+. Installs the signed filesystem extension on first use; macOS may require enabling it in System Settings.";
 #[cfg(target_os = "macos")]
 mod benchmark;
+/// Exit status when the camera has no installed file service, as on stock firmware.
+#[cfg(target_os = "macos")]
+const NO_FILE_SERVICE: i32 = 3;
 
 struct Options {
     firmware: String,
@@ -66,7 +69,11 @@ fn options(args: impl Iterator<Item = String>) -> std::result::Result<Options, S
 async fn main() {
     if let Err(error) = run().await {
         eprintln!("fujimod-mount: {error}");
-        std::process::exit(1);
+        let no_service = matches!(
+            error.downcast_ref(),
+            Some(fujimod_usb::Error::NoFileService)
+        );
+        std::process::exit(if no_service { NO_FILE_SERVICE } else { 1 });
     }
 }
 
@@ -92,7 +99,8 @@ async fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
         options.device,
         options.limits,
         options.flash_reader,
-    )?;
+    )
+    .map_err(|error| error as Box<dyn std::error::Error>)?;
     if options.benchmark_usb {
         use fujimod_camera_mount::Device;
         let result = benchmark::usb(&mut device, &regions);
