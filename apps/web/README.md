@@ -8,7 +8,7 @@ below from that directory.
 
 Try camera firmware and build SD boot files in your browser. Firmware is
 identified by its complete SHA-256 and never uploaded. The web app is developed
-on review branches; the Pages workflow deploys approved main builds only.
+on review branches; a maintainer deploys `main` by hand ([DEPLOYMENT.md](DEPLOYMENT.md)).
 
 ## Rendering and static hosting
 
@@ -308,8 +308,8 @@ state starts fresh at each cold boot.
 
 ### Website assets and deployment
 
-The Web checks workflow runs lint, type checks, tests and the public build on
-web changes in pull requests and on main. It does not deploy.
+The Web checks workflow runs lint, type checks, tests and the public build when
+started by hand. It does not deploy.
 
 `pnpm run deploy -- --runtime DIRECTORY --media DIRECTORY`
 validates locally generated assets, runs checks and tests, builds the website,

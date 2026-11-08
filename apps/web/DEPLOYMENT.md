@@ -7,7 +7,9 @@ serves `share.fujimod.com`; its signaling endpoint is
 
 ## Deploy
 
-Website deployment is independent of mod publication. GitHub Releases contain
+Website deployment is independent of mod publication and of merging to `main`:
+`fujimod.com` shows the camera progress in `catalog/progress/` as of its last
+deploy. GitHub Releases contain
 `patches.json`, mod patches, and optional `notes.md`. Generated emulator runtimes, the camera
 catalog, and feature media are uploaded directly to Cloudflare with the website.
 Generated assets stay outside Git.
