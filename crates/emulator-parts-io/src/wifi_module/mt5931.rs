@@ -158,6 +158,15 @@ impl Endpoint {
         })
     }
 
+    /// The chip lost power: a fresh endpoint that keeps the access point's
+    /// network (leases, servers and their counters), which is not part of
+    /// the camera.
+    pub fn power_off(&mut self, options: Option<&Options>) {
+        let network = std::mem::take(&mut self.network);
+        *self = Self::new(options);
+        self.network = network;
+    }
+
     pub fn interrupt(&self) -> bool {
         self.interrupt_output && self.interrupt_status & self.interrupt_enable != 0
     }
