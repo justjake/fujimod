@@ -94,3 +94,24 @@ test('green LED cards cover every processor generation without an updater DAT', 
     unknown.free();
   }
 });
+
+test('EXR II bodies that share a memory setup header share one card root', () => {
+  const header = (firmwareId: string) => {
+    const status = recovery.availability(firmwareId);
+    try {
+      return status.otaStartupHeader;
+    } finally {
+      status.free();
+    }
+  };
+  assert.match(header('x70-110') ?? '', /^[0-9a-f]{64}$/);
+  assert.equal(header('xe2-411'), header('x70-110'));
+  assert.equal(header('xe2s-111'), header('x70-110'));
+  assert.notEqual(header('xt10-131'), header('x70-110'));
+  assert.equal(header('x100v-301'), undefined);
+  assert.throws(
+    () => recovery.buildOtaStartup('x70-110', new Uint8Array(4)),
+    /Update size differs from recipe/,
+  );
+  assert.throws(() => recovery.buildOtaStartup('x100v-301', new Uint8Array(4)), /requires EXR II/);
+});

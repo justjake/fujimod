@@ -47,6 +47,11 @@ impl RecoveryAvailability {
             .into()
         })
     }
+    /// Firmwares with the same value share one card's EXR II boot files.
+    #[wasm_bindgen(getter, js_name = otaStartupHeader)]
+    pub fn ota_startup_header(&self) -> Option<String> {
+        self.inner.ota_startup_header.clone()
+    }
     #[wasm_bindgen(getter, js_name = greenLedFilenames)]
     pub fn green_led_filenames(&self) -> Result<Vec<String>, JsValue> {
         match core::Recipe::bundled(&self.inner.firmware_id).map_err(error)? {
@@ -134,6 +139,18 @@ pub fn build(firmware_id: &str, source: &[u8]) -> Result<RecoveryCard, JsValue> 
         .ok_or_else(|| js_sys::Error::new("Missing recovery recipe"))?;
     recipe
         .build(source)
+        .map(|files| RecoveryCard { files })
+        .map_err(error)
+}
+
+/// The EXR II card root that loads stage 1 from NAND, then FujiMod stage 2.
+#[wasm_bindgen(js_name = buildOtaStartupCard)]
+pub fn build_ota_startup(firmware_id: &str, source: &[u8]) -> Result<RecoveryCard, JsValue> {
+    let recipe = core::Recipe::bundled(firmware_id)
+        .map_err(error)?
+        .ok_or_else(|| js_sys::Error::new("Missing recovery recipe"))?;
+    recipe
+        .build_ota_startup(source)
         .map(|files| RecoveryCard { files })
         .map_err(error)
 }
