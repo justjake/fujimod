@@ -175,6 +175,7 @@ function index() {
     firmwares: [
       {
         boot_instructions: ['Copy files to your card.'],
+        mods: [],
         id: 'x70-110',
         model: 'X70',
         version: '1.10',

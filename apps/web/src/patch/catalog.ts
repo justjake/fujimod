@@ -19,7 +19,20 @@ export interface PatchFirmware {
   patch_sha256: string;
   patch_bytes: number;
   boot_instructions: string[];
-  mods?: string[];
+  /** The mods built into this firmware's release. */
+  mods: string[];
+}
+/** A file the release offers for the SD card, published as a release asset. */
+export interface CardFile {
+  /** Path on the card, in upper-case 8.3 names: `FUJIMOD/RECIPES/AGFAOPT.JSN`. */
+  path: string;
+  asset: string;
+  sha256: string;
+  bytes: number;
+  /** Boot files belong to one processor and are written only for its cameras. */
+  processor?: string;
+  title?: string;
+  author?: string;
 }
 export interface PatchIndex {
   schema: 2;
@@ -28,8 +41,37 @@ export interface PatchIndex {
   patches: Record<string, string>;
   firmwares: PatchFirmware[];
   notes?: ReleaseNotes;
+  card?: CardFile[];
 }
 const hash = /^[0-9a-f]{64}$/;
+const shortName = '[A-Z0-9_~-]{1,8}(?:\\.[A-Z0-9_~-]{1,3})?';
+/** Card paths use the 8.3 names the camera's file system reads. */
+export const cardPath = new RegExp(`^(?:${shortName}/)*${shortName}$`);
+const optionalText = (value: unknown) =>
+  value === undefined || (typeof value === 'string' && value.length > 0 && value.length < 200);
+function validateCard(value: unknown): CardFile[] {
+  if (!Array.isArray(value)) throw new Error('The release card files are invalid.');
+  const paths = new Set<string>();
+  for (const file of value as CardFile[]) {
+    if (
+      !file ||
+      typeof file.path !== 'string' ||
+      !cardPath.test(file.path) ||
+      typeof file.asset !== 'string' ||
+      !releaseFilename.test(file.asset) ||
+      typeof file.sha256 !== 'string' ||
+      !hash.test(file.sha256) ||
+      !Number.isSafeInteger(file.bytes) ||
+      file.bytes < 0 ||
+      ![file.processor, file.title, file.author].every(optionalText)
+    )
+      throw new Error('A release card file is invalid.');
+    const key = `${file.processor ?? ''}\n${file.path}`;
+    if (paths.has(key)) throw new Error('A release card file is listed twice.');
+    paths.add(key);
+  }
+  return value as CardFile[];
+}
 const calendarDate = (value: unknown) => {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(value + 'T00:00:00Z');
@@ -78,6 +120,8 @@ export function validateIndex(value: unknown): PatchIndex {
       !entry.boot_instructions.every(
         (step) => typeof step === 'string' && step.length && step.length < 2000,
       ) ||
+      !Array.isArray(entry.mods) ||
+      !entry.mods.every((name) => typeof name === 'string' && name.length > 0) ||
       !Number.isSafeInteger(entry.patch_bytes) ||
       entry.patch_bytes <= 0 ||
       entry.patch_bytes > 64 * 1024 * 1024 ||
@@ -109,7 +153,11 @@ export function validateIndex(value: unknown): PatchIndex {
     new Set(Object.values(index.patches)).size !== seen.size
   )
     throw new Error('The release patch map is inconsistent.');
-  return { ...index, firmwares };
+  return {
+    ...index,
+    firmwares,
+    ...(index.card === undefined ? {} : { card: validateCard(index.card) }),
+  };
 }
 
 export async function verifyPatch(index: PatchIndex, entry: PatchFirmware, data: Uint8Array) {
