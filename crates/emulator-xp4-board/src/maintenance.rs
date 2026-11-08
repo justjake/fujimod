@@ -195,7 +195,7 @@ impl Maintenance {
             // Security, EL, TTBR and VMID are evidence, never peer filters.
             if event.owner != self.tokens[source] || event.sequence != expected
                 || event.selector != native::TLBIALLIS || event.secure > 1
-                || event.exception_level > 3 || event.actlr & SMP == 0 || event.actlr & DDVM != 0
+                || event.exception_level > 3 || event.actlr & DDVM != 0
             {
                 return Err("Unsupported or inconsistent accepted translation event".into());
             }
@@ -214,7 +214,9 @@ impl Maintenance {
                 };
                 peer_actlr.push(actlr);
                 if core != source {
-                    if actlr & SMP == 0 {
+                    // A source outside the coherency domain (ACTLR.SMP clear)
+                    // broadcasts nothing; its local invalidation already ran.
+                    if actlr & SMP == 0 || event.actlr & SMP == 0 {
                         excluded |= 1 << core;
                     } else {
                         recipients |= 1 << core;

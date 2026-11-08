@@ -211,8 +211,23 @@ fn nonparticipating_peer_is_excluded_and_other_sessions_are_isolated() {
 }
 
 #[test]
+fn source_outside_coherency_invalidates_only_itself() {
+    let s = session(4);
+    s.coprocessor(0, cp(1, 0, 0, 1), Some(0x6000)).unwrap();
+    warm(&s, 4);
+    updater(&s, ALL_IS);
+    update(&s, 8);
+    let state = s.translation_maintenance_state().unwrap();
+    assert_eq!((state.records[0].recipients, state.records[0].excluded), (0, 0b1110));
+    assert!(state.records[0].acknowledged);
+    assert_eq!(state.delivered_peers, 0);
+    assert_eq!(load(&s, 0), 0x22);
+    for core in 1..4 { assert_eq!(load(&s, core), 0x11); }
+}
+
+#[test]
 fn unsupported_participation_fails_before_any_peer_delivery_and_stays_failed() {
-    for (core, actlr) in [(0, 0x6000), (0, 0xe040), (2, 0xe040)] {
+    for (core, actlr) in [(0, 0xe040), (2, 0xe040)] {
         let s = session(4);
         warm(&s, 4);
         s.coprocessor(core, cp(1, 0, 0, 1), Some(actlr)).unwrap();
