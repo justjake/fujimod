@@ -1,0 +1,10 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "gfx100s",
+  "soc_id": "xp4",
+  "control_bus_chips": [],
+  "connections": [],
+  "parts": [],
+  "wiring": []
+}

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "gfx100s-213",
+  "body_id": "gfx100s",
+  "version": "2.13",
+  "update": {
+    "size": 50197040,
+    "sha256": "ea997915ac5accc79699392b47909bb29506f66ec8d571e5804dd1fb0408fd12"
+  },
+  "boot_rom": {
+    "address": 4293918720,
+    "content": {
+      "size": 32768,
+      "sha256": "2a8b69986dd3fad0b73808c44e0834fa95c7b4e4f84e6c8664d4b0a82f7b24a4"
+    }
+  },
+  "installation": null,
+  "generated_facts": {
+    "remote": null,
+    "cfgdata_location": {
+      "kind": "pointer",
+      "address": 25967856
+    },
+    "additional_ui_modes": {
+      "play": 4,
+      "setup_play": 6
+    },
+    "menu_cursor": 28343940,
+    "menu_keys": {
+      "menu": "EXE_M",
+      "back": "DISP_B",
+      "up": "UP",
+      "down": "DOWN"
+    },
+    "uncached_alias": 0,
+    "identity_checks": [
+      {
+        "address": 19518168,
+        "size": 36,
+        "sha256": "fd4cb46daf766b1ad67d16bc74fae342c928c0fd6a5acec5bae9118f6f037ed1"
+      },
+      {
+        "address": 37056528,
+        "size": 180,
+        "sha256": "31c1701425c61d6fdd01165ca253f19a63f4791e079c3291d7240c09fb1e14fd"
+      }
+    ],
+    "observation": null
+  }
+}
