@@ -123,7 +123,7 @@
           "type": "integer"
         },
         "menu_id": {
-          "description": "Menu id.",
+          "description": "Root key decoded from the descriptor.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
@@ -295,6 +295,68 @@
       ],
       "type": "object"
     },
+    "RootLayout": {
+      "description": "Representation of the live root table.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A 32-bit pointer array; the array index is the root key.",
+          "properties": {
+            "kind": {
+              "const": "pointer_array",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Entries contain a sized integer key and a 32-bit pointer.",
+          "properties": {
+            "key_offset": {
+              "description": "Byte offset of the key within each entry.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "key_width": {
+              "description": "Key width in bytes.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "keyed_entries",
+              "type": "string"
+            },
+            "pointer_offset": {
+              "description": "Byte offset of the 32-bit pointer within each entry.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stride": {
+              "description": "Entry stride in bytes.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "stride",
+            "key_offset",
+            "key_width",
+            "pointer_offset"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "RootRoute": {
       "additionalProperties": false,
       "description": "A root menu entry strategy.",
@@ -345,7 +407,7 @@
     },
     "page_tabs": {
       "additionalProperties": false,
-      "description": "Root indices mapped to first tab keys.",
+      "description": "Root keys mapped to first tab keys.",
       "patternProperties": {
         "^\\d+$": {
           "format": "uint32",
@@ -365,14 +427,21 @@
         "minimum": 0,
         "type": "integer"
       },
-      "description": "Named root indices.",
+      "description": "Named root keys (array indices for a pointer array).",
       "type": "object"
     },
     "root_count": {
-      "description": "Number of root pointers.",
+      "description": "Number of entries in the root table.",
       "format": "uint32",
       "minimum": 0,
       "type": "integer"
+    },
+    "root_layout": {
+      "$ref": "#/$defs/RootLayout",
+      "default": {
+        "kind": "pointer_array"
+      },
+      "description": "How root entries are represented. Omission retains the 32-bit pointer\narray, with the entry index serving as its root key."
     },
     "root_routes": {
       "additionalProperties": false,
@@ -386,7 +455,7 @@
     },
     "root_titles": {
       "additionalProperties": false,
-      "description": "Root indices mapped to caption resource IDs.",
+      "description": "Root keys mapped to caption resource IDs.",
       "patternProperties": {
         "^\\d+$": {
           "format": "uint32",
@@ -397,7 +466,7 @@
       "type": "object"
     },
     "roots_address": {
-      "description": "Address of the root pointer table.",
+      "description": "Address of the root table.",
       "format": "uint64",
       "minimum": 0,
       "type": "integer"

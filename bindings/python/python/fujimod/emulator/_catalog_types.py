@@ -3473,6 +3473,7 @@ class MenuTables(TypedDict, total=False):
     q_grid: Required[QuickGrid]
     roles: Required[dict[str, int]]
     root_count: Required[int]
+    root_layout: NotRequired[RootLayout]
     root_routes: Required[MenuTablesVariant1]
     root_titles: Required[MenuTablesVariant2]
     roots_address: Required[int]
@@ -4310,6 +4311,21 @@ class RestartMechanism(TypedDict, total=False):
     sender: Required[int]
     transport: Required[RequestTransport]
     ui: Required[RecIdle]
+
+
+type RootLayout = RootLayoutVariant0 | RootLayoutVariant1
+
+
+class RootLayoutVariant0(TypedDict, total=False):
+    kind: Required[Literal["pointer_array"]]
+
+
+class RootLayoutVariant1(TypedDict, total=False):
+    key_offset: Required[int]
+    key_width: Required[int]
+    kind: Required[Literal["keyed_entries"]]
+    pointer_offset: Required[int]
+    stride: Required[int]
 
 
 class RootRoute(TypedDict, total=False):

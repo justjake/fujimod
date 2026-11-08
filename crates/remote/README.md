@@ -26,6 +26,21 @@ and readiness override have `state.readiness.input_pending_width` and
 existing four-byte layout; declared widths must be 1, 2, 4 or 8. Observations
 read exactly that extent, and a UI mode larger than 32 bits is refused.
 
+Menu roots default to a 32-bit pointer array, whose entry indices are root keys.
+An explicit `menus.root_layout` can describe keyed entries instead:
+
+```json
+{"kind":"keyed_entries","stride":8,"key_offset":0,"key_width":1,"pointer_offset":4}
+```
+
+`root_count` counts entries. Keys may be sparse and need not be less than that
+count. Key widths are 1, 2 or 4 bytes; pointers remain 32-bit. Fields must be
+aligned, nonoverlapping and contained in their stride. Duplicate live keys and
+overflowing table extents refuse observation. Padding beside a key is not part
+of its value. Descriptor `menu_id` must decode a declared root key; a separate
+packed identifier must not be substituted merely because it occupies the same
+record. This root layout does not add packed descriptor or cursor decoding.
+
 Build `Facts` with `Facts::from_selection(&selection, manifest)`. A reference is
 resolved on every use; duplicate or missing rows and option names produce an
 error with the candidates found. Stock menu IDs are root indices or catalog

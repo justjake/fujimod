@@ -212,17 +212,21 @@ pub struct DebugKey {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct MenuTables {
-    /// Address of the root pointer table.
+    /// Address of the root table.
     pub roots_address: u64,
-    /// Number of root pointers.
+    /// Number of entries in the root table.
     pub root_count: u32,
-    /// Named root indices.
+    /// How root entries are represented. Omission retains the 32-bit pointer
+    /// array, with the entry index serving as its root key.
+    #[serde(default)]
+    pub root_layout: RootLayout,
+    /// Named root keys (array indices for a pointer array).
     pub roles: BTreeMap<String, u32>,
-    /// Root indices mapped to caption resource IDs.
+    /// Root keys mapped to caption resource IDs.
     pub root_titles: BTreeMap<u32, u32>,
     /// Declared root entry strategies.
     pub root_routes: BTreeMap<u32, RootRoute>,
-    /// Root indices mapped to first tab keys.
+    /// Root keys mapped to first tab keys.
     pub page_tabs: BTreeMap<u32, u32>,
     /// Tab navigation bounds.
     pub navigation: MenuNavigation,
@@ -234,6 +238,85 @@ pub struct MenuTables {
     pub cursor: CursorLayout,
     /// Quick menu geometry and menu ID.
     pub q_grid: QuickGrid,
+}
+
+/// Representation of the live root table.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum RootLayout {
+    /// A 32-bit pointer array; the array index is the root key.
+    #[default]
+    PointerArray,
+    /// Entries contain a sized integer key and a 32-bit pointer.
+    KeyedEntries {
+        /// Entry stride in bytes.
+        stride: u32,
+        /// Byte offset of the key within each entry.
+        key_offset: u32,
+        /// Key width in bytes.
+        key_width: u8,
+        /// Byte offset of the 32-bit pointer within each entry.
+        pointer_offset: u32,
+    },
+}
+
+impl MenuTables {
+    /// Validate the root-table layout and return its entry stride and byte extent.
+    pub fn checked_root_table_extent(&self) -> Result<(u32, usize), String> {
+        if self.roots_address == 0 || self.root_count == 0 || self.root_count > 4096 {
+            return Err("invalid remote root table address or count".into());
+        }
+        let stride = match &self.root_layout {
+            RootLayout::PointerArray => 4,
+            RootLayout::KeyedEntries {
+                stride,
+                key_offset,
+                key_width,
+                pointer_offset,
+            } => {
+                if *stride == 0
+                    || *stride > 256
+                    || !matches!(*key_width, 1 | 2 | 4)
+                    || *stride % u32::from(*key_width) != 0
+                    || *stride % 4 != 0
+                    || *key_offset % u32::from(*key_width) != 0
+                    || *pointer_offset % 4 != 0
+                    || self.roots_address % u64::from(*key_width) != 0
+                    || self.roots_address % 4 != 0
+                {
+                    return Err("invalid keyed root table width, stride, or alignment".into());
+                }
+                let key_end = key_offset
+                    .checked_add(u32::from(*key_width))
+                    .ok_or("keyed root key extent overflow")?;
+                let pointer_end = pointer_offset
+                    .checked_add(4)
+                    .ok_or("keyed root pointer extent overflow")?;
+                if key_end > *stride
+                    || pointer_end > *stride
+                    || (*key_offset < pointer_end && *pointer_offset < key_end)
+                {
+                    return Err("keyed root fields overlap or exceed their stride".into());
+                }
+                *stride
+            }
+        };
+        let table_bytes = u64::from(self.root_count)
+            .checked_mul(u64::from(stride))
+            .ok_or("remote root table extent overflow")?;
+        self.roots_address
+            .checked_add(table_bytes)
+            .ok_or("remote root table address overflow")?;
+        let table_size = usize::try_from(table_bytes)
+            .map_err(|_| "remote root table exceeds host address space")?;
+        Ok((stride, table_size))
+    }
 }
 
 /// A root menu entry strategy.
@@ -311,7 +394,7 @@ pub struct MenuLayout {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct MenuFields {
-    /// Menu id.
+    /// Root key decoded from the descriptor.
     pub menu_id: u32,
     /// Type code.
     pub type_code: u32,
@@ -1081,17 +1164,38 @@ impl FirmwareFacts {
             identity.validate()?;
         }
         let m = &self.menus;
-        if m.roots_address == 0
-            || m.root_count == 0
-            || m.layout.size < 32
+        if m.layout.size < 32
             || m.layout.row_size < 8
             || m.cursor.size < 32
             || m.cursor_address == 0
             || m.q_grid.rows == 0
             || m.q_grid.columns == 0
-            || m.roles.values().any(|index| *index >= m.root_count)
         {
             return Err("invalid remote menu layout or roots".into());
+        }
+        m.checked_root_table_extent()?;
+        match &m.root_layout {
+            RootLayout::PointerArray if m.roles.values().any(|index| *index >= m.root_count) => {
+                return Err("invalid remote menu layout or roots".into());
+            }
+            RootLayout::KeyedEntries { key_width, .. } => {
+                let maximum_key = if *key_width == 4 {
+                    u32::MAX
+                } else {
+                    (1u32 << (u32::from(*key_width) * 8)) - 1
+                };
+                let keys_fit = m
+                    .roles
+                    .values()
+                    .chain(m.root_titles.keys())
+                    .chain(m.root_routes.keys())
+                    .chain(m.page_tabs.keys())
+                    .all(|key| *key <= maximum_key);
+                if !keys_fit {
+                    return Err("declared root key exceeds its field width".into());
+                }
+            }
+            _ => {}
         }
         let node = &m.layout.fields;
         let cursor = &m.cursor.fields;

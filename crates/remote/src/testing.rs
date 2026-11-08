@@ -2,6 +2,7 @@ use super::*;
 use crate::backend::Backend;
 #[cfg(test)]
 use crate::connection::Connection;
+use fujimod_catalog_remote::{RootLayout, RootRoute};
 use serde_json::json;
 
 pub fn facts() -> Facts {
@@ -62,6 +63,76 @@ pub fn facts() -> Facts {
                 "bitmaps":{"table":24576,"stride":8,"final_table":24576,"final_first_index":0,"last_index":0,"last_record":24576,"layout":{"data_bytes":4,"data_offset":0,"height_bytes":2,"height_offset":4,"kind_bytes":1,"kind_offset":6,"width_bytes":2,"width_offset":8}}}
         },"menu_manifest":null
     })).unwrap()
+}
+
+fn keyed_facts(
+    root_key: u32,
+    stride: u32,
+    key_offset: u32,
+    key_width: u8,
+    pointer_offset: u32,
+) -> Facts {
+    let mut facts = facts();
+    let menus = &mut facts.firmware.menus;
+    menus.root_count = 2;
+    menus.root_layout = RootLayout::KeyedEntries {
+        stride,
+        key_offset,
+        key_width,
+        pointer_offset,
+    };
+    menus.roles.clear();
+    menus.roles.insert("shooting".into(), root_key);
+    menus.root_routes.clear();
+    menus.root_routes.insert(
+        root_key,
+        RootRoute {
+            entry: "shooting_menu".into(),
+            tab: None,
+        },
+    );
+    facts
+}
+
+fn write_keyed_roots(
+    backend: &mut Synthetic,
+    entries: &[(u32, u32)],
+    stride: u32,
+    key_offset: u32,
+    key_width: u8,
+    pointer_offset: u32,
+) {
+    for (index, (key, pointer)) in entries.iter().enumerate() {
+        let entry = 256 + index * stride as usize;
+        backend.bytes[entry..entry + stride as usize].fill(0xa5);
+        for byte in 0..usize::from(key_width) {
+            backend.bytes[entry + key_offset as usize + byte] = (*key >> (byte * 8)) as u8;
+        }
+        backend.word(entry + pointer_offset as usize, *pointer);
+    }
+}
+
+fn keyed_backend(
+    root_key: u32,
+    child_key: u32,
+    entries: &[(u32, u32)],
+    stride: u32,
+    key_offset: u32,
+    key_width: u8,
+    pointer_offset: u32,
+) -> Synthetic {
+    let mut backend = Synthetic::new();
+    backend.node(4096, root_key, 0, 8192, 12288);
+    backend.node(4352, child_key, 4096, 8448, 12544);
+    write_keyed_roots(
+        &mut backend,
+        entries,
+        stride,
+        key_offset,
+        key_width,
+        pointer_offset,
+    );
+    backend
 }
 /// Synthetic facts with a touch surface whose decoded report sits at 1536.
 pub fn touch_facts() -> Facts {
@@ -346,6 +417,144 @@ fn navigate_select_reopen_and_capture() {
         assert_eq!(r.backend.waits.last().unwrap().devices, [7].into());
     });
 }
+
+#[test]
+fn legacy_root_layout_defaults_to_pointer_array() {
+    futures_lite::future::block_on(async {
+        let facts = facts();
+        assert_eq!(facts.firmware.menus.root_layout, RootLayout::PointerArray);
+        let mut remote = Connection::connect(Synthetic::new(), facts).unwrap();
+        let result = remote
+            .navigate(&menu("shooting").with_key(20), 100)
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().node, 4096);
+        assert!(result.menu().unwrap().selected);
+    });
+}
+
+#[test]
+fn sparse_keyed_roots_resolve_independently_of_entry_order() {
+    futures_lite::future::block_on(async {
+        for entries in [
+            [(0x123, 4096), (0xabc, 4352)],
+            [(0xabc, 4352), (0x123, 4096)],
+        ] {
+            let facts = keyed_facts(0x123, 12, 2, 2, 8);
+            let backend = keyed_backend(0x123, 0xabc, &entries, 12, 2, 2, 8);
+            let mut remote = Connection::connect(backend, facts).unwrap();
+            let result = remote
+                .navigate(&menu("shooting").with_key(20), 100)
+                .await
+                .unwrap();
+            assert_eq!(result.menu().unwrap().node, 4096);
+            assert!(result.menu().unwrap().selected);
+        }
+    });
+}
+
+#[test]
+fn byte_keyed_roots_ignore_padding_before_the_key_and_pointer() {
+    futures_lite::future::block_on(async {
+        let entries = [(0x20, 4096), (0x21, 4352)];
+        let facts = keyed_facts(0x20, 8, 1, 1, 4);
+        let backend = keyed_backend(0x20, 0x21, &entries, 8, 1, 1, 4);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let result = remote
+            .navigate(&menu("shooting").with_key(20), 100)
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().node, 4096);
+        assert!(result.menu().unwrap().selected);
+    });
+}
+
+#[test]
+fn keyed_root_tables_reject_duplicate_keys_but_allow_duplicate_pointers() {
+    futures_lite::future::block_on(async {
+        let duplicate_keys = [(0x20, 4096), (0x20, 4352)];
+        let facts = keyed_facts(0x20, 8, 1, 1, 4);
+        let backend = keyed_backend(0x20, 0x21, &duplicate_keys, 8, 1, 1, 4);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let error = remote
+            .read(&menu("shooting").into())
+            .await
+            .unwrap_err();
+        assert!(error.contains("Duplicate root key"));
+
+        let duplicate_pointers = [(0x20, 4096), (0x21, 4096)];
+        let facts = keyed_facts(0x20, 8, 1, 1, 4);
+        let backend = keyed_backend(0x20, 0x21, &duplicate_pointers, 8, 1, 1, 4);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let result = remote
+            .navigate(&menu("shooting").with_key(20), 100)
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().node, 4096);
+    });
+}
+
+#[test]
+fn keyed_root_lookup_does_not_fall_back_to_an_entry_index() {
+    futures_lite::future::block_on(async {
+        let entries = [(0x20, 4096), (0x21, 4352)];
+        let facts = keyed_facts(1, 8, 1, 1, 4);
+        let backend = keyed_backend(0x20, 0x21, &entries, 8, 1, 1, 4);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let error = remote
+            .read(&menu("shooting").into())
+            .await
+            .unwrap_err();
+        assert!(error.contains("root key 0x1 is absent"));
+    });
+}
+
+#[test]
+fn invalid_descriptor_key_refuses_before_following_its_row_pointer() {
+    futures_lite::future::block_on(async {
+        let mut backend = Synthetic::new();
+        backend.word(4096, 99);
+        backend.word(4096 + 24, u32::MAX - 7);
+        let mut remote = Connection::connect(backend, facts()).unwrap();
+        let error = remote.read(&menu("shooting").into()).await.unwrap_err();
+        assert!(error.contains("Invalid menu descriptor"), "{error}");
+    });
+}
+
+#[test]
+fn keyed_root_layout_validation_rejects_width_stride_overlap_and_overflow() {
+    let mut invalid_width = keyed_facts(0x20, 8, 1, 1, 4);
+    invalid_width.firmware.menus.root_layout = RootLayout::KeyedEntries {
+        stride: 8,
+        key_offset: 0,
+        key_width: 3,
+        pointer_offset: 4,
+    };
+    assert!(invalid_width.firmware.validate().is_err());
+
+    let mut invalid_stride = keyed_facts(0x20, 7, 1, 1, 4);
+    invalid_stride.firmware.menus.root_layout = RootLayout::KeyedEntries {
+        stride: 7,
+        key_offset: 1,
+        key_width: 1,
+        pointer_offset: 4,
+    };
+    assert!(invalid_stride.firmware.validate().is_err());
+
+    let mut overlapping_fields = keyed_facts(0x20, 8, 0, 4, 0);
+    overlapping_fields.firmware.menus.root_layout = RootLayout::KeyedEntries {
+        stride: 8,
+        key_offset: 0,
+        key_width: 4,
+        pointer_offset: 0,
+    };
+    assert!(overlapping_fields.firmware.validate().is_err());
+
+    let mut overflowing_table = keyed_facts(0x20, 8, 1, 1, 4);
+    overflowing_table.firmware.menus.roots_address = u64::MAX - 3;
+    assert!(overflowing_table.firmware.validate().is_err());
+}
+
 #[test]
 fn root_navigation_backs_out_of_a_remembered_submenu() {
     futures_lite::future::block_on(async {

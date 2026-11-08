@@ -5,7 +5,30 @@ use crate::{
     memory::{Memory, word},
 };
 use fujimod_catalog_controls::InputTarget;
+use fujimod_catalog_remote::RootLayout;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
+
+fn root_key(bytes: &[u8], offset: usize, width: u8) -> Result<u32> {
+    if !matches!(width, 1 | 2 | 4) {
+        return Err("Unsupported root key width".into());
+    }
+    let end = offset
+        .checked_add(usize::from(width))
+        .ok_or("root key extent overflow")?;
+    let field = bytes
+        .get(offset..end)
+        .ok_or("root key exceeds its entry")?;
+    let mut value = 0u32;
+    for (shift, byte) in field.iter().enumerate() {
+        value |= u32::from(*byte) << (shift * 8);
+    }
+    Ok(value)
+}
+
+fn root_pointer(bytes: &[u8], offset: usize) -> Result<u32> {
+    let offset = u32::try_from(offset).map_err(|_| "root pointer offset exceeds 32 bits")?;
+    word(bytes, offset)
+}
 
 #[derive(Clone, Debug)]
 struct Row {
@@ -22,14 +45,14 @@ struct Node {
     rows: Vec<Row>,
 }
 impl<B: Backend> Memory<'_, B> {
-    async fn node(&mut self, pointer: u64) -> Result<Node> {
+    async fn node(&mut self, pointer: u64, roots: &BTreeMap<u32, u64>) -> Result<Node> {
         let l = &self.facts.firmware.menus.layout;
         if !(32..=256).contains(&l.size) || !(8..=256).contains(&l.row_size) {
             return Err("Unsupported menu descriptor extent".into());
         }
         let raw = self.bytes(pointer, l.size as usize).await?;
         let code = word(&raw, l.fields.menu_id)?;
-        if code >= self.facts.firmware.menus.root_count
+        if !roots.contains_key(&code)
             || word(&raw, l.fields.type_code)? > l.max_kind
             || word(&raw, l.fields.rows_per_page)? > 1024
         {
@@ -61,18 +84,61 @@ impl<B: Backend> Memory<'_, B> {
             rows,
         })
     }
-    async fn graph(&mut self) -> Result<(Vec<u64>, BTreeMap<u64, Node>)> {
+    async fn graph(&mut self) -> Result<(BTreeMap<u32, u64>, BTreeMap<u64, Node>)> {
         let m = &self.facts.firmware.menus;
         if m.root_count > 4096 {
             return Err("Menu root bound exceeded".into());
         }
-        let raw = self
-            .bytes(m.roots_address, m.root_count as usize * 4)
-            .await?;
-        let roots = (0..m.root_count)
-            .map(|i| word(&raw, i * 4).map(u64::from))
-            .collect::<Result<Vec<_>>>()?;
-        let mut pending: VecDeque<_> = roots.iter().copied().filter(|p| *p != 0).collect();
+        let (_, table_size) = m.checked_root_table_extent()?;
+        let raw = self.bytes(m.roots_address, table_size).await?;
+        let mut roots = BTreeMap::new();
+        match &m.root_layout {
+            RootLayout::PointerArray => {
+                for index in 0..m.root_count {
+                    let offset = usize::try_from(index)
+                        .map_err(|_| "root index exceeds host address space")?
+                        .checked_mul(4)
+                        .ok_or("root pointer offset overflow")?;
+                    roots.insert(index, u64::from(root_pointer(&raw, offset)?));
+                }
+            }
+            RootLayout::KeyedEntries {
+                stride,
+                key_offset,
+                key_width,
+                pointer_offset,
+            } => {
+                let stride = usize::try_from(*stride)
+                    .map_err(|_| "root stride exceeds host address space")?;
+                let key_offset = usize::try_from(*key_offset)
+                    .map_err(|_| "root key offset exceeds host address space")?;
+                let pointer_offset = usize::try_from(*pointer_offset)
+                    .map_err(|_| "root pointer offset exceeds host address space")?;
+                for index in 0..m.root_count {
+                    let entry = usize::try_from(index)
+                        .map_err(|_| "root index exceeds host address space")?
+                        .checked_mul(stride)
+                        .ok_or("root entry offset overflow")?;
+                    let key_at = entry
+                        .checked_add(key_offset)
+                        .ok_or("root key offset overflow")?;
+                    let pointer_at = entry
+                        .checked_add(pointer_offset)
+                        .ok_or("root pointer offset overflow")?;
+                    let key = root_key(&raw, key_at, *key_width)?;
+                    let pointer = u64::from(root_pointer(&raw, pointer_at)?);
+                    if roots.insert(key, pointer).is_some() {
+                        return Err(format!("Duplicate root key {key:#x}"));
+                    }
+                }
+            }
+        }
+        let root_pointers: BTreeSet<_> = roots
+            .values()
+            .copied()
+            .filter(|pointer| *pointer != 0)
+            .collect();
+        let mut pending: VecDeque<_> = root_pointers.iter().copied().collect();
         let mut nodes = BTreeMap::new();
         let mut visited = BTreeSet::new();
         while let Some(pointer) = pending.pop_front() {
@@ -84,9 +150,9 @@ impl<B: Backend> Memory<'_, B> {
             }
             // Function rows may contain operation values rather than descriptors.
             // A root, or a descriptor explicitly requested later, must validate.
-            let node = match self.node(pointer).await {
+            let node = match self.node(pointer, &roots).await {
                 Ok(node) => node,
-                Err(error) if roots.contains(&pointer) => return Err(error),
+                Err(error) if root_pointers.contains(&pointer) => return Err(error),
                 Err(_) => continue,
             };
             pending.extend(node.rows.iter().filter(|r| r.child != 0).map(|r| r.child));
@@ -122,7 +188,7 @@ impl<B: Backend> Memory<'_, B> {
     fn target(
         &self,
         reference: &Menu,
-        roots: &[u64],
+        roots: &BTreeMap<u32, u64>,
         nodes: &BTreeMap<u64, Node>,
     ) -> Result<(u64, Option<u32>)> {
         let mut chain = vec![];
@@ -143,9 +209,9 @@ impl<B: Backend> Memory<'_, B> {
             .collect();
         let (mut pointer, mut key) = if declarations.is_empty() {
             let code = self.code(current.id())?;
-            let pointer = *roots
-                .get(code as usize)
-                .ok_or_else(|| format!("Menu {} is outside the root table", current.id()))?;
+            let pointer = *roots.get(&code).ok_or_else(|| {
+                format!("Menu {} root key {code:#x} is absent from the root table", current.id())
+            })?;
             (pointer, current.key())
         } else if declarations.len() == 1 {
             let item = declarations[0];
@@ -228,7 +294,7 @@ impl<B: Backend> Memory<'_, B> {
     fn ancestry(
         &self,
         pointer: u64,
-        roots: &[u64],
+        roots: &BTreeMap<u32, u64>,
         nodes: &BTreeMap<u64, Node>,
         reference: &Menu,
     ) -> Result<(String, Vec<Menu>)> {
@@ -248,7 +314,7 @@ impl<B: Backend> Memory<'_, B> {
             let node = nodes
                 .get(&current)
                 .ok_or("Menu ancestry has no live descriptor")?;
-            if roots.get(node.code as usize) == Some(&current)
+            if roots.get(&node.code) == Some(&current)
                 && self
                     .facts
                     .firmware
@@ -300,6 +366,52 @@ impl<B: Backend> Memory<'_, B> {
             reverse.push((parent.code, row.key));
             current = parent.pointer;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn malformed_root_layouts_refuse_before_reading_memory() {
+        futures_lite::future::block_on(async {
+            let mut bad_width = crate::testing::facts();
+            bad_width.firmware.menus.root_layout = RootLayout::KeyedEntries {
+                stride: 8,
+                key_offset: 0,
+                key_width: 0,
+                pointer_offset: 4,
+            };
+            let mut bad_stride = crate::testing::facts();
+            bad_stride.firmware.menus.root_layout = RootLayout::KeyedEntries {
+                stride: 0,
+                key_offset: 0,
+                key_width: 4,
+                pointer_offset: 4,
+            };
+            let mut wrapped_extent = crate::testing::facts();
+            wrapped_extent.firmware.menus.root_layout = RootLayout::KeyedEntries {
+                stride: 8,
+                key_offset: 0,
+                key_width: 4,
+                pointer_offset: 4,
+            };
+            wrapped_extent.firmware.menus.roots_address = u64::MAX - 3;
+
+            for facts in [bad_width, bad_stride, wrapped_extent] {
+                let mut backend = crate::testing::Synthetic::new();
+                let mut memory = Memory {
+                    backend: &mut backend,
+                    facts: &facts,
+                    reads: crate::ReadSet::default(),
+                    scope: false,
+                    depth: 0,
+                };
+                assert!(memory.graph().await.is_err());
+                assert!(memory.reads.stores.is_empty());
+            }
+        });
     }
 }
 fn unique_row<'a>(node: &'a Node, key: u32, id: &str) -> Result<&'a Row> {
