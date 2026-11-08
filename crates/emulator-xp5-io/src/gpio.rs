@@ -14,6 +14,16 @@ pub struct InitialOutput {
     pub levels: u16,
 }
 
+/// One external pad level at the boot handoff, for a pin whose level the board
+/// or the run declares. Undeclared pads keep the pin bank's default.
+#[derive(Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InitialInput {
+    pub port: usize,
+    pub pin: usize,
+    pub high: bool,
+}
+
 pub struct Gpio {
     pins: SharedPins,
     special: bool,
@@ -63,6 +73,27 @@ impl Gpio {
             let mut pins = self.pins.lock().unwrap();
             for output in outputs {
                 pins.ports[output.port].registers[0] = output.levels.into();
+            }
+        }
+        Ok(self)
+    }
+    /// External pad levels at the selected boot handoff. Construction performs
+    /// no guest access; an input route whose level is active sees it as an
+    /// initially active level, as for the default pads.
+    pub fn with_initial_inputs(mut self, inputs: Vec<InitialInput>) -> Result<Self, String> {
+        if inputs.iter().enumerate().any(|(i, input)| {
+            input.port >= 20
+                || input.pin >= 16
+                || inputs[..i]
+                    .iter()
+                    .any(|other| (other.port, other.pin) == (input.port, input.pin))
+        }) {
+            return Err("invalid initial GPIO input pins".into());
+        }
+        {
+            let mut pins = self.pins.lock().unwrap();
+            for input in inputs {
+                pins.set_input(input.port, input.pin, input.high);
             }
         }
         Ok(self)
@@ -238,6 +269,32 @@ mod tests {
     }
     use super::*;
     use fujimod_emulator_devices::test_host::recording::RecordingHost;
+    #[test]
+    fn initial_input_levels_set_only_the_declared_pads() {
+        let pins = Pins::shared();
+        let mut gpio = Gpio::new(0xff907000, pins.clone(), false, Vec::new())
+            .unwrap()
+            .with_initial_inputs(vec![InitialInput { port: 11, pin: 4, high: false }])
+            .unwrap();
+        assert_eq!(pins.lock().unwrap().level(11, 4), 0);
+        assert_eq!(pins.lock().unwrap().level(11, 3), 1);
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(gpio.read(&mut cx, 0xff907000 + 11 * 0x40 + 0x14, 4), 0xffef);
+        for invalid in [
+            vec![InitialInput { port: 20, pin: 0, high: true }],
+            vec![InitialInput { port: 1, pin: 16, high: true }],
+            vec![
+                InitialInput { port: 1, pin: 2, high: true },
+                InitialInput { port: 1, pin: 2, high: false },
+            ],
+        ] {
+            assert!(Gpio::new(0xff907000, Pins::shared(), false, Vec::new())
+                .unwrap()
+                .with_initial_inputs(invalid)
+                .is_err());
+        }
+    }
     #[test]
     fn external_shutter_levels_wake_declared_irq_routes_without_polling() {
         let pins = Pins::shared();

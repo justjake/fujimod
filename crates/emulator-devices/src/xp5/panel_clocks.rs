@@ -24,9 +24,12 @@ impl Clocks {
     pub fn selector(&self, value: u32) {
         self.0.lock().unwrap().selector = value & 1;
     }
-    /// Reproduce14f3520's float32 arithmetic (returned MHz), including its
-    /// low-byte divider reads. Fractional PLL words are retained but the
-    /// frequency query does not incorporate them.
+    /// The XP5 display clock tree as the stock pixel-clock query computes it,
+    /// in float32 MHz with low-byte divider reads. Every XP5 firmware modeled
+    /// so far carries the same query. Bank 1 is PLL 0 times 12 over its
+    /// divider; bank 0 is PLLs 2 and 3 over their dividers times 24 or 48 by
+    /// the selector. Fractional PLL words are retained but the query does not
+    /// incorporate them.
     pub fn pixel_hz(&self, bank: usize) -> Result<f64, String> {
         let s = self.0.lock().unwrap();
         let ratio = |p: Pll| p.n as f32 / ((p.dividers[0] & 255) + 1) as f32;

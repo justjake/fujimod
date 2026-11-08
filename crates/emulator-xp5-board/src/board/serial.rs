@@ -23,7 +23,7 @@ pub(super) struct Connection {
 enum Part {
     PowerController { rtc_seconds: u32, rtc_valid: bool },
     SerialCalibrationRegisters { miso_high: bool },
-    SerialCommandRegisters { mode: u8, miso_high: bool },
+    SerialCommandRegisters(fujimod_emulator_parts_io::serial_command_registers::Wiring),
     BisConfigurationRegisters { revision: [u8; 2], idle_high: bool },
     Lsm6dsConfigurationRegisters,
 }
@@ -112,10 +112,8 @@ fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn E
         Part::SerialCalibrationRegisters { miso_high } => {
             Box::new(CalibrationRegisters::new(miso_high))
         }
-        Part::SerialCommandRegisters { mode, miso_high } => Box::new(
-            fujimod_emulator_parts_io::serial_command_registers::CommandRegisters::new(
-                mode, miso_high,
-            )?,
+        Part::SerialCommandRegisters(wiring) => Box::new(
+            fujimod_emulator_parts_io::serial_command_registers::CommandRegisters::new(wiring)?,
         ),
         Part::BisConfigurationRegisters {
             revision,
@@ -227,6 +225,33 @@ mod tests {
         keys.enqueue(Duration::from_nanos(9), Key::Menu, false).unwrap();
         keys.advance(9);
         assert_eq!(read(endpoint.as_mut(), 0x34), 1023);
+    }
+
+    #[test]
+    fn command_register_endpoints_take_their_declared_wire_format() {
+        let connection = |part: &str| {
+            toml::from_str::<Connection>(&format!(
+                "select = {{ port = 12, pin = 8, active_high = false }}\npart = {part}"
+            ))
+        };
+        let burst = connection(
+            "{ kind = 'serial-command-registers', bits = 8, mode = 0, read_flag = 1, miso_high = false }",
+        )
+        .unwrap();
+        let mut part = endpoint(burst.part, None).unwrap();
+        for word in [0x0a, 0x11, 0x22] {
+            let frame = Frame { bits: 8, mode: 0, word };
+            part.validate(frame).unwrap();
+            part.transfer(frame, 0);
+        }
+        assert_eq!(part.save()["registers"]["registers"]["10"], serde_json::json!([0x11, 0x22]));
+        assert!(connection("{ kind = 'serial-command-registers', mode = 0, miso_high = false }").is_err());
+        assert!(
+            connection(
+                "{ kind = 'serial-command-registers', bits = 8, mode = 0, read_flag = 1, miso_high = false, idle = 1 }"
+            )
+            .is_err()
+        );
     }
 
     #[test]
