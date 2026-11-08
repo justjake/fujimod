@@ -111,11 +111,15 @@ pub struct Timeline {
 }
 impl Timeline {
     pub fn new(ratio: Ratio, processors: usize) -> Result<Self, String> {
+        Self::new_at(ratio, processors, 0)
+    }
+    /// Begin a new powered epoch on the existing virtual-time axis.
+    pub fn new_at(ratio: Ratio, processors: usize, start_tick: u64) -> Result<Self, String> {
         if ratio.numerator < ratio.denominator {
             return Err("timeline requires at least one instruction per board tick".into());
         }
         Ok(Self {
-            now: 0,
+            now: start_tick,
             phase: 0,
             ratio,
             sequence: 0,
@@ -294,6 +298,16 @@ impl Timeline {
         self.now = at;
         Ok(true)
     }
+    /// Advance an unpowered machine without executing its old device events.
+    /// The old powered epoch cannot be resumed after this operation.
+    pub fn advance_unpowered(&mut self, at: u64) -> Result<(), String> {
+        if at < self.now { return Err("unpowered time moved backward".into()); }
+        self.queue.clear();
+        self.lags.fill(0);
+        self.now = at;
+        self.phase = 0;
+        Ok(())
+    }
     pub fn pop_due(&mut self) -> Option<Event> {
         if self.queue.peek().is_some_and(|e| e.0.at <= self.now) {
             self.queue.pop().map(|e| e.0)
@@ -381,6 +395,18 @@ impl Timeline {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn fresh_epoch_keeps_virtual_time_and_starts_with_no_events() {
+        let mut timeline = Timeline::new_at(Ratio::new(2, 1).unwrap(), 2, 9000).unwrap();
+        assert_eq!(timeline.now(), 9000);
+        assert_eq!(timeline.processor_clock(0).unwrap().now, 9000);
+        assert_eq!(timeline.next_event(), None);
+        assert!(timeline.schedule(Target::DeviceEvent(0), 8999, 0).is_err());
+        timeline.schedule(Target::DeviceEvent(0), 9003, 7).unwrap();
+        assert!(timeline.advance_waiting(true, None).unwrap());
+        assert_eq!(timeline.now(), 9003);
+        assert_eq!(timeline.pop_due().unwrap().token, 7);
+    }
     #[test]
     fn replacing_a_model_deadline_preserves_explicit_and_processor_events() {
         let mut t = Timeline::new(Ratio::new(1, 1).unwrap(), 1).unwrap();

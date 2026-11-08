@@ -1,5 +1,8 @@
 //! The reference catalog of SoCs, parts, bodies and firmware and their hardware profiles.
 pub mod assembly;
+pub mod boot_identity;
+pub mod boot_patch;
+pub mod boot_rom;
 pub mod capture;
 pub mod firmware_versions;
 pub mod first_start;
@@ -7,6 +10,7 @@ pub mod ui_scene_names;
 pub mod ui_setting_names;
 pub mod ui_event_codes;
 pub mod generation;
+pub mod nand_boot;
 pub mod progress;
 pub mod reference;
 pub mod soc;

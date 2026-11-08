@@ -115,6 +115,11 @@ pub enum SerialEndpoint {
     Registers {
         options: serde_json::Value,
     },
+    WakeRegisters {
+        options: serde_json::Value,
+        clock: String,
+        ticks_per_second: u64,
+    },
     Panel {
         options: serde_json::Value,
     },
@@ -600,15 +605,19 @@ impl Model {
             }
             Self::SerialChannel { gpio, endpoint, .. } => {
                 refs.push(gpio.as_str());
-                if let SerialEndpoint::LensUnit { pulses, gpio, .. } = endpoint {
-                    refs.extend([pulses.as_str(), gpio.as_str()]);
+                match endpoint {
+                    SerialEndpoint::LensUnit { pulses, gpio, .. } => refs.extend([pulses.as_str(), gpio.as_str()]),
+                    SerialEndpoint::WakeRegisters { clock, .. } => refs.push(clock.as_str()),
+                    _ => {}
                 }
             }
             Self::SpiController { routes } => {
                 for route in routes {
                     refs.push(route.gpio.as_str());
-                    if let SerialEndpoint::LensUnit { pulses, gpio, .. } = &route.endpoint {
-                        refs.extend([pulses.as_str(), gpio.as_str()]);
+                    match &route.endpoint {
+                        SerialEndpoint::LensUnit { pulses, gpio, .. } => refs.extend([pulses.as_str(), gpio.as_str()]),
+                        SerialEndpoint::WakeRegisters { clock, .. } => refs.push(clock.as_str()),
+                        _ => {}
                     }
                 }
             }

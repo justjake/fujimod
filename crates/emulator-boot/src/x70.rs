@@ -124,9 +124,14 @@ const NODE_RULES: &[NodeRule] = &[
         dependencies: &[],
     },
     NodeRule {
+        name: "clocks",
+        blocks: &["clock-controller", "clock-controller-aux"],
+        dependencies: &[],
+    },
+    NodeRule {
         name: "serial_spi1",
         blocks: &["serial-spi1"],
-        dependencies: &["serial_gpio"],
+        dependencies: &["serial_gpio", "clocks"],
     },
     NodeRule {
         name: "dram_controller",
@@ -141,11 +146,6 @@ const NODE_RULES: &[NodeRule] = &[
     NodeRule {
         name: "reset_control",
         blocks: &["reset-controller"],
-        dependencies: &[],
-    },
-    NodeRule {
-        name: "clocks",
-        blocks: &["clock-controller", "clock-controller-aux"],
         dependencies: &[],
     },
     NodeRule {
@@ -1991,6 +1991,10 @@ fn apply_run_inputs(
                 ));
             }
         }
+        let endpoint = &mut recipe["routes"][body_mcu.channel as usize]["endpoint"];
+        endpoint["kind"] = json!("wake-registers");
+        endpoint["clock"] = json!("clocks");
+        endpoint["ticks_per_second"] = json!(rtc.ticks_per_second);
     }
     if name == "usb_cable" {
         // The typed wire is updated in assemble after all recipes are built.

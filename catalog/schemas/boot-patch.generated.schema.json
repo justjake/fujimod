@@ -1,0 +1,299 @@
+{
+  "$defs": {
+    "BootPatchClear": {
+      "additionalProperties": false,
+      "description": "A RAM range stock zeroes after stage 3.",
+      "properties": {
+        "address": {
+          "description": "First zeroed byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "done_after": {
+          "description": "Trigger after which the clear is done.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Clear name.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Zeroed bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "size",
+        "done_after"
+      ],
+      "type": "object"
+    },
+    "BootPatchCompression": {
+      "description": "Compression of one unit's stored stream.",
+      "oneOf": [
+        {
+          "const": "raw",
+          "description": "Stored bytes are the loaded bytes.",
+          "type": "string"
+        },
+        {
+          "const": "method4",
+          "description": "The stock method-4 decoder expands the stream.",
+          "type": "string"
+        }
+      ]
+    },
+    "BootPatchIsa": {
+      "description": "Instruction set of the patched image.",
+      "oneOf": [
+        {
+          "const": "arm32",
+          "description": "32-bit ARM.",
+          "type": "string"
+        }
+      ]
+    },
+    "BootPatchRange": {
+      "additionalProperties": false,
+      "description": "A half-open RAM range.",
+      "properties": {
+        "address": {
+          "description": "First byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size"
+      ],
+      "type": "object"
+    },
+    "BootPatchTrigger": {
+      "additionalProperties": false,
+      "description": "One site whose completion means its group can be applied.",
+      "properties": {
+        "address_mask": {
+          "description": "Mask applied to the base register before reporting a range.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "base_register": {
+          "description": "ARM register holding the copied base for a range trigger.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expected": {
+          "description": "Stock word expected at the site.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/$defs/BootPatchTriggerKind",
+          "description": "Whether the site is once or reports a range."
+        },
+        "length_register": {
+          "description": "ARM register holding the copied length for a range trigger.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Trigger name, used by clears and progress records.",
+          "type": "string"
+        },
+        "site": {
+          "description": "RAM address whose instruction the trampoline replaces.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "units": {
+          "description": "Resident units and units streamed by this or earlier triggers.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "site",
+        "expected",
+        "kind",
+        "units"
+      ],
+      "type": "object"
+    },
+    "BootPatchTriggerKind": {
+      "description": "How a trigger's group is applied.",
+      "oneOf": [
+        {
+          "const": "once",
+          "description": "The site fires once per boot.",
+          "type": "string"
+        },
+        {
+          "const": "range",
+          "description": "The site fires for a copied range held in two registers.",
+          "type": "string"
+        }
+      ]
+    },
+    "BootPatchUnit": {
+      "additionalProperties": false,
+      "description": "One initialized RAM image or overlay bank.",
+      "properties": {
+        "address": {
+          "description": "Cached RAM address of the first loaded byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "compression": {
+          "$ref": "#/$defs/BootPatchCompression",
+          "description": "Stored-stream compression."
+        },
+        "dat_offset": {
+          "description": "Offset of the stored stream in the update.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "executable": {
+          "description": "Whether the unit holds executable code.",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Name the DAT reader gives the unit.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "SHA-256 of the loaded bytes.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Loaded bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "size",
+        "dat_offset",
+        "compression",
+        "executable",
+        "sha256"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/boot-patch.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Boot-patch facts for one firmware.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/boot-patch.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "clears": {
+      "description": "RAM stock clears after stage 3.",
+      "items": {
+        "$ref": "#/$defs/BootPatchClear"
+      },
+      "type": "array"
+    },
+    "firmware_id": {
+      "description": "Firmware the facts belong to.",
+      "type": "string"
+    },
+    "id": {
+      "description": "Stable document identity.",
+      "type": "string"
+    },
+    "isa": {
+      "$ref": "#/$defs/BootPatchIsa",
+      "description": "Instruction set the image uses."
+    },
+    "resident_space": {
+      "$ref": "#/$defs/BootPatchRange",
+      "description": "RAM range for the resident apply part."
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "stage3_resident": {
+      "description": "Units already in RAM when stage 3 runs.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "trampoline_space": {
+      "$ref": "#/$defs/BootPatchRange",
+      "description": "RAM range for the generated trampolines."
+    },
+    "triggers": {
+      "description": "Trigger sites in boot order.",
+      "items": {
+        "$ref": "#/$defs/BootPatchTrigger"
+      },
+      "type": "array"
+    },
+    "units": {
+      "description": "Units the stock loader places in RAM, in boot order.",
+      "items": {
+        "$ref": "#/$defs/BootPatchUnit"
+      },
+      "type": "array"
+    },
+    "update_sha256": {
+      "description": "SHA-256 of the update the facts were derived from.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "firmware_id",
+    "update_sha256",
+    "isa",
+    "units",
+    "triggers",
+    "clears",
+    "trampoline_space",
+    "resident_space",
+    "stage3_resident"
+  ],
+  "title": "FirmwareBootPatch",
+  "type": "object"
+}

@@ -1,7 +1,10 @@
 //! EXR II board constructors for this crate's models.
 use crate::{dma, spi};
 use fujimod_emulator_devices::Device;
-use fujimod_emulator_exr2_plan::{Model, SerialEndpoint, construction::{Builder, Built, Constructors, controllers, decode, line}};
+use fujimod_emulator_exr2_plan::{
+    Model, SerialEndpoint,
+    construction::{Builder, Built, Constructors, controllers, decode, line},
+};
 use fujimod_emulator_exr2_resources::wire;
 use fujimod_emulator_parts_lens::{
     lens::{LensUnit, bridge::Bridge},
@@ -280,6 +283,22 @@ fn spi_endpoint(
         SerialEndpoint::Registers { options } => {
             let options: fujimod_emulator_parts_io::spi::RegisterOptions = decode(options)?;
             Box::new(RegisterFile::new(options)?)
+        }
+        SerialEndpoint::WakeRegisters {
+            options,
+            clock,
+            ticks_per_second,
+        } => {
+            use std::sync::{Arc, Mutex};
+            let options: fujimod_emulator_parts_io::spi::RegisterOptions = decode(options)?;
+            let alarm = Arc::new(Mutex::new(
+                fujimod_emulator_devices::exr2::wake_alarm::WakeAlarm::new(
+                    ticks_per_second,
+                    fujimod_emulator_devices::exr2::clock::POWER_HOLD_RELEASE_LIMIT_TICKS,
+                )?,
+            ));
+            resources.clock(&clock)?.attach_power(alarm.clone())?;
+            Box::new(crate::power_endpoint::PowerEndpoint::new(options, alarm)?)
         }
         SerialEndpoint::Panel { options } => {
             let options: fujimod_emulator_parts_io::spi::PanelOptions = decode(options)?;

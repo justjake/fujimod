@@ -1,8 +1,8 @@
 //! NAND controller (EXR II at FFF52000 by default; the register base is an option). Register-selected PIO/DMA and completion IRQ80 only.
 //! Data/OOB placement, clean ECC and virtual latency are declared inputs;
 //! opaque update bytes never select commands or authorize completion.
-use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_devices::parts::nand::Nand;
+use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 
 const OFFSETS: &[usize] = &[
@@ -184,7 +184,7 @@ impl NandController {
             || config & 0x10000000 != 0
             || app && !matches!((config >> 20) & 7, 3 | 4)
             || verify && !app
-            || rom && (count != 2048 || config != 0x401000)
+            || rom && (!(512..=2048).contains(&count) || count % 512 != 0 || config != 0x401000)
             || !rom && self.get(0x8a8) != 0x100000
         {
             return Err("unsupported NAND receive DMA setup or interrupt mode".into());
@@ -556,10 +556,14 @@ impl NandController {
     }
 }
 impl Device for NandController {
-    fn nand_store(&self) -> Option<&(dyn fujimod_emulator_devices::capability::NandStore + 'static)> {
+    fn nand_store(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::NandStore + 'static)> {
         Some(self)
     }
-    fn nand_store_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::NandStore + 'static)> {
+    fn nand_store_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::NandStore + 'static)> {
         Some(self)
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
@@ -577,7 +581,10 @@ impl Device for NandController {
         )?
         .with_children(vec![self.medium.checkpoint()?]))
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let state: (
             Box<[u32]>,
             Vec<u8>,
@@ -599,7 +606,10 @@ impl Device for NandController {
         }
         Ok(())
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         let (regs, aperture, scratch, pending, jobs_started, staged, cache): (
             Box<[u32]>,
@@ -744,7 +754,10 @@ impl fujimod_emulator_devices::capability::NandStore for NandController {
     fn medium(&self) -> &fujimod_emulator_devices::parts::nand::Nand {
         NandController::medium(self)
     }
-    fn retain(&mut self, medium: fujimod_emulator_devices::parts::nand::Nand) -> std::result::Result<(), String> {
+    fn retain(
+        &mut self,
+        medium: fujimod_emulator_devices::parts::nand::Nand,
+    ) -> std::result::Result<(), String> {
         NandController::retain(self, medium)
     }
 }

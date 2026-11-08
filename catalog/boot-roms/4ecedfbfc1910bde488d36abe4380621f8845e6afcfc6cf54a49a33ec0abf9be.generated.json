@@ -1,0 +1,36 @@
+{
+  "$schema": "https://fujimod.com/schemas/boot-rom.generated.schema.json",
+  "schema": 1,
+  "id": "boot-rom-4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be",
+  "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be",
+  "routines": {
+    "mount": 2147490720,
+    "open": 2147491268,
+    "read": 2147491464
+  },
+  "command_table": {
+    "source": 2147492576,
+    "destination": 8928,
+    "bytes": 80
+  },
+  "filesystem_pointer": {
+    "address": 4293918720,
+    "entry_value": 0
+  },
+  "power_hold": {
+    "address": 4294475908,
+    "bit": 0
+  },
+  "sd": {
+    "host": 4294246400,
+    "initialization_clock": 1088,
+    "transfer_clock": 1280
+  },
+  "nand": {
+    "initialize": 2147486580,
+    "probe_block_markers": 2147486764,
+    "read_512_bytes": 2147486984,
+    "load_blocks_dma": 2147487212
+  },
+  "load_address": 0
+}

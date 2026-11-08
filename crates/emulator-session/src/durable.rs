@@ -86,7 +86,7 @@ impl Media {
         Ok(())
     }
     pub fn apply(&self, session: &mut Session, spec: &Spec) -> Result<(), String> {
-        if session.board.instruction_counts().iter().any(|n| *n != 0) {
+        if !session.board.epoch_is_unexecuted() {
             return Err("durable media requires an unexecuted board".into());
         }
         self.validate(session, spec)?;

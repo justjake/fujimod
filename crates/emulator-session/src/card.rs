@@ -157,7 +157,7 @@ impl Session {
             .inspect_capability::<dyn CardSlot, _>(self.node(name)?, |host| Ok(host.card().clone()))
     }
     pub fn initialize_card_revision(&mut self, name: &str, revision: u64) -> Result<(), String> {
-        if self.board.instruction_counts().iter().any(|n| *n != 0) {
+        if !self.board.epoch_is_unexecuted() {
             return Err("initial card revision requires an unexecuted board".into());
         }
         self.board
@@ -170,7 +170,7 @@ impl Session {
         present: bool,
         protected: bool,
     ) -> Result<(), String> {
-        if self.board.instruction_counts().iter().any(|n| *n != 0) {
+        if !self.board.epoch_is_unexecuted() {
             return Err("retaining external media requires an unexecuted board".into());
         }
         self.admit_card_contacts(name, present, protected)?;

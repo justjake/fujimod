@@ -1,0 +1,87 @@
+{
+  "$schema": "https://fujimod.com/schemas/nand-boot.generated.schema.json",
+  "schema": 1,
+  "id": "x100s-121-nand-boot",
+  "firmware_id": "x100s-121",
+  "update_sha256": "bd0530be00e22d9e807f295acb51693c1ede47e5ee6d276169a67c7beb7cf08d",
+  "stage1": {
+    "dat_bias": 604,
+    "load_address": 0,
+    "block_bytes": 16384,
+    "image_bytes": 131072,
+    "image_sha256": "84c19929fd4c8683216e300ee5611d973578ee463342cded30a96c8ee221017b",
+    "blocks": [
+      {
+        "ordinal": 2,
+        "native_offset": 32768,
+        "bytes": 16384,
+        "sha256": "51e014bb4b6f8c091b0aa519b8ca61744b54800c0800853cea733732a620732b"
+      },
+      {
+        "ordinal": 3,
+        "native_offset": 49152,
+        "bytes": 16384,
+        "sha256": "9c7b9ccae7aab7eed2009bd2ee59a09d272bd3736c5633277196a6e099d93a99"
+      },
+      {
+        "ordinal": 4,
+        "native_offset": 65536,
+        "bytes": 16384,
+        "sha256": "0fbba07a833d4dcfc7024eaf313661a0ba8f80a05c6d29b8801c612e10e60dee"
+      },
+      {
+        "ordinal": 5,
+        "native_offset": 81920,
+        "bytes": 16384,
+        "sha256": "0fbba07a833d4dcfc7024eaf313661a0ba8f80a05c6d29b8801c612e10e60dee"
+      },
+      {
+        "ordinal": 6,
+        "native_offset": 98304,
+        "bytes": 16384,
+        "sha256": "62455f9ba8c012400178f140d56629c272ce158620efe24f42914b67c90c39c9"
+      },
+      {
+        "ordinal": 7,
+        "native_offset": 114688,
+        "bytes": 16384,
+        "sha256": "70df11f6927d56e9afe46dc70fc8e1aef8a141d841fc23ea6957cba9587ae28d"
+      },
+      {
+        "ordinal": 8,
+        "native_offset": 131072,
+        "bytes": 16384,
+        "sha256": "0fbba07a833d4dcfc7024eaf313661a0ba8f80a05c6d29b8801c612e10e60dee"
+      },
+      {
+        "ordinal": 9,
+        "native_offset": 147456,
+        "bytes": 16384,
+        "sha256": "0fbba07a833d4dcfc7024eaf313661a0ba8f80a05c6d29b8801c612e10e60dee"
+      }
+    ],
+    "entry": {
+      "literal_address": 32,
+      "literal": 16384,
+      "first_word": 3852464152,
+      "instruction": "ldr pc, [pc, #0x18]",
+      "code_entry": 16384,
+      "code_first_word": 3942645779
+    }
+  },
+  "code_space": {
+    "address": 256,
+    "capacity": 4096,
+    "native_offset": 33024
+  },
+  "boot_rom": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be",
+  "load_range": {
+    "file": "FM_EXR2.BIN",
+    "address": 486539264,
+    "capacity": 262144,
+    "alias": "0x5d000000",
+    "heap_base": null,
+    "heap_bytes": null,
+    "basis": "frozen-exr2-range"
+  }
+}

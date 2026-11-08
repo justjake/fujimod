@@ -13,7 +13,7 @@
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use std::sync::{
-    Arc,
+    Arc, Mutex,
     atomic::{AtomicU32, Ordering},
 };
 
@@ -30,10 +30,33 @@ const POWER_HOLD: usize = 0x84 / 4;
 pub const POWER_HOLD_RELEASE_LIMIT_TICKS: u64 = 100_000;
 /// Register-derived output pins; observing them never settles the clock.
 #[derive(Clone, Default)]
-pub struct Output(Arc<AtomicU32>);
+pub struct Output(
+    Arc<AtomicU32>,
+    Arc<Mutex<Option<Arc<Mutex<super::wake_alarm::WakeAlarm>>>>>,
+);
 impl Output {
     pub fn ready(&self) -> bool {
         self.0.load(Ordering::Relaxed) & (REQUEST | READY) == REQUEST | READY
+    }
+    /// Attach the power controller wired to this supply-hold output.
+    pub fn attach_power(
+        &self,
+        power: Arc<Mutex<super::wake_alarm::WakeAlarm>>,
+    ) -> Result<(), String> {
+        let mut slot = self.1.lock().map_err(|_| "power connection poisoned")?;
+        if slot.is_some() {
+            return Err("power controller already connected".into());
+        }
+        *slot = Some(power);
+        Ok(())
+    }
+    /// The explicitly attached power controller, if this board has one.
+    pub fn power_alarm(&self) -> Result<Option<Arc<Mutex<super::wake_alarm::WakeAlarm>>>, String> {
+        Ok(self
+            .1
+            .lock()
+            .map_err(|_| "power connection poisoned")?
+            .clone())
     }
 }
 #[derive(Clone, Copy, Deserialize)]
@@ -197,6 +220,23 @@ impl Device for Clocks {
             value &= !REQUEST;
         }
         if index == POWER_HOLD {
+            let power = match self.output.power_alarm() {
+                Ok(power) => power,
+                Err(error) => {
+                    cx.fail(error);
+                    return;
+                }
+            };
+            if let Some(power) = power {
+                let result = power
+                    .lock()
+                    .map_err(|_| "power alarm poisoned".to_string())
+                    .and_then(|mut power| power.hold(cx.now(), value & 1 != 0));
+                if let Err(error) = result {
+                    cx.fail(error);
+                    return;
+                }
+            }
             if value & 1 != 0 {
                 self.state.power_off_due = None;
             } else if self.state.power_off_due.is_none() {
@@ -216,9 +256,19 @@ impl Device for Clocks {
             self.publish();
         }
         if self.state.power_off_due.is_some_and(|at| at <= cx.now()) {
-            cx.fail(format!(
-                "supply off: power hold FFF88084 bit 0 released for {POWER_HOLD_RELEASE_LIMIT_TICKS} ticks"
-            ));
+            match self.output.power_alarm() {
+                Ok(Some(power)) => {
+                    let result = power.lock().map_err(|_| "power alarm poisoned".to_string())
+                        .and_then(|mut alarm| alarm.advance(cx.now()));
+                    if let Err(error) = result { cx.fail(error); return; }
+                    if let Err(error) = cx.power_off() { cx.fail(error); return; }
+                    self.state.power_off_due = None;
+                }
+                Ok(None) => cx.fail(format!(
+                    "supply off: power hold FFF88084 bit 0 released for {POWER_HOLD_RELEASE_LIMIT_TICKS} ticks"
+                )),
+                Err(error) => cx.fail(error),
+            }
         }
     }
     fn next_deadline(&self, _: u64) -> Option<u64> {
@@ -256,6 +306,38 @@ mod tests {
         .unwrap()
     }
     #[test]
+    fn declared_power_peer_receives_the_actual_hold_writes() {
+        use super::super::wake_alarm::{Supply, WakeAlarm};
+        let mut clock = clock();
+        let power = Arc::new(Mutex::new(
+            WakeAlarm::new(12_000_000, POWER_HOLD_RELEASE_LIMIT_TICKS).unwrap(),
+        ));
+        clock.output().attach_power(power.clone()).unwrap();
+        assert!(clock.output().attach_power(power.clone()).is_err());
+        let mut host = TestHost::new();
+        write(&mut clock, &mut host, BASE + 0x84, 1);
+        write(&mut clock, &mut host, BASE + 0x84, 0);
+        let mut peer = power.lock().unwrap();
+        assert_eq!(peer.next_deadline(), Some(POWER_HOLD_RELEASE_LIMIT_TICKS));
+        peer.advance(POWER_HOLD_RELEASE_LIMIT_TICKS).unwrap();
+        assert_eq!(peer.supply(), Supply::Off);
+    }
+    #[test]
+    fn connected_power_off_pauses_the_runtime_at_the_release_deadline() {
+        use super::super::wake_alarm::{Supply, WakeAlarm};
+        let mut clock = clock();
+        let power = Arc::new(Mutex::new(
+            WakeAlarm::new(12_000_000, POWER_HOLD_RELEASE_LIMIT_TICKS).unwrap(),
+        ));
+        clock.output().attach_power(power.clone()).unwrap();
+        let mut host = TestHost::new();
+        write(&mut clock, &mut host, BASE + 0x84, 0);
+        advance(&mut clock, &mut host, POWER_HOLD_RELEASE_LIMIT_TICKS);
+        assert_eq!(host.effects, ["power-off"]);
+        assert_eq!(power.lock().unwrap().supply(), Supply::Off);
+        assert_eq!(clock.next_deadline(host.now), None);
+    }
+    #[test]
     fn released_power_hold_cuts_the_supply_unless_held_again() {
         let hold = BASE + 0x84;
         let mut clock = clock();
@@ -275,7 +357,10 @@ mod tests {
         host.now = due;
         let mut cx = host.cx();
         restored.advance(&mut cx);
-        assert!(cx.refusal().is_some_and(|reason| reason.contains("supply off")));
+        assert!(
+            cx.refusal()
+                .is_some_and(|reason| reason.contains("supply off"))
+        );
     }
     #[test]
     fn sd_timing_rmw_preserves_other_fields_and_restores_without_a_deadline() {

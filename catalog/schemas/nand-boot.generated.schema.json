@@ -1,0 +1,289 @@
+{
+  "$defs": {
+    "NandBootBlock": {
+      "additionalProperties": false,
+      "description": "One stage-1 NAND block.",
+      "properties": {
+        "bytes": {
+          "description": "Bytes in the block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "native_offset": {
+          "description": "Native-flash offset of the block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ordinal": {
+          "description": "Good-block ordinal the ROM counts from the medium start.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "SHA-256 of the stock block.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ordinal",
+        "native_offset",
+        "bytes",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "NandBootCodeSpace": {
+      "additionalProperties": false,
+      "description": "Stage-1 loader reservation for the NAND bootloader.",
+      "properties": {
+        "address": {
+          "description": "RAM address of the reservation.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "capacity": {
+          "description": "Bytes available at that address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "native_offset": {
+          "description": "Native-flash offset of the reservation.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "capacity",
+        "native_offset"
+      ],
+      "type": "object"
+    },
+    "NandBootEntry": {
+      "additionalProperties": false,
+      "description": "The reset vector and the first instruction behind its literal.",
+      "properties": {
+        "code_entry": {
+          "description": "RAM address the literal points to.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "code_first_word": {
+          "description": "First word at the code entry.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "first_word": {
+          "description": "First word the ROM branches to.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "instruction": {
+          "description": "Instruction text of the first word.",
+          "type": "string"
+        },
+        "literal": {
+          "description": "Stock value at the reset literal.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "literal_address": {
+          "description": "Byte offset of the reset literal in the stage-1 image.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "literal_address",
+        "literal",
+        "first_word",
+        "instruction",
+        "code_entry",
+        "code_first_word"
+      ],
+      "type": "object"
+    },
+    "NandBootLoadRange": {
+      "additionalProperties": false,
+      "description": "Frozen stage-2 file, address and size.",
+      "properties": {
+        "address": {
+          "description": "Cached RAM address of the first byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "alias": {
+          "description": "Uncached alias of the address, where the body establishes one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "basis": {
+          "description": "Why this range is safe: the stock heap or the frozen EXR II range.",
+          "type": "string"
+        },
+        "capacity": {
+          "description": "Maximum file size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "file": {
+          "description": "Root 8.3 file name.",
+          "type": "string"
+        },
+        "heap_base": {
+          "description": "Base of the stock network heap when it owns this range.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "heap_bytes": {
+          "description": "Bytes in the stock network heap when it owns this range.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "file",
+        "address",
+        "capacity",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "NandBootStage1": {
+      "additionalProperties": false,
+      "description": "Stage-1 image loaded from NAND and its reset vector.",
+      "properties": {
+        "block_bytes": {
+          "description": "Bytes in each stage-1 block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "blocks": {
+          "description": "The blocks the ROM loads, in order.",
+          "items": {
+            "$ref": "#/$defs/NandBootBlock"
+          },
+          "type": "array"
+        },
+        "dat_bias": {
+          "description": "Native-flash offset of update byte zero.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "entry": {
+          "$ref": "#/$defs/NandBootEntry",
+          "description": "The reset literal and the code entry behind it."
+        },
+        "image_bytes": {
+          "description": "Bytes in the complete stage-1 image.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "image_sha256": {
+          "description": "SHA-256 of the complete stage-1 image.",
+          "type": "string"
+        },
+        "load_address": {
+          "description": "RAM address the ROM loads stage 1 to.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "dat_bias",
+        "load_address",
+        "block_bytes",
+        "image_bytes",
+        "image_sha256",
+        "blocks",
+        "entry"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/nand-boot.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "NAND bootloader facts for one EXR II firmware.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/nand-boot.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "boot_rom": {
+      "description": "SHA-256 of the boot ROM whose card facts this document uses.",
+      "type": "string"
+    },
+    "code_space": {
+      "$ref": "#/$defs/NandBootCodeSpace",
+      "description": "Where the bootloader is placed in stage 1."
+    },
+    "firmware_id": {
+      "description": "Firmware the facts belong to.",
+      "type": "string"
+    },
+    "id": {
+      "description": "Stable document identity.",
+      "type": "string"
+    },
+    "load_range": {
+      "$ref": "#/$defs/NandBootLoadRange",
+      "description": "Frozen stage-2 file and RAM range."
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "stage1": {
+      "$ref": "#/$defs/NandBootStage1",
+      "description": "Stage-1 load image and the entry the boot ROM reaches."
+    },
+    "update_sha256": {
+      "description": "SHA-256 of the update the facts were derived from.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "firmware_id",
+    "update_sha256",
+    "stage1",
+    "code_space",
+    "boot_rom",
+    "load_range"
+  ],
+  "title": "FirmwareNandBoot",
+  "type": "object"
+}

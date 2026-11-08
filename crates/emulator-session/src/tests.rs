@@ -9,6 +9,12 @@ use fujimod_emulator_ip::sdhci::host::{self as sdhc, SdHost};
 use fujimod_emulator_storage::fat;
 
 fn card_session() -> Session {
+    card_session_with_epoch(None)
+}
+fn card_session_with_epoch(epoch: Option<(u64, Vec<u64>)>) -> Session {
+    card_session_with_power(epoch, None)
+}
+fn card_session_with_power(epoch: Option<(u64, Vec<u64>)>, power: Option<std::sync::Arc<std::sync::Mutex<fujimod_emulator_devices::exr2::wake_alarm::WakeAlarm>>>) -> Session {
     let contacts = fujimod_emulator_devices::parts::card_contacts::Contacts::new(true, false);
     let card = fat::format(
         &format(),
@@ -57,6 +63,15 @@ fn card_session() -> Session {
     let pads = gpio.pads();
     let gpio_id = bus.register(0xfff89000, 0x480, Box::new(gpio)).unwrap();
     let mut resources = Resources::default();
+    resources.wires.insert("usb_cable".into(), fujimod_emulator_exr2_resources::Wire::logic_level(false));
+    resources.users.insert("usb_cable".into(), Default::default());
+    if let Some(power) = power {
+        use fujimod_emulator_devices::exr2::clock;
+        let clocks = clock::Clocks::new(clock::Options { output_settle_ticks: 2, reset_ready: true }, ()).unwrap();
+        clocks.output().attach_power(power).unwrap();
+        resources.clocks.insert("clocks".into(), clocks.output());
+        bus.register(clock::BASE, 0x100, Box::new(clocks)).unwrap();
+    }
     resources.card_pins.insert(
         "sd".into(),
         CardPins {
@@ -68,19 +83,22 @@ fn card_session() -> Session {
             protected_high: true,
         },
     );
-    let graph:factory::Graph=serde_json::from_value(serde_json::json!({
+    let mut graph:factory::Graph=serde_json::from_value(serde_json::json!({
         "processors":[{"model":"cortex-r5f","registers":[],"released":true,"mprofile":null,"rprofile":{"cp14_identity":21930,"tcm":{"btcm":{"bytes":4096,"reset":1879048193},"atcm":{"bytes":8192,"reset":4294934529u32}}}}],
         "ram":[{"base":0,"size":4096}],"dma_mappings":[{"address":0,"physical":0,"size":4096,"permissions":3}],
         "mappings":[{"core":0,"address":0,"physical":0,"size":4096,"permissions":7}],
         "peripherals":[],"decoders":[],"instructions_per_tick":[24,1]
     })).unwrap();
+    if resources.clocks.contains_key("clocks") {
+        graph.peripherals.push(factory::Peripheral { core: 0, address: 0xfff88000, physical: 0xfff88000, size: 0x100 });
+    }
+    let mut options = factory::Options::new(factory::Engine::Unicorn)
+        .with_translation_cache_size_bytes(1 << 20);
+    if let Some((tick, counts)) = epoch {
+        options = options.with_epoch(tick, counts);
+    }
     let board = graph
-        .build(
-            factory::Options::new(factory::Engine::Unicorn)
-                .with_translation_cache_size_bytes(1 << 20),
-            bus,
-            None,
-        )
+        .build(options, bus, None)
         .unwrap();
     Session {
         definition: serde_json::json!({"fixture":"card-session"}),
@@ -90,6 +108,7 @@ fn card_session() -> Session {
         resources,
         nodes: BTreeMap::from([("sd".into(), id), ("adc".into(), adc)]),
         contacts: BTreeMap::from([("sd".into(), contacts)]),
+        power_cycle: None,
         recording_frames: Default::default(),
     }
 }

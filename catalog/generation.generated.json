@@ -94,7 +94,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "ValueError: power-cut routine: no verified family match (0x1470210: no four settle calls with w0 = -6); 0 structural candidates "
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -1529,6 +1529,15 @@
       "version": "1.21",
       "internal_version": "2.33",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: x100s-121: the stage-2 range at 0x1d000000 is not the base of the stock network heap (not located); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -1653,6 +1662,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: the stage-1 image starts at 0x8000, not after the two header blocks"
+            }
+          ]
         }
       }
     },
@@ -1662,6 +1680,15 @@
       "version": "1.11",
       "internal_version": "1.56",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: x100t-111: the stage-2 range at 0x1d000000 is not the base of the stock network heap (0x1e000000+0x322280); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -1734,6 +1761,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: x100t-111 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         }
       }
     },
@@ -1961,6 +1997,15 @@
       "version": "1.03",
       "internal_version": "2.19",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: x20-103: the stage-2 range at 0x1d000000 is not the base of the stock network heap (not located); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -2085,6 +2130,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: the stage-1 image starts at 0x8000, not after the two header blocks"
+            }
+          ]
         }
       }
     },
@@ -2094,6 +2148,15 @@
       "version": "1.03",
       "internal_version": "1.53",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: x30-103: the stage-2 range at 0x1d000000 is not the base of the stock network heap (0x1e100000+0x322280); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -2166,6 +2229,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: no registered boot ROM: x30-103 has no registered boot ROM asset"
+            }
+          ]
         }
       }
     },
@@ -2175,6 +2247,10 @@
       "version": "1.10",
       "internal_version": "1.39",
       "tables": {
+        "boot-patch": {
+          "status": "available",
+          "errors": []
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -2246,6 +2322,10 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "available",
+          "errors": []
         }
       }
     },
@@ -2255,6 +2335,15 @@
       "version": "1.50",
       "internal_version": "1.78",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: xa1-150: the stage-2 range at 0x1d000000 is not the base of the stock network heap (0x1e7f4900+0x322280); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -2375,6 +2464,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xa1-150 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         }
       }
     },
@@ -2494,6 +2592,15 @@
       "version": "1.30",
       "internal_version": "1.31",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: xa2-130: the stage-2 range at 0x1d000000 is not the base of the stock network heap (0x1e7f4900+0x322280); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -2614,6 +2721,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xa2-130 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         }
       }
     },
@@ -3225,6 +3341,10 @@
       "version": "4.11",
       "internal_version": "3.05",
       "tables": {
+        "boot-patch": {
+          "status": "available",
+          "errors": []
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -3302,6 +3422,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xe2-411 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         }
       }
     },
@@ -3311,6 +3440,10 @@
       "version": "1.11",
       "internal_version": "1.19",
       "tables": {
+        "boot-patch": {
+          "status": "available",
+          "errors": []
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -3383,6 +3516,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xe2s-111 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         }
       }
     },
@@ -3761,7 +3903,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -4279,7 +4421,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -4393,7 +4535,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -4554,6 +4696,15 @@
       "version": "1.01",
       "internal_version": "1.61",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: xm1-101: the stage-2 range at 0x1d000000 is not the base of the stock network heap (not located); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "unavailable",
           "errors": [
@@ -4725,6 +4876,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: no registered boot ROM: xm1-101 has no registered boot ROM asset"
+            }
+          ]
         }
       }
     },
@@ -4734,6 +4894,15 @@
       "version": "1.20",
       "internal_version": "1.73",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: xm1-120: the stage-2 range at 0x1d000000 is not the base of the stock network heap (not located); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "unavailable",
           "errors": [
@@ -4905,6 +5074,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: no mod target for xm1-120 (<input>)"
+            }
+          ]
         }
       }
     },
@@ -4914,6 +5092,15 @@
       "version": "1.50",
       "internal_version": "1.78",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: xm1-150: the stage-2 range at 0x1d000000 is not the base of the stock network heap (0x1e7f4900+0x322280); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -5034,6 +5221,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xm1-150 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         }
       }
     },
@@ -5604,6 +5800,15 @@
       "version": "1.21",
       "internal_version": "1.81",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: xq1-121: the stage-2 range at 0x1d000000 is not the base of the stock network heap (not located); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -5723,6 +5928,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xq1-121 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         }
       }
     },
@@ -5732,6 +5946,15 @@
       "version": "1.01",
       "internal_version": "1.09",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: xq2-101: the stage-2 range at 0x1d000000 is not the base of the stock network heap (not located); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -5851,6 +6074,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xq2-101 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         }
       }
     },
@@ -6195,7 +6427,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -6246,6 +6478,15 @@
       "version": "5.52",
       "internal_version": "2.39",
       "tables": {
+        "boot-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "boot-patch",
+              "reason": "ValueError: xt1-552: the stage-2 range at 0x1d000000 is not the base of the stock network heap (not located); no stock owner bounds a resident space after the range"
+            }
+          ]
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -6340,6 +6581,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xt1-552 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         }
       }
     },
@@ -6349,6 +6599,10 @@
       "version": "1.31",
       "internal_version": "1.52",
       "tables": {
+        "boot-patch": {
+          "status": "available",
+          "errors": []
+        },
         "bulk": {
           "status": "available",
           "errors": []
@@ -6421,6 +6675,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xt10-131 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         }
       }
     },
@@ -7379,7 +7642,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -7736,7 +7999,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "ValueError: power-cut routine: no verified family match; 2 structural candidates 0x90fb14, 0x1473f08"
+              "reason": "firmware image not available"
             }
           ]
         },

@@ -26,10 +26,16 @@ pub trait Wire: Send {
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         Err("serial wire has no exact checkpoint implementation".into())
     }
-    fn validate_checkpoint(&self, _: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        _: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         Err("serial wire has no exact checkpoint implementation".into())
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_checkpoint(saved)
     }
     fn validate_pending(
@@ -74,7 +80,10 @@ impl Wire for InputLevel {
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         fujimod_emulator_devices::checkpoint::Checkpoint::encode("fixed-serial-input", &self.0)
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let high: bool = saved.decode("fixed-serial-input")?;
         if high != self.0 || !saved.children().is_empty() || !saved.blobs().is_empty() {
             return Err("fixed serial input checkpoint differs".into());

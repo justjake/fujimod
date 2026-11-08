@@ -101,6 +101,30 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
+        "nand-boot.generated.schema.json",
+        schema::<fujimod_catalog::nand_boot::FirmwareNandBoot>(
+            fujimod_catalog::nand_boot::NAND_BOOT_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
+        "boot-patch.generated.schema.json",
+        schema::<fujimod_catalog::boot_patch::FirmwareBootPatch>(
+            fujimod_catalog::boot_patch::BOOT_PATCH_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
+        "boot-rom.generated.schema.json",
+        schema::<fujimod_catalog::boot_rom::BootRom>(
+            fujimod_catalog::boot_rom::BOOT_ROM_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
+        "exr2-boot-identity.generated.schema.json",
+        schema::<fujimod_catalog::boot_identity::Exr2BootIdentity>(
+            fujimod_catalog::boot_identity::EXR2_BOOT_IDENTITY_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
         "progress.generated.schema.json",
         schema::<fujimod_catalog::progress::FirmwareProgress>(
             fujimod_catalog::progress::PROGRESS_SCHEMA_URI,

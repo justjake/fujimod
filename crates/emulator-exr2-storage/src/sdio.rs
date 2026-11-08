@@ -1,8 +1,8 @@
 //! EXR II SDIO host1, FFF51000. Owns a one-function part; no memory outside
 //! the programmed SDMA extent is inspected. Timing is declared.
-use fujimod_emulator_ip::sdhci::registers::Registers;
 use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine};
 use fujimod_emulator_ip::sdhci::Clocks;
+use fujimod_emulator_ip::sdhci::registers::Registers;
 use fujimod_emulator_parts_io::wifi_module::{Operation, Protocol, WifiModule};
 use serde::{Deserialize, Serialize};
 pub const BASE: u64 = 0xfff51000;
@@ -166,7 +166,8 @@ impl SdioHost {
                     || pio && (write || block || quantity % 4 != 0)
                     || !pio && word != expected
                     || block
-                        && (![3, 5].contains(&count)
+                        && (count == 0
+                            || count > 5
                             || self.regs.get(4) != 512
                             || self.regs.get(6) as u32 != count
                             || self.module.block_size() != 512)
@@ -200,9 +201,12 @@ impl SdioHost {
                         || quantity > 2560
                         || physical + quantity as u64 > self.options.ram_bytes
                         || self.regs.get(0x28) & 0x18 != 0
-                        || quantity > 4096 - physical as usize % 4096
                     {
-                        return Err("Wi-Fi SDMA extent, alignment or boundary unsupported".into());
+                        return Err(format!(
+                            "Wi-Fi SDMA extent or alignment unsupported (dma={address_dma:#x} physical={physical:#x} quantity={quantity} ram={:#x} control={:#x})",
+                            self.options.ram_bytes,
+                            self.regs.get(0x28)
+                        ));
                     }
                     if write {
                         cx.ram_read(physical, &mut self.scratch[..quantity])?;
@@ -225,8 +229,15 @@ impl SdioHost {
         Ok(r)
     }
     fn start(&mut self, cx: &mut Cx<'_>, word: u32) -> Result<(), String> {
-        if self.request.is_some() || self.regs.get(0x30) != 0 || self.regs.get(0x32) != 0 {
-            return Err("SDIO command requires idle host and ACKed status".into());
+        // The card-interrupt bit reports a pending function interrupt and does
+        // not block a new command. Command/data completion must be ACKed.
+        if self.request.is_some() || self.regs.get(0x30) & !0x100 != 0 || self.regs.get(0x32) != 0 {
+            return Err(format!(
+                "SDIO command requires idle host and ACKed status (request={} normal={:#x} error={:#x})",
+                self.request.is_some(),
+                self.regs.get(0x30),
+                self.regs.get(0x32)
+            ));
         }
         if self.clocks.read(cx, BASE + 0x2c, 2) & 7 != 7 || self.regs.get(0x2e) & 15 != 14 {
             return Err("SDIO command before clock/timeout setup".into());
@@ -388,10 +399,19 @@ impl SdioHost {
         {
             return Err("Unsupported SDIO host configuration".into());
         }
+        let powered = self.regs.get(0x28) & 0x100 != 0;
         if size == 4 {
             self.regs.put_word(o, value);
         } else {
             self.regs.set(o, value as u16);
+        }
+        // SD Bus Power (Power Control bit 0, register 0x29) going off removes
+        // the card's supply: it returns to the idle state and the module
+        // loses its downloaded firmware. Stock clears it after the CCCR I/O
+        // reset when it stops Wi-Fi, and restarts from CMD5.
+        if powered && self.regs.get(0x28) & 0x100 == 0 {
+            self.state = State::Idle;
+            self.module.power_off();
         }
         self.signal(cx)
     }
@@ -476,6 +496,11 @@ impl Device for SdioHost {
         if let Err(e) = self.complete(cx) {
             cx.fail(e);
         }
+        if self.module.poll_host(cx.now())
+            && let Err(e) = self.signal(cx)
+        {
+            cx.fail(e);
+        }
     }
     fn event(&mut self, cx: &mut Cx<'_>, _: u64) {
         self.advance(cx);
@@ -486,6 +511,7 @@ impl Device for SdioHost {
             .and_then(|r| r.due)
             .into_iter()
             .chain(self.clocks.next_deadline(now))
+            .chain(self.module.next_host_poll(now))
             .min()
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
@@ -515,6 +541,8 @@ mod tests {
                     mt5931: (protocol == Protocol::Mt5931).then_some(
                         wifi_module::mt5931::Options {
                             mac_address: [2, 0, 0, 0, 0, 1],
+                            access_point: None,
+                            capability_reply: None,
                         },
                     ),
                 })
@@ -740,5 +768,18 @@ mod tests {
         assert_eq!(&bytes[20..], &[0; 492]);
         assert_eq!(m.module.vendor(0x50, false, &[], 4).unwrap().response, 0);
         assert!(m.request.is_none());
+    }
+
+    #[test]
+    fn pending_card_interrupt_does_not_block_the_next_command() {
+        let mut m = model(Protocol::Mt5931);
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        m.state = State::Transfer;
+        m.regs.set(0x30, 0x100);
+        let mut cx = h.cx();
+        m.start(&mut cx, 0x341a0010).unwrap();
+        assert!(m.request.is_some());
+        assert_eq!(cx.refusal(), None);
     }
 }

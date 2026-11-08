@@ -28,6 +28,10 @@ impl Host for TestHost {
     fn now(&self) -> u64 {
         self.now
     }
+    fn power_off(&mut self) -> Result<(), String> {
+        self.effects.push("power-off");
+        Ok(())
+    }
     fn schedule(&mut self, _: usize, _: u64, _: u64) {}
     fn set_irq(&mut self, _: u32, _: bool) {}
     fn raise_irq(&mut self, c: usize, l: u32) -> Result<(), String> {

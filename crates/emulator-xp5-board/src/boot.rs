@@ -667,6 +667,7 @@ pub fn open(
         resources: Default::default(),
         nodes: assembly.nodes,
         contacts: assembly.contacts,
+        power_cycle: None,
         recording_frames: Default::default(),
     };
     Ok((session, assembly.inputs))

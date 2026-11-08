@@ -78,6 +78,7 @@ struct State {
     device_workers: usize,
     // Host run boundary, not a device deadline or persistent modeled state.
     clock_limit: Option<u64>,
+    power_off: bool,
     memory: Rc<memory::Memory>,
     bus: Bus,
     timeline: Timeline,
@@ -91,6 +92,7 @@ struct State {
     pins: Vec<(bool, bool)>,
     interrupt_delivery: Vec<bool>,
     instructions: Vec<u64>,
+    epoch_instructions: Vec<u64>,
     accounted: Vec<u64>,
     deadlines: Vec<Option<u64>>,
     generations: Vec<u64>,
@@ -268,12 +270,33 @@ impl Board {
         released: Vec<bool>,
         memory: memory::Memory,
     ) -> Result<Self, String> {
+        Self::new_at(cpus, bus, ratio, interrupts, released, memory, 0, None)
+    }
+
+    /// Construct fresh processors and devices on a continuing host timeline.
+    pub(crate) fn new_at(
+        cpus: Vec<Box<dyn Cpu>>,
+        bus: Bus,
+        ratio: Ratio,
+        interrupts: Option<InterruptMap>,
+        released: Vec<bool>,
+        memory: memory::Memory,
+        start_tick: u64,
+        previous_instructions: Option<Vec<u64>>,
+    ) -> Result<Self, String> {
         if cpus.is_empty() || cpus.len() != released.len() || !released.iter().any(|r| *r) {
             return Err("invalid released processor set".into());
+        }
+        let instructions = previous_instructions.unwrap_or_else(|| vec![0; cpus.len()]);
+        if instructions.len() != cpus.len()
+            || instructions.iter().try_fold(0u64, |sum, n| sum.checked_add(*n)).is_none()
+        {
+            return Err("invalid prior processor instruction counts".into());
         }
         if let Some(g) = &interrupts {
             g.validate(cpus.len())?;
         }
+        let epoch_instructions = instructions.clone();
         let n = cpus.len();
         let reset_contexts = cpus
             .iter()
@@ -301,9 +324,10 @@ impl Board {
             execution_policy: ExecutionPolicy::Exact,
             device_workers: 0,
             clock_limit: None,
+            power_off: false,
             memory: memory.clone(),
             bus,
-            timeline: Timeline::new(ratio, n)?,
+            timeline: Timeline::new_at(ratio, n, start_tick)?,
             interrupts,
             core_interrupts: (0..n).map(|_| None).collect(),
             interrupt_changed: vec![false; n],
@@ -313,7 +337,8 @@ impl Board {
             events: vec![false; n],
             pins: vec![(false, false); n],
             interrupt_delivery: vec![true; n],
-            instructions: vec![0; n],
+            instructions,
+            epoch_instructions,
             accounted: vec![0; n],
             deadlines: vec![None; count],
             generations: vec![0; count],
@@ -441,6 +466,11 @@ impl Board {
     ) -> Vec<Result<std::collections::BTreeMap<&'static str, u64>, String>> {
         self.cpus.iter().map(|cpu| cpu.exit_counters()).collect()
     }
+    /// Whether the processors constructed for this epoch have executed.
+    pub fn epoch_is_unexecuted(&self) -> bool {
+        let state = self.state.borrow();
+        state.instructions == state.epoch_instructions
+    }
     /// Serviced board MMIO callbacks, indexed by processor.
     pub fn mmio_trap_callback_counts(&self) -> Vec<u64> {
         self.mmio_callback_counts.borrow().clone()
@@ -463,6 +493,21 @@ impl Board {
     }
     pub fn now(&self) -> u64 {
         self.state.borrow().timeline.now()
+    }
+    /// Whether a connected device has removed the board supply.
+    pub fn is_powered_off(&self) -> bool {
+        self.state.borrow().power_off
+    }
+    /// Advance only the unpowered interval. Old CPU and device events cannot run.
+    pub fn advance_unpowered(&mut self, at: u64) -> Result<(), String> {
+        let mut state = self.state.try_borrow_mut().map_err(|_| "board is executing")?;
+        if !state.power_off || state.active_slice.is_some() || state.parallel.is_some() {
+            return Err("unpowered advance requires a stopped, unpowered board".into());
+        }
+        state.timeline.advance_unpowered(at)?;
+        state.deadlines.fill(None);
+        state.processor_deadlines.fill(None);
+        Ok(())
     }
     /// Begin block-level guest observations while all processors are stopped.
     pub fn start_guest_profile(&self) -> Result<(), String> {
@@ -605,8 +650,9 @@ impl Board {
         if self.cpu(core)?.model() != fujimod_emulator_cpu::Model::CortexR5F {
             return Err("per-core interrupt device requires an R-profile processor".into());
         }
+        let unexecuted = self.epoch_is_unexecuted();
         let mut s = self.state.borrow_mut();
-        if s.instructions.iter().any(|n| *n != 0)
+        if !unexecuted
             || s.core_interrupts[core].is_some()
             || s.core_interrupts
                 .iter()
@@ -724,6 +770,7 @@ impl Board {
     /// Execute to a guest tick. Exact uses deterministic round-robin slices;
     /// Interactive workers finish blocks and join at device/owner barriers.
     pub fn run_until(&mut self, until: u64, quantum: usize) -> Result<(), String> {
+        if self.is_powered_off() { return Err("cannot run an unpowered board".into()); }
         let result = self.run_inner(Some(until), None, None, quantum);
         self.state.borrow_mut().clock_limit = None;
         if let Err(error) = &result {
@@ -771,6 +818,7 @@ impl Board {
         pause_after: Option<u64>,
         until: Option<u64>,
     ) -> Result<(), String> {
+        if self.is_powered_off() { return Err("cannot run an unpowered board".into()); }
         let start = self.state.borrow().total_instructions()?;
         if end < start && self.execution_policy() == ExecutionPolicy::Exact {
             return Err("board instruction window moved backward".into());
@@ -792,6 +840,9 @@ impl Board {
         pause_after: Option<u64>,
         quantum: usize,
     ) -> Result<(), String> {
+        if self.is_powered_off() {
+            return Err("cannot run an unpowered board".into());
+        }
         prepare_device_workers(self.execution_policy(), self.device_worker_preference())?;
         if quantum == 0 {
             return Err("zero processor quantum".into());
@@ -1068,7 +1119,7 @@ impl Board {
         let s = self.state.borrow();
         self.track_all_devices(&s.bus);
         let mut value = json!({"execution_mode":s.bus.mode().name(),"execution_policy":s.execution_policy.name(),"counts_as_boot":s.bus.mode()==bus::Mode::Strict,
-            "timeline":s.timeline.save(),"instructions":s.instructions,"released":s.released,"waiting":s.waiting,"waiting_event":s.waiting_event,"events":s.events,"next_core":self.next_core.get(),"slice_left":self.slice_left.get(),"quantum":self.quantum.get(),"failure":s.error,
+            "timeline":s.timeline.save(),"instructions":s.instructions,"epoch_instructions":s.epoch_instructions,"power_off":s.power_off,"released":s.released,"waiting":s.waiting,"waiting_event":s.waiting_event,"events":s.events,"next_core":self.next_core.get(),"slice_left":self.slice_left.get(),"quantum":self.quantum.get(),"failure":s.error,
             "memory_decoders":s.decoders.state(),"dma_mappings":s.memory.state(),"gic":s.interrupts.as_ref().map(|g|g.gic.save()),"core_interrupt_devices":s.core_interrupts.iter().map(|c|c.as_ref().map(|c|c.device)).collect::<Vec<_>>(),"outputs":s.outputs,"implementation_cluster":s.implementation_cluster,"unmodeled_system":s.unmodeled_system.iter().map(|(&(core,register,pc),&(reads,writes))|json!({"core":core,"register":register,"pc":pc,"reads":reads,"writes":writes})).collect::<Vec<_>>(),"armv7a":s.armv7a,"aprofile":s.aprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()).unwrap_or_else(|e|json!({"error":e})))).collect::<Vec<_>>(),"mprofile":s.mprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()))).collect::<Vec<_>>()});
         value["bus"] = bus;
         value["discovery_callee_stubs"] = self.discovery_callee_stubs();
@@ -1424,6 +1475,7 @@ impl State {
             execution_policy,
             device_workers,
             host_pause,
+            power_off,
             bus,
             memory,
             timeline,
@@ -1450,6 +1502,7 @@ impl State {
             execution_policy: *execution_policy,
             device_workers: *device_workers,
             host_pause,
+            power_off,
             memory,
             timeline,
             interrupts,
@@ -1683,6 +1736,7 @@ struct Services<'a> {
     execution_policy: ExecutionPolicy,
     device_workers: usize,
     host_pause: &'a Cell<bool>,
+    power_off: &'a mut bool,
     memory: &'a memory::Memory,
     timeline: &'a mut Timeline,
     interrupts: &'a mut Option<InterruptMap>,
@@ -1758,6 +1812,12 @@ impl Host for Services<'_> {
             .ok_or("CPU cannot pause at the current instruction boundary")?;
         cpu.tighten_instruction_limit(progress)?;
         self.host_pause.set(true);
+        Ok(())
+    }
+    fn power_off(&mut self) -> Result<(), String> {
+        if self.active_core.is_some() { self.request_pause()?; }
+        self.host_pause.set(true);
+        *self.power_off = true;
         Ok(())
     }
     fn schedule(&mut self, device: usize, at: u64, token: u64) {
