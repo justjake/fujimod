@@ -375,7 +375,8 @@ download page and original release date, patch hash/size, included mods and mode
 local filenames. The Worker serves the index and patches from the same origin
 through `/releases/`; they are fetched at runtime and are never website build
 inputs. Each firmware has `downloads: {sd_card, installable}`, both false by
-default; installable requires a verified `fpupdate` patch output. Optional
+default; installable requires a verified `fpupdate` patch output and
+`update_filename`, the body's update DAT name. Optional
 `notes: {name}` identifies Markdown fetched as text for display.
 See [the release contract](RELEASE-DOWNLOADS.md).
 

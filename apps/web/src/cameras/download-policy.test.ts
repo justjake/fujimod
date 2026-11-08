@@ -4,11 +4,15 @@ import { cardDownloadAllowed } from './download-policy';
 test('card firmware files obey independent per-firmware release switches', () => {
   for (const sd_card of [false, true])
     for (const installable of [false, true]) {
-      const switches = { sd_card, installable };
-      expect(cardDownloadAllowed('FFBoot.BIN', switches)).toBe(sd_card);
-      expect(cardDownloadAllowed('ffsys.bin', switches)).toBe(sd_card);
-      expect(cardDownloadAllowed('FPUPDATE.DAT', switches)).toBe(installable);
-      expect(cardDownloadAllowed('DSCF0001.JPG', switches)).toBe(true);
+      const firmware = { downloads: { sd_card, installable }, update_filename: 'FWUP0009.DAT' };
+      expect(cardDownloadAllowed('FFBoot.BIN', firmware)).toBe(sd_card);
+      expect(cardDownloadAllowed('ffsys.bin', firmware)).toBe(sd_card);
+      expect(cardDownloadAllowed('fwup0009.dat', firmware)).toBe(installable);
+      expect(cardDownloadAllowed('FPUPDATE.DAT', firmware)).toBe(true);
+      expect(cardDownloadAllowed('FPUPDATE.DAT', { downloads: firmware.downloads })).toBe(
+        installable,
+      );
+      expect(cardDownloadAllowed('DSCF0001.JPG', firmware)).toBe(true);
     }
   expect(cardDownloadAllowed('ffboot.bin')).toBe(false);
   expect(cardDownloadAllowed('FPUPDATE.DAT')).toBe(false);

@@ -71,6 +71,7 @@ export function CameraLauncher(props: {
     firmware: LibraryFirmware;
     format: FirmwareDownloadFormat;
     release: string;
+    updateFilename?: string;
   }>();
   const [downloading, setDownloading] = createSignal(false);
   const [downloadError, setDownloadError] = createSignal('');
@@ -117,7 +118,12 @@ export function CameraLauncher(props: {
     if (row.id === 'mod' || row.id === 'stock') props.run(firmware, row.id === 'mod', false);
     else {
       setDownloadError('');
-      setModal({ firmware, format: row.id, release: modRelease() });
+      setModal({
+        firmware,
+        format: row.id,
+        release: modRelease(),
+        updateFilename: patch()?.update_filename,
+      });
     }
   }
   async function download() {
@@ -240,6 +246,7 @@ export function CameraLauncher(props: {
             format={target().format}
             firmware={target().firmware}
             release={target().release}
+            updateFilename={target().updateFilename}
             busy={downloading()}
             error={downloadError()}
             download={() => void download()}

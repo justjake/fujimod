@@ -13,6 +13,7 @@ export function DownloadModal(props: {
   format: FirmwareDownloadFormat;
   firmware: LibraryFirmware;
   release: string;
+  updateFilename?: string;
   busy: boolean;
   error: string;
   download: () => void;
@@ -100,8 +101,8 @@ export function DownloadModal(props: {
             Unzip onto the card’s top level:{' '}
             <FileList
               files={
-                installable()
-                  ? ['ffsys.bin', 'ffboot.bin', 'FPUPDATE.DAT']
+                installable() && props.updateFilename
+                  ? ['ffsys.bin', 'ffboot.bin', props.updateFilename]
                   : ['ffsys.bin', 'ffboot.bin']
               }
             />
