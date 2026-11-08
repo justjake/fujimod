@@ -34,9 +34,22 @@ pub struct Options {
     /// instead of the programmed period.
     #[serde(default)]
     pub counter_readback_channels: Vec<u8>,
+    /// Additional per-core lines an interval timer raises with its primary
+    /// output, for a timer wired to more than one interrupt controller (EXR
+    /// Pro's kernel tick, channel 7, reaches both cores' line 27).
+    #[serde(default)]
+    pub mirrored_irqs: Vec<MirroredIrq>,
     pub quadrature: bool,
     pub initial_phase: u8,
     pub capture_channel: Option<u8>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MirroredIrq {
+    pub channel: u8,
+    pub core: usize,
+    pub line: u32,
 }
 
 /// IRQ outputs are physical wiring. Interrupt masks do not select a CPU.
@@ -59,6 +72,9 @@ struct State {
     channels: [Channel; 12],
     enabled: u16,
     route: u32,
+    /// Input routes for channels 8..11 (+0x18, one nibble per channel), as EXR Pro uses for channel 11.
+    #[serde(default)]
+    route_high: u32,
     clock_route: u32,
     phase_position: i64,
     anchor: i64,
@@ -82,6 +98,7 @@ pub struct PulsePins {
     quadrature: bool,
     capture: Option<u8>,
     irqs: [Option<InterruptLine>; 12],
+    mirrored: Vec<MirroredIrq>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, serde::Deserialize)]
@@ -93,7 +110,7 @@ pub struct Pwm {
 
 impl PulsePins {
     pub fn counter_wired(&self, channel: u8) -> bool {
-        channel < 8 && self.counters & (1 << channel) != 0
+        channel < 12 && self.counters & (1 << channel) != 0
     }
     pub fn quadrature_wired(&self) -> bool {
         self.quadrature
@@ -247,12 +264,17 @@ pub struct PulseUnit {
     pins: PulsePins,
 }
 
+/// Input route nibble of `channel`: +0x10 holds channels 0..7, +0x18 channels 8..11.
+fn route_nibble(s: &State, channel: usize) -> u32 {
+    if channel < 8 { s.route >> (channel * 4) & 15 } else { s.route_high >> ((channel - 8) * 4) & 15 }
+}
+
 impl PulseUnit {
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
         let mut counters = 0u16;
         for channel in options.counter_channels {
-            if channel >= 8 || counters & (1 << channel) != 0 {
-                return Err("counter inputs require unique channels below eight".into());
+            if channel >= 12 || counters & (1 << channel) != 0 {
+                return Err("counter inputs require unique channels below twelve".into());
             }
             counters |= 1 << channel;
         }
@@ -282,6 +304,11 @@ impl PulseUnit {
             }
             readbacks |= 1 << channel;
         }
+        for m in &options.mirrored_irqs {
+            if m.channel >= 12 || timers & (1 << m.channel) == 0 {
+                return Err("mirrored IRQs require a declared interval-timer channel".into());
+            }
+        }
         if options.initial_phase > 3
             || options.capture_channel.is_some_and(|v| v != 1)
             || options.quadrature && options.capture_channel.is_some()
@@ -302,6 +329,7 @@ impl PulseUnit {
                 quadrature: options.quadrature,
                 capture: options.capture_channel,
                 irqs: wiring.irqs,
+                mirrored: options.mirrored_irqs,
             },
         })
     }
@@ -376,7 +404,7 @@ impl PulseUnit {
                 || period != 0
                 || reload != 0
                 || duty != 0xffff
-                || s.route >> (channel * 4) & 15 != channel as u32
+                || route_nibble(s, channel) != channel as u32
             {
                 return Err("incomplete external counter configuration".into());
             }
@@ -445,6 +473,21 @@ impl PulseUnit {
                     }
                 }
                 s.route = value;
+            }
+            a if a == BASE + 0x18 => {
+                for ch in 8..12 {
+                    let nibble = value >> ((ch - 8) * 4) & 15;
+                    if nibble != 0 && (self.pins.counters & (1 << ch) == 0 || nibble != ch as u32) {
+                        return Err("unsupported pulse input route".into());
+                    }
+                    if s.enabled & (1 << ch) != 0 && (value ^ s.route_high) & (15 << ((ch - 8) * 4)) != 0 {
+                        return Err("changing an armed pulse input route".into());
+                    }
+                }
+                if value >> 16 != 0 {
+                    return Err("unsupported pulse input route".into());
+                }
+                s.route_high = value;
             }
             a if a == BASE + 0x14 => {
                 if value & !0xf0f != 0 {
@@ -547,6 +590,7 @@ impl Device for PulseUnit {
             BASE => s.enabled as u64,
             a if a == BASE + 0x10 => s.route as u64,
             a if a == BASE + 0x14 => s.clock_route as u64,
+            a if a == BASE + 0x18 => s.route_high as u64,
             _ => match Self::locate(address, size) {
                 Some((ch, word)) => {
                     if word == 2 && self.pins.one_shots & (1 << ch) != 0 {
@@ -624,6 +668,12 @@ impl Device for PulseUnit {
                     }
                 }
                 InterruptLine::Shared(line) => cx.set_irq(line, true),
+            }
+            for m in self.pins.mirrored.iter().filter(|m| usize::from(m.channel) == ch) {
+                if let Err(error) = cx.raise_irq(m.core, m.line) {
+                    cx.fail(error);
+                    return;
+                }
             }
             c.due = if one_shot || c.words[0] & 0x4000 != 0 {
                 None

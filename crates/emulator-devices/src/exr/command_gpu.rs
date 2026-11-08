@@ -14,6 +14,8 @@
 //! (0x8fb84c) so the GPU clears it when it has consumed the list. No interrupt
 //! is involved.
 //! The list consumption time is a declared input, one tick count per word.
+mod render;
+
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
 
@@ -24,7 +26,7 @@ const DESCRIPTOR: u64 = 0x40;
 const RING_BASE: u64 = 0x80;
 const CHANNELS: usize = 8;
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
     pub base: u64,
@@ -32,6 +34,16 @@ pub struct Options {
     pub ticks_per_word: u64,
     /// Ticks before a list starts to be consumed.
     pub setup_ticks: u64,
+    /// Keep the words of up to this many consumed lists in the device state, for host-side decoding.
+    #[serde(default)]
+    pub record_lists: usize,
+    /// Execute consumed lists in software, drawing into guest memory (see `render`).
+    #[serde(default)]
+    pub render: bool,
+    /// Declared register values the renderer starts from (register, value), for state the driver establishes
+    /// outside submitted lists.
+    #[serde(default)]
+    pub render_registers: Vec<(u32, u32)>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -40,6 +52,19 @@ struct List {
     channel: usize,
     address: u64,
     due: u64,
+    #[serde(default)]
+    words: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RecordedList {
+    channel: usize,
+    address: u64,
+    at: u64,
+    #[serde(default)]
+    descriptor_words: u64,
+    words: Vec<u32>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -51,6 +76,11 @@ struct State {
     lists: Vec<List>,
     /// Tick the channel's previous list finishes.
     free_at: [u64; CHANNELS],
+    /// Consumed lists, oldest first, when `record_lists` is set.
+    #[serde(default)]
+    recorded: Vec<RecordedList>,
+    #[serde(default)]
+    renderer: render::Renderer,
 }
 
 /// The GPU's command front end.
@@ -73,6 +103,8 @@ impl CommandGpu {
                 registers: [0; WORDS],
                 lists: Vec::new(),
                 free_at: [0; CHANNELS],
+                recorded: Vec::new(),
+                renderer: render::Renderer::default(),
             },
         })
     }
@@ -103,7 +135,7 @@ impl CommandGpu {
             .checked_add(words * self.options.ticks_per_word)
             .ok_or("EXR GPU list deadline overflow")?;
         self.state.free_at[channel] = due;
-        self.state.lists.push(List { channel, address, due });
+        self.state.lists.push(List { channel, address, due, words });
         Ok(())
     }
 
@@ -116,6 +148,31 @@ impl CommandGpu {
                 continue;
             }
             let list = self.state.lists.remove(index);
+            if self.options.render {
+                let mut bytes = vec![0u8; list.words as usize * 16];
+                cx.ram_read(list.address, &mut bytes)?;
+                let words: Vec<u32> = bytes.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+                if !self.state.renderer.seeded() {
+                    self.state.renderer.seed(&self.options.render_registers)?;
+                }
+                self.state.renderer.execute(cx, &words)?;
+            }
+            if self.options.record_lists > 0 {
+                // The descriptor's length field counts 16-byte units: a list of n units holds 4n words
+                // (lists of 1, 2, 3 and 5 units end their batch terminator at words 3, 7, 11 and 19).
+                let mut bytes = vec![0u8; list.words as usize * 16];
+                cx.ram_read(list.address, &mut bytes)?;
+                let words = bytes.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+                self.state.recorded.push(RecordedList {
+                    channel: list.channel,
+                    address: list.address,
+                    at: now,
+                    descriptor_words: list.words,
+                    words,
+                });
+                let excess = self.state.recorded.len().saturating_sub(self.options.record_lists);
+                self.state.recorded.drain(..excess);
+            }
             // The first word is the fence the submitter polls.
             cx.ram_write(list.address, &0u32.to_le_bytes())?;
         }
@@ -215,6 +272,9 @@ mod tests {
             base: BASE,
             ticks_per_word: 2,
             setup_ticks: 10,
+            record_lists: 0,
+            render: false,
+            render_registers: vec![],
         })
         .unwrap()
     }
@@ -259,8 +319,8 @@ mod tests {
 
     #[test]
     fn invalid_options_and_channels_are_refused() {
-        assert!(CommandGpu::new(Options { base: BASE + 4, ticks_per_word: 1, setup_ticks: 0 }).is_err());
-        assert!(CommandGpu::new(Options { base: BASE, ticks_per_word: 0, setup_ticks: 0 }).is_err());
+        assert!(CommandGpu::new(Options { base: BASE + 4, ticks_per_word: 1, setup_ticks: 0, record_lists: 0, render: false, render_registers: vec![] }).is_err());
+        assert!(CommandGpu::new(Options { base: BASE, ticks_per_word: 0, setup_ticks: 0, record_lists: 0, render: false, render_registers: vec![] }).is_err());
         let mut model = gpu();
         let mut host = TestHost::new();
         let mut cx = host.cx();

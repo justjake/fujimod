@@ -4,8 +4,11 @@
 //! A start on +04 also raises the declared completion interrupt after the declared delay: start-up 0x7a085c
 //! writes the start, then registers its handler on IRQ index 0x42 and waits for it with a 100-tick timeout.
 //! The +00 control (loader 0x44dc) is polled and raises nothing. +10 + 4n holds channel n's 10-bit result
-//! (0x7a07c0 masks it with 0x3ff); each channel samples a declared, constant external input level.
+//! (0x7a07c0 masks it with 0x3ff); each channel samples its external input level, declared at construction and
+//! changed through the analog-input capability (dials, switches and resistor-ladder buttons).
 use crate::bus::InterruptLine;
+use crate::capability::AnalogInputs;
+use crate::parts::analog::Samples;
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -19,7 +22,7 @@ pub struct Options {
     pub start_irq: Option<InterruptLine>,
     /// Ticks from a +04 start to its interrupt.
     pub start_ticks: u64,
-    /// The 10-bit level each of the eight inputs converts to.
+    /// The 10-bit level each of the eight inputs converts to at construction.
     pub inputs: [u16; CHANNELS],
 }
 
@@ -38,6 +41,7 @@ struct State {
 pub struct Adc {
     options: Options,
     state: State,
+    samples: Samples,
 }
 
 impl Adc {
@@ -46,6 +50,7 @@ impl Adc {
             return Err("ADC input levels are 10-bit".into());
         }
         Ok(Self {
+            samples: Samples::new(options.inputs.to_vec())?,
             options,
             state: State {
                 control: [0; 2],
@@ -77,6 +82,14 @@ impl Device for Adc {
         "exr-pro-adc"
     }
 
+    fn analog_inputs(&self) -> Option<&(dyn AnalogInputs + 'static)> {
+        Some(self)
+    }
+
+    fn analog_inputs_mut(&mut self) -> Option<&mut (dyn AnalogInputs + 'static)> {
+        Some(self)
+    }
+
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         let Some(offset) = Self::offset(address, size) else {
             cx.unmodeled();
@@ -91,7 +104,13 @@ impl Device for Adc {
                 )
             }
             0x40 | 0x44 => u64::from(self.state.words[(offset / 4 - 0x10) as usize]),
-            _ => u64::from(self.options.inputs[((offset - RESULTS) / 4) as usize]),
+            _ => match self.samples.get(((offset - RESULTS) / 4) as usize) {
+                Ok(level) => u64::from(level),
+                Err(error) => {
+                    cx.fail(error);
+                    0
+                }
+            },
         }
     }
 
@@ -148,14 +167,36 @@ impl Device for Adc {
     }
 
     fn save(&self) -> Value {
-        json!({"state": self.state})
+        json!({"state": self.state, "samples": self.samples.values()})
     }
 
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value["state"].clone())
             .map_err(|error| format!("invalid ADC state: {error}"))?;
+        if let Some(samples) = value.get("samples") {
+            let samples: Vec<u16> =
+                serde_json::from_value(samples.clone()).map_err(|error| format!("invalid ADC samples: {error}"))?;
+            self.samples.replace(&samples)?;
+        }
         self.state = state;
         Ok(())
+    }
+}
+
+impl AnalogInputs for Adc {
+    fn external_inputs(&self) -> Samples {
+        self.samples.clone()
+    }
+
+    fn samples(&self) -> Vec<u16> {
+        self.samples.values()
+    }
+
+    fn set_sample(&mut self, channel: usize, value: u16) -> Result<(), String> {
+        if value > 0x3ff {
+            return Err("ADC input levels are 10-bit".into());
+        }
+        self.samples.set(channel, value)
     }
 }
 
@@ -294,6 +335,19 @@ mod start_irq_tests {
 mod result_tests {
     use super::*;
     use crate::test_host::{TestHost, read};
+
+    #[test]
+    fn changed_inputs_are_converted_and_checkpointed() {
+        let mut adc = Adc::new(Options { inputs: [1; CHANNELS], ..Options::default() }).unwrap();
+        let mut host = TestHost::new();
+        adc.set_sample(3, 0x162).unwrap();
+        assert!(adc.set_sample(3, 0x400).is_err());
+        assert_eq!(read(&mut adc, &mut host, BASE + RESULTS + 12), 0x162);
+        let saved = adc.save();
+        adc.set_sample(3, 7).unwrap();
+        adc.restore(&saved).unwrap();
+        assert_eq!(read(&mut adc, &mut host, BASE + RESULTS + 12), 0x162);
+    }
 
     #[test]
     fn results_report_the_declared_inputs_and_are_read_only() {
