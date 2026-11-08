@@ -259,12 +259,11 @@ fn explicit_slow_mode_never_sends_a_diagnostic_query_or_writes_an_enabled_gate()
         },
     ))
     .unwrap();
+    // Both commands arrive as one batched chunk.
     assert_eq!(
         block_on(reader.next_chunk()).unwrap().unwrap(),
-        b"0123456789abcdef"
+        b"0123456789abcdefghi"
     );
-    assert_eq!(reader.bytes_completed(), 16);
-    assert_eq!(block_on(reader.next_chunk()).unwrap().unwrap(), b"ghi");
     assert_eq!(reader.bytes_completed(), 19);
     assert!(block_on(reader.next_chunk()).unwrap().is_none());
     assert_eq!(script.remaining(), 0);
@@ -295,7 +294,7 @@ fn unexpected_gate_value_stops_before_code_or_probe_reads() {
     assert_eq!(script.remaining(), 0);
 }
 #[test]
-fn failed_probe_preserves_only_the_completed_prefix() {
+fn a_failed_command_completes_none_of_its_batch() {
     let mut f = executable_facts();
     f.normal_usb = None;
     f.read_mode = ReadMode::Slow;
@@ -321,12 +320,10 @@ fn failed_probe_preserves_only_the_completed_prefix() {
         },
     ))
     .unwrap();
-    assert_eq!(
-        block_on(reader.next_chunk()).unwrap().unwrap(),
-        b"0123456789abcdef"
-    );
+    // The verified first command shares the failed tail's batch, so the
+    // reader reports no completed bytes.
     assert!(block_on(reader.next_chunk()).is_err());
-    assert_eq!(reader.bytes_completed(), 16);
+    assert_eq!(reader.bytes_completed(), 0);
     assert_eq!(script.remaining(), 0);
 }
 #[test]

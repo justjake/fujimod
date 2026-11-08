@@ -372,7 +372,7 @@ fn identity_zero_chroma_matches_the_measured_control() {
         .collect();
     // Full 256x32 hardware identity control, including 62 invalidated pairs.
     assert_eq!(
-        fujimod_emulator_devices::fingerprint::bytes(&pixels)["sha256"],
+        format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(&pixels)),
         "83dc56dc906da7311c4508df4016d24af4cd3e5e2034dee445ccfd4ec192e26c"
     );
     assert_eq!(

@@ -24,6 +24,7 @@
       "fujimod-emulator-exr2-serial",
       "fujimod-emulator-exr2-storage",
       "fujimod-emulator-exr2-system",
+      "fujimod-emulator-gpu",
       "fujimod-emulator-graphics",
       "fujimod-emulator-image-codecs",
       "fujimod-emulator-image-formation",
@@ -79,6 +80,7 @@
     ],
     "final": [
       "fujimod-emulator-cli",
+      "fujimod-emulator-ip-dmp-webgpu",
       "fujimod-emulator-javascript",
       "fujimod-emulator-models",
       "fujimod-javascript",
@@ -117,13 +119,26 @@
       "fujimod-usb-proxy",
       "fujimod-virtual-scene",
       "fujimod-workflows",
-      "fujimod-workspace-hack"
+      "fujimod-workspace-hack",
+      "fujimod-camera-mount",
+      "fujimod-catalog-card",
+      "fujimod-catalog-execution",
+      "fujimod-catalog-restart",
+      "fujimod-framebuffer",
+      "fujimod-framebuffer-exr2",
+      "fujimod-framebuffer-xp4",
+      "fujimod-framebuffer-xp5",
+      "fujimod-framebuffer-xpp",
+      "fujimod-perf",
+      "fujimod-recovery",
+      "fujimod-runtime-install"
     ]
   },
   "remaining": {
     "untested_libraries": [],
     "model_dependencies": {
       "fujimod-emulator-xp5-board": [
+        "fujimod-emulator-graphics",
         "fujimod-emulator-ip",
         "fujimod-emulator-ip-arm",
         "fujimod-emulator-ip-dmp",
@@ -145,13 +160,30 @@
         "fujimod-emulator-xp4-storage"
       ],
       "fujimod-emulator-xpp": [
+        "fujimod-emulator-graphics",
+        "fujimod-emulator-image-codecs",
         "fujimod-emulator-ip",
         "fujimod-emulator-ip-arm",
+        "fujimod-emulator-ip-dmp",
+        "fujimod-emulator-parts-controls",
         "fujimod-emulator-xp4-io"
+      ],
+      "fujimod-python-emulator": [
+        "fujimod-emulator-ip"
       ]
     },
-    "oversize_models": [],
+    "oversize_models": [
+      "fujimod-emulator-exr2-gpu",
+      "fujimod-emulator-ip",
+      "fujimod-emulator-ip-dmp"
+    ],
     "interface_devices": [
+      "fujimod-emulator-devices/src/exr.rs",
+      "fujimod-emulator-devices/src/exr/adc.rs",
+      "fujimod-emulator-devices/src/exr/clocks.rs",
+      "fujimod-emulator-devices/src/exr/command_gpu.rs",
+      "fujimod-emulator-devices/src/exr/display_pipe.rs",
+      "fujimod-emulator-devices/src/exr/register_stub.rs",
       "fujimod-emulator-devices/src/exr2/clock.rs",
       "fujimod-emulator-devices/src/exr2/gpio.rs",
       "fujimod-emulator-devices/src/exr2/irq.rs",
