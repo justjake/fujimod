@@ -73,6 +73,16 @@
           "id": "sd-facts",
           "title": "SD-boot load map and packaging located",
           "result": "pass"
+        },
+        {
+          "id": "nand-boot-facts",
+          "title": "EXR II NAND bootloader facts located",
+          "result": "not-run"
+        },
+        {
+          "id": "boot-patch-facts",
+          "title": "Boot-patch triggers, clears and free spaces located",
+          "result": "not-run"
         }
       ]
     },
@@ -83,6 +93,16 @@
         {
           "id": "rec",
           "title": "Boots to the shooting screen",
+          "result": "not-run"
+        },
+        {
+          "id": "emulator-nand-boot",
+          "title": "NAND bootloader boots stock or the card program",
+          "result": "not-run"
+        },
+        {
+          "id": "emulator-boot-patch",
+          "title": "Each boot-patch trigger sees its units in RAM",
           "result": "not-run"
         },
         {
@@ -319,6 +339,7 @@
     "bug-report": "not-run",
     "sd-volume-name": "not-run",
     "date-folders": "not-run",
-    "software-nd": "not-run"
+    "software-nd": "not-run",
+    "ota-runtime": "not-run"
   }
 }

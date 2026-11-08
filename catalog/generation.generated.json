@@ -94,7 +94,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "ValueError: power-cut routine: no verified family match (0x1470210: no four settle calls with w0 = -6); 0 structural candidates "
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -3841,7 +3841,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -4359,7 +4359,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -4473,7 +4473,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -6320,7 +6320,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -7522,7 +7522,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -7879,7 +7879,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "ValueError: power-cut routine: no verified family match; 2 structural candidates 0x90fb14, 0x1473f08"
+              "reason": "firmware image not available"
             }
           ]
         },
