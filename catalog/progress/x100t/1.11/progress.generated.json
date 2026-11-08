@@ -183,6 +183,11 @@
       "title": "FujiMod",
       "stages": [
         {
+          "id": "language-font-bank",
+          "title": "Language font bank located and kept out of mod memory",
+          "result": "pass"
+        },
+        {
           "id": "mod-target",
           "title": "Mod target generated from facts",
           "result": "not-run"
