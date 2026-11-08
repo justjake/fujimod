@@ -1,0 +1,53 @@
+{
+  "$schema": "https://fujimod.com/schemas/physical-controls.schema.json",
+  "schema": 1,
+  "id": "gfx100s-controls",
+  "body_id": "gfx100s",
+  "manual": {
+    "url": "https://fujifilm-dsc.com/en/manual/gfx100s/about_this_camera/parts/index.html",
+    "title": "FUJIFILM GFX100S Owner's Manual",
+    "pages": [2, 3, 8]
+  },
+  "analog_levels": null,
+  "boot": {
+    "service": {
+      "usb": true,
+      "hold": [
+        { "id": "rear_command_dial.press" },
+        { "id": "shutter_button", "stage": "full" }
+      ]
+    }
+  },
+  "controls": {
+    "shutter_button": {
+      "name": "Shutter button",
+      "location": "top",
+      "manual_page": 2,
+      "connection_ids": [],
+      "assignable": false,
+      "pushable": true,
+      "mechanical": false,
+      "positions": [],
+      "behavior": {
+        "kind": "shutter",
+        "stages": { "half_press": null, "full_press": null }
+      }
+    },
+    "rear_command_dial": {
+      "name": "Rear command dial",
+      "location": "rear",
+      "manual_page": 3,
+      "connection_ids": [],
+      "assignable": true,
+      "pushable": true,
+      "mechanical": false,
+      "positions": [],
+      "behavior": {
+        "kind": "dial",
+        "motion": { "kind": "steps", "decrease": null, "increase": null },
+        "press": null,
+        "endless": null
+      }
+    }
+  }
+}
