@@ -672,6 +672,32 @@ fn scalar_half_fir_transfer_blocks_change_no_pixels_and_refuse_partial_rows() {
             "{transfer:#x}"
         );
     }
+
+    // 160x120 to 80x60 requested, as the X30 ADV filter programs it: the
+    // request builder rounds the scalar destination width up to a multiple
+    // of its block's byte count taken as pixels: 96 for 32-byte blocks, 128
+    // for 64-byte blocks. Wider destinations still refuse.
+    for (width, transfer, ok) in [
+        (96, 0x1000_1000, true),
+        (96, 0x0000_1000, false),
+        (112, 0x1000_1000, false),
+        (128, 0x2000_1000, true),
+        (144, 0x2000_1000, false),
+    ] {
+        let mut regs = vec![0; 36];
+        let values = [
+            0x1000, 0x10000, 0x500, 0x007800a0, 0x100000, 0x500, 0x003c0000 | width, 0x40,
+            0x082030, 0x081e3844, 0x00400080, transfer,
+        ];
+        for (register, word) in ORDER.into_iter().zip(values) {
+            regs[register / 4] = word;
+        }
+        assert_eq!(
+            Decompressor::raster_kind_for(&regs).is_ok(),
+            ok,
+            "{width} {transfer:#x}"
+        );
+    }
 }
 
 #[test]

@@ -392,7 +392,10 @@ impl Decompressor {
             return Ok(RasterKind::ScalarWeightedHalf);
         }
         // Declared replicated-edge FIR with a 2:1 pixel-center step. The
-        // destination may include up to 15 replicated columns for alignment.
+        // destination may include up to 15 replicated columns for alignment,
+        // or, for a scalar raster, columns up to the next multiple of its
+        // transfer block's byte count taken as pixels: the request builder
+        // rounds the scalar width to that multiple before programming it.
         // Format/control and both normalized kernels remain explicit; an
         // arbitrary new descriptor does not acquire a completion law.
         // Register 80 may select DMA transfer blocks for either raster.
@@ -407,7 +410,9 @@ impl Decompressor {
             && dh > 0
             && dh * 2 == sh
             && dw >= sw.div_ceil(2)
-            && dw <= sw.div_ceil(2) + 15
+            && dw
+                <= (sw.div_ceil(2) + 15)
+                    .max(sw.div_ceil(2).next_multiple_of(16 << (r(0x80) >> 28 & 3)))
             && r(0x14) >= sw * 2
             && r(0x14) <= 1440
             && r(0x24) >= dw * 2
