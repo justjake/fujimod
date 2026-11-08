@@ -424,11 +424,13 @@ class Board:
         pause_at_tick: int | None = None,
         store_watches: list[tuple[int, int]] | None = None,
         device_watches: list[str] | None = None,
+        contact_watch: bool = False,
     ) -> bool:
         """Run within instruction and optional pause limits.
 
         ``store_watches`` contains half-open physical address ranges;
-        ``device_watches`` contains nodes in the selected device graph.
+        ``device_watches`` contains nodes in the selected device graph;
+        ``contact_watch`` ends the run after the host contact queue changes.
         Watches apply only to this call. Return whether a watched store or
         device publication ended the continuation, including at the current tick.
         """
@@ -450,6 +452,7 @@ class Board:
             pause_at_tick,
             store_watches,
             device_watches,
+            contact_watch,
         )
 
     def run_until(self, tick: int) -> None:

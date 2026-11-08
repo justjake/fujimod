@@ -288,6 +288,7 @@ class emulator:
             pause_at_tick: SupportsIndex | None = None,
             store_watches: list[tuple[int, int]] | None = None,
             device_watches: list[str] | None = None,
+            contact_watch: bool = False,
         ) -> None: ...
         def run_for_instructions(
             self, /, count: SupportsIndex, quantum: SupportsIndex
@@ -302,6 +303,7 @@ class emulator:
             pause_at_tick: SupportsIndex | None = None,
             store_watches: list[tuple[int, int]] | None = None,
             device_watches: list[str] | None = None,
+            contact_watch: bool = False,
         ) -> None: ...
         def scanout(
             self,
