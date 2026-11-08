@@ -351,21 +351,42 @@ impl Decompressor {
         }
         let (sw, sh) = (r(0x18) & 8191, r(0x18) >> 16);
         let (dw, dh) = (r(0x28) & 8191, r(0x28) >> 16);
+        // Bounded scalar 2:1 geometry. The destination may include up to 15
+        // replicated columns for alignment or, for a scalar raster, columns
+        // up to the next multiple of its transfer block's byte count taken
+        // as pixels: the request builder rounds the scalar width to that
+        // multiple before programming it.
+        let scalar_half = || {
+            (1..=720).contains(&sw)
+                && (1..=480).contains(&sh)
+                && dh > 0
+                && dh * 2 == sh
+                && dw >= sw.div_ceil(2)
+                && dw
+                    <= (sw.div_ceil(2) + 15)
+                        .max(sw.div_ceil(2).next_multiple_of(16 << (r(0x80) >> 28 & 3)))
+                && r(0x14) >= sw * 2
+                && r(0x14) <= 1440
+                && r(0x24) >= dw * 2
+                && r(0x24) <= 1440
+        };
+        // The Soft Focus kernel's laws keep their earlier register 80 zero
+        // form, and also admit the X30 preview's transfer-block selectors
+        // when each raster row is a whole number of its blocks.
+        let soft_focus_transfer =
+            r(0x80) == 0 || Self::whole_transfer_blocks(r(0x80), sw * 2, dw * 2);
         // This bounded scalar descriptor supplies the saved threshold and
         // asymmetric kernels. Its pixel operation is not decoded; raster()
-        // applies a small empirical luma curve after the declared FIR.
+        // applies a small empirical luma curve after the declared FIR. The
+        // camera measured that curve at 256x192 to 128x96, so it is a
+        // per-sample law that the same bounded geometry admits.
         if r(8) == 0x1100
             && r(0x30) == 0x4c
             && r(0x34) == 0x00191a1a
             && r(0x38) == 0x24242526
             && r(0x3c) == 0x00400080
-            && r(0x80) == 0
-            && sw == 720
-            && sh == 480
-            && dw == 368
-            && dh == 240
-            && r(0x14) == 1440
-            && r(0x24) == 1440
+            && soft_focus_transfer
+            && scalar_half()
         {
             return Ok(RasterKind::ScalarThresholdedHalf);
         }
@@ -377,25 +398,12 @@ impl Decompressor {
             && r(0x34) == 0x00191a1a
             && r(0x38) == 0x24242526
             && r(0x3c) == 0x00400080
-            && r(0x80) == 0
-            && (1..=720).contains(&sw)
-            && (1..=480).contains(&sh)
-            && dh > 0
-            && dh * 2 == sh
-            && dw >= sw.div_ceil(2)
-            && dw <= sw.div_ceil(2) + 15
-            && r(0x14) >= sw * 2
-            && r(0x14) <= 1440
-            && r(0x24) >= dw * 2
-            && r(0x24) <= 1440
+            && soft_focus_transfer
+            && scalar_half()
         {
             return Ok(RasterKind::ScalarWeightedHalf);
         }
-        // Declared replicated-edge FIR with a 2:1 pixel-center step. The
-        // destination may include up to 15 replicated columns for alignment,
-        // or, for a scalar raster, columns up to the next multiple of its
-        // transfer block's byte count taken as pixels: the request builder
-        // rounds the scalar width to that multiple before programming it.
+        // Declared replicated-edge FIR with a 2:1 pixel-center step.
         // Format/control and both normalized kernels remain explicit; an
         // arbitrary new descriptor does not acquire a completion law.
         // Register 80 may select DMA transfer blocks for either raster.
@@ -405,18 +413,7 @@ impl Decompressor {
             && r(0x38) == 0x081e3844
             && r(0x3c) == 0x00400080
             && Self::whole_transfer_blocks(r(0x80), sw * 2, dw * 2)
-            && (1..=720).contains(&sw)
-            && (1..=480).contains(&sh)
-            && dh > 0
-            && dh * 2 == sh
-            && dw >= sw.div_ceil(2)
-            && dw
-                <= (sw.div_ceil(2) + 15)
-                    .max(sw.div_ceil(2).next_multiple_of(16 << (r(0x80) >> 28 & 3)))
-            && r(0x14) >= sw * 2
-            && r(0x14) <= 1440
-            && r(0x24) >= dw * 2
-            && r(0x24) <= 1440
+            && scalar_half()
         {
             return Ok(RasterKind::ScalarFilteredHalf);
         }

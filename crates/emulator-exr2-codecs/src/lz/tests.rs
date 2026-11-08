@@ -543,6 +543,77 @@ fn soft_focus_first_crop_refuses_unmeasured_descriptor_variants() {
 }
 
 #[test]
+fn soft_focus_x30_preview_crops_admit_transfer_blocks_with_the_same_pixels() {
+    // The X30 Soft Focus preview's first crop: 640x480 to 320x240 with
+    // 1280-byte pitches and 32-byte transfer blocks for both rasters.
+    let resize = |transfer: u32, input: u16| {
+        let (mut d, mut h, mut c) = setup();
+        reset(&mut d, &mut h);
+        enabled(&mut c, &mut h, 0, true);
+        for y in 0..480 {
+            for x in 0..640 {
+                let at = 0x10000 + y * 1280 + x * 2;
+                let sample = if input == 0 { (x + 3 * y) as u16 % 200 } else { input };
+                h.bytes[at..at + 2].copy_from_slice(&sample.to_le_bytes());
+            }
+        }
+        let values = [
+            0x1100, 0x10000, 0x500, 0x01e00280, 0x100000, 0x500, 0x00f00140, 0x4c, 0x00191a1a,
+            0x24242526, 0x00400080, transfer,
+        ];
+        for (offset, value) in ORDER.into_iter().zip(values) {
+            put(&mut d, &mut h, offset, value).unwrap();
+        }
+        put(&mut d, &mut h, 0x8c, 1).unwrap();
+        assert!(matches!(
+            d.raster_kind(),
+            Ok(RasterKind::ScalarThresholdedHalf)
+        ));
+        put(&mut d, &mut h, 4, 1).unwrap();
+        let due = d.next_deadline(h.now).unwrap();
+        tick(&mut d, &mut h, due).unwrap();
+        assert_eq!(h.irqs, [(0, IRQ)]);
+        h.bytes[0x100000..0x100000 + 1280 * 240].to_vec()
+    };
+    let unblocked = resize(0, 0);
+    assert_eq!(resize(0x1000_1000, 0), unblocked);
+    // The camera's measured samples hold at this geometry too.
+    for (input, expected) in [(16u16, 19u16), (21, 24), (240, 255)] {
+        let pixels = resize(0x1000_1000, input);
+        for row in pixels.chunks_exact(1280) {
+            assert!(row[..640].chunks_exact(2).all(|s| s == expected.to_le_bytes()));
+            assert!(row[640..].iter().all(|byte| *byte == 0xcc));
+        }
+    }
+
+    // Its follow-up crops and the first crop refuse rows that are not whole
+    // blocks and every other register 80 field.
+    for (control, limit, source, destination, transfer, ok) in [
+        (0x1100, 0x4c, 0x01e00280, 0x00f00140, 0x1000_1000, true),
+        (0x1100, 0x4c, 0x01e00280, 0x00f00140, 0x1000_1100, false),
+        (0x1100, 0x4c, 0x01e002d0, 0x00f00170, 0x2000_2000, false),
+        (0x1000, 0x40, 0x00f00140, 0x007800a0, 0x1000_1000, true),
+        (0x1000, 0x40, 0x007800a0, 0x003c0060, 0x1000_1000, true),
+        (0x1000, 0x40, 0x007800a0, 0x003c0050, 0x2000_1000, false),
+        (0x1000, 0x40, 0x00f00140, 0x007800a0, 0x0000_1001, false),
+    ] {
+        let mut regs = vec![0; 36];
+        let values = [
+            control, 0x10000, 0x500, source, 0x100000, 0x500, destination, limit, 0x00191a1a,
+            0x24242526, 0x00400080, transfer,
+        ];
+        for (register, word) in ORDER.into_iter().zip(values) {
+            regs[register / 4] = word;
+        }
+        assert_eq!(
+            Decompressor::raster_kind_for(&regs).is_ok(),
+            ok,
+            "{control:#x} {source:#x} {destination:#x} {transfer:#x}"
+        );
+    }
+}
+
+#[test]
 fn weighted_scalar_half_resizes_with_exact_kernel_inside_source_row_padding() {
     let (mut d, mut h, mut c) = setup();
     reset(&mut d, &mut h);
