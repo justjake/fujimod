@@ -35,7 +35,10 @@ Instruction fields follow the vector arithmetic/flow layout described by
 Native SMAPH path rendering uses the shared GPU surfaces when a host adapter is
 available. Set `FUJIMOD_SMAPH_CPU=1` to force CPU rendering. Set
 `FUJIMOD_SMAPH_VERIFY_GPU=1` to compare GPU coverage and complete target bytes
-against the CPU renderer while returning the CPU result.
+against the CPU renderer while returning the CPU result. Both renderers publish
+only the pixels a draw covers inside its scissors, and a command's completion
+time counts those bytes, so the host renderer never changes guest memory or
+timing.
 Arithmetic intermediates use IEEE float32, primary color conversion truncates; combiners use integer eight-bit components,
 ADD_SIGNED subtracts 128, and each scaled stage saturates separately. Blended
 RGBA8 output rounds to the nearest byte,
