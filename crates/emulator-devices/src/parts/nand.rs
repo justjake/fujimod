@@ -47,10 +47,11 @@ struct CommittedImage {
 /// What a NAND chip keeps across loss of power, relative to its checked base
 /// image: the declared input overlays and spare tags it was given, and every
 /// page programmed since. The base itself is identified, not copied.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Changes {
     identity: serde_json::Value,
-    overlays: Vec<Overlay>,
+    overlays: Vec<(u64, Vec<u8>)>,
     spare: BTreeMap<u32, Vec<u8>>,
     pages: BTreeMap<u32, Vec<u8>>,
     written_spare: BTreeMap<u32, Vec<u8>>,
@@ -72,7 +73,11 @@ impl Nand {
     pub fn changes(&self) -> Changes {
         Changes {
             identity: self.base_identity(),
-            overlays: self.overlays.clone(),
+            overlays: self
+                .overlays
+                .iter()
+                .map(|overlay| (overlay.offset, overlay.bytes.to_vec()))
+                .collect(),
             spare: self.spare.clone(),
             pages: self.pages.clone(),
             written_spare: self.written_spare.clone(),
@@ -99,7 +104,14 @@ impl Nand {
         let mut medium = Self::new(
             self.options.clone(),
             self.base.clone(),
-            changes.overlays.clone(),
+            changes
+                .overlays
+                .iter()
+                .map(|(offset, bytes)| Overlay {
+                    offset: *offset,
+                    bytes: Arc::from(bytes.as_slice()),
+                })
+                .collect(),
             changes.spare.clone(),
         )?;
         medium.pages = changes.pages.clone();
