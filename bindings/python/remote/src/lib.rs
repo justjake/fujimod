@@ -374,8 +374,13 @@ fn read_set(json: &str, device_ids: &BTreeMap<String, usize>) -> Result<ReadSet>
     struct Reads {
         stores: Vec<(u64, u64)>,
         devices: Vec<DeviceWatch>,
+        #[serde(default)]
+        contacts: bool,
     }
     let observed: Reads = serde_json::from_str(json).map_err(|e| e.to_string())?;
+    if observed.contacts {
+        return Err("Remote waits cannot watch the host contact queue".into());
+    }
     let mut reads = ReadSet {
         stores: observed.stores,
         devices: Default::default(),

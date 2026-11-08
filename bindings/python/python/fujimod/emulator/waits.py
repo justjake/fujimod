@@ -24,7 +24,8 @@ class WaitBoard(Protocol):
     def virtual_ticks(self) -> int: ...
     def run(self, limit: int, *, pause_at_tick: int | None = None,
             store_watches: list[tuple[int, int]] | None = None,
-            device_watches: list[str] | None = None) -> bool: ...
+            device_watches: list[str] | None = None,
+            contact_watch: bool = False) -> bool: ...
 
 
 WAIT_KINDS = (
@@ -186,15 +187,20 @@ def wait_steps(board: WaitBoard, predicate: Callable[[], T], description: str, *
                 raise TimeoutError('Native execution did not complete: ' + description)
             stores = [(int(lo), int(hi)) for lo, hi in reads['stores']]
             devices = [str(name) for name in reads['devices'] if name not in ignored_devices]
-            if not stores and not devices and until_tick is None and max_run_instructions is None:
+            contacts = reads.get('contacts') is True
+            watched = bool(stores or devices or contacts)
+            if not watched and until_tick is None and max_run_instructions is None:
                 raise ValueError('Wait predicate reads nothing watchable; name until_tick: ' + description)
-            if not stores and not devices and until_tick is not None and board.virtual_ticks >= until_tick:
+            if not watched and until_tick is not None and board.virtual_ticks >= until_tick:
                 raise ValueError('Wait predicate is false at its named tick: ' + description)
             boundaries = [t for t in (deadline, until_tick) if t is not None and t > board.virtual_ticks]
             boundary = min(boundaries) if boundaries else None
             before = board.instructions, board.virtual_ticks
+            # Only a predicate that read the contact queue names its watch, so
+            # boards without contact automation keep their run signature.
             published = board.run(remaining if max_run_instructions is None else min(remaining, max_run_instructions), pause_at_tick=boundary,
-                                  store_watches=stores, device_watches=devices)
+                                  store_watches=stores, device_watches=devices,
+                                  **({'contact_watch': True} if contacts else {}))
             report.continuations += 1
             if profile_stops and published:
                 stop = board.native.continuation_stop()

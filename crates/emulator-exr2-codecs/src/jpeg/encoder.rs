@@ -245,7 +245,9 @@ impl Device for Encoder {
         ; blobs: [source]
     );
     fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
-        Ok(self.save())
+        Ok(serde_json::json!({"r":self.r,"fifo":self.fifo,"cursor":self.cursor,"ready":self.ready,
+            "dma":self.dma.fingerprint(),"pending":self.pending,
+            "source":fujimod_emulator_devices::state::bytes(&self.source)}))
     }
 
     fn name(&self) -> &'static str {

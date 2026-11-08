@@ -68,6 +68,24 @@ pub struct Board {
     last_continuation_stop: Option<fujimod_emulator::board::continuation::ContinuationStop>,
 }
 impl Board {
+    /// A watched contact queue ends a run at its next change.
+    fn watch_contacts(&mut self, watched: bool) -> PyResult<()> {
+        if self.driver.is_some() {
+            return if watched {
+                Err(error("Contact watches require a session run".into()))
+            } else {
+                Ok(())
+            };
+        }
+        match self.session_mut()?.contact_driver.as_mut() {
+            Some(driver) => driver.set_watched(watched),
+            None if watched => {
+                return Err(error("physical input automation is not configured".into()));
+            }
+            None => {}
+        }
+        Ok(())
+    }
     fn begin_continuation(
         &mut self,
         stores: Option<Vec<(u64, u64)>>,
@@ -854,6 +872,7 @@ impl Board {
             .map_err(error)
     }
     fn control_state(&self) -> PyResult<String> {
+        self.board()?.track_contacts();
         serde_json::to_string(&self.session()?.control_state().map_err(error)?)
             .map_err(|e| error(e.to_string()))
     }
@@ -1065,8 +1084,10 @@ impl Board {
                     .ok_or_else(|| error("Read set names an absent device".into()))
             })
             .collect::<PyResult<Vec<_>>>()?;
-        serde_json::to_string(&serde_json::json!({"stores":reads.stores,"devices":names}))
-            .map_err(|e| error(e.to_string()))
+        serde_json::to_string(
+            &serde_json::json!({"stores":reads.stores,"devices":names,"contacts":reads.contacts}),
+        )
+        .map_err(|e| error(e.to_string()))
     }
     /// Return the first stop event from the most recent watched run.
     fn continuation_stop<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
@@ -1094,7 +1115,7 @@ impl Board {
         }
         Ok(Some(result))
     }
-    #[pyo3(signature = (count, quantum, pause_after=None, pause_at_tick=None, store_watches=None, device_watches=None))]
+    #[pyo3(signature = (count, quantum, pause_after=None, pause_at_tick=None, store_watches=None, device_watches=None, contact_watch=false))]
     fn run(
         slf: &Bound<'_, Self>,
         py: Python<'_>,
@@ -1104,6 +1125,7 @@ impl Board {
         pause_at_tick: Option<u64>,
         store_watches: Option<Vec<(u64, u64)>>,
         device_watches: Option<Vec<String>>,
+        contact_watch: bool,
     ) -> PyResult<bool> {
         {
             let owner = slf.try_borrow()?;
@@ -1112,6 +1134,7 @@ impl Board {
                     || pause_at_tick.is_some()
                     || store_watches.is_some()
                     || device_watches.is_some()
+                    || contact_watch
                 {
                     return Err(PyValueError::new_err(
                         "XP4 execution does not support pause boundaries",
@@ -1123,12 +1146,14 @@ impl Board {
         let mut owner = slf.try_borrow_mut()?;
         owner.last_continuation_stop = None;
         owner.begin_continuation(store_watches, device_watches)?;
+        owner.watch_contacts(contact_watch)?;
         let result = owner.run_graph(py, count, quantum, pause_after, pause_at_tick);
+        let unwatched = owner.watch_contacts(false);
         owner.last_continuation_stop = owner.board()?.continuation_stop();
         let cleanup = owner.board_mut()?.continuation_end().map_err(error);
-        result.and(cleanup)
+        result.and(unwatched).and(cleanup)
     }
-    #[pyo3(signature = (end, quantum, pause_after=None, pause_at_tick=None, store_watches=None, device_watches=None))]
+    #[pyo3(signature = (end, quantum, pause_after=None, pause_at_tick=None, store_watches=None, device_watches=None, contact_watch=false))]
     fn run_window(
         &mut self,
         py: Python<'_>,
@@ -1138,6 +1163,7 @@ impl Board {
         pause_at_tick: Option<u64>,
         store_watches: Option<Vec<(u64, u64)>>,
         device_watches: Option<Vec<String>>,
+        contact_watch: bool,
     ) -> PyResult<bool> {
         if self.driver.is_some() {
             return Err(error(
@@ -1146,6 +1172,7 @@ impl Board {
         }
         self.last_continuation_stop = None;
         self.begin_continuation(store_watches, device_watches)?;
+        self.watch_contacts(contact_watch)?;
         let result = run::window(
             py,
             self.session_mut()?,
@@ -1154,9 +1181,10 @@ impl Board {
             pause_after,
             pause_at_tick,
         );
+        let unwatched = self.watch_contacts(false);
         self.last_continuation_stop = self.board()?.continuation_stop();
         let cleanup = self.board_mut()?.continuation_end().map_err(error);
-        self.outcome(result).and(cleanup)
+        self.outcome(result).and(unwatched).and(cleanup)
     }
     fn reg_read(&self, core: usize, register: &str) -> PyResult<u64> {
         if let Some(Backend::Xp4(session)) = &self.backend {

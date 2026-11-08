@@ -134,6 +134,28 @@ fn continue_session(session: &mut Session) {
 }
 
 #[test]
+fn watched_contact_queue_ends_a_window_after_its_change() {
+    let mut session = session();
+    let total = |session: &Session| -> u64 { session.board.instruction_counts().iter().sum() };
+    session.contact_input("menu", None, false).unwrap();
+    session.contact_driver.as_mut().unwrap().set_watched(true);
+    // An unacknowledged press leaves the queue unchanged: the window ends at its limit.
+    session.run_window(50, 7, None, None).unwrap();
+    assert_eq!(total(&session), 50);
+    assert!(session.contact_driver.as_ref().unwrap().busy());
+    session.board.write_physical(0x200, &[1]).unwrap();
+    session.run_window(1000, 7, None, None).unwrap();
+    assert!(!session.contact_driver.as_ref().unwrap().busy());
+    assert!(total(&session) < 1000);
+    // Unwatched, the same queue change continues to the window's end.
+    let mut unwatched = self::session();
+    unwatched.contact_input("menu", None, false).unwrap();
+    unwatched.board.write_physical(0x200, &[1]).unwrap();
+    unwatched.run_window(1000, 7, None, None).unwrap();
+    assert_eq!(total(&unwatched), 1000);
+}
+
+#[test]
 fn durable_session_restores_media_sensor_inputs_contacts_and_queued_actions_then_resumes() {
     let (bytes, before, continued) = {
         let mut source = session();

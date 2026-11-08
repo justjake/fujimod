@@ -12,6 +12,8 @@ use std::{
 pub struct ReadSet {
     pub stores: Vec<(u64, u64)>,
     pub devices: BTreeSet<usize>,
+    /// The predicate read the host contact queue (`Session::control_state`).
+    pub contacts: bool,
 }
 /// The first observed event that ended a watched continuation.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -209,6 +211,13 @@ impl Board {
     pub(super) fn track_device_read(&self, id: usize) {
         if let Some(reads) = self.read_set.borrow_mut().as_mut() {
             reads.devices.insert(id);
+        }
+    }
+    /// Record a read of the host contact queue; a session run with a watched
+    /// contact driver (`Driver::set_watched`) ends at the queue's next change.
+    pub fn track_contacts(&self) {
+        if let Some(reads) = self.read_set.borrow_mut().as_mut() {
+            reads.contacts = true;
         }
     }
     pub(super) fn track_device_kind(&self, kind: &str, bus: &Bus) {

@@ -531,7 +531,13 @@ fn block_on<F: std::future::Future>(future: F) -> F::Output {
 }
 
 fn words_as_bytes(words: &[u32]) -> Vec<u8> {
-    words.iter().flat_map(|word| word.to_le_bytes()).collect()
+    // A sized copy vectorizes; collecting a flattened iterator went byte by
+    // byte through every pixel of a clip mask.
+    let mut bytes = vec![0; words.len() * 4];
+    for (chunk, word) in bytes.chunks_exact_mut(4).zip(words) {
+        chunk.copy_from_slice(&word.to_le_bytes());
+    }
+    bytes
 }
 
 #[cfg(test)]
