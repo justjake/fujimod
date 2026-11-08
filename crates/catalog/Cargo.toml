@@ -15,6 +15,7 @@ fujimod-catalog-bulk.workspace = true
 fujimod-catalog-card.workspace = true
 fujimod-catalog-execution.workspace = true
 fujimod-catalog-restart.workspace = true
+fujimod-catalog-memory-reservations.workspace = true
 fujimod-catalog-construction.workspace = true
 fujimod-catalog-identity.workspace = true
 fujimod-catalog-controls = { workspace = true, optional = true }
@@ -31,7 +32,7 @@ fujimod-workspace-hack.workspace = true
 
 [features]
 # JSON Schema derives, used only to generate and check the committed schemas.
-schema = ["fujimod-catalog-bulk/schema", "fujimod-catalog-card/schema", "fujimod-catalog-execution/schema", "fujimod-catalog-restart/schema", "fujimod-catalog-construction/schema", "fujimod-catalog-controls/schema", "fujimod-catalog-remote/schema", "fujimod-catalog-settings/schema"]
+schema = ["fujimod-catalog-bulk/schema", "fujimod-catalog-card/schema", "fujimod-catalog-execution/schema", "fujimod-catalog-restart/schema", "fujimod-catalog-memory-reservations/schema", "fujimod-catalog-construction/schema", "fujimod-catalog-controls/schema", "fujimod-catalog-remote/schema", "fujimod-catalog-settings/schema"]
 
 [dev-dependencies]
 fujimod-catalog-controls.workspace = true
