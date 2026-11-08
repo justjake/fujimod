@@ -87,9 +87,10 @@ impl<B: Backend> Memory<'_, B> {
     }
     async fn state_inner(&mut self) -> Result<State> {
         let f = &self.facts.firmware.state;
-        let mode = self.word(f.ui_mode).await?;
-        let active = self.word(f.menu_active).await? != 0;
-        let node = self.word(f.menu_node).await?.into();
+        let mode = u32::try_from(self.uint(f.ui_mode, f.widths.ui_mode).await?)
+            .map_err(|_| "UI mode exceeds 32 bits")?;
+        let active = self.uint(f.menu_active, f.widths.menu_active).await? != 0;
+        let node = self.uint(f.menu_node, f.widths.menu_node).await?;
         let cursor = self
             .word(
                 self.facts.firmware.menus.cursor_address
@@ -133,7 +134,7 @@ impl<B: Backend> Memory<'_, B> {
     async fn readiness_inner(&mut self, control: Option<&Control>) -> Result<Readiness> {
         let f = &self.facts.firmware.state;
         let mut pending = vec![];
-        let mode_pending = self.word(f.pending_mode).await?;
+        let mode_pending = self.uint(f.pending_mode, f.widths.pending_mode).await?;
         if mode_pending != 0 {
             pending.push(format!("pending UI mode={mode_pending}"));
         }
@@ -158,14 +159,14 @@ impl<B: Backend> Memory<'_, B> {
         let input = if f.input_pending == 0 {
             0
         } else {
-            self.word(f.input_pending).await?
+            self.uint(f.input_pending, f.input_pending_width).await?
         };
         let timer = if f.operation_alert_timer == 0 {
             0
         } else {
             self.word(f.operation_alert_timer).await?
         };
-        let override_value = self.word(f.override_address).await?;
+        let override_value = self.uint(f.override_address, f.override_width).await?;
         // REC parameter readiness observes category-one bit 9. Other
         // category-one operations may remain active while inputs are accepted.
         if !parameter_independent && one & (1 << 9) != 0 {
@@ -191,7 +192,14 @@ impl<B: Backend> Memory<'_, B> {
             let mode = if tasks.busy.is_empty() {
                 0
             } else {
-                self.word(self.facts.firmware.state.ui_mode).await?
+                u32::try_from(
+                    self.uint(
+                        self.facts.firmware.state.ui_mode,
+                        self.facts.firmware.state.widths.ui_mode,
+                    )
+                    .await?,
+                )
+                .map_err(|_| "UI mode exceeds 32 bits")?
             };
             for gate in &tasks.busy {
                 if mode == gate.mode && self.uint(gate.address, gate.width).await? != 0 {

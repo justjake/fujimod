@@ -3,7 +3,8 @@
     "PixelFormat": {
       "description": "Implemented scanout encodings.",
       "enum": [
-        "bgra8888"
+        "bgra8888",
+        "rgba8888_premultiplied"
       ],
       "type": "string"
     }

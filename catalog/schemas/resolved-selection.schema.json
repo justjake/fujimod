@@ -8373,6 +8373,17 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "widths": {
+          "$ref": "#/$defs/ObservationWidths",
+          "default": {
+            "menu_active": 4,
+            "menu_node": 4,
+            "pending_mode": 4,
+            "system_mode": 4,
+            "ui_mode": 4
+          },
+          "description": "Width, in bytes, for each state value read by the remote observer."
         }
       },
       "required": [
@@ -16833,6 +16844,50 @@
       ],
       "type": "object"
     },
+    "ObservationWidths": {
+      "additionalProperties": false,
+      "description": "Byte widths for firmware state values used by remote observations.",
+      "properties": {
+        "menu_active": {
+          "description": "Menu-active field width.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_node": {
+          "description": "Menu-node pointer field width.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pending_mode": {
+          "description": "Pending mode field width.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "system_mode": {
+          "description": "System mode field width.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ui_mode": {
+          "description": "UI mode field width.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ui_mode",
+        "system_mode",
+        "menu_active",
+        "pending_mode",
+        "menu_node"
+      ],
+      "type": "object"
+    },
     "OpticalQuantity": {
       "description": "Named optical quantities exposed by a lens assembly.",
       "oneOf": [
@@ -18531,7 +18586,8 @@
     "PixelFormat": {
       "description": "Implemented scanout encodings.",
       "enum": [
-        "bgra8888"
+        "bgra8888",
+        "rgba8888_premultiplied"
       ],
       "type": "string"
     },
@@ -19187,6 +19243,13 @@
           "minimum": 0,
           "type": "integer"
         },
+        "input_pending_width": {
+          "default": 4,
+          "description": "Width, in bytes, of the pending input state field.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
         "operation_alert_timer": {
           "description": "Firmware address for the operation-alert timer.",
           "format": "uint64",
@@ -19196,6 +19259,13 @@
         "override_address": {
           "description": "Firmware address used to override readiness.",
           "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "override_width": {
+          "default": 4,
+          "description": "Width, in bytes, of the readiness override field.",
+          "format": "uint",
           "minimum": 0,
           "type": "integer"
         }

@@ -438,6 +438,7 @@ pub struct Scanout {
 )]
 pub enum PixelFormat {
     Bgra8888,
+    Rgba8888Premultiplied,
 }
 
 /// Native text and bitmap resource table layouts.
@@ -1058,6 +1059,21 @@ impl FirmwareFacts {
         fujimod_catalog_identity::validate_id(&self.firmware_id)?;
         fujimod_catalog_identity::validate_id(&self.body_id)?;
         fujimod_catalog_identity::validate_content_sha256(&self.firmware_sha256.clone())?;
+        let widths = &self.state.widths;
+        if [
+            widths.ui_mode,
+            widths.system_mode,
+            widths.menu_active,
+            widths.pending_mode,
+            widths.menu_node,
+            self.state.readiness.input_pending_width,
+            self.state.readiness.override_width,
+        ]
+        .into_iter()
+        .any(|width| !matches!(width, 1 | 2 | 4 | 8))
+        {
+            return Err("invalid remote observation width".into());
+        }
         if self.identity_checks.is_empty() {
             return Err("remote facts require firmware identity checks".into());
         }
@@ -1264,6 +1280,44 @@ pub struct FirmwareObservation {
     pub setup_mode: u32,
     /// Readiness observer addresses.
     pub readiness: ReadinessAddresses,
+    /// Width, in bytes, for each state value read by the remote observer.
+    #[serde(default)]
+    pub widths: ObservationWidths,
+}
+
+/// Byte widths for firmware state values used by remote observations.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct ObservationWidths {
+    /// UI mode field width.
+    pub ui_mode: usize,
+    /// System mode field width.
+    pub system_mode: usize,
+    /// Menu-active field width.
+    pub menu_active: usize,
+    /// Pending mode field width.
+    pub pending_mode: usize,
+    /// Menu-node pointer field width.
+    pub menu_node: usize,
+}
+
+impl Default for ObservationWidths {
+    fn default() -> Self {
+        Self {
+            ui_mode: 4,
+            system_mode: 4,
+            menu_active: 4,
+            pending_mode: 4,
+            menu_node: 4,
+        }
+    }
 }
 
 /// Addresses used to check REC readiness.
@@ -1283,10 +1337,20 @@ pub struct ReadinessAddresses {
     pub category_two: u64,
     /// Firmware address for pending input state.
     pub input_pending: u64,
+    /// Width, in bytes, of the pending input state field.
+    #[serde(default = "default_observation_width")]
+    pub input_pending_width: usize,
     /// Mask of readiness bits excluded from the check.
     pub excluded_mask: u32,
     /// Firmware address for the operation-alert timer.
     pub operation_alert_timer: u64,
     /// Firmware address used to override readiness.
     pub override_address: u64,
+    /// Width, in bytes, of the readiness override field.
+    #[serde(default = "default_observation_width")]
+    pub override_width: usize,
+}
+
+fn default_observation_width() -> usize {
+    4
 }

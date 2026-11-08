@@ -1955,6 +1955,7 @@ class FirmwareObservation(TypedDict, total=False):
     setup_mode: Required[int]
     system_mode: Required[int]
     ui_mode: Required[int]
+    widths: NotRequired[ObservationWidths]
 
 
 class FirmwarePersistentAssetLayout(TypedDict, total=False):
@@ -3695,6 +3696,14 @@ type NativeVectorGpuInputsClearProfile = Literal["declared-vg-ui-primitives-unme
 type NativeVectorGpuInputsCopyProfile = Literal["vg-32bpp-untile-unrotated"]
 
 
+class ObservationWidths(TypedDict, total=False):
+    menu_active: Required[int]
+    menu_node: Required[int]
+    pending_mode: Required[int]
+    system_mode: Required[int]
+    ui_mode: Required[int]
+
+
 type OpticalQuantity = Literal["lens_focus", "lens_aperture"]
 
 
@@ -4050,7 +4059,7 @@ class PhysicalControlsVariant0(TypedDict, total=False):
 type PictureLayout = Literal["bgra8888-straight"]
 
 
-type PixelFormat = Literal["bgra8888"]
+type PixelFormat = Literal["bgra8888", "rgba8888_premultiplied"]
 
 
 class PowerControlAssembly(TypedDict, total=False):
@@ -4178,8 +4187,10 @@ class ReadinessAddresses(TypedDict, total=False):
     category_two: Required[int]
     excluded_mask: Required[int]
     input_pending: Required[int]
+    input_pending_width: NotRequired[int]
     operation_alert_timer: Required[int]
     override_address: Required[int]
+    override_width: NotRequired[int]
 
 
 class RecIdle(TypedDict, total=False):

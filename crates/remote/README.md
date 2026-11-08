@@ -19,6 +19,13 @@ and its own read set, so a wait on menu state never wakes for readiness reads.
 `operations::wait_ready` waits for it; Python exposes `Camera.readiness()` and
 `Camera.wait_until_ready(deadline=...)`.
 
+Firmware state facts declare the byte widths of UI mode, system mode,
+menu-active, pending-mode and menu-node fields in `state.widths`. Pending input
+and readiness override have `state.readiness.input_pending_width` and
+`state.readiness.override_width`. Omitted widths retain the
+existing four-byte layout; declared widths must be 1, 2, 4 or 8. Observations
+read exactly that extent, and a UI mode larger than 32 bits is refused.
+
 Build `Facts` with `Facts::from_selection(&selection, manifest)`. A reference is
 resolved on every use; duplicate or missing rows and option names produce an
 error with the candidates found. Stock menu IDs are root indices or catalog
@@ -44,6 +51,13 @@ without replay. Its screenshot completion witness is a newly published
 framebuffer pointer, so an unchanged pointer can reach the deadline; passive
 `frame()` can still capture the current buffer. Physical identity, permission
 and session entry/exit belong to the caller.
+
+The declared scanout format selects straight BGRA8888 or premultiplied
+RGBA8888 decoding. Both produce RGB captures composited on black. The latter
+preserves the already-premultiplied RGB channels without multiplying alpha a
+second time. This captures the selected memory layer; it does not establish
+that sensor video is present or that the buffer remained unchanged between
+the two pointer observations.
 
 Python exposes the same futures through `fujimod.remote.Camera` and
 `camera.blocking`. `menu(id, key=..., via=...)`, `option(item, name)` and

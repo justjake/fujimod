@@ -498,6 +498,120 @@ fn rec_readiness_gates_parameter_changes_without_blocking_other_category_one_wor
             .unwrap();
     });
 }
+
+#[test]
+fn byte_sized_state_and_readiness_fields_ignore_adjacent_bytes() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.state.widths.ui_mode = 1;
+        facts.firmware.state.widths.menu_active = 1;
+        facts.firmware.state.widths.pending_mode = 1;
+        facts.firmware.state.readiness.input_pending_width = 1;
+        facts.firmware.state.readiness.override_width = 1;
+        facts.firmware.state.readiness.excluded_mask = 8;
+        let mut remote = Connection::connect(Synthetic::new(), facts).unwrap();
+
+        remote.backend.bytes[768..772].copy_from_slice(&[3, 0xa1, 0xb2, 0xc3]);
+        remote.backend.bytes[776..780].copy_from_slice(&[0, 0xa1, 0xb2, 0xc3]);
+        remote.backend.bytes[780..784].copy_from_slice(&[0, 0xa1, 0xb2, 0xc3]);
+        remote.backend.bytes[816..820].copy_from_slice(&[0, 0xa1, 0xb2, 0xc3]);
+        remote.backend.bytes[808..816].copy_from_slice(&8u64.to_le_bytes());
+        remote.backend.bytes[824..828].copy_from_slice(&[1, 0xa1, 0xb2, 0xc3]);
+
+        let observed = remote.read(&control("selector.down").into()).await.unwrap();
+        assert_eq!(observed.state.mode, 3);
+        assert!(!observed.state.menu_active);
+
+        let readiness = remote.readiness(None).await.unwrap();
+        assert!(
+            readiness.ready,
+            "unexpected pending checks: {:?}",
+            readiness.pending
+        );
+        assert!(readiness.pending.is_empty());
+        remote.backend.bytes[824] = 0;
+        assert!(!remote.readiness(None).await.unwrap().ready);
+    });
+}
+
+#[test]
+fn eight_byte_menu_node_is_preserved_by_state_observation() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.state.widths.menu_node = 8;
+        let mut remote = Connection::connect(Synthetic::new(), facts).unwrap();
+        let node = 0x1_2345_6789u64;
+        remote.backend.bytes[784..792].copy_from_slice(&node.to_le_bytes());
+
+        let observed = remote.read(&control("selector.down").into()).await.unwrap();
+        assert_eq!(observed.state.node, node);
+        assert!(!observed.state.menu_active);
+    });
+}
+
+#[test]
+fn ui_mode_observation_rejects_values_above_32_bits() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.state.widths.ui_mode = 8;
+        let mut remote = Connection::connect(Synthetic::new(), facts).unwrap();
+        remote.backend.bytes[768..776].copy_from_slice(&0x1_0000_0003u64.to_le_bytes());
+
+        let error = remote
+            .read(&control("selector.down").into())
+            .await
+            .unwrap_err();
+        assert!(error.contains("UI mode exceeds 32 bits"));
+    });
+}
+
+#[test]
+fn invalid_observation_widths_are_rejected_before_connecting() {
+    let mut facts_with_invalid_mode_width = facts();
+    facts_with_invalid_mode_width.firmware.state.widths.ui_mode = 3;
+    let error = match Connection::connect(Synthetic::new(), facts_with_invalid_mode_width) {
+        Ok(_) => panic!("invalid UI mode width was accepted"),
+        Err(error) => error,
+    };
+    assert!(error.contains("invalid remote observation width"));
+
+    let mut facts_with_invalid_input_width = facts();
+    facts_with_invalid_input_width
+        .firmware
+        .state
+        .readiness
+        .input_pending_width = 16;
+    let error = match Connection::connect(Synthetic::new(), facts_with_invalid_input_width) {
+        Ok(_) => panic!("invalid input-pending width was accepted"),
+        Err(error) => error,
+    };
+    assert!(error.contains("invalid remote observation width"));
+
+    let mut facts_with_invalid_override_width = facts();
+    facts_with_invalid_override_width
+        .firmware
+        .state
+        .readiness
+        .override_width = 0;
+    let error = match Connection::connect(Synthetic::new(), facts_with_invalid_override_width) {
+        Ok(_) => panic!("invalid override width was accepted"),
+        Err(error) => error,
+    };
+    assert!(error.contains("invalid remote observation width"));
+}
+
+#[test]
+fn omitted_observation_widths_keep_the_existing_four_byte_defaults() {
+    let facts = facts();
+    assert_eq!(facts.firmware.state.widths.ui_mode, 4);
+    assert_eq!(facts.firmware.state.widths.system_mode, 4);
+    assert_eq!(facts.firmware.state.widths.menu_active, 4);
+    assert_eq!(facts.firmware.state.widths.pending_mode, 4);
+    assert_eq!(facts.firmware.state.widths.menu_node, 4);
+    assert_eq!(facts.firmware.state.readiness.input_pending_width, 4);
+    assert_eq!(facts.firmware.state.readiness.override_width, 4);
+}
+
 #[test]
 fn predicate_tracks_only_its_reads() {
     futures_lite::future::block_on(async {

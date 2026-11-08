@@ -85,6 +85,38 @@ fn range_reads_use_alias_and_chunk_limits() {
         assert_eq!(script.remaining(), 0);
     });
 }
+
+#[test]
+fn shared_ff80_frame_decodes_premultiplied_rgba_without_reprocessing_alpha() {
+    futures_lite::future::block_on(async {
+        let pointer = 0x1000u32;
+        let rgba = [17, 29, 43, 128];
+        let mut steps = vec![];
+        for (address, data) in [
+            (832u32, pointer.to_le_bytes().to_vec()),
+            (pointer, rgba.to_vec()),
+            (832, pointer.to_le_bytes().to_vec()),
+        ] {
+            let mut parameters = [0; 16];
+            parameters[8..12].copy_from_slice(&address.to_le_bytes());
+            parameters[12..16].copy_from_slice(&(data.len() as u32).to_le_bytes());
+            steps.extend(exchanges(
+                command(2, parameters, &[]),
+                command(2, parameters, &data),
+            ));
+        }
+        let script = opened(steps);
+        let session = script.begin_session(1024, None).await.unwrap();
+        let mut facts = facts();
+        facts.firmware.scanout.pixel_format =
+            fujimod_catalog_remote::PixelFormat::Rgba8888Premultiplied;
+        let mut remote = Ff80Remote::new(session, facts, options()).unwrap();
+        let capture = crate::RemoteReader::frame(&mut remote).await.unwrap();
+        assert_eq!(capture.frame.pixels(), &[17, 29, 43]);
+        assert_eq!(capture.sequence, u64::from(pointer));
+        assert_eq!(script.remaining(), 0);
+    });
+}
 #[test]
 fn debug_names_are_explicit_and_failed_events_are_not_replayed() {
     futures_lite::future::block_on(async {

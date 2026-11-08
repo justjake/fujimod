@@ -159,13 +159,24 @@ impl<S: BorrowMut<Session>> Backend for Ff80Backend<S> {
                 ));
             }
             reads.extend(memory.reads);
-            Ok(Capture {
-                frame: fujimod_recording::Frame::bgra(
+            let frame = match scanout.pixel_format {
+                fujimod_catalog_remote::PixelFormat::Bgra8888 => fujimod_recording::Frame::bgra(
                     scanout.width,
                     scanout.height,
                     scanout.stride_bytes as usize,
                     &raw,
                 )?,
+                fujimod_catalog_remote::PixelFormat::Rgba8888Premultiplied => {
+                    fujimod_recording::Frame::rgba_premultiplied(
+                        scanout.width,
+                        scanout.height,
+                        scanout.stride_bytes as usize,
+                        &raw,
+                    )?
+                }
+            };
+            Ok(Capture {
+                frame,
                 time: self.now(),
                 clock: Clock::WallNanoseconds,
                 output: self.options.output.clone(),
