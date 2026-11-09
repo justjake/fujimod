@@ -3458,6 +3458,7 @@ class MenuKeys(TypedDict, total=False):
 
 
 class MenuLayout(TypedDict, total=False):
+    caption_word_order: NotRequired[list[int] | None]
     caption_words: Required[int]
     field_widths: NotRequired[MenuFieldWidths]
     fields: Required[MenuFields]

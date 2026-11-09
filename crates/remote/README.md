@@ -51,6 +51,12 @@ must fit its width. Smaller descriptor and row records are accepted when their
 declared fields form a complete valid layout. Cursor decoding retains its
 existing layout.
 
+Caption records contain `caption_words` 32-bit resource IDs. Omitted
+`caption_word_order` keeps the legacy priority (word 1 then word 0 for two or
+more words, otherwise word 0). An explicit order lists only the word indices
+the resolver tries, in priority order; it must be nonempty, contain unique
+indices below `caption_words`, and use a valid 1–64 word extent.
+
 Build `Facts` with `Facts::from_selection(&selection, manifest)`. A reference is
 resolved on every use; duplicate or missing rows and option names produce an
 error with the candidates found. Stock menu IDs are root indices or catalog

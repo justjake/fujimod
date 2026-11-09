@@ -2945,6 +2945,19 @@
       "additionalProperties": false,
       "description": "Offsets within a native menu descriptor and row.",
       "properties": {
+        "caption_word_order": {
+          "default": null,
+          "description": "Caption word indices to try in priority order. Omission keeps the legacy\norder: word 1 then word 0 when at least two words are present, otherwise\nword 0.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "caption_words": {
           "description": "Caption words.",
           "format": "uint32",

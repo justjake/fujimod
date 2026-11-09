@@ -655,6 +655,220 @@ fn packed_descriptor_and_byte_rows_traverse_sparse_keyed_roots() {
     });
 }
 
+#[cfg(test)]
+fn set_root_caption_words(backend: &mut Synthetic, word_count: u32, words: &[u32]) {
+    assert_eq!(usize::try_from(word_count).unwrap(), words.len());
+    let row = 12288 + usize::try_from(word_count).unwrap() * 4;
+    for (index, value) in words.iter().enumerate() {
+        backend.word(row + index * 4, *value);
+    }
+}
+
+#[test]
+fn explicit_caption_word_order_can_prefer_a_later_word() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.layout.caption_words = 3;
+        facts.firmware.menus.layout.caption_word_order = Some(vec![2, 1, 0]);
+        let mut backend = Synthetic::new();
+        set_root_caption_words(&mut backend, 3, &[28672, 28688, 28704]);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, "OFF");
+    });
+}
+
+#[test]
+fn caption_word_order_skips_icons_zero_sentinel_and_empty_text() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.layout.caption_words = 5;
+        facts.firmware.menus.layout.caption_word_order = Some(vec![0, 1, 2, 3, 4]);
+        let mut backend = Synthetic::new();
+        set_root_caption_words(
+            &mut backend,
+            5,
+            &[0xff00_0001, 0, 0x7fff_fffe, 30000, 28688],
+        );
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, "SETTING");
+    });
+}
+
+#[test]
+fn omitted_caption_word_order_keeps_legacy_priorities() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        assert_eq!(facts.firmware.menus.layout.caption_word_order, None);
+        let mut backend = Synthetic::new();
+        set_root_caption_words(&mut backend, 2, &[28672, 28688]);
+        let mut remote = Connection::connect(backend, facts.clone()).unwrap();
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, "SETTING");
+
+        facts.firmware.menus.layout.caption_words = 1;
+        let mut backend = Synthetic::new();
+        set_root_caption_words(&mut backend, 1, &[28672]);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, "FIRST");
+    });
+}
+
+#[test]
+fn caption_order_does_not_follow_unselected_invalid_resource_pointers() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.layout.caption_words = 3;
+        facts.firmware.menus.layout.caption_word_order = Some(vec![1]);
+        let mut backend = Synthetic::new();
+        set_root_caption_words(&mut backend, 3, &[0x400000, 28688, 0x400010]);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, "SETTING");
+        assert!(remote
+            .backend
+            .memory_requests
+            .iter()
+            .all(|(address, _)| *address < 0x400000));
+    });
+}
+
+#[test]
+fn zero_caption_pointer_still_returns_an_empty_label() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.layout.caption_words = 3;
+        facts.firmware.menus.layout.caption_word_order = Some(vec![2, 1]);
+        let mut backend = Synthetic::new();
+        backend.word(4096 + 28, 0);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, "");
+        assert!(remote
+            .backend
+            .memory_requests
+            .iter()
+            .all(|(address, _)| *address != 12288));
+    });
+}
+
+#[test]
+fn legacy_zero_caption_extent_remains_accepted_when_pointer_is_null() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.layout.caption_words = 0;
+        assert_eq!(facts.firmware.menus.layout.caption_word_order, None);
+        facts.firmware.validate().unwrap();
+
+        let mut backend = Synthetic::new();
+        backend.word(4096 + 28, 0);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, "");
+    });
+}
+
+#[test]
+fn legacy_caption_extent_is_checked_when_a_nonnull_pointer_is_read() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.layout.caption_words = 0;
+        assert_eq!(facts.firmware.menus.layout.caption_word_order, None);
+        facts.firmware.validate().unwrap();
+        let mut remote = Connection::connect(Synthetic::new(), facts).unwrap();
+        let error = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap_err();
+        assert!(error.contains("Invalid caption extent"), "{error}");
+    });
+}
+
+#[test]
+fn invalid_caption_orders_refuse_before_memory_reads() {
+    futures_lite::future::block_on(async {
+        let mut invalid = vec![];
+
+        let mut empty = facts();
+        empty.firmware.menus.layout.caption_word_order = Some(vec![]);
+        invalid.push(empty);
+
+        let mut duplicate = facts();
+        duplicate.firmware.menus.layout.caption_word_order = Some(vec![1, 1]);
+        invalid.push(duplicate);
+
+        let mut out_of_range = facts();
+        out_of_range.firmware.menus.layout.caption_word_order = Some(vec![2]);
+        invalid.push(out_of_range);
+
+        let mut maximum_index = facts();
+        maximum_index.firmware.menus.layout.caption_word_order = Some(vec![u32::MAX]);
+        invalid.push(maximum_index);
+
+        let mut zero_extent = facts();
+        zero_extent.firmware.menus.layout.caption_words = 0;
+        zero_extent.firmware.menus.layout.caption_word_order = Some(vec![0]);
+        invalid.push(zero_extent);
+
+        let mut oversized_extent = facts();
+        oversized_extent.firmware.menus.layout.caption_words = 65;
+        oversized_extent.firmware.menus.layout.caption_word_order = Some(vec![0]);
+        invalid.push(oversized_extent);
+
+        let mut max_extent = facts();
+        max_extent.firmware.menus.layout.caption_words = u32::MAX;
+        max_extent.firmware.menus.layout.caption_word_order = Some(vec![0]);
+        invalid.push(max_extent);
+
+        let mut oversized_order = facts();
+        oversized_order.firmware.menus.layout.caption_words = 64;
+        oversized_order.firmware.menus.layout.caption_word_order =
+            Some((0..65).collect());
+        invalid.push(oversized_order);
+
+        for facts in invalid {
+            assert!(facts.firmware.validate().is_err());
+            let mut backend = Synthetic::new();
+            let mut memory = crate::memory::Memory {
+                backend: &mut backend,
+                facts: &facts,
+                reads: ReadSet::default(),
+                scope: false,
+                depth: 0,
+            };
+            assert!(memory.validate_graph().await.is_err());
+            assert!(memory.reads.stores.is_empty());
+        }
+    });
+}
+
 #[test]
 fn eight_byte_descriptor_and_row_pointers_keep_their_declared_width() {
     futures_lite::future::block_on(async {

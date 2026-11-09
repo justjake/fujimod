@@ -5,7 +5,7 @@ use crate::{
     memory::{Memory, checked_indexed_address, word},
 };
 use fujimod_catalog_controls::InputTarget;
-use fujimod_catalog_remote::RootLayout;
+use fujimod_catalog_remote::{MenuLayout, RootLayout};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 fn field_u64(bytes: &[u8], offset: u32, width: u8) -> Result<u64> {
@@ -52,6 +52,31 @@ fn root_key(bytes: &[u8], offset: usize, width: u8) -> Result<u32> {
 fn root_pointer(bytes: &[u8], offset: usize) -> Result<u32> {
     let offset = u32::try_from(offset).map_err(|_| "root pointer offset exceeds 32 bits")?;
     word(bytes, offset)
+}
+
+fn checked_caption_order(layout: &MenuLayout) -> Result<Vec<u32>> {
+    let words = layout.caption_words;
+    if !(1..=64).contains(&words) {
+        return Err("Invalid caption extent".into());
+    }
+    let order = match &layout.caption_word_order {
+        Some(order) => order.clone(),
+        None if words >= 2 => vec![1, 0],
+        None => vec![0],
+    };
+    if order.is_empty() || order.len() > 64 {
+        return Err("Invalid caption word order extent".into());
+    }
+    let extent = words.checked_mul(4).ok_or("Caption extent overflow")?;
+    let mut seen = BTreeSet::new();
+    for index in &order {
+        let offset = index.checked_mul(4).ok_or("Caption word offset overflow")?;
+        let end = offset.checked_add(4).ok_or("Caption word extent overflow")?;
+        if *index >= words || end > extent || !seen.insert(*index) {
+            return Err("Invalid caption word order".into());
+        }
+    }
+    Ok(order)
 }
 
 #[derive(Clone, Debug)]
@@ -468,29 +493,24 @@ fn unique_row<'a>(node: &'a Node, key: u32, id: &str) -> Result<&'a Row> {
 }
 impl<B: Backend> Memory<'_, B> {
     async fn caption(&mut self, node: &Node, row: &Row) -> Result<String> {
-        let width = self.facts.firmware.menus.layout.caption_words;
         if node.captions == 0 {
             return Ok(String::new());
         }
-        if width == 0 || width > 64 {
-            return Err("Invalid caption extent".into());
-        }
+        let layout = &self.facts.firmware.menus.layout;
+        let order = checked_caption_order(layout)?;
+        let width = layout.caption_words;
+        let stride = width.checked_mul(4).ok_or("Caption stride overflow")?;
         let raw = self
             .bytes(
-                checked_indexed_address(
-                    node.captions,
-                    u64::from(row.index),
-                    u64::from(width) * 4,
-                    0,
-                )?,
-                width as usize * 4,
+                checked_indexed_address(node.captions, u64::from(row.index), u64::from(stride), 0)?,
+                usize::try_from(stride).map_err(|_| "Caption extent exceeds host address space")?,
             )
             .await?;
         let label = String::new();
-        // Caption records store the compact summary first and the full menu
-        // label second. Prefer the full label; summaries can be only an icon
-        // or an abbreviation (for example N versus NORMAL).
-        for offset in (0..width.min(2)).rev().map(|n| n * 4) {
+        // The default prefers the full label over the compact summary.
+        // Other record layouts declare their own field priority explicitly.
+        for index in order {
+            let offset = index.checked_mul(4).ok_or("Caption word offset overflow")?;
             let resource = word(&raw, offset)?;
             if resource == 0 || resource == 0x7ffffffe || resource >= 0xff000000 {
                 continue;

@@ -385,6 +385,11 @@ pub struct MenuLayout {
     pub row_child_width: u8,
     /// Caption words.
     pub caption_words: u32,
+    /// Caption word indices to try in priority order. Omission keeps the legacy
+    /// order: word 1 then word 0 when at least two words are present, otherwise
+    /// word 0.
+    #[serde(default)]
+    pub caption_word_order: Option<Vec<u32>>,
     /// Sentinel.
     pub sentinel: u32,
     /// Max kind.
@@ -445,6 +450,30 @@ impl MenuLayout {
     pub fn validate(&self) -> Result<(), String> {
         if self.size == 0 || self.size > 256 || self.row_size == 0 || self.row_size > 256 {
             return Err("invalid remote menu record extent".into());
+        }
+        if let Some(order) = &self.caption_word_order {
+            if !(1..=64).contains(&self.caption_words)
+                || order.is_empty()
+                || order.len() > 64
+            {
+                return Err("invalid remote caption word order extent".into());
+            }
+            let caption_bytes = self
+                .caption_words
+                .checked_mul(4)
+                .ok_or("remote caption extent overflow")?;
+            let mut seen = BTreeSet::new();
+            for index in order {
+                let offset = index
+                    .checked_mul(4)
+                    .ok_or("remote caption word offset overflow")?;
+                let end = offset
+                    .checked_add(4)
+                    .ok_or("remote caption word extent overflow")?;
+                if *index >= self.caption_words || end > caption_bytes || !seen.insert(*index) {
+                    return Err("invalid remote caption word order".into());
+                }
+            }
         }
         let f = &self.fields;
         let w = &self.field_widths;
