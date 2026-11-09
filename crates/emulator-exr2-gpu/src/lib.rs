@@ -39,6 +39,7 @@ impl Profile {
 }
 use fujimod_emulator_devices::record::Result;
 use fujimod_emulator_devices::{Action, Record, Unsupported, Value, WordMap};
+use fujimod_perf::{DeviceWorkCounter, add_work};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 #[cfg(not(target_os = "emscripten"))]
@@ -478,6 +479,11 @@ pub fn offset(address: u64, size: u32) -> Result<u32> {
     Ok(logical)
 }
 impl CommandProcessor {
+    fn job_started(&mut self) {
+        self.jobs_started += 1;
+        add_work(DeviceWorkCounter::GpuCommandStarts, 1);
+    }
+
     pub fn new_job(&mut self, fields: Fields) -> Job {
         self.new_job_with_receipts(true, || fields)
     }
@@ -1037,7 +1043,7 @@ impl CommandProcessor {
                 });
                 self.last_job = if receipts { Some(job.clone()) } else { None };
                 self.busy = true;
-                self.jobs_started += 1;
+                self.job_started();
                 self.clear_ack_offsets.clear();
                 self.store(GLES_SUBMIT, trigger);
                 self.gpu_gles_lists += 1;
@@ -1104,7 +1110,7 @@ impl CommandProcessor {
         });
         self.last_job = if receipts { Some(job.clone()) } else { None };
         self.busy = true;
-        self.jobs_started += 1;
+        self.job_started();
         self.clear_ack_offsets.clear();
         self.store(GLES_SUBMIT, trigger);
         self.schedule(
@@ -1182,7 +1188,7 @@ impl CommandProcessor {
         let delay = self.delay(count);
         self.busy = true;
         self.store(0x1c, control);
-        self.jobs_started += 1;
+        self.job_started();
         let j = self.new_job_with_receipts(record_receipts, || {
             vec![
                 ("cpu", num(cpu)),
@@ -1343,7 +1349,7 @@ impl CommandProcessor {
         let delay = 2.max(destination_count.div_ceil(self.copy_bytes_per_tick));
         self.busy = true;
         self.store(0xc18, trigger);
-        self.jobs_started += 1;
+        self.job_started();
         let profile = self
             .copy_profile
             .map_or_else(|| Value::constant("native-pixmap"), Profile::value);
@@ -1460,7 +1466,7 @@ impl CommandProcessor {
             ]
         });
         self.busy = true;
-        self.jobs_started += 1;
+        self.job_started();
         self.store(0xc18, trigger);
         self.schedule(
             Completion {
@@ -1786,7 +1792,7 @@ impl CommandProcessor {
         merge(&mut self.fill, &fb);
         self.clear_ack_offsets.clear();
         self.busy = true;
-        self.jobs_started += 1;
+        self.job_started();
         if self.ui() {
             c.compact();
         }
@@ -1883,7 +1889,7 @@ impl CommandProcessor {
                 replace(&mut self.fill, &banks.fill);
                 self.clear_ack_offsets.clear();
                 self.busy = true;
-                self.jobs_started += 1;
+                self.job_started();
                 c.compact();
                 self.last_job = if record_receipts {
                     Some(c.job.clone())
@@ -1928,7 +1934,7 @@ impl CommandProcessor {
         replace(&mut self.fill, &banks.fill);
         self.clear_ack_offsets.clear();
         self.busy = true;
-        self.jobs_started += 1;
+        self.job_started();
         c.compact();
         if record_receipts {
             update(

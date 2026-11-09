@@ -242,6 +242,79 @@ impl ByteCounter {
     }
 }
 
+/// Device and kernel work totals collected during one guide.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DeviceWorkCounter {
+    GpuCommandStarts,
+    GpuReadbackBatches,
+    GpuReadbackSurfaces,
+    GpuReadbackPixels,
+    GpuReadbackBytes,
+    GpuReadbackWaitNs,
+    CoverageBatches,
+    CoverageEdges,
+    RawRows,
+    RawPixels,
+    JpegStarts,
+    JpegMcus,
+    JpegBytes,
+}
+
+impl DeviceWorkCounter {
+    pub const COUNT: usize = 13;
+    pub const ALL: [Self; Self::COUNT] = [
+        Self::GpuCommandStarts,
+        Self::GpuReadbackBatches,
+        Self::GpuReadbackSurfaces,
+        Self::GpuReadbackPixels,
+        Self::GpuReadbackBytes,
+        Self::GpuReadbackWaitNs,
+        Self::CoverageBatches,
+        Self::CoverageEdges,
+        Self::RawRows,
+        Self::RawPixels,
+        Self::JpegStarts,
+        Self::JpegMcus,
+        Self::JpegBytes,
+    ];
+
+    pub fn index(self) -> usize {
+        match self {
+            Self::GpuCommandStarts => 0,
+            Self::GpuReadbackBatches => 1,
+            Self::GpuReadbackSurfaces => 2,
+            Self::GpuReadbackPixels => 3,
+            Self::GpuReadbackBytes => 4,
+            Self::GpuReadbackWaitNs => 5,
+            Self::CoverageBatches => 6,
+            Self::CoverageEdges => 7,
+            Self::RawRows => 8,
+            Self::RawPixels => 9,
+            Self::JpegStarts => 10,
+            Self::JpegMcus => 11,
+            Self::JpegBytes => 12,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::GpuCommandStarts => "gpu_command_starts",
+            Self::GpuReadbackBatches => "gpu_readback_batches",
+            Self::GpuReadbackSurfaces => "gpu_readback_surfaces",
+            Self::GpuReadbackPixels => "gpu_readback_pixels",
+            Self::GpuReadbackBytes => "gpu_readback_bytes",
+            Self::GpuReadbackWaitNs => "gpu_readback_wait_ns",
+            Self::CoverageBatches => "coverage_batches",
+            Self::CoverageEdges => "coverage_edges",
+            Self::RawRows => "raw_rows",
+            Self::RawPixels => "raw_pixels",
+            Self::JpegStarts => "jpeg_starts",
+            Self::JpegMcus => "jpeg_mcus",
+            Self::JpegBytes => "jpeg_bytes",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct GuestProgress {
     pub instructions: u64,
@@ -346,6 +419,7 @@ pub struct GuideSummary {
     pub devices: Vec<DeviceSummary>,
     pub engines: Vec<EngineSummary>,
     pub bytes: BTreeMap<String, u64>,
+    pub device_work: BTreeMap<String, u64>,
     pub counters: Vec<CoreCounters>,
     pub memory: MemorySummary,
 }
@@ -365,6 +439,7 @@ impl GuideSummary {
             devices: Vec::new(),
             engines: Vec::new(),
             bytes: BTreeMap::new(),
+            device_work: BTreeMap::new(),
             counters: Vec::new(),
             memory: MemorySummary::default(),
         }

@@ -11,6 +11,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+fujimod-perf.workspace = true
 fujimod-workspace-hack.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

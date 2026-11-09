@@ -4,6 +4,7 @@
 //! quantizers use the same declared arithmetic. No system image library;
 //! decoding uses the pure Rust zune-jpeg.
 mod tables;
+use fujimod_perf::{DeviceWorkCounter, add_work};
 use tables::*;
 
 /// Entropy output reached the destination capacity. Owners decide how the
@@ -368,6 +369,7 @@ impl Codec {
                 self.block(&mut w, pixels, c, &mut prev[c])?;
             }
         }
+        add_work(DeviceWorkCounter::JpegMcus, mcus as u64);
         w.flush()?;
         w.marker(0xd9)?;
         let at = w.at;

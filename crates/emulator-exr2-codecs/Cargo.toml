@@ -11,6 +11,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+fujimod-perf.workspace = true
 fujimod-emulator-exr2-resources.workspace = true
 fujimod-emulator-exr2-images.workspace = true
 fujimod-emulator-image-processing.workspace = true

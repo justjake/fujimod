@@ -11,6 +11,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+fujimod-perf.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-image-formation.workspace = true
 fujimod-emulator-imaging.workspace = true

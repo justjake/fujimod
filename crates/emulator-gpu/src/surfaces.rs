@@ -16,6 +16,7 @@ use std::{
     task::{Context, Poll, Wake},
 };
 
+use fujimod_perf::{DeviceWorkCounter, add_work, work_timer};
 use wgpu::util::DeviceExt;
 
 const TILE_SIDE: u32 = 8;
@@ -974,6 +975,8 @@ impl Gpu {
             })
             .collect::<Result<Vec<_>, String>>()?;
         if !pending.is_empty() {
+            add_work(DeviceWorkCounter::GpuReadbackBatches, 1);
+            let _wait = work_timer(DeviceWorkCounter::GpuReadbackWaitNs);
             self.device
                 .poll(wgpu::PollType::wait_indefinitely())
                 .map_err(|error| format!("host GPU polling: {error}"))?;
@@ -998,6 +1001,10 @@ impl Gpu {
         }
         #[cfg(target_arch = "wasm32")]
         {
+            if !pending.is_empty() {
+                add_work(DeviceWorkCounter::GpuReadbackBatches, 1);
+            }
+            let _wait = work_timer(DeviceWorkCounter::GpuReadbackWaitNs);
             for readback in &pending {
                 let download = readback
                     .surface
@@ -1011,6 +1018,7 @@ impl Gpu {
                     .clone();
                 wait_for_mapping(&download).await?;
             }
+            drop(_wait);
             self.decode_readbacks(pending)
         }
     }
@@ -1044,6 +1052,12 @@ impl Gpu {
                 4 => decode_pixels::<4>(key, &mapped[..pixel_bytes], &mapped[pixel_bytes..]),
                 _ => unreachable!("checked surface format"),
             };
+            add_work(DeviceWorkCounter::GpuReadbackSurfaces, 1);
+            add_work(
+                DeviceWorkCounter::GpuReadbackPixels,
+                u64::from(key.extent.width) * u64::from(key.extent.height),
+            );
+            add_work(DeviceWorkCounter::GpuReadbackBytes, mapped.len() as u64);
             drop(mapped);
             download.unmap();
             readbacks.push((Arc::clone(&pending.surface), readback));

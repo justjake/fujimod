@@ -1191,6 +1191,8 @@ impl Cpu for Core {
             "limited_translations",
             "translation_flushes",
             "translation_invalidations",
+            "tb_restore_lookups",
+            "tb_restart_lookups",
         ];
         let values = unsafe { std::slice::from_raw_parts(read(self.raw), names.len()) };
         Ok(names.into_iter().zip(values.iter().copied()).collect())
