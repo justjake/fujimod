@@ -13,6 +13,7 @@ mod card;
 mod commands;
 pub(super) mod connection;
 mod install;
+mod memory;
 mod operations;
 mod reader;
 mod restart;
@@ -60,6 +61,11 @@ enum Slot {
     Open(Box<ff80::Session>),
     InFlight(oneshot::Sender<()>),
     ReadingRange(std::sync::Weak<Mutex<reader::State>>),
+    /// A memory handle owns the session; the state holds the native session
+    /// and its staged bulk loan.
+    MemoryOwned(Arc<Mutex<memory::State>>),
+    /// A terminal memory owner: the loan report stays readable, no I/O runs.
+    MemoryAbandoned(Arc<Mutex<memory::State>>),
     Closed,
     CompletionUnknown,
     Abandoned,
@@ -71,9 +77,19 @@ impl Slot {
             Self::Open(_) | Self::CompletionUnknown => {
                 Err(binding_error(BindingError::CompletionUnknown))
             }
+            Self::MemoryOwned(state) => {
+                let fenced = { lock(state)?.fenced() };
+                Err(binding_error(if fenced {
+                    BindingError::CompletionUnknown
+                } else {
+                    BindingError::Busy
+                }))
+            }
             Self::InFlight(_) | Self::ReadingRange(_) => Err(binding_error(BindingError::Busy)),
             Self::Closed => Err(binding_error(BindingError::Closed)),
-            Self::Abandoned => Err(binding_error(BindingError::Abandoned)),
+            Self::Abandoned | Self::MemoryAbandoned(_) => {
+                Err(binding_error(BindingError::Abandoned))
+            }
         }
     }
 }
@@ -195,6 +211,7 @@ pub(super) fn register(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult
     module.add_class::<sequence::CommandSequence>()?;
     install::register(module)?;
     module.add_class::<reader::Reader>()?;
+    memory::register(module)?;
     module.add_function(wrap_pyfunction!(self::discover, module)?)?;
     module.add_function(wrap_pyfunction!(self::discover_proxy, module)?)?;
     module.add_function(wrap_pyfunction!(self::interfaces, module)?)?;

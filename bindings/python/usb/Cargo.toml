@@ -14,6 +14,8 @@ doctest = false
 [features]
 
 [dependencies]
+fujimod-catalog.workspace = true
+fujimod-catalog-bulk.workspace = true
 fujimod-python-usb-base = { path = "../usb-base" }
 fujimod-catalog-workflows.workspace = true
 fujimod-catalog-restart.workspace = true

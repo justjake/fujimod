@@ -179,6 +179,28 @@ are distinct from persistent saves. `diagnostic_query`, `prepare_data_read`,
 `prepare_data_write`, `read_data`, `write_data` and `empty_response` expose separate
 stages without implicit preparation, firmware retries or cleanup.
 
+`await session.memory(profile)` qualifies one firmware's stock bulk-read path
+and keeps the borrowed source for many reads. `profile` is either a frozen
+`usb.BulkProfile.from_json(text)` or one exact bundled firmware ID; a wrong
+type, an unknown ID or facts that fail validation are refused before the
+session is used, and no other source is consulted. The handle is read-only:
+`await memory.read(address, length)` uses the qualified path for any length,
+`await memory.aclose()` restores the borrowed source, and `async with` does the
+same on exit while preserving a body exception (a failed restore becomes a note
+on it). Ordinary session methods, range readers, remote leases and a second
+memory handle report `SessionBusyError` while the loan is active. Once
+completion is unknown they report `CompletionUnknownError` and send no more
+traffic. The session reports `SessionState.MemoryOwned` while the loan is
+active, rather than `Ready`. `session.memory_state`
+(when a loan is attached) and `memory.state` return `phase`, `in_flight`,
+`closed`, `abandoned`, `loan_available` and a `loan` dictionary with the
+borrowed `address`, its `original` bytes and, once selected, the `selected`
+bytes; `loan_available` is false and `loan` is `None` only while the resource is
+in flight, so a settled canceled setup keeps its report. Abandoning the session
+keeps that report, refuses all further requests and never restores or reopens
+anything; dropping a `Memory` handle releases nothing. This handle is native
+only for now; the Pyodide adapter has no fallback for it.
+
 Camera errors have a separate exception type from protocol/transport failures.
 Device-command exceptions retain `command`, `primary` and `secondary` fields;
 failed transfers retain available partial bytes. Diagnostic replies expose a

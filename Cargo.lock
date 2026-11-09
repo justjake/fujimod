@@ -2975,6 +2975,8 @@ dependencies = [
 name = "fujimod-python-usb"
 version = "0.1.0"
 dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-bulk",
  "fujimod-catalog-firmware-identity",
  "fujimod-catalog-restart",
  "fujimod-catalog-workflows",

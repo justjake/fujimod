@@ -47,6 +47,14 @@ impl AsyncSession {
                 ff80::SessionState::Ready => SessionState::Ready,
                 ff80::SessionState::CompletionUnknown => SessionState::CompletionUnknown,
             },
+            Slot::MemoryOwned(state) => {
+                if lock(state)?.fenced() {
+                    SessionState::CompletionUnknown
+                } else {
+                    SessionState::MemoryOwned
+                }
+            }
+            Slot::MemoryAbandoned(_) => SessionState::Abandoned,
             Slot::InFlight(_) => SessionState::InFlight,
             Slot::ReadingRange(_) => SessionState::ReadingRange,
             Slot::Closed => SessionState::Closed,
@@ -90,25 +98,43 @@ impl AsyncSession {
     }
     /// Host cancellation only. Does not close, reset, or stop the camera.
     fn abandon(&self) -> PyResult<()> {
-        let previous = {
+        enum Cancel {
+            Operation(oneshot::Sender<()>),
+            Range(std::sync::Weak<Mutex<reader::State>>),
+            Memory(Arc<Mutex<memory::State>>),
+        }
+        let cancel = {
             let mut slot = lock(&self.inner)?;
             match &*slot {
                 Slot::Closed => return Err(binding_error(BindingError::Closed)),
-                Slot::Abandoned => return Err(binding_error(BindingError::Abandoned)),
-                _ => (),
+                Slot::Abandoned | Slot::MemoryAbandoned(_) => {
+                    return Err(binding_error(BindingError::Abandoned));
+                }
+                // Commit the terminal owner under the slot lock before any
+                // cancellation signal; the loan report stays in the state.
+                Slot::MemoryOwned(state) => {
+                    let state = state.clone();
+                    *slot = Slot::MemoryAbandoned(state.clone());
+                    Cancel::Memory(state)
+                }
+                _ => match std::mem::replace(&mut *slot, Slot::Abandoned) {
+                    Slot::InFlight(cancel) => Cancel::Operation(cancel),
+                    Slot::ReadingRange(reader) => Cancel::Range(reader),
+                    _ => return Ok(()),
+                },
             }
-            std::mem::replace(&mut *slot, Slot::Abandoned)
         };
-        match previous {
-            Slot::InFlight(cancel) => {
+        match cancel {
+            Cancel::Operation(cancel) => {
                 let _ = cancel.send(());
             }
-            Slot::ReadingRange(reader) => {
+            Cancel::Range(reader) => {
                 if let Some(reader) = reader.upgrade() {
                     reader::abandon(&reader)?;
                 }
             }
-            _ => (),
+            // No owner lock is held here.
+            Cancel::Memory(state) => memory::abandon(&state)?,
         }
         Ok(())
     }
