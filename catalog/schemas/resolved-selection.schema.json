@@ -18725,6 +18725,60 @@
             "kind"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Serial NAND flash geometry and device identification, when declared.",
+          "properties": {
+            "jedec_id": {
+              "default": null,
+              "description": "JEDEC identification value, when supplied by the part definition.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "serial-nand-flash",
+              "type": "string"
+            },
+            "page_bytes": {
+              "default": null,
+              "description": "Program-page capacity in bytes, when declared.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "pages_per_block": {
+              "default": null,
+              "description": "Pages per erase block, when declared.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "spare_bytes": {
+              "default": null,
+              "description": "Spare bytes per page, when declared.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
         }
       ]
     },

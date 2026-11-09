@@ -117,14 +117,39 @@ impl Storage {
         Ok(())
     }
 }
-pub struct Aperture(pub Shared);
+/// The flash-storage medium behind the aperture, controller and DMA devices.
+/// Serial NOR keeps the sparse session overlay; serial NAND is die-backed
+/// (parts::nand) with the same linear evidence surface.
+#[derive(Clone)]
+pub enum Medium {
+    Nor(Shared),
+    Nand(crate::nand_storage::NandShared),
+}
+
+impl Medium {
+    pub(crate) fn read_device(&self, offset: u64, n: usize) -> Result<Vec<u8>, String> {
+        match self {
+            Medium::Nor(s) => s.lock().unwrap().read_device(offset, n),
+            Medium::Nand(s) => s.lock().unwrap().read_device(offset, n),
+        }
+    }
+    /// Declared data seeds are a NOR-overlay concept; the NAND die takes none.
+    pub fn seed(&self, offset: u64, value: u8) -> Result<(), String> {
+        match self {
+            Medium::Nor(s) => s.lock().unwrap().seed(offset, value),
+            Medium::Nand(_) => Err("serial NAND storage takes no data seeds".into()),
+        }
+    }
+}
+
+pub struct Aperture(pub Medium);
 impl Device for Aperture {
     fn name(&self) -> &'static str {
         "firmware-flash-storage"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, n: u8) -> u64 {
         let o = address.wrapping_sub(BASE);
-        match self.0.lock().unwrap().read_device(o, n as usize) {
+        match self.0.read_device(o, n as usize) {
             Ok(b) => b
                 .iter()
                 .enumerate()
@@ -139,14 +164,43 @@ impl Device for Aperture {
         cx.fail("CPU write to read-only flash storage aperture");
     }
     fn save(&self) -> Value {
-        serde_json::to_value(&self.0.lock().unwrap().session).unwrap()
+        match &self.0 {
+            Medium::Nor(s) => serde_json::json!({
+                "medium": "nor",
+                "session": serde_json::to_value(&s.lock().unwrap().session).unwrap(),
+            }),
+            Medium::Nand(s) => serde_json::json!({
+                "medium": "nand",
+                "session": serde_json::to_value(&s.lock().unwrap().session).unwrap(),
+            }),
+        }
     }
     fn restore(&mut self, v: &Value) -> Result<(), String> {
-        let session: Session = serde_json::from_value(v.clone())
-            .map_err(|e| format!("invalid flash storage checkpoint: {e}"))?;
-        session.reads.validate(SIZE)?;
-        self.0.lock().unwrap().session = session;
-        Ok(())
+        let medium = v
+            .get("medium")
+            .and_then(Value::as_str)
+            .ok_or("flash storage checkpoint without a medium tag")?;
+        let session = v
+            .get("session")
+            .ok_or("flash storage checkpoint without a session")?;
+        match (medium, &mut self.0) {
+            ("nor", Medium::Nor(s)) => {
+                let session: Session = serde_json::from_value(session.clone())
+                    .map_err(|e| format!("invalid flash storage checkpoint: {e}"))?;
+                session.reads.validate(SIZE)?;
+                s.lock().unwrap().session = session;
+                Ok(())
+            }
+            ("nand", Medium::Nand(s)) => {
+                let session: crate::nand_storage::NandSession =
+                    serde_json::from_value(session.clone())
+                        .map_err(|e| format!("invalid flash storage checkpoint: {e}"))?;
+                session.reads.validate(SIZE)?;
+                s.lock().unwrap().session = session;
+                Ok(())
+            }
+            _ => Err("flash storage checkpoint medium differs from the device".into()),
+        }
     }
 }
 #[cfg(test)]
@@ -156,7 +210,7 @@ mod tests {
     fn guest_reads_are_checkpointed_but_host_inspection_is_observational() {
         use fujimod_emulator_devices::test_host::recording::RecordingHost;
         let storage = Arc::new(Mutex::new(Storage::new(vec![0xa5; 16]).unwrap()));
-        let mut aperture = Aperture(storage.clone());
+        let mut aperture = Aperture(Medium::Nor(storage.clone()));
         let mut host = RecordingHost::default();
         assert_eq!(
             aperture.read(&mut Cx::new(&mut host, 0, 0, 0), BASE + 4, 4),
@@ -164,6 +218,7 @@ mod tests {
         );
         assert_eq!(storage.lock().unwrap().session.reads.ranges, [(4, 8)]);
         let saved = aperture.save();
+        assert_eq!(saved["medium"], "nor");
         for _ in 0..2 {
             storage.lock().unwrap().read(0, 16).unwrap();
             aperture.save();
@@ -175,7 +230,7 @@ mod tests {
         aperture.restore(&saved).unwrap();
         assert_eq!(aperture.save(), saved);
         let mut invalid = saved;
-        invalid["reads"]["ranges"] = serde_json::json!([[SIZE, SIZE + 1]]);
+        invalid["session"]["reads"]["ranges"] = serde_json::json!([[SIZE, SIZE + 1]]);
         assert!(aperture.restore(&invalid).is_err());
         assert!(storage.lock().unwrap().read_device(SIZE - 1, 2).is_err());
         assert_eq!(storage.lock().unwrap().session.reads.bytes, 4);

@@ -218,6 +218,22 @@ pub enum PeripheralPart {
         #[serde(default)]
         page_bytes: Option<u64>,
     },
+
+    /// Serial NAND flash geometry and device identification, when declared.
+    SerialNandFlash {
+        /// JEDEC identification value, when supplied by the part definition.
+        #[serde(default)]
+        jedec_id: Option<u32>,
+        /// Program-page capacity in bytes, when declared.
+        #[serde(default)]
+        page_bytes: Option<u64>,
+        /// Pages per erase block, when declared.
+        #[serde(default)]
+        pages_per_block: Option<u64>,
+        /// Spare bytes per page, when declared.
+        #[serde(default)]
+        spare_bytes: Option<u64>,
+    },
 }
 
 /// A command accepted by a lens stabilizer endpoint.
