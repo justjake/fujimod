@@ -341,10 +341,10 @@ impl<B: Backend> Memory<'_, B> {
             if code == 0 {
                 return String::from_utf16(&units).map_err(|e| e.to_string());
             }
-            if u32::from(code) >= r.glyph_first && u32::from(code) <= r.glyph_last {
-                continue;
-            }
-            if u32::from(code) >= r.private_text_first && u32::from(code) <= r.private_text_last {
+            let glyph = (r.glyph_first..=r.glyph_last).contains(&u32::from(code));
+            if !glyph
+                && (r.private_text_first..=r.private_text_last).contains(&u32::from(code))
+            {
                 code = (u32::from(code) - r.private_text_bias) as u16;
             }
             units.push(code);

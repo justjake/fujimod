@@ -697,6 +697,19 @@ fn set_root_caption_words(backend: &mut Synthetic, word_count: u32, words: &[u32
     }
 }
 
+#[cfg(test)]
+fn set_supplementary_caption(backend: &mut Synthetic, facts: &Facts, resource: u32, units: &[u16]) {
+    let layout = &facts.firmware.resources;
+    assert!(resource >= layout.supplementary_first);
+    let address = layout.supplementary_address
+        + u64::from(resource - layout.supplementary_first) * u64::from(layout.supplementary_stride);
+    let address = usize::try_from(address).unwrap();
+    for (index, unit) in units.iter().enumerate() {
+        let offset = address + index * 2;
+        backend.bytes[offset..offset + 2].copy_from_slice(&unit.to_le_bytes());
+    }
+}
+
 #[test]
 fn type_code_json_requires_explicit_null_to_disable_and_preserves_numeric_offsets() {
     let numeric = serde_json::to_value(facts()).unwrap();
@@ -821,7 +834,7 @@ fn explicit_caption_word_order_can_prefer_a_later_word() {
 }
 
 #[test]
-fn caption_word_order_skips_icons_zero_sentinel_and_empty_text() {
+fn caption_word_order_skips_invalid_resources_and_empty_text() {
     futures_lite::future::block_on(async {
         let mut facts = facts();
         facts.firmware.menus.layout.caption_words = 5;
@@ -839,6 +852,79 @@ fn caption_word_order_skips_icons_zero_sentinel_and_empty_text() {
             .await
             .unwrap();
         assert_eq!(result.menu().unwrap().label, "SETTING");
+    });
+}
+
+#[test]
+fn glyph_only_caption_is_preserved_as_an_opaque_identity_and_wins_priority() {
+    futures_lite::future::block_on(async {
+        let mut facts = packed_menu_facts();
+        facts.firmware.menus.layout.caption_word_order = Some(vec![0, 1]);
+        let mut backend = packed_menu_backend();
+        backend.word(12544, 16);
+        backend.word(12548, 28704);
+        let glyphs = [0xf056, b' ' as u16, 0xf062, 0xf060, 0xf1f3, 0];
+        set_supplementary_caption(&mut backend, &facts, 16, &glyphs);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let nested = menu("secondary")
+            .with_key(7)
+            .via(menu("shooting").with_key(10));
+        let snapshot = remote.read(&nested.into()).await.unwrap();
+        let exact = "\u{f056} \u{f062}\u{f060}\u{f1f3}";
+        assert_eq!(snapshot.menu().unwrap().label, exact);
+
+        let item = menu("shooting").with_key(10);
+        let result = remote
+            .read(&option(item.clone(), exact).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, exact);
+
+        let error = remote
+            .read(&option(item, "OFF").into())
+            .await
+            .unwrap_err();
+        assert!(error.contains("0 matches"), "{error}");
+    });
+}
+
+#[test]
+fn mixed_caption_preserves_normal_private_and_glyph_units_for_exact_option_matching() {
+    futures_lite::future::block_on(async {
+        let mut facts = packed_menu_facts();
+        facts.firmware.menus.layout.caption_word_order = Some(vec![0, 1]);
+        let mut backend = packed_menu_backend();
+        backend.word(12544, 16);
+        backend.word(12548, 28704);
+        let units = [
+            b'N' as u16,
+            0xe150,
+            0xf056,
+            b' ' as u16,
+            b'F' as u16,
+            b' ' as u16,
+            b' ' as u16,
+            0,
+            0xf060,
+            b'X' as u16,
+        ];
+        set_supplementary_caption(&mut backend, &facts, 16, &units);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let item = menu("shooting").with_key(10);
+        let exact = "NP\u{f056} F  ";
+
+        let result = remote
+            .read(&option(item.clone(), exact).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, exact);
+
+        let error = remote
+            .read(&option(item, "NP F").into())
+            .await
+            .unwrap_err();
+        assert!(error.contains("0 matches"), "{error}");
     });
 }
 

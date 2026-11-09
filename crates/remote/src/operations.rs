@@ -273,7 +273,8 @@ pub async fn wait_until_stable_memory<R: Remote + ?Sized>(
 /// The physical control for one navigation step, by the body's canonical IDs.
 ///
 /// MENU/OK opens menus and confirms; bodies without a separate MENU/OK button
-/// press the selector's center. Directions are the selector's members.
+/// press the selector's center. Directions may be separate buttons or members
+/// of the selector pad, as declared by the body.
 fn navigation_control(facts: &Facts, step: &str) -> Result<Control> {
     let controls = &facts.physical_controls;
     let id = match step {
@@ -282,7 +283,14 @@ fn navigation_control(facts: &Facts, step: &str) -> Result<Control> {
         }
         "menu" | "ok" => "selector".into(),
         "back" => "disp_back_button".into(),
-        "up" | "down" | "left" | "right" => format!("selector.{step}"),
+        "up" | "down" | "left" | "right" => {
+            let button = format!("selector_{step}_button");
+            if controls.controls.contains_key(&button) {
+                button
+            } else {
+                format!("selector.{step}")
+            }
+        }
         other => return Err(format!("Unknown navigation step {other}")),
     };
     controls.control(&id)?;
@@ -534,5 +542,45 @@ pub async fn screenshot<R: Remote + ?Sized>(r: &mut R, deadline: u64) -> Result<
             ));
         }
         r.wait(&frame.completion_reads, deadline).await?;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn navigation_resolves_declared_pad_directions() {
+        let facts = crate::testing::facts();
+        for direction in ["up", "down", "left", "right"] {
+            let resolved = navigation_control(&facts, direction).unwrap();
+            assert_eq!(resolved.id(), format!("selector.{direction}"));
+        }
+    }
+
+    #[test]
+    fn navigation_resolves_separate_direction_buttons() {
+        let mut facts = crate::testing::facts();
+        let mut document = serde_json::to_value(&facts.physical_controls).unwrap();
+        let controls = document["controls"].as_object_mut().unwrap();
+        let pad = controls.remove("selector").unwrap();
+        for direction in ["up", "down", "left", "right"] {
+            let mut button = controls["menu_ok_button"].clone();
+            button["behavior"]["press"] = pad["behavior"]["directions"][direction].clone();
+            controls.insert(format!("selector_{direction}_button"), button);
+        }
+        facts.physical_controls = serde_json::from_value(document).unwrap();
+        for direction in ["up", "down", "left", "right"] {
+            let resolved = navigation_control(&facts, direction).unwrap();
+            assert_eq!(resolved.id(), format!("selector_{direction}_button"));
+        }
+    }
+
+    #[test]
+    fn navigation_refuses_an_undeclared_direction() {
+        let mut facts = crate::testing::facts();
+        facts.physical_controls.controls.remove("selector");
+        assert!(navigation_control(&facts, "left").is_err());
+        assert!(navigation_control(&facts, "diagonal").is_err());
     }
 }

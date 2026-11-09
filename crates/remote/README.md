@@ -19,6 +19,10 @@ and its own read set, so a wait on menu state never wakes for readiness reads.
 `operations::wait_ready` waits for it; Python exposes `Camera.readiness()` and
 `Camera.wait_until_ready(deadline=...)`.
 
+Menu navigation uses the body's declared direction buttons when present
+(`selector_left_button`, for example), or the corresponding member of its
+selector pad (`selector.left`). An undeclared direction is refused.
+
 Firmware state facts declare the byte widths of UI mode, system mode,
 menu-active, pending-mode and menu-node fields in `state.widths`. Pending input
 and readiness override have `state.readiness.input_pending_width` and
@@ -70,7 +74,11 @@ more words, otherwise word 0). An explicit order lists only the word indices
 the resolver tries, in priority order; it must be nonempty, contain unique
 indices below `caption_words`, and use a valid 1–64 word extent.
 Empty or whitespace-only decoded captions are skipped. A caption containing
-text retains its original spacing.
+text retains its original spacing. UTF-16 units within the declared glyph range
+are preserved in the decoded string as their literal private-use Unicode
+characters, in their original order with surrounding spaces. They are opaque
+glyph identities, not inferred names; exact option matching includes them, so
+the visible text alone does not match a caption that also contains glyphs.
 
 Build `Facts` with `Facts::from_selection(&selection, manifest)`. A reference is
 resolved on every use; duplicate or missing rows and option names produce an
@@ -80,9 +88,10 @@ option identities come from the installed build's menu manifest.
 
 The bundled X-T20 2.11 profile supplies packed state/menu/status layouts, live
 text and icon-font registry bindings, and a premultiplied RGBA scanout. Q-grid
-geometry and unused observation metadata remain explicit null. A glyph-only
-caption has no plain-text option name; explicit row keys still identify those
-menu entries without assigning an invented label.
+geometry and unused observation metadata remain explicit null. Glyph-only
+captions can be selected by their exact literal PUA sequence. The sequence is
+an opaque identity, not a semantic translation or a promise that this API can
+render the native icon font.
 
 Each observation reads the root map, then loads only the requested descriptors,
 explicit `via` path, declared parent candidates and applicable parent chain.
