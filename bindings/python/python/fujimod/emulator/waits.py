@@ -174,7 +174,7 @@ def wait_steps(board: WaitBoard, predicate: Callable[[], T], description: str, *
     polls = 0
     wait_counter = perf.begin_wait(description)
     properties = dict(instructions=0, ticks=0, polls=0, continuations=0)
-    with perf.span('wait', wait_kind(description), properties):
+    with perf.span('wait', wait_kind(description), properties, wait_counter=wait_counter):
       try:
         while True:
             board.native.read_set_begin()

@@ -45,20 +45,25 @@ fn set_cpu_counters(snapshot: &str) -> PyResult<()> {
 }
 
 #[pyfunction]
-#[pyo3(signature = (kind, wait=None, instructions=0, ticks=0))]
+#[pyo3(signature = (kind, wait=None, instructions=0, ticks=0, wait_counter=None))]
 fn begin_span(
     kind: &str,
     wait: Option<&str>,
     instructions: u64,
     ticks: u64,
+    wait_counter: Option<usize>,
 ) -> PyResult<bool> {
     let kind = SpanKind::parse(kind, wait).map_err(error)?;
+    if wait_counter.is_some() && kind.wait().is_none() {
+        return Err(error("wait counters are only valid for wait spans"));
+    }
     Ok(fujimod_perf::begin_span(
         kind,
         GuestProgress {
             instructions,
             ticks,
         },
+        wait_counter,
     ))
 }
 

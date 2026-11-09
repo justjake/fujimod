@@ -21,11 +21,11 @@ from fujimod.emulator.waits import (
 def observed_spans(records):
     """Capture the span category and final properties without a native build."""
     @contextmanager
-    def span(kind, wait=None, properties=None):
+    def span(kind, wait=None, properties=None, wait_counter=None):
         try:
             yield
         finally:
-            records.append((kind, wait, dict(properties or {})))
+            records.append((kind, wait, dict(properties or {}), wait_counter))
     with patch.object(waits.perf, 'span', span):
         yield
 
@@ -84,12 +84,14 @@ class Board:
 def test_read_set_changes_after_short_circuit_and_tracks_device_reads():
     board = Board()
     records = []
-    with observed_spans(records):
-        assert wait_until(board, lambda: board.read(8) >= 3 and board.device('timer') >= 6,
-                          'dependent', instruction_limit=20)
+    with patch.object(waits.perf, 'begin_wait', return_value=42) as begin_wait:
+        with observed_spans(records):
+            assert wait_until(board, lambda: board.read(8) >= 3 and board.device('timer') >= 6,
+                              'dependent', instruction_limit=20)
+    begin_wait.assert_called_once_with('dependent')
     assert board.calls == [(20, None, [(8,12)], []), (17, None, [(8,12)], ['timer'])]
     assert records == [('wait', 'other', dict(instructions=6, ticks=6, polls=3,
-                                              continuations=2))]
+                                              continuations=2), 42)]
     assert board.native.stop_calls == 0
 
 

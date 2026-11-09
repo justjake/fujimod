@@ -333,5 +333,8 @@ pub struct WaitSummary {
     pub description: String,
     pub predicate_evaluations: u64,
     pub continuations: u64,
+    pub instructions: u64,
+    pub ticks: u64,
+    pub thread_cpu_ns: u64,
     pub stops: BTreeMap<String, u64>,
 }

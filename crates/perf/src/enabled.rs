@@ -102,6 +102,9 @@ struct WaitCounts {
     description: String,
     predicate_evaluations: u64,
     continuations: u64,
+    instructions: u64,
+    ticks: u64,
+    thread_cpu_ns: u64,
     stops: BTreeMap<String, u64>,
     device_stops: BTreeMap<String, u64>,
 }
@@ -300,7 +303,7 @@ pub fn begin_guide(id: &str) {
             *slot.borrow_mut() = Some(guard);
         });
     }
-    begin_span(SpanKind::Guide, GuestProgress::default());
+    begin_span(SpanKind::Guide, GuestProgress::default(), None);
 }
 
 /// Count a predicate evaluation for an interned wait description.
@@ -395,6 +398,9 @@ pub fn end_guide() -> GuideSummary {
                 description: counts.description.clone(),
                 predicate_evaluations: counts.predicate_evaluations,
                 continuations: counts.continuations,
+                instructions: counts.instructions,
+                ticks: counts.ticks,
+                thread_cpu_ns: counts.thread_cpu_ns,
                 stops,
             }
         }).collect();
@@ -606,16 +612,18 @@ pub fn span(kind: SpanKind) -> SpanGuard {
 
 struct PendingSpan {
     index: usize,
+    wait_counter: Option<usize>,
     start_raw: u64,
     start_thread_ns: u64,
     guest_start: GuestProgress,
     span: SpanHandle,
 }
 
-pub fn begin_span(kind: SpanKind, guest: GuestProgress) -> bool {
+pub fn begin_span(kind: SpanKind, guest: GuestProgress, wait_counter: Option<usize>) -> bool {
     if !ACTIVE.load(Ordering::Relaxed) {
         return false;
     }
+    debug_assert!(wait_counter.is_none() || kind.wait().is_some());
     let name = match kind.wait() {
         Some(wait) => format!("wait.{}", wait.name()),
         None => kind.name().to_owned(),
@@ -624,6 +632,7 @@ pub fn begin_span(kind: SpanKind, guest: GuestProgress) -> bool {
     PENDING_SPANS.with(|pending| {
         pending.borrow_mut().push(PendingSpan {
             index: kind.index(),
+            wait_counter,
             start_raw: raw_now(),
             start_thread_ns: thread_cpu_ns_now(),
             guest_start: guest,
@@ -653,13 +662,25 @@ pub fn end_span(guest: GuestProgress, properties: &[(&str, u64)]) {
             )))
     });
     let elapsed = elapsed_raw(pending.start_raw);
-    record_span(
-        pending.index,
-        elapsed,
-        thread_cpu_ns,
-        guest.delta(pending.guest_start),
-    );
+    let guest = guest.delta(pending.guest_start);
+    record_span(pending.index, elapsed, thread_cpu_ns, guest);
+    if let Some(index) = pending.wait_counter {
+        record_wait_span(index, guest, thread_cpu_ns);
+    }
     drop(pending);
+}
+
+fn record_wait_span(index: usize, guest: GuestProgress, thread_cpu_ns: u64) {
+    if !ACTIVE.load(Ordering::Relaxed) || index == usize::MAX {
+        return;
+    }
+    let mut ledger = WAITS.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(wait) = ledger.waits.get_mut(index) else {
+        return;
+    };
+    wait.instructions = wait.instructions.saturating_add(guest.instructions);
+    wait.ticks = wait.ticks.saturating_add(guest.ticks);
+    wait.thread_cpu_ns = wait.thread_cpu_ns.saturating_add(thread_cpu_ns);
 }
 
 fn record_span(index: usize, elapsed_raw: u64, thread_cpu_ns: u64, guest: GuestProgress) {
@@ -1044,6 +1065,37 @@ mod tests {
         record_wait_evaluation(display);
         record_wait_stop(display, "device-publication", Some("display-timing"));
         record_wait_stop(display, "deadline", None);
+        let start = GuestProgress {
+            instructions: 10,
+            ticks: 20,
+        };
+        assert!(begin_span(
+            SpanKind::Wait(WaitKind::OsdFrame),
+            start,
+            Some(display),
+        ));
+        end_span(
+            GuestProgress {
+                instructions: 30,
+                ticks: 70,
+            },
+            &[],
+        );
+        assert!(begin_span(
+            SpanKind::Wait(WaitKind::OsdFrame),
+            GuestProgress {
+                instructions: 30,
+                ticks: 70,
+            },
+            Some(display),
+        ));
+        end_span(
+            GuestProgress {
+                instructions: 35,
+                ticks: 80,
+            },
+            &[],
+        );
         let menu = begin_wait("menu ready");
         record_wait_evaluation(menu);
         let summary = end_guide();
@@ -1052,6 +1104,10 @@ mod tests {
         assert_eq!(wait.continuations, 2);
         assert_eq!(wait.stops.get("device:display-timing"), Some(&1));
         assert_eq!(wait.stops.get("deadline"), Some(&1));
+        assert_eq!((wait.instructions, wait.ticks), (25, 60));
+        let wait_span = summary.spans.iter().find(|span| span.kind == "wait" && span.wait.as_deref() == Some("osd_frame")).unwrap();
+        assert_eq!((wait.instructions, wait.ticks), (wait_span.instructions, wait_span.ticks));
+        assert_eq!(wait.thread_cpu_ns, wait_span.thread_cpu_ns);
         assert_eq!(summary.waits.iter().find(|wait| wait.description == "menu ready").unwrap().predicate_evaluations, 1);
     }
 
@@ -1063,8 +1119,8 @@ mod tests {
             instructions: 7,
             ticks: 9,
         };
-        assert!(begin_span(SpanKind::Wait(WaitKind::OsdFrame), start));
-        assert!(begin_span(SpanKind::Capture, start));
+        assert!(begin_span(SpanKind::Wait(WaitKind::OsdFrame), start, None));
+        assert!(begin_span(SpanKind::Capture, start, None));
         end_span(
             GuestProgress {
                 instructions: 9,
