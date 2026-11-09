@@ -103,6 +103,14 @@ second time. This captures the selected memory layer; it does not establish
 that sensor video is present or that the buffer remained unchanged between
 the two pointer observations.
 
+Firmware facts keep the live cursor offset and FF80 pointer, mask, geometry,
+stride and pixel format explicit. Other cursor offsets and scanout address,
+instance, layer and channel metadata are required keys that may be explicitly
+`null` when they are not established. `BoardRemote` requires a declared
+scanout instance before it borrows a session; FF80 frame decoding does not use
+the optional scanout metadata. Quick-menu geometry is also a required key that
+may be `null` when unknown. A missing key is still an invalid facts record.
+
 Python exposes the same futures through `fujimod.remote.Camera` and
 `camera.blocking`. `menu(id, key=..., via=...)`, `option(item, name)` and
 `control(id)` create references without a connection. Async operations yield to

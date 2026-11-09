@@ -110,6 +110,10 @@ fn shared_ff80_frame_decodes_premultiplied_rgba_without_reprocessing_alpha() {
         let mut facts = facts();
         facts.firmware.scanout.pixel_format =
             fujimod_catalog_remote::PixelFormat::Rgba8888Premultiplied;
+        facts.firmware.scanout.address = None;
+        facts.firmware.scanout.instance = None;
+        facts.firmware.scanout.layer = None;
+        facts.firmware.scanout.channel = None;
         let mut remote = Ff80Remote::new(session, facts, options()).unwrap();
         let capture = crate::RemoteReader::frame(&mut remote).await.unwrap();
         assert_eq!(capture.frame.pixels(), &[17, 29, 43]);

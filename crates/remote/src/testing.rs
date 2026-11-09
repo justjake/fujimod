@@ -655,6 +655,39 @@ fn packed_descriptor_and_byte_rows_traverse_sparse_keyed_roots() {
     });
 }
 
+#[test]
+fn observation_works_without_unestablished_cursor_and_scanout_metadata() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        let cursor = &mut facts.firmware.menus.cursor.fields;
+        cursor.pointer = None;
+        cursor.subcursor = None;
+        cursor.visible_count = None;
+        cursor.value_cursor = None;
+        cursor.raw_count = None;
+        cursor.filtered_count = None;
+        facts.firmware.scanout.address = None;
+        facts.firmware.scanout.instance = None;
+        facts.firmware.scanout.layer = None;
+        facts.firmware.scanout.channel = None;
+        facts.firmware.menus.q_grid = None;
+        facts.validate().unwrap();
+
+        let mut backend = Synthetic::new();
+        backend.active(4096, 0);
+        backend.word(544, 3);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let result = remote
+            .read(&menu("shooting").with_key(10).into())
+            .await
+            .unwrap();
+        assert_eq!(result.state.current_key, Some(10));
+        let snapshot = result.menu().unwrap();
+        assert!(!snapshot.visible);
+        assert!(!snapshot.enabled);
+    });
+}
+
 #[cfg(test)]
 fn set_root_caption_words(backend: &mut Synthetic, word_count: u32, words: &[u32]) {
     assert_eq!(usize::try_from(word_count).unwrap(), words.len());

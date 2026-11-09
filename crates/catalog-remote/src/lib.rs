@@ -236,8 +236,10 @@ pub struct MenuTables {
     pub cursor_address: u64,
     /// Cursor and row status layout.
     pub cursor: CursorLayout,
-    /// Quick menu geometry and menu ID.
-    pub q_grid: QuickGrid,
+    /// Quick menu geometry and menu ID, or null when this metadata is unknown.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_quick_grid_schema"))]
+    pub q_grid: Option<QuickGrid>,
 }
 
 /// Representation of the live root table.
@@ -551,7 +553,7 @@ pub struct MenuFields {
     /// Root key decoded from the descriptor.
     pub menu_id: u32,
     /// Declared type-code offset, or `null` when descriptors have no type field.
-    #[serde(deserialize_with = "deserialize_required_nullable_type_code")]
+    #[serde(deserialize_with = "deserialize_required_nullable")]
     #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
     pub type_code: Option<u32>,
     /// Setting id.
@@ -568,19 +570,27 @@ pub struct MenuFields {
     pub handlers_pointer: u32,
 }
 
-fn deserialize_required_nullable_type_code<'de, D>(
+fn deserialize_required_nullable<'de, D, T>(
     deserializer: D,
-) -> std::result::Result<Option<u32>, D::Error>
+) -> std::result::Result<Option<T>, D::Error>
 where
     D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
 {
-    Option::<u32>::deserialize(deserializer)
+    Option::<T>::deserialize(deserializer)
 }
 
 #[cfg(feature = "schema")]
 fn nullable_u32_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
     schemars::json_schema!({
         "anyOf": [generator.subschema_for::<u32>(), {"type": "null"}]
+    })
+}
+
+#[cfg(feature = "schema")]
+fn nullable_u64_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "anyOf": [generator.subschema_for::<u64>(), {"type": "null"}]
     })
 }
 
@@ -596,7 +606,7 @@ fn nullable_u32_schema(generator: &mut schemars::SchemaGenerator) -> schemars::S
 pub struct CursorLayout {
     /// Cursor byte size.
     pub size: u32,
-    /// Cursor word offsets.
+    /// Offsets for declared cursor fields.
     pub fields: CursorFields,
     /// Status byte offset from the cursor base; begins after `size`.
     pub status_offset: u32,
@@ -606,7 +616,7 @@ pub struct CursorLayout {
     pub status_width: u32,
 }
 
-/// Live cursor word offsets.
+/// Offsets for declared cursor fields; unknown unused offsets remain null.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -616,20 +626,32 @@ pub struct CursorLayout {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct CursorFields {
-    /// Pointer.
-    pub pointer: u32,
-    /// Cursor.
+    /// Pointer field offset, or null when this offset is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub pointer: Option<u32>,
+    /// Current cursor field offset.
     pub cursor: u32,
-    /// Subcursor.
-    pub subcursor: u32,
-    /// Visible count.
-    pub visible_count: u32,
-    /// Value cursor.
-    pub value_cursor: u32,
-    /// Raw count.
-    pub raw_count: u32,
-    /// Filtered count.
-    pub filtered_count: u32,
+    /// Subcursor field offset, or null when this offset is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub subcursor: Option<u32>,
+    /// Visible-count field offset, or null when this offset is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub visible_count: Option<u32>,
+    /// Value-cursor field offset, or null when this offset is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub value_cursor: Option<u32>,
+    /// Raw-count field offset, or null when this offset is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub raw_count: Option<u32>,
+    /// Filtered-count field offset, or null when this offset is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub filtered_count: Option<u32>,
 }
 
 /// Quick menu dimensions.
@@ -650,6 +672,13 @@ pub struct QuickGrid {
     pub menu_code: u32,
 }
 
+#[cfg(feature = "schema")]
+fn nullable_quick_grid_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "anyOf": [generator.subschema_for::<QuickGrid>(), {"type": "null"}]
+    })
+}
+
 /// A located framebuffer and its live selection pointer.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -660,8 +689,10 @@ pub struct QuickGrid {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct Scanout {
-    /// Address.
-    pub address: u64,
+    /// Observed framebuffer address, or null when this metadata is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u64_schema"))]
+    pub address: Option<u64>,
     /// Width.
     pub width: u32,
     /// Height.
@@ -670,12 +701,18 @@ pub struct Scanout {
     pub pixel_format: PixelFormat,
     /// Stride bytes.
     pub stride_bytes: u32,
-    /// Instance.
-    pub instance: u32,
-    /// Layer.
-    pub layer: u32,
-    /// Channel.
-    pub channel: u32,
+    /// Display instance required by board-backed frame capture, or null when unavailable.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub instance: Option<u32>,
+    /// Observed display layer, or null when this metadata is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub layer: Option<u32>,
+    /// Observed display channel, or null when this metadata is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub channel: Option<u32>,
     /// Pointer address.
     pub pointer_address: u64,
     /// Address mask.
@@ -1338,8 +1375,9 @@ impl FirmwareFacts {
         let m = &self.menus;
         if m.cursor.size < 32
             || m.cursor_address == 0
-            || m.q_grid.rows == 0
-            || m.q_grid.columns == 0
+            || m.q_grid
+                .as_ref()
+                .is_some_and(|grid| grid.rows == 0 || grid.columns == 0)
         {
             return Err("invalid remote menu layout or roots".into());
         }
@@ -1369,27 +1407,26 @@ impl FirmwareFacts {
             _ => {}
         }
         let cursor = &m.cursor.fields;
-        for (width, offsets) in [(
-            m.cursor.size,
-            vec![
+        let mut offsets = vec![cursor.cursor];
+        offsets.extend(
+            [
                 cursor.pointer,
-                cursor.cursor,
                 cursor.subcursor,
                 cursor.visible_count,
                 cursor.value_cursor,
                 cursor.raw_count,
                 cursor.filtered_count,
-            ],
-        )] {
-            let unique: BTreeSet<_> = offsets.iter().copied().collect();
-            if width < 4
-                || unique.len() != offsets.len()
-                || offsets
-                    .iter()
-                    .any(|offset| offset % 4 != 0 || *offset > width - 4)
-            {
-                return Err("remote menu field offset exceeds its record or overlaps".into());
-            }
+            ]
+            .into_iter()
+            .flatten(),
+        );
+        let unique: BTreeSet<_> = offsets.iter().copied().collect();
+        if unique.len() != offsets.len()
+            || offsets
+                .iter()
+                .any(|offset| offset % 4 != 0 || *offset > m.cursor.size - 4)
+        {
+            return Err("remote menu field offset exceeds its record or overlaps".into());
         }
         if !matches!(m.cursor.status_width, 1 | 2 | 4 | 8)
             || m.cursor.status_stride < m.cursor.status_width

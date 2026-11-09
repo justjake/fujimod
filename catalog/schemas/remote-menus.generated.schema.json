@@ -2,49 +2,91 @@
   "$defs": {
     "CursorFields": {
       "additionalProperties": false,
-      "description": "Live cursor word offsets.",
+      "description": "Offsets for declared cursor fields; unknown unused offsets remain null.",
       "properties": {
         "cursor": {
-          "description": "Cursor.",
+          "description": "Current cursor field offset.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
         },
         "filtered_count": {
-          "description": "Filtered count.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Filtered-count field offset, or null when this offset is not established."
         },
         "pointer": {
-          "description": "Pointer.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Pointer field offset, or null when this offset is not established."
         },
         "raw_count": {
-          "description": "Raw count.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Raw-count field offset, or null when this offset is not established."
         },
         "subcursor": {
-          "description": "Subcursor.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Subcursor field offset, or null when this offset is not established."
         },
         "value_cursor": {
-          "description": "Value cursor.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Value-cursor field offset, or null when this offset is not established."
         },
         "visible_count": {
-          "description": "Visible count.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Visible-count field offset, or null when this offset is not established."
         }
       },
       "required": [
@@ -64,7 +106,7 @@
       "properties": {
         "fields": {
           "$ref": "#/$defs/CursorFields",
-          "description": "Cursor word offsets."
+          "description": "Offsets for declared cursor fields."
         },
         "size": {
           "description": "Cursor byte size.",
@@ -539,8 +581,15 @@
       "type": "object"
     },
     "q_grid": {
-      "$ref": "#/$defs/QuickGrid",
-      "description": "Quick menu geometry and menu ID."
+      "anyOf": [
+        {
+          "$ref": "#/$defs/QuickGrid"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Quick menu geometry and menu ID, or null when this metadata is unknown."
     },
     "roles": {
       "additionalProperties": {

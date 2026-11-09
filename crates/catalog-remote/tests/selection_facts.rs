@@ -20,6 +20,59 @@ fn nullable_type_code_is_required_and_accepts_integer_or_null_in_schema() {
     }));
 }
 
+#[cfg(feature = "schema")]
+#[test]
+fn observation_metadata_schemas_require_each_nullable_key() {
+    fn required_nullable(schema: &serde_json::Value, name: &str) {
+        assert!(schema["required"].as_array().unwrap().iter().any(|item| item == name));
+        let alternatives = schema["properties"][name]["anyOf"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{name} schema should admit explicit null"));
+        assert!(alternatives.iter().any(|item| item["type"] == "null"));
+        assert!(alternatives.iter().any(|item| {
+            item["type"] == "integer" || item.get("$ref").is_some()
+        }));
+    }
+
+    let cursor = serde_json::to_value(schemars::schema_for!(
+        fujimod_catalog_remote::CursorFields
+    ))
+    .unwrap();
+    for name in [
+        "pointer",
+        "subcursor",
+        "visible_count",
+        "value_cursor",
+        "raw_count",
+        "filtered_count",
+    ] {
+        required_nullable(&cursor, name);
+    }
+    assert!(cursor["required"].as_array().unwrap().iter().any(|item| item == "cursor"));
+    assert_eq!(cursor["properties"]["cursor"]["type"], "integer");
+
+    let scanout = serde_json::to_value(schemars::schema_for!(
+        fujimod_catalog_remote::Scanout
+    ))
+    .unwrap();
+    for name in ["address", "instance", "layer", "channel"] {
+        required_nullable(&scanout, name);
+    }
+
+    let menus = serde_json::to_value(schemars::schema_for!(
+        fujimod_catalog_remote::MenuTables
+    ))
+    .unwrap();
+    assert!(menus["required"].as_array().unwrap().iter().any(|item| item == "q_grid"));
+    let alternatives = menus["properties"]["q_grid"]["anyOf"]
+        .as_array()
+        .expect("q_grid schema should admit explicit null");
+    assert!(alternatives.iter().any(|item| item["type"] == "null"));
+    assert!(alternatives
+        .iter()
+        .any(|item| item["type"] == "object" || item.get("$ref").is_some()));
+}
+
 fn remote_selection<'a>(selection: &'a fujimod_catalog::ResolvedSelection) -> Selection<'a> {
     let generated = selection.firmware.generated_facts.as_ref();
     Selection {
@@ -40,6 +93,124 @@ fn remote_selection<'a>(selection: &'a fujimod_catalog::ResolvedSelection) -> Se
             .map(|connection| connection.id.as_str())
             .collect(),
     }
+}
+
+fn selected_remote_facts() -> Facts {
+    let selected = ReferenceCatalog::bundled()
+        .unwrap()
+        .resolve_firmware("x70-110")
+        .unwrap();
+    Facts::from_selection(&remote_selection(&selected), None).unwrap()
+}
+
+#[test]
+fn observation_metadata_requires_explicit_null_and_preserves_numeric_values() {
+    let original = selected_remote_facts();
+    let base = serde_json::to_value(&original).unwrap();
+    let cursor_names = [
+        "pointer",
+        "subcursor",
+        "visible_count",
+        "value_cursor",
+        "raw_count",
+        "filtered_count",
+    ];
+    for name in cursor_names {
+        let mut explicit_null = base.clone();
+        explicit_null["firmware"]["menus"]["cursor"]["fields"][name] =
+            serde_json::Value::Null;
+        let parsed: Facts = serde_json::from_value(explicit_null).unwrap();
+        parsed.validate().unwrap();
+
+        let mut missing = base.clone();
+        missing["firmware"]["menus"]["cursor"]["fields"]
+            .as_object_mut()
+            .unwrap()
+            .remove(name);
+        let error = serde_json::from_value::<Facts>(missing).unwrap_err();
+        assert!(error.to_string().contains(name), "{name}: {error}");
+    }
+    for name in ["address", "instance", "layer", "channel"] {
+        let mut explicit_null = base.clone();
+        explicit_null["firmware"]["scanout"][name] = serde_json::Value::Null;
+        let parsed: Facts = serde_json::from_value(explicit_null).unwrap();
+        parsed.validate().unwrap();
+
+        let mut missing = base.clone();
+        missing["firmware"]["scanout"]
+            .as_object_mut()
+            .unwrap()
+            .remove(name);
+        let error = serde_json::from_value::<Facts>(missing).unwrap_err();
+        assert!(error.to_string().contains(name), "{name}: {error}");
+    }
+
+    let mut explicit_null = base.clone();
+    explicit_null["firmware"]["menus"]["q_grid"] = serde_json::Value::Null;
+    let parsed: Facts = serde_json::from_value(explicit_null).unwrap();
+    parsed.validate().unwrap();
+
+    let mut missing = base.clone();
+    missing["firmware"]["menus"]
+        .as_object_mut()
+        .unwrap()
+        .remove("q_grid");
+    let error = serde_json::from_value::<Facts>(missing).unwrap_err();
+    assert!(error.to_string().contains("q_grid"), "{error}");
+
+    let parsed: Facts = serde_json::from_value(base).unwrap();
+    assert_eq!(
+        parsed.firmware.menus.cursor.fields.pointer,
+        original.firmware.menus.cursor.fields.pointer
+    );
+    assert_eq!(
+        parsed.firmware.scanout.address,
+        original.firmware.scanout.address
+    );
+    assert_eq!(
+        parsed.firmware.scanout.instance,
+        original.firmware.scanout.instance
+    );
+    assert_eq!(parsed.firmware.menus.q_grid, original.firmware.menus.q_grid);
+}
+
+#[test]
+fn cursor_offsets_still_validate_when_declared() {
+    let facts = selected_remote_facts();
+    let mut overlap = facts.clone();
+    overlap.firmware.menus.cursor.fields.pointer =
+        Some(overlap.firmware.menus.cursor.fields.cursor);
+    assert!(
+        overlap
+            .validate()
+            .unwrap_err()
+            .contains("field offset exceeds")
+    );
+
+    let mut out_of_bounds = facts;
+    out_of_bounds.firmware.menus.cursor.fields.pointer =
+        Some(out_of_bounds.firmware.menus.cursor.size);
+    assert!(
+        out_of_bounds
+            .validate()
+            .unwrap_err()
+            .contains("field offset exceeds")
+    );
+}
+
+#[test]
+fn quick_grid_dimensions_are_validated_when_present() {
+    let facts = selected_remote_facts();
+    for (rows, columns) in [(0, 2), (2, 0)] {
+        let mut invalid = facts.clone();
+        let grid = invalid.firmware.menus.q_grid.as_mut().unwrap();
+        grid.rows = rows;
+        grid.columns = columns;
+        assert!(invalid.validate().is_err());
+    }
+    let mut unknown = facts;
+    unknown.firmware.menus.q_grid = None;
+    unknown.validate().unwrap();
 }
 
 #[test]

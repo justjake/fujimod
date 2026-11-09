@@ -46,6 +46,9 @@ pub struct BoardBackend<S> {
 pub type BoardRemote<S> = Connection<BoardBackend<S>>;
 impl<S: SessionOwner> Connection<BoardBackend<S>> {
     pub fn new(mut owner: S, facts: Facts, options: Options) -> Result<Self> {
+        if facts.firmware.scanout.instance.is_none() {
+            return Err("BoardRemote requires a scanout instance".into());
+        }
         if options.quantum == 0 || options.window_instructions == 0 || options.output.is_empty() {
             return Err("Invalid board continuation options".into());
         }
@@ -360,6 +363,11 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
     ) -> LocalFuture<'a, Capture> {
         Box::pin(async move {
             let options = &self.options;
+            let instance = facts
+                .firmware
+                .scanout
+                .instance
+                .ok_or("BoardRemote requires a scanout instance")?;
             self.owner.with_session(|s| {
                 let (sequence, completion_reads) = scoped(s, |s| {
                     let counters = s.board.device_states(&options.frame_counter_kind)?;
@@ -372,7 +380,8 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                     let frame = s
                         .recording_frame(
                             &options.scanout_node,
-                            facts.firmware.scanout.instance as usize,
+                            usize::try_from(instance)
+                                .map_err(|_| "Scanout instance exceeds host address space")?,
                             false,
                         )?
                         .ok_or("Scanout is inactive")?;
@@ -470,5 +479,39 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                 .as_ref()
                 .and_then(|p| p.positions().get(id).cloned()))
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{cell::Cell, rc::Rc};
+
+    struct BorrowCounter(Rc<Cell<u32>>);
+    impl SessionOwner for BorrowCounter {
+        fn with_session<T>(&mut self, _: impl FnOnce(&mut Session) -> Result<T>) -> Result<T> {
+            self.0.set(self.0.get() + 1);
+            Err("unexpected session borrow".into())
+        }
+    }
+
+    #[test]
+    fn missing_scanout_instance_is_rejected_before_session_borrow() {
+        let count = Rc::new(Cell::new(0));
+        let owner = BorrowCounter(count.clone());
+        let mut facts = crate::testing::facts();
+        facts.firmware.scanout.instance = None;
+        let options = Options {
+            quantum: 1,
+            window_instructions: 1,
+            scanout_node: "display".into(),
+            output: "lcd".into(),
+            frame_counter_kind: "frame-counter".into(),
+            frame_counter_pointer: "/count".into(),
+        };
+
+        let result = BoardRemote::new(owner, facts, options);
+        assert!(result.is_err());
+        assert_eq!(count.get(), 0);
     }
 }

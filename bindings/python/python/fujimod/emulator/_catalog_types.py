@@ -1369,12 +1369,12 @@ class CoreRelease(TypedDict, total=False):
 
 class CursorFields(TypedDict, total=False):
     cursor: Required[int]
-    filtered_count: Required[int]
-    pointer: Required[int]
-    raw_count: Required[int]
-    subcursor: Required[int]
-    value_cursor: Required[int]
-    visible_count: Required[int]
+    filtered_count: Required[int | None]
+    pointer: Required[int | None]
+    raw_count: Required[int | None]
+    subcursor: Required[int | None]
+    value_cursor: Required[int | None]
+    visible_count: Required[int | None]
 
 
 class CursorLayout(TypedDict, total=False):
@@ -3485,7 +3485,7 @@ class MenuTables(TypedDict, total=False):
     layout: Required[MenuLayout]
     navigation: Required[MenuNavigation]
     page_tabs: Required[MenuTablesVariant0]
-    q_grid: Required[QuickGrid]
+    q_grid: Required[QuickGrid | None]
     roles: Required[dict[str, int]]
     root_count: Required[int]
     root_layout: NotRequired[RootLayout]
@@ -5312,12 +5312,12 @@ class ScannerTable(TypedDict, total=False):
 
 
 class Scanout(TypedDict, total=False):
-    address: Required[int]
+    address: Required[int | None]
     address_mask: Required[int]
-    channel: Required[int]
+    channel: Required[int | None]
     height: Required[int]
-    instance: Required[int]
-    layer: Required[int]
+    instance: Required[int | None]
+    layer: Required[int | None]
     pixel_format: Required[PixelFormat]
     pointer_address: Required[int]
     stride_bytes: Required[int]
