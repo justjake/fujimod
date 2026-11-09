@@ -22,7 +22,7 @@ export function DownloadModal(props: {
   const [controls, setControls] = createSignal<PhysicalControls>();
   const [controlsError, setControlsError] = createSignal('');
   const installable = () => props.format === 'installable';
-  const title = () => (installable() ? 'FujiMod installable' : 'FujiMod SD boot');
+  const title = () => (installable() ? 'FujiMod installable' : 'FujiMod SD boot v1');
   let dialog!: HTMLDialogElement;
   onSettled(() => {
     let disposed = false;

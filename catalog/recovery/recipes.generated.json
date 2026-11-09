@@ -12,7 +12,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot_combination": null,
     "firmware_update": null,
     "updater": {
       "public_version": [
@@ -279,7 +279,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot_combination": null,
     "firmware_update": null,
     "updater": null,
     "missing": [
@@ -504,7 +504,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot_combination": null,
     "firmware_update": null,
     "updater": null,
     "missing": [
@@ -783,7 +783,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot_combination": null,
     "firmware_update": null,
     "updater": null,
     "missing": [
@@ -1005,7 +1005,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot_combination": null,
     "firmware_update": null,
     "updater": null,
     "missing": [
@@ -1231,7 +1231,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "usb": false,
       "hold": [
         {
@@ -1493,7 +1493,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot_combination": null,
     "firmware_update": null,
     "updater": null,
     "missing": [
@@ -1703,7 +1703,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "hold": [
         {
           "id": "command_dial.press"
@@ -2280,7 +2280,7 @@
       "load_address": 4293984256,
       "workspace": 4294105088
     },
-    "sd_boot": {
+    "sd_boot_combination": {
       "usb": false,
       "hold": [
         {
@@ -4205,7 +4205,7 @@
     },
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "usb": false,
       "hold": [
         {
@@ -4461,7 +4461,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot_combination": null,
     "firmware_update": null,
     "updater": null,
     "missing": [
@@ -4671,7 +4671,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "hold": [
         {
           "id": "command_dial.press"
@@ -4890,7 +4890,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "hold": [
         {
           "id": "command_control.press"
@@ -5161,7 +5161,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "hold": [
         {
           "id": "sub_command_dial.press"
@@ -5427,7 +5427,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "hold": [
         {
           "id": "sub_command_dial.press"
@@ -5689,7 +5689,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot_combination": null,
     "firmware_update": null,
     "updater": null,
     "missing": [
@@ -5899,7 +5899,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "hold": [
         {
           "id": "command_dial.press"
@@ -6164,7 +6164,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "hold": [
         {
           "id": "command_dial.press"
@@ -6338,7 +6338,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot_combination": null,
     "firmware_update": null,
     "updater": null,
     "missing": [
@@ -6887,7 +6887,7 @@
       "load_address": 4293984256,
       "workspace": 4294105088
     },
-    "sd_boot": {
+    "sd_boot_combination": {
       "usb": false,
       "hold": [
         {
@@ -6957,7 +6957,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot_combination": null,
     "firmware_update": null,
     "updater": null,
     "missing": [
@@ -7212,7 +7212,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot_combination": null,
     "firmware_update": null,
     "updater": null,
     "missing": [
@@ -7437,7 +7437,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "usb": false,
       "hold": [
         {
@@ -7513,7 +7513,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "hold": [
         {
           "id": "iso_button"
@@ -7543,7 +7543,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "hold": [
         {
           "id": "iso_button"
@@ -7763,7 +7763,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "hold": [
         {
           "id": "sub_command_dial.press"
@@ -7982,7 +7982,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "hold": [
         {
           "id": "sub_command_dial.press"
@@ -8248,7 +8248,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "hold": [
         {
           "id": "sub_command_dial.press"
@@ -9074,7 +9074,7 @@
     },
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "usb": false,
       "hold": [
         {
@@ -9330,7 +9330,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot_combination": null,
     "firmware_update": null,
     "updater": null,
     "missing": [
@@ -9555,7 +9555,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot_combination": null,
     "firmware_update": null,
     "updater": {
       "public_version": [
@@ -10140,7 +10140,7 @@
       "load_address": 4293984256,
       "workspace": 4294105088
     },
-    "sd_boot": {
+    "sd_boot_combination": {
       "usb": false,
       "hold": [
         {
@@ -10400,7 +10400,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot_combination": null,
     "firmware_update": null,
     "updater": null,
     "missing": [
@@ -10610,7 +10610,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot_combination": null,
     "firmware_update": null,
     "updater": null,
     "missing": [
@@ -10889,7 +10889,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "usb": false,
       "hold": [
         {
@@ -11455,7 +11455,7 @@
       "load_address": 4293984256,
       "workspace": 4294105088
     },
-    "sd_boot": {
+    "sd_boot_combination": {
       "usb": false,
       "hold": [
         {
@@ -11531,7 +11531,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot_combination": null,
     "firmware_update": null,
     "updater": null,
     "missing": [
@@ -11742,7 +11742,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "hold": [
         {
           "id": "ae_lock_button"
@@ -12107,7 +12107,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "hold": [
         {
           "id": "rear_command_dial.press"
@@ -12387,7 +12387,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "usb": false,
       "hold": [
         {
@@ -12668,7 +12668,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "usb": false,
       "hold": [
         {
@@ -13263,7 +13263,7 @@
       "load_address": 4293984256,
       "workspace": 4294105088
     },
-    "sd_boot": {
+    "sd_boot_combination": {
       "usb": false,
       "hold": [
         {
@@ -13852,7 +13852,7 @@
       "load_address": 4293984256,
       "workspace": 4294105088
     },
-    "sd_boot": {
+    "sd_boot_combination": {
       "usb": false,
       "hold": [
         {
@@ -14451,7 +14451,7 @@
       "load_address": 4293984256,
       "workspace": 4294105088
     },
-    "sd_boot": {
+    "sd_boot_combination": {
       "usb": false,
       "hold": [
         {
@@ -15247,7 +15247,7 @@
     },
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot_combination": null,
     "firmware_update": null,
     "updater": null,
     "missing": [
@@ -15796,7 +15796,7 @@
       "load_address": 4293984256,
       "workspace": 4294105088
     },
-    "sd_boot": {
+    "sd_boot_combination": {
       "usb": false,
       "hold": [
         {
@@ -15866,7 +15866,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "hold": [
         {
           "id": "front_command_dial.press"
@@ -15896,7 +15896,7 @@
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": {
+    "sd_boot_combination": {
       "usb": false,
       "hold": [
         {

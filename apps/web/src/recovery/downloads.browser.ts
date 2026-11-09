@@ -4,7 +4,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { unzipSync } from 'fflate';
 import { chromium, webkit } from 'playwright';
 import { createHash } from 'node:crypto';
-import { catalog, initialize, recovery } from 'fujimod';
+import { catalog, initialize, sdCardTools } from 'fujimod';
 
 const cases: { firmwareId: string; dat: string }[] = JSON.parse(
   process.env.FUJIMOD_RECOVERY_CASES ?? '[]',
@@ -60,7 +60,7 @@ for (const engine of engines) {
       const led = page.getByRole('button', { name: 'Download green LED image', exact: true });
       const system = page.getByRole('button', { name: 'Download full system image', exact: true });
       await led.waitFor({ state: 'visible' });
-      const status = recovery.availability(test.firmwareId);
+      const status = sdCardTools.availability(test.firmwareId);
       try {
         const pending = Promise.race([
           page.waitForEvent('download'),
@@ -79,7 +79,7 @@ for (const engine of engines) {
         if (expectedBuildSha) assert.equal(buildSha, expectedBuildSha);
         assert.equal(
           download.suggestedFilename(),
-          `fujimod-green-led-sd-boot-${identity}-build-${buildSha}.zip`,
+          `fujimod-green-led-${identity}-build-${buildSha}.zip`,
         );
         const zip = unzipSync(await readFile((await download.path())!));
         assert.deepEqual(Object.keys(zip).sort(), [...status.greenLedFilenames].sort());
@@ -89,7 +89,7 @@ for (const engine of engines) {
             : Object.values(zip).every((bytes) => bytes.length < 1024),
         );
         assert.ok(Object.values(zip).reduce((size, bytes) => size + bytes.length, 0) < 65536);
-        const expected = recovery.buildGreenLed(test.firmwareId, await readFile(test.dat));
+        const expected = sdCardTools.buildGreenLed(test.firmwareId, await readFile(test.dat));
         try {
           for (const file of expected.takeFiles()) {
             try {
@@ -121,7 +121,7 @@ for (const engine of engines) {
           const systemDownload = await pendingSystem;
           assert.equal(
             systemDownload.suggestedFilename(),
-            `fujimod-recovery-sd-boot-${identity}-build-${buildSha}.zip`,
+            `fujimod-sd-card-recovery-${identity}-build-${buildSha}.zip`,
           );
           const files = unzipSync(await readFile((await systemDownload.path())!));
           assert.deepEqual(Object.keys(files).sort(), [...status.outputFilenames].sort());
@@ -133,7 +133,7 @@ for (const engine of engines) {
               assert.equal(createHash('sha256').update(bytes).digest('hex'), checked[name].sha256);
             }
           }
-          const expectedSystem = recovery.build(test.firmwareId, await readFile(test.dat));
+          const expectedSystem = sdCardTools.build(test.firmwareId, await readFile(test.dat));
           try {
             for (const file of expectedSystem.takeFiles()) {
               try {

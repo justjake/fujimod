@@ -2,9 +2,9 @@
 use serde::Deserialize;
 use std::{collections::BTreeMap, sync::LazyLock};
 
-pub(super) const IMAGE: &[u8] = include_bytes!("../../assets/xp4-sd-loader.generated.bin");
+pub(super) const IMAGE: &[u8] = include_bytes!("../../assets/sd-boot-v1-xp4-loader.generated.bin");
 pub(super) static LAYOUT: LazyLock<Layout> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../../assets/xp4-sd-loader.generated.json"))
+    serde_json::from_str(include_str!("../../assets/sd-boot-v1-xp4-loader.generated.json"))
         .expect("checked XP4 SD loader layout")
 });
 

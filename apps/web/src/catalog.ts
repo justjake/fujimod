@@ -18,7 +18,7 @@ export interface Firmware {
   device?: {
     panel: DevicePanel;
     initialPositions: Record<string, string>;
-    sdBoot?: boolean;
+    sdCardBoot?: boolean;
   };
   model_asset?: string;
   service_workflow?: string;

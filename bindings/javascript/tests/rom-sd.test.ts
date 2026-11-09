@@ -1,14 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { initialize, recovery } from '../dist/index.js';
+import { initialize, sdCardTools } from '../dist/index.js';
 
 await initialize({
   module_or_path: await readFile(new URL('../pkg/fujimod_bg.wasm', import.meta.url)),
 });
 
 test('Agate recovery is available without a complete emulator board', () => {
-  const status = recovery.availability('xpro2-511');
+  const status = sdCardTools.availability('xpro2-511');
   try {
     assert.equal(status.generation, 'xpp');
     assert.equal(status.canBuild, true);
@@ -17,12 +17,12 @@ test('Agate recovery is available without a complete emulator board', () => {
   } finally {
     status.free();
   }
-  assert.throws(() => recovery.build('xpro2-511', new Uint8Array(4)), /size differs/);
+  assert.throws(() => sdCardTools.build('xpro2-511', new Uint8Array(4)), /size differs/);
 });
 
 test('EXR exposes its third file and the unresolved updater contract', () => {
   for (const [id, generation] of [['xf1-101', 'exr'], ['xpro1-382', 'exrpro']] as const) {
-    const status = recovery.availability(id);
+    const status = sdCardTools.availability(id);
     try {
       assert.equal(status.generation, generation);
       assert.equal(status.canBuild, false);
@@ -31,6 +31,6 @@ test('EXR exposes its third file and the unresolved updater contract', () => {
     } finally {
       status.free();
     }
-    assert.throws(() => recovery.build(id, new Uint8Array(4)), /stock updater acceptance/);
+    assert.throws(() => sdCardTools.build(id, new Uint8Array(4)), /stock updater acceptance/);
   }
 });

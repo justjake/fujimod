@@ -169,7 +169,7 @@ fn recipes_match_catalog_identities_and_generation() {
         let status = availability(id).unwrap();
         assert_eq!(status.can_build, status.missing.is_empty());
         assert_eq!(
-            serde_json::to_value(status.sd_boot).unwrap(),
+            serde_json::to_value(status.sd_boot_combination).unwrap(),
             selected
                 .physical_controls
                 .as_ref()

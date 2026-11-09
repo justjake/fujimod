@@ -1,0 +1,51 @@
+{
+  "$schema": "https://fujimod.com/schemas/sd-boot-v2-autostart.generated.schema.json",
+  "schema": 1,
+  "id": "xe2s-111-nand-boot",
+  "firmware_id": "xe2s-111",
+  "update_sha256": "a34859b8e7ad2b915bcb77b337ddca4799cc29141a57de88909ee5746c62d424",
+  "stage1": {
+    "dat_bias": 604,
+    "load_address": 0,
+    "block_bytes": 131072,
+    "image_bytes": 262144,
+    "image_sha256": "25aa565793e0260428cf20755a0f5cb059f7dabe43f20797572d00593d641184",
+    "blocks": [
+      {
+        "ordinal": 2,
+        "native_offset": 262144,
+        "bytes": 131072,
+        "sha256": "4c4458c66572de6e789e51aa6a3279ef752c9770be1543c92b3566aeebe4ef9d"
+      },
+      {
+        "ordinal": 3,
+        "native_offset": 393216,
+        "bytes": 131072,
+        "sha256": "0c9203d6a94170c470bcd840be97135ec4ca79f1adc4a628fdf5a4703c1f4fa7"
+      }
+    ],
+    "entry": {
+      "literal_address": 32,
+      "literal": 6144,
+      "first_word": 3852464152,
+      "instruction": "ldr pc, [pc, #0x18]",
+      "code_entry": 6144,
+      "code_first_word": 3942645779
+    }
+  },
+  "code_space": {
+    "address": 256,
+    "capacity": 4096,
+    "native_offset": 262400
+  },
+  "boot_rom": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be",
+  "load_range": {
+    "file": "FM_EXR2.BIN",
+    "address": 486539264,
+    "capacity": 262144,
+    "alias": "0x5d000000",
+    "heap_base": 486539264,
+    "heap_bytes": 3285632,
+    "basis": "network-heap"
+  }
+}

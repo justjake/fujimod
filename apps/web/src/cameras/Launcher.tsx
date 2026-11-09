@@ -35,8 +35,8 @@ const rows = [
     icon: 'flash',
   },
   {
-    id: 'sd-boot',
-    title: 'Download FujiMod SD boot',
+    id: 'sd-boot-v1',
+    title: 'Download FujiMod SD boot v1',
     subtitle: 'Dual boot from an SD card',
     icon: 'sd-card',
   },
@@ -85,9 +85,9 @@ export function CameraLauncher(props: {
     if (!chosen()) return false;
     switch (row.id) {
       case 'installable':
-        return !!patch()?.downloads.installable;
-      case 'sd-boot':
-        return !!patch()?.downloads.sd_card;
+        return !!patch()?.downloads.sd_boot_v1_installable;
+      case 'sd-boot-v1':
+        return !!patch()?.downloads.sd_boot_v1;
       case 'mod':
         return !!support()?.emu && !!support()?.mod;
       case 'stock':
@@ -104,7 +104,7 @@ export function CameraLauncher(props: {
     switch (row.id) {
       case 'installable':
         return `${label()} • Includes SD boot version`;
-      case 'sd-boot':
+      case 'sd-boot-v1':
         return `${label()} base firmware`;
       case 'mod':
         return `${label()} with ${modRelease()}`;

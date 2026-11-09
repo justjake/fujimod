@@ -5,7 +5,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.len() != 2 {
         return Err("Usage: xpp_read_map FIRMWARE UPDATE.DAT".into());
     }
-    let recipe = Recipe::bundled(&args[0])?.ok_or("Missing recovery recipe")?;
+    let recipe = Recipe::bundled(&args[0])?.ok_or("Missing SD card recipe")?;
     if !matches!(recipe.generation, Generation::Xpp) {
         return Err("Requires X-Processor Pro".into());
     }

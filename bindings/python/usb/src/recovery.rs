@@ -72,7 +72,7 @@ fn startup_indicator(
 ) -> PyResult<RamImage> {
     let recipe = core::Recipe::bundled(firmware_id)
         .map_err(error)?
-        .ok_or_else(|| error("Missing recovery recipe"))?;
+        .ok_or_else(|| error("Missing SD card recipe"))?;
     let original = result.data.bind(py).as_bytes();
     let mut bytes = original.to_vec();
     let (address, size) = core::early_led::image(&recipe, source, &mut bytes).map_err(error)?;
@@ -186,7 +186,7 @@ fn build<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let recipe = core::Recipe::bundled(firmware_id)
         .map_err(error)?
-        .ok_or_else(|| error("Missing recovery recipe"))?;
+        .ok_or_else(|| error("Missing SD card recipe"))?;
     let files = if startup {
         recipe.build_startup(source)
     } else {
@@ -203,14 +203,14 @@ fn build<'py>(
 fn cold_worker(py: Python<'_>, firmware_id: &str, source: &[u8]) -> PyResult<Py<PyAny>> {
     let recipe = core::Recipe::bundled(firmware_id)
         .map_err(error)?
-        .ok_or_else(|| error("Missing recovery recipe"))?;
+        .ok_or_else(|| error("Missing SD card recipe"))?;
     Ok(value(py, &recipe.cold_worker(source).map_err(error)?)?.unbind())
 }
 #[pyfunction]
 fn cold_plan(py: Python<'_>, firmware_id: &str, source: &[u8]) -> PyResult<Py<PyAny>> {
     let recipe = core::Recipe::bundled(firmware_id)
         .map_err(error)?
-        .ok_or_else(|| error("Missing recovery recipe"))?;
+        .ok_or_else(|| error("Missing SD card recipe"))?;
     Ok(value(
         py,
         &serde_json::to_value(recipe.cold_plan(source).map_err(error)?).map_err(error)?,
@@ -221,7 +221,7 @@ fn cold_plan(py: Python<'_>, firmware_id: &str, source: &[u8]) -> PyResult<Py<Py
 fn recipe(py: Python<'_>, firmware_id: &str) -> PyResult<Py<PyAny>> {
     let recipe = core::Recipe::bundled(firmware_id)
         .map_err(error)?
-        .ok_or_else(|| error("Missing recovery recipe"))?;
+        .ok_or_else(|| error("Missing SD card recipe"))?;
     Ok(value(py, &serde_json::to_value(recipe).map_err(error)?)?.unbind())
 }
 #[pyfunction]
@@ -236,7 +236,7 @@ fn compile_ffinit<'py>(
 ) -> PyResult<(Bound<'py, PyBytes>, Py<PyAny>)> {
     let recipe = core::Recipe::bundled(firmware_id)
         .map_err(error)?
-        .ok_or_else(|| error("Missing recovery recipe"))?;
+        .ok_or_else(|| error("Missing SD card recipe"))?;
     let text: String = py
         .import("json")?
         .call_method1("dumps", (api,))?

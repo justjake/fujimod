@@ -38,7 +38,7 @@ const adapters = import.meta.glob<{
   panel: DevicePanel;
   preview?: string;
   previewCredit?: PreviewCredit;
-  sdBoot?: boolean;
+  sdCardBoot?: boolean;
 }>('../../devices/*/index.ts');
 export function startHome(
   state: HomeState,
@@ -303,7 +303,7 @@ export function startHome(
       runningLayout();
       if (camera && !restart) modEnabled = camera.modEnabled;
       const modSupported =
-        'sdBoot' in device && !!device.sdBoot && !!release?.patches[entry.sha256];
+        'sdCardBoot' in device && !!device.sdCardBoot && !!release?.patches[entry.sha256];
       // A FujiMod boot patches the firmware before the camera is built.
       if (modSupported && modEnabled)
         setState((s) => {
@@ -427,7 +427,7 @@ export function startHome(
     if (
       !index ||
       !entry ||
-      !(format === 'installable' ? entry.downloads.installable : entry.downloads.sd_card)
+      !(format === 'installable' ? entry.downloads.sd_boot_v1_installable : entry.downloads.sd_boot_v1)
     )
       throw Error('This download is unavailable for the selected firmware.');
     const file = new File([await cameras.firmware(source.sha256)], source.fileName);

@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "base": 256,
+  "capacity": 4096,
+  "image_bytes": 604,
+  "entry": 0,
+  "firmware_id": 532,
+  "config": 548,
+  "save": 596,
+  "command_table_save_bytes": 128
+}

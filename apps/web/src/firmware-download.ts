@@ -1,5 +1,5 @@
 export type FirmwareDownloadKind = 'recovery' | 'green-led' | 'modified';
-export type FirmwareDownloadFormat = 'sd-boot' | 'installable';
+export type FirmwareDownloadFormat = 'sd-boot-v1' | 'sd-card-recovery' | 'green-led' | 'installable';
 export interface FirmwareDownloadIdentity {
   model: string;
   version: string;
@@ -22,5 +22,5 @@ export function firmwareDownloadName(
     .replace(/^[.-]+|[.-]+$/g, '');
   if (!model || !version || !/^[a-f0-9]{8}$/.test(build))
     throw Error('Firmware download identity is invalid.');
-  return `fujimod-${kind}-${format}-${model}-${version}-build-${build}.zip`;
+  return `fujimod-${kind === 'modified' ? `modified-${format}` : format}-${model}-${version}-build-${build}.zip`;
 }

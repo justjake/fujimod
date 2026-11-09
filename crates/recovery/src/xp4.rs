@@ -80,7 +80,7 @@ pub fn package(
 
 /// The recovery card: the full-image cold pair with the green lamp held on
 /// by the stock loader's GPIO table. This card booted an X-Pro3 from SD.
-pub(super) fn recovery_card(
+pub(super) fn sd_card_recovery(
     recipe: &crate::Recipe,
     source: &[u8],
     inverted: &[u8],

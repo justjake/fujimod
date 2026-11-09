@@ -133,12 +133,12 @@ export const catalog = Object.freeze({
     ModeTransitionKind: native.ModeTransitionKind,
   }),
 });
-/** Construct an SD recovery card from an identity-checked official update. */
-export const recovery = Object.freeze({
-  availability: native.recoveryAvailability,
-  build: native.buildRecoveryCard,
+/** Construct SD card files from an identity-checked official update. */
+export const sdCardTools = Object.freeze({
+  availability: native.sdCardAvailability,
+  build: native.buildSdCardRecovery,
   buildGreenLed: native.buildGreenLedCard,
-  buildOtaStartup: native.buildOtaStartupCard,
+  buildSdBootV2SdCard: native.buildSdBootV2SdCard,
 });
 export const usb = Object.freeze({
   Device: native.Device,

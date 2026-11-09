@@ -1,23 +1,23 @@
-import { recovery } from 'fujimod';
+import { sdCardTools } from 'fujimod';
 
-/** One file of an SD recovery card. */
-export interface RecoveryFile {
+/** One file for an SD card utility. */
+export interface SdCardUtilityFile {
   name: string;
   data: Uint8Array<ArrayBuffer>;
 }
 
-export type RecoveryDownload = 'system' | 'green-led';
+export type SdCardUtilityDownload = 'system' | 'green-led';
 
-/** The SD recovery card files for `firmwareId`, built from its official update `dat`. */
-export function recoveryCard(
+/** Build SD card recovery or green LED files from an official update. */
+export function buildSdCardUtility(
   firmwareId: string,
   dat: Uint8Array,
-  kind: RecoveryDownload,
-): RecoveryFile[] {
+  kind: SdCardUtilityDownload,
+): SdCardUtilityFile[] {
   const card =
     kind === 'green-led'
-      ? recovery.buildGreenLed(firmwareId, dat)
-      : recovery.build(firmwareId, dat);
+      ? sdCardTools.buildGreenLed(firmwareId, dat)
+      : sdCardTools.build(firmwareId, dat);
   try {
     return card.takeFiles().map((file) => {
       try {

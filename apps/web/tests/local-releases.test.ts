@@ -111,7 +111,7 @@ test('development routes serve the configured release, observe edits, and refuse
     ];
     await writeFile(join(options.card, 'card.json'), JSON.stringify(card));
     await writeFile(join(options.card, 'ABCDEF01.234'), recipe);
-    expect((await loadRelease(base))?.card).toEqual(card);
+    expect((await loadRelease(base))?.sd_card_files).toEqual(card);
     expect(await (await fetch(`${base}/releases/v2/ABCDEF01.234`)).text()).toBe(recipe);
     expect((await fetch(`${base}/releases/v2/card.json`)).status).toBe(404);
   } finally {

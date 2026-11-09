@@ -8,8 +8,8 @@ fn main() {
     fs::write(out.join("recipes.generated.json"), bytes).unwrap();
 
     // The XP5 SD loader is a prebuilt binary asset; its layout becomes constants.
-    let image = root.join("assets/xp5-sd-loader.generated.bin");
-    let layout = root.join("assets/xp5-sd-loader.generated.json");
+    let image = root.join("assets/sd-boot-v1-xp5-loader.generated.bin");
+    let layout = root.join("assets/sd-boot-v1-xp5-loader.generated.json");
     println!("cargo:rerun-if-changed={}", image.display());
     println!("cargo:rerun-if-changed={}", layout.display());
     let layout: serde_json::Value =

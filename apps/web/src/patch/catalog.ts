@@ -1,8 +1,8 @@
 import { releaseFilename, releaseTag } from './releases.ts';
 import { inspectPatch, sha256 } from './patcher.ts';
 export interface ReleaseDownloads {
-  sd_card: boolean;
-  installable: boolean;
+  sd_boot_v1: boolean;
+  sd_boot_v1_installable: boolean;
 }
 export interface ReleaseNotes {
   name: string;
@@ -25,7 +25,7 @@ export interface PatchFirmware {
   mods: string[];
 }
 /** A file the release offers for the SD card, published as a release asset. */
-export interface CardFile {
+export interface SdCardFile {
   /** Path on the card, in upper-case 8.3 names: `FUJIMOD/RECIPES/AGFAOPT.JSN`. */
   path: string;
   asset: string;
@@ -43,22 +43,22 @@ export interface PatchIndex {
   patches: Record<string, string>;
   firmwares: PatchFirmware[];
   notes?: ReleaseNotes;
-  card?: CardFile[];
+  sd_card_files?: SdCardFile[];
 }
 const hash = /^[0-9a-f]{64}$/;
 const shortName = '[A-Z0-9_~-]{1,8}(?:\\.[A-Z0-9_~-]{1,3})?';
 /** Card paths use the 8.3 names the camera's file system reads. */
-export const cardPath = new RegExp(`^(?:${shortName}/)*${shortName}$`);
+export const sdCardPath = new RegExp(`^(?:${shortName}/)*${shortName}$`);
 const optionalText = (value: unknown) =>
   value === undefined || (typeof value === 'string' && value.length > 0 && value.length < 200);
-function validateCard(value: unknown): CardFile[] {
+function validateCard(value: unknown): SdCardFile[] {
   if (!Array.isArray(value)) throw new Error('The release card files are invalid.');
   const paths = new Set<string>();
-  for (const file of value as CardFile[]) {
+  for (const file of value as SdCardFile[]) {
     if (
       !file ||
       typeof file.path !== 'string' ||
-      !cardPath.test(file.path) ||
+      !sdCardPath.test(file.path) ||
       typeof file.asset !== 'string' ||
       !releaseFilename.test(file.asset) ||
       typeof file.sha256 !== 'string' ||
@@ -72,7 +72,7 @@ function validateCard(value: unknown): CardFile[] {
     if (paths.has(key)) throw new Error('A release card file is listed twice.');
     paths.add(key);
   }
-  return value as CardFile[];
+  return value as SdCardFile[];
 }
 const calendarDate = (value: unknown) => {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -137,22 +137,22 @@ export function validateIndex(value: unknown): PatchIndex {
       (!downloads ||
         typeof downloads !== 'object' ||
         Array.isArray(downloads) ||
-        (downloads.sd_card !== undefined && typeof downloads.sd_card !== 'boolean') ||
-        (downloads.installable !== undefined && typeof downloads.installable !== 'boolean'))
+        (downloads.sd_boot_v1 !== undefined && typeof downloads.sd_boot_v1 !== 'boolean') ||
+        (downloads.sd_boot_v1_installable !== undefined && typeof downloads.sd_boot_v1_installable !== 'boolean'))
     )
       throw new Error('The release download switches are invalid.');
     if (
       (entry.update_filename !== undefined &&
         (typeof entry.update_filename !== 'string' ||
           !/^[A-Z0-9]{1,8}\.DAT$/.test(entry.update_filename))) ||
-      (downloads?.installable && entry.update_filename === undefined)
+      (downloads?.sd_boot_v1_installable && entry.update_filename === undefined)
     )
       throw new Error('The release update file name is invalid.');
     firmwares.push({
       ...entry,
       downloads: {
-        sd_card: downloads?.sd_card ?? false,
-        installable: downloads?.installable ?? false,
+        sd_boot_v1: downloads?.sd_boot_v1 ?? false,
+        sd_boot_v1_installable: downloads?.sd_boot_v1_installable ?? false,
       },
     });
     seen.add(entry.sha256);
@@ -165,7 +165,7 @@ export function validateIndex(value: unknown): PatchIndex {
   return {
     ...index,
     firmwares,
-    ...(index.card === undefined ? {} : { card: validateCard(index.card) }),
+    ...(index.sd_card_files === undefined ? {} : { sd_card_files: validateCard(index.sd_card_files) }),
   };
 }
 
@@ -178,7 +178,7 @@ export async function verifyPatch(index: PatchIndex, entry: PatchFirmware, data:
     meta.source.bytes !== entry.bytes ||
     meta.firmware !== entry.id ||
     meta.release !== index.release ||
-    (entry.downloads.installable && !meta.outputs.fpupdate) ||
+    (entry.downloads.sd_boot_v1_installable && !meta.outputs.fpupdate) ||
     !Array.isArray(meta.mods) ||
     !meta.mods.every((name) => typeof name === 'string') ||
     (await sha256(program)) !== meta.program_sha256

@@ -62,7 +62,7 @@ fn main() {
             ("Firmware", "ui-setting-names.generated.json") => "UiSettingNames",
             ("Firmware", "ui-event-codes.generated.json") => "UiEventCodes",
             ("Firmware", "bulk.generated.json") => "Bulk",
-            ("Firmware", "nand-boot.generated.json") => "NandBoot",
+            ("Firmware", "sd-boot-v2-autostart.generated.json") => "NandBoot",
             ("Firmware", "boot-patch.generated.json") => "BootPatch",
             ("BootRom", _) => "BootRom",
             ("Firmware", "card-files.generated.json") => "CardFiles",

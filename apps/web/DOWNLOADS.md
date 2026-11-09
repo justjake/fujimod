@@ -1,7 +1,7 @@
 # Firmware downloads
 
 The homepage loads the current GitHub release through the same-origin release
-proxy. Each firmware's `downloads.sd_card` and `downloads.installable` switches
+proxy. Each firmware's `downloads.sd_boot_v1` and `downloads.sd_boot_v1_installable` switches
 control its download rows and firmware files in the emulator's card browser.
 Both switches default to false. Installable downloads also require a verified
 `fpupdate` output in the release patch and the entry's `update_filename`.

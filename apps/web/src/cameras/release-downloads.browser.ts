@@ -76,7 +76,7 @@ for (const engine of [chromium, webkit].filter(
         acceptDownloads: true,
       });
       await context.routeWebSocket('**/*', () => {});
-      let installable = false,
+      let sd_boot_v1_installable = false,
         showNotes = true,
         releaseError = false;
       const catalogResponse = await context.request.get(new URL('runtime/catalog.json', base).href);
@@ -93,7 +93,7 @@ for (const engine of [chromium, webkit].filter(
         boot_instructions: ['Copy files.'],
         update_filename: 'FPUPDATE.DAT',
         mods: [],
-        downloads: { sd_card: true, installable: false },
+        downloads: { sd_boot_v1: true, sd_boot_v1_installable: false },
       };
       const index: PatchIndex = {
         schema: 2,
@@ -120,7 +120,7 @@ for (const engine of [chromium, webkit].filter(
             json: {
               ...index,
               ...(showNotes ? {} : { notes: undefined }),
-              firmwares: [{ ...entry, downloads: { sd_card: true, installable } }],
+              firmwares: [{ ...entry, downloads: { sd_boot_v1: true, sd_boot_v1_installable } }],
             },
           });
         if (path.endsWith('/notes.md'))
@@ -227,7 +227,7 @@ for (const engine of [chromium, webkit].filter(
       await page.getByRole('radio', { name: 'X70 · 1.10', exact: true }).check();
       assert.equal(await page.getByRole('button', { name: 'Start fresh', exact: true }).count(), 2);
       await screenshot('saved-cameras');
-      await page.getByRole('button', { name: 'Download FujiMod SD boot', exact: true }).click();
+      await page.getByRole('button', { name: 'Download FujiMod SD boot v1', exact: true }).click();
       await page.locator('dialog[open] .power-combo-keys').waitFor();
       assert.equal(await page.locator('dialog .recovery-steps > li').count(), 3);
       assert.equal(await page.locator('dialog .power-combo-keys').count(), 1);
@@ -256,14 +256,14 @@ for (const engine of [chromium, webkit].filter(
       const sd = await sdDownload;
       assert.match(
         sd.suggestedFilename(),
-        /^fujimod-modified-sd-boot-x70-1\.10-build-[a-f0-9]{8}\.zip$/,
+        /^fujimod-modified-sd-boot-v1-x70-1\.10-build-[a-f0-9]{8}\.zip$/,
       );
       assert.deepEqual(Object.keys(unzipSync(await readFile((await sd.path())!))).sort(), [
         'ffboot.bin',
         'ffsys.bin',
       ]);
       await page.getByRole('button', { name: 'Close', exact: true }).click();
-      installable = true;
+      sd_boot_v1_installable = true;
       await page.reload();
       await ready();
       await page.getByRole('radio', { name: 'X70 · 1.10', exact: true }).check();
