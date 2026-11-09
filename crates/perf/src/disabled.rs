@@ -41,7 +41,7 @@ pub fn span(_kind: SpanKind) -> SpanGuard {
     SpanGuard
 }
 
-pub fn begin_span(_kind: SpanKind, _guest: GuestProgress) -> bool {
+pub fn begin_span(_kind: SpanKind, _guest: GuestProgress, _wait_counter: Option<usize>) -> bool {
     false
 }
 

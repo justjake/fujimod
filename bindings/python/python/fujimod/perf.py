@@ -82,11 +82,12 @@ def span(
     wait_kind: str | None = None,
     properties: Mapping[str, int] | None = None,
     board: Any = _DEFAULT,
+    wait_counter: int | None = None,
 ) -> Iterator[None]:
     """Record one phase span, including guest progress across its body."""
     selected = _board() if board is _DEFAULT else board
     instructions, ticks = _guest(selected)
-    _native.begin_span(kind, wait_kind, instructions, ticks)
+    _native.begin_span(kind, wait_kind, instructions, ticks, wait_counter)
     try:
         yield
     finally:

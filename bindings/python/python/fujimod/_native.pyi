@@ -903,6 +903,7 @@ class perf:
         wait: str | None = ...,
         instructions: int = ...,
         ticks: int = ...,
+        wait_counter: int | None = ...,
     ) -> bool: ...
     @staticmethod
     def end_span(
