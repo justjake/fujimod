@@ -15,9 +15,9 @@ use std::{
 
 mod images;
 pub use images::{
-    Edge, ImagePreparation, ImageResources, ImageSnapshot, ImageSpec, SensorFrame,
-    SensorFrameCodec, SensorRecord, SensorSnapshot, SensorState, install_image_preparation,
-    install_sensor_frame_codec, prepare_images,
+    Edge, ImagePreparation, ImageResources, ImageSnapshot, ImageSnapshotJson, ImageSpec,
+    SensorFrame, SensorFrameCodec, SensorRecord, SensorSnapshot, SensorState,
+    install_image_preparation, install_sensor_frame_codec, install_snapshot_json, prepare_images,
 };
 
 /// Prepared external media inputs. Firmware/file verification belongs to the
@@ -166,7 +166,11 @@ impl Resources {
             .ok_or_else(|| format!("{name} has no connected models"))
     }
     pub fn image_users(&self, name: &str) -> Result<Vec<usize>, String> {
-        if !self.images.as_ref().is_some_and(|part| part.has_image(name)) {
+        if !self
+            .images
+            .as_ref()
+            .is_some_and(|part| part.has_image(name))
+        {
             return Err(format!("no such image input {name}"));
         }
         Ok(self

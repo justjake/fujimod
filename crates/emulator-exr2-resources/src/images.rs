@@ -79,6 +79,8 @@ pub trait SensorState: Send + Sync {
     fn shared(&self) -> bool;
     /// The current frame and, unless shared, the latched frame.
     fn frames(&self) -> Result<Vec<Checkpoint>, String>;
+    /// Readable frame metadata for diagnostics; pixels stay in the checkpoint.
+    fn fingerprint(&self) -> Result<serde_json::Value, String>;
     fn as_any(&self) -> &dyn Any;
 }
 #[derive(Clone)]
@@ -112,6 +114,42 @@ pub struct ImageSnapshot {
     pub images: BTreeMap<String, Checkpoint>,
     pub statistics: BTreeMap<String, Checkpoint>,
     pub sensors: BTreeMap<String, SensorSnapshot>,
+}
+
+/// Readable image-part JSON derived from the typed snapshot.
+pub type ImageSnapshotJson = fn(&ImageSnapshot) -> Result<serde_json::Value, String>;
+static SNAPSHOT_JSON: OnceLock<ImageSnapshotJson> = OnceLock::new();
+
+/// Install the image part's readable decoder; there is one per process.
+pub fn install_snapshot_json(json: ImageSnapshotJson) {
+    let _ = SNAPSHOT_JSON.set(json);
+}
+
+impl ImageSnapshot {
+    /// Readable state derived on demand from the typed checkpoints.
+    pub fn to_json(&self) -> Result<serde_json::Value, String> {
+        match SNAPSHOT_JSON.get() {
+            Some(json) => json(self),
+            None => self.extent_json(),
+        }
+    }
+
+    fn extent_json(&self) -> Result<serde_json::Value, String> {
+        use serde_json::json;
+        Ok(json!({
+            "wires":self.wires.iter().map(|(name, state)| (name.clone(), state.state())).collect::<BTreeMap<_, _>>(),
+            "images":self.images.iter().map(|(name, state)| (name.clone(), state.state())).collect::<BTreeMap<_, _>>(),
+            "statistics":self.statistics.iter().map(|(name, state)| (name.clone(), state.state())).collect::<BTreeMap<_, _>>(),
+            "sensors":self.sensors.iter().map(|(name, frames)| {
+                Ok((name.clone(), json!({
+                    "edge":frames.0.edge(),
+                    "view":frames.0.view(),
+                    "shared":frames.0.shared(),
+                    "frames":frames.0.frames()?.iter().map(Checkpoint::state).collect::<Vec<_>>(),
+                })))
+            }).collect::<Result<BTreeMap<_, _>, String>>()?,
+        }))
+    }
 }
 
 /// The image wires and inputs of a board.

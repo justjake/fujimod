@@ -44,6 +44,9 @@ impl Checkpoint {
     pub fn children(&self) -> &[Checkpoint] {
         &self.children
     }
+    pub fn kind(&self) -> &str {
+        self.kind.as_ref()
+    }
     pub fn with_blobs(mut self, blobs: Vec<Arc<[u8]>>) -> Self {
         self.blobs = blobs;
         self

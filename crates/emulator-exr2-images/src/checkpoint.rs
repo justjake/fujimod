@@ -191,3 +191,66 @@ pub(crate) fn restore(part: &Images, saved: &ImageSnapshot) -> Result<(), String
     }
     Ok(())
 }
+
+/// Readable image state derived from a typed snapshot on demand.
+pub(crate) fn readable(snapshot: &ImageSnapshot) -> Result<serde_json::Value, String> {
+    use serde_json::json;
+    let wires = snapshot
+        .wires
+        .iter()
+        .map(|(name, state)| Ok((name.clone(), readable_wire(state)?)))
+        .collect::<Result<BTreeMap<_, _>, String>>()?;
+    let images = snapshot
+        .images
+        .iter()
+        .map(|(name, state)| {
+            Ok((
+                name.clone(),
+                ImageFrames::decoded(state, sensor_decoders())?.fingerprint(),
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>, String>>()?;
+    let statistics = snapshot
+        .statistics
+        .iter()
+        .map(|(name, state)| {
+            Ok((
+                name.clone(),
+                StatisticsFrames::decoded(state)?.fingerprint(),
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>, String>>()?;
+    let sensors = snapshot
+        .sensors
+        .iter()
+        .map(|(name, state)| Ok((name.clone(), state.0.fingerprint()?)))
+        .collect::<Result<BTreeMap<_, _>, String>>()?;
+    Ok(json!({
+        "wires":wires,
+        "images":images,
+        "statistics":statistics,
+        "sensors":sensors,
+    }))
+}
+
+fn readable_wire(saved: &Checkpoint) -> Result<serde_json::Value, String> {
+    use serde_json::json;
+    Ok(match saved.kind() {
+        "sensor-frame-period" => json!(saved.decode::<u64>("sensor-frame-period")?),
+        "sensor-image-grid" => json!(saved.decode::<[usize; 2]>("sensor-image-grid")?),
+        "physical-exposure" => json!(
+            saved.decode::<fujimod_emulator_imaging::exposure::Exposure>("physical-exposure")?
+        ),
+        "parameters" => json!(saved.decode::<isp::parameters::Parameters>("parameters")?),
+        "memory-outputs" => saved
+            .decode::<isp::memory_outputs::MemoryOutputs>("memory-outputs")?
+            .fingerprint(),
+        "stream" => json!(saved.decode::<isp::stream::Stream>("stream")?),
+        "phase-edges" => json!(saved.decode::<[Option<FrameEdge>; 2]>("phase-edges")?),
+        "output-channels" => {
+            let channels: isp::output_channels::Channels = saved.decode("output-channels")?;
+            isp::output_channels::OutputChannels(Arc::new(Mutex::new(channels))).fingerprint()
+        }
+        _ => saved.state(),
+    })
+}

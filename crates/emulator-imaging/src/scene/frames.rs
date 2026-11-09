@@ -143,6 +143,12 @@ struct ImageState {
 #[derive(Clone)]
 pub struct ImageFrames(pub Arc<Mutex<ImageFrame>>);
 impl ImageFrames {
+    /// Reconstruct an immutable image only for readable diagnostics.
+    pub fn decoded(saved: &Checkpoint, sensor: Option<&SensorDecoders>) -> Result<Self, String> {
+        Ok(Self(Arc::new(Mutex::new(Self::from_checkpoint(
+            saved, sensor,
+        )?))))
+    }
     pub fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         let frame = self.0.lock().map_err(|_| "image-frame poisoned")?;
         let state = ImageState {
@@ -325,6 +331,14 @@ pub struct StatisticsFrame {
 #[derive(Clone)]
 pub struct StatisticsFrames(pub Arc<Mutex<StatisticsFrame>>);
 impl StatisticsFrames {
+    /// Reconstruct statistics only for readable diagnostics.
+    pub fn decoded(
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<Self, String> {
+        Ok(Self(Arc::new(Mutex::new(
+            saved.decode("statistics-frame")?,
+        ))))
+    }
     pub fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             "statistics-frame",

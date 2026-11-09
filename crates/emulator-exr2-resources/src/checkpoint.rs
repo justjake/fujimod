@@ -3,23 +3,12 @@ mod portable;
 use super::*;
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct ResourceSnapshot {
     wires: BTreeMap<String, Checkpoint>,
     images: ImageSnapshot,
     media: Checkpoint,
     nands: BTreeMap<String, Checkpoint>,
-    /// Readable values captured with the typed state. Equality and canonical
-    /// archives use the typed checkpoints above; this is diagnostic output.
-    readable: Option<serde_json::Value>,
-}
-impl PartialEq for ResourceSnapshot {
-    fn eq(&self, other: &Self) -> bool {
-        self.wires == other.wires
-            && self.images == other.images
-            && self.media == other.media
-            && self.nands == other.nands
-    }
 }
 impl ResourceSnapshot {
     /// Encoded mutable resource state; shared sensor rasters remain external inputs.
@@ -45,13 +34,18 @@ impl ResourceSnapshot {
                 return Some(format!("wires.{name}/{message}"));
             }
         }
-        for name in other.wires.keys().filter(|name| !self.wires.contains_key(*name)) {
+        for name in other
+            .wires
+            .keys()
+            .filter(|name| !self.wires.contains_key(*name))
+        {
             return Some(format!("wires.{name}: only in right state"));
         }
         if let Some(message) = diff_map("images.wires", &self.images.wires, &other.images.wires) {
             return Some(message);
         }
-        if let Some(message) = diff_map("images.images", &self.images.images, &other.images.images) {
+        if let Some(message) = diff_map("images.images", &self.images.images, &other.images.images)
+        {
             return Some(message);
         }
         if let Some(message) = diff_map(
@@ -87,24 +81,18 @@ impl ResourceSnapshot {
     pub fn to_checkpoint(&self) -> Result<Checkpoint, String> {
         let mut children = Vec::new();
         for (name, state) in &self.wires {
-            children.push(
-                Checkpoint::encode("wire", &name)?.with_children(vec![state.clone()]),
-            );
+            children.push(Checkpoint::encode("wire", &name)?.with_children(vec![state.clone()]));
         }
         for (name, state) in &self.images.wires {
-            children.push(
-                Checkpoint::encode("image-wire", &name)?.with_children(vec![state.clone()]),
-            );
+            children
+                .push(Checkpoint::encode("image-wire", &name)?.with_children(vec![state.clone()]));
         }
         for (name, state) in &self.images.images {
-            children.push(
-                Checkpoint::encode("image", &name)?.with_children(vec![state.clone()]),
-            );
+            children.push(Checkpoint::encode("image", &name)?.with_children(vec![state.clone()]));
         }
         for (name, state) in &self.images.statistics {
-            children.push(
-                Checkpoint::encode("statistics", &name)?.with_children(vec![state.clone()]),
-            );
+            children
+                .push(Checkpoint::encode("statistics", &name)?.with_children(vec![state.clone()]));
         }
         for (name, state) in &self.images.sensors {
             let frames = state.0.frames()?;
@@ -123,18 +111,13 @@ impl ResourceSnapshot {
         }
         children.push(self.media.clone());
         for (name, state) in &self.nands {
-            children.push(
-                Checkpoint::encode("nand", &name)?.with_children(vec![state.clone()]),
-            );
+            children.push(Checkpoint::encode("nand", &name)?.with_children(vec![state.clone()]));
         }
         Ok(Checkpoint::encode("resources", &())?.with_children(children))
     }
 
     /// Readable direct-state JSON; binary content stays in the typed checkpoint.
     pub fn to_json(&self) -> Result<serde_json::Value, String> {
-        if let Some(readable) = &self.readable {
-            return Ok(readable.clone());
-        }
         self.checkpoint_json()
     }
 
@@ -144,28 +127,28 @@ impl ResourceSnapshot {
             BTreeMap<String, Card>,
             BTreeMap<String, Vec<(String, Vec<u8>)>>,
         ) = self.media.decode("resource-media")?;
+        let images = self.images.to_json()?;
         let mut wires = self
             .wires
             .iter()
-            .map(|(name, state)| (name.clone(), state.state()))
-            .collect::<BTreeMap<_, _>>();
-        for (name, state) in &self.images.wires {
-            wires.insert(name.clone(), state.state());
+            .map(|(name, state)| Ok((name.clone(), wire_json(state)?)))
+            .collect::<Result<BTreeMap<_, _>, String>>()?;
+        if let Some(image_wires) = images["wires"].as_object() {
+            wires.extend(
+                image_wires
+                    .iter()
+                    .map(|(name, value)| (name.clone(), value.clone())),
+            );
         }
         Ok(json!({
             "wires":wires,
-            "images":self.images.images.iter().map(|(name, state)| (name.clone(), state.state())).collect::<BTreeMap<_, _>>(),
-            "statistics":self.images.statistics.iter().map(|(name, state)| (name.clone(), state.state())).collect::<BTreeMap<_, _>>(),
-            "sensors":self.images.sensors.iter().map(|(name, state)| {
-                Ok((name.clone(), json!({
-                    "edge":state.0.edge(),
-                    "view":state.0.view(),
-                    "shared":state.0.shared(),
-                    "frames":state.0.frames()?.iter().map(Checkpoint::state).collect::<Vec<_>>(),
-                })))
-            }).collect::<Result<BTreeMap<_, _>, String>>()?,
+            "images":images["images"].clone(),
+            "statistics":images["statistics"].clone(),
+            "sensors":images["sensors"].clone(),
             "cards":cards.iter().map(|(name, card)| (name.clone(), card.state())).collect::<BTreeMap<_, _>>(),
-            "nands":self.nands.iter().map(|(name, state)| (name.clone(), state.state())).collect::<BTreeMap<_, _>>(),
+            "nands":self.nands.iter().map(|(name, state)| {
+                Ok((name.clone(), fujimod_emulator_devices::parts::nand::Nand::from_checkpoint(state)?.state()))
+            }).collect::<Result<BTreeMap<_, _>, String>>()?,
             "files":files.iter().map(|(name, entries)| {
                 (name.clone(), entries.iter().map(|(path, data)| json!({
                     "path":path,
@@ -174,6 +157,21 @@ impl ResourceSnapshot {
             }).collect::<BTreeMap<_, _>>(),
         }))
     }
+}
+
+/// Readable value carried by one resource wire's typed checkpoint.
+fn wire_json(saved: &Checkpoint) -> Result<serde_json::Value, String> {
+    use serde_json::json;
+    Ok(match saved.kind() {
+        "physical-focus" => json!(saved.decode::<f64>("physical-focus")?),
+        "physical-aperture" => json!(saved.decode::<f64>("physical-aperture")?),
+        "software-pulse" => json!(saved.decode::<bool>("software-pulse")?),
+        "logic-level" => json!(saved.decode::<bool>("logic-level")?),
+        "optical-position" => json!(saved.decode::<i64>("optical-position")?),
+        "image-irq-routes" => irq_routes::IrqRoutes::from_checkpoint(saved)?.fingerprint(),
+        "bridge-registers" => json!(saved.decode::<Vec<u8>>("bridge-registers")?),
+        _ => saved.state(),
+    })
 }
 
 fn diff_map(
@@ -301,7 +299,6 @@ impl Resources {
                 .iter()
                 .map(|(k, v)| Ok((k.clone(), v.checkpoint()?)))
                 .collect::<Result<_, String>>()?,
-            readable: Some(self.fingerprint()?),
         })
     }
     pub fn validate_checkpoint(&self, saved: &ResourceSnapshot) -> Result<(), String> {
@@ -381,7 +378,6 @@ mod optical_wire_tests {
     }
 }
 
-
 #[cfg(test)]
 mod aperture_wire_tests {
     use super::*;
@@ -404,5 +400,27 @@ mod aperture_wire_tests {
         assert_eq!(resources.fingerprint().unwrap(), changed);
         resources.restore_checkpoint(&saved).unwrap();
         assert_eq!(*aperture.lock().unwrap(), 16.);
+    }
+}
+
+#[cfg(test)]
+mod readable_snapshot_tests {
+    use super::*;
+
+    #[test]
+    fn readable_wire_values_are_derived_from_the_typed_checkpoint() {
+        let mut resources = Resources::default();
+        resources
+            .wires
+            .insert("usb".into(), Wire::logic_level(false));
+        resources.wires.insert("dial".into(), {
+            let position = optics::Position::default();
+            position.publish(-4);
+            Wire::OpticalPosition(position)
+        });
+        let saved = resources.checkpoint().unwrap();
+        let state = saved.to_json().unwrap();
+        assert_eq!(state["wires"]["usb"], serde_json::json!(false));
+        assert_eq!(state["wires"]["dial"], serde_json::json!(-4));
     }
 }
