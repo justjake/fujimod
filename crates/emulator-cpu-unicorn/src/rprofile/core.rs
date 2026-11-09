@@ -393,6 +393,34 @@ impl Execution {
             }
         }
     }
+    fn enter_supervisor_call(&self) -> Result<(), String> {
+        let cpsr = self.scalar(arm::CPSR)?;
+        // Unicorn's SVC trap leaves PC at the following instruction in both
+        // ARM and Thumb state. It has not changed mode or taken the vector.
+        let return_pc = self.scalar(arm::PC)?;
+        let sctlr = self.cpu.coprocessor(
+            arm::Coprocessor {
+                cp: 15,
+                opc1: 0,
+                crn: 1,
+                crm: 0,
+                opc2: 0,
+                secure: 0,
+                wide: false,
+            },
+            None,
+        )? as u32;
+        if sctlr & ((1 << 30) | (1 << 25)) != 0 {
+            return Err("Thumb/big-endian SVC exception entry is not implemented".into());
+        }
+        let vector = if sctlr & (1 << 13) != 0 { 0xffff0008 } else { 8 };
+        // Clear IT, J, E and T, switch to the SVC bank, and mask IRQ only.
+        let next = (cpsr & !(0x0600fc00 | 0x01000000 | 0x200 | 0x20 | 0x1f)) | 0x93;
+        self.set(arm::CPSR, next)?;
+        self.set(arm::SPSR, cpsr)?;
+        self.set(arm::CORE[14], return_pc)?;
+        self.set(arm::PC, vector)
+    }
     fn accounting(&self) -> Accounting {
         unsafe { Accounting::from_raw(self.record) }
     }
@@ -1102,6 +1130,12 @@ unsafe fn store(access: Access, address: u64, size: i32, value: i64, data: *mut 
 unsafe fn exception(exception: arm::Exception, data: *mut c_void) {
     let e = unsafe { context(data) };
     e.guarded(|| {
+        if exception == arm::Exception::SupervisorCall {
+            // The SVC was the last executed instruction of its block.
+            e.settle(0, true)?;
+            e.exception.set(Some(exception));
+            return e.cpu.stop();
+        }
         if matches!(
             exception,
             arm::Exception::PrefetchAbort | arm::Exception::DataAbort
