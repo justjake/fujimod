@@ -160,6 +160,9 @@ only its adapter. Ordinary ranges use bounded range reads, and only
 declared, DMA-admitted ranges larger than the loan's slow-read limit use the
 staged bulk mapping. Canceled reads and events leave the mapping unresolved
 and send no cleanup traffic.
+The remote facts' uncached alias can select a continuous canonical range only
+inside the existing bulk profile. Other reads keep their aliased addresses and
+ordinary limits; the profile window is never expanded.
 
 The native binding uses PyO3's `experimental-async` coroutine support and nusb's
 wakeups directly, without a background Python worker or an added Rust runtime.

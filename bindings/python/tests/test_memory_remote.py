@@ -56,12 +56,14 @@ def remote_facts() -> dict:
     return facts_from_selection(catalog.resolve_firmware(FW_ID))
 
 
-def profile(firmware_id: str = FW_ID) -> usb.BulkProfile:
+def profile(firmware_id: str = FW_ID, *, canonical: bool = False) -> usb.BulkProfile:
     """One synthetic publication profile, aligned to its DMA declaration."""
+    alias = remote_facts()['firmware']['uncached_alias'] if canonical else 0
+    base, data_address = WINDOW[0] & ~alias, DATA[0] & ~alias
     return usb.BulkProfile.from_json(
         profile_json(
             firmware_id=firmware_id,
-            window={"address": WINDOW[0], "size": WINDOW[1]},
+            window={"address": base, "size": WINDOW[1]},
             source={
                 "mechanism": "publication",
                 "source_state": SOURCE_STATE,
@@ -71,17 +73,17 @@ def profile(firmware_id: str = FW_ID) -> usb.BulkProfile:
             code_checks=[
                 {
                     "name": "entry",
-                    "address": WINDOW[0],
+                    "address": base,
                     "size": len(CODE),
                     "sha256": hashlib.sha256(CODE).hexdigest(),
                 }
             ],
-            probes=[{"address": WINDOW[0], "size": 8}],
+            probes=[{"address": base, "size": 8}],
             scopes=[
                 {
                     "name": "quick",
                     "basis": "Synthetic test range.",
-                    "ranges": [{"name": "data", "address": DATA[0], "size": DATA[1]}],
+                    "ranges": [{"name": "data", "address": data_address, "size": DATA[1]}],
                 }
             ],
         )
@@ -91,19 +93,19 @@ def profile(firmware_id: str = FW_ID) -> usb.BulkProfile:
 PROFILE = profile()
 
 
-def qualified() -> list[testing.Exchange]:
-    return [*info(4, "SYNTHETIC"), *info(8, "0.0"), *read(WINDOW[0], CODE)]
+def qualified(base: int = WINDOW[0]) -> list[testing.Exchange]:
+    return [*info(4, "SYNTHETIC"), *info(8, "0.0"), *read(base, CODE)]
 
 
-def publication_open() -> list[testing.Exchange]:
+def publication_open(base: int = WINDOW[0]) -> list[testing.Exchange]:
     return [
-        *qualified(),
+        *qualified(base),
         *read(SOURCE_STATE, ORIGINAL),
         *write(SOURCE_STATE, SELECTED),
         *read(SOURCE_STATE, SELECTED),
-        *read(WINDOW[0], CODE[:8]),
+        *read(base, CODE[:8]),
         *read(SOURCE_STATE, SELECTED),
-        *data_read(WINDOW[0], CODE[:8]),
+        *data_read(base, CODE[:8]),
         *read(SOURCE_STATE, SELECTED),
     ]
 
@@ -283,6 +285,33 @@ async def test_a_profile_for_another_firmware_refuses_before_traffic() -> None:
     assert session.state == usb.SessionState.MemoryOwned
     session.abandon()
     assert script.remaining == 1
+
+
+async def test_remote_alias_selects_only_the_admitted_canonical_bulk_window() -> None:
+    alias = remote_facts()['firmware']['uncached_alias']
+    base, address = WINDOW[0] & ~alias, DATA[0] & ~alias
+    steps, expected = bulk_steps(address, DATA[1])
+    session, script = await opened([
+        *publication_open(base), *steps, *read(OUTSIDE, b"abcd"),
+        *restore_steps(), CANARY,
+    ])
+    memory = await session.memory(profile(canonical=True))
+    remote = camera(memory)
+    observed = await remote.wait_until_memory(
+        lambda rows: True, [(address, DATA[1])],
+        deadline=deadline(remote), condition='canonical bulk window',
+    )
+    assert observed == [(address, expected)]
+    outside = OUTSIDE & ~alias
+    observed = await remote.wait_until_memory(
+        lambda rows: True, [(outside, 4)],
+        deadline=deadline(remote), condition='outside canonical window',
+    )
+    assert observed == [(outside, b"abcd")]
+    remote.close()
+    await memory.aclose()
+    assert script.remaining == 1
+    session.abandon()
 
 
 async def test_a_non_memory_object_refuses_before_traffic() -> None:

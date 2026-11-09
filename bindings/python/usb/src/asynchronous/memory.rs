@@ -535,6 +535,7 @@ impl Memory {
     pub(super) fn provider(
         &self,
         firmware_id: &str,
+        uncached_alias: u32,
     ) -> PyResult<Box<dyn fujimod_python_usb_base::MemorySource>> {
         if self.closed_report()?.is_some() {
             return Err(closed_error());
@@ -563,6 +564,7 @@ impl Memory {
             limits: self.limits,
             window: profile.window,
             dma: profile.dma,
+            uncached_alias,
         }))
     }
 }
@@ -578,6 +580,9 @@ struct Provider {
     limits: Limits,
     window: BulkRange,
     dma: Option<BulkDma>,
+    /// The remote facts' declared alias, already applied to remote addresses.
+    /// Only its canonical counterpart may select the existing bulk window.
+    uncached_alias: u32,
 }
 impl fujimod_python_usb_base::MemorySource for Provider {
     fn limits(&self) -> DebugMemoryLimits {
@@ -593,9 +598,23 @@ impl fujimod_python_usb_base::MemorySource for Provider {
                 return Err(PyValueError::new_err("length must be nonzero"));
             }
             let mut lease = Lease::take(&self.state)?;
-            let target = BulkRange {
+            let requested = BulkRange {
                 address: u64::from(address),
                 size: u64::from(length),
+            };
+            // Honor a profile that directly admits the supplied address.
+            // Otherwise remove only the alias declared by these remote facts;
+            // the resulting target must still lie in the unchanged profile.
+            let boundary = 1u64 << self.uncached_alias.trailing_zeros();
+            let last = requested.address + requested.size - 1;
+            let continuous = requested.address / boundary == last / boundary;
+            let target = if self.window.contains(requested) || !continuous {
+                requested
+            } else {
+                BulkRange {
+                    address: u64::from(address & !self.uncached_alias),
+                    size: requested.size,
+                }
             };
             // Only a declared, admitted range larger than the owner's slow-read
             // limit uses the shared E1 mapping. Every other range stays a

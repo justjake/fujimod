@@ -234,6 +234,10 @@ as a slow read. The adapter retains the loan's owner and state but never
 restores them: `camera.close()` only drops it, `memory.aclose()` is the single
 close, and a canceled read or event leaves the mapping unresolved without
 cleanup traffic.
+The provider resolves the declared uncached alias only into its admitted bulk
+window, without changing that window. Ordinary reads retain their aliased
+addresses. An aliased range that cannot be represented continuously is not
+normalized into a bulk read.
 
 Optional `Facts.input_tasks` supplies a checked task-table layout, required
 entry identities and receive state, plus mode-qualified busy registers. Input

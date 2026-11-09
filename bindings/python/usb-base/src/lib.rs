@@ -181,8 +181,8 @@ pub struct Sessions {
     /// The firmware's configuration command limit of a Python USB session object, in bytes.
     pub configuration_limit: fn(&Bound<'_, PyAny>) -> PyResult<u32>,
     /// Open a provider on a Python memory handle whose staged bulk profile must
-    /// carry the given firmware ID.
-    pub memory: fn(&Bound<'_, PyAny>, &str) -> PyResult<Box<dyn MemorySource>>,
+    /// carry the given firmware ID. The remote facts supply the alias mask.
+    pub memory: fn(&Bound<'_, PyAny>, &str, u32) -> PyResult<Box<dyn MemorySource>>,
 }
 static SESSIONS: OnceLock<Sessions> = OnceLock::new();
 
@@ -212,8 +212,9 @@ pub fn configuration_limit(session: &Bound<'_, PyAny>) -> PyResult<u32> {
 pub fn memory_source(
     memory: &Bound<'_, PyAny>,
     firmware_id: &str,
+    uncached_alias: u32,
 ) -> PyResult<Box<dyn MemorySource>> {
-    (sessions()?.memory)(memory, firmware_id)
+    (sessions()?.memory)(memory, firmware_id, uncached_alias)
 }
 
 /// Run a native ff80 operation on a Python USB session object.

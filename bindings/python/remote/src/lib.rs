@@ -133,7 +133,10 @@ impl Camera {
         // Everything that can refuse from the facts does so before the memory
         // handle is even asked for a provider.
         facts.validate().map_err(error)?;
-        let source = fujimod_python_usb_base::memory_source(memory, &facts.firmware.firmware_id)?;
+        let alias = u32::try_from(facts.firmware.uncached_alias)
+            .map_err(|_| PyValueError::new_err("ff80 alias exceeds 32 bits"))?;
+        let source =
+            fujimod_python_usb_base::memory_source(memory, &facts.firmware.firmware_id, alias)?;
         let options = remote::ff80::Options {
             memory_limits: source.limits(),
             event_bytes,
