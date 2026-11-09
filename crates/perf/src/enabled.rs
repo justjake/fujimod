@@ -1105,8 +1105,15 @@ mod tests {
         assert_eq!(wait.stops.get("device:display-timing"), Some(&1));
         assert_eq!(wait.stops.get("deadline"), Some(&1));
         assert_eq!((wait.instructions, wait.ticks), (25, 60));
-        let wait_span = summary.spans.iter().find(|span| span.kind == "wait" && span.wait.as_deref() == Some("osd_frame")).unwrap();
-        assert_eq!((wait.instructions, wait.ticks), (wait_span.instructions, wait_span.ticks));
+        let wait_span = summary
+            .spans
+            .iter()
+            .find(|span| span.kind == "wait" && span.wait.as_deref() == Some("osd_frame"))
+            .unwrap();
+        assert_eq!(
+            (wait.instructions, wait.ticks),
+            (wait_span.instructions, wait_span.ticks)
+        );
         assert_eq!(wait.thread_cpu_ns, wait_span.thread_cpu_ns);
         assert_eq!(summary.waits.iter().find(|wait| wait.description == "menu ready").unwrap().predicate_evaluations, 1);
     }
