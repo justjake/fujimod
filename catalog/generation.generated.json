@@ -3448,6 +3448,10 @@
           "status": "available",
           "errors": []
         },
+        "card-files": {
+          "status": "available",
+          "errors": []
+        },
         "controls": {
           "status": "available",
           "errors": []
@@ -3472,6 +3476,15 @@
         "memory-reservations": {
           "status": "available",
           "errors": []
+        },
+        "nand-boot": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "nand-boot",
+              "reason": "ValueError: xe2s-111 has no EXR II stage-1 code-space policy (flash_update.loader)"
+            }
+          ]
         },
         "progress": {
           "status": "available",
@@ -3516,15 +3529,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "nand-boot": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "nand-boot",
-              "reason": "ValueError: xe2s-111 has no EXR II stage-1 code-space policy (flash_update.loader)"
-            }
-          ]
         }
       }
     },
