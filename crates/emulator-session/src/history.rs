@@ -54,6 +54,10 @@ pub enum Input {
         node: String,
         cycles: i32,
     },
+    RotateEdges {
+        node: String,
+        edges: i32,
+    },
     Touch {
         node: String,
         script: Vec<ContactInput>,
@@ -130,6 +134,7 @@ impl Input {
             | Self::Frames { node, .. }
             | Self::Wake { node }
             | Self::Rotate { node, .. }
+            | Self::RotateEdges { node, .. }
             | Self::CardContacts { node, .. } => node.capacity(),
             Self::Adc { node, samples } => node.capacity() + samples.capacity() * size_of::<u16>(),
             Self::Touch { node, script } => {
@@ -186,6 +191,7 @@ impl Input {
             } => session.gpio(node, *port, *pin, *high),
             Self::Adc { node, samples } => session.set_adc_samples(node, samples),
             Self::Rotate { node, cycles } => session.rotate(node, *cycles),
+            Self::RotateEdges { node, edges } => session.rotate_edges(node, *edges),
             Self::Touch { node, script } => session.touch(node, script),
             Self::Logic { wire, high } => session.logic_input(wire, *high),
             Self::Wake { node } => session.board.inputs_changed(session.node(node)?),

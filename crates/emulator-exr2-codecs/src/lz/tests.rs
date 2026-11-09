@@ -543,6 +543,77 @@ fn soft_focus_first_crop_refuses_unmeasured_descriptor_variants() {
 }
 
 #[test]
+fn soft_focus_x30_preview_crops_admit_transfer_blocks_with_the_same_pixels() {
+    // The X30 Soft Focus preview's first crop: 640x480 to 320x240 with
+    // 1280-byte pitches and 32-byte transfer blocks for both rasters.
+    let resize = |transfer: u32, input: u16| {
+        let (mut d, mut h, mut c) = setup();
+        reset(&mut d, &mut h);
+        enabled(&mut c, &mut h, 0, true);
+        for y in 0..480 {
+            for x in 0..640 {
+                let at = 0x10000 + y * 1280 + x * 2;
+                let sample = if input == 0 { (x + 3 * y) as u16 % 200 } else { input };
+                h.bytes[at..at + 2].copy_from_slice(&sample.to_le_bytes());
+            }
+        }
+        let values = [
+            0x1100, 0x10000, 0x500, 0x01e00280, 0x100000, 0x500, 0x00f00140, 0x4c, 0x00191a1a,
+            0x24242526, 0x00400080, transfer,
+        ];
+        for (offset, value) in ORDER.into_iter().zip(values) {
+            put(&mut d, &mut h, offset, value).unwrap();
+        }
+        put(&mut d, &mut h, 0x8c, 1).unwrap();
+        assert!(matches!(
+            d.raster_kind(),
+            Ok(RasterKind::ScalarThresholdedHalf)
+        ));
+        put(&mut d, &mut h, 4, 1).unwrap();
+        let due = d.next_deadline(h.now).unwrap();
+        tick(&mut d, &mut h, due).unwrap();
+        assert_eq!(h.irqs, [(0, IRQ)]);
+        h.bytes[0x100000..0x100000 + 1280 * 240].to_vec()
+    };
+    let unblocked = resize(0, 0);
+    assert_eq!(resize(0x1000_1000, 0), unblocked);
+    // The camera's measured samples hold at this geometry too.
+    for (input, expected) in [(16u16, 19u16), (21, 24), (240, 255)] {
+        let pixels = resize(0x1000_1000, input);
+        for row in pixels.chunks_exact(1280) {
+            assert!(row[..640].chunks_exact(2).all(|s| s == expected.to_le_bytes()));
+            assert!(row[640..].iter().all(|byte| *byte == 0xcc));
+        }
+    }
+
+    // Its follow-up crops and the first crop refuse rows that are not whole
+    // blocks and every other register 80 field.
+    for (control, limit, source, destination, transfer, ok) in [
+        (0x1100, 0x4c, 0x01e00280, 0x00f00140, 0x1000_1000, true),
+        (0x1100, 0x4c, 0x01e00280, 0x00f00140, 0x1000_1100, false),
+        (0x1100, 0x4c, 0x01e002d0, 0x00f00170, 0x2000_2000, false),
+        (0x1000, 0x40, 0x00f00140, 0x007800a0, 0x1000_1000, true),
+        (0x1000, 0x40, 0x007800a0, 0x003c0060, 0x1000_1000, true),
+        (0x1000, 0x40, 0x007800a0, 0x003c0050, 0x2000_1000, false),
+        (0x1000, 0x40, 0x00f00140, 0x007800a0, 0x0000_1001, false),
+    ] {
+        let mut regs = vec![0; 36];
+        let values = [
+            control, 0x10000, 0x500, source, 0x100000, 0x500, destination, limit, 0x00191a1a,
+            0x24242526, 0x00400080, transfer,
+        ];
+        for (register, word) in ORDER.into_iter().zip(values) {
+            regs[register / 4] = word;
+        }
+        assert_eq!(
+            Decompressor::raster_kind_for(&regs).is_ok(),
+            ok,
+            "{control:#x} {source:#x} {destination:#x} {transfer:#x}"
+        );
+    }
+}
+
+#[test]
 fn weighted_scalar_half_resizes_with_exact_kernel_inside_source_row_padding() {
     let (mut d, mut h, mut c) = setup();
     reset(&mut d, &mut h);
@@ -613,6 +684,90 @@ fn scalar_half_fir_refuses_other_filters_geometry_and_alias_overlap_before_dma()
         assert_eq!(h.writes, 0);
         assert!(h.irqs.is_empty());
         assert_eq!(d.next_deadline(h.now), None);
+    }
+}
+
+#[test]
+fn scalar_half_fir_transfer_blocks_change_no_pixels_and_refuse_partial_rows() {
+    // 640x480 scalar to 320x240 with 1280-byte pitches, as an ADV filter
+    // preview programs it: 32-byte transfer blocks for both rasters.
+    let resize = |transfer: u32| {
+        let (mut d, mut h, mut c) = setup();
+        reset(&mut d, &mut h);
+        enabled(&mut c, &mut h, 0, true);
+        for y in 0..480 {
+            for x in 0..640 {
+                let at = 0x10000 + y * 1280 + x * 2;
+                h.bytes[at..at + 2].copy_from_slice(&((3 * x + 37 * y) as u16).to_le_bytes());
+            }
+        }
+        configure(
+            &mut d,
+            &mut h,
+            [0x500, 0x01e00280, 0x500, 0x00f00140, 0x00400080, transfer],
+            3,
+        );
+        put(&mut d, &mut h, 4, 1).unwrap();
+        let due = d.next_deadline(h.now).unwrap();
+        tick(&mut d, &mut h, due).unwrap();
+        assert_eq!(h.irqs, [(0, IRQ)]);
+        h.bytes[0x100000..0x100000 + 1280 * 240].to_vec()
+    };
+    let unblocked = resize(0);
+    assert_ne!(unblocked, vec![0xcc; unblocked.len()]);
+    assert_eq!(resize(0x1000_1000), unblocked);
+    assert_eq!(resize(0x3000_3000), unblocked);
+
+    // 720x480 to 368x240: 1440-byte source rows and 736-byte destination
+    // rows are whole 32-byte blocks but not whole 64-byte blocks. Other
+    // register 80 fields remain unmodeled.
+    for (transfer, ok) in [
+        (0x1000_1000, true),
+        (0x0000_2000, false),
+        (0x2000_0000, false),
+        (0x1000_1001, false),
+        (0x1100_1000, false),
+        (0x1000_1100, false),
+    ] {
+        let mut regs = vec![0; 36];
+        let values = [
+            0x1000, 0x10000, 0x5a0, 0x01e002d0, 0x100000, 0x5a0, 0x00f00170, 0x40, 0x082030,
+            0x081e3844, 0x00400080, transfer,
+        ];
+        for (register, word) in ORDER.into_iter().zip(values) {
+            regs[register / 4] = word;
+        }
+        assert_eq!(
+            Decompressor::raster_kind_for(&regs).is_ok(),
+            ok,
+            "{transfer:#x}"
+        );
+    }
+
+    // 160x120 to 80x60 requested, as the X30 ADV filter programs it: the
+    // request builder rounds the scalar destination width up to a multiple
+    // of its block's byte count taken as pixels: 96 for 32-byte blocks, 128
+    // for 64-byte blocks. Wider destinations still refuse.
+    for (width, transfer, ok) in [
+        (96, 0x1000_1000, true),
+        (96, 0x0000_1000, false),
+        (112, 0x1000_1000, false),
+        (128, 0x2000_1000, true),
+        (144, 0x2000_1000, false),
+    ] {
+        let mut regs = vec![0; 36];
+        let values = [
+            0x1000, 0x10000, 0x500, 0x007800a0, 0x100000, 0x500, 0x003c0000 | width, 0x40,
+            0x082030, 0x081e3844, 0x00400080, transfer,
+        ];
+        for (register, word) in ORDER.into_iter().zip(values) {
+            regs[register / 4] = word;
+        }
+        assert_eq!(
+            Decompressor::raster_kind_for(&regs).is_ok(),
+            ok,
+            "{width} {transfer:#x}"
+        );
     }
 }
 
@@ -848,6 +1003,52 @@ fn packed_luma_half_resize_latches_source_preserves_padding_and_completes_before
     tick(&mut restored, &mut h, due + 1).unwrap();
     assert_eq!(restored.fingerprint().unwrap(), completed);
     assert_eq!(h.writes, 240);
+}
+
+#[test]
+fn packed_luma_half_admits_builder_rounded_destination_widths() {
+    // 640x480 to 320x240, as the X30 Dynamic Tone preview requests it. The
+    // request builder rounds the packed destination width up to twice its
+    // 64-byte block: 384. Columns past the half width replicate the right
+    // edge; wider destinations still refuse.
+    let resize = |width: u32| {
+        let (mut d, mut h, mut c) = setup();
+        reset(&mut d, &mut h);
+        enabled(&mut c, &mut h, 0, true);
+        for y in 0..480 {
+            for x in (0..640).step_by(2) {
+                let at = 0x10000 + y * 2048 + x * 2;
+                h.bytes[at..at + 4]
+                    .copy_from_slice(&[(x / 8 + y / 4) as u8, (x / 8 + y / 4) as u8, 128, 128]);
+            }
+        }
+        let mut words = luma_conversion_words();
+        words[3] = 480 << 16 | 640;
+        words[5] = 640;
+        words[6] = 240 << 16 | width;
+        configure_luma(&mut d, &mut h, words);
+        put(&mut d, &mut h, 4, 1)?;
+        let due = d.next_deadline(h.now).unwrap();
+        tick(&mut d, &mut h, due).unwrap();
+        assert_eq!(h.irqs, [(0, IRQ)]);
+        Ok::<_, String>(
+            (0..240)
+                .map(|y| h.bytes[0x180000 + y * 640..0x180000 + y * 640 + 640].to_vec())
+                .collect::<Vec<_>>(),
+        )
+    };
+    let half = resize(320).unwrap();
+    let rounded = resize(384).unwrap();
+    for (half, rounded) in half.iter().zip(&rounded) {
+        assert_eq!(rounded[..320], half[..320]);
+        assert!(rounded[320..384].iter().all(|&value| value == rounded[320]));
+        assert!(rounded[320] >= half[319]);
+        assert!(half[320..].iter().all(|&byte| byte == 0xcc));
+        assert!(rounded[384..].iter().all(|&byte| byte == 0xcc));
+    }
+    for width in [312, 392, 448] {
+        assert!(resize(width).is_err(), "{width}");
+    }
 }
 
 #[test]

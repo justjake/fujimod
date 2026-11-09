@@ -241,7 +241,7 @@ impl Session {
     }
     pub fn rotation(&self, id: &str, steps: i32) -> Result<(String, i32), String> {
         use super::contact_driver::Interface;
-        let (node, sign) = self
+        let (node, edges_per_step) = self
             .contact_driver
             .as_ref()
             .and_then(|d| {
@@ -249,17 +249,17 @@ impl Session {
                     Interface::Rotary {
                         id: found,
                         node,
-                        cycles_per_step,
-                    } if found == id => Some((node, *cycles_per_step)),
+                        edges_per_step,
+                    } if found == id => Some((node, *edges_per_step)),
                     _ => None,
                 })
             })
             .ok_or("physical rotary control is unavailable")?;
-        let cycles = steps.checked_mul(sign).ok_or("rotary step overflow")?;
+        let edges = steps.checked_mul(edges_per_step).ok_or("rotary step overflow")?;
         self.resources
             .encoder(node)?
-            .admit_cycles(self.board.now(), cycles)?;
-        Ok((node.clone(), cycles))
+            .admit_edges(self.board.now(), edges)?;
+        Ok((node.clone(), edges))
     }
     pub fn touch_input(
         &self,

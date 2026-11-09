@@ -10,7 +10,7 @@ pub use crate::ladders::{ControlLadder, LadderRung, LadderWire};
 
 use crate::facts::{
     ControlInterface, DecodedTouch, GpioScanner, ManualReference, NativeKeyNames, ScannerReader,
-    ScannerRecordWitness, ScannerTable,
+    ScannerInputKind, ScannerRecordWitness, ScannerTable,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -559,6 +559,28 @@ pub struct LocatedScannerRecord {
     pub witness: ScannerRecordWitness,
 }
 
+/// Configuration-byte offsets used by a calibrated analog phase decoder.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct AdcEncoderCalibration {
+    /// Little-endian u16 center offsets, one for each channel.
+    pub centers: [u16; 2],
+    /// Little-endian signed u16 center adjustment offset.
+    pub offset: u16,
+    /// Byte holding the Schmitt half-band width.
+    pub hysteresis: u16,
+    /// Byte holding accepted edges per native direction event.
+    pub edges_per_step: u16,
+    /// Byte selecting normal or reversed native direction.
+    pub direction: u16,
+}
+
 /// Located electrical meaning, separate from scanner table operands.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -600,6 +622,15 @@ pub enum ElectricalInput {
         /// Firmware interpretation of the contact.
         scanner: GpioScanner,
     },
+    /// Conjunction of the ordered digital contacts in one body connection.
+    GpioContacts {
+        /// Body connection carrying all of the contacts, in predicate order.
+        connection_id: String,
+        /// Required logic level of each contact.
+        expected_levels: Vec<bool>,
+        /// Firmware callback evaluating the conjunction.
+        callback: u64,
+    },
     /// Physical encoder interpreted by a located quadrature decoder.
     GpioQuadrature {
         /// Body connection carrying the encoder phases.
@@ -616,6 +647,34 @@ pub enum ElectricalInput {
         guard: u64,
         /// Located decoder activation threshold.
         threshold: u32,
+    },
+    /// Physical encoder whose decoder emits each accepted transition without a latch.
+    GpioTransition {
+        /// Ordered body connection carrying the two encoder phases.
+        connection_id: String,
+        /// Decoder phase mapping.
+        phase_map: [u8; 4],
+        /// Decoder transition values indexed by new phase, then old phase.
+        transitions: [u8; 16],
+        /// Decoder-local direction event, distinct from the UI event.
+        decoder_event: u32,
+        /// Located decoder guard address.
+        guard: u64,
+        /// Located decoder activation threshold.
+        threshold: u32,
+    },
+    /// Calibrated analog phase decoder with a native edge accumulator.
+    AdcTransition {
+        /// Ordered body connection carrying the two analog channels.
+        connection_id: String,
+        /// Decoder phase mapping.
+        phase_map: [u8; 4],
+        /// Decoder transition values indexed by new phase, then old phase.
+        transitions: [u8; 16],
+        /// Decoder-local direction event, distinct from the UI event.
+        decoder_event: u32,
+        /// Configuration offsets for thresholds, edge count, and direction.
+        calibration_offsets: AdcEncoderCalibration,
     },
     /// Physical encoder whose firmware counts whole phase cycles, one event per cycle.
     GpioFixedCycle {
@@ -1473,6 +1532,9 @@ impl FirmwareControlIds {
                 let connection_ids: Vec<&String> = match electrical {
                     ElectricalInput::Adc { connection_id, .. }
                     | ElectricalInput::Gpio { connection_id, .. }
+                    | ElectricalInput::GpioContacts { connection_id, .. }
+                    | ElectricalInput::GpioTransition { connection_id, .. }
+                    | ElectricalInput::AdcTransition { connection_id, .. }
                     | ElectricalInput::GpioQuadrature { connection_id, .. } => vec![connection_id],
                     ElectricalInput::GpioFixedCycle { connection_id, .. }
                     | ElectricalInput::SerialStatus { connection_id, .. } => vec![connection_id],
@@ -1508,6 +1570,45 @@ impl FirmwareControlIds {
                         "input {} has an invalid encoder cycle sign",
                         input.id
                     ));
+                }
+                if let ElectricalInput::GpioTransition {
+                    phase_map, transitions, decoder_event, guard, threshold, ..
+                } = electrical {
+                    let mut phases = *phase_map;
+                    phases.sort_unstable();
+                    if phases != [0, 1, 2, 3]
+                        || transitions.iter().any(|event| *event > 2)
+                        || !matches!(*decoder_event, 1 | 2)
+                        || !transitions.contains(&(*decoder_event as u8))
+                        || *guard == 0
+                        || *threshold != 1
+                        || input.scanner.is_some()
+                    {
+                        return Err(format!("input {} has an invalid transition encoder", input.id));
+                    }
+                }
+                if let ElectricalInput::AdcTransition {
+                    phase_map, transitions, decoder_event, calibration_offsets, ..
+                } = electrical {
+                    if *phase_map != [0, 1, 2, 3]
+                        || transitions.iter().any(|event| *event > 3)
+                        || !matches!(*decoder_event, 1 | 2)
+                        || calibration_offsets.centers.contains(&u16::MAX)
+                        || calibration_offsets.offset == u16::MAX
+                        || input.scanner.is_some()
+                    {
+                        return Err(format!("input {} has an invalid analog encoder", input.id));
+                    }
+                }
+                if let ElectricalInput::GpioContacts { expected_levels, callback, .. } = electrical
+                    && (!(2..=8).contains(&expected_levels.len())
+                        || *callback == 0
+                        || input.scanner.as_ref().is_none_or(|scanner|
+                            scanner.witness.input_kind != ScannerInputKind::Kind5
+                                || u64::from(scanner.witness.source) != *callback
+                                || scanner.witness.upper != 1))
+                {
+                    return Err(format!("input {} has an invalid GPIO conjunction", input.id));
                 }
                 if let ElectricalInput::Adc {
                     intervals,
@@ -1579,6 +1680,7 @@ impl FirmwareControlIds {
                     ElectricalInput::Adc { .. }
                         | ElectricalInput::AdcConjunction { .. }
                         | ElectricalInput::Gpio { .. }
+                        | ElectricalInput::GpioContacts { .. }
                         | ElectricalInput::SerialStatus { .. }
                 ) && input.scanner.is_none()
                 {

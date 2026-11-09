@@ -884,8 +884,8 @@ impl Board {
             .map_err(error)
     }
     fn rotate_control(&mut self, id: &str, steps: i32) -> PyResult<()> {
-        let (node, cycles) = self.session()?.rotation(id, steps).map_err(error)?;
-        self.session_mut()?.rotate(&node, cycles).map_err(error)
+        let (node, edges) = self.session()?.rotation(id, steps).map_err(error)?;
+        self.session_mut()?.rotate_edges(&node, edges).map_err(error)
     }
     fn touch_script(&mut self, node: &str, script: &str) -> PyResult<()> {
         self.session_mut()?
@@ -1030,6 +1030,16 @@ impl Board {
             return Ok(session.now());
         }
         Ok(self.board()?.now())
+    }
+    /// Opt in to ending a run when a device deadline passes and every released
+    /// core is still waiting; `idle_stopped` reports that outcome.
+    fn set_idle_stop(&self, enabled: bool) -> PyResult<()> {
+        self.board()?.set_idle_stop(enabled);
+        Ok(())
+    }
+    #[getter]
+    fn idle_stopped(&self) -> PyResult<bool> {
+        Ok(self.board()?.idle_stopped())
     }
     #[getter]
     fn quiescent(&self) -> PyResult<bool> {

@@ -144,8 +144,8 @@ impl Session {
         self.session_state()
     }
     pub fn rotate(&mut self, id: &str, steps: i32) -> Result<SessionState, String> {
-        let (node, cycles) = self.core.rotation(id, steps)?;
-        self.apply_marked_input(Input::Rotate { node, cycles })?;
+        let (node, edges) = self.core.rotation(id, steps)?;
+        self.apply_marked_input(Input::RotateEdges { node, edges })?;
         self.session_state()
     }
     pub fn touch(

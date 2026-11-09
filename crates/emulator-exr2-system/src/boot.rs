@@ -1,11 +1,16 @@
 //! Boot-source latch and FFF98008 memory selection. The meanings of selection
 //! words are supplied by board wiring: the old 1=RAM/2=storage interpretation
 //! is not a measured address decoder. No CPU state or code bytes are inputs.
+//!
+//! FFF98200 is a read-only memory-traffic status: the X30 SRAM sleep code
+//! (0x1220988) waits for bits 4 and 0 to clear before and after it requests
+//! DRAM self-refresh. The model has no outstanding traffic, so it reads zero.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 
 pub const BASE: u64 = 0xfff98000;
 const OFFSETS: [u64; 5] = [0, 8, 0x100, 0x104, 0x208];
+const TRAFFIC_STATUS: u64 = BASE + 0x200;
 #[derive(Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
@@ -74,6 +79,9 @@ impl Device for Block98000 {
         "block-98000"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
+        if address == TRAFFIC_STATUS && size == 4 {
+            return 0;
+        }
         match Self::index(address, size) {
             Some(index) => self.state.registers[index] as u64,
             None => {
@@ -104,7 +112,7 @@ impl Device for Block98000 {
         self.state.registers[index] = word;
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
-        Self::index(address, size).is_some()
+        Self::index(address, size).is_some() || address == TRAFFIC_STATUS && size == 4
     }
     fn save(&self) -> serde_json::Value {
         serde_json::to_value(&self.state).expect("boot control state")

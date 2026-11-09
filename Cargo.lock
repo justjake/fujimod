@@ -1966,6 +1966,7 @@ dependencies = [
  "futures-lite",
  "libm",
  "openh264",
+ "parking_lot",
  "rusty_h264-common",
  "rusty_h264-encoder",
  "serde",
@@ -2472,6 +2473,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-workspace-hack",
+ "parking_lot",
  "serde",
  "serde_json",
 ]

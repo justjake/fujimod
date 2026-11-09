@@ -306,6 +306,17 @@ impl Decompressor {
     fn raster_kind(&self) -> Result<RasterKind, String> {
         Self::raster_kind_for(&self.state.regs)
     }
+    /// Register 80 holds one two-bit DMA transfer-block selector per raster,
+    /// blocks of 16 << selector bytes: bits 12-13 for the source and 28-29
+    /// for the destination. The driver pads each row to whole blocks, so a
+    /// selector changes transfer granularity only. Rows that are not whole
+    /// blocks and every other register 80 field stay unmodeled.
+    fn whole_transfer_blocks(word: u32, source_row: u32, destination_row: u32) -> bool {
+        let block = |shift: u32| 16 << ((word >> shift) & 3);
+        word & !0x3000_3000 == 0
+            && source_row % block(12) == 0
+            && destination_row % block(28) == 0
+    }
     fn raster_kind_for(regs: &[u32]) -> Result<RasterKind, String> {
         let r = |o: usize| regs[o / 4];
         let stage = [r(0x14), r(0x18), r(0x24), r(0x28), r(0x3c), r(0x80)];
@@ -340,21 +351,42 @@ impl Decompressor {
         }
         let (sw, sh) = (r(0x18) & 8191, r(0x18) >> 16);
         let (dw, dh) = (r(0x28) & 8191, r(0x28) >> 16);
+        // Bounded scalar 2:1 geometry. The destination may include up to 15
+        // replicated columns for alignment or, for a scalar raster, columns
+        // up to the next multiple of its transfer block's byte count taken
+        // as pixels: the request builder rounds the scalar width to that
+        // multiple before programming it.
+        let scalar_half = || {
+            (1..=720).contains(&sw)
+                && (1..=480).contains(&sh)
+                && dh > 0
+                && dh * 2 == sh
+                && dw >= sw.div_ceil(2)
+                && dw
+                    <= (sw.div_ceil(2) + 15)
+                        .max(sw.div_ceil(2).next_multiple_of(16 << (r(0x80) >> 28 & 3)))
+                && r(0x14) >= sw * 2
+                && r(0x14) <= 1440
+                && r(0x24) >= dw * 2
+                && r(0x24) <= 1440
+        };
+        // The Soft Focus kernel's laws keep their earlier register 80 zero
+        // form, and also admit the X30 preview's transfer-block selectors
+        // when each raster row is a whole number of its blocks.
+        let soft_focus_transfer =
+            r(0x80) == 0 || Self::whole_transfer_blocks(r(0x80), sw * 2, dw * 2);
         // This bounded scalar descriptor supplies the saved threshold and
         // asymmetric kernels. Its pixel operation is not decoded; raster()
-        // applies a small empirical luma curve after the declared FIR.
+        // applies a small empirical luma curve after the declared FIR. The
+        // camera measured that curve at 256x192 to 128x96, so it is a
+        // per-sample law that the same bounded geometry admits.
         if r(8) == 0x1100
             && r(0x30) == 0x4c
             && r(0x34) == 0x00191a1a
             && r(0x38) == 0x24242526
             && r(0x3c) == 0x00400080
-            && r(0x80) == 0
-            && sw == 720
-            && sh == 480
-            && dw == 368
-            && dh == 240
-            && r(0x14) == 1440
-            && r(0x24) == 1440
+            && soft_focus_transfer
+            && scalar_half()
         {
             return Ok(RasterKind::ScalarThresholdedHalf);
         }
@@ -366,47 +398,32 @@ impl Decompressor {
             && r(0x34) == 0x00191a1a
             && r(0x38) == 0x24242526
             && r(0x3c) == 0x00400080
-            && r(0x80) == 0
-            && (1..=720).contains(&sw)
-            && (1..=480).contains(&sh)
-            && dh > 0
-            && dh * 2 == sh
-            && dw >= sw.div_ceil(2)
-            && dw <= sw.div_ceil(2) + 15
-            && r(0x14) >= sw * 2
-            && r(0x14) <= 1440
-            && r(0x24) >= dw * 2
-            && r(0x24) <= 1440
+            && soft_focus_transfer
+            && scalar_half()
         {
             return Ok(RasterKind::ScalarWeightedHalf);
         }
-        // Declared replicated-edge FIR with a 2:1 pixel-center step. The
-        // destination may include up to 15 replicated columns for alignment.
+        // Declared replicated-edge FIR with a 2:1 pixel-center step.
         // Format/control and both normalized kernels remain explicit; an
         // arbitrary new descriptor does not acquire a completion law.
+        // Register 80 may select DMA transfer blocks for either raster.
         if r(8) == 0x1000
             && r(0x30) == 0x40
             && r(0x34) == 0x082030
             && r(0x38) == 0x081e3844
             && r(0x3c) == 0x00400080
-            && r(0x80) == 0
-            && (1..=720).contains(&sw)
-            && (1..=480).contains(&sh)
-            && dh > 0
-            && dh * 2 == sh
-            && dw >= sw.div_ceil(2)
-            && dw <= sw.div_ceil(2) + 15
-            && r(0x14) >= sw * 2
-            && r(0x14) <= 1440
-            && r(0x24) >= dw * 2
-            && r(0x24) <= 1440
+            && Self::whole_transfer_blocks(r(0x80), sw * 2, dw * 2)
+            && scalar_half()
         {
             return Ok(RasterKind::ScalarFilteredHalf);
         }
         // The packing controls select packed 422 input and byte-plane output.
         // Register 80 describes 128/64 transfer blocks, not sample formats.
         // This law shares the declared replicated-edge FIR and half-size
-        // pixel-center sampling, retaining only the luma component.
+        // pixel-center sampling, retaining only the luma component. The
+        // request builder rounds a packed raster's width up to twice its
+        // transfer block's byte count, so the destination may extend to the
+        // half width rounded that way; those columns replicate the right edge.
         if r(8) == 0x10
             && r(0x30) == 0x40
             && r(0x34) == 0x082030
@@ -414,8 +431,10 @@ impl Decompressor {
             && r(0x3c) == 0x01000200
             && r(0x80) == 0x20003000
             && (16..=1024).contains(&sw)
+            && sw % 2 == 0
             && (2..=480).contains(&sh)
-            && dw * 2 == sw
+            && dw >= sw / 2
+            && dw <= (sw / 2).next_multiple_of(2 * (16 << (r(0x80) >> 28 & 3)))
             && dh * 2 == sh
             && r(0x14) >= sw * 2
             && r(0x14) <= 2048
@@ -565,7 +584,6 @@ impl Decompressor {
         let (sw, sh) = (self.r(0x18) as usize & 8191, (self.r(0x18) >> 16) as usize);
         let (w, h) = (self.r(0x28) as usize & 8191, (self.r(0x28) >> 16) as usize);
         let (sp, pitch) = (self.r(0x14) as usize, self.r(0x24) as usize);
-        let (sf, df) = (self.r(0x80) >> 12 & 3, self.r(0x80) >> 28 & 3);
         if let RasterKind::PyramidLuma { packed, smooth } = kind {
             // Cache pure pixel results by active DMA bytes and arithmetic
             // controls. Addresses, padding and program state cannot select a
@@ -639,10 +657,20 @@ impl Decompressor {
                 RasterKind::BoxHalf | RasterKind::PyramidLuma { .. } => unreachable!(),
             };
             use fujimod_emulator_image_processing::separable::Samples;
-            let input = if sf == 0 && df == 0 {
-                Samples::Scalar16
-            } else {
-                Samples::YyCbCr422
+            // Register 80 selects transfer blocks, so the admitted
+            // descriptor fixes the sample layout. The fitted final level of
+            // the filtered-rational table reads scalar16 samples; its
+            // earlier levels read packed 422.
+            let input = match kind {
+                RasterKind::ScalarFilteredHalf
+                | RasterKind::ScalarWeightedHalf
+                | RasterKind::ScalarThresholdedHalf => Samples::Scalar16,
+                RasterKind::FilteredRational
+                    if self.r(0x14) == FILTERED[3][0] && self.r(0x18) == FILTERED[3][1] =>
+                {
+                    Samples::Scalar16
+                }
+                _ => Samples::YyCbCr422,
             };
             let output = if kind == RasterKind::LumaFilteredHalf {
                 Samples::Luma8
