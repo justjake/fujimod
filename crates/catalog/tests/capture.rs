@@ -41,7 +41,15 @@ fn capture_contracts_resolve_with_the_selected_firmware() {
                 .iter()
                 .any(|r| r.name == "boot-sram" && r.address == 0xff800000)
         );
-        assert!(!state.regions.iter().any(|r| r.name == "boot-rom"));
+        let rom = state
+            .regions
+            .iter()
+            .find(|region| region.name == "boot-rom")
+            .unwrap();
+        assert_eq!(
+            (rom.address, rom.size, rom.constant),
+            (0xffc00000, 0x40000, true)
+        );
     }
     for firmware in ["x70-110", "xe2-411", "xm1-150"] {
         let state = catalog.resolve_firmware(firmware).unwrap().state.unwrap();

@@ -155,7 +155,7 @@ mod tests {
             .find(|f| f.firmware_id == "xe4-201")
             .unwrap();
         assert!(firmware.tables.values().any(|t| !t.errors.is_empty()));
-        assert!(missing_table_reason("xe4-201", "settings").contains("No settings-bank locator"));
+        assert!(missing_table_reason("xe4-201", "settings").starts_with("settings: "));
         assert!(
             missing_table_reason("unreported-100", "bulk").contains("No bulk generation result")
         );

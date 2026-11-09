@@ -21,6 +21,7 @@
   "controls": {
     "shutter_button": {
       "name": "Shutter button",
+      "short_name": "SHUTTER",
       "location": "top",
       "manual_page": 2,
       "connection_ids": [],
@@ -35,6 +36,7 @@
     },
     "rear_command_dial": {
       "name": "Rear command dial",
+      "short_name": "REAR DIAL",
       "location": "rear",
       "manual_page": 3,
       "connection_ids": [],
