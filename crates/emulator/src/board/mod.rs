@@ -121,19 +121,27 @@ fn engine_end_reason(
     boundary: fujimod_perf::EngineEndReason,
     watch_or_observer_stop: bool,
     failed: bool,
+    interrupted_by_scheduler: bool,
 ) -> fujimod_perf::EngineEndReason {
     use fujimod_perf::EngineEndReason;
 
     if watch_or_observer_stop {
         return EngineEndReason::WatchOrObserverStop;
     }
-    if !failed && matches!(exit, Some(Exit::Stopped)) && instructions >= instruction_limit {
-        return match boundary {
-            EngineEndReason::QuantumOrInstructionBudget | EngineEndReason::DeviceDeadline => {
-                boundary
+    if !failed {
+        match exit {
+            Some(Exit::Stopped) if instructions >= instruction_limit => {
+                return match boundary {
+                    EngineEndReason::QuantumOrInstructionBudget
+                    | EngineEndReason::DeviceDeadline => boundary,
+                    _ => EngineEndReason::OtherExit,
+                };
             }
-            _ => EngineEndReason::OtherExit,
-        };
+            Some(Exit::Stopped) if !interrupted_by_scheduler => {
+                return EngineEndReason::WatchOrObserverStop;
+            }
+            _ => (),
+        }
     }
     EngineEndReason::OtherExit
 }
@@ -1207,6 +1215,7 @@ impl Board {
                 budget as u64,
                 boundary,
                 s.continuation.borrow().fired || self.host_pause.get(),
+                false,
                 false,
             );
             engine_guard.set_instructions(entered);
