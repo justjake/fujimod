@@ -552,7 +552,8 @@ impl Devices {
             }),
             read_gate,
         );
-        let command = sensor::Command::new(command_base, sensor.clone(), command_ticks)?;
+        let command =
+            sensor::Command::new(command_base, sensor.clone(), command_ticks)?.with_retained_words();
         let mut receiver = slvs::Receiver::new(
             sensor,
             slvs::Wiring {

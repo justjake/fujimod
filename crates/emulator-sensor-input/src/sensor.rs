@@ -172,6 +172,7 @@ pub struct Command {
     state: State,
     pub sensor: Sensor,
     latency_ticks: u64,
+    retain_unmodeled: bool,
 }
 impl Command {
     pub fn new(base: u64, sensor: Sensor, latency_ticks: u64) -> Result<Self, String> {
@@ -183,7 +184,14 @@ impl Command {
             state: State::default(),
             sensor,
             latency_ticks,
+            retain_unmodeled: false,
         })
+    }
+    /// Let words of the window that have no modeled meaning read back their last write
+    /// (zero before one) instead of failing the access.
+    pub fn with_retained_words(mut self) -> Self {
+        self.retain_unmodeled = true;
+        self
     }
     fn reg(&self, o: u64) -> u32 {
         self.state.registers.get(&o).copied().unwrap_or(0)
@@ -269,6 +277,7 @@ impl Device for Command {
                     u64::from(self.reg(o))
                 }
             }
+            _ if self.retain_unmodeled && o < 0x244 => u64::from(self.reg(o)),
             _ => {
                 cx.unmodeled();
                 0
@@ -339,6 +348,9 @@ impl Device for Command {
                 } else {
                     self.state.registers.insert(o, value);
                 }
+            }
+            _ if self.retain_unmodeled && o < 0x244 => {
+                self.state.registers.insert(o, value);
             }
             _ => cx.unmodeled(),
         }
