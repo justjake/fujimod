@@ -144,6 +144,13 @@
       "vbus_bank": 15,
       "vbus_pin": 15,
       "speed": "high"
+    },
+    "execution_clock": {
+      "basis": "Estimated, not measured: four Cortex-A7 cores at roughly 1.2 GHz against the 54 MHz device tick give about 22 instructions per tick at one instruction per cycle; 24 is the ratio the other bodies' overlays declare. At one instruction per tick the sensor command and SD card paths overlap in time (a card in slot 1 stops the strict boot at 646,309,679 instructions with 'reconfiguring active sensor command'); at 24 the same run reaches REC with the card-inserted message posted.",
+      "instructions_per_tick": [
+        24,
+        1
+      ]
     }
   }
 }
