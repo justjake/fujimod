@@ -1100,6 +1100,7 @@ impl Session {
             imaging,
             movdc,
             sd_clocks,
+            sd_hosts,
             register_banks,
             usb_condition,
             instructions_per_tick,
@@ -1388,7 +1389,10 @@ impl Session {
                 None => None,
             }
         };
+        // Card files go on the first host's card.
+        let mut card_files = Some(card_files);
         if let Some(sd) = xpp_sd {
+            let card_files = card_files.take().unwrap_or_default();
             let reset = match (sd.reset_channel, &reset_gates) {
                 (Some(channel), Some(lines)) => Some(
                     lines
@@ -1404,8 +1408,15 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_sd(sd, reset, &card_files)?;
-        } else if !card_files.is_empty() {
-            return Err("SD card files require the X-Processor Pro SD wrapper".to_owned());
+        }
+        for host in sd_hosts {
+            let files = card_files.take().unwrap_or_default();
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .sd_host(host, &files)?;
+        }
+        if card_files.is_some_and(|files| !files.is_empty()) {
+            return Err("SD card files require an SD host".to_owned());
         }
         if let Some((unit, ..)) = xpp_live_view_image
             && !xpp_register_blocks

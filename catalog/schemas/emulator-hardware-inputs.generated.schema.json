@@ -219,6 +219,13 @@
           ],
           "description": "Declared SD card in the slot at power-on."
         },
+        "sd_cards": {
+          "description": "Declared SD cards in the slots of the SD hosts at power-on.",
+          "items": {
+            "$ref": "#/$defs/ResetSdSlotCard"
+          },
+          "type": "array"
+        },
         "sensor_frame": {
           "anyOf": [
             {
@@ -2283,6 +2290,27 @@
         "high_speed",
         "rca",
         "sectors"
+      ],
+      "type": "object"
+    },
+    "ResetSdSlotCard": {
+      "additionalProperties": false,
+      "description": "The card in the slot of one SD host at power-on.",
+      "properties": {
+        "card": {
+          "$ref": "#/$defs/ResetSdCardInput",
+          "description": "The card."
+        },
+        "host_base": {
+          "description": "Base of the SD host whose slot holds the card.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "card",
+        "host_base"
       ],
       "type": "object"
     },

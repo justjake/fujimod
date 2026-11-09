@@ -205,6 +205,9 @@ pub struct Definition {
     pub movdc: Vec<(u64, u32, u64, u64, u8)>,
     #[serde(default)]
     pub sd_clocks: Vec<(u64, u64)>,
+    /// SD hosts with the card in their slot; each owns its page, clock halfword included.
+    #[serde(default)]
+    pub sd_hosts: Vec<SdHost>,
     /// Card-controller register windows, each excluding its clock halfword.
     #[serde(default)]
     pub register_banks: Vec<(u64, u64)>,
@@ -337,6 +340,16 @@ pub struct XppSd {
     /// SD channel of the reset-gate line; requires `xpp_reset_gates`.
     #[serde(default)]
     pub reset_channel: Option<usize>,
+}
+
+/// An XP4 SD host with a freshly formatted card in its slot.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SdHost {
+    pub options: fujimod_emulator_xp4_io::sd::Options,
+    pub card: fujimod_emulator_storage::fat::Options,
+    #[serde(default)]
+    pub irq: Option<u32>,
 }
 
 /// X-Processor Pro imaging frame sync: register base, the address of the

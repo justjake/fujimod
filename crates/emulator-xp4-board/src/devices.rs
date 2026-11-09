@@ -441,6 +441,33 @@ impl Devices {
         self.windows.push((base, base + 0x604, id));
         Ok(())
     }
+    pub fn sd_host(
+        &mut self,
+        host: crate::definition::SdHost,
+        files: &[(String, Vec<u8>)],
+    ) -> Result<(), String> {
+        let base = host.options.base;
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(0x1000))
+        {
+            return Err("Overlapping XP4 SD host".into());
+        }
+        let card = fujimod_emulator_storage::fat::format(&host.card, files)?;
+        let contacts = fujimod_emulator_devices::parts::card_contacts::Contacts::new(true, false);
+        let model = fujimod_emulator_xp4_io::sd::Controller::new(
+            host.options,
+            card,
+            contacts,
+            host.irq
+                .map(fujimod_emulator_devices::bus::InterruptLine::Shared),
+        )?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + 0x1000, id));
+        Ok(())
+    }
     pub fn sd_clocks(&mut self, words: &[(u64, u64)]) -> Result<(), String> {
         if words.iter().any(|&(address, _)| {
             self.windows

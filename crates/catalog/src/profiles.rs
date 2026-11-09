@@ -1345,6 +1345,37 @@ pub struct XppSdHost {
     pub transfer_ticks: u64,
 }
 
+/// X-Processor 4 SD host: one standard SDHCI register bank at the window base.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareSdHost"))]
+pub struct SdHost {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Capabilities register (+0x40).
+    pub capabilities: u32,
+    /// Capabilities 2 register (+0x44).
+    pub capabilities_2: u32,
+    /// Ticks for the internal clock to report stable.
+    pub clock_ticks: u64,
+    /// Interrupt line of the SDHCI status, when it is known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub irq_route: Option<u32>,
+    /// Declared size.
+    pub size: u64,
+    /// Slot status halfword (+0xfc) and host controller version (+0xfe).
+    pub slot_and_version: u32,
+    /// Ticks of one command or data transfer.
+    pub transfer_ticks: u64,
+    /// Offsets of vendor words beyond the standard bank that read back their
+    /// last write.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub vendor_offsets: Vec<u64>,
+}
+
 /// X-Processor Pro reset and gate controls; SD channel reset lines.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1983,6 +2014,9 @@ pub struct RegisterLayouts {
     /// Declared X-Processor Pro SD channel.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub xpp_sd: Option<XppSdHost>,
+    /// Declared X-Processor 4 SD hosts.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sd_hosts: Vec<SdHost>,
     /// Declared X-Processor Pro reset and gate controls.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reset_gates: Option<ResetGates>,

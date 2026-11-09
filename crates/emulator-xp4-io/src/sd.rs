@@ -5,6 +5,7 @@ use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_ip::sdhci::host::{self, SdHost};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::collections::BTreeMap;
 
 /// Size of the standard register bank this host decodes.
 const BANK: u64 = 0x108;
@@ -29,11 +30,16 @@ pub struct Options {
     pub capabilities_2: u32,
     /// Slot status halfword (+0xfc) and host controller version (+0xfe).
     pub slot_and_version: u32,
+    /// Offsets of vendor words beyond the standard bank that read back their
+    /// last write.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub vendor_offsets: Vec<u64>,
 }
 
 pub struct Controller {
     options: Options,
     host: SdHost,
+    vendor: BTreeMap<u64, u32>,
 }
 
 impl Controller {
@@ -66,7 +72,11 @@ impl Controller {
         } else {
             SdHost::new_polled(host_options, card, contacts)?
         };
-        Ok(Self { options, host })
+        Ok(Self {
+            options,
+            host,
+            vendor: BTreeMap::new(),
+        })
     }
 
     fn transfer(
@@ -83,6 +93,15 @@ impl Controller {
         let offset = address
             .checked_sub(self.options.base)
             .ok_or("SD access below the register bank")?;
+        if size == 4 && offset >= BANK && self.options.vendor_offsets.contains(&offset) {
+            return Ok(match value {
+                Some(v) => {
+                    self.vendor.insert(offset, v as u32);
+                    0
+                }
+                None => u64::from(self.vendor.get(&offset).copied().unwrap_or(0)),
+            });
+        }
         if offset + u64::from(size) > BANK || address & u64::from(size - 1) != 0 {
             return Err(format!(
                 "SD access outside the register bank: +{offset:#x}/{size}"
@@ -160,6 +179,9 @@ impl Device for Controller {
             cx.fail(e);
         }
     }
+    fn advance(&mut self, cx: &mut Cx<'_>) {
+        self.host.advance(cx);
+    }
     fn event(&mut self, cx: &mut Cx<'_>, _: u64) {
         self.host.advance(cx);
     }
@@ -167,7 +189,7 @@ impl Device for Controller {
         self.host.next_deadline(now)
     }
     fn save(&self) -> Value {
-        json!({"host":self.host.save()})
+        json!({"host":self.host.save(),"vendor":self.vendor})
     }
     fn card_slot(&self) -> Option<&(dyn fujimod_emulator_devices::capability::CardSlot + 'static)> {
         self.host.card_slot()
@@ -179,17 +201,18 @@ impl Device for Controller {
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         // The SD host owns the exact card, FIFO, pending command and clocks.
-        Ok(
-            fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.options)?
-                .with_children(vec![self.host.checkpoint()?]),
-        )
+        Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &(&self.options, &self.vendor),
+        )?
+        .with_children(vec![self.host.checkpoint()?]))
     }
     fn validate_checkpoint(
         &self,
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
-        let options: Options = saved.decode(self.name())?;
-        if options != self.options {
+        let (options, vendor): (Options, BTreeMap<u64, u32>) = saved.decode(self.name())?;
+        if options != self.options || vendor.keys().any(|o| !self.options.vendor_offsets.contains(o)) {
             return Err("SD host checkpoint wiring differs".into());
         }
         if saved.children().len() != 1 {
@@ -202,14 +225,19 @@ impl Device for Controller {
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
-        self.host.restore_checkpoint(&saved.children()[0])
+        self.host.restore_checkpoint(&saved.children()[0])?;
+        let (_, vendor): (Options, BTreeMap<u64, u32>) = saved.decode(self.name())?;
+        self.vendor = vendor;
+        Ok(())
     }
     fn restore(&mut self, _: &Value) -> Result<(), String> {
         Err("SD host restoration requires its full checkpoint".into())
     }
     fn fingerprint(&self) -> Result<Value, String> {
-        let wrapper =
-            fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.options)?;
+        let wrapper = fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &(&self.options, &self.vendor),
+        )?;
         Ok(json!({"wrapper":wrapper.state(),"host":self.host.fingerprint()?}))
     }
 }
@@ -221,7 +249,7 @@ mod tests {
         card_contacts::Contacts,
         sd_card::{Card, Options as CardOptions},
     };
-    use fujimod_emulator_devices::test_host::{TestHost, read};
+    use fujimod_emulator_devices::test_host::{TestHost, read, write};
 
     fn controller(base: u64) -> Controller {
         let card = Card::new(CardOptions {
@@ -240,6 +268,7 @@ mod tests {
             capabilities: 0x25e8_30b0,
             capabilities_2: 0x2077,
             slot_and_version: 0x0102_0000,
+            vendor_offsets: vec![0x1e0],
         };
         Controller::new(options, card, Contacts::new(true, false), None).unwrap()
     }
@@ -252,6 +281,19 @@ mod tests {
         let state = read(&mut d, &mut h, base + 0x24);
         assert_ne!(state & 0x0001_0000, 0, "card inserted");
         assert_ne!(state & 0x0002_0000, 0, "card state stable");
+    }
+
+    #[test]
+    fn declared_vendor_words_read_back_their_last_write_and_others_are_refused() {
+        let base = 0x80000;
+        let mut d = controller(base);
+        let mut h = TestHost::new();
+        assert_eq!(read(&mut d, &mut h, base + 0x1e0), 0);
+        write(&mut d, &mut h, base + 0x1e0, 0x400);
+        assert_eq!(read(&mut d, &mut h, base + 0x1e0), 0x400);
+        let mut cx = h.cx();
+        d.read(&mut cx, base + 0x1e4, 4);
+        assert!(cx.refusal().is_some(), "undeclared vendor word");
     }
 
     #[test]

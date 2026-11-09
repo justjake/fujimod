@@ -14441,6 +14441,13 @@
           ],
           "description": "Declared sd host clocks."
         },
+        "sd_hosts": {
+          "description": "Declared X-Processor 4 SD hosts.",
+          "items": {
+            "$ref": "#/$defs/HardwareSdHost"
+          },
+          "type": "array"
+        },
         "serial_flash": {
           "anyOf": [
             {
@@ -14721,6 +14728,87 @@
         "lines",
         "mode",
         "vertical"
+      ],
+      "type": "object"
+    },
+    "HardwareSdHost": {
+      "additionalProperties": false,
+      "description": "X-Processor 4 SD host: one standard SDHCI register bank at the window base.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "capabilities": {
+          "description": "Capabilities register (+0x40).",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "capabilities_2": {
+          "description": "Capabilities 2 register (+0x44).",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "clock_ticks": {
+          "description": "Ticks for the internal clock to report stable.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq_route": {
+          "description": "Interrupt line of the SDHCI status, when it is known.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "slot_and_version": {
+          "description": "Slot status halfword (+0xfc) and host controller version (+0xfe).",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transfer_ticks": {
+          "description": "Ticks of one command or data transfer.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "vendor_offsets": {
+          "description": "Offsets of vendor words beyond the standard bank that read back their\nlast write.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "capabilities",
+        "capabilities_2",
+        "clock_ticks",
+        "size",
+        "slot_and_version",
+        "transfer_ticks"
       ],
       "type": "object"
     },

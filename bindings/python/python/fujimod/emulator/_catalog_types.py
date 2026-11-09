@@ -3066,6 +3066,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     register_blocks: NotRequired[list[HardwareRegisterBlock]]
     reset_gates: NotRequired[HardwareResetGates | None]
     sd_host_clocks: NotRequired[HardwareSdHostClocks | None]
+    sd_hosts: NotRequired[list[HardwareSdHost]]
     serial_flash: NotRequired[HardwareSerialFlash | None]
     serial_ports: NotRequired[HardwareSerialPorts | None]
     spi: NotRequired[dict[str, HardwareSpi] | None]
@@ -3110,6 +3111,19 @@ class HardwareRollingReference(TypedDict, total=False):
     lines: Required[int]
     mode: Required[int]
     vertical: Required[int]
+
+
+class HardwareSdHost(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    capabilities: Required[int]
+    capabilities_2: Required[int]
+    clock_ticks: Required[int]
+    irq_route: NotRequired[int | None]
+    size: Required[int]
+    slot_and_version: Required[int]
+    transfer_ticks: Required[int]
+    vendor_offsets: NotRequired[list[int]]
 
 
 class HardwareSdHostClocks(TypedDict, total=False):

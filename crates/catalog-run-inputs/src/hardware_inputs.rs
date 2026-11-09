@@ -288,6 +288,18 @@ pub struct SdCardInput {
     pub sectors: u64,
 }
 
+/// The card in the slot of one SD host at power-on.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetSdSlotCard"))]
+pub struct SdSlotCard {
+    /// The card.
+    pub card: SdCardInput,
+    /// Base of the SD host whose slot holds the card.
+    pub host_base: u64,
+}
+
 /// Refresh-rate level the DRAM device reports to its controller.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1187,6 +1199,9 @@ pub struct HardwareReset {
     /// Declared SD card in the slot at power-on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sd_card: Option<SdCardInput>,
+    /// Declared SD cards in the slots of the SD hosts at power-on.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sd_cards: Vec<SdSlotCard>,
     /// Declared serial ports with nothing attached: every byte received
     /// reads 0xff.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
