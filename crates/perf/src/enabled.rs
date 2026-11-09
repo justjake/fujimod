@@ -18,6 +18,7 @@ const MAX_DEVICES: usize = 128;
 const MAX_CORES: usize = 16;
 const PHASE_COUNT: usize = 5;
 const BYTE_COUNT: usize = 8;
+const HISTOGRAM_BUCKETS: usize = 65;
 
 struct CellCounts {
     calls: AtomicU64,
@@ -61,6 +62,71 @@ struct SpanCounts {
     ticks: AtomicU64,
 }
 
+struct HistogramCounts {
+    runs: AtomicU64,
+    instructions: AtomicU64,
+}
+
+impl HistogramCounts {
+    const fn new() -> Self {
+        Self {
+            runs: AtomicU64::new(0),
+            instructions: AtomicU64::new(0),
+        }
+    }
+}
+
+struct EngineRunCounts {
+    runs: AtomicU64,
+    instructions: AtomicU64,
+    end_reasons: [AtomicU64; 4],
+    instruction_histogram: [HistogramCounts; HISTOGRAM_BUCKETS],
+}
+
+impl EngineRunCounts {
+    const fn new() -> Self {
+        Self {
+            runs: AtomicU64::new(0),
+            instructions: AtomicU64::new(0),
+            end_reasons: [const { AtomicU64::new(0) }; 4],
+            instruction_histogram: [const { HistogramCounts::new() }; HISTOGRAM_BUCKETS],
+        }
+    }
+
+    fn reset(&self) {
+        self.runs.store(0, Ordering::Relaxed);
+        self.instructions.store(0, Ordering::Relaxed);
+        for reason in &self.end_reasons {
+            reason.store(0, Ordering::Relaxed);
+        }
+        for bucket in &self.instruction_histogram {
+            bucket.runs.store(0, Ordering::Relaxed);
+            bucket.instructions.store(0, Ordering::Relaxed);
+        }
+    }
+}
+
+fn histogram_index(instructions: u64) -> usize {
+    if instructions == 0 {
+        0
+    } else {
+        (u64::BITS - instructions.leading_zeros()) as usize
+    }
+}
+
+fn histogram_bounds(index: usize) -> (u64, u64) {
+    if index == 0 {
+        return (0, 0);
+    }
+    let lower_bound = 1u64 << (index - 1);
+    let upper_bound = if index == u64::BITS as usize {
+        u64::MAX
+    } else {
+        (1u64 << index) - 1
+    };
+    (lower_bound, upper_bound)
+}
+
 impl SpanCounts {
     const fn new() -> Self {
         Self {
@@ -83,6 +149,8 @@ static SPANS: [SpanCounts; SpanKind::COUNT] =
 static DEVICES: [[CellCounts; PHASE_COUNT]; MAX_DEVICES] =
     [const { [const { CellCounts::new() }; PHASE_COUNT] }; MAX_DEVICES];
 static ENGINES: [CellCounts; MAX_CORES] = [const { CellCounts::new() }; MAX_CORES];
+static ENGINE_RUNS: [EngineRunCounts; MAX_CORES] =
+    [const { EngineRunCounts::new() }; MAX_CORES];
 static BYTES: [AtomicU64; BYTE_COUNT] = [const { AtomicU64::new(0) }; BYTE_COUNT];
 static WAITS: Mutex<WaitLedger> = Mutex::new(WaitLedger::new());
 
@@ -256,6 +324,9 @@ fn reset_ledger() {
         }
     }
     for engine in &ENGINES {
+        engine.reset();
+    }
+    for engine in &ENGINE_RUNS {
         engine.reset();
     }
     for counter in &BYTES {
@@ -432,12 +503,46 @@ pub fn end_guide() -> GuideSummary {
         .enumerate()
         .filter_map(|(core, cell)| {
             let values = cell.read();
-            (values.calls != 0 || values.worker_calls != 0).then(|| EngineSummary {
-                core: core as u8,
-                calls: values.calls,
-                elapsed_ns: scale(values.raw),
-                worker_calls: values.worker_calls,
-                worker_elapsed_ns: scale(values.worker_raw),
+            let run_counts = &ENGINE_RUNS[core];
+            let runs = run_counts.runs.load(Ordering::Relaxed);
+            (values.calls != 0 || values.worker_calls != 0 || runs != 0).then(|| {
+                let end_reasons = EngineEndReason::ALL
+                    .into_iter()
+                    .map(|reason| {
+                        (
+                            reason.name().to_owned(),
+                            run_counts.end_reasons[reason.index()].load(Ordering::Relaxed),
+                        )
+                    })
+                    .collect();
+                let instruction_histogram = run_counts
+                    .instruction_histogram
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, bucket)| {
+                        let runs = bucket.runs.load(Ordering::Relaxed);
+                        (runs != 0).then(|| {
+                            let (lower_bound, upper_bound) = histogram_bounds(index);
+                            InstructionHistogramBucket {
+                                lower_bound,
+                                upper_bound,
+                                runs,
+                                instructions: bucket.instructions.load(Ordering::Relaxed),
+                            }
+                        })
+                    })
+                    .collect();
+                EngineSummary {
+                    core: core as u8,
+                    calls: values.calls,
+                    elapsed_ns: scale(values.raw),
+                    worker_calls: values.worker_calls,
+                    worker_elapsed_ns: scale(values.worker_raw),
+                    runs,
+                    instructions: run_counts.instructions.load(Ordering::Relaxed),
+                    end_reasons,
+                    instruction_histogram,
+                }
             })
         })
         .collect();
@@ -706,6 +811,68 @@ pub struct AccumulatorGuard {
     previous: Option<DeviceContext>,
 }
 
+pub struct EngineRunGuard {
+    core: usize,
+    start_raw: u64,
+    elapsed_raw: Option<u64>,
+    instructions: u64,
+    worker: bool,
+    recording: bool,
+    finished: bool,
+}
+
+impl EngineRunGuard {
+    pub fn stop(&mut self) {
+        if self.recording && self.elapsed_raw.is_none() {
+            self.elapsed_raw = Some(elapsed_raw(self.start_raw));
+        }
+    }
+
+    pub fn set_instructions(&mut self, instructions: u64) {
+        self.instructions = instructions;
+    }
+
+    pub fn finish(mut self, reason: EngineEndReason) {
+        self.record(reason);
+    }
+
+    pub fn cancel(mut self) {
+        self.finished = true;
+    }
+
+    fn record(&mut self, reason: EngineEndReason) {
+        if self.recording && !self.finished {
+            self.stop();
+            let elapsed = self.elapsed_raw.unwrap_or(0);
+            let cell = &ENGINES[self.core];
+            if self.worker {
+                cell.worker_calls.fetch_add(1, Ordering::Relaxed);
+                cell.worker_raw.fetch_add(elapsed, Ordering::Relaxed);
+            } else {
+                cell.calls.fetch_add(1, Ordering::Relaxed);
+                cell.raw.fetch_add(elapsed, Ordering::Relaxed);
+            }
+
+            let counts = &ENGINE_RUNS[self.core];
+            counts.runs.fetch_add(1, Ordering::Relaxed);
+            counts.instructions.fetch_add(self.instructions, Ordering::Relaxed);
+            counts.end_reasons[reason.index()].fetch_add(1, Ordering::Relaxed);
+            let bucket = &counts.instruction_histogram[histogram_index(self.instructions)];
+            bucket.runs.fetch_add(1, Ordering::Relaxed);
+            bucket.instructions.fetch_add(self.instructions, Ordering::Relaxed);
+        }
+        self.finished = true;
+    }
+}
+
+impl Drop for EngineRunGuard {
+    fn drop(&mut self) {
+        if !self.finished {
+            self.record(EngineEndReason::OtherExit);
+        }
+    }
+}
+
 impl Drop for AccumulatorGuard {
     fn drop(&mut self) {
         if let Some(cell) = self.cell {
@@ -760,16 +927,18 @@ pub fn device(index: u16, _kind: &'static str, phase: DevicePhase) -> Accumulato
     )
 }
 
-pub fn engine(core: u8) -> AccumulatorGuard {
-    if core as usize >= MAX_CORES {
-        return AccumulatorGuard {
-            cell: None,
-            start_raw: 0,
-            worker: false,
-            previous: None,
-        };
+pub fn engine_run(core: u8, worker: bool) -> EngineRunGuard {
+    let core = core as usize;
+    let recording = ACTIVE.load(Ordering::Relaxed) && core < MAX_CORES;
+    EngineRunGuard {
+        core: core.min(MAX_CORES - 1),
+        start_raw: if recording { raw_now() } else { 0 },
+        elapsed_raw: None,
+        instructions: 0,
+        worker,
+        recording,
+        finished: !recording,
     }
-    accumulator(&ENGINES[core as usize], None)
 }
 
 pub fn add_bytes(counter: ByteCounter, bytes: u64) {
@@ -1174,7 +1343,9 @@ mod tests {
             let _event = device(3, "sd", DevicePhase::Event);
         }
         {
-            let _engine = engine(1);
+            let mut run = engine_run(1, false);
+            run.set_instructions(4);
+            run.finish(EngineEndReason::QuantumOrInstructionBudget);
         }
         let summary = end_guide();
         assert_eq!(summary.devices.len(), 2);
@@ -1186,6 +1357,89 @@ mod tests {
         assert_eq!((read.device, read.calls), (3, 1));
         assert_eq!(summary.engines[0].core, 1);
         assert_eq!(summary.engines[0].calls, 1);
+        assert_eq!(summary.engines[0].runs, 1);
+        assert_eq!(summary.engines[0].instructions, 4);
+        assert_eq!(summary.engines[0].instruction_histogram[0].lower_bound, 4);
+        assert_eq!(summary.engines[0].instruction_histogram[0].upper_bound, 7);
+    }
+
+    #[test]
+    fn engine_run_histogram_and_end_reasons_cover_each_core_run() {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        begin_guide("engine-runs");
+        for (instructions, reason, worker) in [
+            (0, EngineEndReason::OtherExit, false),
+            (1, EngineEndReason::QuantumOrInstructionBudget, false),
+            (3, EngineEndReason::DeviceDeadline, true),
+            (4, EngineEndReason::WatchOrObserverStop, true),
+        ] {
+            let mut run = engine_run(0, worker);
+            run.set_instructions(instructions);
+            run.finish(reason);
+        }
+
+        let value = end_guide().to_value();
+        let engine = &value["engines"][0];
+        assert_eq!(engine["core"], 0);
+        assert_eq!(engine["calls"], 2);
+        assert_eq!(engine["worker_calls"], 2);
+        assert_eq!(engine["runs"], 4);
+        assert_eq!(engine["instructions"], 8);
+        assert_eq!(engine["end_reasons"]["other_exit"], 1);
+        assert_eq!(engine["end_reasons"]["quantum_or_instruction_budget"], 1);
+        assert_eq!(engine["end_reasons"]["device_deadline"], 1);
+        assert_eq!(engine["end_reasons"]["watch_or_observer_stop"], 1);
+        let bins = engine["instruction_histogram"].as_array().unwrap();
+        assert_eq!(bins.len(), 4);
+        assert_eq!(
+            (
+                bins[0]["lower_bound"].as_u64(),
+                bins[0]["upper_bound"].as_u64()
+            ),
+            (Some(0), Some(0))
+        );
+        assert_eq!(
+            (
+                bins[1]["lower_bound"].as_u64(),
+                bins[1]["upper_bound"].as_u64()
+            ),
+            (Some(1), Some(1))
+        );
+        assert_eq!(
+            (
+                bins[2]["lower_bound"].as_u64(),
+                bins[2]["upper_bound"].as_u64()
+            ),
+            (Some(2), Some(3))
+        );
+        assert_eq!(
+            (
+                bins[3]["lower_bound"].as_u64(),
+                bins[3]["upper_bound"].as_u64()
+            ),
+            (Some(4), Some(7))
+        );
+        assert_eq!(
+            bins.iter()
+                .map(|bin| bin["runs"].as_u64().unwrap())
+                .sum::<u64>(),
+            engine["runs"].as_u64().unwrap()
+        );
+        assert_eq!(
+            bins.iter()
+                .map(|bin| bin["instructions"].as_u64().unwrap())
+                .sum::<u64>(),
+            engine["instructions"].as_u64().unwrap()
+        );
+        assert_eq!(
+            engine["end_reasons"]
+                .as_object()
+                .unwrap()
+                .values()
+                .map(|count| count.as_u64().unwrap())
+                .sum::<u64>(),
+            engine["runs"].as_u64().unwrap()
+        );
     }
 
     #[test]
