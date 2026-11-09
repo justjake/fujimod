@@ -70,6 +70,74 @@ fn prepare_device_workers(policy: ExecutionPolicy, preference: usize) -> Result<
     Ok(())
 }
 
+fn engine_run_boundary(
+    timeline: &Timeline,
+    instruction_limit: u64,
+    until: Option<u64>,
+    lag: u64,
+) -> Result<fujimod_perf::EngineEndReason, String> {
+    use fujimod_perf::EngineEndReason;
+
+    let ratio = timeline.ratio();
+    let now = timeline.now();
+    let phase = timeline.phase();
+    let event = timeline.next_event();
+    let event_budget = event
+        .map(|event| {
+            ratio
+                .budget(now, phase, event.at)
+                .map(|budget| budget.saturating_add(lag))
+        })
+        .transpose()?
+        .unwrap_or(u64::MAX);
+    let until_budget = until
+        .map(|until| {
+            ratio
+                .budget(now, phase, until)
+                .map(|budget| budget.saturating_add(lag))
+        })
+        .transpose()?
+        .unwrap_or(u64::MAX);
+
+    if event_budget <= instruction_limit && event_budget <= until_budget {
+        return Ok(match event.map(|event| event.target) {
+            Some(Target::DeviceEvent(_) | Target::DeviceDeadline(_)) => {
+                EngineEndReason::DeviceDeadline
+            }
+            _ => EngineEndReason::OtherExit,
+        });
+    }
+    if instruction_limit <= until_budget {
+        Ok(EngineEndReason::QuantumOrInstructionBudget)
+    } else {
+        Ok(EngineEndReason::OtherExit)
+    }
+}
+
+fn engine_end_reason(
+    exit: Option<Exit>,
+    instructions: u64,
+    instruction_limit: u64,
+    boundary: fujimod_perf::EngineEndReason,
+    watch_or_observer_stop: bool,
+    failed: bool,
+) -> fujimod_perf::EngineEndReason {
+    use fujimod_perf::EngineEndReason;
+
+    if watch_or_observer_stop {
+        return EngineEndReason::WatchOrObserverStop;
+    }
+    if !failed && matches!(exit, Some(Exit::Stopped)) && instructions >= instruction_limit {
+        return match boundary {
+            EngineEndReason::QuantumOrInstructionBudget | EngineEndReason::DeviceDeadline => {
+                boundary
+            }
+            _ => EngineEndReason::OtherExit,
+        };
+    }
+    EngineEndReason::OtherExit
+}
+
 struct State {
     continuation: Rc<RefCell<continuation::Stops>>,
     host_pause: Rc<Cell<bool>>,
@@ -956,12 +1024,14 @@ impl Board {
                         s.timeline.phase(),
                         until.unwrap_or(u64::MAX),
                     )?;
-                    let budget = s.timeline.budget(room.min(cap).min(usize::MAX as u64))? as usize;
+                    let instruction_limit = room.min(cap).min(usize::MAX as u64);
+                    let boundary = engine_run_boundary(&s.timeline, instruction_limit, until, 0)?;
+                    let budget = s.timeline.budget(instruction_limit)? as usize;
                     if budget == 0 {
                         return Err("scheduler made no progress at a device deadline".into());
                     }
                     drop(s);
-                    self.interactive_window(&cores, budget, quantum)?;
+                    self.interactive_window(&cores, budget, quantum, boundary)?;
                     completed_slice = None;
                     continue;
                 }
@@ -1012,17 +1082,21 @@ impl Board {
             } else {
                 u64::MAX
             };
-            let budget = s.timeline.processor_budget(
-                core,
-                if peer {
-                    self.slice_left.get() as u64
-                } else {
-                    solo_pause
-                }
+            let instruction_limit = (if peer {
+                self.slice_left.get() as u64
+            } else {
+                solo_pause
+            })
                 .min(remaining)
-                .min(usize::MAX as u64),
-                until,
-            )? as usize;
+                .min(usize::MAX as u64);
+            let lag = s
+                .timeline
+                .lags()
+                .get(core)
+                .copied()
+                .ok_or_else(|| format!("timeline has no processor {core}"))?;
+            let boundary = engine_run_boundary(&s.timeline, instruction_limit, until, lag)?;
+            let budget = s.timeline.processor_budget(core, instruction_limit, until)? as usize;
             if budget == 0 {
                 return Err("scheduler made no progress at a device deadline".into());
             }
@@ -1056,7 +1130,10 @@ impl Board {
             // or runnable-peer turn; those boundaries end the stable window.
             cpu.set_loop_window(self.state.borrow().loop_window())?;
             let pc = scalar(&**cpu, Register::Pc)?;
-            let engine_guard = fujimod_perf::engine(u8::try_from(core).unwrap_or(u8::MAX));
+            let mut engine_guard = fujimod_perf::engine_run(
+                u8::try_from(core).unwrap_or(u8::MAX),
+                false,
+            );
             let result = cpu.run(Run {
                 begin: if cpu.model() == fujimod_emulator_cpu::Model::CortexM4
                     || matches!(
@@ -1073,8 +1150,9 @@ impl Board {
                 watchdog_us: 0,
                 instructions: Some(budget),
             });
+            engine_guard.stop();
+            engine_guard.set_instructions(cpu.instruction_progress().unwrap_or(0));
             let mut s = self.state.borrow_mut();
-            drop(engine_guard);
             s.active_slice = None;
             s.sync(&**cpu, core)?;
             if let Some(error) = s.error.take() {
@@ -1123,6 +1201,16 @@ impl Board {
             let entered = s.instructions[core]
                 .checked_sub(entered)
                 .ok_or("processor entry count moved backward")?;
+            let reason = engine_end_reason(
+                Some(exit),
+                entered,
+                budget as u64,
+                boundary,
+                s.continuation.borrow().fired || self.host_pause.get(),
+                false,
+            );
+            engine_guard.set_instructions(entered);
+            engine_guard.finish(reason);
             if entered > budget as u64 && s.execution_policy == ExecutionPolicy::Exact {
                 return Err("CPU exceeded its requested instruction budget".into());
             }

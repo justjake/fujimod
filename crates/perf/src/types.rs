@@ -142,6 +142,41 @@ pub enum DevicePhase {
     Dependency,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EngineEndReason {
+    QuantumOrInstructionBudget,
+    DeviceDeadline,
+    WatchOrObserverStop,
+    OtherExit,
+}
+
+impl EngineEndReason {
+    pub const ALL: [EngineEndReason; 4] = [
+        EngineEndReason::QuantumOrInstructionBudget,
+        EngineEndReason::DeviceDeadline,
+        EngineEndReason::WatchOrObserverStop,
+        EngineEndReason::OtherExit,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            EngineEndReason::QuantumOrInstructionBudget => "quantum_or_instruction_budget",
+            EngineEndReason::DeviceDeadline => "device_deadline",
+            EngineEndReason::WatchOrObserverStop => "watch_or_observer_stop",
+            EngineEndReason::OtherExit => "other_exit",
+        }
+    }
+
+    pub(crate) fn index(self) -> usize {
+        match self {
+            EngineEndReason::QuantumOrInstructionBudget => 0,
+            EngineEndReason::DeviceDeadline => 1,
+            EngineEndReason::WatchOrObserverStop => 2,
+            EngineEndReason::OtherExit => 3,
+        }
+    }
+}
+
 impl DevicePhase {
     pub const ALL: [DevicePhase; 5] = [
         DevicePhase::AdvanceRead,
@@ -266,6 +301,18 @@ pub struct EngineSummary {
     pub elapsed_ns: u64,
     pub worker_calls: u64,
     pub worker_elapsed_ns: u64,
+    pub runs: u64,
+    pub instructions: u64,
+    pub end_reasons: BTreeMap<String, u64>,
+    pub instruction_histogram: Vec<InstructionHistogramBucket>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct InstructionHistogramBucket {
+    pub lower_bound: u64,
+    pub upper_bound: u64,
+    pub runs: u64,
+    pub instructions: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]

@@ -11,14 +11,21 @@ mod tests;
 pub(super) struct Epoch {
     clock: Clock,
     limit: u64,
+    boundary: fujimod_perf::EngineEndReason,
     progress: Vec<u64>,
     advanced: u64,
 }
 impl Epoch {
-    fn new(cores: usize, clock: Clock, limit: u64) -> Self {
+    fn new(
+        cores: usize,
+        clock: Clock,
+        limit: u64,
+        boundary: fujimod_perf::EngineEndReason,
+    ) -> Self {
         Self {
             clock,
             limit,
+            boundary,
             progress: vec![0; cores],
             advanced: 0,
         }
@@ -28,15 +35,35 @@ impl Epoch {
         timeline: &Timeline,
         until: Option<u64>,
     ) -> Result<(), String> {
-        let deadline = timeline
-            .next_event()
-            .map_or(u64::MAX, |event| event.at)
-            .min(until.unwrap_or(u64::MAX));
-        self.limit = self.limit.min(self.clock.ratio.budget(
-            self.clock.now,
-            self.clock.phase,
-            deadline,
-        )?);
+        let event = timeline.next_event();
+        let event_budget = event
+            .map(|event| {
+                self.clock
+                    .ratio
+                    .budget(self.clock.now, self.clock.phase, event.at)
+            })
+            .transpose()?
+            .unwrap_or(u64::MAX);
+        let until_budget = until
+            .map(|until| {
+                self.clock
+                    .ratio
+                    .budget(self.clock.now, self.clock.phase, until)
+            })
+            .transpose()?
+            .unwrap_or(u64::MAX);
+        if event_budget <= self.limit && event_budget <= until_budget {
+            self.boundary = match event.map(|event| event.target) {
+                Some(
+                    fujimod_emulator_cpu::timeline::Target::DeviceEvent(_)
+                    | fujimod_emulator_cpu::timeline::Target::DeviceDeadline(_),
+                ) => fujimod_perf::EngineEndReason::DeviceDeadline,
+                _ => fujimod_perf::EngineEndReason::OtherExit,
+            };
+        } else if until_budget <= self.limit {
+            self.boundary = fujimod_perf::EngineEndReason::OtherExit;
+        }
+        self.limit = self.limit.min(event_budget.min(until_budget));
         Ok(())
     }
     pub(super) fn room(&self, core: usize) -> u64 {
@@ -60,8 +87,14 @@ struct Entry {
     core: usize,
     pc: u64,
     token: RunToken,
+    start_instructions: u64,
+    instruction_limit: u64,
+    boundary: fujimod_perf::EngineEndReason,
+    engine_run: fujimod_perf::EngineRunGuard,
     done: bool,
     pending: bool,
+    watch_or_observer_stop: bool,
+    failed: bool,
     exit: Option<Exit>,
 }
 
@@ -73,6 +106,7 @@ impl Board {
         cores: &[usize],
         budget: usize,
         quantum: usize,
+        boundary: fujimod_perf::EngineEndReason,
     ) -> Result<(), String> {
         let started = Instant::now();
         {
@@ -87,6 +121,7 @@ impl Board {
                     ratio: state.timeline.ratio(),
                 },
                 budget as u64,
+                boundary,
             ));
             state.code_run = None;
         }
@@ -145,9 +180,13 @@ impl Board {
                         pc
                     };
                     state.accounted[core] = 0;
+                    let start_instructions = state.instructions[core];
                     prepared.push((
                         core,
                         pc,
+                        start_instructions,
+                        room,
+                        epoch.boundary,
                         Run {
                             begin,
                             until: None,
@@ -167,23 +206,31 @@ impl Board {
     // Every segment joins all its workers before returning, including errors.
     fn interactive_segment(
         &mut self,
-        prepared: Vec<(usize, u64, Run)>,
+        prepared: Vec<(usize, u64, u64, u64, fujimod_perf::EngineEndReason, Run)>,
         quantum: usize,
     ) -> Result<(), String> {
         let mut entries = Vec::with_capacity(prepared.len());
         let mut error = None;
-        for (core, pc, request) in prepared {
+        for (core, pc, start_instructions, instruction_limit, boundary, request) in prepared {
             let cpu = &self.cpus[core];
+            let engine_run = fujimod_perf::engine_run(u8::try_from(core).unwrap_or(u8::MAX), true);
             match cpu.start_run(request) {
                 Ok(token) => entries.push(Entry {
                     core,
                     pc,
                     token,
+                    start_instructions,
+                    instruction_limit,
+                    boundary,
+                    engine_run,
                     done: false,
                     pending: false,
+                    watch_or_observer_stop: false,
+                    failed: false,
                     exit: None,
                 }),
                 Err(e) => {
+                    engine_run.cancel();
                     error = Some(e.to_string());
                     break;
                 }
@@ -203,9 +250,16 @@ impl Board {
                     Ok(RunStatus::Complete(result)) => {
                         entry.done = true;
                         entry.pending = false;
+                        entry.engine_run.stop();
+                        entry.engine_run.set_instructions(
+                            self.cpus[entry.core].instruction_progress().unwrap_or(0),
+                        );
+                        entry.watch_or_observer_stop = self.host_pause.get()
+                            || self.state.borrow().continuation.borrow().fired;
                         match result {
                             Ok(exit) => entry.exit = Some(exit),
                             Err(e) => {
+                                entry.failed = true;
                                 error.get_or_insert_with(|| e.to_string());
                             }
                         }
@@ -213,6 +267,13 @@ impl Board {
                     Err(e) => {
                         entry.done = true;
                         entry.pending = false;
+                        entry.engine_run.stop();
+                        entry.engine_run.set_instructions(
+                            self.cpus[entry.core].instruction_progress().unwrap_or(0),
+                        );
+                        entry.watch_or_observer_stop = self.host_pause.get()
+                            || self.state.borrow().continuation.borrow().fired;
+                        entry.failed = true;
                         error.get_or_insert_with(|| e.to_string());
                     }
                 }
@@ -272,14 +333,27 @@ impl Board {
             }
         }
         state.active_slice = None;
-        for entry in entries {
+        for mut entry in entries {
             if let Some(exit) = entry.exit {
                 if let Err(e) =
                     state.finish_exit(&*self.cpus[entry.core], entry.core, entry.pc, exit)
                 {
+                    entry.failed = true;
                     error.get_or_insert(e);
                 }
             }
+            let instructions =
+                state.instructions[entry.core].saturating_sub(entry.start_instructions);
+            let reason = super::engine_end_reason(
+                entry.exit,
+                instructions,
+                entry.instruction_limit,
+                entry.boundary,
+                entry.watch_or_observer_stop,
+                entry.failed,
+            );
+            entry.engine_run.set_instructions(instructions);
+            entry.engine_run.finish(reason);
         }
         if let Err(e) = state.apply_memory(&self.cpus) {
             error.get_or_insert(e);
