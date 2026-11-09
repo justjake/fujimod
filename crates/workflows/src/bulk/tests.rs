@@ -1,3 +1,4 @@
+use super::mapping::Operation;
 use super::read as read_bulk;
 use super::*;
 use fujimod_catalog_bulk::{BULK_SCHEMA_URI, BulkDma, CaptureScope, CodeCheck, NamedRange};
@@ -6,7 +7,7 @@ use fujimod_usb::{
     operations::checks::sha256_bytes,
     testing::{Exchange as E, Script},
 };
-use futures_lite::future::block_on;
+use futures_lite::future::{block_on, poll_once};
 
 const CODE: &[u8] = b"stock code";
 
@@ -240,25 +241,31 @@ fn mounted_reader_rounds_dma_inside_its_window_and_never_caches_live_bytes() {
         address: 0x1000,
         size: 0x1000,
     };
+    let mut camera = query_camera();
+    camera.dma = Some(BulkDma {
+        address_alignment: 32,
+        length_granule: 32,
+    });
     let mut mapping = BulkMapping {
-        source: Source {
-            window: DataWindow::new(
-                Address(0x1000),
-                memory_range(window).unwrap(),
-                NonZeroU32::new(32).unwrap(),
-                OffsetMode::Wrapping,
-            )
-            .unwrap()
-            .with_alignment(DataAlignment::new(32, 32).unwrap()),
-            overwritten: None,
-            saved: None,
-        },
-        window,
+        bulk: camera,
         limits: limits(),
-        dma: Some(BulkDma {
-            address_alignment: 32,
-            length_granule: 32,
-        }),
+        alignment: Some(DataAlignment::new(32, 32).unwrap()),
+        phase: BulkMappingPhase::Ready,
+        source: Source {
+            window: Some(
+                DataWindow::new(
+                    Address(0x1000),
+                    memory_range(window).unwrap(),
+                    NonZeroU32::new(32).unwrap(),
+                    OffsetMode::Wrapping,
+                )
+                .unwrap()
+                .with_alignment(DataAlignment::new(32, 32).unwrap()),
+            ),
+            overwritten: None,
+            loan: None,
+            restored: true,
+        },
     };
     assert!(mapping.admits(0x1fff, 1));
     assert!(!mapping.admits(0x1fff, 2));
@@ -484,9 +491,8 @@ fn preserving_reads_support_every_source_family_and_restore_without_pattern_writ
             steps.extend(write(state, &original));
             steps.extend(read(state, &original));
             let (mut session, script) = opened(steps);
-            let mapping = BulkMapping::prepare_preserving(&mut session, &camera, limits())
-                .await
-                .unwrap();
+            let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+            mapping.prepare_preserving(&mut session).await.unwrap();
             assert_eq!(mapping.overwritten(), None);
             assert_eq!(
                 mapping.read(&mut session, target()).await.unwrap(),
@@ -543,9 +549,8 @@ fn query_publication_is_restored_through_the_stock_cacheable_view() {
         steps.extend(write(0x1200, &original));
         steps.extend(read(0x1200, &original));
         let (mut session, script) = opened(steps);
-        let mapping = BulkMapping::prepare_preserving(&mut session, &camera, limits())
-            .await
-            .unwrap();
+        let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+        mapping.prepare_preserving(&mut session).await.unwrap();
         mapping.restore(&mut session).await.unwrap();
         assert_eq!(
             script.remaining(),
@@ -577,14 +582,8 @@ fn preserving_bulk_mismatch_restores_publication_before_refusing() {
     steps.extend(write(0x1400, &original));
     steps.extend(read(0x1400, &original));
     let (mut session, script) = opened(steps);
-    assert!(
-        block_on(BulkMapping::prepare_preserving(
-            &mut session,
-            &camera,
-            limits()
-        ))
-        .is_err()
-    );
+    let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+    assert!(block_on(mapping.prepare_preserving(&mut session)).is_err());
     assert_eq!(session.state(), SessionState::Ready);
     assert_eq!(script.remaining(), 0);
 }
@@ -606,14 +605,8 @@ fn foreign_publication_during_preserving_setup_is_never_overwritten_and_fences_t
     steps.extend(read(0x1400, &foreign));
     steps.extend(read(0x1400, &foreign));
     let (mut session, script) = opened(steps);
-    assert!(
-        block_on(BulkMapping::prepare_preserving(
-            &mut session,
-            &camera,
-            limits()
-        ))
-        .is_err()
-    );
+    let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+    assert!(block_on(mapping.prepare_preserving(&mut session)).is_err());
     assert_eq!(session.state(), SessionState::CompletionUnknown);
     assert_eq!(script.remaining(), 0);
 }
@@ -664,9 +657,8 @@ fn preserving_e1_uses_registered_capacity_instead_of_the_pattern_length() {
         steps.extend(read(0x1400, &original));
         let (mut session, script) = opened(steps);
         block_on(async {
-            let mapping = BulkMapping::prepare_preserving(&mut session, &camera, limits())
-                .await
-                .unwrap();
+            let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+            mapping.prepare_preserving(&mut session).await.unwrap();
             assert_eq!(mapping.read(&mut session, target()).await.unwrap(), [7; 64]);
             mapping.restore(&mut session).await.unwrap();
         });
@@ -787,10 +779,10 @@ fn publication_prepare_paths_borrow_the_pair_without_query_or_pattern_traffic() 
             steps.extend(write(0x1200, &original));
             steps.extend(read(0x1200, &original));
             let (mut session, script) = opened(steps);
-            let mapping = if preserving {
-                BulkMapping::prepare_preserving(&mut session, &camera, limits())
-                    .await
-                    .unwrap()
+            let mut mapping = if preserving {
+                let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+                mapping.prepare_preserving(&mut session).await.unwrap();
+                mapping
             } else {
                 BulkMapping::prepare(&mut session, &camera, limits())
                     .await
@@ -817,13 +809,10 @@ fn publication_refuses_a_pair_that_already_holds_the_selected_source() {
     let mut steps = qualified();
     steps.extend(read(0x1200, &words(&[0, 32])));
     let (mut session, script) = opened(steps);
-    let error = block_on(BulkMapping::prepare_preserving(
-        &mut session,
-        &camera,
-        limits(),
-    ))
-    .err()
-    .expect("an already selected pair is refused");
+    let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+    let error = block_on(mapping.prepare_preserving(&mut session))
+        .err()
+        .expect("an already selected pair is refused");
     assert!(error.to_string().contains("ownership"), "{error}");
     assert_eq!(session.state(), SessionState::Ready);
     assert_eq!(script.remaining(), 0, "nothing was written or read further");
@@ -857,9 +846,8 @@ fn publication_capacity_is_clamped_to_the_reply_limit_and_splits_chunks() {
         size: 256,
     };
     block_on(async {
-        let mapping = BulkMapping::prepare_preserving(&mut session, &camera, limits())
-            .await
-            .unwrap();
+        let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+        mapping.prepare_preserving(&mut session).await.unwrap();
         assert_eq!(
             mapping.read(&mut session, target).await.unwrap(),
             [[1; 128], [2; 128]].concat()
@@ -895,8 +883,9 @@ fn publication_write_and_readback_follow_memory_limits() {
             session: &mut session,
             limits,
         };
-        let source = Source::borrow(&mut access, &camera).await.unwrap();
-        assert_eq!(source.window.capacity().get(), 32);
+        let mut source = Source::staged();
+        source.borrow(&mut access, &camera).await.unwrap();
+        assert_eq!(source.capacity(), Some(32));
         assert_eq!(source.overwritten, Some((0x1200, 8)));
         source.restore(&mut access).await.unwrap();
     });
@@ -922,9 +911,8 @@ fn publication_owner_change_between_chunks_sends_no_next_chunk_and_fences() {
     steps.extend(read(0x1200, &foreign));
     let (mut session, script) = opened(steps);
     block_on(async {
-        let mapping = BulkMapping::prepare_preserving(&mut session, &camera, limits())
-            .await
-            .unwrap();
+        let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+        mapping.prepare_preserving(&mut session).await.unwrap();
         let error = mapping.read(&mut session, target()).await.unwrap_err();
         assert!(error.to_string().contains("changed owner"), "{error}");
         assert_eq!(session.state(), SessionState::CompletionUnknown);
@@ -951,9 +939,8 @@ fn publication_owner_change_before_the_first_chunk_sends_no_bulk_data() {
     steps.extend(read(0x1200, &foreign));
     let (mut session, script) = opened(steps);
     block_on(async {
-        let mapping = BulkMapping::prepare_preserving(&mut session, &camera, limits())
-            .await
-            .unwrap();
+        let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+        mapping.prepare_preserving(&mut session).await.unwrap();
         assert!(mapping.read(&mut session, target()).await.is_err());
         assert_eq!(session.state(), SessionState::CompletionUnknown);
         assert!(mapping.restore(&mut session).await.is_err());
@@ -1062,9 +1049,13 @@ fn publication_invalid_metadata_stops_before_any_qualification_traffic() {
                 camera.source = source;
                 let (mut session, script) = opened(vec![]);
                 let result = if preserving {
-                    BulkMapping::prepare_preserving(&mut session, &camera, limits()).await
+                    // Staged construction validates metadata before any session
+                    // is touched, so no mapping can be prepared from bad facts.
+                    BulkMapping::new(&camera, limits()).map(|_| ())
                 } else {
-                    BulkMapping::prepare(&mut session, &camera, limits()).await
+                    BulkMapping::prepare(&mut session, &camera, limits())
+                        .await
+                        .map(|_| ())
                 };
                 assert!(result.is_err());
                 assert_eq!(script.remaining(), 0);
@@ -1133,9 +1124,8 @@ fn publication_unverified_owner_read_fences_before_the_caller_restores() {
     steps.extend(failed);
     let (mut session, script) = opened(steps);
     block_on(async {
-        let mapping = BulkMapping::prepare_preserving(&mut session, &camera, limits())
-            .await
-            .unwrap();
+        let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+        mapping.prepare_preserving(&mut session).await.unwrap();
         assert!(mapping.read(&mut session, target()).await.is_err());
         assert_eq!(session.state(), SessionState::CompletionUnknown);
         assert!(mapping.restore(&mut session).await.is_err());
@@ -1169,9 +1159,8 @@ fn publication_misaligned_read_is_refused_before_ownership_or_data_traffic() {
     steps.extend(read(0x1200, &original));
     let (mut session, script) = opened(steps);
     block_on(async {
-        let mapping = BulkMapping::prepare_preserving(&mut session, &camera, limits())
-            .await
-            .unwrap();
+        let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+        mapping.prepare_preserving(&mut session).await.unwrap();
         assert!(
             mapping
                 .read(
@@ -1188,4 +1177,427 @@ fn publication_misaligned_read_is_refused_before_ownership_or_data_traffic() {
         mapping.restore(&mut session).await.unwrap();
     });
     assert_eq!(script.remaining(), 0);
+}
+
+// ---- staged loans: cancellation, retention and phase fences -----------------
+
+fn publication_steps(original: &[u8], selected: &[u8]) -> Vec<E> {
+    let mut steps = qualified();
+    steps.extend(read(0x1200, original));
+    steps.extend(write(0x1200, selected));
+    steps.extend(read(0x1200, selected));
+    // Qualification compares the slow probe with the same bytes through E1,
+    // checking the borrowed pair around each piece.
+    steps.extend(read(0x1000, b"stoc"));
+    steps.extend(read(0x1200, selected));
+    steps.extend(data(0x1000, b"stoc"));
+    steps.extend(read(0x1200, selected));
+    steps
+}
+
+fn pending(exchange: Vec<E>, maximum: usize) -> Vec<E> {
+    let mut exchange = exchange;
+    exchange.pop();
+    exchange.push(E::PendingRead { maximum });
+    exchange
+}
+
+#[test]
+fn canceled_publication_setup_keeps_the_loan_and_fences_the_session() {
+    let camera = publication_camera(32);
+    let original = words(&[0xdead_0000, 16]);
+    let selected = words(&[0, 32]);
+    let mut steps = qualified();
+    steps.extend(read(0x1200, &original));
+    steps.extend(write(0x1200, &selected));
+    steps.extend(pending(read(0x1200, &selected), 44));
+    // Any later endpoint call would consume this deliberately unmatched canary.
+    steps.push(E::Control([0xaa; 12]));
+    let (mut session, script) = opened(steps);
+    let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+    {
+        let mut future = Box::pin(mapping.prepare_preserving(&mut session));
+        assert!(
+            block_on(poll_once(future.as_mut())).is_none(),
+            "the write completed but publication readback is pending"
+        );
+        drop(future);
+    }
+    assert_eq!(mapping.phase(), BulkMappingPhase::Unresolved);
+    assert_eq!(session.state(), SessionState::CompletionUnknown);
+    assert_eq!(
+        mapping.loan(),
+        Some(BulkLoan {
+            address: 0x1200,
+            original: original.clone(),
+            selected: Some(selected),
+        }),
+        "the bytes written before cancellation are still reported"
+    );
+    assert!(block_on(mapping.restore(&mut session)).is_err());
+    assert_eq!(script.remaining(), 1, "a fence sends no restore traffic");
+}
+
+#[test]
+fn canceled_query_setup_keeps_the_original_and_an_unknown_selection() {
+    let camera = query_camera();
+    let original = words(&[0xdead0000, 16]);
+    let mut steps = qualified();
+    steps.extend(read(0x1200, &original));
+    steps.extend(read(0x1100, &words(&[0x1500])));
+    steps.extend(read(0x150c, &words(&[0x2000])));
+    steps.extend(pending(diagnostic(0x450006, 0x80, 32), 32));
+    // Any later endpoint call would consume this deliberately unmatched canary.
+    steps.push(E::Control([0xaa; 12]));
+    let (mut session, script) = opened(steps);
+    let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+    {
+        let mut future = Box::pin(mapping.prepare_preserving(&mut session));
+        assert!(block_on(poll_once(future.as_mut())).is_none());
+        drop(future);
+    }
+    assert_eq!(mapping.phase(), BulkMappingPhase::Unresolved);
+    assert_eq!(session.state(), SessionState::CompletionUnknown);
+    assert_eq!(
+        mapping.loan(),
+        Some(BulkLoan {
+            address: 0x1200,
+            original: original.clone(),
+            selected: None,
+        }),
+        "the query's selected pair was never read back"
+    );
+    assert!(block_on(mapping.restore(&mut session)).is_err());
+    assert_eq!(script.remaining(), 1);
+}
+
+#[test]
+fn canceled_e1_read_keeps_the_loan_and_refuses_restoration() {
+    let camera = publication_camera(32);
+    let original = words(&[0x9000, 16]);
+    let selected = words(&[0, 32]);
+    let mut steps = publication_steps(&original, &selected);
+    steps.extend(read(0x1200, &selected));
+    steps.extend(pending(data(0x1800, &[1; 32]), 32));
+    // Any later endpoint call would consume this deliberately unmatched canary.
+    steps.push(E::Control([0xaa; 12]));
+    let (mut session, script) = opened(steps);
+    let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+    block_on(mapping.prepare_preserving(&mut session)).unwrap();
+    assert_eq!(mapping.phase(), BulkMappingPhase::Ready);
+    {
+        let mut future = Box::pin(mapping.read(&mut session, target()));
+        assert!(block_on(poll_once(future.as_mut())).is_none());
+        drop(future);
+    }
+    assert_eq!(mapping.phase(), BulkMappingPhase::Unresolved);
+    assert_eq!(session.state(), SessionState::CompletionUnknown);
+    assert_eq!(
+        mapping.loan(),
+        Some(BulkLoan {
+            address: 0x1200,
+            original,
+            selected: Some(selected),
+        })
+    );
+    assert!(block_on(mapping.restore(&mut session)).is_err());
+    assert_eq!(script.remaining(), 1, "no chunk or restore after the drop");
+}
+
+#[test]
+fn canceled_restore_keeps_the_loan_and_refuses_a_retry() {
+    let camera = publication_camera(32);
+    let original = words(&[0x9000, 16]);
+    let selected = words(&[0, 32]);
+    let mut steps = publication_steps(&original, &selected);
+    steps.extend(read(0x1200, &selected));
+    steps.extend(write(0x1200, &original));
+    steps.extend(pending(read(0x1200, &original), 44));
+    // Any later endpoint call would consume this deliberately unmatched canary.
+    steps.push(E::Control([0xaa; 12]));
+    let (mut session, script) = opened(steps);
+    let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+    block_on(mapping.prepare_preserving(&mut session)).unwrap();
+    {
+        let mut future = Box::pin(mapping.restore(&mut session));
+        assert!(block_on(poll_once(future.as_mut())).is_none());
+        drop(future);
+    }
+    assert_eq!(mapping.phase(), BulkMappingPhase::Unresolved);
+    assert_eq!(session.state(), SessionState::CompletionUnknown);
+    assert_eq!(
+        mapping.loan(),
+        Some(BulkLoan {
+            address: 0x1200,
+            original,
+            selected: Some(selected),
+        })
+    );
+    assert!(
+        block_on(mapping.restore(&mut session)).is_err(),
+        "an unresolved mapping never retries restoration"
+    );
+    assert_eq!(script.remaining(), 1, "the retry sent nothing");
+}
+
+#[test]
+fn staged_mapping_reaches_restored_and_refuses_reads_after_close() {
+    let camera = publication_camera(32);
+    let original = words(&[0x9000, 16]);
+    let selected = words(&[0, 32]);
+    let mut steps = publication_steps(&original, &selected);
+    steps.extend(read(0x1200, &selected));
+    steps.extend(data(0x1800, &[7; 32]));
+    steps.extend(read(0x1200, &selected));
+    steps.extend(read(0x1200, &selected));
+    steps.extend(write(0x1200, &original));
+    steps.extend(read(0x1200, &original));
+    let (mut session, script) = opened(steps);
+    block_on(async {
+        let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+        assert_eq!(mapping.phase(), BulkMappingPhase::Staged);
+        mapping.prepare_preserving(&mut session).await.unwrap();
+        assert_eq!(mapping.phase(), BulkMappingPhase::Ready);
+        assert_eq!(
+            mapping
+                .read(
+                    &mut session,
+                    BulkRange {
+                        address: 0x1800,
+                        size: 32
+                    }
+                )
+                .await
+                .unwrap(),
+            [7; 32]
+        );
+        mapping.restore(&mut session).await.unwrap();
+        assert_eq!(mapping.phase(), BulkMappingPhase::Restored);
+        mapping.restore(&mut session).await.unwrap();
+        assert!(
+            mapping.read(&mut session, target()).await.is_err(),
+            "a restored mapping never reads"
+        );
+        assert_eq!(mapping.overwritten(), Some((0x1200, 8)));
+        assert!(mapping.loan().is_some());
+    });
+    assert_eq!(session.state(), SessionState::Ready);
+    assert_eq!(script.remaining(), 0);
+}
+
+#[test]
+fn staged_mapping_sends_no_traffic_before_preparation() {
+    let camera = publication_camera(32);
+    let (mut session, script) = opened(vec![]);
+    let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+    assert_eq!(mapping.phase(), BulkMappingPhase::Staged);
+    assert_eq!(mapping.loan(), None);
+    assert!(block_on(mapping.read(&mut session, target())).is_err());
+    assert!(block_on(mapping.restore(&mut session)).is_err());
+    assert_eq!(mapping.phase(), BulkMappingPhase::Staged);
+    assert_eq!(session.state(), SessionState::Ready);
+    assert_eq!(script.remaining(), 0);
+}
+
+#[test]
+fn refused_setup_reports_a_closed_loan_only_when_the_cell_was_verified() {
+    // Refused before any write: the cell still holds its original bytes.
+    let camera = publication_camera(32);
+    let mut steps = qualified();
+    steps.extend(read(0x1200, &words(&[0, 32])));
+    let (mut session, script) = opened(steps);
+    let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+    assert!(block_on(mapping.prepare_preserving(&mut session)).is_err());
+    assert_eq!(mapping.phase(), BulkMappingPhase::Restored);
+    assert_eq!(session.state(), SessionState::Ready);
+    assert!(block_on(mapping.restore(&mut session)).is_ok());
+    assert_eq!(script.remaining(), 0, "a closed loan restores nothing");
+
+    // A foreign readback leaves the ownership unknown: no restoration, no
+    // retry and no traffic.
+    let camera = publication_camera(32);
+    let original = words(&[0xdead_0000, 16]);
+    let selected = words(&[0, 32]);
+    let foreign = words(&[0x7000, 12]);
+    let mut steps = qualified();
+    steps.extend(read(0x1200, &original));
+    steps.extend(write(0x1200, &selected));
+    steps.extend(read(0x1200, &foreign));
+    steps.extend(read(0x1200, &foreign));
+    let (mut session, script) = opened(steps);
+    let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+    assert!(block_on(mapping.prepare_preserving(&mut session)).is_err());
+    assert_eq!(mapping.phase(), BulkMappingPhase::Unresolved);
+    assert_eq!(session.state(), SessionState::CompletionUnknown);
+    assert!(mapping.loan().is_some());
+    assert!(block_on(mapping.restore(&mut session)).is_err());
+    assert_eq!(script.remaining(), 0);
+}
+
+#[test]
+fn dropped_operation_fences_a_ready_session_without_an_exchange() {
+    let camera = publication_camera(32);
+    let original = words(&[0x9000, 16]);
+    let selected = words(&[0, 32]);
+    let (mut session, script) = opened(publication_steps(&original, &selected));
+    let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+    block_on(mapping.prepare_preserving(&mut session)).unwrap();
+    assert_eq!(session.state(), SessionState::Ready);
+    // The per-exchange guard would not fire here: nothing is in flight.
+    drop(Operation::new(&mut mapping, &mut session));
+    assert_eq!(mapping.phase(), BulkMappingPhase::Unresolved);
+    assert_eq!(session.state(), SessionState::CompletionUnknown);
+    assert!(
+        mapping.loan().is_some(),
+        "the snapshot stays with the owner"
+    );
+    assert_eq!(script.remaining(), 0, "the guard sends no traffic");
+}
+
+#[test]
+fn returned_owner_errors_mark_both_read_paths_unresolved_and_keep_the_loan() {
+    for progress in [false, true] {
+        let camera = publication_camera(32);
+        let original = words(&[0x9000, 16]);
+        let selected = words(&[0, 32]);
+        let mut steps = publication_steps(&original, &selected);
+        steps.extend(read(0x1200, &words(&[0x8000, 12])));
+        steps.push(E::Control([0xaa; 12]));
+        let (mut session, script) = opened(steps);
+        let mut mapping = BulkMapping::new(&camera, limits()).unwrap();
+        block_on(mapping.prepare_preserving(&mut session)).unwrap();
+        let error = if progress {
+            block_on(mapping.read_progress(&mut session, target(), &mut |_| Ok(())))
+        } else {
+            block_on(mapping.read(&mut session, target()))
+        }
+        .unwrap_err();
+        assert!(error.to_string().contains("changed owner"));
+        assert_eq!(session.state(), SessionState::CompletionUnknown);
+        assert_eq!(mapping.phase(), BulkMappingPhase::Unresolved);
+        assert_eq!(mapping.loan().unwrap().original, original);
+        assert!(block_on(mapping.restore(&mut session)).is_err());
+        assert!(block_on(mapping.read(&mut session, target())).is_err());
+        assert_eq!(
+            script.remaining(),
+            1,
+            "no E1 or cleanup after ownership loss"
+        );
+    }
+}
+
+#[test]
+fn returned_setup_transport_error_is_unresolved_even_before_a_loan_exists() {
+    let mut steps = info(4, "X-M5");
+    let E::Read { maximum, .. } = steps.pop().unwrap() else {
+        panic!("info reply")
+    };
+    steps.push(E::ReadFailure {
+        maximum,
+        error: nusb::transfer::TransferError::Disconnected,
+        partial: vec![],
+    });
+    steps.push(E::Control([0xaa; 12]));
+    let (mut session, script) = opened(steps);
+    let mut mapping = BulkMapping::new(&publication_camera(32), limits()).unwrap();
+    assert!(block_on(mapping.prepare_preserving(&mut session)).is_err());
+    assert_eq!(mapping.loan(), None);
+    assert_eq!(session.state(), SessionState::CompletionUnknown);
+    assert_eq!(mapping.phase(), BulkMappingPhase::Unresolved);
+    assert!(block_on(mapping.restore(&mut session)).is_err());
+    assert_eq!(
+        script.remaining(),
+        1,
+        "an empty loan is not proof of completion"
+    );
+}
+
+#[test]
+fn failed_qualification_keeps_the_snapshot_after_known_successful_rollback() {
+    let original = words(&[0x9000, 16]);
+    let selected = words(&[0, 32]);
+    let mut steps = qualified();
+    steps.extend(read(0x1200, &original));
+    steps.extend(write(0x1200, &selected));
+    steps.extend(read(0x1200, &selected));
+    steps.extend(read(0x1000, b"stoc"));
+    steps.extend(read(0x1200, &selected));
+    steps.extend(data(0x1000, b"nope"));
+    steps.extend(read(0x1200, &selected));
+    steps.extend(read(0x1200, &selected));
+    steps.extend(write(0x1200, &original));
+    steps.extend(read(0x1200, &original));
+    steps.push(E::Control([0xaa; 12]));
+    let (mut session, script) = opened(steps);
+    let mut mapping = BulkMapping::new(&publication_camera(32), limits()).unwrap();
+    let error = block_on(mapping.prepare_preserving(&mut session)).unwrap_err();
+    assert!(error.to_string().contains("disagree"));
+    assert_eq!(mapping.phase(), BulkMappingPhase::Restored);
+    assert_eq!(session.state(), SessionState::Ready);
+    assert_eq!(mapping.loan().unwrap().original, original);
+    block_on(mapping.restore(&mut session)).unwrap();
+    assert!(block_on(mapping.read(&mut session, target())).is_err());
+    assert_eq!(script.remaining(), 1, "known rollback does not run twice");
+}
+
+#[test]
+fn query_setup_never_adopts_a_foreign_pair_after_the_checked_readback() {
+    let original = words(&[0x9000, 16]);
+    let selected = words(&[0x1000, 32]);
+    let foreign = words(&[0x1800, 64]);
+    let mut steps = qualified();
+    steps.extend(read(0x1200, &original));
+    steps.extend(read(0x1100, &words(&[0x1500])));
+    steps.extend(read(0x150c, &words(&[0x2000])));
+    steps.extend(diagnostic(0x450006, 0x80, 32));
+    steps.extend(read(0x1200, &selected));
+    steps.extend(read(0x1200, &foreign));
+    steps.push(E::Control([0xaa; 12]));
+    let (mut session, script) = opened(steps);
+    let mut mapping = BulkMapping::new(&query_camera(), limits()).unwrap();
+    let error = block_on(mapping.prepare_preserving(&mut session)).unwrap_err();
+    assert!(error.to_string().contains("changed owner"));
+    assert_eq!(mapping.loan().unwrap().original, original);
+    assert_eq!(mapping.loan().unwrap().selected, Some(selected));
+    assert_eq!(mapping.phase(), BulkMappingPhase::Unresolved);
+    assert_eq!(session.state(), SessionState::CompletionUnknown);
+    assert!(block_on(mapping.restore(&mut session)).is_err());
+    assert_eq!(
+        script.remaining(),
+        1,
+        "foreign bytes never become restorable"
+    );
+}
+
+#[test]
+fn query_setup_preserves_its_primary_error_when_ownership_readback_also_fails() {
+    let original = words(&[0x9000, 16]);
+    let mut steps = qualified();
+    steps.extend(read(0x1200, &original));
+    steps.extend(read(0x1100, &words(&[0x1500])));
+    steps.extend(read(0x150c, &words(&[0x2000])));
+    steps.extend(diagnostic(0x450006, 0x80, 32));
+    steps.extend(read(0x1200, &words(&[0x1000, 64])));
+    let mut failed = read(0x1200, &original);
+    failed.pop();
+    failed.push(E::ReadFailure {
+        maximum: 44,
+        error: nusb::transfer::TransferError::Disconnected,
+        partial: vec![],
+    });
+    steps.extend(failed);
+    steps.push(E::Control([0xaa; 12]));
+    let (mut session, script) = opened(steps);
+    let mut mapping = BulkMapping::new(&query_camera(), limits()).unwrap();
+    let error = block_on(mapping.prepare_preserving(&mut session)).unwrap_err();
+    let BulkError::Cleanup { operation, cleanup } = error else {
+        panic!("primary and cleanup")
+    };
+    assert!(operation.contains("capacity differs"));
+    assert!(matches!(*cleanup, BulkError::Usb(_)));
+    assert_eq!(mapping.loan().unwrap().original, original);
+    assert_eq!(mapping.phase(), BulkMappingPhase::Unresolved);
+    assert_eq!(session.state(), SessionState::CompletionUnknown);
+    assert!(block_on(mapping.restore(&mut session)).is_err());
+    assert_eq!(script.remaining(), 1);
 }

@@ -7,11 +7,23 @@ Pyodide, over local USB or USB sharing.
 
 ## `bulk`: bounded borrowed memory sources
 
-`BulkMapping::prepare_preserving` qualifies a firmware's identity, code and
-bulk/packet probes, then holds its selected E1 source until explicit `restore`.
-The caller keeps the session exclusive throughout that lifetime. Uncertain
-completion withholds restoration and further commands; dropping a mapping does
-not send USB traffic.
+`BulkMapping::new` validates a firmware's bulk metadata and bounds without USB
+and returns a staged mapping; `prepare_preserving` then qualifies identity,
+code and bulk/packet probes on the session, and the mapping keeps its selected
+E1 source until an explicit `restore`. The owner keeps the mapping for the whole
+loan and passes the same session to every call: construct it before the first await,
+prepare it in place, and `restore` it by mutable reference. `phase()` reports
+`Staged`, `Preparing`, `Ready`, `Restoring`, `Restored` or `Unresolved`; reads
+need `Ready`, and an `Unresolved` mapping sends no traffic, so a failed or
+canceled setup or restoration is never retried.
+
+Dropping a prepare, read or restore future before it returns synchronously
+marks the mapping `Unresolved` and invalidates the session's completion, even
+when the last exchange was acknowledged; `Drop` itself sends no USB traffic. The
+mapping keeps the borrowed cell's original bytes after errors, cancellation and
+successful restoration, reported by `loan()` (address, original bytes, and the
+planned host-write bytes or observed query bytes) independently of
+`overwritten()`. A query's selected pair stays unknown until that readback.
 
 `BulkSource::Publication` borrows a located eight-byte source/capacity pair and
 selects base zero with a per-command ceiling clamped to the session reply limit.
@@ -28,6 +40,14 @@ restore diagnostic pattern scratch or make a frozen framebuffer snapshot.
 No camera aperture is enabled by adding the source type. Rust workflows and
 the JavaScript memory handle can consume it; an owned Python memory binding
 remains separate work.
+
+This loan API requires an owner that remains alive. The JavaScript handle's
+per-operation session serialization does not reserve the session for its whole
+lifetime; canceling an open before the handle is returned can discard that
+owner. Likewise, a camera-mount transaction that drops its entire transport
+does not retain a report merely because the mapping was staged. These outer
+ownership boundaries still need integration; the operation guard fences the
+core without issuing cleanup.
 
 ## `debug_mode`: persistent debug access
 
