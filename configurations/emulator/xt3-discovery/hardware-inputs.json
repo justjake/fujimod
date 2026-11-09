@@ -151,6 +151,23 @@
         24,
         1
       ]
-    }
+    },
+    "sd_cards": [
+      {
+        "host_base": 4294721536,
+        "card": {
+          "basis": "Declared, not measured: an empty 8 GiB SDHC card with high speed, formatted as one FAT32 partition from sector 8192 with 32 KiB clusters, the layout of the other FujiMod REC configurations. The camera's slot 1 held a UHS-I card when the host registers were read; its identity, size and contents are not read, and the emulated host does not model UHS-I modes.",
+          "format": {
+            "filesystem": "fat32",
+            "label": "CAMERA",
+            "partition_start": 8192,
+            "sectors_per_cluster": 64
+          },
+          "high_speed": true,
+          "rca": 1,
+          "sectors": 16777216
+        }
+      }
+    ]
   }
 }
