@@ -32,6 +32,7 @@ struct Camera {
     mutations: usize,
     cache_calls: usize,
     reject_update: bool,
+    mailbox_operations: Vec<u32>,
 }
 impl Camera {
     fn read(&self, a: u32, n: usize) -> Vec<u8> {
@@ -66,6 +67,7 @@ impl Camera {
     fn mailbox(&mut self) {
         let request = self.word(0x40104);
         let op = request & 255;
+        self.mailbox_operations.push(op);
         let size = request >> 8;
         let path = self.text(0x40200);
         let mut count = 0;
@@ -618,11 +620,18 @@ fn refused_update_recreates_only_a_confirmed_empty_file() {
                 if initial.is_empty() {
                     vec![4, 5, 6]
                 } else {
-                    initial
+                    initial.clone()
                 }
             );
             assert_eq!(c.files["A:\\OLD.BIN"], vec![1, 2]);
             assert!(c.opened.is_none());
+            if initial.is_empty() {
+                assert!(c.mailbox_operations.contains(&9));
+                assert!(!c.mailbox_operations.contains(&5));
+            } else {
+                assert!(c.mailbox_operations.contains(&5));
+                assert!(!c.mailbox_operations.contains(&9));
+            }
         }
     })
 }
