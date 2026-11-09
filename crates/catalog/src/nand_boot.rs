@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 
 pub const NAND_BOOT_SCHEMA_URI: &str =
-    "https://fujimod.com/schemas/nand-boot.generated.schema.json";
+    "https://fujimod.com/schemas/sd-boot-v2-autostart.generated.schema.json";
 
 /// NAND bootloader facts for one EXR II firmware.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,6 +44,11 @@ pub struct FirmwareNandBoot {
 /// Stage-1 image loaded from NAND and its reset vector.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(missing_as_null)
+)]
 #[serde(deny_unknown_fields)]
 pub struct NandBootStage1 {
     /// Native-flash offset of update byte zero.
@@ -65,6 +70,11 @@ pub struct NandBootStage1 {
 /// One stage-1 NAND block.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(missing_as_null)
+)]
 #[serde(deny_unknown_fields)]
 pub struct NandBootBlock {
     /// Good-block ordinal the ROM counts from the medium start.
@@ -80,6 +90,11 @@ pub struct NandBootBlock {
 /// The reset vector and the first instruction behind its literal.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(missing_as_null)
+)]
 #[serde(deny_unknown_fields)]
 pub struct NandBootEntry {
     /// Byte offset of the reset literal in the stage-1 image.
@@ -99,6 +114,11 @@ pub struct NandBootEntry {
 /// Stage-1 loader reservation for the NAND bootloader.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(missing_as_null)
+)]
 #[serde(deny_unknown_fields)]
 pub struct NandBootCodeSpace {
     /// RAM address of the reservation.
@@ -112,6 +132,11 @@ pub struct NandBootCodeSpace {
 /// Frozen stage-2 file, address and size.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(missing_as_null)
+)]
 #[serde(deny_unknown_fields)]
 pub struct NandBootLoadRange {
     /// Root 8.3 file name.

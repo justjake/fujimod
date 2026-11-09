@@ -3,7 +3,7 @@ import { loadRelease } from './release.ts';
 import { validateIndex, verifyPatch } from './catalog.ts';
 import { sha256 } from './patcher.ts';
 const source = 'a'.repeat(64);
-async function fixture(installable = false, fpupdate = false) {
+async function fixture(sd_boot_v1_installable = false, fpupdate = false) {
   const notes = '# Release\n\nRelease notes.';
   const program = new Uint8Array(20);
   const identity = { bytes: 1, sha256: source };
@@ -47,7 +47,7 @@ async function fixture(installable = false, fpupdate = false) {
         boot_instructions: ['Copy files.'],
         update_filename: 'FWUP0009.DAT',
         mods: [],
-        downloads: { sd_card: true, installable },
+        downloads: { sd_boot_v1: true, sd_boot_v1_installable },
       },
     ],
   };
@@ -81,7 +81,7 @@ test('runtime release fetches metadata and Markdown at same-origin URLs', async 
     prerelease: true,
     assetBase: 'https://fujimod.com/releases/v2/',
     notesText: '# Release\n\nRelease notes.',
-    firmwares: [{ downloads: { sd_card: true, installable: false } }],
+    firmwares: [{ downloads: { sd_boot_v1: true, sd_boot_v1_installable: false } }],
   });
   expect(
     f.fetcher.mock.calls.map(([url]) => (url instanceof Request ? url.url : url.toString())),
@@ -97,7 +97,7 @@ test('missing notes produces no text, and omitted download switches default to f
   delete raw.notes;
   delete raw.firmwares[0].downloads;
   const validated = validateIndex(raw);
-  expect(validated.firmwares[0].downloads).toEqual({ sd_card: false, installable: false });
+  expect(validated.firmwares[0].downloads).toEqual({ sd_boot_v1: false, sd_boot_v1_installable: false });
   expect(raw.firmwares[0].downloads).toBeUndefined();
   f.files.set('/releases/v2/patches.json', Response.json(raw));
   expect((await loadRelease('https://fujimod.com/', f.fetcher))?.notesText).toBeUndefined();
@@ -111,7 +111,7 @@ test('rejects old schemas, unsafe notes filenames and malformed download switche
   ])
     expect(() => validateIndex({ ...index, notes })).toThrow();
   expect(() => validateIndex({ ...index, schema: 1 })).toThrow();
-  for (const downloads of [null, [], { sd_card: 'yes' }, { installable: 1 }])
+  for (const downloads of [null, [], { sd_boot_v1: 'yes' }, { sd_boot_v1_installable: 1 }])
     expect(() =>
       validateIndex({ ...index, firmwares: [{ ...index.firmwares[0], downloads }] }),
     ).toThrow();
@@ -129,7 +129,7 @@ test('displaying a release never downloads firmware patches; patch use verifies 
     verifyPatch(validateIndex(bad.index), bad.index.firmwares[0], bad.patch),
   ).rejects.toThrow(/index/);
   expect(
-    (await loadRelease('https://fujimod.com/', bad.fetcher))?.firmwares[0].downloads.installable,
+    (await loadRelease('https://fujimod.com/', bad.fetcher))?.firmwares[0].downloads.sd_boot_v1_installable,
   ).toBe(true);
   expect(bad.fetcher.mock.calls).toHaveLength(3);
   expect(

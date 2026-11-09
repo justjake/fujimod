@@ -3,7 +3,7 @@ export interface OtaFile {
   sha256: string;
   size: number;
 }
-export interface OtaRelease {
+export interface SdBootV2Release {
   firmware: string;
   version: string;
   /** File layer paths, such as `/firmware.patch`, mapped to their store files. */
@@ -17,7 +17,7 @@ const layerPath = (path: string) =>
   !Array.from({ length: path.length }, (_, i) => path.charCodeAt(i)).some((code) => code < 0x20);
 
 /** The card directory of a firmware's release: the firmware id in upper case. */
-export function otaFirmware(id: string) {
+export function sdBootV2Firmware(id: string) {
   return id.toUpperCase();
 }
 
@@ -27,8 +27,8 @@ export function storeName(sha256: string) {
   return `${sha256.slice(0, 8)}.${sha256.slice(8, 11)}`.toUpperCase();
 }
 
-export function validateOtaRelease(value: unknown, firmware: string): OtaRelease {
-  const release = value as OtaRelease;
+export function validateOtaRelease(value: unknown, firmware: string): SdBootV2Release {
+  const release = value as SdBootV2Release;
   if (
     !release ||
     release.firmware !== firmware ||
@@ -77,7 +77,7 @@ export async function loadOtaRelease(
   base: string | URL,
   firmware: string,
   fetcher: typeof fetch = fetch,
-): Promise<OtaRelease> {
+): Promise<SdBootV2Release> {
   const response = await fetcher(new URL(`/ota/${encodeURIComponent(firmware)}/latest.json`, base));
   const unavailable = Error(`The ${firmware} release files are unavailable.`);
   if (!response.ok || !response.headers.get('content-type')?.includes('json')) throw unavailable;
@@ -88,7 +88,7 @@ export async function loadOtaRelease(
 }
 
 /** The first-install system manifest, `FUJIMOD/SYSTEM/<FIRMWARE>/A.JSN`. */
-export function firstInstallManifest(release: OtaRelease) {
+export function sdBootV2FirstInstallManifest(release: SdBootV2Release) {
   return {
     gen: 1,
     version: release.version,
@@ -101,7 +101,7 @@ export function firstInstallManifest(release: OtaRelease) {
 }
 
 /** The first-install boot state, `FUJIMOD/SYSTEM/<FIRMWARE>/STATE.JSN`. */
-export function firstInstallState() {
+export function sdBootV2FirstInstallState() {
   return {
     a: { gen: 1, attempts: 0, confirmed: false },
     b: { gen: -1, attempts: 0, confirmed: false },

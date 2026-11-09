@@ -7,12 +7,12 @@ fn error(error: core::image::Error) -> JsValue {
 }
 
 #[wasm_bindgen]
-pub struct RecoveryAvailability {
+pub struct SdCardAvailability {
     inner: core::Availability,
 }
 
 #[wasm_bindgen]
-impl RecoveryAvailability {
+impl SdCardAvailability {
     #[wasm_bindgen(getter, js_name = firmwareId)]
     pub fn firmware_id(&self) -> String {
         self.inner.firmware_id.clone()
@@ -48,7 +48,7 @@ impl RecoveryAvailability {
         })
     }
     /// Firmwares with the same value share one card's EXR II boot files.
-    #[wasm_bindgen(getter, js_name = otaStartupHeader)]
+    #[wasm_bindgen(getter, js_name = sdBootV2Header)]
     pub fn ota_startup_header(&self) -> Option<String> {
         self.inner.ota_startup_header.clone()
     }
@@ -59,12 +59,12 @@ impl RecoveryAvailability {
             None => Ok(vec![]),
         }
     }
-    #[wasm_bindgen(getter, js_name = sdBoot, unchecked_return_type = "BootCombination | null")]
-    pub fn sd_boot(&self) -> Result<JsValue, JsValue> {
+    #[wasm_bindgen(getter, js_name = sdBootCombination, unchecked_return_type = "BootCombination | null")]
+    pub fn sd_boot_combination(&self) -> Result<JsValue, JsValue> {
         js_sys::JSON::parse(
             &self
                 .inner
-                .sd_boot
+                .sd_boot_combination
                 .as_ref()
                 .map_or("null".into(), ToString::to_string),
         )
@@ -82,11 +82,11 @@ impl RecoveryAvailability {
 }
 
 #[wasm_bindgen]
-pub struct RecoveryFile {
+pub struct SdCardFile {
     inner: core::image::File,
 }
 #[wasm_bindgen]
-impl RecoveryFile {
+impl SdCardFile {
     #[wasm_bindgen(getter)]
     pub fn name(&self) -> String {
         self.inner.name.clone()
@@ -102,30 +102,30 @@ impl RecoveryFile {
 }
 
 #[wasm_bindgen]
-pub struct RecoveryCard {
+pub struct SdCardFiles {
     files: Vec<core::image::File>,
 }
 #[wasm_bindgen]
-impl RecoveryCard {
+impl SdCardFiles {
     /// Transfer all file ownership to JS in one call.
-    #[wasm_bindgen(js_name = takeFiles, unchecked_return_type = "RecoveryFile[]")]
+    #[wasm_bindgen(js_name = takeFiles, unchecked_return_type = "SdCardFile[]")]
     pub fn take_files(&mut self) -> js_sys::Array {
         std::mem::take(&mut self.files)
             .into_iter()
-            .map(|inner| JsValue::from(RecoveryFile { inner }))
+            .map(|inner| JsValue::from(SdCardFile { inner }))
             .collect()
     }
 }
 
-#[wasm_bindgen(js_name = recoveryAvailability)]
-pub fn availability(firmware_id: &str) -> Result<RecoveryAvailability, JsValue> {
+#[wasm_bindgen(js_name = sdCardAvailability)]
+pub fn availability(firmware_id: &str) -> Result<SdCardAvailability, JsValue> {
     core::availability(firmware_id)
-        .map(|inner| RecoveryAvailability { inner })
+        .map(|inner| SdCardAvailability { inner })
         .map_err(error)
 }
 
-#[wasm_bindgen(js_name = buildRecoveryCard)]
-pub fn build(firmware_id: &str, source: &[u8]) -> Result<RecoveryCard, JsValue> {
+#[wasm_bindgen(js_name = buildSdCardRecovery)]
+pub fn build(firmware_id: &str, source: &[u8]) -> Result<SdCardFiles, JsValue> {
     let status = core::availability(firmware_id).map_err(error)?;
     if !status.can_build {
         return Err(js_sys::Error::new(&format!(
@@ -136,31 +136,31 @@ pub fn build(firmware_id: &str, source: &[u8]) -> Result<RecoveryCard, JsValue> 
     }
     let recipe = core::Recipe::bundled(firmware_id)
         .map_err(error)?
-        .ok_or_else(|| js_sys::Error::new("Missing recovery recipe"))?;
+        .ok_or_else(|| js_sys::Error::new("Missing SD card recipe"))?;
     recipe
         .build(source)
-        .map(|files| RecoveryCard { files })
+        .map(|files| SdCardFiles { files })
         .map_err(error)
 }
 
 /// The EXR II card root that loads stage 1 from NAND, then FujiMod stage 2.
-#[wasm_bindgen(js_name = buildOtaStartupCard)]
-pub fn build_ota_startup(firmware_id: &str, source: &[u8]) -> Result<RecoveryCard, JsValue> {
+#[wasm_bindgen(js_name = buildSdBootV2SdCard)]
+pub fn build_ota_startup(firmware_id: &str, source: &[u8]) -> Result<SdCardFiles, JsValue> {
     let recipe = core::Recipe::bundled(firmware_id)
         .map_err(error)?
-        .ok_or_else(|| js_sys::Error::new("Missing recovery recipe"))?;
+        .ok_or_else(|| js_sys::Error::new("Missing SD card recipe"))?;
     recipe
         .build_ota_startup(source)
-        .map(|files| RecoveryCard { files })
+        .map(|files| SdCardFiles { files })
         .map_err(error)
 }
 
 #[wasm_bindgen(js_name = buildGreenLedCard)]
-pub fn build_green_led(firmware_id: &str, source: &[u8]) -> Result<RecoveryCard, JsValue> {
+pub fn build_green_led(firmware_id: &str, source: &[u8]) -> Result<SdCardFiles, JsValue> {
     let recipe = core::Recipe::bundled(firmware_id)
         .map_err(error)?
-        .ok_or_else(|| js_sys::Error::new("Missing recovery recipe"))?;
+        .ok_or_else(|| js_sys::Error::new("Missing SD card recipe"))?;
     core::green_led::build(&recipe, source)
-        .map(|files| RecoveryCard { files })
+        .map(|files| SdCardFiles { files })
         .map_err(error)
 }

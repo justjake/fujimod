@@ -14,7 +14,7 @@ import { createFirmwareLibrary } from '../cameras/firmware-library';
 import { Steps, Step, FileList } from './Steps';
 import { FirmwareDownloads, type DownloadRow } from '../cameras/FirmwareDownloads';
 import '../cameras/launcher.css';
-import { recoveryCard, type RecoveryDownload } from './card';
+import { buildSdCardUtility, type SdCardUtilityDownload } from './card';
 import { SiteHeader } from '../ui/site-header';
 import { SYSTEMS, FORMAT_STEPS, detectSystem, type System } from './format-guide';
 import '../home/site.css';
@@ -32,7 +32,7 @@ export default function Recovery() {
   const [error, setError] = createSignal('');
   const [building, setBuilding] = createSignal(false);
   const [buildError, setBuildError] = createSignal('');
-  const [downloadType, setDownloadType] = createSignal<RecoveryDownload>('system');
+  const [downloadType, setDownloadType] = createSignal<SdCardUtilityDownload>('system');
   const [cameras, setCameras] = createSignal<DownloadRow[]>([]);
 
   const chosen = library.chosen;
@@ -59,13 +59,13 @@ export default function Recovery() {
     setSystem(detectSystem(navigator.userAgent));
   });
 
-  async function download(firmware: LibraryFirmware, kind: RecoveryDownload) {
+  async function download(firmware: LibraryFirmware, kind: SdCardUtilityDownload) {
     setBuildError('');
     setDownloadType(kind);
     setBuilding(true);
     try {
       const bytes = new Uint8Array(await store.firmwareBytes(firmware.sha256));
-      const files = recoveryCard(firmware.firmwareId, bytes, kind);
+      const files = buildSdCardUtility(firmware.firmwareId, bytes, kind);
       const zip = await zipBlob(
         files.map((entry) => ({ path: entry.name, data: new Blob([entry.data]) })),
       );
@@ -77,7 +77,7 @@ export default function Recovery() {
         zip,
         firmwareDownloadName(
           kind === 'green-led' ? 'green-led' : 'recovery',
-          'sd-boot',
+          kind === 'green-led' ? 'green-led' : 'sd-card-recovery',
           { model: release.product, version: release.version },
           __FUJIMOD_BUILD_SHA__,
         ),
@@ -188,7 +188,7 @@ export default function Recovery() {
                   </p>
                   {(() => {
                     const keys = (modes: ('sd' | 'firmware_update')[]) => (
-                      <Show when={result().sdBoot}>
+                      <Show when={result().sdBootCombination}>
                         {(controls) => <PowerComboKeys controls={controls()} modes={modes} />}
                       </Show>
                     );
@@ -223,7 +223,7 @@ export default function Recovery() {
                       </Show>
                     );
                   })()}
-                  <Show when={!result().sdBoot}>
+                  <Show when={!result().sdBootCombination}>
                     <p class="recovery-error">
                       The {result().model}’s SD boot buttons are not in the catalog yet.
                     </p>

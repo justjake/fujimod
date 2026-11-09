@@ -10,7 +10,7 @@ import { cameraProgress } from '../ui/catalog-progress';
 import { PersonalNote } from '../ui/personal-note';
 import { SiteHeader } from '../ui/site-header';
 import { FeatureCatalog } from './Features';
-import { SdCardDownload } from './sd-card/SdCardDownload';
+import { SdBootV2Download } from './sd-boot-v2/SdBootV2Download';
 import { createFirmwareLibrary } from '../cameras/firmware-library';
 import { sha256 } from '../patch/patcher';
 import { initialize } from 'fujimod';
@@ -70,7 +70,7 @@ export default function Home() {
         <main>
           <PersonalNote />
           <FeatureCatalog />
-          <SdCardDownload release={state.release} catalog={state.catalog.firmwares} />
+          <SdBootV2Download release={state.release} catalog={state.catalog.firmwares} />
           <div class="emulator-heading">
             <h2 class="section-heading" id="software">
               Software

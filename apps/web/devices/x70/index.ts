@@ -10,4 +10,4 @@ export const panel: DevicePanel = {
 };
 export const preview = new URL('./preview.png', import.meta.url).href;
 
-export const sdBoot = true;
+export const sdCardBoot = true;

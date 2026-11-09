@@ -3609,7 +3609,7 @@ impl ReferenceKind {
             Some("ui-event-codes.generated.json") => Ok(Self::UiEventCodes),
             Some("bulk.generated.json") => Ok(Self::Bulk),
             Some("execution.generated.json") => Ok(Self::Execution),
-            Some("nand-boot.generated.json") => Ok(Self::NandBoot),
+            Some("sd-boot-v2-autostart.generated.json") => Ok(Self::NandBoot),
             Some("boot-patch.generated.json") => Ok(Self::BootPatch),
             Some("card-files.generated.json") => Ok(Self::CardFiles),
             Some("restart.generated.json") => Ok(Self::Restart),

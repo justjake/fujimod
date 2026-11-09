@@ -5,9 +5,9 @@ export function cardDownloadAllowed(
   name: string,
   firmware?: Pick<PatchFirmware, 'downloads' | 'update_filename'>,
 ) {
-  if (/^ff(?:boot|sys)\.bin$/i.test(name)) return firmware?.downloads.sd_card ?? false;
+  if (/^ff(?:boot|sys)\.bin$/i.test(name)) return firmware?.downloads.sd_boot_v1 ?? false;
   const update = firmware?.update_filename;
   if (update ? name.toUpperCase() === update : /\.dat$/i.test(name))
-    return firmware?.downloads.installable ?? false;
+    return firmware?.downloads.sd_boot_v1_installable ?? false;
   return true;
 }

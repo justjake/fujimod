@@ -1,4 +1,4 @@
-# SD recovery cards
+# SD card startup and recovery
 
 `fujimod-recovery` constructs SD startup files from an official update supplied
 by the caller. It checks the complete DAT identity, decoded source hashes,
@@ -153,20 +153,20 @@ so the paired official DAT needs no version change. The recipe pins those
 code spans and verifies them against the constructed RAM image. `Recipe::build_startup` constructs boot files
 separately for execution and transfer tests.
 
-JavaScript uses `recovery.availability(firmwareId)` and
-`recovery.build(firmwareId, datBytes)`. Call `card.takeFiles()` to obtain file
+JavaScript uses `sdCardTools.availability(firmwareId)` and
+`sdCardTools.build(firmwareId, datBytes)`. Call `card.takeFiles()` to obtain file
 objects with `name`, `size`, and `bytes: Uint8Array`. Free the file objects and
 card after copying their contents to downloads or an archive. Construction has
 no filesystem, USB, camera, or network access.
 
 The native CLI exposes `list`, `build FIRMWARE DAT NEW_DIRECTORY`, and
-`startup FIRMWARE DAT NEW_DIRECTORY`, and `stage-one FIRMWARE DAT NEW_DIRECTORY`.
+`sd-boot-v1-startup FIRMWARE DAT NEW_DIRECTORY`, and `sd-boot-v1-stage-one FIRMWARE DAT NEW_DIRECTORY`.
 
 `rescue-baseline FIRMWARE DAT NEW_DIRECTORY` reconstructs the original XP4 cold
 pair before firmware-reader redirection. `Recipe::build_rescue_baseline` exposes
 the same construction for regression comparisons.
 
-`card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY` accepts an explicit
+`sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY` accepts an explicit
 unit storage image for recipes with retained setup data. It checks the storage
 size and complete update pages, carries the retained cache in SRAM, and appends
 the storage namespace to the OS file. It defaults to zero success hold. The
@@ -174,7 +174,7 @@ optional runtime binding initializes the card and serves checked descriptor
 reads from that namespace; it uses the card’s retained training data and
 does not initialize the serial NOR controller.
 
-`startup` and `stage-one` accept `--success-hold-seconds N` (default `0`).
+`sd-boot-v1-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
 green using a counted loop before continuing. Each second requests 2,048 units
 of 1,000,000 four-NOP iterations, allowing up to two billion iterations per
@@ -182,8 +182,8 @@ second; the startup clock can make the hold longer. This early hold calls no
 stock code and requires no initialized timer. Zero skips the hold. The library
 exposes the same setting through `StartupOptions` and the corresponding `_with_options` methods.
 
-The XP4 compiled SD loader is `assets/xp4-sd-loader.generated.bin`; its companion
-`assets/xp4-sd-loader.generated.json` describes segment offsets, symbols and ARM
+The XP4 compiled SD loader is `assets/sd-boot-v1-xp4-loader.generated.bin`; its companion
+`assets/sd-boot-v1-xp4-loader.generated.json` describes segment offsets, symbols and ARM
 relocations. The crate loads these inputs with `include_bytes!` and
 `include_str!`. They contain empty camera-data placeholders. Runtime relocation
 inserts the supplied update's setup tables and updates absolute references,
@@ -197,15 +197,15 @@ reader and primary-loader call identities, reserves its code and backing ranges,
 and preserves the conditional primary-core initialization call. Out-of-range
 reads return errors. Per-unit storage APIs retain their stock behavior.
 
-The XP5 compiled SD loader is `assets/xp5-sd-loader.generated.bin`; its companion
-`assets/xp5-sd-loader.generated.json` gives the image size, symbol offsets, the
+The XP5 compiled SD loader is `assets/sd-boot-v1-xp5-loader.generated.bin`; its companion
+`assets/sd-boot-v1-xp5-loader.generated.json` gives the image size, symbol offsets, the
 pre-setup stack bound and the two relocations against stock setup routines. The
 build script turns that layout into constants and the crate loads the image with
 `include_bytes!`. The image contains empty camera-data placeholders; card
 construction needs only the official DAT and the compiled catalog recipes.
 
-The EXR compiled SD loader is `assets/exr-sd-loader.generated.bin`; its
-companion `assets/exr-sd-loader.generated.json` gives the startup loader and
+The EXR compiled SD loader is `assets/sd-boot-v1-exr-loader.generated.bin`; its
+companion `assets/sd-boot-v1-exr-loader.generated.json` gives the startup loader and
 firmware-reader segments, configuration offsets, symbols, and SRAM/stack
 bounds. The crate loads these inputs with `include_bytes!` and `include_str!`.
 Card construction fills the empty configuration fields with the ROM file API,
@@ -267,7 +267,7 @@ system.
 
 ## EXR II release startup
 
-`ota-startup FIRMWARE DAT NEW_DIRECTORY` constructs the board's `ffsys.bin`,
+`sd-boot-v2-sd-card FIRMWARE DAT NEW_DIRECTORY` constructs the board's `ffsys.bin`,
 one universal `ffboot.bin`, and `FM_EXR2.BIN`. The first executable loads stage
 1 from NAND with the ROM's routines, then calls stage 2 without a firmware
 identity. Stage 2 identifies the installed firmware from the SHA-256 of its

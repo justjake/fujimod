@@ -136,7 +136,7 @@ pub struct Recipe {
     pub xp5: Option<Xp5Setup>,
     pub cold_start: Option<ColdStart>,
     pub file_api: Option<FileApi>,
-    pub sd_boot: Option<serde_json::Value>,
+    pub sd_boot_combination: Option<serde_json::Value>,
     pub firmware_update: Option<serde_json::Value>,
     pub missing: Vec<String>,
 }
@@ -283,7 +283,7 @@ impl Recipe {
         )?;
         if matches!(self.generation, Generation::Xp4) {
             let missing = || image::Error::Invalid("Missing XP4 recovery facts".into());
-            let mut files = xp4::recovery_card(
+            let mut files = xp4::sd_card_recovery(
                 self,
                 source,
                 &fujimod_firmware::invert(source),
@@ -368,11 +368,11 @@ impl Recipe {
         let mut files = packaging.package_bytes(
             &inverted,
             packaging.entry,
-            include_bytes!("../assets/exr2-sd-boot.generated.bin").to_vec(),
+            include_bytes!("../assets/sd-boot-v2-stage1-sd-card.generated.bin").to_vec(),
         )?;
         files.push(File::new(
             "FM_EXR2.BIN",
-            include_bytes!("../assets/exr2-stage2.generated.bin").to_vec(),
+            include_bytes!("../assets/sd-boot-v2-stage2.generated.bin").to_vec(),
         )?);
         Ok(files)
     }
@@ -507,7 +507,7 @@ pub struct Availability {
     pub can_build: bool,
     pub missing: Vec<String>,
     pub output_filenames: Vec<String>,
-    pub sd_boot: Option<serde_json::Value>,
+    pub sd_boot_combination: Option<serde_json::Value>,
     pub firmware_update: Option<serde_json::Value>,
     /// The system card turns the green lamp on during SD startup.
     pub system_startup_lamp: bool,
@@ -517,7 +517,7 @@ pub struct Availability {
 pub fn availability(firmware_id: &str) -> Result<Availability> {
     let id = firmware_id;
     let recipe = Recipe::bundled(id)?;
-    let sd_boot = recipe.as_ref().and_then(|r| r.sd_boot.clone());
+    let sd_boot_combination = recipe.as_ref().and_then(|r| r.sd_boot_combination.clone());
     let firmware_update = recipe.as_ref().and_then(|r| r.firmware_update.clone());
     let missing = recipe
         .as_ref()
@@ -557,7 +557,7 @@ pub fn availability(firmware_id: &str) -> Result<Availability> {
         can_build: missing.is_empty(),
         missing,
         output_filenames,
-        sd_boot,
+        sd_boot_combination,
         firmware_update,
         ota_startup_header,
     })

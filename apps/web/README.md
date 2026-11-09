@@ -6,7 +6,7 @@ worker CPU captures, Wasm symbols, instruction rates and repeatable timing.
 This app lives in `apps/web/` of the FujiMod repository. Run the commands
 below from that directory.
 
-Try camera firmware and build SD boot files in your browser. Firmware is
+Try camera firmware and build SD boot v1 files in your browser. Firmware is
 identified by its complete SHA-256 and never uploaded. The web app is developed
 on review branches; `main` is deployed nightly and by hand ([DEPLOYMENT.md](DEPLOYMENT.md)).
 
@@ -375,7 +375,7 @@ operations. A genuinely new codec would require an interpreter update.
 download page and original release date, patch hash/size, included mods and model-specific boot instructions. Patch filenames are simple
 local filenames. The Worker serves the index and patches from the same origin
 through `/releases/`; they are fetched at runtime and are never website build
-inputs. Each firmware has `downloads: {sd_card, installable}`, both false by
+inputs. Each firmware has `downloads: {sd_boot_v1, sd_boot_v1_installable}`, both false by
 default; installable requires a verified `fpupdate` patch output and
 `update_filename`, the body's update DAT name. Optional
 `notes: {name}` identifies Markdown fetched as text for display.

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { Plugin, Connect } from 'vite';
-import { validateIndex, type CardFile } from '../src/patch/catalog.ts';
+import { validateIndex, type SdCardFile } from '../src/patch/catalog.ts';
 import { releaseRoute } from '../src/patch/releases.ts';
 
 interface LocalReleaseOptions {
@@ -30,12 +30,12 @@ export function localReleaseMiddleware(options: LocalReleaseOptions): Connect.Ne
       return;
     }
     try {
-      const card: CardFile[] | undefined = options.card
+      const card: SdCardFile[] | undefined = options.card
         ? JSON.parse(await readFile(resolve(options.card, 'card.json'), 'utf8'))
         : undefined;
       const raw = {
         ...JSON.parse(await readFile(resolve(options.artifacts, 'patches.json'), 'utf8')),
-        ...(card ? { card } : {}),
+        ...(card ? { sd_card_files: card } : {}),
       };
       const index = validateIndex(raw);
       const cardAssets = new Set(card?.map((file) => file.asset));

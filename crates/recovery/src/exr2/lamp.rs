@@ -6,7 +6,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-const PROGRAM: &[u8] = include_bytes!("../../assets/startup-lamp.generated.bin");
+const PROGRAM: &[u8] = include_bytes!("../../assets/sd-boot-v1-startup-lamp.generated.bin");
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StartupLamp {
@@ -120,7 +120,7 @@ struct Layout {
 impl StartupLamp {
     pub(crate) fn install(&self, plan: &Plan, ram: &mut [u8]) -> Result<()> {
         let layout: Layout =
-            serde_json::from_str(include_str!("../../assets/startup-lamp.generated.json"))
+            serde_json::from_str(include_str!("../../assets/sd-boot-v1-startup-lamp.generated.json"))
                 .map_err(|e| image::Error::Invalid(e.to_string()))?;
         require(
             layout.schema == 1

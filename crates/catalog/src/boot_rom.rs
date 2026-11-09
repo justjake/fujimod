@@ -46,6 +46,11 @@ pub struct BootRom {
 /// The three ROM file routines the NAND bootloader calls.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(missing_as_null)
+)]
 #[serde(deny_unknown_fields)]
 pub struct BootRomRoutines {
     /// Mount entry.
@@ -59,6 +64,11 @@ pub struct BootRomRoutines {
 /// SD command table copied over stage-1 bytes while the ROM runs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(missing_as_null)
+)]
 #[serde(deny_unknown_fields)]
 pub struct BootRomCommandTable {
     /// High-mirror source address.
@@ -72,6 +82,11 @@ pub struct BootRomCommandTable {
 /// The word the ROM file service uses to publish its current volume.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(missing_as_null)
+)]
 #[serde(deny_unknown_fields)]
 pub struct BootRomFilesystemPointer {
     /// Address of the pointer word.
@@ -83,6 +98,11 @@ pub struct BootRomFilesystemPointer {
 /// Power-hold register asserted before any ROM card access.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(missing_as_null)
+)]
 #[serde(deny_unknown_fields)]
 pub struct BootRomPowerHold {
     /// Register address.
@@ -94,6 +114,11 @@ pub struct BootRomPowerHold {
 /// The SD0 controller base and the two clock dividers the ROM installs on it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(missing_as_null)
+)]
 #[serde(deny_unknown_fields)]
 pub struct BootRomSdClocks {
     /// SD0 controller register base.
@@ -107,6 +132,11 @@ pub struct BootRomSdClocks {
 /// The four NAND entries the universal SD-boot stage 1 calls.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(missing_as_null)
+)]
 #[serde(deny_unknown_fields)]
 pub struct BootRomNand {
     /// Controller initialize entry.

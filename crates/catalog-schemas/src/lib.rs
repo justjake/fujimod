@@ -101,7 +101,7 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
-        "nand-boot.generated.schema.json",
+        "sd-boot-v2-autostart.generated.schema.json",
         schema::<fujimod_catalog::nand_boot::FirmwareNandBoot>(
             fujimod_catalog::nand_boot::NAND_BOOT_SCHEMA_URI,
         ),

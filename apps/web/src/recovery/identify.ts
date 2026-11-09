@@ -1,4 +1,4 @@
-import { catalog as reference, recovery, type PhysicalControls } from 'fujimod';
+import { catalog as reference, sdCardTools, type PhysicalControls } from 'fujimod';
 import type { DownloadRow } from '../cameras/FirmwareDownloads';
 import type { IdentifiedFirmware } from '../cameras/store';
 
@@ -12,7 +12,7 @@ export interface RecoveryPlan {
   /** The system card turns the green LED on while the camera boots from it. */
   systemStartupLamp: boolean;
   /** How to hold the camera to boot from the SD card, when the catalog documents it. */
-  sdBoot?: PhysicalControls;
+  sdBootCombination?: PhysicalControls;
 }
 
 function controlsFor(firmwareId: string): PhysicalControls | undefined {
@@ -69,9 +69,9 @@ export function recoveryPlan(firmwareId: string): RecoveryPlan {
   const model =
     reference.firmwareVersions().find((entry) => entry.firmware_id === firmwareId)?.product ??
     firmwareId;
-  const status = recovery.availability(firmwareId);
+  const status = sdCardTools.availability(firmwareId);
   try {
-    const sd = status.sdBoot;
+    const sd = status.sdBootCombination;
     const controls = controlsFor(firmwareId);
     return {
       model,
@@ -80,7 +80,7 @@ export function recoveryPlan(firmwareId: string): RecoveryPlan {
       files: [...status.outputFilenames],
       greenLedFiles: [...status.greenLedFilenames],
       systemStartupLamp: status.systemStartupLamp,
-      sdBoot: sd && controls ? controls : undefined,
+      sdBootCombination: sd && controls ? controls : undefined,
     };
   } finally {
     status.free();

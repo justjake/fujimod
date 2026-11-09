@@ -1506,7 +1506,7 @@ mod tests {
 
     #[test]
     fn sd_boot_presets_keep_storage_and_cleared_journals() {
-        let overlay = RunOverlay::bundled("xm1-150-sd-boot-rec").unwrap();
+        let overlay = RunOverlay::bundled("xm1-150-sd-card-boot-rec").unwrap();
         let RunOverlayChange::Preset { preset } = overlay.change else {
             panic!("expected preset");
         };

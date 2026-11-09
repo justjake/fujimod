@@ -35,8 +35,8 @@ visitor), but not release files: every download path ends at
 `patches.json` schema 2 has, per firmware entry, two download switches, both false
 unless the release sets them:
 
-- `sd_card`: offer FujiMod SD boot for this body.
-- `installable`: offer FujiMod installable (SD boot files plus the update DAT).
+- `sd_boot_v1`: offer FujiMod SD boot v1 for this body.
+- `sd_boot_v1_installable`: offer FujiMod installable (SD boot files plus the update DAT).
   Accepted only when the release contains that body's update DAT output and the
   entry's `update_filename`, the name the body's updater looks for
   (`FPUPDATE.DAT`, `FWUP0009.DAT`, …).
@@ -72,7 +72,7 @@ and verified when used.
 `notesText` (Markdown text). `notes` retains the index's filename.
 The home controller exposes this value as `state.release`. To find download
 availability, find the entry in `state.release.firmwares` by the chosen DAT's
-SHA-256 and read `entry.downloads.sd_card` or `entry.downloads.installable`.
+SHA-256 and read `entry.downloads.sd_boot_v1` or `entry.downloads.sd_boot_v1_installable`.
 The validator fills missing switches with `false`; malformed values fail.
 Use `notesText` with the restricted renderer described above. Resolve patch
 filenames against `assetBase`, including when passing it to the patch worker.
@@ -89,7 +89,7 @@ rows styled like the camera list rows (icon, title, subtitle, chevron):
 | Row                            | Subtitle with a chosen DAT              | Unavailable                         |
 | ------------------------------ | --------------------------------------- | ----------------------------------- |
 | Download FujiMod installable   | `X70 • 1.10 • Includes SD boot version` | _Not available for this camera yet_ |
-| Download FujiMod SD boot       | `X70 • 1.10 base firmware`              | _Not available for this camera yet_ |
+| Download FujiMod SD boot v1       | `X70 • 1.10 base firmware`              | _Not available for this camera yet_ |
 | Run FujiMod in your browser    | `X70 • 1.10 with FujiMod 0.0.1`         |                                     |
 | Run unmodified in your browser | `X70 • 1.10 official firmware`          |                                     |
 
@@ -132,7 +132,7 @@ Before each SD boot or firmware-update button combination, switch the camera
 OFF, then remove and reinsert the battery. Show the hand-drawn battery-cycle
 SVG beside this instruction.
 
-- **FujiMod SD boot:** 1. Download the SD card files, with the disclaimer
+- **FujiMod SD boot v1:** 1. Download the SD card files, with the disclaimer
   below and a blue button. 2. Copy them to a FAT32 SD card (`ffsys.bin`,
   `ffboot.bin`). 3. Boot from the SD card with the `sd` combination only.
   Hold the buttons only while turning the power switch on; once the switch is
@@ -173,9 +173,9 @@ clean.
 
 ## Download filenames
 
-Archives use `fujimod-{recovery,green-led,modified}-{sd-boot,installable}-{model}-{firmware}-build-{build}.zip`.
+Archives use `fujimod-{sd-card-recovery,green-led,modified-sd-boot-v1,modified-installable}-{model}-{firmware}-build-{build}.zip`.
 The model is lowercase with hyphens instead of spaces; firmware versions retain
 periods, and the build is the website's eight-character Git commit SHA.
-For example: `fujimod-recovery-sd-boot-x-t1-5.52-build-1234abcd.zip`.
+For example: `fujimod-sd-card-recovery-x-t1-5.52-build-1234abcd.zip`.
 Camera-required filenames inside each archive stay intact. Modified installable
 archives include the SD boot files and the body's `update_filename` DAT.
