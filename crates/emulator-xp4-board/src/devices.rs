@@ -598,7 +598,7 @@ impl Devices {
                     ready: 0x2e8,
                     max_offset: 0x2e8,
                     write_limit: 0x2e4,
-                    enables: [0x100, 0],
+                    enables: [0x3ff, 0x3df],
                     causes: [0x100, 0],
                     outputs: vec![Output {
                         enable_word: 0,
