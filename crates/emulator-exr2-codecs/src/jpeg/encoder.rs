@@ -5,6 +5,7 @@
 //! with status 0x20 instead of READY (0x10), count 0 and no RAM write.
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_perf::{DeviceWorkCounter, add_work};
 use fujimod_emulator_image_codecs::jpeg::{Codec, OUTPUT_OVERFLOW};
 use fujimod_emulator_imaging::exr2_isp::{
     dma::{Transfer, physical},
@@ -161,6 +162,7 @@ impl Encoder {
             })();
             if result.is_ok() {
                 out.splice(0..0, [0xff, 0xd8]);
+                add_work(DeviceWorkCounter::JpegBytes, out.len() as u64);
             }
             match result {
                 // Overflow completes as a hardware error with no output;
@@ -179,6 +181,7 @@ impl Encoder {
             return Err(error);
         }
         self.pending = Some(Pending::Encode { stream: streaming });
+        add_work(DeviceWorkCounter::JpegStarts, 1);
         Ok(())
     }
     fn store(&mut self, cx: &Cx<'_>, o: usize, v: u32) -> Result<(), String> {

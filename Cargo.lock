@@ -2039,6 +2039,7 @@ dependencies = [
  "fujimod-emulator-image-codecs",
  "fujimod-emulator-image-processing",
  "fujimod-emulator-imaging",
+ "fujimod-perf",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -2087,6 +2088,7 @@ dependencies = [
  "fujimod-emulator-gpu",
  "fujimod-emulator-graphics",
  "fujimod-emulator-ip-dmp",
+ "fujimod-perf",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -2279,6 +2281,7 @@ dependencies = [
 name = "fujimod-emulator-gpu"
 version = "0.1.0"
 dependencies = [
+ "fujimod-perf",
  "fujimod-workspace-hack",
  "wgpu",
 ]
@@ -2298,6 +2301,7 @@ version = "0.1.0"
 dependencies = [
  "apple-cf",
  "fujimod-catalog-construction",
+ "fujimod-perf",
  "fujimod-workspace-hack",
  "futures-lite",
  "openh264",
@@ -2328,6 +2332,7 @@ dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-image-formation",
  "fujimod-emulator-imaging",
+ "fujimod-perf",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",

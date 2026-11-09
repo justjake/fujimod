@@ -2,6 +2,7 @@
 //! data. Full-field nearest sampling is a declared spatial approximation,
 //! separate from the measured integer film arithmetic.
 use fujimod_emulator_imaging::film::{Film, FilmPixels};
+use fujimod_perf::{DeviceWorkCounter, add_work};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -245,6 +246,12 @@ impl Cfa {
         rows: std::ops::Range<usize>,
         out: &mut [u8],
     ) {
+        let row_count = rows.end.saturating_sub(rows.start);
+        add_work(DeviceWorkCounter::RawRows, row_count as u64);
+        add_work(
+            DeviceWorkCounter::RawPixels,
+            width.saturating_mul(row_count) as u64,
+        );
         let [left, top, crop_width, crop_height] = crop;
         let interior = left >= 3
             && top >= 3

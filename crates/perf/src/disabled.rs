@@ -73,6 +73,14 @@ pub fn engine_run(_core: u8, _worker: bool) -> EngineRunGuard {
 
 pub fn add_bytes(_counter: ByteCounter, _bytes: u64) {}
 
+pub fn add_work(_counter: DeviceWorkCounter, _value: u64) {}
+
+pub struct WorkTimer;
+
+pub fn work_timer(_counter: DeviceWorkCounter) -> WorkTimer {
+    WorkTimer
+}
+
 pub fn write_chrome_trace(path: &Path) -> io::Result<()> {
     if let Some(parent) = path
         .parent()

@@ -12,6 +12,7 @@ doctest = false
 
 [dependencies]
 ciborium.workspace = true
+fujimod-perf.workspace = true
 fujimod-emulator-ip-dmp.workspace = true
 fujimod-emulator-exr2-plan.workspace = true
 fujimod-emulator-graphics.workspace = true

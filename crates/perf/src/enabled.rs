@@ -152,6 +152,8 @@ static ENGINES: [CellCounts; MAX_CORES] = [const { CellCounts::new() }; MAX_CORE
 static ENGINE_RUNS: [EngineRunCounts; MAX_CORES] =
     [const { EngineRunCounts::new() }; MAX_CORES];
 static BYTES: [AtomicU64; BYTE_COUNT] = [const { AtomicU64::new(0) }; BYTE_COUNT];
+static DEVICE_WORK: [AtomicU64; DeviceWorkCounter::COUNT] =
+    [const { AtomicU64::new(0) }; DeviceWorkCounter::COUNT];
 static WAITS: Mutex<WaitLedger> = Mutex::new(WaitLedger::new());
 
 struct WaitLedger {
@@ -330,6 +332,9 @@ fn reset_ledger() {
         engine.reset();
     }
     for counter in &BYTES {
+        counter.store(0, Ordering::Relaxed);
+    }
+    for counter in &DEVICE_WORK {
         counter.store(0, Ordering::Relaxed);
     }
     RESIDENT.store(0, Ordering::Relaxed);
@@ -556,6 +561,15 @@ pub fn end_guide() -> GuideSummary {
             )
         })
         .collect();
+    let device_work = DeviceWorkCounter::ALL
+        .iter()
+        .map(|counter| {
+            (
+                counter.name().to_owned(),
+                DEVICE_WORK[counter.index()].load(Ordering::Relaxed),
+            )
+        })
+        .collect();
     let counters = counter_deltas();
     let memory = memory_summary();
 
@@ -583,6 +597,7 @@ pub fn end_guide() -> GuideSummary {
         devices,
         engines,
         bytes,
+        device_work,
         counters,
         memory,
     }
@@ -944,6 +959,35 @@ pub fn engine_run(core: u8, worker: bool) -> EngineRunGuard {
 pub fn add_bytes(counter: ByteCounter, bytes: u64) {
     if ACTIVE.load(Ordering::Relaxed) && bytes != 0 {
         BYTES[counter as usize].fetch_add(bytes, Ordering::Relaxed);
+    }
+}
+
+pub fn add_work(counter: DeviceWorkCounter, value: u64) {
+    if value != 0 && ACTIVE.load(Ordering::Relaxed) {
+        DEVICE_WORK[counter.index()].fetch_add(value, Ordering::Relaxed);
+    }
+}
+
+pub struct WorkTimer {
+    counter: DeviceWorkCounter,
+    started: Option<u64>,
+}
+
+pub fn work_timer(counter: DeviceWorkCounter) -> WorkTimer {
+    WorkTimer {
+        counter,
+        started: ACTIVE.load(Ordering::Relaxed).then(raw_now),
+    }
+}
+
+impl Drop for WorkTimer {
+    fn drop(&mut self) {
+        if let Some(started) = self.started
+            && ACTIVE.load(Ordering::Relaxed)
+        {
+            DEVICE_WORK[self.counter.index()]
+                .fetch_add(scale(elapsed_raw(started)), Ordering::Relaxed);
+        }
     }
 }
 

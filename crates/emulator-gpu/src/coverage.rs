@@ -1,6 +1,7 @@
 //! Shared coverage rasterization over floating-point edge coordinates.
 
 use super::GpuContext;
+use fujimod_perf::{DeviceWorkCounter, add_work};
 use std::mem::size_of;
 use wgpu::util::DeviceExt;
 
@@ -145,6 +146,11 @@ impl CoverageKernel {
                 total_count: 0,
             });
         }
+
+        let source_edge_count = requests
+            .iter()
+            .map(|request| request.edges.len() as u64)
+            .sum();
 
         let mut jobs = Vec::<u32>::with_capacity(requests.len() * 12);
         let mut edges = Vec::<[f32; 8]>::new();
@@ -350,6 +356,8 @@ impl CoverageKernel {
                 requests.len() as u32,
             );
         }
+        add_work(DeviceWorkCounter::CoverageBatches, 1);
+        add_work(DeviceWorkCounter::CoverageEdges, source_edge_count);
         Ok(CoverageBatch {
             output: Some(output),
             rasters,
