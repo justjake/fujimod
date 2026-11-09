@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 #[test]
 fn physical_ram_fill_is_applied_before_execution() {
     let graph: factory::Graph = serde_json::from_value(serde_json::json!({
-        "processors": [{"model":"cortex-r5f","registers":[],"released":true,"mprofile":null,"rprofile":null}],
+        "processors": [{"model":"cortex-r5f","registers":[],"released":true,"mprofile":null,"rprofile":{"cp14_identity":21930,"tcm":{"btcm":{"bytes":4096,"reset":1879048193},"atcm":{"bytes":8192,"reset":4294934529u32}}}}],
         "ram": [{"base":0,"size":4096}], "dma_mappings": [], "decoders": [],
         "mappings": [{"core":0,"address":0,"physical":0,"size":4096,"permissions":7}],
         "peripherals": [], "instructions_per_tick": [1,1]
