@@ -106,7 +106,7 @@ impl XMountLens {
     pub fn new(
         transport: serial_dma::Options,
         configuration: x_mount_link::Configuration,
-        startup_ticks: u64,
+        timing: x_mount_lens::Timing,
         options: Options,
         gpio: gpio::Pads,
         controllers: Vec<(usize, irq::Inputs)>,
@@ -119,7 +119,7 @@ impl XMountLens {
         {
             return Err("X-mount ready requires unique per-core interrupt controllers".into());
         }
-        let port = x_mount_lens::Port::new(configuration, startup_ticks)?;
+        let port = x_mount_lens::Port::new(configuration, timing)?;
         let transport =
             serial_dma::Nodes::with_wire(transport, Box::new(port.clone()))?.into_transport();
         let state = State {
@@ -177,7 +177,7 @@ impl XMountLens {
             .collect()
     }
     fn connector_deadline(&self, now: u64) -> Result<Option<u64>, String> {
-        if (!self.port.ready_high() && !self.transport_configured()?)
+        if (self.port.serving() && !self.transport_configured()?)
             || self.gpio.input_level(self.options.ready.pin)? != self.port.ready_high()
             || self
                 .signals()?
@@ -193,7 +193,7 @@ impl XMountLens {
     }
     fn update_connector(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
         self.port.tick(cx.now(), self.pins()?)?;
-        if !self.port.ready_high() && !self.transport_configured()? {
+        if self.port.serving() && !self.transport_configured()? {
             return Err(
                 "Powered X-mount lens requires its declared SPI clock/TX/RX pad configuration"
                     .into(),

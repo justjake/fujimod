@@ -214,6 +214,12 @@ pub enum Model {
         transport: serde_json::Value,
         configuration: serde_json::Value,
         startup_ticks: u64,
+        /// Ticks after startup until the lens returns its ready output high; absent keeps it low.
+        #[serde(default)]
+        busy_ticks: Option<u64>,
+        /// Ticks each started lens operation holds the ready output low; absent reports none.
+        #[serde(default)]
+        operation_ticks: Option<u64>,
         pins: serde_json::Value,
         gpio: String,
         controllers: Vec<String>,

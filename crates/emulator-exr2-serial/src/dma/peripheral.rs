@@ -3,6 +3,9 @@
 //! Register layout and supported byte-wide TX/RX modes are explicit model
 //! configuration.
 //! This mechanism does not identify an attached part or implement its protocol.
+//! The request line of a channel comes from the routing block (the control
+//! word's low bits then name the channel) or, on a SoC without that block,
+//! from the control word's low bits directly; the board declares which.
 //! Memory, linked, repeated, strided and other peripheral modes refuse.
 use super::routing::{Routing, SharedRouting};
 use fujimod_emulator_devices::bus::InterruptLine;
@@ -15,6 +18,27 @@ use std::collections::BTreeMap;
 const CHANNELS: usize = 8;
 const TX: u32 = 0x03200168;
 const RX: u32 = 0x02100160;
+
+/// Electrical sense of a channel's completion output.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CompletionLevel {
+    /// Low while idle or running, high while the status reads complete.
+    #[default]
+    High,
+    /// High from activation, low while the status reads complete, high again after the channel reset.
+    Low,
+}
+
+/// Where a channel's peripheral request line is selected.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RequestSelect {
+    /// The routing block's per-channel selector; control bits 2:0 repeat the channel index.
+    Routing,
+    /// Control bits 2:0 are the request line.
+    Control,
+}
 
 #[derive(Clone)]
 pub struct Connection {
@@ -46,10 +70,21 @@ pub struct PeripheralChannels {
     base: u64,
     channels: [Channel; CHANNELS],
     routing: SharedRouting,
+    select: RequestSelect,
+    completion: CompletionLevel,
     connections: BTreeMap<u8, Connection>,
     interrupts: [Vec<InterruptLine>; CHANNELS],
 }
 impl PeripheralChannels {
+    fn selector(&self, routing: &Routing, channel: usize, c: &Channel) -> u8 {
+        match self.select {
+            RequestSelect::Routing => routing.selector(channel),
+            RequestSelect::Control => (c.registers[11] & 7) as u8,
+        }
+    }
+    fn channel_field_matches(&self, channel: usize, c: &Channel) -> bool {
+        self.select == RequestSelect::Control || c.registers[11] & 7 == channel as u32
+    }
     fn validate_state(
         &self,
         channels: &[Channel; CHANNELS],
@@ -69,12 +104,12 @@ impl PeripheralChannels {
         }
         // Validate active mode/port wiring against the saved route before any mutation.
         for (index, c) in channels.iter().enumerate().filter(|(_, c)| c.active) {
-            if c.registers[11] & 7 != index as u32 {
+            if !self.channel_field_matches(index, c) {
                 return Err("EXR II DMA checkpoint channel differs".into());
             }
             let p = self
                 .connections
-                .get(&routing.selector(index))
+                .get(&self.selector(routing, index, c))
                 .ok_or("EXR II DMA checkpoint port is absent")?;
             let direction = c.direction()?;
             if p.direction != direction
@@ -98,12 +133,15 @@ impl PeripheralChannels {
     pub fn new(
         base: u64,
         routing: SharedRouting,
+        select: RequestSelect,
+        completion: CompletionLevel,
         connections: BTreeMap<u8, Connection>,
         interrupts: [Vec<InterruptLine>; CHANNELS],
     ) -> Result<Self, String> {
         if base & 0x3f != 0
             || base.checked_add(0x200).is_none()
             || connections.keys().any(|v| *v >= 32)
+            || select == RequestSelect::Control && connections.keys().any(|v| *v >= 8)
         {
             return Err("invalid EXR II peripheral DMA wiring".into());
         }
@@ -111,6 +149,8 @@ impl PeripheralChannels {
             base,
             channels: std::array::from_fn(|_| Channel::default()),
             routing,
+            select,
+            completion,
             connections,
             interrupts,
         })
@@ -124,11 +164,14 @@ impl PeripheralChannels {
         matches!(word, 0..=5 | 9..=14).then_some((offset as usize / 0x40, word))
     }
     fn connection(&self, channel: usize, c: &Channel) -> Result<&Connection, String> {
-        let selector = self
-            .routing
-            .lock()
-            .map_err(|_| "EXR II DMA routing poisoned")?
-            .selector(channel);
+        let selector = self.selector(
+            &*self
+                .routing
+                .lock()
+                .map_err(|_| "EXR II DMA routing poisoned")?,
+            channel,
+            c,
+        );
         let p = self
             .connections
             .get(&selector)
@@ -145,7 +188,7 @@ impl PeripheralChannels {
         Ok(p)
     }
     fn validate(&self, channel: usize, c: &Channel) -> Result<(), String> {
-        if c.registers[11] & 7 != channel as u32
+        if !self.channel_field_matches(channel, c)
             || !matches!(c.registers[2], 1..=0x100000)
             || [3, 4, 5, 12, 13, 14].iter().any(|i| c.registers[*i] != 0)
         {
@@ -172,9 +215,18 @@ impl PeripheralChannels {
             return Ok(());
         }
         for line in &self.interrupts[channel] {
-            line.drive(cx, high)?;
+            line.drive(cx, high == (self.completion == CompletionLevel::High))?;
         }
         self.channels[channel].irq_published = high;
+        Ok(())
+    }
+    /// An active-low completion output rests high once its channel runs.
+    fn rest(&self, cx: &mut Cx<'_>, channel: usize) -> Result<(), String> {
+        if self.completion == CompletionLevel::Low && self.channels[channel].active {
+            for line in &self.interrupts[channel] {
+                line.drive(cx, true)?;
+            }
+        }
         Ok(())
     }
     fn write_register(&mut self, channel: usize, word: usize, value: u32) -> Result<(), String> {
@@ -249,7 +301,8 @@ impl PeripheralChannels {
             .iter()
             .map(|(request, p)| (*request, p.address, p.direction))
             .collect();
-        json!({"base":self.base,"ports":ports,"interrupts":self.interrupts})
+        json!({"base":self.base,"select":self.select,"completion":self.completion,
+            "ports":ports,"interrupts":self.interrupts})
     }
 }
 impl Device for PeripheralChannels {
@@ -306,7 +359,10 @@ impl Device for PeripheralChannels {
             cx.fail(error);
             return;
         }
-        if let Err(error) = self.publish(cx, channel) {
+        if let Err(error) = self
+            .publish(cx, channel)
+            .and_then(|()| self.rest(cx, channel))
+        {
             cx.fail(error);
         }
     }

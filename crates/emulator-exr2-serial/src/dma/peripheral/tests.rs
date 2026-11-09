@@ -115,7 +115,14 @@ fn devices() -> (
     irqs[2] = vec![InterruptLine::Core { core: 0, line: 93 }];
     irqs[3] = vec![InterruptLine::Core { core: 1, line: 94 }];
     (
-        PeripheralChannels::new(0x4000, routing.clone(), connections, irqs).unwrap(),
+        PeripheralChannels::new(
+            0x4000,
+            routing.clone(),
+            RequestSelect::Routing,
+            CompletionLevel::High,
+            connections,
+            irqs,
+        ).unwrap(),
         super::super::routing::Block98500::new(0x8000, routing).unwrap(),
         port,
     )
@@ -301,4 +308,119 @@ fn pending_checkpoint_restores_requests_and_rejects_corrupt_state_before_mutatio
         port.lock().unwrap().transmitted,
         resumed_port.lock().unwrap().transmitted
     );
+}
+
+#[test]
+fn control_request_select_takes_the_request_line_from_the_control_word() {
+    let port = Arc::new(Mutex::new(WirePort::default()));
+    let connections = BTreeMap::from([
+        (
+            5,
+            Connection {
+                address: 0x501c,
+                direction: Direction::Transmit,
+                port: port.clone(),
+            },
+        ),
+        (
+            4,
+            Connection {
+                address: 0x5018,
+                direction: Direction::Receive,
+                port: port.clone(),
+            },
+        ),
+    ]);
+    let irqs: [Vec<InterruptLine>; 8] = std::array::from_fn(|_| vec![]);
+    let new = |connections| {
+        PeripheralChannels::new(
+            0x4000,
+            SharedRouting::default(),
+            RequestSelect::Control,
+            CompletionLevel::High,
+            connections,
+            irqs.clone(),
+        )
+    };
+    let mut d = new(connections.clone()).unwrap();
+    let mut h = Clock::default();
+    // Channel 2 transmits on request 5 and channel 3 receives on request 4; neither field is the channel index.
+    for (channel, source, destination, mode) in
+        [(2, 0x1000, 0x501c, TX | 5), (3, 0x5018, 0x2000, RX | 4)]
+    {
+        let base = 0x4000 + channel * 0x40;
+        for (offset, value) in [
+            (0, source),
+            (4, destination),
+            (8, 1),
+            (0x2c, mode as u64),
+            (0x28, 8),
+            (0x28, 1),
+        ] {
+            store(&mut d, &mut h, 0, base + offset, value).unwrap();
+        }
+    }
+    port.lock().unwrap().transmit_due = Some(10);
+    port.lock().unwrap().received.push_back((12, 0xa1));
+    advance(&mut d, &mut h, 0, 10);
+    advance(&mut d, &mut h, 0, 12);
+    assert_eq!(port.lock().unwrap().transmitted, [0]);
+    assert_eq!(h.ram[&0x2000], 0xa1);
+    assert_eq!(d.channels[2].registers[9], 0x40);
+    assert_eq!(d.channels[3].registers[9], 0x40);
+    // A request line without a port refuses at activation.
+    store(&mut d, &mut h, 0, 0x4080 + 0x28, 8).unwrap();
+    store(&mut d, &mut h, 0, 0x4080 + 8, 1).unwrap();
+    store(&mut d, &mut h, 0, 0x4080 + 0x2c, TX as u64 | 6).unwrap();
+    assert!(store(&mut d, &mut h, 0, 0x4080 + 0x28, 1).is_err());
+    // The control field holds three bits.
+    let mut wide = connections;
+    wide.insert(
+        9,
+        Connection {
+            address: 0x501c,
+            direction: Direction::Transmit,
+            port,
+        },
+    );
+    assert!(new(wide).is_err());
+}
+
+#[test]
+fn active_low_completion_rests_high_from_activation_and_falls_when_complete() {
+    let port = Arc::new(Mutex::new(WirePort::default()));
+    let connections = BTreeMap::from([(
+        4,
+        Connection {
+            address: 0x5018,
+            direction: Direction::Receive,
+            port: port.clone(),
+        },
+    )]);
+    let mut irqs: [Vec<InterruptLine>; 8] = std::array::from_fn(|_| vec![]);
+    irqs[3] = vec![InterruptLine::Core { core: 0, line: 70 }];
+    let mut d = PeripheralChannels::new(
+        0x4000,
+        SharedRouting::default(),
+        RequestSelect::Control,
+        CompletionLevel::Low,
+        connections,
+        irqs,
+    )
+    .unwrap();
+    let mut h = Clock::default();
+    for (offset, value) in [(0, 0x5018), (4, 0x2000), (8, 1), (0x2c, RX as u64 | 4)] {
+        store(&mut d, &mut h, 0, 0x40c0 + offset, value).unwrap();
+    }
+    assert!(h.irqs.is_empty());
+    h.now = 3;
+    store(&mut d, &mut h, 0, 0x40c0 + 0x28, 8).unwrap();
+    store(&mut d, &mut h, 0, 0x40c0 + 0x28, 1).unwrap();
+    assert_eq!(h.irqs, [(3, 0, 70, true)]);
+    port.lock().unwrap().received.push_back((12, 0xa1));
+    advance(&mut d, &mut h, 0, 12);
+    assert_eq!(h.irqs[1..], [(12, 0, 70, false)]);
+    h.now = 20;
+    store(&mut d, &mut h, 0, 0x40c0 + 0x28, 8).unwrap();
+    assert_eq!(h.irqs[2..], [(20, 0, 70, true)]);
 }

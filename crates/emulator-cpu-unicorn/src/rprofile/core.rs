@@ -35,11 +35,26 @@ mod tcm_tests;
 #[cfg(test)]
 mod tests;
 
+const SCTLR: arm::Coprocessor = arm::Coprocessor {
+    cp: 15,
+    opc1: 0,
+    crn: 1,
+    crm: 0,
+    opc2: 0,
+    secure: 0,
+    wide: false,
+};
+/// SCTLR.V: exception vectors at 0xffff0000.
+const SCTLR_V: u64 = 1 << 13;
+
 #[derive(Clone, Copy, Default, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
     pub cp14_identity: u32,
     pub tcm: super::tcm::Options,
+    /// The processor's VINITHI input: exception vectors start at 0xffff0000 (SCTLR.V set at reset).
+    #[serde(default)]
+    pub high_vectors: bool,
 }
 pub struct Wiring {
     pub memory: Memory,
@@ -328,6 +343,10 @@ impl Core {
             e.cpu.hook_watched(stores, true)?;
         }
         e.cpu.precise_store_pc(true)?;
+        if options.high_vectors {
+            let sctlr = e.cpu.coprocessor(SCTLR, None)?;
+            e.cpu.coprocessor(SCTLR, Some(sctlr | SCTLR_V))?;
+        }
         for bank in 0..2 {
             e.declare_tcm(bank)?;
             e.map_tcm(bank)?;
@@ -398,22 +417,15 @@ impl Execution {
         // Unicorn's SVC trap leaves PC at the following instruction in both
         // ARM and Thumb state. It has not changed mode or taken the vector.
         let return_pc = self.scalar(arm::PC)?;
-        let sctlr = self.cpu.coprocessor(
-            arm::Coprocessor {
-                cp: 15,
-                opc1: 0,
-                crn: 1,
-                crm: 0,
-                opc2: 0,
-                secure: 0,
-                wide: false,
-            },
-            None,
-        )? as u32;
+        let sctlr = self.cpu.coprocessor(SCTLR, None)? as u32;
         if sctlr & ((1 << 30) | (1 << 25)) != 0 {
             return Err("Thumb/big-endian SVC exception entry is not implemented".into());
         }
-        let vector = if sctlr & (1 << 13) != 0 { 0xffff0008 } else { 8 };
+        let vector = if u64::from(sctlr) & SCTLR_V != 0 {
+            0xffff0008
+        } else {
+            8
+        };
         // Clear IT, J, E and T, switch to the SVC bank, and mask IRQ only.
         let next = (cpsr & !(0x0600fc00 | 0x01000000 | 0x200 | 0x20 | 0x1f)) | 0x93;
         self.set(arm::CPSR, next)?;
