@@ -1,0 +1,57 @@
+{
+  "$schema": "https://fujimod.com/schemas/flash.generated.schema.json",
+  "schema": 1,
+  "id": "xt2-441-flash",
+  "firmware_id": "xt2-441",
+  "device": {
+    "kind": "serial-nor"
+  },
+  "window": {
+    "address": 4026531840,
+    "size": 67108864
+  },
+  "update_image": {
+    "dat_offset": 604,
+    "xor": 255
+  },
+  "reader": {
+    "symbol": "flash_read_wait",
+    "alignment": 4
+  },
+  "transport": "xpp-cmd-callback",
+  "code_ranges": [
+    {
+      "name": "flash_read",
+      "address": 12954328,
+      "size": 976
+    },
+    {
+      "name": "flash_read_wait",
+      "address": 12955304,
+      "size": 52
+    },
+    {
+      "name": "flash transfer helper",
+      "address": 12952264,
+      "size": 300
+    },
+    {
+      "name": "flash read-mode selector",
+      "address": 12958632,
+      "size": 484
+    }
+  ],
+  "state_checks": [
+    {
+      "name": "flash driver initialized",
+      "address": 16777760,
+      "size": 4,
+      "value": 2003199317
+    }
+  ],
+  "control": {
+    "offset": 0,
+    "size": 32768,
+    "sha256": "fa3762dcb06a37eac1d99bc222f6b350e34fa65f4563f2927fb99242a0f67fdf"
+  }
+}

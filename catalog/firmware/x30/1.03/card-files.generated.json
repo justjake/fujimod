@@ -1,0 +1,15 @@
+{
+  "$schema": "https://fujimod.com/schemas/card-files.generated.schema.json",
+  "schema": 1,
+  "firmware_id": "x30-103",
+  "product": "X30",
+  "internal_version": "1.53",
+  "code_checks": [],
+  "mechanism": {
+    "kind": "mailbox",
+    "search_address": 5177344,
+    "search_bytes": 1114112,
+    "address_alias": 1073741824,
+    "build": null
+  }
+}

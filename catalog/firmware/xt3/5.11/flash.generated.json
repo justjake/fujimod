@@ -21,7 +21,7 @@
   "transport": null,
   "code_ranges": [
     {
-      "name": "firmware flash reader",
+      "name": "flash command routine",
       "address": 17256376,
       "size": 948
     },
@@ -41,7 +41,7 @@
       "size": 296
     },
     {
-      "name": "flash destination cache maintenance",
+      "name": "flash read preparation",
       "address": 17261516,
       "size": 40
     }

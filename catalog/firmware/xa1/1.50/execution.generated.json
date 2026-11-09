@@ -1,0 +1,94 @@
+{
+  "$schema": "https://fujimod.com/schemas/execution.generated.schema.json",
+  "schema": 1,
+  "id": "xa1-150-execution",
+  "firmware_id": "xa1-150",
+  "product": "X-A1",
+  "internal_version": "1.78",
+  "code_alias": 1073741824,
+  "mechanism": {
+    "kind": "exr2_query_heap",
+    "allocation": {
+      "allocate": 9031028,
+      "release": 9031060,
+      "configuration": {
+        "mechanism": "pointer",
+        "address": 9882128
+      }
+    },
+    "cache": {
+      "data_clean": 271932,
+      "instruction_invalidate": 272160,
+      "data_barrier": 277012,
+      "instruction_barrier": 271908
+    },
+    "code_checks": [
+      {
+        "name": "exr2_execution_0",
+        "address": 6945976,
+        "size": 32,
+        "sha256": "c5ad896c7c3285cd9502e39161c6e9e82f21439f06d82a7e5f24f7e36c22b7c5"
+      },
+      {
+        "name": "exr2_execution_1",
+        "address": 9031060,
+        "size": 28,
+        "sha256": "bf476d82ea2894cf3047174db98e99fbaf8fed750abfc7d5ca7aabec4ec096f8"
+      },
+      {
+        "name": "exr2_execution_2",
+        "address": 9037104,
+        "size": 592,
+        "sha256": "2ee990afb29c36f926beca902b9c19db20d7901500b88dc541fdcb6ed5160a7b"
+      },
+      {
+        "name": "exr2_execution_3",
+        "address": 9036852,
+        "size": 240,
+        "sha256": "5e26cd0ce9a592281e0a0ebe9a22e4df07cce3c580248b8306265a02ae6a65ee"
+      },
+      {
+        "name": "exr2_execution_4",
+        "address": 7516620,
+        "size": 68,
+        "sha256": "356d85b95e61e50f2d1910be4fa528310690226d0087ea947c7dddcb553cc9f3"
+      },
+      {
+        "name": "exr2_execution_5",
+        "address": 7516516,
+        "size": 104,
+        "sha256": "417187425a15f0a83a33b0a3fa0348ee256c0511cedfed071ab3ae37fead2f03"
+      },
+      {
+        "name": "exr2_execution_6",
+        "address": 9031028,
+        "size": 28,
+        "sha256": "a4f2cfba02320758d129137ea243d424373290ec2e22ef54d4544bbb8264bd54"
+      },
+      {
+        "name": "exr2_execution_7",
+        "address": 9031092,
+        "size": 1800,
+        "sha256": "36667d3902f82bc50ca59fe2bc41413af200b10c6387e64edc9d46dbdc44f9ab"
+      },
+      {
+        "name": "exr2_execution_8",
+        "address": 7516432,
+        "size": 84,
+        "sha256": "fb54fdfee195615ccc3160ea376bccdab4deac24615b0127826102e4ab099cc8"
+      },
+      {
+        "name": "exr2_execution_9",
+        "address": 271908,
+        "size": 532,
+        "sha256": "10aad5ca7b798181283de15647d4cae836a2feaf0ce7363f23b430a0855d316c"
+      },
+      {
+        "name": "exr2_execution_10",
+        "address": 277012,
+        "size": 40,
+        "sha256": "4f5e46f3fcacb11933fd0f5e8fc33ae5837f738e38902a0e475c040ac5897890"
+      }
+    ]
+  }
+}

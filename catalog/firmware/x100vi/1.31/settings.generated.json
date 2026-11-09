@@ -1,0 +1,23 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "x100vi-131-settings",
+  "firmware_id": "x100vi-131",
+  "source": {
+    "flash_offset": 10223616,
+    "address": 18616320,
+    "size": 11673600,
+    "sha256": "400684fa19281f9ca4c05fb4461da356885a46f8c455413cff7876047d1f96cd"
+  },
+  "configuration": {
+    "flash_offset": 6684672,
+    "bytes": 2443536,
+    "sha256": "b35b2c029714fa28233d1acf2a7c2768818485fd857f6c2c9a0fea16f2f5046e",
+    "basis": "At startup the stock configuration initializer zero-fills the configuration store when its stored signature is invalid and, when the firmware image enables it, copies these installed flash bytes to store offset 0."
+  },
+  "defaults": null,
+  "fields": [],
+  "profile": null,
+  "settings": {},
+  "sections": []
+}

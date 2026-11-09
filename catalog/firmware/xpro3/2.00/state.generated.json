@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/state.generated.schema.json",
+  "schema": 1,
+  "id": "xpro3-200-state",
+  "firmware_id": "xpro3-200",
+  "regions": [
+    {
+      "name": "dram",
+      "address": 0,
+      "size": 536870912,
+      "constant": false
+    }
+  ]
+}

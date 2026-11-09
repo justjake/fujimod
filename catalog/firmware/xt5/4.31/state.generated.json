@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/state.generated.schema.json",
+  "schema": 1,
+  "id": "xt5-431-state",
+  "firmware_id": "xt5-431",
+  "regions": [
+    {
+      "name": "dram",
+      "address": 0,
+      "size": 1610612736,
+      "constant": false
+    },
+    {
+      "name": "boot-rom",
+      "address": 4290772992,
+      "size": 262144,
+      "constant": true
+    }
+  ]
+}

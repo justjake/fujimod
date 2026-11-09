@@ -1,0 +1,15 @@
+{
+  "$schema": "https://fujimod.com/schemas/card-files.generated.schema.json",
+  "schema": 1,
+  "firmware_id": "xm1-150",
+  "product": "X-M1",
+  "internal_version": "1.78",
+  "code_checks": [],
+  "mechanism": {
+    "kind": "mailbox",
+    "search_address": 5488640,
+    "search_bytes": 524288,
+    "address_alias": 1073741824,
+    "build": null
+  }
+}

@@ -11,6 +11,12 @@
       "constant": false
     },
     {
+      "name": "boot-rom",
+      "address": 4290772992,
+      "size": 262144,
+      "constant": true
+    },
+    {
       "name": "boot-sram",
       "address": 4286578688,
       "size": 262144,

@@ -11,8 +11,18 @@
     "sha256": "86df5aab451fbd29f1effc11814fbc222dd600faae0c5a15e33f05028b693de1"
   },
   "input_readers": {
-    "calibration": null,
-    "scanner": null
+    "calibration": 19282932,
+    "scanner": {
+      "stable_offset": 25,
+      "stable_width": 1,
+      "pressed_value": 1,
+      "released_value": 0,
+      "routine": {
+        "address": 18895880,
+        "size": 60,
+        "sha256": "018a996e912163d3dc553a59ecd3921f60e07b15355081747b2ec00329af508b"
+      }
+    }
   },
   "native_key_names": null,
   "event_translation": {

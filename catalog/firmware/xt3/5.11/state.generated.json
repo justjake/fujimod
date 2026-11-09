@@ -7,7 +7,7 @@
     {
       "name": "dram",
       "address": 0,
-      "size": 536870912,
+      "size": 1073741824,
       "constant": false
     }
   ]

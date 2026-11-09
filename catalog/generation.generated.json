@@ -94,7 +94,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "firmware image not available"
+              "reason": "ValueError: power-cut routine: no verified family match (0x1470210: no four settle calls with w0 = -6); 0 structural candidates "
             }
           ]
         },
@@ -112,7 +112,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor 5"
+              "reason": "ValueError: Configuration remapper has an unchecked branch before its identity return"
             }
           ]
         },
@@ -136,6 +136,59 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: card open: 0 checked routines in a mapped section"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "firmware_id": "gfx100s-213",
+      "product": "GFX100S",
+      "version": "2.13",
+      "internal_version": null,
+      "tables": {
+        "bulk": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "bulk",
+              "reason": "firmware image not available"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
+            }
+          ]
+        },
+        "controls": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "controls",
+              "reason": "firmware image not available"
+            }
+          ]
+        },
+        "settings": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "settings",
+              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+            }
+          ]
         }
       }
     },
@@ -146,13 +199,8 @@
       "internal_version": "1.50",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "BulkCatalogError: No bulk transport locator for X-Processor Pro"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "unavailable",
@@ -297,7 +345,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor Pro"
+              "reason": "SettingsCatalogError: No settings profile is available for this firmware"
             }
           ]
         },
@@ -317,6 +365,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
         }
       }
     },
@@ -482,7 +539,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor Pro"
+              "reason": "SettingsCatalogError: No settings profile is available for this firmware"
             }
           ]
         },
@@ -506,6 +563,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
         }
       }
     },
@@ -683,6 +749,15 @@
             {
               "locator": "identity",
               "reason": "Release identity was not generated"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
             }
           ]
         }
@@ -864,6 +939,15 @@
               "reason": "Release identity was not generated"
             }
           ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
+            }
+          ]
         }
       }
     },
@@ -1043,6 +1127,15 @@
               "reason": "Release identity was not generated"
             }
           ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
+            }
+          ]
         }
       }
     },
@@ -1205,6 +1298,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
+            }
+          ]
         }
       }
     },
@@ -1379,6 +1481,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
+            }
+          ]
         }
       }
     },
@@ -1389,13 +1500,8 @@
       "internal_version": "1.68",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "BulkCatalogError: No bulk transport locator for X-Processor Pro"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "unavailable",
@@ -1496,7 +1602,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor Pro"
+              "reason": "SettingsCatalogError: No settings profile is available for this firmware"
             }
           ]
         },
@@ -1520,6 +1626,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
         }
       }
     },
@@ -1664,11 +1779,15 @@
           "errors": []
         },
         "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
           "status": "unavailable",
           "errors": [
             {
-              "locator": "nand-boot",
-              "reason": "ValueError: the stage-1 image starts at 0x8000, not after the two header blocks"
+              "locator": "card_files.locate",
+              "reason": "TypeError: 'NoneType' object is not subscriptable"
             }
           ]
         }
@@ -1763,13 +1882,12 @@
           "errors": []
         },
         "nand-boot": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "nand-boot",
-              "reason": "ValueError: x100t-111 has no EXR II stage-1 code-space policy (flash_update.loader)"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
+          "status": "available",
+          "errors": []
         }
       }
     },
@@ -1864,7 +1982,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor 4"
+              "reason": "SettingsCatalogError: x100v-301: profile header defaults have no marker"
             }
           ]
         },
@@ -1964,13 +2082,8 @@
           ]
         },
         "settings": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "settings",
-              "reason": "ValueError: Configuration remapper branches around its identity return"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "state": {
           "status": "unavailable",
@@ -1988,6 +2101,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "MissingMechanism: Stock card routines located (path_open, open, read, write, close, seek, unlink, opendir), but X-Processor 5 has no card mechanism: stock_sdk is the X-Processor 4 asynchronous SDK, and mailbox needs a reserved RAM region and an AArch64 file-service build"
+            }
+          ]
         }
       }
     },
@@ -2132,11 +2254,15 @@
           "errors": []
         },
         "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
           "status": "unavailable",
           "errors": [
             {
-              "locator": "nand-boot",
-              "reason": "ValueError: the stage-1 image starts at 0x8000, not after the two header blocks"
+              "locator": "card_files.locate",
+              "reason": "TypeError: 'NoneType' object is not subscriptable"
             }
           ]
         }
@@ -2231,13 +2357,12 @@
           "errors": []
         },
         "nand-boot": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "nand-boot",
-              "reason": "ValueError: no registered boot ROM: x30-103 has no registered boot ROM asset"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
+          "status": "available",
+          "errors": []
         }
       }
     },
@@ -2466,13 +2591,12 @@
           "errors": []
         },
         "nand-boot": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "nand-boot",
-              "reason": "ValueError: xa1-150 has no EXR II stage-1 code-space policy (flash_update.loader)"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
+          "status": "available",
+          "errors": []
         }
       }
     },
@@ -2583,6 +2707,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
+            }
+          ]
         }
       }
     },
@@ -2723,13 +2856,12 @@
           "errors": []
         },
         "nand-boot": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "nand-boot",
-              "reason": "ValueError: xa2-130 has no EXR II stage-1 code-space policy (flash_update.loader)"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
+          "status": "available",
+          "errors": []
         }
       }
     },
@@ -2840,6 +2972,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
+            }
+          ]
         }
       }
     },
@@ -2950,6 +3091,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
+            }
+          ]
         }
       }
     },
@@ -3060,6 +3210,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
+            }
+          ]
         }
       }
     },
@@ -3170,6 +3329,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
+            }
+          ]
         }
       }
     },
@@ -3332,6 +3500,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
         }
       }
     },
@@ -3424,13 +3601,12 @@
           "errors": []
         },
         "nand-boot": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "nand-boot",
-              "reason": "ValueError: xe2-411 has no EXR II stage-1 code-space policy (flash_update.loader)"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
+          "status": "available",
+          "errors": []
         }
       }
     },
@@ -3478,13 +3654,8 @@
           "errors": []
         },
         "nand-boot": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "nand-boot",
-              "reason": "ValueError: xe2s-111 has no EXR II stage-1 code-space policy (flash_update.loader)"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "progress": {
           "status": "available",
@@ -3610,7 +3781,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor Pro"
+              "reason": "SettingsCatalogError: No settings profile is available for this firmware"
             }
           ]
         },
@@ -3639,6 +3810,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
+            }
+          ]
         }
       }
     },
@@ -3747,7 +3927,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor 4"
+              "reason": "SettingsCatalogError: xe4-201: profile header defaults have no marker"
             }
           ]
         },
@@ -3771,6 +3951,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: module_open: 0 checked card bindings"
+            }
+          ]
         }
       }
     },
@@ -3781,22 +3970,12 @@
       "internal_version": "1.63",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "controls",
-              "reason": "ControlIdsError: No catalog firmware, body, and physical-control records are published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "facts": {
           "status": "unavailable",
@@ -3907,7 +4086,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "firmware image not available"
+              "reason": "RestartCatalogError: No console callback transport facts for this firmware"
             }
           ]
         },
@@ -3925,7 +4104,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor 5"
+              "reason": "SettingsCatalogError: xp5: expected one flash/update bias"
             }
           ]
         },
@@ -3949,6 +4128,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: card open: 0 checked routines in a mapped section"
+            }
+          ]
         }
       }
     },
@@ -4107,6 +4295,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
         }
       }
     },
@@ -4217,6 +4414,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
+            }
+          ]
         }
       }
     },
@@ -4329,7 +4535,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor Pro"
+              "reason": "SettingsCatalogError: No settings profile is available for this firmware"
             }
           ]
         },
@@ -4353,6 +4559,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
         }
       }
     },
@@ -4363,13 +4578,8 @@
       "internal_version": "3.51",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "firmware image not available"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "unavailable",
@@ -4425,7 +4635,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "firmware image not available"
+              "reason": "ValueError: power-cut routine: no verified family match (0x13823f0: no four settle calls with w0 = -6); 0 structural candidates "
             }
           ]
         },
@@ -4443,7 +4653,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor 5"
+              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
             }
           ]
         },
@@ -4467,6 +4677,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "MissingMechanism: Stock card routines located (path_open, open, read, write, close, seek, unlink, opendir), but X-Processor 5 has no card mechanism: stock_sdk is the X-Processor 4 asynchronous SDK, and mailbox needs a reserved RAM region and an AArch64 file-service build"
+            }
+          ]
         }
       }
     },
@@ -4477,13 +4696,8 @@
       "internal_version": "3.64",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "firmware image not available"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "unavailable",
@@ -4539,7 +4753,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "firmware image not available"
+              "reason": "ValueError: power-cut routine: no verified family match (0x169ffd0: no four settle calls with w0 = -6); 0 structural candidates "
             }
           ]
         },
@@ -4557,7 +4771,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor 5"
+              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
             }
           ]
         },
@@ -4581,6 +4795,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: card open: 0 checked routines in a mapped section"
+            }
+          ]
         }
       }
     },
@@ -4691,6 +4914,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
+            }
+          ]
         }
       }
     },
@@ -4719,13 +4951,8 @@
           ]
         },
         "controls": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "controls",
-              "reason": "ControlIdsError: No catalog firmware, body, and physical-control records are published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "facts": {
           "status": "unavailable",
@@ -4882,11 +5109,15 @@
           "errors": []
         },
         "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
           "status": "unavailable",
           "errors": [
             {
-              "locator": "nand-boot",
-              "reason": "ValueError: no registered boot ROM: xm1-101 has no registered boot ROM asset"
+              "locator": "card_files.locate",
+              "reason": "KeyError: 'mod_memory'"
             }
           ]
         }
@@ -4917,13 +5148,8 @@
           ]
         },
         "controls": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "controls",
-              "reason": "ControlIdsError: No catalog firmware, body, and physical-control records are published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "facts": {
           "status": "unavailable",
@@ -5080,11 +5306,15 @@
           "errors": []
         },
         "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
           "status": "unavailable",
           "errors": [
             {
-              "locator": "nand-boot",
-              "reason": "ValueError: no mod target for xm1-120 (<input>)"
+              "locator": "card_files.locate",
+              "reason": "KeyError: 'mod_memory'"
             }
           ]
         }
@@ -5227,13 +5457,12 @@
           "errors": []
         },
         "nand-boot": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "nand-boot",
-              "reason": "ValueError: xm1-150 has no EXR II stage-1 code-space policy (flash_update.loader)"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
+          "status": "available",
+          "errors": []
         }
       }
     },
@@ -5314,7 +5543,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "ValueError: power-cut routine: no verified family match; 2 structural candidates 0x914ba8, 0x148e548"
+              "reason": "RestartCatalogError: No console callback transport facts for this firmware"
             }
           ]
         },
@@ -5332,7 +5561,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "ValueError: Configuration initializer has 0 block-region reads"
+              "reason": "SettingsCatalogError: xp5: expected one flash/update bias"
             }
           ]
         },
@@ -5352,6 +5581,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "MissingMechanism: Stock card routines located (path_open, open, read, write, close, seek, unlink, opendir), but X-Processor 5 has no card mechanism: stock_sdk is the X-Processor 4 asynchronous SDK, and mailbox needs a reserved RAM region and an AArch64 file-service build"
+            }
+          ]
         }
       }
     },
@@ -5514,6 +5752,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
         }
       }
     },
@@ -5524,13 +5771,8 @@
       "internal_version": "2.45",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "BulkCatalogError: No bulk transport locator for X-Processor Pro"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "unavailable",
@@ -5635,7 +5877,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor Pro"
+              "reason": "SettingsCatalogError: No settings profile is available for this firmware"
             }
           ]
         },
@@ -5659,6 +5901,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
         }
       }
     },
@@ -5677,13 +5928,8 @@
           "errors": []
         },
         "controls": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "controls",
-              "reason": "ControlIdsError: No catalog firmware, body, and physical-control records are published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "facts": {
           "status": "unavailable",
@@ -5771,7 +6017,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor 4"
+              "reason": "SettingsCatalogError: xpro3-200: profile header defaults have no marker"
             }
           ]
         },
@@ -5934,11 +6180,15 @@
           "errors": []
         },
         "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
           "status": "unavailable",
           "errors": [
             {
-              "locator": "nand-boot",
-              "reason": "ValueError: xq1-121 has no EXR II stage-1 code-space policy (flash_update.loader)"
+              "locator": "card_files.locate",
+              "reason": "TypeError: 'NoneType' object is not subscriptable"
             }
           ]
         }
@@ -6080,11 +6330,15 @@
           "errors": []
         },
         "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
           "status": "unavailable",
           "errors": [
             {
-              "locator": "nand-boot",
-              "reason": "ValueError: xq2-101 has no EXR II stage-1 code-space policy (flash_update.loader)"
+              "locator": "card_files.locate",
+              "reason": "TypeError: 'NoneType' object is not subscriptable"
             }
           ]
         }
@@ -6249,6 +6503,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
+            }
+          ]
         }
       }
     },
@@ -6339,7 +6602,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor 4"
+              "reason": "SettingsCatalogError: xs10-311: profile header defaults have no marker"
             }
           ]
         },
@@ -6359,6 +6622,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: module_open: 0 checked card bindings"
+            }
+          ]
         }
       }
     },
@@ -6369,13 +6641,8 @@
       "internal_version": "1.68",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "firmware image not available"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "unavailable",
@@ -6431,7 +6698,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "firmware image not available"
+              "reason": "RestartCatalogError: No console callback transport facts for this firmware"
             }
           ]
         },
@@ -6449,7 +6716,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor 5"
+              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
             }
           ]
         },
@@ -6473,6 +6740,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: card open: 0 checked routines in a mapped section"
+            }
+          ]
         }
       }
     },
@@ -6587,13 +6863,12 @@
           "errors": []
         },
         "nand-boot": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "nand-boot",
-              "reason": "ValueError: xt1-552 has no EXR II stage-1 code-space policy (flash_update.loader)"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
+          "status": "available",
+          "errors": []
         }
       }
     },
@@ -6681,13 +6956,12 @@
           "errors": []
         },
         "nand-boot": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "nand-boot",
-              "reason": "ValueError: xt10-131 has no EXR II stage-1 code-space policy (flash_update.loader)"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
+          "status": "available",
+          "errors": []
         }
       }
     },
@@ -6798,6 +7072,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
+            }
+          ]
         }
       }
     },
@@ -6808,22 +7091,12 @@
       "internal_version": "2.70",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "BulkCatalogError: No bulk transport locator for X-Processor Pro"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "controls",
-              "reason": "ControlIdsError: No catalog firmware, body, and physical-control records are published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "facts": {
           "status": "unavailable",
@@ -6915,7 +7188,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor Pro"
+              "reason": "SettingsCatalogError: No settings profile is available for this firmware"
             }
           ]
         },
@@ -6939,6 +7212,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
         }
       }
     },
@@ -6949,13 +7231,8 @@
       "internal_version": "1.46",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "BulkCatalogError: No bulk transport locator for X-Processor Pro"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "available",
@@ -7019,6 +7296,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
         }
       }
     },
@@ -7129,6 +7415,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
+            }
+          ]
         }
       }
     },
@@ -7220,13 +7515,8 @@
           ]
         },
         "settings": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor 4"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "state": {
           "status": "unavailable",
@@ -7242,6 +7532,10 @@
           "errors": []
         },
         "versions": {
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
           "status": "available",
           "errors": []
         }
@@ -7486,7 +7780,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor 4"
+              "reason": "SettingsCatalogError: xt30ii-204: profile header defaults have no marker"
             }
           ]
         },
@@ -7510,6 +7804,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: module_open: 0 checked card bindings"
+            }
+          ]
         }
       }
     },
@@ -7524,7 +7827,7 @@
           "errors": [
             {
               "locator": "bulk",
-              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+              "reason": "ValueError: xp5_system_mode_getter: 0 candidates, 0 verified results"
             }
           ]
         },
@@ -7646,7 +7949,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "firmware image not available"
+              "reason": "RestartCatalogError: No console callback transport facts for this firmware"
             }
           ]
         },
@@ -7664,7 +7967,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor 5"
+              "reason": "SettingsCatalogError: Missing settings facts: cfgdata_reader, cfgdata_location"
             }
           ]
         },
@@ -7688,6 +7991,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: card open: 0 checked routines in a mapped section"
+            }
+          ]
         }
       }
     },
@@ -7791,7 +8103,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "SettingsCatalogError: No settings-bank locator for X-Processor 4"
+              "reason": "SettingsCatalogError: xt4-212: profile header defaults have no marker"
             }
           ]
         },
@@ -7811,6 +8123,15 @@
         "versions": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: module_open: 0 checked card bindings"
+            }
+          ]
         }
       }
     },
@@ -7929,8 +8250,13 @@
       "internal_version": "1.65",
       "tables": {
         "bulk": {
-          "status": "available",
-          "errors": []
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "bulk",
+              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+            }
+          ]
         },
         "card-files": {
           "status": "unavailable",
@@ -8003,7 +8329,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "firmware image not available"
+              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
             }
           ]
         },
@@ -8021,7 +8347,7 @@
           "errors": [
             {
               "locator": "settings",
-              "reason": "ValueError: Configuration initializer has 0 block-region reads"
+              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
             }
           ]
         },
