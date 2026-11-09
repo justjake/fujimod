@@ -13,8 +13,34 @@
  "card_slot": null,
  "control_bus_chips": [],
  "connections": [],
- "parts": ["xe5-serial-nand"],
- "wiring": [{"source_id": "flash", "target_id": "xe5-serial-nand", "signal": "storage"}],
+ "parts": [
+  "xe5-serial-nand",
+  "power-controller",
+  "serial-calibration",
+  "bis-configuration"
+ ],
+ "wiring": [
+  {
+   "source_id": "flash",
+   "target_id": "xe5-serial-nand",
+   "signal": "storage"
+  },
+  {
+   "source_id": "spi0",
+   "target_id": "power-controller",
+   "signal": "serial_data"
+  },
+  {
+   "source_id": "spi0",
+   "target_id": "serial-calibration",
+   "signal": "serial_data"
+  },
+  {
+   "source_id": "serial",
+   "target_id": "bis-configuration",
+   "signal": "serial_data"
+  }
+ ],
  "hardware": {
   "serial_attachments": [],
   "gpio_feedback": [],
