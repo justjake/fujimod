@@ -181,6 +181,20 @@ class Camera:
         return cls(_native.Camera.from_board(board, json.dumps(facts), json.dumps(options), observe))
 
     @classmethod
+    def from_memory(cls, memory, facts: dict, *, event_bytes: int,
+                    poll_seconds: float = .1, output: str = "lcd") -> Camera:
+        """A camera over an already open ``usb.Memory`` loan.
+
+        This shares the memory loan's existing session and source owner.
+        Ordinary ranges use bounded reads and only declared, admitted
+        ranges larger than the owner's slow-read limit use the bulk mapping.
+        ``close()`` only drops this adapter; ``memory.aclose()`` is what
+        restores the source and returns the session.
+        """
+        return cls(_native.Camera.from_memory(memory, json.dumps(facts), event_bytes,
+                                              poll_seconds, output))
+
+    @classmethod
     def from_ff80(cls, session, facts: dict, *, read_bytes: int, write_bytes: int,
                   event_bytes: int, poll_seconds: float = .1, output: str = "lcd",
                   operation_scoped: bool = False) -> Camera:

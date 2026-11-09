@@ -18,6 +18,11 @@ use task::{Output, Task};
 fn error(message: String) -> PyErr {
     PyRuntimeError::new_err(message)
 }
+/// The message a provider's Python exception keeps when a remote transport
+/// reports it as its own string error.
+fn provider_error(error: PyErr) -> String {
+    Python::attach(|py| error.value(py).to_string())
+}
 fn decode<T: serde::de::DeserializeOwned>(json: &str) -> PyResult<T> {
     serde_json::from_str(json).map_err(|e| PyValueError::new_err(e.to_string()))
 }
@@ -65,8 +70,89 @@ impl remote::board::SessionOwner for PythonBoard {
         })
     }
 }
+/// Adapts the shared provider to the remote crate's own transport: one bounded
+/// range read or debug event on the memory loan, with no retry or fallback.
+struct MemoryTransport {
+    source: Box<dyn fujimod_python_usb_base::MemorySource>,
+}
+impl remote::ff80::Transport for MemoryTransport {
+    fn memory<'a>(
+        &'a mut self,
+        range: remote::ff80::MemoryRange,
+        _limits: remote::ff80::DebugMemoryLimits,
+    ) -> LocalFuture<'a, Vec<u8>> {
+        Box::pin(async move {
+            self.source
+                .read(range.address().0, range.length().get())
+                .await
+                .map_err(provider_error)
+        })
+    }
+    fn event<'a>(
+        &'a mut self,
+        event: remote::ff80::DebugEvent,
+        limit: std::num::NonZeroU32,
+    ) -> LocalFuture<'a, ()> {
+        Box::pin(async move {
+            self.source
+                .event(event, limit)
+                .await
+                .map_err(provider_error)
+        })
+    }
+}
 #[pymethods]
 impl Camera {
+    /// A camera over an already prepared `usb.Memory` loan. The loan stays the
+    /// only owner of the session and its bulk source: this adapter performs
+    /// ordinary bounded reads and, for declared admitted ranges larger than the
+    /// owner's slow-read limit, reads through the mapping. Closing this camera
+    /// only drops the adapter; `Memory.aclose()` restores the source.
+    #[staticmethod]
+    #[pyo3(signature = (memory, facts, event_bytes, poll_seconds=0.1, output=None))]
+    fn from_memory(
+        memory: &Bound<'_, PyAny>,
+        facts: &str,
+        event_bytes: u32,
+        poll_seconds: f64,
+        output: Option<String>,
+    ) -> PyResult<Self> {
+        use std::{num::NonZeroU32, time::Duration};
+        let output = output.unwrap_or_else(|| "lcd".to_string());
+        if !poll_seconds.is_finite() || poll_seconds <= 0. || poll_seconds > 60. {
+            return Err(PyValueError::new_err(
+                "Poll interval must be in (0, 60] seconds",
+            ));
+        }
+        if output.is_empty() {
+            return Err(PyValueError::new_err("Output name must be nonempty"));
+        }
+        let event_bytes = NonZeroU32::new(event_bytes)
+            .ok_or_else(|| PyValueError::new_err("Transport limits must be nonzero"))?;
+        let facts: Facts = decode(facts)?;
+        // Everything that can refuse from the facts does so before the memory
+        // handle is even asked for a provider.
+        facts.validate().map_err(error)?;
+        let source = fujimod_python_usb_base::memory_source(memory, &facts.firmware.firmware_id)?;
+        let options = remote::ff80::Options {
+            memory_limits: source.limits(),
+            event_bytes,
+            poll_interval: Duration::from_secs_f64(poll_seconds),
+            output,
+        };
+        let remote =
+            remote::connection::Connection::<remote::ff80::Ff80Backend<_>>::with_transport(
+                MemoryTransport { source },
+                facts.clone(),
+                options,
+            )
+            .map_err(error)?;
+        Ok(Self {
+            slot: Rc::new(RefCell::new(Some(Box::new(remote)))),
+            facts: Rc::new(facts),
+            device_ids: BTreeMap::new(),
+        })
+    }
     #[staticmethod]
     fn from_ff80(
         session: &Bound<'_, PyAny>,

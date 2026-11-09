@@ -9,7 +9,8 @@
 //! back-reference to its owner slot, so the slot can hold the state strongly
 //! without a cycle; the handle keeps the Python session alive instead.
 use super::*;
-use fujimod_catalog_bulk::{BulkRange, FirmwareBulk};
+use fujimod_catalog_bulk::{BulkDma, BulkRange, FirmwareBulk};
+use fujimod_usb::ff80::commands::debug::DebugEvent;
 use fujimod_workflows::{
     Limits,
     bulk::{BulkError, BulkLoan, BulkMapping, BulkMappingPhase},
@@ -184,6 +185,10 @@ struct Lease {
     session: Option<Box<ff80::Session>>,
     mapping: Option<BulkMapping>,
     cancel: Option<oneshot::Receiver<()>>,
+    /// Set while a raw read or debug event is awaiting. A lease dropped before
+    /// it settles fences the mapping and the native completion, because an
+    /// exchange may have been acknowledged but not observed.
+    fence: bool,
 }
 impl Lease {
     /// Take the idle pair for one operation. The owner slot is read before the
@@ -228,6 +233,7 @@ impl Lease {
             session: Some(session),
             mapping: Some(mapping),
             cancel: Some(cancel),
+            fence: false,
         })
     }
     fn parts(&mut self) -> (&mut ff80::Session, &mut BulkMapping) {
@@ -277,10 +283,86 @@ impl Lease {
         ))
         .await
     }
+    /// One bounded slow read, as the ordinary range reader performs it. The
+    /// owner's limits bound every command; no bulk source traffic is sent.
+    async fn raw(&mut self, address: u32, length: u32, limits: Limits) -> PyResult<Vec<u8>> {
+        let cancel = self.cancel.take().expect("one lease per operation");
+        let target = MemoryRange::new(
+            Address(address),
+            NonZeroU32::new(length)
+                .ok_or_else(|| PyValueError::new_err("length must be nonzero"))?,
+        )
+        .map_err(error)?;
+        // Armed before the first await: a dropped future may have sent an
+        // exchange whose outcome this owner did not observe.
+        self.fence = true;
+        let (session, _) = self.parts();
+        let outcome = detached(futures_lite::future::or(
+            async move {
+                let _ = cancel.await;
+                RawOutcome::Abandoned
+            },
+            async move {
+                RawOutcome::Returned(
+                    fujimod_usb::operations::memory::read_range(session, target, limits.memory)
+                        .await
+                        .map_err(error),
+                )
+            },
+        ))
+        .await;
+        self.finish(outcome)
+    }
+    /// One debug event command on the same retained session.
+    async fn event(&mut self, event: DebugEvent, limit: NonZeroU32) -> PyResult<()> {
+        let cancel = self.cancel.take().expect("one lease per operation");
+        self.fence = true;
+        let (session, _) = self.parts();
+        let outcome = detached(futures_lite::future::or(
+            async move {
+                let _ = cancel.await;
+                RawOutcome::Abandoned
+            },
+            async move {
+                RawOutcome::Returned(
+                    session
+                        .send_event(event, limit)
+                        .await
+                        .map(|_| ())
+                        .map_err(error),
+                )
+            },
+        ))
+        .await;
+        self.finish(outcome)
+    }
+    /// Settle a raw exchange. A known return with the session still ready keeps
+    /// the mapping usable; anything else fences it without further traffic. An
+    /// explicit abandon keeps the fence armed for the lease's own drop.
+    fn finish<T>(&mut self, outcome: RawOutcome<T>) -> PyResult<T> {
+        match outcome {
+            RawOutcome::Abandoned => Err(abandoned_error()),
+            RawOutcome::Returned(result) => {
+                {
+                    let (session, mapping) = self.parts();
+                    if session.state() != ff80::SessionState::Ready {
+                        mapping.invalidate_completion(session);
+                    }
+                }
+                self.fence = false;
+                result
+            }
+        }
+    }
+}
+enum RawOutcome<T> {
+    Returned(PyResult<T>),
+    Abandoned,
 }
 impl Drop for Lease {
     fn drop(&mut self) {
-        let (Some(mut session), Some(mapping)) = (self.session.take(), self.mapping.take()) else {
+        let (Some(mut session), Some(mut mapping)) = (self.session.take(), self.mapping.take())
+        else {
             return;
         };
         let (mut held, poisoned) = match self.state.lock() {
@@ -294,6 +376,11 @@ impl Drop for Lease {
             // Abandon can win before the shared future is first polled, so
             // its own cancellation guard may not have been armed yet.
             session.invalidate_completion();
+        }
+        if self.fence {
+            // A raw read or event was dropped between exchanges: completion and
+            // source ownership are uncertain, so no restoration may follow.
+            mapping.invalidate_completion(&mut session);
         }
         if matches!(held.resource, Resource::InFlight { .. }) || poisoned {
             held.resource = Resource::Idle(session, mapping);
@@ -398,6 +485,9 @@ pub(super) struct Memory {
     owner: Arc<Mutex<Slot>>,
     state: Arc<Mutex<State>>,
     closed: Mutex<Option<Snapshot>>,
+    /// The exact transfer limits this loan was opened with; a raw read never
+    /// substitutes wider bounds.
+    limits: Limits,
 }
 impl Memory {
     /// The retained close report, when this handle already closed once.
@@ -438,6 +528,97 @@ impl Memory {
         drop(lease.mapping.take());
         *lock(&self.closed)? = Some(report);
         Ok(())
+    }
+    /// Open a provider on this loan for a remote adapter. Everything that can
+    /// refuse is checked here, before any traffic: a closed, abandoned, fenced
+    /// or busy loan, and a profile naming another firmware.
+    pub(super) fn provider(
+        &self,
+        firmware_id: &str,
+    ) -> PyResult<Box<dyn fujimod_python_usb_base::MemorySource>> {
+        if self.closed_report()?.is_some() {
+            return Err(closed_error());
+        }
+        let profile = {
+            // Reuse the owner-identity, fence and busy checks. Taking and
+            // returning an unstarted lease sends no traffic, and error
+            // conversion happens after the state guards have been dropped.
+            let lease = Lease::take(&self.state)?;
+            lease
+                .mapping
+                .as_ref()
+                .expect("leased mapping")
+                .profile()
+                .clone()
+        };
+        if profile.firmware_id != firmware_id {
+            return Err(PyValueError::new_err(format!(
+                "memory loan profile is for firmware {}, not {firmware_id}",
+                profile.firmware_id
+            )));
+        }
+        Ok(Box::new(Provider {
+            _owner: self.owner.clone(),
+            state: self.state.clone(),
+            limits: self.limits,
+            window: profile.window,
+            dma: profile.dma,
+        }))
+    }
+}
+
+/// A provider over one open memory loan. It holds both the owner slot and the
+/// loan state, so dropping it retains the borrowed source instead of restoring
+/// it; only the memory handle's explicit close does that.
+struct Provider {
+    /// Retains the loan's owner slot for the provider's lifetime; the loan
+    /// state only refers back to it weakly.
+    _owner: Arc<Mutex<Slot>>,
+    state: Arc<Mutex<State>>,
+    limits: Limits,
+    window: BulkRange,
+    dma: Option<BulkDma>,
+}
+impl fujimod_python_usb_base::MemorySource for Provider {
+    fn limits(&self) -> DebugMemoryLimits {
+        self.limits.memory
+    }
+    fn read<'a>(
+        &'a self,
+        address: u32,
+        length: u32,
+    ) -> Pin<Box<dyn std::future::Future<Output = PyResult<Vec<u8>>> + Send + 'a>> {
+        Box::pin(async move {
+            if length == 0 {
+                return Err(PyValueError::new_err("length must be nonzero"));
+            }
+            let mut lease = Lease::take(&self.state)?;
+            let target = BulkRange {
+                address: u64::from(address),
+                size: u64::from(length),
+            };
+            // Only a declared, admitted range larger than the owner's slow-read
+            // limit uses the shared E1 mapping. Every other range stays a
+            // bounded ordinary read; an E1 failure is never retried as one.
+            if length > self.limits.memory.read.get()
+                && self.window.contains(target)
+                && self.dma.is_none_or(|dma| dma.admits(target))
+            {
+                lease.read(target).await
+            } else {
+                lease.raw(address, length, self.limits).await
+            }
+        })
+    }
+    fn event<'a>(
+        &'a self,
+        event: DebugEvent,
+        limit: NonZeroU32,
+    ) -> Pin<Box<dyn std::future::Future<Output = PyResult<()>> + Send + 'a>> {
+        Box::pin(async move {
+            let mut lease = Lease::take(&self.state)?;
+            lease.event(event, limit).await
+        })
     }
 }
 #[pymethods]
@@ -561,6 +742,7 @@ impl AsyncSession {
                     owner: self.inner.clone(),
                     state,
                     closed: Mutex::new(None),
+                    limits,
                 })
             }
             Err(error) => {

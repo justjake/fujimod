@@ -83,6 +83,21 @@ impl BulkMapping {
         self.phase
     }
 
+    /// The immutable, metadata-validated firmware profile this mapping stages.
+    /// Runtime qualification happens during preparation.
+    pub fn profile(&self) -> &FirmwareBulk {
+        &self.bulk
+    }
+
+    /// Fence this mapping without any I/O: a canceled or state-unknown
+    /// transport operation leaves both completion and source ownership
+    /// uncertain, so the stage keeps its loan report and sends no more
+    /// traffic. Used by owners that run operations outside this module.
+    pub fn invalidate_completion(&mut self, session: &mut Session) {
+        self.phase = BulkMappingPhase::Unresolved;
+        session.invalidate_completion();
+    }
+
     /// The source-state cell this mapping borrowed, with its original bytes and
     /// the planned host-write bytes or observed query bytes. Reported
     /// independently of `overwritten()` and kept after errors, cancellation and

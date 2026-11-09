@@ -1,11 +1,15 @@
 //! ff80 range reads, stock debug key events and bounded polled waits.
 use crate::{backend::Backend, connection::Connection, *};
+pub use fujimod_usb::ff80::commands::{
+    debug::DebugEvent,
+    memory::{DebugMemoryLimits, MemoryRange},
+};
 use fujimod_usb::{
     ff80::{
         Session,
         commands::{
-            debug::{DebugEvent, EventName, KeyState},
-            memory::{Address, DebugMemoryLimits, MemoryRange},
+            debug::{EventName, KeyState},
+            memory::Address,
         },
     },
     operations::memory::read_range,
@@ -22,25 +26,89 @@ pub struct Options {
     pub poll_interval: Duration,
     pub output: String,
 }
-pub struct Ff80Backend<S> {
+
+/// The two ff80 operations a remote backend needs from its transport. The
+/// backend owns aliasing, range validation and every frame and poll decision;
+/// a transport only performs one memory range read or debug event command.
+/// Implementations must never retry a failed exchange.
+pub trait Transport {
+    /// Read exactly `range` with the caller's firmware transfer limits.
+    fn memory<'a>(
+        &'a mut self,
+        range: MemoryRange,
+        limits: DebugMemoryLimits,
+    ) -> LocalFuture<'a, Vec<u8>>;
+    /// Send one debug event command with at most `limit` payload bytes.
+    fn event<'a>(&'a mut self, event: DebugEvent, limit: NonZeroU32) -> LocalFuture<'a, ()>;
+}
+
+impl<T: Transport + ?Sized> Transport for Box<T> {
+    fn memory<'a>(
+        &'a mut self,
+        range: MemoryRange,
+        limits: DebugMemoryLimits,
+    ) -> LocalFuture<'a, Vec<u8>> {
+        (**self).memory(range, limits)
+    }
+    fn event<'a>(&'a mut self, event: DebugEvent, limit: NonZeroU32) -> LocalFuture<'a, ()> {
+        (**self).event(event, limit)
+    }
+}
+
+/// The ordinary range transport over one borrowed or owned ff80 session.
+pub struct RangeTransport<S> {
     session: S,
+}
+impl<S: BorrowMut<Session>> Transport for RangeTransport<S> {
+    fn memory<'a>(
+        &'a mut self,
+        range: MemoryRange,
+        limits: DebugMemoryLimits,
+    ) -> LocalFuture<'a, Vec<u8>> {
+        Box::pin(async move {
+            read_range(self.session.borrow_mut(), range, limits)
+                .await
+                .map_err(|e| e.to_string())
+        })
+    }
+    fn event<'a>(&'a mut self, event: DebugEvent, limit: NonZeroU32) -> LocalFuture<'a, ()> {
+        Box::pin(async move {
+            self.session
+                .borrow_mut()
+                .send_event(event, limit)
+                .await
+                .map(|_| ())
+                .map_err(|e| e.to_string())
+        })
+    }
+}
+
+pub struct Ff80Backend<T> {
+    transport: T,
     options: Options,
     start: Instant,
     alias: u64,
 }
-pub type Ff80Remote<S> = Connection<Ff80Backend<S>>;
-impl<S: BorrowMut<Session>> Connection<Ff80Backend<S>> {
+pub type Ff80Remote<T> = Connection<Ff80Backend<T>>;
+impl<S: BorrowMut<Session>> Connection<Ff80Backend<RangeTransport<S>>> {
     pub fn into_session(self) -> S {
-        self.backend.session
+        self.backend.transport.session
     }
     pub fn new(session: S, facts: Facts, options: Options) -> Result<Self> {
+        Self::with_transport(RangeTransport { session }, facts, options)
+    }
+}
+impl<T: Transport> Connection<Ff80Backend<T>> {
+    /// Construct over any owned transport. The caller supplies the transport's
+    /// own memory limits in `options`; this constructor invents none.
+    pub fn with_transport(transport: T, facts: Facts, options: Options) -> Result<Self> {
         if options.poll_interval.is_zero() || options.output.is_empty() {
             return Err("Invalid ff80 polling options".into());
         }
         let alias = facts.firmware.uncached_alias;
         Self::connect(
             Ff80Backend {
-                session,
+                transport,
                 options,
                 start: Instant::now(),
                 alias,
@@ -49,7 +117,7 @@ impl<S: BorrowMut<Session>> Connection<Ff80Backend<S>> {
         )
     }
 }
-impl<S: BorrowMut<Session>> Backend for Ff80Backend<S> {
+impl<T: Transport> Backend for Ff80Backend<T> {
     fn now(&self) -> u64 {
         self.start.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64
     }
@@ -68,9 +136,9 @@ impl<S: BorrowMut<Session>> Backend for Ff80Backend<S> {
             )
             .map_err(|e| e.to_string())?;
             reads.stores.push((address, address + size as u64));
-            read_range(self.session.borrow_mut(), range, self.options.memory_limits)
+            self.transport
+                .memory(range, self.options.memory_limits)
                 .await
-                .map_err(|e| e.to_string())
         })
     }
     fn input<'a>(&'a mut self, input: &'a Input, facts: &'a Facts) -> LocalFuture<'a, ()> {
@@ -110,17 +178,15 @@ impl<S: BorrowMut<Session>> Backend for Ff80Backend<S> {
                         vec![KeyState::Off]
                     };
                     for state in states {
-                        self.session
-                            .borrow_mut()
-                            .send_event(
+                        self.transport
+                            .event(
                                 DebugEvent::Key {
                                     name: name.clone(),
                                     state,
                                 },
                                 self.options.event_bytes,
                             )
-                            .await
-                            .map_err(|e| e.to_string())?;
+                            .await?;
                     }
                 }
             }

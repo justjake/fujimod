@@ -153,6 +153,14 @@ Neither operation can stop camera execution. Creating an unawaited coroutine
 sends nothing; discarding or canceling it before dispatch leaves the session
 available.
 
+`fujimod.remote.Camera.from_memory(memory, facts, event_bytes=...)` runs a remote
+camera over an already open native `usb.Memory` loan. Keep the memory handle
+for explicit `await memory.aclose()`: closing or dropping the camera releases
+only its adapter. Ordinary ranges use bounded range reads, and only
+declared, DMA-admitted ranges larger than the loan's slow-read limit use the
+staged bulk mapping. Canceled reads and events leave the mapping unresolved
+and send no cleanup traffic.
+
 The native binding uses PyO3's `experimental-async` coroutine support and nusb's
 wakeups directly, without a background Python worker or an added Rust runtime.
 I/O polling releases the GIL. These native coroutines work with `await`,

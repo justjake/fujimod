@@ -121,6 +121,14 @@ framebuffer pointer, so an unchanged pointer can reach the deadline; passive
 `frame()` can still capture the current buffer. Physical identity, permission
 and session entry/exit belong to the caller.
 
+`Ff80Remote::with_transport(transport, facts, options)` accepts any owned
+`ff80::Transport`: one memory-range read and one debug event command, each with
+the caller's limits and no retry. `RangeTransport` over a session is what
+`Ff80Remote::new` uses. The backend keeps aliasing, range validation, polling
+and frame decisions, so a transport only changes how those exchanges leave the
+process. `options.memory_limits` belong to the transport's owner; the
+constructor invents no bounds.
+
 The declared scanout format selects straight BGRA8888 or premultiplied
 RGBA8888 decoding. Both produce RGB captures composited on black. The latter
 preserves the already-premultiplied RGB channels without multiplying alpha a
@@ -217,6 +225,15 @@ each remote operation and returns it before the next application observation.
 Its absolute clock is Python's `time.monotonic_ns()`. This permits existing
 session commands between operations while preserving refusal of overlapping
 USB exchanges. The default connection retains its session lease until close.
+
+`Camera.from_memory(memory, facts, event_bytes=..., poll_seconds=..., output=...)`
+connects over an already open `usb.Memory` loan. Ordinary ranges use bounded
+range reads; only declared, DMA-admitted ranges larger than the owner's
+slow-read limit use the staged bulk mapping, and an E1 failure is never retried
+as a slow read. The adapter retains the loan's owner and state but never
+restores them: `camera.close()` only drops it, `memory.aclose()` is the single
+close, and a canceled read or event leaves the mapping unresolved without
+cleanup traffic.
 
 Optional `Facts.input_tasks` supplies a checked task-table layout, required
 entry identities and receive state, plus mode-qualified busy registers. Input

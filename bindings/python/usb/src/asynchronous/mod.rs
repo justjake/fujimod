@@ -233,6 +233,7 @@ pub(super) fn install() {
         configuration_limit: |session| {
             Ok(session.cast::<AsyncSession>()?.get().configuration_limit())
         },
+        memory: |memory, firmware_id| memory.cast::<memory::Memory>()?.get().provider(firmware_id),
     });
 }
 impl std::borrow::Borrow<ff80::Session> for Lease {
