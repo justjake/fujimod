@@ -43,6 +43,60 @@
         }
       ]
     },
+    "AdcEncoderCalibration": {
+      "additionalProperties": false,
+      "description": "Configuration-byte offsets used by a calibrated analog phase decoder.",
+      "properties": {
+        "centers": {
+          "description": "Little-endian u16 center offsets, one for each channel.",
+          "items": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "direction": {
+          "description": "Byte selecting normal or reversed native direction.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "edges_per_step": {
+          "description": "Byte holding accepted edges per native direction event.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "hysteresis": {
+          "description": "Byte holding the Schmitt half-band width.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "description": "Little-endian signed u16 center adjustment offset.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "centers",
+        "offset",
+        "hysteresis",
+        "edges_per_step",
+        "direction"
+      ],
+      "type": "object"
+    },
     "AdcInterval": {
       "description": "Bounds of one accepted analog interval.",
       "oneOf": [
@@ -560,6 +614,40 @@
         },
         {
           "additionalProperties": false,
+          "description": "Conjunction of the ordered digital contacts in one body connection.",
+          "properties": {
+            "callback": {
+              "description": "Firmware callback evaluating the conjunction.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "connection_id": {
+              "description": "Body connection carrying all of the contacts, in predicate order.",
+              "type": "string"
+            },
+            "expected_levels": {
+              "description": "Required logic level of each contact.",
+              "items": {
+                "type": "boolean"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "gpio_contacts",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "expected_levels",
+            "callback"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Physical encoder interpreted by a located quadrature decoder.",
           "properties": {
             "connection_id": {
@@ -633,6 +721,129 @@
             "decoder_event",
             "guard",
             "threshold"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Physical encoder whose decoder emits each accepted transition without a latch.",
+          "properties": {
+            "connection_id": {
+              "description": "Ordered body connection carrying the two encoder phases.",
+              "type": "string"
+            },
+            "decoder_event": {
+              "description": "Decoder-local direction event, distinct from the UI event.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "guard": {
+              "description": "Located decoder guard address.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "gpio_transition",
+              "type": "string"
+            },
+            "phase_map": {
+              "description": "Decoder phase mapping.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 4,
+              "minItems": 4,
+              "type": "array"
+            },
+            "threshold": {
+              "description": "Located decoder activation threshold.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "transitions": {
+              "description": "Decoder transition values indexed by new phase, then old phase.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 16,
+              "minItems": 16,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "phase_map",
+            "transitions",
+            "decoder_event",
+            "guard",
+            "threshold"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Calibrated analog phase decoder with a native edge accumulator.",
+          "properties": {
+            "calibration_offsets": {
+              "$ref": "#/$defs/AdcEncoderCalibration",
+              "description": "Configuration offsets for thresholds, edge count, and direction."
+            },
+            "connection_id": {
+              "description": "Ordered body connection carrying the two analog channels.",
+              "type": "string"
+            },
+            "decoder_event": {
+              "description": "Decoder-local direction event, distinct from the UI event.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "adc_transition",
+              "type": "string"
+            },
+            "phase_map": {
+              "description": "Decoder phase mapping.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 4,
+              "minItems": 4,
+              "type": "array"
+            },
+            "transitions": {
+              "description": "Decoder transition values indexed by new phase, then old phase.",
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 16,
+              "minItems": 16,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "connection_id",
+            "phase_map",
+            "transitions",
+            "decoder_event",
+            "calibration_offsets"
           ],
           "type": "object"
         },

@@ -96,13 +96,13 @@
           "result": "pass"
         },
         {
-          "id": "emulator-nand-boot",
-          "title": "NAND bootloader boots stock or the card program",
+          "id": "sd-boot-v2-autostart-starts-in-emulator",
+          "title": "SD boot v2: autostart starts in the emulator",
           "result": "stale"
         },
         {
-          "id": "emulator-boot-patch",
-          "title": "Each boot-patch trigger sees its units in RAM",
+          "id": "sd-boot-v2-patch-triggers-fire-in-emulator",
+          "title": "SD boot v2: patch triggers fire in the emulator",
           "result": "stale"
         },
         {
@@ -116,14 +116,19 @@
           "result": "not-run"
         },
         {
-          "id": "emulator-sd-boot",
-          "title": "Our SD card of the stock firmware boots",
+          "id": "sd-boot-v1-stock-boots-in-emulator",
+          "title": "SD boot v1: stock firmware boots from an SD card in the emulator",
           "result": "pass"
         },
         {
-          "id": "emulator-updater",
-          "title": "The stock updater installs an update from the card",
+          "id": "firmware-update-stock-installs-in-emulator",
+          "title": "Firmware update: stock updater installs an update from an SD card in the emulator",
           "result": "pass"
+        },
+        {
+          "id": "sd-boot-v2-fujimod-boots-in-emulator",
+          "title": "SD boot v2: FujiMod boots from an SD card in the emulator",
+          "result": "not-run"
         }
       ]
     },
@@ -223,14 +228,19 @@
           "result": "not-run"
         },
         {
-          "id": "sd-image",
-          "title": "Dual-boot SD image built",
+          "id": "sd-boot-v1-fujimod-built",
+          "title": "SD boot v1: FujiMod SD image built",
           "result": "stale"
         },
         {
-          "id": "flash-update",
-          "title": "Flashable update built",
+          "id": "firmware-update-fujimod-built",
+          "title": "Firmware update: FujiMod update built",
           "result": "not-run"
+        },
+        {
+          "id": "sd-boot-v2-fujimod-built",
+          "title": "SD boot v2: FujiMod release built",
+          "result": "stale"
         }
       ]
     },
@@ -239,28 +249,38 @@
       "title": "SD card and install",
       "stages": [
         {
-          "id": "sd-select",
-          "title": "The boot ROM loads a green-LED card",
+          "id": "boot-rom-loads-sd-card-on-camera",
+          "title": "Boot ROM: loads an SD card on a camera",
           "result": "pass"
         },
         {
-          "id": "sd-stock-boot",
-          "title": "Our card dual-boots the stock firmware",
+          "id": "sd-boot-v1-stock-boots-on-camera",
+          "title": "SD boot v1: stock firmware boots from an SD card on a camera",
           "result": "not-run"
         },
         {
-          "id": "sd-recovery",
-          "title": "A flash-free card applies an official update",
-          "result": "not-run"
-        },
-        {
-          "id": "sd-boot",
-          "title": "FujiMod boots from the card",
+          "id": "sd-boot-v1-fujimod-boots-on-camera",
+          "title": "SD boot v1: FujiMod boots from an SD card on a camera",
           "result": "pass"
         },
         {
-          "id": "full-install",
-          "title": "FujiMod installed as a firmware update",
+          "id": "sd-boot-v2-fujimod-boots-on-camera",
+          "title": "SD boot v2: FujiMod boots from an SD card on a camera",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-boot-v2-autostart-installs-on-camera",
+          "title": "SD boot v2: autostart installs on a camera",
+          "result": "not-run"
+        },
+        {
+          "id": "firmware-update-stock-installs-on-camera",
+          "title": "Firmware update: stock updater installs an update from an SD card on a camera",
+          "result": "not-run"
+        },
+        {
+          "id": "firmware-update-fujimod-installs-on-camera",
+          "title": "Firmware update: FujiMod installs on a camera",
           "result": "not-run"
         }
       ]

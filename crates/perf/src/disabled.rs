@@ -25,6 +25,12 @@ pub fn end_guide() -> GuideSummary {
 
 pub fn set_cpu_counters(_counters: Vec<Result<BTreeMap<String, u64>, String>>) {}
 
+pub fn begin_wait(_description: &str) -> usize { usize::MAX }
+
+pub fn record_wait_evaluation(_index: usize) {}
+
+pub fn record_wait_stop(_index: usize, _cause: &str, _device: Option<&str>) {}
+
 pub struct SpanGuard;
 
 impl SpanGuard {

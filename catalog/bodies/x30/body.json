@@ -39,6 +39,16 @@
               "refs": {}
             },
             {
+              "name": "imagescaler",
+              "kind": "ImageScaler",
+              "refs": {}
+            },
+            {
+              "name": "imagecombination",
+              "kind": "ImageCombination",
+              "refs": {}
+            },
+            {
               "name": "loadermemorydma",
               "kind": "LoaderMemoryDMA",
               "refs": {}
@@ -163,6 +173,47 @@
               "name": "displayformatter",
               "kind": "DisplayFormatter",
               "refs": {}
+            },
+            {
+              "name": "prefilter",
+              "kind": "PrefilterControl",
+              "refs": {}
+            },
+            {
+              "name": "rawstatistics",
+              "kind": "RawStatisticsControl",
+              "refs": {}
+            },
+            {
+              "name": "stillisp",
+              "kind": "StillProcessor",
+              "refs": {}
+            },
+            {
+              "name": "imagewarp",
+              "kind": "ImageWarpControl",
+              "refs": {}
+            },
+            {
+              "name": "jpegencoder",
+              "kind": "ApproximateJPEGEncodeControl",
+              "refs": {
+                "stream_source": "imagewarp"
+              }
+            },
+            {
+              "name": "rawreadback",
+              "kind": "MemoryReadback",
+              "refs": {
+                "input_controller": "inputprocessingcontrol",
+                "image_output": "imageworkcontrol",
+                "parameters": "imageparametercontrol"
+              }
+            },
+            {
+              "name": "jpegdecoder",
+              "kind": "JPEGDecodeControl",
+              "refs": {}
             }
           ],
           "construction_order": [
@@ -171,6 +222,8 @@
             "kernelinterrupts",
             "nandcontroller",
             "fujidecompressor",
+            "imagescaler",
+            "imagecombination",
             "loadermemorydma",
             "powerdevices",
             "usbcontrol",
@@ -193,7 +246,14 @@
             "graphicsaccelerator",
             "displayscanout",
             "displaytiming",
-            "displayformatter"
+            "displayformatter",
+            "prefilter",
+            "rawstatistics",
+            "stillisp",
+            "imagewarp",
+            "jpegencoder",
+            "rawreadback",
+            "jpegdecoder"
           ],
           "attachment_order": [
             "windowanalysis",
@@ -201,6 +261,8 @@
             "kernelinterrupts",
             "nandcontroller",
             "fujidecompressor",
+            "imagescaler",
+            "imagecombination",
             "loadermemorydma",
             "usbcontrol",
             "powerdevices",
@@ -223,7 +285,14 @@
             "graphicsaccelerator",
             "displayscanout",
             "displaytiming",
-            "displayformatter"
+            "displayformatter",
+            "prefilter",
+            "rawstatistics",
+            "stillisp",
+            "imagewarp",
+            "jpegencoder",
+            "rawreadback",
+            "jpegdecoder"
           ]
         },
         "controllers": {
@@ -493,7 +562,7 @@
                 ],
                 [
                   32,
-                  31
+                  159
                 ],
                 [
                   97,
@@ -520,7 +589,8 @@
           },
           "input_processing": {
             "command_controls": [
-              16777216
+              16777216,
+              16973824
             ],
             "basis": "Declared catalog input."
           }
@@ -574,6 +644,113 @@
         "limits": [],
         "dram_basis": "Declared catalog input.",
         "imaging": {
+          "sensor_capture": {
+            "width": 4224,
+            "height": 3132,
+            "period_ticks": 1200000,
+            "dma_ticks": 1000,
+            "cfa_origin": [
+              96,
+              120
+            ]
+          },
+          "capture_color": {
+            "black": 256,
+            "full_scale": 4095,
+            "reference_white": [
+              527,
+              302,
+              584
+            ],
+            "initial_rgb": [
+              128,
+              128,
+              128
+            ],
+            "basis": "Declared catalog input.",
+            "sensor_cfa": [
+              1,
+              2,
+              1,
+              1,
+              0,
+              1,
+              0,
+              1,
+              0,
+              2,
+              1,
+              2,
+              1,
+              2,
+              1,
+              1,
+              0,
+              1,
+              1,
+              0,
+              1,
+              1,
+              2,
+              1,
+              2,
+              1,
+              2,
+              0,
+              1,
+              0,
+              1,
+              0,
+              1,
+              1,
+              2,
+              1
+            ],
+            "processing_cfa": [
+              1,
+              2,
+              1,
+              1,
+              0,
+              1,
+              0,
+              1,
+              0,
+              2,
+              1,
+              2,
+              1,
+              2,
+              1,
+              1,
+              0,
+              1,
+              1,
+              0,
+              1,
+              1,
+              2,
+              1,
+              2,
+              1,
+              2,
+              0,
+              1,
+              0,
+              1,
+              0,
+              1,
+              1,
+              2,
+              1
+            ],
+            "sensor_image_area": [
+              96,
+              120,
+              4032,
+              3012
+            ]
+          },
           "focus_imaging": {
             "optics": {
               "target_position": 320,
@@ -602,6 +779,34 @@
             "input_period_ticks": 200000
           }
         },
+        "encoders": [
+          {
+            "name": "command_dial",
+            "options": {
+              "pins": [
+                {"port": 3, "pin": 8},
+                {"port": 3, "pin": 9}
+              ],
+              "phase_ticks": 120000,
+              "rest_phase": 3
+            },
+            "counter": null
+          },
+          {
+            "name": "control_ring",
+            "adc": "adc",
+            "options": {
+              "outputs": {
+                "kind": "adc",
+                "channels": [6, 7],
+                "levels": [{"low": 250, "high": 750}, {"low": 250, "high": 750}]
+              },
+              "phase_ticks": 120000,
+              "rest_phase": 3
+            },
+            "counter": null
+          }
+        ],
         "attachments": {
           "serial_part": [
             "three-byte-stabilized-lens-programmed"
@@ -645,6 +850,16 @@
             {
               "name": "fujidecompressor",
               "kind": "FujiDecompressor",
+              "refs": {}
+            },
+            {
+              "name": "imagescaler",
+              "kind": "ImageScaler",
+              "refs": {}
+            },
+            {
+              "name": "imagecombination",
+              "kind": "ImageCombination",
               "refs": {}
             },
             {
@@ -780,6 +995,8 @@
             "kernelinterrupts",
             "nandcontroller",
             "fujidecompressor",
+            "imagescaler",
+            "imagecombination",
             "loadermemorydma",
             "powerdevices",
             "usbcontrol",
@@ -810,6 +1027,8 @@
             "kernelinterrupts",
             "nandcontroller",
             "fujidecompressor",
+            "imagescaler",
+            "imagecombination",
             "loadermemorydma",
             "usbcontrol",
             "powerdevices",
@@ -1102,7 +1321,7 @@
                 ],
                 [
                   32,
-                  31
+                  159
                 ],
                 [
                   97,
@@ -1129,7 +1348,8 @@
           },
           "input_processing": {
             "command_controls": [
-              16777216
+              16777216,
+              16973824
             ],
             "basis": "Declared catalog input."
           },
@@ -1212,6 +1432,113 @@
         "limits": [],
         "dram_basis": "Declared catalog input.",
         "imaging": {
+          "sensor_capture": {
+            "width": 4224,
+            "height": 3132,
+            "period_ticks": 1200000,
+            "dma_ticks": 1000,
+            "cfa_origin": [
+              96,
+              120
+            ]
+          },
+          "capture_color": {
+            "black": 256,
+            "full_scale": 4095,
+            "reference_white": [
+              527,
+              302,
+              584
+            ],
+            "initial_rgb": [
+              128,
+              128,
+              128
+            ],
+            "basis": "Declared catalog input.",
+            "sensor_cfa": [
+              1,
+              2,
+              1,
+              1,
+              0,
+              1,
+              0,
+              1,
+              0,
+              2,
+              1,
+              2,
+              1,
+              2,
+              1,
+              1,
+              0,
+              1,
+              1,
+              0,
+              1,
+              1,
+              2,
+              1,
+              2,
+              1,
+              2,
+              0,
+              1,
+              0,
+              1,
+              0,
+              1,
+              1,
+              2,
+              1
+            ],
+            "processing_cfa": [
+              1,
+              2,
+              1,
+              1,
+              0,
+              1,
+              0,
+              1,
+              0,
+              2,
+              1,
+              2,
+              1,
+              2,
+              1,
+              1,
+              0,
+              1,
+              1,
+              0,
+              1,
+              1,
+              2,
+              1,
+              2,
+              1,
+              2,
+              0,
+              1,
+              0,
+              1,
+              0,
+              1,
+              1,
+              2,
+              1
+            ],
+            "sensor_image_area": [
+              96,
+              120,
+              4032,
+              3012
+            ]
+          },
           "focus_imaging": {
             "optics": {
               "target_position": 320,
@@ -1364,6 +1691,40 @@
           "kind": "gpio",
           "port": 12,
           "pin": 6,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "controls-encoder-adc-6-7",
+      "kind": "control",
+      "signals": [
+        {"kind": "adc", "channel": 6, "threshold": null},
+        {"kind": "adc", "channel": 7, "threshold": null}
+      ]
+    },
+    {
+      "id": "controls-encoder-3-8-3-9",
+      "kind": "control",
+      "signals": [
+        {"kind": "gpio", "port": 3, "pin": 8, "active_level": true},
+        {"kind": "gpio", "port": 3, "pin": 9, "active_level": true}
+      ]
+    },
+    {
+      "id": "controls-contacts-3-6-3-7",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 6,
+          "active_level": true
+        },
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 7,
           "active_level": true
         }
       ]

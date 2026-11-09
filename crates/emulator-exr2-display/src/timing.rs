@@ -571,6 +571,7 @@ pub struct Wiring {
     pub output_hold: Option<fujimod_emulator_devices::signals::Level>,
 }
 pub struct DisplayTiming {
+    publication_generation: u64,
     state: Timing,
     status_snapshots: [Arc<AtomicU32>; 2],
     options: Options,
@@ -644,6 +645,7 @@ impl DisplayTiming {
         let status_snapshots =
             std::array::from_fn(|i| Arc::new(AtomicU32::new(state.banks[i].status)));
         Ok(Self {
+            publication_generation: 0,
             state,
             status_snapshots,
             options,
@@ -702,54 +704,18 @@ impl DisplayTiming {
         }
     }
 }
-impl fujimod_emulator_devices::Device for DisplayTiming {
-    fn checkpoint(&self) -> std::result::Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
-        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.state)
+impl DisplayTiming {
+    fn publication_state(&self) -> Timing {
+        self.state.clone()
     }
-    fn validate_checkpoint(
-        &self,
-        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
-    ) -> std::result::Result<(), String> {
-        self.validate_state(&saved.decode(self.name())?)
-    }
-    fn restore_checkpoint(
+}
+impl DisplayTiming {
+    fn read_published(
         &mut self,
-        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
-    ) -> std::result::Result<(), String> {
-        let state: Timing = saved.decode(self.name())?;
-        self.validate_state(&state)?;
-        self.state = state;
-        self.publish_status();
-        Ok(())
-    }
-
-    fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
-        Ok(self.save())
-    }
-
-    fn name(&self) -> &'static str {
-        "display-timing"
-    }
-    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
-        let Some(window_end) = window_base.checked_add(window_size) else {
-            return Vec::new();
-        };
-        BASES
-            .iter()
-            .enumerate()
-            .filter_map(|(bank, base)| {
-                let address = base.checked_add(0x30)?;
-                let end = address.checked_add(4)?;
-                (address >= window_base && end <= window_end).then(|| {
-                    FastReadWord::atomic_u32(
-                        address - window_base,
-                        self.status_snapshots[bank].clone(),
-                    )
-                })
-            })
-            .collect()
-    }
-    fn read(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, a: u64, size: u8) -> u64 {
+        cx: &mut fujimod_emulator_devices::Cx<'_>,
+        a: u64,
+        size: u8,
+    ) -> u64 {
         if address(a, size as u32).is_err() {
             cx.unmodeled();
             return 0;
@@ -773,7 +739,13 @@ impl fujimod_emulator_devices::Device for DisplayTiming {
             }
         }
     }
-    fn write(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, a: u64, size: u8, value: u64) {
+    fn write_published(
+        &mut self,
+        cx: &mut fujimod_emulator_devices::Cx<'_>,
+        a: u64,
+        size: u8,
+        value: u64,
+    ) {
         if address(a, size as u32).is_err() {
             cx.unmodeled();
             return;
@@ -795,7 +767,7 @@ impl fujimod_emulator_devices::Device for DisplayTiming {
             cx.fail(error.0);
         }
     }
-    fn advance(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>) {
+    fn advance_published(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>) {
         let Some(now) = self.time(cx) else { return };
         let held = self.output_hold_high();
         let delivers = !held && self.state.has_withheld();
@@ -825,6 +797,106 @@ impl fujimod_emulator_devices::Device for DisplayTiming {
             cx.fail(error.0);
         }
     }
+}
+impl fujimod_emulator_devices::Device for DisplayTiming {
+    fn publication_generation(&self) -> Option<u64> {
+        Some(self.publication_generation)
+    }
+    fn checkpoint(
+        &self,
+    ) -> std::result::Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.state)
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> std::result::Result<(), String> {
+        self.validate_state(&saved.decode(self.name())?)
+    }
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> std::result::Result<(), String> {
+        let state: Timing = saved.decode(self.name())?;
+        self.validate_state(&state)?;
+        if self.state != state {
+            self.publication_generation = self.publication_generation.wrapping_add(1);
+        }
+        self.state = state;
+        self.publish_status();
+        Ok(())
+    }
+
+    fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
+        Ok(self.save())
+    }
+
+    fn name(&self) -> &'static str {
+        "display-timing"
+    }
+    fn display_frame_count(&self, output: usize) -> std::result::Result<u64, String> {
+        self.state
+            .banks
+            .get(output)
+            .map(|bank| bank.frames as u64)
+            .ok_or_else(|| "invalid display timing output".into())
+    }
+    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
+        let Some(window_end) = window_base.checked_add(window_size) else {
+            return Vec::new();
+        };
+        BASES
+            .iter()
+            .enumerate()
+            .filter_map(|(bank, base)| {
+                let address = base.checked_add(0x30)?;
+                let end = address.checked_add(4)?;
+                (address >= window_base && end <= window_end).then(|| {
+                    FastReadWord::atomic_u32(
+                        address - window_base,
+                        self.status_snapshots[bank].clone(),
+                    )
+                })
+            })
+            .collect()
+    }
+    fn read(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, a: u64, size: u8) -> u64 {
+        if self
+            .next_deadline(cx.now())
+            .is_none_or(|due| due > cx.now())
+        {
+            return self.read_published(cx, a, size);
+        }
+        let before = self.publication_state();
+        let result = self.read_published(cx, a, size);
+        if self.publication_state() != before {
+            self.publication_generation = self.publication_generation.wrapping_add(1);
+        }
+        result
+    }
+    fn write(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, a: u64, size: u8, value: u64) {
+        let before = self.publication_state();
+        let result = self.write_published(cx, a, size, value);
+        if self.publication_state() != before {
+            self.publication_generation = self.publication_generation.wrapping_add(1);
+        }
+        result
+    }
+    fn advance(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>) {
+        if (self.output_hold_high() || !self.state.has_withheld())
+            && self
+                .next_deadline(cx.now())
+                .is_none_or(|due| due > cx.now())
+        {
+            return self.advance_published(cx);
+        }
+        let before = self.publication_state();
+        let result = self.advance_published(cx);
+        if self.publication_state() != before {
+            self.publication_generation = self.publication_generation.wrapping_add(1);
+        }
+        result
+    }
     fn next_deadline(&self, now: u64) -> Option<u64> {
         if now > self.ceiling {
             return Some(now);
@@ -842,6 +914,9 @@ impl fujimod_emulator_devices::Device for DisplayTiming {
     fn restore(&mut self, value: &serde_json::Value) -> std::result::Result<(), String> {
         let state: Timing = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         self.validate_state(&state)?;
+        if self.state != state {
+            self.publication_generation = self.publication_generation.wrapping_add(1);
+        }
         self.state = state;
         self.publish_status();
         Ok(())
@@ -852,7 +927,10 @@ impl fujimod_emulator_devices::Device for DisplayTiming {
 mod native_tests {
     use super::*;
     use fujimod_emulator_devices::test_host::{TestHost, advance, write};
-    use fujimod_emulator_devices::{Device, exr2::{clock, irq}};
+    use fujimod_emulator_devices::{
+        Device,
+        exr2::{clock, irq},
+    };
     fn fixture() -> (DisplayTiming, clock::Clocks, TestHost) {
         let mut host = TestHost::new();
         let clock = clock::Clocks::new(
@@ -897,15 +975,49 @@ mod native_tests {
         (timing, clock, host)
     }
     #[test]
+    fn frame_count_and_publication_generation_match_saved_changes() {
+        let (mut timing, _, mut host) = fixture();
+        assert_eq!(timing.display_frame_count(0).unwrap(), 0);
+        assert_eq!(timing.display_frame_count(1).unwrap(), 0);
+        assert!(timing.display_frame_count(2).is_err());
+        for (now, address, value) in [
+            (0, BASES[1] + 4, 0x10001),
+            (0, BASES[1] + 4, 0x10001),
+            (1, BASES[1] + 4, 0x10001),
+        ] {
+            host.now = now;
+            let before = timing.save();
+            let generation = timing.publication_generation();
+            write(&mut timing, &mut host, address, value);
+            assert_eq!(
+                timing.publication_generation() != generation,
+                timing.save() != before
+            );
+        }
+        let mut saved = timing.save();
+        saved["banks"][0]["frames"] = 3.into();
+        saved["banks"][1]["frames"] = 7.into();
+        let generation = timing.publication_generation();
+        timing.restore(&saved).unwrap();
+        assert_ne!(timing.publication_generation(), generation);
+        assert_eq!(timing.display_frame_count(0).unwrap(), 3);
+        assert_eq!(timing.display_frame_count(1).unwrap(), 7);
+        let generation = timing.publication_generation();
+        timing.restore(&saved).unwrap();
+        assert_eq!(timing.publication_generation(), generation);
+    }
+    #[test]
     fn pure_status_reads_leave_checkpoint_state_unchanged_between_deadlines() {
         let (mut timing, _, mut host) = fixture();
         let before = timing.save();
+        let generation = timing.publication_generation();
         for now in [1, 2, 100, 10000] {
             host.now = now;
             let mut cx = host.cx();
             assert_eq!(timing.read(&mut cx, BASES[0] + 0x30, 4), 2);
             assert!(cx.refusal().is_none());
             assert_eq!(timing.save(), before);
+            assert_eq!(timing.publication_generation(), generation);
         }
     }
     #[test]
@@ -943,7 +1055,9 @@ mod native_tests {
         advance(&mut timing, &mut host, 10);
         assert_eq!(timing.save(), saved);
         for tick in [11, 14, 17] {
+            let generation = timing.publication_generation();
             advance(&mut timing, &mut host, tick);
+            assert_ne!(timing.publication_generation(), generation);
             assert_eq!(status_value(), if tick == 17 { 2 } else { 0 });
         }
         assert_eq!(host.irqs, [(1, 55), (1, 56), (1, 55)]);

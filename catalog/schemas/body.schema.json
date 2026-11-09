@@ -1250,6 +1250,13 @@
           "additionalProperties": false,
           "description": "encoder hardware.",
           "properties": {
+            "adc": {
+              "description": "Optional ADC output connection.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "counter": {
               "description": "counter.",
               "type": [
@@ -1258,8 +1265,11 @@
               ]
             },
             "gpio": {
-              "description": "gpio.",
-              "type": "string"
+              "description": "Optional GPIO output connection.",
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "kind": {
               "const": "encoder",
@@ -1267,8 +1277,7 @@
             }
           },
           "required": [
-            "kind",
-            "gpio"
+            "kind"
           ],
           "type": "object"
         },
@@ -3495,6 +3504,80 @@
       ],
       "type": "object"
     },
+    "EncoderLevels": {
+      "additionalProperties": false,
+      "description": "Raw ADC codes for one encoder phase channel.",
+      "properties": {
+        "high": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "low": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "low",
+        "high"
+      ],
+      "type": "object"
+    },
+    "EncoderOutputs": {
+      "description": "Physical encoder output levels; channel order is high phase bit, low phase bit.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "gpio",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "channels": {
+              "items": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "kind": {
+              "const": "adc",
+              "type": "string"
+            },
+            "levels": {
+              "items": {
+                "$ref": "#/$defs/EncoderLevels"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "channels",
+            "levels"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "FocusAxis": {
       "additionalProperties": false,
       "description": "A focus-axis model.",
@@ -4582,6 +4665,13 @@
       "additionalProperties": false,
       "description": "Declared encoders facts.",
       "properties": {
+        "adc": {
+          "description": "ADC connection for an analog encoder.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "counter": {
           "description": "Declared counter.",
           "type": [
@@ -4608,6 +4698,17 @@
       "additionalProperties": false,
       "description": "Declared encoders options facts.",
       "properties": {
+        "outputs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EncoderOutputs"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit output choice; absent means GPIO for existing bodies."
+        },
         "phase_ticks": {
           "description": "Declared phase ticks.",
           "format": "uint64",
@@ -4619,7 +4720,10 @@
           "items": {
             "$ref": "#/$defs/PartAssemblyPin"
           },
-          "type": "array"
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "rest_phase": {
           "description": "Declared rest phase.",
@@ -4630,7 +4734,6 @@
       },
       "required": [
         "phase_ticks",
-        "pins",
         "rest_phase"
       ],
       "type": "object"

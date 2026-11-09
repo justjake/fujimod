@@ -41,6 +41,11 @@ impl Default for IrqRoutes {
     }
 }
 impl IrqRoutes {
+    pub fn from_checkpoint(saved: &crate::checkpoint::Checkpoint) -> Result<Self, String> {
+        Ok(Self(Arc::new(Mutex::new(
+            saved.decode("image-irq-routes")?,
+        ))))
+    }
     pub fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
         crate::checkpoint::Checkpoint::encode(
             "image-irq-routes",

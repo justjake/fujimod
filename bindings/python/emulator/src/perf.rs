@@ -19,6 +19,22 @@ fn end_guide() -> PyResult<String> {
         .map_err(|cause| error(cause.to_string()))
 }
 
+#[pyfunction]
+fn begin_wait(description: &str) -> usize {
+    fujimod_perf::begin_wait(description)
+}
+
+#[pyfunction]
+fn record_wait_evaluation(index: usize) {
+    fujimod_perf::record_wait_evaluation(index);
+}
+
+#[pyfunction]
+#[pyo3(signature = (index, cause, device=None))]
+fn record_wait_stop(index: usize, cause: &str, device: Option<&str>) {
+    fujimod_perf::record_wait_stop(index, cause, device);
+}
+
 /// Accept the existing per-core exit-counter snapshot vocabulary.
 #[pyfunction]
 fn set_cpu_counters(snapshot: &str) -> PyResult<()> {
@@ -77,7 +93,8 @@ fn write_chrome_trace(path: PathBuf) -> PyResult<()> {
 mod binding {
     #[pymodule_export]
     use super::{
-        add_bytes, begin_guide, begin_span, end_guide, end_span, set_cpu_counters,
+        add_bytes, begin_guide, begin_span, begin_wait, end_guide, end_span, record_wait_evaluation,
+        record_wait_stop, set_cpu_counters,
         write_chrome_trace,
     };
 }

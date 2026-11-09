@@ -349,6 +349,27 @@ pub struct ControllerModels {
     pub window_analysis: Option<WindowAnalysis>,
 }
 
+/// Raw ADC codes for one encoder phase channel.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct EncoderLevels {
+    pub low: u16,
+    pub high: u16,
+}
+
+/// Physical encoder output levels; channel order is high phase bit, low phase bit.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum EncoderOutputs {
+    Gpio,
+    Adc {
+        channels: [usize; 2],
+        levels: [EncoderLevels; 2],
+    },
+}
+
 /// Declared encoders options facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -358,7 +379,11 @@ pub struct EncoderTiming {
     /// Declared phase ticks.
     pub phase_ticks: u64,
     /// Declared pins.
-    pub pins: Vec<Pin>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pins: Option<Vec<Pin>>,
+    /// Explicit output choice; absent means GPIO for existing bodies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outputs: Option<EncoderOutputs>,
     /// Declared rest phase.
     pub rest_phase: u64,
 }
@@ -372,6 +397,9 @@ pub struct Encoder {
     /// Declared counter.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub counter: Option<String>,
+    /// ADC connection for an analog encoder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adc: Option<String>,
     /// Declared name.
     pub name: String,
     /// Declared options.

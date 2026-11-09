@@ -445,7 +445,7 @@ fn add(folder: &mut Folder, record: &[u8; 32]) -> Result<(), String> {
     Ok(())
 }
 /// Validate path conflicts and input bounds before allocating a medium.
-pub fn normalize_paths(files: &[(String, Vec<u8>)]) -> Result<Vec<String>, String> {
+pub fn normalize_paths<T: AsRef<[u8]>>(files: &[(String, T)]) -> Result<Vec<String>, String> {
     let mut paths = BTreeSet::new();
     let mut directories = BTreeSet::new();
     let mut normalized = Vec::new();
@@ -455,7 +455,7 @@ pub fn normalize_paths(files: &[(String, Vec<u8>)]) -> Result<Vec<String>, Strin
         let parts: Vec<_> = path.split('/').collect();
         let parents: Vec<_> = (1..parts.len()).map(|i| parts[..i].join("/")).collect();
         bytes = bytes
-            .checked_add(payload.len())
+            .checked_add(payload.as_ref().len())
             .ok_or("Preload size overflows")?;
         if bytes > MAX_PRELOAD_BYTES
             || paths.len() >= MAX_ENTRIES
@@ -476,7 +476,10 @@ pub fn normalize_paths(files: &[(String, Vec<u8>)]) -> Result<Vec<String>, Strin
 }
 /// Construct a new medium atomically. Existing media is never rebuilt to insert
 /// files into a mounted filesystem; session insertion replaces the external part.
-pub fn format(options: &Options, files: &[(String, Vec<u8>)]) -> Result<Card, String> {
+pub fn format<T: AsRef<[u8]>>(
+    options: &Options,
+    files: &[(String, T)],
+) -> Result<Card, String> {
     let mut card = Card::new(CardOptions {
         sectors: options.sectors,
         max_dirty_sectors: options.max_dirty_sectors,
@@ -626,7 +629,7 @@ pub fn format(options: &Options, files: &[(String, Vec<u8>)]) -> Result<Card, St
             }
             parent = current;
         }
-        let count = payload.len().div_ceil(cluster_bytes) as u32;
+        let count = payload.as_ref().len().div_ceil(cluster_bytes) as u32;
         let first = if count == 0 { 0 } else { next };
         if next as u64 + count as u64 > clusters as u64 + 2 {
             return err("Files exceed FAT32 volume");
@@ -652,11 +655,11 @@ pub fn format(options: &Options, files: &[(String, Vec<u8>)]) -> Result<Card, St
                 short,
                 0x20 | u8::from(read_only.contains(&path)),
                 first,
-                payload.len() as u32,
+                payload.as_ref().len() as u32,
             ),
         )?;
         if count > 0 {
-            for (i, chunk) in payload.chunks(65536 * 512).enumerate() {
+            for (i, chunk) in payload.as_ref().chunks(65536 * 512).enumerate() {
                 card.write_bytes(
                     (start + relative_data + (first - 2) * spc) as u64 * 512
                         + (i * 65536 * 512) as u64,
@@ -766,7 +769,7 @@ mod tests {
         assert!(format(&options(), &[("A/B".into(), vec![]), ("A".into(), vec![])]).is_err());
         let mut o = options();
         o.sectors_per_cluster = 128;
-        assert!(format(&o, &[]).is_err());
+        assert!(format::<Vec<u8>>(&o, &[]).is_err());
     }
 
     #[test]

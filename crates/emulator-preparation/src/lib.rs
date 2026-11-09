@@ -8,6 +8,7 @@ pub mod persistent_inputs;
 use fujimod_emulator_exr2_resources::{ImageSpec, Resources};
 use serde::Deserialize;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 #[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -54,7 +55,7 @@ impl Spec {
                     if total > fujimod_emulator_storage::fat::MAX_PRELOAD_BYTES {
                         return Err("card input exceeds 512 MiB".into());
                     }
-                    Ok((path, bytes.clone()))
+                    Ok((path, Arc::from(bytes.as_slice())))
                 })
                 .collect::<Result<Vec<_>, String>>()?;
             inputs.files.insert(name, files);

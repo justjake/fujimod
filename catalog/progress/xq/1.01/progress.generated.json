@@ -37,7 +37,7 @@
         {
           "id": "bulk-source",
           "title": "Bulk read source located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "flash-reader",
@@ -52,22 +52,22 @@
         {
           "id": "restart-facts",
           "title": "USB restart request located",
-          "result": "not-run"
+          "result": "stale"
         },
         {
           "id": "card-files",
           "title": "Optional card file access located",
-          "result": "not-run"
+          "result": "stale"
         },
         {
           "id": "controls",
           "title": "Physical controls mapped to firmware inputs",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "settings-layout",
           "title": "Settings layout located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "sd-facts",
@@ -77,12 +77,12 @@
         {
           "id": "nand-boot-facts",
           "title": "EXR II NAND bootloader facts located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "boot-patch-facts",
           "title": "Boot-patch triggers, clears and free spaces located",
-          "result": "not-run"
+          "result": "stale"
         }
       ]
     },
@@ -96,13 +96,13 @@
           "result": "pass"
         },
         {
-          "id": "emulator-nand-boot",
-          "title": "NAND bootloader boots stock or the card program",
+          "id": "sd-boot-v2-autostart-starts-in-emulator",
+          "title": "SD boot v2: autostart starts in the emulator",
           "result": "not-run"
         },
         {
-          "id": "emulator-boot-patch",
-          "title": "Each boot-patch trigger sees its units in RAM",
+          "id": "sd-boot-v2-patch-triggers-fire-in-emulator",
+          "title": "SD boot v2: patch triggers fire in the emulator",
           "result": "not-run"
         },
         {
@@ -116,13 +116,18 @@
           "result": "not-run"
         },
         {
-          "id": "emulator-sd-boot",
-          "title": "Our SD card of the stock firmware boots",
+          "id": "sd-boot-v1-stock-boots-in-emulator",
+          "title": "SD boot v1: stock firmware boots from an SD card in the emulator",
           "result": "not-run"
         },
         {
-          "id": "emulator-updater",
-          "title": "The stock updater installs an update from the card",
+          "id": "firmware-update-stock-installs-in-emulator",
+          "title": "Firmware update: stock updater installs an update from an SD card in the emulator",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-boot-v2-fujimod-boots-in-emulator",
+          "title": "SD boot v2: FujiMod boots from an SD card in the emulator",
           "result": "not-run"
         }
       ]
@@ -205,7 +210,7 @@
         {
           "id": "language-font-bank",
           "title": "Language font bank located and kept out of mod memory",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "mod-target",
@@ -223,13 +228,18 @@
           "result": "not-run"
         },
         {
-          "id": "sd-image",
-          "title": "Dual-boot SD image built",
+          "id": "sd-boot-v1-fujimod-built",
+          "title": "SD boot v1: FujiMod SD image built",
           "result": "not-run"
         },
         {
-          "id": "flash-update",
-          "title": "Flashable update built",
+          "id": "firmware-update-fujimod-built",
+          "title": "Firmware update: FujiMod update built",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-boot-v2-fujimod-built",
+          "title": "SD boot v2: FujiMod release built",
           "result": "not-run"
         }
       ]
@@ -239,28 +249,38 @@
       "title": "SD card and install",
       "stages": [
         {
-          "id": "sd-select",
-          "title": "The boot ROM loads a green-LED card",
+          "id": "boot-rom-loads-sd-card-on-camera",
+          "title": "Boot ROM: loads an SD card on a camera",
           "result": "not-run"
         },
         {
-          "id": "sd-stock-boot",
-          "title": "Our card dual-boots the stock firmware",
+          "id": "sd-boot-v1-stock-boots-on-camera",
+          "title": "SD boot v1: stock firmware boots from an SD card on a camera",
           "result": "not-run"
         },
         {
-          "id": "sd-recovery",
-          "title": "A flash-free card applies an official update",
+          "id": "sd-boot-v1-fujimod-boots-on-camera",
+          "title": "SD boot v1: FujiMod boots from an SD card on a camera",
           "result": "not-run"
         },
         {
-          "id": "sd-boot",
-          "title": "FujiMod boots from the card",
+          "id": "sd-boot-v2-fujimod-boots-on-camera",
+          "title": "SD boot v2: FujiMod boots from an SD card on a camera",
           "result": "not-run"
         },
         {
-          "id": "full-install",
-          "title": "FujiMod installed as a firmware update",
+          "id": "sd-boot-v2-autostart-installs-on-camera",
+          "title": "SD boot v2: autostart installs on a camera",
+          "result": "not-run"
+        },
+        {
+          "id": "firmware-update-stock-installs-on-camera",
+          "title": "Firmware update: stock updater installs an update from an SD card on a camera",
+          "result": "not-run"
+        },
+        {
+          "id": "firmware-update-fujimod-installs-on-camera",
+          "title": "Firmware update: FujiMod installs on a camera",
           "result": "not-run"
         }
       ]
@@ -324,6 +344,7 @@
     "controls": "not-run",
     "menu-theme": "not-run",
     "overlay-opacity": "not-run",
+    "menu-animations": "not-run",
     "menu-tap": "not-run",
     "glgui": "not-run",
     "recipes": "not-run",

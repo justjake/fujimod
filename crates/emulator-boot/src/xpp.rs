@@ -194,6 +194,7 @@ fn encoder_nodes(body: &Body, profile: &BodyProfile) -> Result<Vec<Value>, Strin
             .options
             .pins
             .iter()
+            .flatten()
             .map(|pin| (pin.port, pin.pin))
             .collect();
         if declared.len() != 2 || signals != declared {

@@ -884,8 +884,8 @@ impl Board {
             .map_err(error)
     }
     fn rotate_control(&mut self, id: &str, steps: i32) -> PyResult<()> {
-        let (node, cycles) = self.session()?.rotation(id, steps).map_err(error)?;
-        self.session_mut()?.rotate(&node, cycles).map_err(error)
+        let (node, edges) = self.session()?.rotation(id, steps).map_err(error)?;
+        self.session_mut()?.rotate_edges(&node, edges).map_err(error)
     }
     fn touch_script(&mut self, node: &str, script: &str) -> PyResult<()> {
         self.session_mut()?
@@ -1031,6 +1031,16 @@ impl Board {
         }
         Ok(self.board()?.now())
     }
+    /// Opt in to ending a run when a device deadline passes and every released
+    /// core is still waiting; `idle_stopped` reports that outcome.
+    fn set_idle_stop(&self, enabled: bool) -> PyResult<()> {
+        self.board()?.set_idle_stop(enabled);
+        Ok(())
+    }
+    #[getter]
+    fn idle_stopped(&self) -> PyResult<bool> {
+        Ok(self.board()?.idle_stopped())
+    }
     #[getter]
     fn quiescent(&self) -> PyResult<bool> {
         if let Some(Backend::Xp4(session)) = &self.backend {
@@ -1113,6 +1123,11 @@ impl Board {
             fujimod_emulator::board::continuation::ContinuationStop::Device { id } => {
                 result.set_item("kind", "device")?;
                 result.set_item("id", id)?;
+                let name = self.session()?.nodes.iter()
+                    .find(|(_, node)| *node == id)
+                    .map(|(name, _)| name)
+                    .ok_or_else(|| error("Continuation stop names an absent device".into()))?;
+                result.set_item("device", name)?;
             }
         }
         Ok(Some(result))
@@ -1596,6 +1611,9 @@ impl Board {
             .armv7a_exception_entries(core)
             .map_err(error)?;
         Ok((n.irq, n.undefined, n.data_abort, n.prefetch_abort))
+    }
+    fn display_frame_count(&self, output: usize) -> PyResult<u64> {
+        self.board()?.display_frame_count(output).map_err(error)
     }
     fn device_states(&self, kind: &str) -> PyResult<String> {
         serde_json::to_string(&self.board()?.device_states(kind).map_err(error)?)

@@ -2,6 +2,7 @@
 //! missing sectors contain zeros. Media outlives controller resets.
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 pub mod faults;
 
@@ -17,19 +18,31 @@ pub struct Card {
     sectors: u32,
     max_dirty: usize,
     #[serde(with = "sector_bytes")]
-    data: BTreeMap<u32, Vec<u8>>,
+    data: BTreeMap<u32, Arc<[u8]>>,
     revision: u64,
 }
 
 mod sector_bytes {
     use super::*;
+    use serde::de::{MapAccess, Visitor};
+    use serde::ser::SerializeMap;
+
+    struct Bytes<'a>(&'a [u8]);
+    impl serde::Serialize for Bytes<'_> {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            serializer.serialize_bytes(self.0)
+        }
+    }
+    struct Sector(Arc<[u8]>);
+    impl<'de> serde::Deserialize<'de> for Sector {
+        fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            crate::checkpoint::shared_bytes::deserialize(deserializer).map(Self)
+        }
+    }
     pub fn serialize<S: serde::Serializer>(
-        sectors: &BTreeMap<u32, Vec<u8>>,
+        sectors: &BTreeMap<u32, Arc<[u8]>>,
         serializer: S,
     ) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeMap;
-        #[derive(Serialize)]
-        struct Bytes<'a>(#[serde(with = "crate::checkpoint::bytes")] &'a [u8]);
         let mut map = serializer.serialize_map(Some(sectors.len()))?;
         for (address, bytes) in sectors {
             map.serialize_entry(address, &Bytes(bytes))?;
@@ -38,8 +51,22 @@ mod sector_bytes {
     }
     pub fn deserialize<'de, D: serde::Deserializer<'de>>(
         deserializer: D,
-    ) -> Result<BTreeMap<u32, Vec<u8>>, D::Error> {
-        BTreeMap::deserialize(deserializer)
+    ) -> Result<BTreeMap<u32, Arc<[u8]>>, D::Error> {
+        struct Sectors;
+        impl<'de> Visitor<'de> for Sectors {
+            type Value = BTreeMap<u32, Arc<[u8]>>;
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("SD sector map")
+            }
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                let mut sectors = BTreeMap::new();
+                while let Some((address, Sector(bytes))) = map.next_entry::<u32, Sector>()? {
+                    sectors.insert(address, bytes);
+                }
+                Ok(sectors)
+            }
+        }
+        deserializer.deserialize_map(Sectors)
     }
 }
 impl Card {
@@ -121,7 +148,7 @@ impl Card {
     pub fn nonzero_sectors(&self) -> impl Iterator<Item = (u32, &[u8])> {
         self.data
             .iter()
-            .map(|(&lba, bytes)| (lba, bytes.as_slice()))
+            .map(|(&lba, bytes)| (lba, bytes.as_ref()))
     }
     pub fn dirty_sectors(&self) -> usize {
         self.data.len()
@@ -142,7 +169,7 @@ impl Card {
             return Err("SD sector beyond card capacity".into());
         }
         static ZERO: [u8; SECTOR] = [0; SECTOR];
-        Ok(self.data.get(&lba).map_or(&ZERO, Vec::as_slice))
+        Ok(self.data.get(&lba).map_or(&ZERO[..], |bytes| bytes.as_ref()))
     }
     pub fn read_bytes(&self, offset: u64, out: &mut [u8]) -> Result<(), String> {
         self.byte_range(offset, out.len())?;
@@ -211,10 +238,7 @@ impl Card {
             if block.iter().all(|b| *b == 0) {
                 self.data.remove(&lba);
             } else {
-                self.data
-                    .entry(lba)
-                    .or_insert_with(|| vec![0; SECTOR])
-                    .copy_from_slice(&block);
+                self.data.insert(lba, Arc::from(&block[..]));
             }
         }
         self.revision = revision;
@@ -250,7 +274,7 @@ mod tests {
         let identity = a.clone();
         assert_eq!(a, identity);
         let mut b = a.clone();
-        b.data.get_mut(&1).unwrap()[511] ^= 1;
+        Arc::make_mut(b.data.get_mut(&1).unwrap())[511] ^= 1;
         assert_ne!(b, identity);
         b = a.clone();
         let bytes = b.data.remove(&1).unwrap();
@@ -280,6 +304,8 @@ mod tests {
         assert!(saved.bytes() < 1200);
         let mut restored: Card = saved.decode("card").unwrap();
         assert_eq!(serde_json::to_value(&restored).unwrap(), before);
+        let from_json: Card = serde_json::from_value(before.clone()).unwrap();
+        assert_eq!(from_json, card);
         let mut actual = vec![0; 1024];
         restored.read_bytes(512, &mut actual).unwrap();
         assert_eq!(actual, payload);

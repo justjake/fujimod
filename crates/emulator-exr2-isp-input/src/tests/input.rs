@@ -728,7 +728,7 @@ fn raw_dma_refuses_out_of_raster_windows_and_unmodeled_transport_selections() {
     for (offset, value, reason) in [
         (0x24, 3, "bounded input window"), // Odd active width cannot form packed pairs.
         (0x14, 0x80003, "bounded input window"),
-        (0x14, 1, "bounded input window"),
+        (0x14, 5 << 16 | 3, "bounded input window"), // Window [5, 9) exceeds the 8-column sensor.
         (0x18, 0x40000, "bounded input window"),
         (0x18, 4, "bounded input window"),
         (0x354, 0x10200000, "transport"),
@@ -835,9 +835,11 @@ fn packed_raw_readback_matches_u16_with_independent_row_padding() {
                 let b = a + 70;
                 let at = 0x8000 + y * pitch + packing.row_bytes(x);
                 match packing {
+                    // Packed12 stores U12 samples that still color restores
+                    // to the U14 domain of U16 RAW.
                     Packing::U16 => {
-                        h.ram[at..at + 2].copy_from_slice(&a.to_le_bytes());
-                        h.ram[at + 2..at + 4].copy_from_slice(&b.to_le_bytes());
+                        h.ram[at..at + 2].copy_from_slice(&(a << 2).to_le_bytes());
+                        h.ram[at + 2..at + 4].copy_from_slice(&(b << 2).to_le_bytes());
                     }
                     Packing::Packed12 => h.ram[at..at + 3].copy_from_slice(&[
                         a as u8,

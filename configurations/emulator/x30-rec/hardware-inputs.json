@@ -9,15 +9,15 @@
         "gpio_inputs": {
           "0": 3116,
           "2": 6656,
-          "3": 777,
+          "3": 841,
           "12": 128,
           "11": 1,
           "4": 32
         },
-        "profile_name": "X30 discovery: released DRIVE GPIO2.11 and FUNCTION2 GPIO11.0; Q, shutter and remaining inputs borrowed from X-E2S REC."
+        "profile_name": "X30 discovery: released DRIVE GPIO2.11 and FUNCTION2 GPIO11.0; focus selector S uses GPIO3.6 high / GPIO3.7 low (C: high/high; M: low/high); Q, shutter and remaining inputs borrowed from X-E2S REC."
       },
       "power": {
-        "profile_name": "X30 discovery: normal boot class0x40, ring contact enabled in MCU60 bit0, ADC9=0 selects RING_ON and ADC3=640 selects PROGRAM; remaining inputs borrowed.",
+        "profile_name": "X30 discovery: normal boot class0x40, ring contact enabled in MCU60 bit0, ADC9=0 selects RING_ON and ADC3=640 selects PROGRAM; analog control ring ADC6/7=750 starts high/high, with synthetic 250/750 phase levels around calibrated 494/506 Schmitt thresholds and unmeasured 120000-tick spacing; remaining inputs borrowed.",
         "adc_samples": [
           0,
           0,
@@ -25,8 +25,8 @@
           640,
           534,
           640,
-          512,
-          825,
+          750,
+          750,
           1023,
           0,
           0,

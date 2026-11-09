@@ -729,7 +729,7 @@ fn rotary_admission_is_atomic_and_in_flight_phases_replay_through_the_command_ap
         graph["contactDriver"] = json!({"poll_ticks":10,"max_phase_ticks":1000,
             "catalog":[{"id":"lever","label":"Lever","kind":"selector","supported":true},{"id":"ring","label":"Ring","kind":"rotary","supported":true,"relative":true}],
             "actuators":[{"id":"lever","momentary":false,"states":[{"position":"off","ready":[],"expected":[]},{"position":"on","ready":[],"expected":[]}]}],
-            "interfaces":[{"kind":"rotary","id":"ring","node":"encoder","cycles_per_step":-1}]});
+            "interfaces":[{"kind":"rotary","id":"ring","node":"encoder","edges_per_step":-4}]});
     });
     command(&mut h, "checkpoint", json!({}), &[]).unwrap();
     let cold = command(&mut h, "complete_state", json!({}), &[]).unwrap().0;

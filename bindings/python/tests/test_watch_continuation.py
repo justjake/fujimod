@@ -77,11 +77,11 @@ def test_native_failure_read_does_not_watch_devices_or_memory():
     with board(1, interrupt_controller=True) as machine:
         machine.native.read_set_begin()
         assert machine.native.failure() == "null"
-        assert json.loads(machine.native.read_set_end()) == dict(stores=[], devices=[])
+        assert json.loads(machine.native.read_set_end()) == dict(stores=[], devices=[], contacts=False)
 
         machine.native.read_set_begin()
         assert json.loads(machine.native.observation())["failure"] is None
-        assert json.loads(machine.native.read_set_end()) == dict(stores=[], devices=["irq0"])
+        assert json.loads(machine.native.read_set_end()) == dict(stores=[], devices=["irq0"], contacts=False)
 
         machine.write_memory(0x10000, struct.pack("<I", 0xE5910000))
         machine.cpus[0].reg_write({"Arm32": {"R": 1}}, 0xDEAD0000)
@@ -91,7 +91,7 @@ def test_native_failure_read_does_not_watch_devices_or_memory():
         machine.native.read_set_begin()
         failure = json.loads(machine.native.failure())
         assert isinstance(failure, str) and failure
-        assert json.loads(machine.native.read_set_end()) == dict(stores=[], devices=[])
+        assert json.loads(machine.native.read_set_end()) == dict(stores=[], devices=[], contacts=False)
         assert failure == json.loads(machine.native.observation())["failure"]
 
 
@@ -102,12 +102,12 @@ def test_inspection_observation_matches_tracked_without_watching_devices():
         machine.native.read_set_begin()
         tracked = json.loads(machine.native.observation())
         assert json.loads(machine.native.read_set_end()) == dict(
-            stores=[], devices=["irq0"]
+            stores=[], devices=["irq0"], contacts=False
         )
 
         machine.native.read_set_begin()
         inspected = json.loads(machine.native.inspection_observation())
-        assert json.loads(machine.native.read_set_end()) == dict(stores=[], devices=[])
+        assert json.loads(machine.native.read_set_end()) == dict(stores=[], devices=[], contacts=False)
 
         assert inspected == tracked
         assert inspected["interrupt_controllers"]
@@ -129,7 +129,7 @@ def test_native_watches_preserve_counts_ticks_and_complete_state(quantum):
         assert results[0] == results[1]
         machine.native.read_set_begin()
         machine.read_physical(0x12000,4)
-        assert json.loads(machine.native.read_set_end()) == dict(stores=[[0x12000,0x12004]],devices=[])
+        assert json.loads(machine.native.read_set_end()) == dict(stores=[[0x12000,0x12004]],devices=[], contacts=False)
 
 
 
@@ -137,12 +137,12 @@ def test_native_device_publication_stops_and_read_sets_resolve_graph_names():
     with board(7) as machine:
         machine.native.read_set_begin()
         machine.native.device_states('exr2-block-86000')
-        assert json.loads(machine.native.read_set_end()) == dict(stores=[],devices=['idle'])
+        assert json.loads(machine.native.read_set_end()) == dict(stores=[],devices=['idle'], contacts=False)
         machine.write_memory(0x10000,struct.pack('<3I',0xe5810000,0xe3a00063,0xeafffffe))
         machine.cpus[0].reg_write({'Arm32':{'R':0}},0x300)
         machine.cpus[0].reg_write({'Arm32':{'R':1}},0xfff86000)
         assert machine.run(20,device_watches=['idle'])
-        assert machine.native.continuation_stop() == {'kind': 'device', 'id': 0}
+        assert machine.native.continuation_stop() == {'kind': 'device', 'id': 0, 'device': 'idle'}
         assert machine.instructions == 1
         assert machine.cpus[0].reg_read('Pc') == 0x10004
         assert machine.cpus[0].reg_read({'Arm32':{'R':0}}) == 0x300

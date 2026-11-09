@@ -690,7 +690,9 @@ pub fn build(
                 let model = fujimod_emulator_parts_controls::encoder::Encoder::new(
                     options,
                     fujimod_emulator_parts_controls::encoder::Wiring {
-                        gpio: Box::new(wiring),
+                        outputs: fujimod_emulator_parts_controls::encoder::OutputWiring::Gpio(
+                            Box::new(wiring),
+                        ),
                         counter: None,
                     },
                 )?;

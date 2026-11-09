@@ -94,6 +94,11 @@ fn checkpoint_graph_resources_restore_existing_stream_scene_and_signal_handles()
     stream.lock().unwrap().pixels = vec![9, 8, 7, 6].into();
     let before = resources.fingerprint().unwrap();
     let saved = resources.checkpoint().unwrap();
+    let readable = saved.to_json().unwrap();
+    assert_eq!(readable["wires"]["cable"], serde_json::json!(false));
+    assert_eq!(readable["wires"]["focus"], serde_json::json!(23));
+    assert!(readable["images"]["preview"].is_object());
+    assert!(readable["sensors"]["sensor"]["current"].is_object());
     let captured = images(&resources).unwrap().checkpoint().unwrap();
     let captured = checkpoint::saved_sensor(&captured.sensors["sensor"]).unwrap();
     assert!(Arc::ptr_eq(

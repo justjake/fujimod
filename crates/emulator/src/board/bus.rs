@@ -20,6 +20,10 @@ impl Mode {
         }
     }
 }
+enum Publication {
+    Generation(u64),
+    State(Value),
+}
 struct Window {
     mappings: Vec<Mapping>,
     device: Box<dyn Device>,
@@ -316,15 +320,26 @@ impl Bus {
     ) {
         self.continuation = stops;
     }
-    fn publication_before(&self, id: usize) -> Option<Value> {
+    fn publication_before(&self, id: usize) -> Option<Publication> {
         self.continuation
             .as_ref()
             .filter(|s| s.borrow().devices.contains(&id))
-            .map(|_| self.windows[id].device.save())
+            .map(|_| {
+                let device = &self.windows[id].device;
+                match device.publication_generation() {
+                    Some(generation) => Publication::Generation(generation),
+                    None => Publication::State(device.save()),
+                }
+            })
     }
-    fn publication_after(&self, id: usize, before: Option<Value>) {
+    fn publication_after(&self, id: usize, before: Option<Publication>) {
         if let Some(before) = before {
-            if before != self.windows[id].device.save() {
+            let device = &self.windows[id].device;
+            let changed = match before {
+                Publication::Generation(generation) => device.publication_generation() != Some(generation),
+                Publication::State(state) => device.save() != state,
+            };
+            if changed {
                 if let Some(stops) = &self.continuation {
                     stops.borrow_mut().device(id);
                 }

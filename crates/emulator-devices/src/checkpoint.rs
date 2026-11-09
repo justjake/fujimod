@@ -44,6 +44,9 @@ impl Checkpoint {
     pub fn children(&self) -> &[Checkpoint] {
         &self.children
     }
+    pub fn kind(&self) -> &str {
+        self.kind.as_ref()
+    }
     pub fn with_blobs(mut self, blobs: Vec<Arc<[u8]>>) -> Self {
         self.blobs = blobs;
         self
@@ -229,14 +232,38 @@ pub mod array {
 /// Encode contiguous byte storage as a CBOR byte string. JSON retains its
 /// ordinary integer-array representation, including diagnostic state JSON.
 pub mod bytes {
-    use serde::{Deserialize, Deserializer, Serializer};
+    use serde::{Deserializer, Serializer};
     pub fn serialize<S: Serializer>(value: &[u8], serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_bytes(value)
     }
     pub fn deserialize<'de, D: Deserializer<'de>, B: From<Vec<u8>>>(
         deserializer: D,
     ) -> Result<B, D::Error> {
-        Ok(Vec::<u8>::deserialize(deserializer)?.into())
+        struct Bytes;
+        impl<'de> serde::de::Visitor<'de> for Bytes {
+            type Value = Vec<u8>;
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("bytes")
+            }
+            fn visit_bytes<E: serde::de::Error>(self, bytes: &[u8]) -> Result<Self::Value, E> {
+                Ok(bytes.to_vec())
+            }
+            fn visit_byte_buf<E: serde::de::Error>(self, bytes: Vec<u8>) -> Result<Self::Value, E> {
+                Ok(bytes)
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut bytes = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+                while let Some(byte) = seq.next_element::<u8>()? {
+                    bytes.push(byte);
+                }
+                Ok(bytes)
+            }
+        }
+        // CBOR byte strings decode in bulk; JSON keeps its integer-array form.
+        Ok(deserializer.deserialize_byte_buf(Bytes)?.into())
     }
 }
 
@@ -354,6 +381,8 @@ mod tests {
         let snapshot = super::Checkpoint::encode("buffers", &expected).unwrap();
         assert!(snapshot.bytes() < 8250);
         let decoded: Buffers = snapshot.decode("buffers").unwrap();
+        assert_eq!(decoded, expected);
+        let decoded: Buffers = serde_json::from_value(serde_json::to_value(&expected).unwrap()).unwrap();
         assert_eq!(decoded, expected);
         assert_eq!(
             serde_json::to_value(&decoded).unwrap(),

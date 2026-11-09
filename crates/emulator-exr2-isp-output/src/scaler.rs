@@ -150,15 +150,7 @@ impl Scaler {
         matches!(o,0|4|8|0x10|0x14|0x18|0x20..=0x2c|0x40..=0x64|0x70..=0x80)
     }
     fn start(&mut self, cx: &Cx<'_>, mode: u32) -> Result<(), String> {
-        // A plain copy can be programmed with geometry and no step registers.
-        // With equal source and destination sizes that is a 1:1 copy; other
-        // sizes without programmed steps remain unmodeled.
-        let mut r = self.r.clone();
-        if r[0x40 / 4] == 0 && r[0x54 / 4] == 0 && r[0x18 / 4] == r[0x28 / 4] {
-            r[0x40 / 4] = 65536;
-            r[0x54 / 4] = 65536;
-        }
-        let r = &r;
+        let r = &self.r;
         let src = Raster {
             address: (r[0x10 / 4] & 0x3fffffff) as u64,
             width: (r[0x18 / 4] & 8191) as usize,
@@ -176,6 +168,16 @@ impl Scaler {
         let centered = [0x44, 0x4c, 0x50, 0x5c, 0x60, 0x64]
             .iter()
             .any(|&o| r[o / 4] != 0);
+        // The driver programs +0x40..+0x64 only when a request carries a
+        // transform; otherwise the block keeps its prior contents. A block
+        // never written (zero) with equal source and destination geometry is
+        // a 1:1 copy. Zero steps with any other geometry stay refused below.
+        let steps = match [r[0x40 / 4], r[0x54 / 4]] {
+            [0, 0] if !centered && src.width == dst.width && src.height == dst.height => {
+                [0x10000; 2]
+            }
+            steps => steps,
+        };
         if centered
             && [0x2c, 0x60, 0x64]
                 .iter()
@@ -195,9 +197,7 @@ impl Scaler {
                 .any(|v| v % 8 != 0)
             || src.pitch > 16384
             || dst.pitch > 16384
-            || ![r[0x40 / 4], r[0x54 / 4]]
-                .iter()
-                .all(|&v| v > 0 && v <= 0x1ffff)
+            || !steps.iter().all(|&v| v > 0 && v <= 0x1ffff)
         {
             return Err("scaler geometry/transform is unsupported".into());
         }
@@ -209,8 +209,7 @@ impl Scaler {
         let tagged = mode == 1 && has_zero_chroma(&self.source, &src);
         let identity = src.width == dst.width
             && src.height == dst.height
-            && r[0x40 / 4] == 65536
-            && r[0x54 / 4] == 65536
+            && steps == [65536; 2]
             && [0x2c, 0x44, 0x4c, 0x50, 0x5c]
                 .iter()
                 .all(|&o| r[o / 4] == 0)
@@ -253,7 +252,7 @@ impl Scaler {
                 src.pitch,
                 dst.width,
                 dst.height,
-                [r[0x40 / 4], r[0x54 / 4]],
+                steps,
                 &mut self.dma.pixels,
             ) {
                 self.dma.cancel();

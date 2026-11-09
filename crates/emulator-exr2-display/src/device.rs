@@ -1,7 +1,10 @@
 //! Native scanout registers and reset deadlines. Host rendering is observational.
-use fujimod_framebuffer_exr2::{self as scanout, Observation, BackdropProfile, Compositor, GraphicsProfile, RectangleComposition, ScanoutHost};
-use fujimod_framebuffer::frame::Frame;
 use fujimod_emulator_devices::{Action, Cx, Device, Record, Value as EventValue};
+use fujimod_framebuffer::frame::Frame;
+use fujimod_framebuffer_exr2::{
+    self as scanout, BackdropProfile, Compositor, GraphicsProfile, Observation,
+    RectangleComposition, ScanoutHost,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -20,11 +23,12 @@ pub struct Options {
 }
 
 pub struct Scanout {
+    publication_generation: u64,
     compositor: Compositor,
     reset_ticks: u64,
     deadlines: BTreeMap<u64, u64>,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Saved {
     pipes: [scanout::Pipe; 2],
@@ -53,6 +57,7 @@ impl Scanout {
             .map(|v| RectangleComposition::from_name(v).ok_or("unknown rectangle interpretation"))
             .transpose()?;
         Ok(Self {
+            publication_generation: 0,
             compositor: Compositor {
                 pipes: Default::default(),
                 packing: options.packing,
@@ -163,11 +168,76 @@ impl Scanout {
         Ok(saved)
     }
 }
+impl Scanout {
+    fn publication_state(&self) -> Saved {
+        Saved {
+            pipes: self.compositor.pipes.clone(),
+            deadlines: self.deadlines.clone(),
+        }
+    }
+}
+impl Scanout {
+    fn write_published(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
+        if scanout::address(address, size.into()).is_err() {
+            cx.unmodeled();
+            return;
+        }
+        let Ok(value) = u32::try_from(value) else {
+            cx.fail("scanout value exceeds 32 bits");
+            return;
+        };
+        if self
+            .compositor
+            .pipes
+            .iter()
+            .any(|p| p.generation >= (u64::MAX >> 2) as i64)
+        {
+            cx.fail("scanout reset generation exhausted");
+            return;
+        }
+        let mut actions = Vec::new();
+        if let Err(e) = write_registers(
+            &mut self.compositor,
+            cx.cpu as i64,
+            address,
+            size.into(),
+            value,
+            &mut actions,
+        ) {
+            cx.fail(e.0);
+            return;
+        }
+        self.actions(cx, actions);
+    }
+    fn advance_published(&mut self, cx: &mut Cx<'_>) {
+        while let Some((token, due)) = self
+            .deadlines
+            .iter()
+            .map(|(t, d)| (*t, *d))
+            .min_by_key(|(t, d)| (*d, *t))
+        {
+            if due > cx.now() {
+                break;
+            }
+            self.deadlines.remove(&token);
+            let mut actions = Vec::new();
+            complete(&mut self.compositor, token, cx.now() as i64, &mut actions);
+            self.actions(cx, actions);
+        }
+    }
+}
 impl Device for Scanout {
-    fn scanout_source(&self) -> Option<&(dyn fujimod_emulator_devices::capability::ScanoutSource + 'static)> {
+    fn publication_generation(&self) -> Option<u64> {
+        Some(self.publication_generation)
+    }
+    fn scanout_source(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::ScanoutSource + 'static)> {
         Some(self)
     }
-    fn scanout_source_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::ScanoutSource + 'static)> {
+    fn scanout_source_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::ScanoutSource + 'static)> {
         Some(self)
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
@@ -179,11 +249,20 @@ impl Device for Scanout {
             },
         )
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_state(saved.decode(self.name())?).map(|_| ())
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let state = self.validate_state(saved.decode(self.name())?)?;
+        if self.compositor.pipes != state.pipes || self.deadlines != state.deadlines {
+            self.publication_generation = self.publication_generation.wrapping_add(1);
+        }
         self.compositor.pipes = state.pipes;
         self.deadlines = state.deadlines;
         Ok(())
@@ -207,50 +286,29 @@ impl Device for Scanout {
         }
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
-        if scanout::address(address, size.into()).is_err() {
-            cx.unmodeled();
-            return;
+        let before = self.publication_state();
+        let result = self.write_published(cx, address, size, value);
+        if self.publication_state() != before {
+            self.publication_generation = self.publication_generation.wrapping_add(1);
         }
-        let Ok(value) = u32::try_from(value) else {
-            cx.fail("scanout value exceeds 32 bits");
-            return;
-        };
-        if self
-            .compositor
-            .pipes
-            .iter()
-            .any(|p| p.generation >= (u64::MAX >> 2) as i64)
-        {
-            cx.fail("scanout reset generation exhausted");
-            return;
-        }
-        let mut actions = Vec::new();
-        if let Err(e) =
-            write_registers(&mut self.compositor, cx.cpu as i64, address, size.into(), value, &mut actions)
-        {
-            cx.fail(e.0);
-            return;
-        }
-        self.actions(cx, actions);
+        result
     }
     fn next_deadline(&self, _now: u64) -> Option<u64> {
         self.deadlines.values().min().copied()
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
-        while let Some((token, due)) = self
-            .deadlines
-            .iter()
-            .map(|(t, d)| (*t, *d))
-            .min_by_key(|(t, d)| (*d, *t))
+        if self
+            .next_deadline(cx.now())
+            .is_none_or(|due| due > cx.now())
         {
-            if due > cx.now() {
-                break;
-            }
-            self.deadlines.remove(&token);
-            let mut actions = Vec::new();
-            complete(&mut self.compositor, token, cx.now() as i64, &mut actions);
-            self.actions(cx, actions);
+            return;
         }
+        let before = self.publication_state();
+        let result = self.advance_published(cx);
+        if self.publication_state() != before {
+            self.publication_generation = self.publication_generation.wrapping_add(1);
+        }
+        result
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
         scanout::address(address, size.into()).is_ok()
@@ -264,6 +322,9 @@ impl Device for Scanout {
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let saved: Saved = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         let saved = self.validate_state(saved)?;
+        if self.compositor.pipes != saved.pipes || self.deadlines != saved.deadlines {
+            self.publication_generation = self.publication_generation.wrapping_add(1);
+        }
         self.compositor.pipes = saved.pipes;
         self.deadlines = saved.deadlines;
         Ok(())
@@ -337,6 +398,36 @@ mod tests {
             .unwrap()
             .rgb
             .unwrap()
+    }
+    #[test]
+    fn publication_generation_matches_register_reset_and_restore_changes() {
+        let mut device = model();
+        let mut host = TestHost::new();
+        for value in [0x10000, 0x10000, 0] {
+            let before = device.save();
+            let generation = device.publication_generation();
+            write(&mut device, &mut host, scanout::BASES[0], value);
+            assert_eq!(
+                device.publication_generation() != generation,
+                device.save() != before
+            );
+        }
+        let saved = device.checkpoint().unwrap();
+        for now in [99, 100, 101] {
+            let before = device.save();
+            let generation = device.publication_generation();
+            advance(&mut device, &mut host, now);
+            assert_eq!(
+                device.publication_generation() != generation,
+                device.save() != before
+            );
+        }
+        let generation = device.publication_generation();
+        device.restore_checkpoint(&saved).unwrap();
+        assert_ne!(device.publication_generation(), generation);
+        let generation = device.publication_generation();
+        device.restore_checkpoint(&saved).unwrap();
+        assert_eq!(device.publication_generation(), generation);
     }
     #[test]
     fn group1_format11_abgr_uses_byte_zero_alpha() {
@@ -507,7 +598,10 @@ mod tests {
                     let address = (address & 0x3fffffff) as usize;
                     Ok(memory[address..address + count].to_vec())
                 };
-                let mut observer = Observation { read: &mut read, diagnostic_hashes: true };
+                let mut observer = Observation {
+                    read: &mut read,
+                    diagnostic_hashes: true,
+                };
                 let before = d.save();
                 let frame = d.frame(pipe, true, &mut observer).unwrap().unwrap();
                 assert_eq!(frame.raw, vec![0; 8 * 6 * 2]);
@@ -607,7 +701,15 @@ impl fujimod_emulator_devices::capability::ScanoutSource for Scanout {
         read: &mut dyn FnMut(u64, usize) -> std::result::Result<Vec<u8>, String>,
         diagnostic_hashes: bool,
     ) -> std::result::Result<Option<fujimod_framebuffer::frame::Frame>, String> {
-        Scanout::frame(self, instance, pixels, &mut Observation { read, diagnostic_hashes })
+        Scanout::frame(
+            self,
+            instance,
+            pixels,
+            &mut Observation {
+                read,
+                diagnostic_hashes,
+            },
+        )
     }
     fn main_frame(
         &self,
@@ -616,7 +718,15 @@ impl fujimod_emulator_devices::capability::ScanoutSource for Scanout {
         read: &mut dyn FnMut(u64, usize) -> std::result::Result<Vec<u8>, String>,
         diagnostic_hashes: bool,
     ) -> std::result::Result<Option<fujimod_framebuffer::frame::Frame>, String> {
-        Scanout::main_frame(self, instance, pixels, &mut Observation { read, diagnostic_hashes })
+        Scanout::main_frame(
+            self,
+            instance,
+            pixels,
+            &mut Observation {
+                read,
+                diagnostic_hashes,
+            },
+        )
     }
 }
 
@@ -634,47 +744,53 @@ pub fn reset_fields(token: u64) -> (usize, i64, i64) {
 }
     /// Guest writes return their record and two-tick reset deadline in order.
 fn write_registers(
-        compositor: &mut Compositor,
-        cpu: i64,
-        a: u64,
-        size: u32,
-        v: u32,
-        actions: &mut Vec<fujimod_emulator_devices::Action>,
-    ) -> fujimod_framebuffer::Result<()> {
-        let (i, o) = scanout::address(a, size)?;
-        let p = &mut compositor.pipes[i];
-        let old = p.regs.get_or_zero(o);
-        p.regs.insert(o, v);
-        p.written.insert(o);
-        if o == 0 && old & 0x10000 != 0 && v & 0x10000 == 0 {
-            // Clearing bit 16 starts reset. No other bit is made ready;
-            // existing configuration is retained (reset behavior is unmeasured).
-            p.generation += 1;
-            actions.push(fujimod_emulator_devices::Action::Log(Record::new(
-                "Image-engine reset start",
-                [("instance", EventValue::int(i as i64)), ("cpu", EventValue::int(cpu))],
-            )));
-            actions.push(fujimod_emulator_devices::Action::Schedule {
-                delay: 2,
-                token: reset_token(i, p.generation, cpu),
-            });
-        }
-        Ok(())
+    compositor: &mut Compositor,
+    cpu: i64,
+    a: u64,
+    size: u32,
+    v: u32,
+    actions: &mut Vec<fujimod_emulator_devices::Action>,
+) -> fujimod_framebuffer::Result<()> {
+    let (i, o) = scanout::address(a, size)?;
+    let p = &mut compositor.pipes[i];
+    let old = p.regs.get_or_zero(o);
+    p.regs.insert(o, v);
+    p.written.insert(o);
+    if o == 0 && old & 0x10000 != 0 && v & 0x10000 == 0 {
+        // Clearing bit 16 starts reset. No other bit is made ready;
+        // existing configuration is retained (reset behavior is unmeasured).
+        p.generation += 1;
+        actions.push(fujimod_emulator_devices::Action::Log(Record::new(
+            "Image-engine reset start",
+            [
+                ("instance", EventValue::int(i as i64)),
+                ("cpu", EventValue::int(cpu)),
+            ],
+        )));
+        actions.push(fujimod_emulator_devices::Action::Schedule {
+            delay: 2,
+            token: reset_token(i, p.generation, cpu),
+        });
     }
+    Ok(())
+}
 fn complete(
-        compositor: &mut Compositor,
-        token: u64,
-        _now: i64,
-        actions: &mut Vec<fujimod_emulator_devices::Action>,
-    ) {
-        let (i, generation, cpu) = reset_fields(token);
-        let p = &mut compositor.pipes[i];
-        if generation == p.generation {
-            p.regs.insert(0, p.regs.get_or_zero(0) | 0x10000);
-            p.reset_completions += 1;
-            actions.push(fujimod_emulator_devices::Action::Log(Record::new(
-                "Image-engine reset complete",
-                [("instance", EventValue::int(i as i64)), ("cpu", EventValue::int(cpu))],
-            )));
-        }
+    compositor: &mut Compositor,
+    token: u64,
+    _now: i64,
+    actions: &mut Vec<fujimod_emulator_devices::Action>,
+) {
+    let (i, generation, cpu) = reset_fields(token);
+    let p = &mut compositor.pipes[i];
+    if generation == p.generation {
+        p.regs.insert(0, p.regs.get_or_zero(0) | 0x10000);
+        p.reset_completions += 1;
+        actions.push(fujimod_emulator_devices::Action::Log(Record::new(
+            "Image-engine reset complete",
+            [
+                ("instance", EventValue::int(i as i64)),
+                ("cpu", EventValue::int(cpu)),
+            ],
+        )));
     }
+}

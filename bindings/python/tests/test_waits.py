@@ -161,6 +161,7 @@ def test_device_publications_at_the_current_tick_are_progress():
     def publish(*args, **kwargs):
         nonlocal publications
         publications += 1
+        board.native.stop = {'kind': 'device', 'id': 0, 'device': 'sink'}
         return True
 
     def ready():
@@ -205,7 +206,7 @@ def test_stop_profile_aggregates_causes_per_wait():
         'address': 8,
         'change_confirmed': True,
     }
-    board.stop_events = [store_stop, {'kind': 'device', 'id': 2}, store_stop]
+    board.stop_events = [store_stop, {'kind': 'device', 'id': 2, 'device': 'timer'}, store_stop]
     report = WaitStops()
 
     assert wait_until(board, lambda: board.read(8) >= 9, 'profiled',
@@ -219,7 +220,7 @@ def test_stop_profile_aggregates_causes_per_wait():
             ),
             2,
         ),
-        ContinuationStopCount(ContinuationStopCause('device', device_id=2), 1),
+        ContinuationStopCount(ContinuationStopCause('device', device_id=2, device='timer'), 1),
     ]
     assert report.continuation_stop_overflow == 0
     assert board.native.stop_calls == 3
@@ -228,8 +229,8 @@ def test_stop_profile_aggregates_causes_per_wait():
 def test_stop_profile_bounds_distinct_causes_and_counts_overflow():
     board = Board()
     event_count = MAX_CONTINUATION_STOP_CAUSES + 3
-    board.stop_events = [{'kind': 'device', 'id': index} for index in range(event_count)]
-    board.stop_events[-1] = {'kind': 'device', 'id': 0}
+    board.stop_events = [{'kind': 'device', 'id': index, 'device': f'device-{index}'} for index in range(event_count)]
+    board.stop_events[-1] = {'kind': 'device', 'id': 0, 'device': 'device-0'}
     report = WaitStops()
 
     assert wait_until(board, lambda: board.device('timer') >= event_count * 3,
@@ -238,14 +239,14 @@ def test_stop_profile_bounds_distinct_causes_and_counts_overflow():
 
     assert len(report.continuation_stops) == MAX_CONTINUATION_STOP_CAUSES
     assert report.continuation_stops[0] == ContinuationStopCount(
-        ContinuationStopCause('device', device_id=0), 2)
+        ContinuationStopCause('device', device_id=0, device='device-0'), 2)
     assert report.continuation_stop_overflow == 2
     assert sum(item.count for item in report.continuation_stops) + report.continuation_stop_overflow == event_count
 
 
 def test_profiled_wait_metrics_are_json_serializable():
     board = Board()
-    board.stop_events = [{'kind': 'device', 'id': 4}]
+    board.stop_events = [{'kind': 'device', 'id': 4, 'device': 'timer'}]
     report = WaitStops()
 
     assert wait_until(board, lambda: board.device('timer') >= 3, 'serializable',
@@ -258,7 +259,7 @@ def test_profiled_wait_metrics_are_json_serializable():
     ), default=lambda item: item.__dict__)
     decoded = json.loads(serialized)
     assert decoded['continuation_stops'] == [
-        {'cause': {'kind': 'device', 'device_id': 4, 'range_index': None,
+        {'cause': {'kind': 'device', 'device_id': 4, 'device': 'timer', 'range_index': None,
                    'physical_range': None, 'address': None, 'change_confirmed': None},
          'count': 1}
     ]

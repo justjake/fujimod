@@ -162,17 +162,51 @@ fn read_guest_draw_memory(
     Ok(bytes)
 }
 
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct Publication {
+    registers: BTreeMap<u16, u32>,
+    vertices_executed: u64,
+    last_output: Option<[[Option<f32>; 4]; 16]>,
+    code_words: usize,
+    host_rasterizer: &'static str,
+    host_shader_cache: Option<ShaderCachePublication>,
+}
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+struct ShaderCachePublication {
+    vertex_modules: usize,
+    fragment_modules: usize,
+    pipelines: usize,
+}
+
 impl Engine {
-    pub fn diagnostics(&self) -> serde_json::Value {
+    /// Exact viewer publication without serializing register or shader state.
+    pub fn publication_state(&self) -> Publication {
         #[cfg(not(target_os = "emscripten"))]
         let host_shader_cache = {
             let (vertex_modules, fragment_modules, pipelines) =
                 gpu_draw::shader_cache_creation_counts();
-            serde_json::json!({"vertex_modules":vertex_modules,"fragment_modules":fragment_modules,"pipelines":pipelines})
+            Some(ShaderCachePublication {
+                vertex_modules,
+                fragment_modules,
+                pipelines,
+            })
         };
         #[cfg(target_os = "emscripten")]
-        let host_shader_cache = serde_json::Value::Null;
-        serde_json::json!({"registers":self.regs,"vertices_executed":self.vertices_executed,"last_output":self.last_output,"code_words":self.code.len(),"host_rasterizer":"CPU","host_shader_cache":host_shader_cache})
+        let host_shader_cache = None;
+        Publication {
+            registers: self.regs.clone(),
+            vertices_executed: self.vertices_executed,
+            // JSON represents nonfinite floats as null; preserve that equality.
+            last_output: self.last_output.map(|vectors| {
+                vectors.map(|vector| vector.map(|value| value.is_finite().then_some(value)))
+            }),
+            code_words: self.code.len(),
+            host_rasterizer: "CPU",
+            host_shader_cache,
+        }
+    }
+    pub fn diagnostics(&self) -> serde_json::Value {
+        serde_json::to_value(self.publication_state()).expect("typed GLES publication")
     }
     pub fn reg(&self, index: u16) -> u32 {
         self.regs.get(&index).copied().unwrap_or(0)
