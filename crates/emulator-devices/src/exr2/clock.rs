@@ -134,7 +134,10 @@ impl Clocks {
         self.output
             .0
             .store(self.state.registers[OUTPUT], Ordering::Relaxed);
-        self.output.2.store(self.state.registers[0x30 / 4] & 0x200 != 0, Ordering::Relaxed);
+        self.output.2.store(
+            self.state.registers[0x30 / 4] & 0x200 != 0,
+            Ordering::Relaxed,
+        );
     }
     fn index(address: u64, size: u8) -> Option<usize> {
         let offset = address.checked_sub(BASE)?;
@@ -207,7 +210,11 @@ impl Device for Clocks {
         };
         self.advance(cx);
         let value = self.state.registers[index]
-            | if index == 0x80 / 4 { self.state.sleep.mode } else { 0 };
+            | if index == 0x80 / 4 {
+                self.state.sleep.mode
+            } else {
+                0
+            };
         u64::from(if matches!(index, 14 | 16) && value & REQUEST != 0 {
             value | READY
         } else {
@@ -242,7 +249,9 @@ impl Device for Clocks {
         self.advance(cx);
         if address == SLEEP_MODE {
             if value & !u64::from(SLEEP_MODE_BITS) != u64::from(self.state.registers[index]) {
-                cx.fail("clock-ready status is read-only; only low-power mode bits 0-1 are writable");
+                cx.fail(
+                    "clock-ready status is read-only; only low-power mode bits 0-1 are writable",
+                );
                 return;
             }
             self.state.sleep.mode = value as u32 & SLEEP_MODE_BITS;

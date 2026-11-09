@@ -273,7 +273,9 @@ pub enum Model {
         options: serde_json::Value,
         wiring: serde_json::Value,
     },
-    ExrClocks { options: serde_json::Value },
+    ExrClocks {
+        options: serde_json::Value,
+    },
     ExrMemoryInterface,
     Clocks {
         options: clock::Options,
@@ -591,9 +593,15 @@ impl Model {
             Self::Power { gpio, .. } | Self::ContactActuator { gpio, .. } => {
                 refs.push(gpio.as_str())
             }
-            Self::SdHost { pins, clock_gate, .. } => {
-                if let Some(pins) = pins { refs.push(pins.gpio.as_str()); }
-                if let Some(clock) = clock_gate { refs.push(clock.as_str()); }
+            Self::SdHost {
+                pins, clock_gate, ..
+            } => {
+                if let Some(pins) = pins {
+                    refs.push(pins.gpio.as_str());
+                }
+                if let Some(clock) = clock_gate {
+                    refs.push(clock.as_str());
+                }
             }
             Self::ExternalFrames {
                 activity: Some(signal),
@@ -614,7 +622,9 @@ impl Model {
             Self::SerialChannel { gpio, endpoint, .. } => {
                 refs.push(gpio.as_str());
                 match endpoint {
-                    SerialEndpoint::LensUnit { pulses, gpio, .. } => refs.extend([pulses.as_str(), gpio.as_str()]),
+                    SerialEndpoint::LensUnit { pulses, gpio, .. } => {
+                        refs.extend([pulses.as_str(), gpio.as_str()])
+                    }
                     SerialEndpoint::WakeRegisters { clock, .. } => refs.push(clock.as_str()),
                     _ => {}
                 }
@@ -623,7 +633,9 @@ impl Model {
                 for route in routes {
                     refs.push(route.gpio.as_str());
                     match &route.endpoint {
-                        SerialEndpoint::LensUnit { pulses, gpio, .. } => refs.extend([pulses.as_str(), gpio.as_str()]),
+                        SerialEndpoint::LensUnit { pulses, gpio, .. } => {
+                            refs.extend([pulses.as_str(), gpio.as_str()])
+                        }
                         SerialEndpoint::WakeRegisters { clock, .. } => refs.push(clock.as_str()),
                         _ => {}
                     }
@@ -636,7 +648,9 @@ impl Model {
                 refs.extend(controllers.iter().map(String::as_str));
             }
             Self::GpioContactResponse { gpio, .. } => refs.push(gpio.as_str()),
-            Self::Encoder { gpio, adc, counter, .. } => {
+            Self::Encoder {
+                gpio, adc, counter, ..
+            } => {
                 refs.extend(gpio.as_deref());
                 refs.extend(adc.as_deref());
                 refs.extend(counter.as_deref());

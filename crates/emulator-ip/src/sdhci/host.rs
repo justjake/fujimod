@@ -195,7 +195,9 @@ impl SdHost {
         self
     }
     fn registers_enabled(&self) -> bool {
-        self.register_gate.as_ref().is_none_or(|gate| gate.load(Ordering::Relaxed))
+        self.register_gate
+            .as_ref()
+            .is_none_or(|gate| gate.load(Ordering::Relaxed))
     }
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
         Self::construct(options, wiring.card, wiring.contacts, Some(wiring.irq))
@@ -1394,7 +1396,9 @@ impl Device for SdHost {
         "sdhci-memory-card"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
-        if !self.registers_enabled() { return 0; }
+        if !self.registers_enabled() {
+            return 0;
+        }
         self.fifo.publish(false);
         let value = self.read_register(cx, address, size);
         if cx.refusal().is_none() {
@@ -1405,7 +1409,9 @@ impl Device for SdHost {
         value
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
-        if !self.registers_enabled() { return; }
+        if !self.registers_enabled() {
+            return;
+        }
         self.fifo.publish(false);
         if address == self.options.base + 0x2c && matches!(size, 2 | 4) {
             if value > u32::MAX as u64
@@ -1491,7 +1497,9 @@ impl Device for SdHost {
         })
     }
     fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
-        if self.register_gate.is_some() { return Vec::new(); }
+        if self.register_gate.is_some() {
+            return Vec::new();
+        }
         let address = self.options.base + 0x20;
         let end = window_base.saturating_add(window_size);
         let mut reads = Vec::new();

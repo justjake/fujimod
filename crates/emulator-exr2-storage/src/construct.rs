@@ -117,7 +117,9 @@ fn sd_host(builder: Builder<'_>, model: Model) -> Result<Built, String> {
         )?;
         let host = if let Some(clock) = clock_gate {
             host.with_register_gate(resources.clock(&clock)?.sd0_gate())
-        } else { host };
+        } else {
+            host
+        };
         built.contacts.insert(name.to_owned(), contacts);
         Box::new(host)
     }))
