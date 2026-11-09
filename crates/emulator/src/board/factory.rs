@@ -73,6 +73,7 @@ pub struct Options {
     pub engine: Engine,
     translation_cache_size_bytes: Option<u32>,
     epoch: Option<(u64, Vec<u64>)>,
+    ram_fill: Option<u8>,
 }
 
 impl Options {
@@ -81,7 +82,14 @@ impl Options {
             engine,
             translation_cache_size_bytes: None,
             epoch: None,
+            ram_fill: None,
         }
+    }
+
+    /// Initialize declared physical memory before boot images are loaded.
+    pub fn with_ram_fill(mut self, byte: u8) -> Self {
+        self.ram_fill = Some(byte);
+        self
     }
 
     /// Start fresh devices and processors on a continuing virtual timeline.
@@ -420,7 +428,14 @@ impl Graph {
         let ram = super::memory::Memory::new(
             self.ram
                 .iter()
-                .map(|r| Ok((r.base, Backing::aligned_zeros(r.size, 0x4000)?)))
+                .map(|r| {
+                    let backing = Backing::aligned_zeros(r.size, 0x4000)?;
+                    if let Some(byte) = options.ram_fill {
+                        // The backing is exclusively owned and not yet mapped by a CPU.
+                        unsafe { std::ptr::write_bytes(backing.as_ptr(), byte, r.size) };
+                    }
+                    Ok((r.base, backing))
+                })
                 .collect::<Result<Vec<_>, String>>()?,
             self.dma_mappings.clone(),
         )?;
