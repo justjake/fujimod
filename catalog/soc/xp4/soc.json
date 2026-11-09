@@ -1239,7 +1239,15 @@
               ],
               "basis": "X-T3 5.11 resets the unit at 0x1055a0c by writing 0 to +0x000 and waits for bit 0 to read 1, as at 0xfff50000. Other words read back their last write; nothing else in this block is modeled."
             }
-          ]
+          ],
+          "xpp_usb": {
+            "base": 4289724416,
+            "size": 65536,
+            "irq_route": 246,
+            "command_ticks": 48,
+            "transaction_ticks": 6000,
+            "basis": "DesignWare USB3 device controller of X-T3 5.11: DCTL at +0xc704 is set at 0x1d8a14c and the interrupt handler 0x1d89408 registers through logical id 0x49, whose descriptor names interrupt 246. The command and transaction latencies are those of the X-T20 controller; the X-T3 values are not measured."
+          }
         },
         "limits": [],
         "cache_basis": "Declared catalog input."

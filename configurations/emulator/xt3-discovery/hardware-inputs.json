@@ -138,6 +138,12 @@
         "signal_shift": 2
       },
       "basis": "Declared catalog input."
+    },
+    "usb_cable": {
+      "basis": "No VBUS input is known for the X-T3: its key table has no USB row and the stock USB task reads the condition register at 0xfff4a300, which follows the cable. Bank 15 pin 15 is a declared pin no stock key row reads; a host negotiates high speed.",
+      "vbus_bank": 15,
+      "vbus_pin": 15,
+      "speed": "high"
     }
   }
 }

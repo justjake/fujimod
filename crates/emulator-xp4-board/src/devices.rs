@@ -57,6 +57,7 @@ pub struct Devices {
     adc: Option<(usize, Arc<Mutex<Adc>>)>,
     xpp_adc: Option<Arc<Mutex<fujimod_emulator_xpp::adc::Converter>>>,
     usb: Option<Arc<Mutex<Dwc3>>>,
+    usb_presence: Option<Arc<std::sync::atomic::AtomicBool>>,
     pub frames: BTreeMap<usize, Frame>,
     pub outputs: BTreeMap<usize, serde_json::Value>,
 }
@@ -365,7 +366,12 @@ impl Devices {
             .unwrap())
     }
     pub fn usb_link(&self, now: u64, connected: bool) -> Result<(), String> {
-        self.usb_model()?.link(now, connected)
+        self.usb_model()?.link(now, connected)?;
+        // The condition strap the stock USB task reads follows the cable.
+        if let Some(presence) = &self.usb_presence {
+            presence.store(connected, std::sync::atomic::Ordering::SeqCst);
+        }
+        Ok(())
     }
     pub fn usb_reset(&self, now: u64) -> Result<(), String> {
         self.usb_model()?.bus_reset(now)
@@ -500,6 +506,7 @@ impl Devices {
             return Err("Overlapping XP4 USB condition register".into());
         }
         let model = fujimod_emulator_xp4_io::usb_condition::UsbCondition::new(base, present)?;
+        self.usb_presence = Some(model.presence());
         let id = self.models.len();
         self.windows.push((base, base + 4, id));
         self.models.push(Some(Box::new(model)));
@@ -651,6 +658,7 @@ impl Devices {
             adc: None,
             xpp_adc: None,
             usb: None,
+            usb_presence: None,
             frames: BTreeMap::new(),
             outputs: BTreeMap::new(),
         }
@@ -779,6 +787,7 @@ impl Devices {
             adc: None,
             xpp_adc: None,
             usb: None,
+            usb_presence: None,
             frames: BTreeMap::new(),
             outputs: BTreeMap::new(),
             windows: vec![
