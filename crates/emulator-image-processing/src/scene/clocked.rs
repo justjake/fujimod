@@ -165,6 +165,12 @@ impl fujimod_emulator_devices::capability::FrameSource for ClockedFrames {
     fn frame_state(&self) -> serde_json::Value {
         self.save()
     }
+    fn frame_exposure(&self) -> Result<Option<(u64, f64, f64)>, String> {
+        let image = self.images.0.lock().map_err(|_| "image frame poisoned")?;
+        let Some(exposure) = image.radiance.as_deref() else { return Ok(None) };
+        let exposure = ExposedFrame::of(exposure)?.exposure;
+        Ok(Some((self.frames, exposure.seconds, exposure.analog_gain)))
+    }
     fn sensor_sample_rgb(&self, width: usize, height: usize) -> Result<Vec<u8>, String> {
         let image = self.images.0.lock().map_err(|_| "image frame poisoned")?;
         match &image.pixels {

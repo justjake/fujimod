@@ -99,6 +99,12 @@ impl Session {
                 |frames| Ok(frames.frame_state()),
             )
     }
+    /// Observe the latched sensor exposure and its live frame index.
+    pub fn frame_exposure(&self, name: &str) -> Result<Option<(u64, f64, f64)>, String> {
+        self.board.inspect_capability::<dyn fujimod_emulator_devices::capability::FrameSource, _>(
+            self.node(name)?, |frames| frames.frame_exposure(),
+        )
+    }
     /// Pure diagnostic sampling of the immutable physical frame before ISP
     /// digital gain, color processing or display encoding. `name` is a frame source.
     pub fn sensor_sample_rgb(

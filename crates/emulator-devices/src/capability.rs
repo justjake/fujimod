@@ -172,6 +172,8 @@ pub trait FrameSource {
     fn configure(&mut self, period: u64, cadence: StatisticsCadence, now: u64) -> Result<(), String>;
     /// The source's clock, cadence and latched exposure, for diagnostics.
     fn frame_state(&self) -> serde_json::Value;
+    /// Frame index and latched sensor exposure in seconds and analog gain.
+    fn frame_exposure(&self) -> Result<Option<(u64, f64, f64)>, String>;
     /// Passive pre-ISP RGB U16LE samples on a uniform grid of the latched
     /// sensor view. Raster dimensions are bounded to 256 by 256.
     fn sensor_sample_rgb(&self, width: usize, height: usize) -> Result<Vec<u8>, String>;
