@@ -3183,6 +3183,7 @@ dependencies = [
 name = "fujimod-unicorn-sys"
 version = "0.1.0"
 dependencies = [
+ "cc",
  "cmake",
  "fujimod-workspace-hack",
 ]
