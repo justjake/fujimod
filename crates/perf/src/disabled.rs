@@ -25,6 +25,10 @@ pub fn end_guide() -> GuideSummary {
 
 pub fn set_cpu_counters(_counters: Vec<Result<BTreeMap<String, u64>, String>>) {}
 
+pub fn record_wait_evaluation(_description: &str) {}
+
+pub fn record_wait_stop(_description: &str, _cause: &str) {}
+
 pub struct SpanGuard;
 
 impl SpanGuard {

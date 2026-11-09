@@ -70,6 +70,7 @@ class WaitStops:
 class ContinuationStopCause:
     kind: str
     device_id: int | None = None
+    device: str | None = None
     range_index: int | None = None
     physical_range: tuple[int, int] | None = None
     address: int | None = None
@@ -90,9 +91,10 @@ def _continuation_stop_cause(value: object) -> ContinuationStopCause:
         raise RuntimeError('Native continuation stop returned an invalid record')
     if value.get('kind') == 'device':
         device_id = value.get('id')
-        if type(device_id) is not int or device_id < 0:
+        device = value.get('device')
+        if type(device_id) is not int or device_id < 0 or not isinstance(device, str) or not device:
             raise RuntimeError('Native continuation stop returned an invalid device id')
-        return ContinuationStopCause('device', device_id=device_id)
+        return ContinuationStopCause('device', device_id=device_id, device=device)
     if value.get('kind') == 'store':
         range_index = value.get('range_index')
         physical_range = value.get('range')
@@ -180,6 +182,7 @@ def wait_steps(board: WaitBoard, predicate: Callable[[], T], description: str, *
             finally:
                 reads = json.loads(board.native.read_set_end())
             polls += 1
+            perf.record_wait_evaluation(description)
             if value:
                 return value
             remaining = instruction_limit - (board.instructions - start)
@@ -202,11 +205,30 @@ def wait_steps(board: WaitBoard, predicate: Callable[[], T], description: str, *
                                   store_watches=stores, device_watches=devices,
                                   **({'contact_watch': True} if contacts else {}))
             report.continuations += 1
-            if profile_stops and published:
+            if published:
                 stop = board.native.continuation_stop()
                 if stop is None:
-                    raise RuntimeError('Native run reported a continuation stop without a cause')
-                _record_continuation_stop(report, stop)
+                    if contacts:
+                        cause = 'contact-queue'
+                    else:
+                        raise RuntimeError('Native run reported a continuation stop without a cause')
+                elif stop.get('kind') == 'device':
+                    cause = f"device:{stop.get('device')}"
+                elif stop.get('kind') == 'store':
+                    cause = 'watched-store'
+                else:
+                    cause = str(stop.get('kind', 'unknown'))
+                perf.record_wait_stop(description, cause)
+                if profile_stops and stop is not None:
+                    _record_continuation_stop(report, stop)
+            else:
+                if deadline is not None and board.virtual_ticks >= deadline:
+                    cause = 'deadline'
+                elif until_tick is not None and board.virtual_ticks >= until_tick:
+                    cause = 'tick-limit'
+                else:
+                    cause = 'instruction-limit'
+                perf.record_wait_stop(description, cause)
             if after_run is not None:
                 after_run()
             # A due device effect can publish at the current tick before any

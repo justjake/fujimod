@@ -1123,6 +1123,11 @@ impl Board {
             fujimod_emulator::board::continuation::ContinuationStop::Device { id } => {
                 result.set_item("kind", "device")?;
                 result.set_item("id", id)?;
+                let name = self.session()?.nodes.iter()
+                    .find(|(_, node)| *node == id)
+                    .map(|(name, _)| name)
+                    .ok_or_else(|| error("Continuation stop names an absent device".into()))?;
+                result.set_item("device", name)?;
             }
         }
         Ok(Some(result))

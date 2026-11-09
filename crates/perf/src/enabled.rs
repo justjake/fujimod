@@ -84,6 +84,14 @@ static DEVICES: [[CellCounts; PHASE_COUNT]; MAX_DEVICES] =
     [const { [const { CellCounts::new() }; PHASE_COUNT] }; MAX_DEVICES];
 static ENGINES: [CellCounts; MAX_CORES] = [const { CellCounts::new() }; MAX_CORES];
 static BYTES: [AtomicU64; BYTE_COUNT] = [const { AtomicU64::new(0) }; BYTE_COUNT];
+static WAITS: Mutex<BTreeMap<String, WaitCounts>> = Mutex::new(BTreeMap::new());
+
+#[derive(Default)]
+struct WaitCounts {
+    predicate_evaluations: u64,
+    continuations: u64,
+    stops: BTreeMap<String, u64>,
+}
 static DEVICE_NAMES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 static COUNTER_BASELINE: Mutex<Option<Vec<Result<BTreeMap<String, u64>, String>>>> =
     Mutex::new(None);
@@ -218,6 +226,7 @@ impl Reporter for TraceReporter {
 }
 
 fn reset_ledger() {
+    WAITS.lock().unwrap_or_else(|e| e.into_inner()).clear();
     for span in &SPANS {
         span.count.store(0, Ordering::Relaxed);
         span.raw.store(0, Ordering::Relaxed);
@@ -281,6 +290,37 @@ pub fn begin_guide(id: &str) {
     begin_span(SpanKind::Guide, GuestProgress::default());
 }
 
+/// Count a predicate evaluation for an interned wait description.
+pub fn record_wait_evaluation(description: &str) {
+    if !ACTIVE.load(Ordering::Relaxed) {
+        return;
+    }
+    let mut waits = WAITS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(wait) = waits.get_mut(description) {
+        wait.predicate_evaluations += 1;
+    } else {
+        waits.insert(description.to_owned(), WaitCounts { predicate_evaluations: 1, ..WaitCounts::default() });
+    }
+}
+
+/// Count a continuation and its stop cause for an interned wait description.
+pub fn record_wait_stop(description: &str, cause: &str) {
+    if !ACTIVE.load(Ordering::Relaxed) {
+        return;
+    }
+    let mut waits = WAITS.lock().unwrap_or_else(|e| e.into_inner());
+    if !waits.contains_key(description) {
+        waits.insert(description.to_owned(), WaitCounts::default());
+    }
+    let wait = waits.get_mut(description).expect("wait inserted");
+    wait.continuations += 1;
+    if let Some(count) = wait.stops.get_mut(cause) {
+        *count += 1;
+    } else {
+        wait.stops.insert(cause.to_owned(), 1);
+    }
+}
+
 pub fn end_guide() -> GuideSummary {
     if !ACTIVE.swap(false, Ordering::Relaxed) {
         return GuideSummary::empty();
@@ -317,6 +357,13 @@ pub fn end_guide() -> GuideSummary {
             })
         })
         .collect();
+    let waits = WAITS.lock().unwrap_or_else(|e| e.into_inner()).iter()
+        .map(|(description, counts)| WaitSummary {
+            description: description.clone(),
+            predicate_evaluations: counts.predicate_evaluations,
+            continuations: counts.continuations,
+            stops: counts.stops.clone(),
+        }).collect();
     let names = DEVICE_NAMES.lock().unwrap_or_else(|e| e.into_inner());
     let mut devices = Vec::new();
     for (index, phases) in DEVICES.iter().enumerate() {
@@ -387,6 +434,7 @@ pub fn end_guide() -> GuideSummary {
         process_cpu_seconds: process_cpu,
         thread_cpu_seconds: thread_cpu,
         spans,
+        waits,
         devices,
         engines,
         bytes,
@@ -951,6 +999,24 @@ mod tests {
         assert_eq!(wait.count, 1);
         assert_eq!((wait.instructions, wait.ticks), (25, 60));
         assert!(wait.thread_cpu_ns > 0);
+    }
+
+    #[test]
+    fn wait_counters_are_keyed_by_description_and_stop_cause() {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        begin_guide("wait-counters");
+        record_wait_evaluation("display frame");
+        record_wait_evaluation("display frame");
+        record_wait_stop("display frame", "device:display-timing");
+        record_wait_stop("display frame", "deadline");
+        record_wait_evaluation("menu ready");
+        let summary = end_guide();
+        let wait = summary.waits.iter().find(|wait| wait.description == "display frame").unwrap();
+        assert_eq!(wait.predicate_evaluations, 2);
+        assert_eq!(wait.continuations, 2);
+        assert_eq!(wait.stops.get("device:display-timing"), Some(&1));
+        assert_eq!(wait.stops.get("deadline"), Some(&1));
+        assert_eq!(summary.waits.iter().find(|wait| wait.description == "menu ready").unwrap().predicate_evaluations, 1);
     }
 
     #[test]

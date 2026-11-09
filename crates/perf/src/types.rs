@@ -295,6 +295,7 @@ pub struct GuideSummary {
     pub process_cpu_seconds: Option<f64>,
     pub thread_cpu_seconds: Option<f64>,
     pub spans: Vec<SpanSummary>,
+    pub waits: Vec<WaitSummary>,
     pub devices: Vec<DeviceSummary>,
     pub engines: Vec<EngineSummary>,
     pub bytes: BTreeMap<String, u64>,
@@ -313,6 +314,7 @@ impl GuideSummary {
             process_cpu_seconds: None,
             thread_cpu_seconds: None,
             spans: Vec::new(),
+            waits: Vec::new(),
             devices: Vec::new(),
             engines: Vec::new(),
             bytes: BTreeMap::new(),
@@ -324,4 +326,12 @@ impl GuideSummary {
     pub fn to_value(&self) -> serde_json::Value {
         serde_json::to_value(self).expect("guide summary serializes")
     }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct WaitSummary {
+    pub description: String,
+    pub predicate_evaluations: u64,
+    pub continuations: u64,
+    pub stops: BTreeMap<String, u64>,
 }

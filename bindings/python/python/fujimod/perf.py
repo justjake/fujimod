@@ -105,5 +105,13 @@ def add_bytes(counter: str, count: int) -> None:
     _native.add_bytes(counter, count)
 
 
+def record_wait_evaluation(description: str) -> None:
+    _native.record_wait_evaluation(description)
+
+
+def record_wait_stop(description: str, cause: str) -> None:
+    _native.record_wait_stop(description, cause)
+
+
 def write_chrome_trace(path: str | PathLike[str]) -> None:
     _native.write_chrome_trace(os.fspath(path))
