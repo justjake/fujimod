@@ -291,6 +291,10 @@ impl<'a> Cx<'a> {
 /// A register-level device behind one or more address windows.
 pub trait Device: Send + std::any::Any {
     fn name(&self) -> &'static str;
+    /// Frame count for a display timing output, when provided by this device.
+    fn display_frame_count(&self, _output: usize) -> Result<u64, String> {
+        Err("device does not provide display frame counts".into())
+    }
     // Capabilities the model offers sessions (`crate::capability`).
     fn analog_inputs(&self) -> Option<&(dyn crate::capability::AnalogInputs + 'static)> {
         None

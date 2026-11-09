@@ -1607,6 +1607,9 @@ impl Board {
             .map_err(error)?;
         Ok((n.irq, n.undefined, n.data_abort, n.prefetch_abort))
     }
+    fn display_frame_count(&self, output: usize) -> PyResult<u64> {
+        self.board()?.display_frame_count(output).map_err(error)
+    }
     fn device_states(&self, kind: &str) -> PyResult<String> {
         serde_json::to_string(&self.board()?.device_states(kind).map_err(error)?)
             .map_err(|e| error(e.to_string()))

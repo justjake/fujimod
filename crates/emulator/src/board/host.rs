@@ -9,6 +9,16 @@ impl Board {
         Ok(state.memory.memory_state())
     }
 
+    pub fn display_frame_count(&self, output: usize) -> Result<u64, String> {
+        let state = self.state.try_borrow().map_err(|_| "board is executing")?;
+        let ids = state.bus.device_ids("display-timing");
+        self.track_device_kind("display-timing", &state.bus);
+        let [id] = ids.as_slice() else {
+            return Err("display frame count requires one display timing device".into());
+        };
+        state.bus.device_dyn(*id)?.display_frame_count(output)
+    }
+
     pub fn device_states(&self, kind: &str) -> Result<serde_json::Value, String> {
         let state = self.state.try_borrow().map_err(|_| "board is executing")?;
         self.track_device_kind(kind, &state.bus);

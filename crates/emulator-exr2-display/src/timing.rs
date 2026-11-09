@@ -730,6 +730,11 @@ impl fujimod_emulator_devices::Device for DisplayTiming {
     fn name(&self) -> &'static str {
         "display-timing"
     }
+    fn display_frame_count(&self, output: usize) -> std::result::Result<u64, String> {
+        self.state.banks.get(output)
+            .map(|bank| bank.frames as u64)
+            .ok_or_else(|| "invalid display timing output".into())
+    }
     fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
         let Some(window_end) = window_base.checked_add(window_size) else {
             return Vec::new();
