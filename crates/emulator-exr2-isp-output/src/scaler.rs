@@ -150,7 +150,15 @@ impl Scaler {
         matches!(o,0|4|8|0x10|0x14|0x18|0x20..=0x2c|0x40..=0x64|0x70..=0x80)
     }
     fn start(&mut self, cx: &Cx<'_>, mode: u32) -> Result<(), String> {
-        let r = &self.r;
+        // A plain copy can be programmed with geometry and no step registers.
+        // With equal source and destination sizes that is a 1:1 copy; other
+        // sizes without programmed steps remain unmodeled.
+        let mut r = self.r.clone();
+        if r[0x40 / 4] == 0 && r[0x54 / 4] == 0 && r[0x18 / 4] == r[0x28 / 4] {
+            r[0x40 / 4] = 65536;
+            r[0x54 / 4] = 65536;
+        }
+        let r = &r;
         let src = Raster {
             address: (r[0x10 / 4] & 0x3fffffff) as u64,
             width: (r[0x18 / 4] & 8191) as usize,

@@ -43,6 +43,40 @@ fn scaler_dma_padding_reset_and_unsupported_transform() {
 }
 
 #[test]
+fn unprogrammed_steps_copy_equal_geometry_and_refuse_resizing() {
+    for (destination, copies) in [(1 << 16 | 8, true), (1 << 16 | 16, false)] {
+        let mut h = TestHost::new();
+        h.ram[0x8000..0x8010]
+            .copy_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+        let mut d = Scaler::new(
+            fujimod_emulator_imaging::exr2_isp::options::scaler::Options {
+                completion_ticks: 4,
+            },
+            Irq { core: 0, line: 67 },
+        )
+        .unwrap();
+        for (o, v) in [
+            (0x10, 0x8000),
+            (0x14, 8),
+            (0x18, 1 << 16 | 8),
+            (0x20, 0x9000),
+            (0x24, 16),
+            (0x28, destination),
+            (0x7c, 0x1301),
+        ] {
+            write(&mut d, &mut h, 0xfff47000 + o, v);
+        }
+        let mut cx = h.cx();
+        d.write(&mut cx, 0xfff47004, 4, 1);
+        assert_eq!(cx.refusal().is_none(), copies);
+        if copies {
+            advance(&mut d, &mut h, 4);
+            assert_eq!(&h.ram[0x9000..0x9010], &h.ram[0x8000..0x8010]);
+        }
+    }
+}
+
+#[test]
 fn scaler_refuses_tags_outside_the_measured_identity_contract() {
     for (step, tag_offset) in [(98304, 0), (65536, 16)] {
         let mut host = TestHost::new();
