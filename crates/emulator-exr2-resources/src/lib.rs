@@ -20,13 +20,16 @@ pub use images::{
     install_image_preparation, install_sensor_frame_codec, install_snapshot_json, prepare_images,
 };
 
+/// Host card files staged for FAT formatting, shared by handle.
+pub type CardFiles = BTreeMap<String, Vec<(String, Arc<[u8]>)>>;
+
 /// Prepared external media inputs. Firmware/file verification belongs to the
 /// frontend; these values contain bytes only.
 #[derive(Default)]
 pub struct Inputs {
     pub cards: BTreeMap<String, Card>,
     pub nands: BTreeMap<String, fujimod_emulator_devices::parts::nand::Nand>,
-    pub files: BTreeMap<String, Vec<(String, Vec<u8>)>>,
+    pub files: CardFiles,
 }
 
 /// A shared wire is declared once and has one concrete type. Every consumer

@@ -44,9 +44,9 @@ impl ResourceSnapshot {
             .chain(self.images.images.values())
             .chain(self.images.statistics.values())
             .chain(self.nands.values())
-            .chain(std::iter::once(&self.media))
             .cloned()
             .collect();
+        children.push(Checkpoint::encode("resource-media", &self.media)?);
         for frames in self.images.sensors.values() {
             children.extend(frames.0.frames()?);
         }
@@ -92,7 +92,7 @@ impl Resources {
         let images = group(metadata.images)?;
         let statistics = group(metadata.statistics)?;
         let nands = group(metadata.nands)?;
-        let media = next()?;
+        let media = next()?.decode("resource-media")?;
         let (wires, image_wires) = all_wires
             .into_iter()
             .partition(|(name, _)| !self.images.as_ref().is_some_and(|part| part.has_wire(name)));
