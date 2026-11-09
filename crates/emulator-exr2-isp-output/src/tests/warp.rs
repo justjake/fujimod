@@ -47,10 +47,20 @@ fn warp_dma_and_jpeg_stream_keep_a_centered_unity_scale_crop() {
             write(&mut d, &mut h, 0xfff65000 + o, v);
         }
         if streamed {
-            let stream = stream.lock().unwrap();
-            assert_eq!(stream.width, 4);
-            assert_eq!(stream.height, 4);
-            assert_eq!(stream.pixels.to_vec(), expected);
+            {
+                let stream = stream.lock().unwrap();
+                assert_eq!(stream.width, 4);
+                assert_eq!(stream.height, 4);
+                assert_eq!(stream.pixels.to_vec(), expected);
+            }
+            let identity = d.fingerprint().unwrap();
+            assert_eq!(identity["stream"]["width"], 4);
+            assert_eq!(identity["stream"]["height"], 4);
+            assert_eq!(identity["stream"]["pixels"]["bytes"], expected.len());
+            assert_eq!(
+                d.save()[3]["pixels"],
+                serde_json::json!(expected)
+            );
         } else {
             advance(&mut d, &mut h, 5);
             assert_eq!(&h.ram[0x9000..0x9020], expected);
