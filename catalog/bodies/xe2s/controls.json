@@ -61,6 +61,18 @@
           "id": "disp_back_button"
         }
       ]
+    },
+    "service": {
+      "usb": true,
+      "hold": [
+        {
+          "id": "selector.up"
+        },
+        {
+          "id": "shutter_button",
+          "stage": "full"
+        }
+      ]
     }
   },
   "controls": {

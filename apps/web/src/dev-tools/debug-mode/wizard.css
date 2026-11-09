@@ -130,6 +130,16 @@
   line-height: 1.5;
   color: var(--dim);
 }
+.dm-model {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 12px;
+  font: 600 16px var(--mono);
+  color: var(--phosphor);
+  background: rgba(var(--phosphor-rgb), 0.06);
+  border: 1px solid var(--edge);
+  border-radius: 0;
+}
 .dm-plan,
 .dm-entry {
   margin: 0;

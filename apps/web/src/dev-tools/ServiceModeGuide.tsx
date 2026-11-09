@@ -1,7 +1,8 @@
 import { BatteryCycleIcon } from '../ui/battery-cycle';
 import { PowerComboKeys } from '@fujimod/emulator-ui/ui/power-combo';
+import type { PhysicalControls } from 'fujimod';
 import { For, Match, Show, Switch, createEffect, createSignal } from 'solid-js';
-import { serviceModeControls, serviceModeEntry } from './service-mode-entry';
+import { serviceModeEntry } from './service-mode-entry';
 import './debug-mode/wizard.css';
 
 /** What the guide needs to know about the selected camera's connection. */
@@ -10,6 +11,11 @@ export enum GuideConnection {
   Disconnected = 'disconnected',
   Choosing = 'choosing',
   Connected = 'connected',
+}
+/** A camera model the guide offers, with its catalog controls when known. */
+export interface ServiceModeGuideCamera {
+  model: string;
+  controls?: PhysicalControls;
 }
 enum Step {
   Overview,
@@ -24,12 +30,19 @@ const rail = [
 /** How to enter service mode and connect. It never changes a setting. */
 export function ServiceModeGuide(props: {
   connection: GuideConnection;
+  cameras: readonly ServiceModeGuideCamera[];
+  model: string | undefined;
+  onModelChanged: (model: string) => void;
   onConnect: () => void;
   onClose: () => void;
 }) {
   const [step, setStep] = createSignal(Step.Overview);
   const [showConnectionHelp, setShowConnectionHelp] = createSignal(false);
   const connection = () => props.connection;
+  const controls = () => {
+    const found = props.cameras.find((camera) => camera.model === props.model)?.controls;
+    return found?.boot?.service ? found : undefined;
+  };
   createEffect(
     () => connection() === GuideConnection.Choosing,
     (choosing) => {
@@ -91,18 +104,49 @@ export function ServiceModeGuide(props: {
             <h1 id="dm-title" class="dm-title">
               Restart into service mode
             </h1>
-            <ol class="dm-entry">
-              <li>
-                <span>
-                  <BatteryCycleIcon />
-                  {serviceModeEntry[0]}
-                </span>
-              </li>
-              <li>
-                <PowerComboKeys controls={serviceModeControls} modes={['service']} />
-              </li>
-              <li>{serviceModeEntry[1]}</li>
-            </ol>
+            <select
+              class="dm-model"
+              aria-label="Camera"
+              onChange={(event) => props.onModelChanged(event.currentTarget.value)}
+            >
+              <option value="" disabled selected={!props.model}>
+                Choose your camera
+              </option>
+              <For each={props.cameras}>
+                {(camera) => (
+                  <option value={camera.model} selected={camera.model === props.model}>
+                    {camera.model}
+                  </option>
+                )}
+              </For>
+            </select>
+            <Show
+              when={controls()}
+              fallback={
+                <Show when={props.model}>
+                  {(model) => (
+                    <p class="dm-caution" role="status">
+                      The {model()} service-mode combination is unknown.
+                    </p>
+                  )}
+                </Show>
+              }
+            >
+              {(known) => (
+                <ol class="dm-entry">
+                  <li>
+                    <span>
+                      <BatteryCycleIcon />
+                      {serviceModeEntry[0]}
+                    </span>
+                  </li>
+                  <li>
+                    <PowerComboKeys controls={known()} modes={['service']} />
+                  </li>
+                  <li>{serviceModeEntry[1]}</li>
+                </ol>
+              )}
+            </Show>
             <div class="dm-warning" role="note">
               <strong>In service mode, do not use the OFF switch.</strong>
               <span>

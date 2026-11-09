@@ -8,6 +8,7 @@ import type { ToolSession } from './camera-model';
 import { Wizard } from './routes';
 import { Workbench } from './Workbench';
 import { GuideConnection, ServiceModeGuide } from './ServiceModeGuide';
+import { serviceModeCameras } from './service-mode-entry';
 import { createTestCameraModel, testCamera } from './test-camera-model';
 
 beforeAll(async () => {
@@ -61,6 +62,18 @@ function page(debug?: Partial<ToolSession['debug']>, initialWizard?: Wizard) {
     },
     unplug: () => test.update('X70', (camera) => ({ ...camera, present: false })),
   };
+}
+
+async function chooseCamera(host: HTMLElement, model: string) {
+  const select = await vi.waitFor(() => {
+    flush();
+    const found = host.querySelector<HTMLSelectElement>('select[aria-label="Camera"]');
+    expect(found?.querySelector(`option[value="${model}"]`)).toBeTruthy();
+    return found!;
+  });
+  select.value = model;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  flush();
 }
 
 function workflowSession() {
@@ -165,6 +178,8 @@ test('the service guide connects without selecting firmware or writing anything'
     flush();
     p.button('Begin')!.click();
     flush();
+    expect(p.host.querySelector('.dm-entry')).toBeNull();
+    await chooseCamera(p.host, 'X70');
     expect(p.host.querySelector('.dm-camera')).toBeNull();
     expect(p.host.querySelector('.dpad .u.glow')).not.toBeNull();
     expect(p.host.querySelector('[data-part="shutter"] [data-action="full"].on')).not.toBeNull();
@@ -238,7 +253,16 @@ test('picker help appears after three seconds, resets on retry, and stops after 
   const [connection, setConnection] = createSignal(GuideConnection.Disconnected);
   const connect = vi.fn(() => setConnection(GuideConnection.Choosing));
   const dispose = render(
-    () => <ServiceModeGuide connection={connection()} onConnect={connect} onClose={() => {}} />,
+    () => (
+      <ServiceModeGuide
+        connection={connection()}
+        cameras={[]}
+        model={undefined}
+        onModelChanged={() => {}}
+        onConnect={connect}
+        onClose={() => {}}
+      />
+    ),
     host,
   );
   const button = (name: string) =>
@@ -290,6 +314,9 @@ test('unsupported browsers cannot open the picker', () => {
     () => (
       <ServiceModeGuide
         connection={GuideConnection.Unsupported}
+        cameras={[]}
+        model={undefined}
+        onModelChanged={() => {}}
         onConnect={connect}
         onClose={() => {}}
       />
@@ -309,5 +336,72 @@ test('unsupported browsers cannot open the picker', () => {
     expect(host.textContent).toContain('Use Chrome or Edge.');
   } finally {
     dispose();
+  }
+});
+
+test('the guide shows the chosen camera’s own service combination or says it is unknown', async () => {
+  const cameras = await serviceModeCameras();
+  const host = document.createElement('div');
+  document.body.append(host);
+  const [model, setModel] = createSignal<string>();
+  const dispose = render(
+    () => (
+      <ServiceModeGuide
+        connection={GuideConnection.Disconnected}
+        cameras={cameras}
+        model={model()}
+        onModelChanged={setModel}
+        onConnect={() => {}}
+        onClose={() => {}}
+      />
+    ),
+    host,
+  );
+  const combination = () => ({
+    up: host.querySelector('.dpad .u.glow') !== null,
+    shutter: host.querySelector('[data-part="shutter"] [data-action="full"].on') !== null,
+    usb: host.querySelector('[aria-label="USB connected"]') !== null,
+  });
+  const held = { up: true, shutter: true, usb: true };
+  try {
+    flush();
+    [...host.querySelectorAll('button')].find((node) => node.textContent === 'Begin')!.click();
+    flush();
+    expect(host.querySelector('.dm-entry')).toBeNull();
+    await chooseCamera(host, 'X-E2S');
+    expect(model()).toBe('X-E2S');
+    expect(combination()).toEqual(held);
+    await chooseCamera(host, 'X70');
+    expect(combination()).toEqual(held);
+    await chooseCamera(host, 'X100V');
+    expect(host.querySelector('.dm-entry')).toBeNull();
+    expect(host.textContent).toContain('The X100V service-mode combination is unknown.');
+  } finally {
+    dispose();
+    host.remove();
+  }
+});
+
+test('the guide starts at the selected camera’s model', async () => {
+  const p = page(undefined, Wizard.Service);
+  try {
+    flush();
+    p.button('Begin')!.click();
+    flush();
+    p.button('Try to Connect')!.click();
+    await vi.waitFor(() => {
+      flush();
+      expect(p.button('Open workbench')).toBeTruthy();
+    });
+    p.unplug();
+    await vi.waitFor(() => {
+      flush();
+      expect(p.host.querySelector('.dm-entry .dpad .u.glow')).not.toBeNull();
+    });
+    expect(p.host.querySelector<HTMLSelectElement>('select[aria-label="Camera"]')!.value).toBe(
+      'X70',
+    );
+  } finally {
+    p.dispose();
   }
 });
