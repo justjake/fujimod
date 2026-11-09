@@ -8,9 +8,22 @@ fn breaks_configure(path: &Path) -> bool {
         .is_none_or(|path| path.contains(|c: char| c.is_whitespace() || c == ':'))
 }
 
+#[cfg(unix)]
 fn link(target: &Path, alias: &Path) {
     let _ = std::fs::remove_file(alias);
     std::os::unix::fs::symlink(target, alias).expect("link Unicorn build alias");
+}
+
+#[cfg(windows)]
+fn link(target: &Path, alias: &Path) {
+    let _ = std::fs::remove_dir(alias);
+    let _ = std::fs::remove_file(alias);
+    if target.is_dir() {
+        std::os::windows::fs::symlink_dir(target, alias)
+    } else {
+        std::os::windows::fs::symlink_file(target, alias)
+    }
+    .expect("link Unicorn build alias");
 }
 
 fn main() {
