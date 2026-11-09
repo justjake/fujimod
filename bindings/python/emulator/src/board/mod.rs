@@ -999,6 +999,9 @@ impl Board {
             })
             .transpose()
     }
+    fn frame_exposure(&self, node: &str) -> PyResult<Option<(u64, f64, f64)>> {
+        self.session()?.frame_exposure(node).map_err(error)
+    }
     fn frame_state(&self, node: &str) -> PyResult<String> {
         serde_json::to_string(&self.session()?.frame_state(node).map_err(error)?)
             .map_err(|e| error(e.to_string()))
