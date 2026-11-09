@@ -350,7 +350,12 @@ impl Device for Decoder {
         ; blobs: [source]
     );
     fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
-        Ok(self.save())
+        Ok(serde_json::json!((
+            &self.r,
+            self.dma.fingerprint(),
+            &self.pending,
+            self.waiting_input
+        )))
     }
 
     fn name(&self) -> &'static str {
@@ -583,6 +588,8 @@ mod checkpoint_tests {
         }
         device.pending = Some(Pending::Decode(41));
         let identity = device.fingerprint().unwrap();
+        assert_eq!(identity[1]["pixels"]["bytes"], 1024 * 512 * 2);
+        assert!(serde_json::to_vec(&identity).unwrap().len() < 4096);
         assert!(
             serde_json::to_vec(&device.diagnostic_state())
                 .unwrap()

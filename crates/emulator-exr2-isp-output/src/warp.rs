@@ -204,9 +204,13 @@ impl Device for Warp {
         ; blobs: [source]
     );
     fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
+        let stream = self.stream.lock().unwrap();
+        let stream_state = serde_json::json!({"state":stream.state,"width":stream.width,
+            "height":stream.height,
+            "pixels":fujimod_emulator_devices::state::bytes(&stream.pixels)});
         Ok(
             serde_json::json!({"r":self.r,"dma":self.dma.fingerprint(),"stop":self.stop,
-            "source":fujimod_emulator_devices::state::bytes(&self.source),"stream":*self.stream.lock().unwrap()}),
+            "source":fujimod_emulator_devices::state::bytes(&self.source),"stream":stream_state}),
         )
     }
 
