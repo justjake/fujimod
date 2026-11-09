@@ -386,6 +386,8 @@ pub enum Model {
     },
     SdHost {
         options: serde_json::Value,
+        #[serde(default)]
+        clock_gate: Option<String>,
         card: Card,
         pins: Option<CardPins>,
         present: bool,
@@ -589,9 +591,10 @@ impl Model {
             Self::Power { gpio, .. } | Self::ContactActuator { gpio, .. } => {
                 refs.push(gpio.as_str())
             }
-            Self::SdHost {
-                pins: Some(pins), ..
-            } => refs.push(pins.gpio.as_str()),
+            Self::SdHost { pins, clock_gate, .. } => {
+                if let Some(pins) = pins { refs.push(pins.gpio.as_str()); }
+                if let Some(clock) = clock_gate { refs.push(clock.as_str()); }
+            }
             Self::ExternalFrames {
                 activity: Some(signal),
                 ..

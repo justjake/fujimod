@@ -17,7 +17,7 @@ use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine};
 use serde::{Deserialize, Serialize};
 use std::sync::{
     Arc,
-    atomic::{AtomicU16, Ordering},
+    atomic::{AtomicBool, AtomicU16, Ordering},
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -130,6 +130,7 @@ fn read_media(
 }
 pub struct SdHost {
     options: Options,
+    register_gate: Option<Arc<AtomicBool>>,
     // Guest media transfers since the last explicit card replacement. Host
     // inspection and contact removal do not affect this passive ledger.
     reads: StorageReads,
@@ -188,6 +189,14 @@ fn default_speed(mode: &u8) -> bool {
     *mode == 0
 }
 impl SdHost {
+    /// Connect a physical gate controlling visibility of the register bank.
+    pub fn with_register_gate(mut self, gate: Arc<AtomicBool>) -> Self {
+        self.register_gate = Some(gate);
+        self
+    }
+    fn registers_enabled(&self) -> bool {
+        self.register_gate.as_ref().is_none_or(|gate| gate.load(Ordering::Relaxed))
+    }
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
         Self::construct(options, wiring.card, wiring.contacts, Some(wiring.irq))
     }
@@ -217,6 +226,7 @@ impl SdHost {
         let clocks = Clocks::new(&[(options.base + 0x2c, options.clock_ticks)])?;
         Ok(Self {
             options,
+            register_gate: None,
             reads: StorageReads::default(),
             card,
             contacts,
@@ -1384,6 +1394,7 @@ impl Device for SdHost {
         "sdhci-memory-card"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
+        if !self.registers_enabled() { return 0; }
         self.fifo.publish(false);
         let value = self.read_register(cx, address, size);
         if cx.refusal().is_none() {
@@ -1394,6 +1405,7 @@ impl Device for SdHost {
         value
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
+        if !self.registers_enabled() { return; }
         self.fifo.publish(false);
         if address == self.options.base + 0x2c && matches!(size, 2 | 4) {
             if value > u32::MAX as u64
@@ -1479,6 +1491,7 @@ impl Device for SdHost {
         })
     }
     fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
+        if self.register_gate.is_some() { return Vec::new(); }
         let address = self.options.base + 0x20;
         let end = window_base.saturating_add(window_size);
         let mut reads = Vec::new();

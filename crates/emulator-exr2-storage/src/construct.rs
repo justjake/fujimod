@@ -44,6 +44,7 @@ fn sd_host(builder: Builder<'_>, model: Model) -> Result<Built, String> {
     } = builder;
     let Model::SdHost {
         options,
+        clock_gate,
         card,
         pins,
         present,
@@ -114,6 +115,9 @@ fn sd_host(builder: Builder<'_>, model: Model) -> Result<Built, String> {
                 irq: line(irq)?,
             },
         )?;
+        let host = if let Some(clock) = clock_gate {
+            host.with_register_gate(resources.clock(&clock)?.sd0_gate())
+        } else { host };
         built.contacts.insert(name.to_owned(), contacts);
         Box::new(host)
     }))

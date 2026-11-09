@@ -21,7 +21,7 @@ use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use std::sync::{
     Arc, Mutex,
-    atomic::{AtomicU32, Ordering},
+    atomic::{AtomicBool, AtomicU32, Ordering},
 };
 
 pub const BASE: u64 = 0xfff88000;
@@ -44,8 +44,13 @@ pub const POWER_HOLD_RELEASE_LIMIT_TICKS: u64 = 100_000;
 pub struct Output(
     Arc<AtomicU32>,
     Arc<Mutex<Option<Arc<Mutex<super::wake_alarm::WakeAlarm>>>>>,
+    Arc<AtomicBool>,
 );
 impl Output {
+    /// SD0 host register clock gate.
+    pub fn sd0_gate(&self) -> Arc<AtomicBool> {
+        self.2.clone()
+    }
     pub fn ready(&self) -> bool {
         self.0.load(Ordering::Relaxed) & (REQUEST | READY) == REQUEST | READY
     }
@@ -129,6 +134,7 @@ impl Clocks {
         self.output
             .0
             .store(self.state.registers[OUTPUT], Ordering::Relaxed);
+        self.output.2.store(self.state.registers[0x30 / 4] & 0x200 != 0, Ordering::Relaxed);
     }
     fn index(address: u64, size: u8) -> Option<usize> {
         let offset = address.checked_sub(BASE)?;
@@ -301,6 +307,7 @@ impl Device for Clocks {
             }
         }
         self.state.registers[index] = value;
+        self.publish();
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         if self.state.output_due.is_some_and(|at| at <= cx.now()) {
