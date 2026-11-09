@@ -353,7 +353,11 @@ unsafe fn exception(exception: arm::Exception, data: *mut c_void) {
     };
     let link_offset = match exception {
         arm::Exception::DataAbort => 8,
-        arm::Exception::SupervisorCall if scalar(&*cpu, arm::SPSR).unwrap_or(0) & 0x20 != 0 => 2,
+        arm::Exception::SupervisorCall | arm::Exception::UndefinedInstruction
+            if scalar(&*cpu, arm::SPSR).unwrap_or(0) & 0x20 != 0 =>
+        {
+            2
+        }
         _ => 4,
     };
     let fault_pc = (scalar(&*cpu, arm::CORE[14]).unwrap_or(0) as u32).wrapping_sub(link_offset);

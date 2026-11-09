@@ -44,7 +44,7 @@ impl Core {
                 return Ok(Exit::Stopped);
             }
             if matches!(&result, Err(ExecutionError::InvalidInstruction(_)))
-                && crate::rprofile::enter_disabled_vfp(&*e.cpu)?
+                && crate::rprofile::enter_supported_undefined(&*e.cpu)?
             {
                 e.clear_exclusive()?;
                 e.observe_exception(arm::Exception::UndefinedInstruction);
