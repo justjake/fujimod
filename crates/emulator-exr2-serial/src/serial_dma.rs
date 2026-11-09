@@ -35,19 +35,23 @@ impl Input {
 pub struct Options {
     pub serial_base: u64,
     pub dma_base: u64,
-    pub routing_base: u64,
+    /// The request selector block, or `None` on a SoC whose DMA control word names the request line.
+    pub routing_base: Option<u64>,
     pub channels: [usize; 2],
     pub transmit_request: u8,
     pub receive_request: u8,
     pub frame_ticks: u64,
     pub irq_targets: Vec<(usize, usize, u32)>,
+    /// Electrical sense of the DMA channels' completion outputs.
+    #[serde(default)]
+    pub completion: peripheral::CompletionLevel,
 }
 pub(crate) struct Transport {
     wiring: Options,
     windows: Vec<(u64, u64)>,
     serial: byte_fifo::ByteFifo,
     dma: peripheral::PeripheralChannels,
-    routing: routing::Block98500,
+    routing: Option<routing::Block98500>,
 }
 impl Transport {
     pub(crate) fn windows(&self) -> &[(u64, u64)] {
@@ -100,14 +104,21 @@ impl Transport {
         let dma = peripheral::PeripheralChannels::new(
             wiring.dma_base,
             shared.clone(),
+            if wiring.routing_base.is_some() {
+                peripheral::RequestSelect::Routing
+            } else {
+                peripheral::RequestSelect::Control
+            },
+            wiring.completion,
             connections,
             interrupts,
         )?;
-        let routing = routing::Block98500::new(wiring.routing_base, shared)?;
-        let mut windows = vec![
-            (wiring.serial_base, wiring.serial_base + 0x24),
-            (wiring.routing_base, wiring.routing_base + 8),
-        ];
+        let routing = wiring
+            .routing_base
+            .map(|base| routing::Block98500::new(base, shared))
+            .transpose()?;
+        let mut windows = vec![(wiring.serial_base, wiring.serial_base + 0x24)];
+        windows.extend(wiring.routing_base.map(|base| (base, base + 8)));
         windows.extend(wiring.channels.iter().map(|c| {
             let base = wiring.dma_base + (*c as u64) * 0x40;
             (base, base + 0x40)
@@ -134,8 +145,16 @@ impl Transport {
         if self.wiring.serial_base <= address && address < self.wiring.serial_base + 0x24 {
             return Ok(&mut self.serial);
         }
-        if self.wiring.routing_base <= address && address < self.wiring.routing_base + 8 {
-            return Ok(&mut self.routing);
+        if self
+            .wiring
+            .routing_base
+            .is_some_and(|base| base <= address && address < base + 8)
+        {
+            return self
+                .routing
+                .as_mut()
+                .map(|routing| routing as &mut dyn Device)
+                .ok_or_else(|| "EXR II serial/DMA routing block is absent".into());
         }
         if self.contains(address, size) {
             return Ok(&mut self.dma);
@@ -147,7 +166,10 @@ impl Transport {
             return false;
         }
         (self.wiring.serial_base <= address && address < self.wiring.serial_base + 0x24)
-            || (self.wiring.routing_base <= address && address < self.wiring.routing_base + 8)
+            || self
+                .wiring
+                .routing_base
+                .is_some_and(|base| base <= address && address < base + 8)
             || self.wiring.channels.iter().any(|c| {
                 let base = self.wiring.dma_base + (*c as u64) * 0x40;
                 base <= address && address < base + 0x40
@@ -214,7 +236,8 @@ impl Device for Transport {
         self.dma.restore_checkpoint(&saved.children()[1])
     }
     fn save(&self) -> Value {
-        json!({"wiring":self.wiring,"serial":self.serial.save(),"dma":self.dma.save(),"routing":self.routing.save()})
+        json!({"wiring":self.wiring,"serial":self.serial.save(),"dma":self.dma.save(),
+            "routing":self.routing.as_ref().map(|routing| routing.save())})
     }
     fn fingerprint(&self) -> Result<Value, String> {
         Ok(self.save())
@@ -258,10 +281,7 @@ impl Nodes {
             base: wiring.serial_base,
             size: 0x24,
         };
-        let routing_window = Mapping {
-            base: wiring.routing_base,
-            size: 8,
-        };
+
         let dma_windows = wiring
             .channels
             .iter()
@@ -270,11 +290,15 @@ impl Nodes {
                 size: 0x40,
             })
             .collect();
-        vec![
-            (vec![serial_window], Box::new(serial) as Box<dyn Device>),
-            (vec![routing_window], Box::new(routing) as Box<dyn Device>),
-            (dma_windows, Box::new(dma) as Box<dyn Device>),
-        ]
+        let mut devices = vec![(vec![serial_window], Box::new(serial) as Box<dyn Device>)];
+        if let (Some(base), Some(routing)) = (wiring.routing_base, routing) {
+            devices.push((
+                vec![Mapping { base, size: 8 }],
+                Box::new(routing) as Box<dyn Device>,
+            ));
+        }
+        devices.push((dma_windows, Box::new(dma) as Box<dyn Device>));
+        devices
     }
 }
 #[cfg(test)]

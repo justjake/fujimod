@@ -10,6 +10,8 @@ fn configuration() -> Configuration {
         focus_ring: 0xffff,
         detail_status: 0x14,
         read_catalogs: vec![],
+        fixed_replies: vec![],
+        operation_families: vec![],
     }
 }
 fn pins() -> Pins {
@@ -19,7 +21,14 @@ fn pins() -> Pins {
     }
 }
 fn port() -> Port {
-    Port::new(configuration(), 240).unwrap()
+    Port::new(configuration(), timing(240, None)).unwrap()
+}
+fn timing(startup_ticks: u64, busy_ticks: Option<u64>) -> Timing {
+    Timing {
+        startup_ticks,
+        busy_ticks,
+        operation_ticks: None,
+    }
 }
 fn frame(word: u8) -> Frame {
     Frame {
@@ -140,7 +149,7 @@ fn checkpoint_restore_is_atomic_and_resumes_power_deadlines_and_partial_frames()
     for bad in [
         {
             let mut v = before.clone();
-            v["startup_ticks"] = json!(1);
+            v["timing"]["startup_ticks"] = json!(1);
             v
         },
         {
@@ -157,5 +166,40 @@ fn checkpoint_restore_is_atomic_and_resumes_power_deadlines_and_partial_frames()
         assert!(a.restore(&bad).is_err());
         assert_eq!(a.save(), before);
     }
-    assert!(Port::new(configuration(), 0).is_err());
+    assert!(Port::new(configuration(), timing(0, None)).is_err());
+    assert!(Port::new(configuration(), timing(240, Some(0))).is_err());
+}
+
+#[test]
+fn declared_busy_duration_returns_ready_high_and_keeps_serving() {
+    let mut p = Port::new(configuration(), timing(240, Some(1000))).unwrap();
+    p.tick(100, pins()).unwrap();
+    assert_eq!(p.next_event_tick(100, pins()), Some(340));
+    p.tick(340, pins()).unwrap();
+    assert!(!p.ready_high());
+    assert_eq!(p.next_event_tick(340, pins()), Some(1340));
+    for (i, v) in [0, 0, 0x3f, 0xc6].into_iter().enumerate() {
+        assert_eq!(byte(&mut p, v, 350 + i as u64), 0);
+    }
+    let low = p.save();
+    p.tick(1339, pins()).unwrap();
+    assert_eq!(p.save(), low);
+    // A late tick still places the release at its exact deadline.
+    p.tick(5000, pins()).unwrap();
+    assert!(p.ready_high());
+    assert_eq!(p.save()["state"]["event_tick"], 1340);
+    assert_eq!(p.next_event_tick(5000, pins()), None);
+    assert_eq!(p.save()["link"]["state"]["frames"], 4);
+    let saved = p.save();
+    let mut restored = Port::new(configuration(), timing(240, Some(1000))).unwrap();
+    restored.restore(&saved).unwrap();
+    assert_eq!(restored.save(), saved);
+    assert!(Port::new(configuration(), timing(240, None)).unwrap().restore(&saved).is_err());
+    // Power loss returns to off; the next power-up is busy again.
+    p.tick(6000, Pins::default()).unwrap();
+    assert!(p.ready_high());
+    assert!(p.begin(frame(0)).is_err());
+    p.tick(7000, pins()).unwrap();
+    p.tick(7240, pins()).unwrap();
+    assert!(!p.ready_high());
 }

@@ -1710,3 +1710,18 @@ fn observer_points_use_backend_hooks_without_installing_native_hooks() {
     ));
     assert_eq!(cpu.execution.cpu.hooks.borrow().len(), native_hooks);
 }
+
+#[test]
+fn high_vectors_option_sets_the_vector_bit_at_reset() {
+    let memory = Memory::default();
+    let low = processor(&memory);
+    assert_eq!(system(&low, 1, 0, 0, None) & (1 << 13), 0);
+    let high = processor_with_options(
+        &Memory::default(),
+        Options {
+            high_vectors: true,
+            ..Options::default()
+        },
+    );
+    assert_eq!(system(&high, 1, 0, 0, None) & (1 << 13), 1 << 13);
+}

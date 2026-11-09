@@ -10,6 +10,8 @@ fn configuration() -> Configuration {
         focus_ring: 0xffff,
         detail_status: 0x14,
         read_catalogs: vec![],
+        fixed_replies: vec![],
+        operation_families: vec![],
     }
 }
 fn frame(byte: u8) -> Frame {
@@ -548,4 +550,80 @@ fn typed_checkpoint_restores_partial_headers_and_validates_pending_tokens() {
             .validate_checkpoint(&saved)
             .is_err()
     );
+}
+
+#[test]
+fn declared_fixed_replies_answer_their_family_for_any_payload_and_nothing_else() {
+    let mut config = configuration();
+    config.fixed_replies = vec![
+        FixedReply {
+            family: 0x3f,
+            payload: 0,
+        },
+        FixedReply {
+            family: 0x54,
+            payload: 0x1234,
+        },
+    ];
+    let mut link = Link::new(config.clone()).unwrap();
+    let mut time = 0;
+    for (sequence, (family, request, value)) in
+        [(0x3f, 0, 0), (0x54, 0x7fff, 0x1234), (0x54, 1, 0x1234)]
+            .into_iter()
+            .enumerate()
+    {
+        let counter = sequence as u16;
+        assert_eq!(
+            word(&mut link, Packet::encode(request, family, false).0, &mut time),
+            0
+        );
+        assert_eq!(
+            word(
+                &mut link,
+                Packet::encode(0x0810 | counter << 8, 0, true).0,
+                &mut time
+            ),
+            Packet::encode(0x0800, family, true).0
+        );
+        assert_eq!(
+            word(&mut link, 0, &mut time),
+            Packet::encode(value, family, false).0
+        );
+        assert_eq!(
+            word(&mut link, Packet::encode(0x0800, family, true).0, &mut time),
+            Packet::encode(0x0800 | counter << 8, 0, true).0
+        );
+    }
+    // A queued fixed reply survives a checkpoint; an undeclared family still refuses.
+    assert_eq!(
+        word(&mut link, Packet::encode(9, 0x54, false).0, &mut time),
+        0
+    );
+    word(&mut link, Packet::encode(0x0b10, 0, true).0, &mut time);
+    let saved = link.save();
+    let mut restored = Link::new(config.clone()).unwrap();
+    restored.restore(&saved).unwrap();
+    assert_eq!(restored.save(), saved);
+    assert!(Link::new(configuration()).unwrap().restore(&saved).is_err());
+    assert!(
+        transfer(
+            &mut link,
+            &Packet::encode(0, 0x55, false).bytes(),
+            &mut time
+        )
+        .unwrap_err()
+        .contains("request is unmodeled")
+    );
+    // Modeled families, family 0 and duplicates cannot be declared.
+    for family in [0, STATUS, SYNC, 0x200] {
+        let mut bad = configuration();
+        bad.fixed_replies = vec![FixedReply { family, payload: 0 }];
+        assert!(Link::new(bad).is_err());
+    }
+    let mut duplicate = config;
+    duplicate.fixed_replies.push(FixedReply {
+        family: 0x3f,
+        payload: 1,
+    });
+    assert!(Link::new(duplicate).is_err());
 }
