@@ -19,7 +19,10 @@ impl Core {
             } else {
                 e.settle(0, true)
             };
-            let settlement = if result.is_ok() && e.exception.get().is_none() {
+            let settlement = if result.is_ok()
+                && matches!(e.exception.get(), None | Some(arm::Exception::SupervisorCall))
+            {
+                // A retiring SVC has no faulting memory access to discard.
                 settlement.and_then(|_| e.publish_stores())
             } else {
                 e.pending_stores.borrow_mut().clear();
@@ -32,7 +35,10 @@ impl Core {
                 return Err(ExecutionError::Backend(message));
             }
             if let Some(exception) = e.exception.take() {
-                crate::rprofile::abort::enter(&*e.cpu, exception)?;
+                match exception {
+                    arm::Exception::SupervisorCall => e.enter_supervisor_call()?,
+                    _ => crate::rprofile::abort::enter(&*e.cpu, exception)?,
+                }
                 e.clear_exclusive()?;
                 e.observe_exception(exception);
                 return Ok(Exit::Stopped);

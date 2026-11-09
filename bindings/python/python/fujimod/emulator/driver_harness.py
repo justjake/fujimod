@@ -1196,9 +1196,10 @@ class DriverHarness:
         if deliver_faults:
             needed.extend((
                 base + 4,
+                base + 8,
                 base + 0xC,
                 base + 0x10,
-            ))  # undefined, prefetch/data abort
+            ))  # undefined, supervisor call, prefetch/data abort
         words = set()
         for vector in needed:
             # Exception entry fetches the vector word, which may live in the
@@ -1378,10 +1379,10 @@ class DriverHarness:
         (an injection is also skipped when PC is at an armed ``stop_at``
         address other than the call entry, so that stop fires first; a stop
         or ``lr=`` address equal to the entry is not armed until execution has
-        left it). ``deliver_faults=True`` routes a native MPU
-        prefetch/data permission abort or disabled-VFP undefined through the board's
-        exception entry and continues in the stock vector (recorded in
-        ``delivered_faults``); the vector word must be fetchable.
+        left it). ``deliver_faults=True`` continues through the guest vector after native
+        supervisor call, MPU prefetch/data permission abort or disabled-VFP
+        undefined exception entry (recorded in ``delivered_faults``); the vector
+        word must be fetchable.
         """
         entry = self._entry(entry)
         args = tuple(args)

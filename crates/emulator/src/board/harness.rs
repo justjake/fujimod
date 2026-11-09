@@ -345,18 +345,18 @@ unsafe fn exception(exception: arm::Exception, data: *mut c_void) {
         return;
     }
     let name = match exception {
+        arm::Exception::SupervisorCall => "Architectural supervisor call entry",
         arm::Exception::UndefinedInstruction => "Architectural undefined instruction entry",
         arm::Exception::PrefetchAbort => "Architectural MPU permission prefetch abort entry",
         arm::Exception::DataAbort => "Architectural MPU permission data abort entry",
         _ => "Architectural exception entry",
     };
-    let fault_pc = scalar(&*cpu, arm::CORE[14]).unwrap_or(0).wrapping_sub(
-        if exception == arm::Exception::DataAbort {
-            8
-        } else {
-            4
-        },
-    );
+    let link_offset = match exception {
+        arm::Exception::DataAbort => 8,
+        arm::Exception::SupervisorCall if scalar(&*cpu, arm::SPSR).unwrap_or(0) & 0x20 != 0 => 2,
+        _ => 4,
+    };
+    let fault_pc = (scalar(&*cpu, arm::CORE[14]).unwrap_or(0) as u32).wrapping_sub(link_offset);
     s.observed
         .borrow_mut()
         .faults
