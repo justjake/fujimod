@@ -703,14 +703,27 @@
               4285536896,
               4285537408,
               4285538432,
+              4285538944,
+              4285539456,
+              4285539968,
+              4285540480,
+              4285540992,
+              4285541504,
+              4285542016,
               4285542528,
               4285546624,
               4285550720,
               4285554816,
-              4285567104
+              4285558912,
+              4285563008,
+              4285567104,
+              4285571200,
+              4285575296,
+              4285579392,
+              4285591680
             ],
             "ack_ticks": 8,
-            "basis": "Declared catalog input."
+            "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block."
           },
           "io_groups": {
             "base": 4294189056,
@@ -825,18 +838,6 @@
           },
           "register_blocks": [
             {
-              "base": 4285591552,
-              "size": 4096,
-              "idle_bits": [],
-              "basis": "X-T3 5.11 writes a 16-register gate bank at 0xff70f000..0xff70f03c (address table 0x13ea340, mask table 0x13ea3f8, set/clear helper 0x108d4c4). Reads return the last write; no arbitration is modeled."
-            },
-            {
-              "base": 4285571072,
-              "size": 4096,
-              "idle_bits": [],
-              "basis": "X-T3 5.11 reads/writes 0xff70a000..0xff70a040. Reads return the last write; no arbitration is modeled."
-            },
-            {
               "base": 4294213632,
               "size": 4096,
               "idle_bits": [],
@@ -849,16 +850,372 @@
               "basis": "X-T3 5.11 reads/writes 0xfff3e000..0xfff3e018. Reads return the last write; no arbitration is modeled."
             },
             {
-              "base": 4285575168,
+              "base": 4283461632,
               "size": 4096,
               "idle_bits": [],
-              "basis": "X-T3 5.11 gate registers at 0xff70b000.. (table descriptors {register,0,0x1ff,base}). Reads return the last write; no arbitration is modeled."
+              "fixed_words": [
+                {
+                  "offset": 3096,
+                  "value": 1
+                }
+              ],
+              "commands": [
+                {
+                  "word": 864,
+                  "value": 4278239245,
+                  "status": 868,
+                  "mask": 1,
+                  "state": 1
+                },
+                {
+                  "word": 128,
+                  "value": 256,
+                  "status": 144,
+                  "mask": 255,
+                  "state": 1
+                },
+                {
+                  "word": 128,
+                  "value": 512,
+                  "status": 144,
+                  "mask": 1,
+                  "state": 0
+                }
+              ],
+              "basis": "X-T3 5.11 DRAM controller channel 0 command words at 0xff507000. The training routines wait for +0xc18 to read 1 after writing 0x40000000 to it, for +0x364 bit 0 after writing 0xff00c00d to +0x360, and for +0x090 to read 1 after writing 0x100 to +0x080 and bit 0 to read 0 after 0x200. +0x044 bit 0 reads 0. No training or timing is modeled."
             },
             {
-              "base": 4285579264,
+              "base": 4284497920,
+              "size": 4096,
+              "idle_bits": [
+                {
+                  "offset": 1648,
+                  "mask": 196611
+                },
+                {
+                  "offset": 1652,
+                  "mask": 196611
+                },
+                {
+                  "offset": 1656,
+                  "mask": 196611
+                },
+                {
+                  "offset": 220,
+                  "mask": 768
+                },
+                {
+                  "offset": 732,
+                  "mask": 768
+                }
+              ],
+              "basis": "X-T3 5.11 DRAM controller channel 0 lock words at 0xff604000. The training routines wait for bits 0, 1, 16 and 17 of +0x670, +0x674 and +0x678 and for bits 8 and 9 of +0x0dc and +0x2dc. Other words read back their last write."
+            },
+            {
+              "base": 4284489728,
               "size": 4096,
               "idle_bits": [],
-              "basis": "X-T3 5.11 gate registers at 0xff70c000.. (table descriptors {register,0,0x1ff,base}). Reads return the last write; no arbitration is modeled."
+              "commands": [
+                {
+                  "word": 0,
+                  "value": 2817,
+                  "status": 272,
+                  "mask": 1,
+                  "state": 1
+                }
+              ],
+              "basis": "X-T3 5.11 DRAM controller channel 0 request word at 0xff602000: writing 0xb01 to +0x000 sets +0x110 bit 0 for the routine that waits on it. Other words read back their last write."
+            },
+            {
+              "base": 4283527168,
+              "size": 4096,
+              "idle_bits": [],
+              "fixed_words": [
+                {
+                  "offset": 3096,
+                  "value": 1
+                }
+              ],
+              "commands": [
+                {
+                  "word": 864,
+                  "value": 4278239245,
+                  "status": 868,
+                  "mask": 1,
+                  "state": 1
+                },
+                {
+                  "word": 128,
+                  "value": 256,
+                  "status": 144,
+                  "mask": 255,
+                  "state": 1
+                },
+                {
+                  "word": 128,
+                  "value": 512,
+                  "status": 144,
+                  "mask": 1,
+                  "state": 0
+                }
+              ],
+              "basis": "X-T3 5.11 DRAM controller channel 1 command words at 0xff517000. The training routines wait for +0xc18 to read 1 after writing 0x40000000 to it, for +0x364 bit 0 after writing 0xff00c00d to +0x360, and for +0x090 to read 1 after writing 0x100 to +0x080 and bit 0 to read 0 after 0x200. +0x044 bit 0 reads 0. No training or timing is modeled."
+            },
+            {
+              "base": 4284563456,
+              "size": 4096,
+              "idle_bits": [
+                {
+                  "offset": 1648,
+                  "mask": 196611
+                },
+                {
+                  "offset": 1652,
+                  "mask": 196611
+                },
+                {
+                  "offset": 1656,
+                  "mask": 196611
+                },
+                {
+                  "offset": 220,
+                  "mask": 768
+                },
+                {
+                  "offset": 732,
+                  "mask": 768
+                }
+              ],
+              "basis": "X-T3 5.11 DRAM controller channel 1 lock words at 0xff614000. The training routines wait for bits 0, 1, 16 and 17 of +0x670, +0x674 and +0x678 and for bits 8 and 9 of +0x0dc and +0x2dc. Other words read back their last write."
+            },
+            {
+              "base": 4284555264,
+              "size": 4096,
+              "idle_bits": [],
+              "commands": [
+                {
+                  "word": 0,
+                  "value": 2817,
+                  "status": 272,
+                  "mask": 1,
+                  "state": 1
+                }
+              ],
+              "basis": "X-T3 5.11 DRAM controller channel 1 request word at 0xff612000: writing 0xb01 to +0x000 sets +0x110 bit 0 for the routine that waits on it. Other words read back their last write."
+            },
+            {
+              "base": 4283592704,
+              "size": 4096,
+              "idle_bits": [],
+              "fixed_words": [
+                {
+                  "offset": 3096,
+                  "value": 1
+                }
+              ],
+              "commands": [
+                {
+                  "word": 864,
+                  "value": 4278239245,
+                  "status": 868,
+                  "mask": 1,
+                  "state": 1
+                },
+                {
+                  "word": 128,
+                  "value": 256,
+                  "status": 144,
+                  "mask": 255,
+                  "state": 1
+                },
+                {
+                  "word": 128,
+                  "value": 512,
+                  "status": 144,
+                  "mask": 1,
+                  "state": 0
+                }
+              ],
+              "basis": "X-T3 5.11 DRAM controller channel 2 command words at 0xff527000. The training routines wait for +0xc18 to read 1 after writing 0x40000000 to it, for +0x364 bit 0 after writing 0xff00c00d to +0x360, and for +0x090 to read 1 after writing 0x100 to +0x080 and bit 0 to read 0 after 0x200. +0x044 bit 0 reads 0. No training or timing is modeled."
+            },
+            {
+              "base": 4284628992,
+              "size": 4096,
+              "idle_bits": [
+                {
+                  "offset": 1648,
+                  "mask": 196611
+                },
+                {
+                  "offset": 1652,
+                  "mask": 196611
+                },
+                {
+                  "offset": 1656,
+                  "mask": 196611
+                },
+                {
+                  "offset": 220,
+                  "mask": 768
+                },
+                {
+                  "offset": 732,
+                  "mask": 768
+                }
+              ],
+              "basis": "X-T3 5.11 DRAM controller channel 2 lock words at 0xff624000. The training routines wait for bits 0, 1, 16 and 17 of +0x670, +0x674 and +0x678 and for bits 8 and 9 of +0x0dc and +0x2dc. Other words read back their last write."
+            },
+            {
+              "base": 4284620800,
+              "size": 4096,
+              "idle_bits": [],
+              "commands": [
+                {
+                  "word": 0,
+                  "value": 2817,
+                  "status": 272,
+                  "mask": 1,
+                  "state": 1
+                }
+              ],
+              "basis": "X-T3 5.11 DRAM controller channel 2 request word at 0xff622000: writing 0xb01 to +0x000 sets +0x110 bit 0 for the routine that waits on it. Other words read back their last write."
+            },
+            {
+              "base": 4283658240,
+              "size": 4096,
+              "idle_bits": [],
+              "fixed_words": [
+                {
+                  "offset": 3096,
+                  "value": 1
+                }
+              ],
+              "commands": [
+                {
+                  "word": 864,
+                  "value": 4278239245,
+                  "status": 868,
+                  "mask": 1,
+                  "state": 1
+                },
+                {
+                  "word": 128,
+                  "value": 256,
+                  "status": 144,
+                  "mask": 255,
+                  "state": 1
+                },
+                {
+                  "word": 128,
+                  "value": 512,
+                  "status": 144,
+                  "mask": 1,
+                  "state": 0
+                }
+              ],
+              "basis": "X-T3 5.11 DRAM controller channel 3 command words at 0xff537000. The training routines wait for +0xc18 to read 1 after writing 0x40000000 to it, for +0x364 bit 0 after writing 0xff00c00d to +0x360, and for +0x090 to read 1 after writing 0x100 to +0x080 and bit 0 to read 0 after 0x200. +0x044 bit 0 reads 0. No training or timing is modeled."
+            },
+            {
+              "base": 4284694528,
+              "size": 4096,
+              "idle_bits": [
+                {
+                  "offset": 1648,
+                  "mask": 196611
+                },
+                {
+                  "offset": 1652,
+                  "mask": 196611
+                },
+                {
+                  "offset": 1656,
+                  "mask": 196611
+                },
+                {
+                  "offset": 220,
+                  "mask": 768
+                },
+                {
+                  "offset": 732,
+                  "mask": 768
+                }
+              ],
+              "basis": "X-T3 5.11 DRAM controller channel 3 lock words at 0xff634000. The training routines wait for bits 0, 1, 16 and 17 of +0x670, +0x674 and +0x678 and for bits 8 and 9 of +0x0dc and +0x2dc. Other words read back their last write."
+            },
+            {
+              "base": 4284686336,
+              "size": 4096,
+              "idle_bits": [],
+              "commands": [
+                {
+                  "word": 0,
+                  "value": 2817,
+                  "status": 272,
+                  "mask": 1,
+                  "state": 1
+                }
+              ],
+              "basis": "X-T3 5.11 DRAM controller channel 3 request word at 0xff632000: writing 0xb01 to +0x000 sets +0x110 bit 0 for the routine that waits on it. Other words read back their last write."
+            },
+            {
+              "base": 4294242304,
+              "size": 4096,
+              "idle_bits": [],
+              "fixed_words": [
+                {
+                  "offset": 28,
+                  "value": 0
+                }
+              ],
+              "basis": "X-T3 5.11 writes 1 to +0x01c at 0x11148a0 and waits for it to read 0; the command completes at once and the word reads 0. Other words read back their last write; nothing else in this block is modeled."
+            },
+            {
+              "base": 4283453440,
+              "size": 4096,
+              "idle_bits": [],
+              "fixed_words": [
+                {
+                  "offset": 900,
+                  "value": 0
+                }
+              ],
+              "basis": "X-T3 5.11 DRAM controller channel 0 apply word at 0xff505384. Each register script of 71 writes ends with 1 written here and the routine waits for it to read 0; the word completes at once and reads 0. Other words read back their last write."
+            },
+            {
+              "base": 4283518976,
+              "size": 4096,
+              "idle_bits": [],
+              "fixed_words": [
+                {
+                  "offset": 900,
+                  "value": 0
+                }
+              ],
+              "basis": "X-T3 5.11 DRAM controller channel 1 apply word at 0xff515384. Each register script of 71 writes ends with 1 written here and the routine waits for it to read 0; the word completes at once and reads 0. Other words read back their last write."
+            },
+            {
+              "base": 4283584512,
+              "size": 4096,
+              "idle_bits": [],
+              "fixed_words": [
+                {
+                  "offset": 900,
+                  "value": 0
+                }
+              ],
+              "basis": "X-T3 5.11 DRAM controller channel 2 apply word at 0xff525384. Each register script of 71 writes ends with 1 written here and the routine waits for it to read 0; the word completes at once and reads 0. Other words read back their last write."
+            },
+            {
+              "base": 4283650048,
+              "size": 4096,
+              "idle_bits": [],
+              "fixed_words": [
+                {
+                  "offset": 900,
+                  "value": 0
+                }
+              ],
+              "basis": "X-T3 5.11 DRAM controller channel 3 apply word at 0xff535384. Each register script of 71 writes ends with 1 written here and the routine waits for it to read 0; the word completes at once and reads 0. Other words read back their last write."
             }
           ]
         },
