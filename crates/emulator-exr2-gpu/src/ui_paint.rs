@@ -752,6 +752,81 @@ mod tests {
     }
 
     #[test]
+    fn repeated_coverage_matches_gpu_reference_and_covered_bytes() {
+        use fujimod_emulator_gpu::{
+            CoverageEdge, CoverageKernel, CoverageRequest, EdgeCoordinates, FillRule, SampleGrid,
+        };
+
+        let context = match fujimod_emulator_gpu::context() {
+            Ok(context) => context,
+            Err(error) if error.starts_with("host GPU adapter:") => {
+                eprintln!("skipping EXR2 GPU paint test without an adapter: {error}");
+                return;
+            }
+            Err(error) => panic!("EXR2 GPU paint context failed: {error}"),
+        };
+        let shape = draw(
+            0x190000,
+            0,
+            [1.25, 0.75, 6.5, 6.0],
+            4,
+            0,
+            [19, 79, 137, 211],
+        );
+        let plan = render::coverage_plan(&shape).unwrap();
+        let reference = render::fill_counts(
+            &plan.edges,
+            plan.nonzero,
+            plan.x0,
+            plan.y0,
+            i64::from(plan.samples),
+            plan.width,
+            plan.height,
+        )
+        .unwrap();
+        let expected: Vec<u32> = reference.iter().copied().map(u32::from).collect();
+        let edges: Vec<_> = plan
+            .edges
+            .iter()
+            .map(|&(a, b)| CoverageEdge::from_f64([a.0, a.1], [b.0, b.1]))
+            .collect();
+        let request = CoverageRequest {
+            bounds: plan.bounds(),
+            edges: &edges,
+            edge_coordinates: EdgeCoordinates::FloatPixel,
+            fill_rule: FillRule::EvenOdd,
+            sample_grid: SampleGrid::FourByFour,
+            stroke_radius: None,
+        };
+        let kernel = CoverageKernel::new(context);
+        for _ in 0..3 {
+            let gpu = kernel.coverage_batch(context, &[request]).unwrap();
+            assert_eq!(gpu, vec![expected.clone()]);
+        }
+
+        // Multiple draws exercise the same covered-byte count used for the
+        // vector device's guest-visible completion deadline.
+        let draws = vec![shape; 32];
+        let mut host = TestInputs {
+            regions: HashMap::from([(0x190000, vec![0; 8 * 8 * 4])]),
+        };
+        let covered_pixels = reference
+            .iter()
+            .zip(plan.clip_mask())
+            .filter(|(count, inside)| **count != 0 && **inside)
+            .count() as u64;
+        assert!(covered_pixels > 0);
+        let expected_bytes = covered_pixels * 4 * draws.len() as u64;
+        let first = render(&draws, 0, &mut host).unwrap();
+        assert_eq!(first.1, expected_bytes);
+        for _ in 0..2 {
+            let repeated = render(&draws, 0, &mut host).unwrap();
+            assert_eq!(repeated.1, expected_bytes);
+            assert_eq!(repeated, first);
+        }
+    }
+
+    #[test]
     fn rgba8_src_src_over_texture_and_linear_ramp_match_cpu_reference() {
         compare_with_cpu(0, batch::TargetFormat::Rgba8);
         compare_with_cpu(1, batch::TargetFormat::Rgba8);
