@@ -94,6 +94,7 @@ struct Entry {
     done: bool,
     pending: bool,
     watch_or_observer_stop: bool,
+    interrupted_by_scheduler: bool,
     failed: bool,
     exit: Option<Exit>,
 }
@@ -227,6 +228,7 @@ impl Board {
                     done: false,
                     pending: false,
                     watch_or_observer_stop: false,
+                    interrupted_by_scheduler: false,
                     failed: false,
                     exit: None,
                 }),
@@ -281,8 +283,10 @@ impl Board {
             }
             if !barrier && (error.is_some() || entries.iter().any(|e| e.done || e.pending)) {
                 barrier = true;
-                for entry in entries.iter().filter(|e| !e.done) {
+                for entry in entries.iter_mut().filter(|e| !e.done) {
+                    entry.interrupted_by_scheduler = true;
                     if let Err(e) = self.cpus[entry.core].request_pause(entry.token) {
+                        entry.failed = true;
                         error.get_or_insert_with(|| e.to_string());
                     }
                 }
@@ -352,6 +356,7 @@ impl Board {
                 entry.boundary,
                 entry.watch_or_observer_stop,
                 entry.failed,
+                entry.interrupted_by_scheduler,
             );
             entry.engine_run.set_instructions(instructions);
             entry.engine_run.finish(reason);
