@@ -25,7 +25,7 @@ const TRACKS: [TrackId, string, [string, string][]][] = [
     ['rec', 'Boots'],
     ['menu', 'Menus respond'],
     ['stock', 'Stock features'],
-    ['emulator-updater', 'Updater'],
+    ['firmware-update-stock-installs-in-emulator', 'Updater'],
   ]],
   ['camera', 'Camera', [
     ['camera-identity', 'Identified'],
@@ -38,7 +38,10 @@ const TRACKS: [TrackId, string, [string, string][]][] = [
     ['mod-build', 'Built'],
     ['walkthroughs', 'Walkthroughs'],
   ]],
-  ['sd', 'SD card and install', [['sd-boot', 'Boots from the card']]],
+  ['sd', 'SD card and install', [
+    ['boot-rom-loads-sd-card-on-camera', 'Boot ROM loads an SD card'],
+    ['sd-boot-v1-fujimod-boots-on-camera', 'FujiMod boots from an SD card'],
+  ]],
 ];
 function progress(
   model: string,
