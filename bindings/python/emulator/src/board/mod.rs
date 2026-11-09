@@ -261,7 +261,7 @@ impl Board {
         Ok(xp4::Xp4 { owner: slf.into() })
     }
     #[pyo3(signature=(entries, quota=4, edge_limit=1<<20, state_limit=1<<16,
-                      return_sites=None, quota_per_edge=false))]
+                      return_sites=None, quota_per_edge=false, instruction_ranges=None))]
     #[allow(clippy::too_many_arguments)]
     fn function_watch_begin(
         &mut self,
@@ -271,6 +271,7 @@ impl Board {
         state_limit: usize,
         return_sites: Option<Vec<u64>>,
         quota_per_edge: bool,
+        instruction_ranges: Option<Vec<(u64, u64)>>,
     ) -> PyResult<()> {
         if self.driver.is_some() {
             return Err(error("Function watch requires a whole-board run".into()));
@@ -290,7 +291,7 @@ impl Board {
         self.function_watch_end()?;
         self.function_watch = Some(
             self.board()?
-                .function_watch_begin(recorder, maps)
+                .function_watch_begin(recorder, maps, instruction_ranges)
                 .map_err(error)?,
         );
         Ok(())
@@ -300,10 +301,14 @@ impl Board {
             .as_ref()
             .map(|watch| {
                 watch.check().map_err(error)?;
-                fujimod_python_base::observation::snapshot(
+                let result = fujimod_python_base::observation::snapshot(
                     py,
                     &watch.recorder.borrow().snapshot(),
-                )
+                )?;
+                if let Some(counts) = &watch.range_counts {
+                    result.set_item("instruction_ranges", counts.borrow().snapshot())?;
+                }
+                Ok(result)
             })
             .transpose()
     }
@@ -517,17 +522,38 @@ impl Board {
                 ));
             }
             return Self::xp5_graph(
-                graph, devices, assets, read_limit, mode, continue_refusals, engine,
+                graph,
+                devices,
+                assets,
+                read_limit,
+                mode,
+                continue_refusals,
+                engine,
                 serde_json::json!({"execution":json::<serde_json::Value>(execution)?,"devices":json::<serde_json::Value>(devices)?}),
             );
         }
-        if json::<serde_json::Value>(devices)?.get("kind").and_then(serde_json::Value::as_str) == Some("xpp") {
-            if !matches!(engine, factory::Engine::Unicorn) || !models.is_empty()
-                || json::<serde_json::Value>(scene)? != serde_json::json!({}) {
-                return Err(PyValueError::new_err("X-Processor Pro requires its native devices and explicit assets"));
+        if json::<serde_json::Value>(devices)?
+            .get("kind")
+            .and_then(serde_json::Value::as_str)
+            == Some("xpp")
+        {
+            if !matches!(engine, factory::Engine::Unicorn)
+                || !models.is_empty()
+                || json::<serde_json::Value>(scene)? != serde_json::json!({})
+            {
+                return Err(PyValueError::new_err(
+                    "X-Processor Pro requires its native devices and explicit assets",
+                ));
             }
-            return Self::xpp_graph(graph, devices, assets, read_limit, mode, continue_refusals,
-                serde_json::json!({"execution":json::<serde_json::Value>(execution)?,"devices":json::<serde_json::Value>(devices)?}));
+            return Self::xpp_graph(
+                graph,
+                devices,
+                assets,
+                read_limit,
+                mode,
+                continue_refusals,
+                serde_json::json!({"execution":json::<serde_json::Value>(execution)?,"devices":json::<serde_json::Value>(devices)?}),
+            );
         }
         if json::<serde_json::Value>(devices)?
             .get("kind")
@@ -623,11 +649,7 @@ impl Board {
         let mut bus = Bus::from_graph(mode, built.graph).map_err(error)?;
         bus.continue_refusals(continue_refusals).map_err(error)?;
         let mut board = graph
-            .build(
-                factory::Options::new(engine),
-                bus,
-                None,
-            )
+            .build(factory::Options::new(engine), bus, None)
             .map_err(error)?;
         for controller in built.core_interrupts {
             board
@@ -885,15 +907,15 @@ impl Board {
     }
     fn rotate_control(&mut self, id: &str, steps: i32) -> PyResult<()> {
         let (node, edges) = self.session()?.rotation(id, steps).map_err(error)?;
-        self.session_mut()?.rotate_edges(&node, edges).map_err(error)
+        self.session_mut()?
+            .rotate_edges(&node, edges)
+            .map_err(error)
     }
     fn touch_script(&mut self, node: &str, script: &str) -> PyResult<()> {
         self.session_mut()?
             .touch(
                 node,
-                &json::<Vec<fujimod_emulator_devices::parts::touch_input::ContactInput>>(
-                    script,
-                )?,
+                &json::<Vec<fujimod_emulator_devices::parts::touch_input::ContactInput>>(script)?,
             )
             .map_err(error)
     }
@@ -1126,7 +1148,10 @@ impl Board {
             fujimod_emulator::board::continuation::ContinuationStop::Device { id } => {
                 result.set_item("kind", "device")?;
                 result.set_item("id", id)?;
-                let name = self.session()?.nodes.iter()
+                let name = self
+                    .session()?
+                    .nodes
+                    .iter()
                     .find(|(_, node)| *node == id)
                     .map(|(name, _)| name)
                     .ok_or_else(|| error("Continuation stop names an absent device".into()))?;
@@ -1244,19 +1269,13 @@ impl Board {
             let address = u32::try_from(address)
                 .map_err(|_| PyValueError::new_err("ARMv7-A virtual address exceeds 32 bits"))?;
             let result = session.read_virtual(py, core, address, size)?;
-            fujimod_perf::add_bytes(
-                fujimod_perf::ByteCounter::GuestToPythonBytes,
-                size as u64,
-            );
+            fujimod_perf::add_bytes(fujimod_perf::ByteCounter::GuestToPythonBytes, size as u64);
             return Ok(result);
         }
         let result = PyBytes::new_with(py, size, |out| {
             self.board()?.read_memory(core, address, out).map_err(error)
         })?;
-        fujimod_perf::add_bytes(
-            fujimod_perf::ByteCounter::GuestToPythonBytes,
-            size as u64,
-        );
+        fujimod_perf::add_bytes(fujimod_perf::ByteCounter::GuestToPythonBytes, size as u64);
         Ok(result)
     }
     fn mem_write(&self, core: usize, address: u64, bytes: &[u8]) -> PyResult<()> {
@@ -1280,19 +1299,13 @@ impl Board {
             let address = usize::try_from(address)
                 .map_err(|_| PyValueError::new_err("Physical address exceeds host size"))?;
             let result = session.read(py, address, size)?;
-            fujimod_perf::add_bytes(
-                fujimod_perf::ByteCounter::GuestToPythonBytes,
-                size as u64,
-            );
+            fujimod_perf::add_bytes(fujimod_perf::ByteCounter::GuestToPythonBytes, size as u64);
             return Ok(result);
         }
         let result = PyBytes::new_with(py, size, |out| {
             self.board()?.read_physical(address, out).map_err(error)
         })?;
-        fujimod_perf::add_bytes(
-            fujimod_perf::ByteCounter::GuestToPythonBytes,
-            size as u64,
-        );
+        fujimod_perf::add_bytes(fujimod_perf::ByteCounter::GuestToPythonBytes, size as u64);
         Ok(result)
     }
     /// Read physical memory that an active wait observes but does not depend on.
@@ -1342,7 +1355,9 @@ impl Board {
             );
             return Ok(());
         }
-        self.board()?.write_physical(address, bytes).map_err(error)?;
+        self.board()?
+            .write_physical(address, bytes)
+            .map_err(error)?;
         fujimod_perf::add_bytes(
             fujimod_perf::ByteCounter::PythonToGuestBytes,
             bytes.len() as u64,
@@ -1388,8 +1403,7 @@ impl Board {
         serde_json::to_string(&self.board()?.guest_profile()).map_err(|e| error(e.to_string()))
     }
     fn exit_counters(&self) -> PyResult<String> {
-        serde_json::to_string(&self.board()?.exit_counters())
-            .map_err(|e| error(e.to_string()))
+        serde_json::to_string(&self.board()?.exit_counters()).map_err(|e| error(e.to_string()))
     }
     fn encoder_cycles(&mut self, name: &str, cycles: i32) -> PyResult<()> {
         self.session_mut()?.rotate(name, cycles).map_err(error)
@@ -1626,7 +1640,12 @@ impl Board {
         serde_json::to_string(&self.board()?.device_state_values(kind).map_err(error)?)
             .map_err(|e| error(e.to_string()))
     }
-    fn device_buffer<'py>(&self, py: Python<'py>, kind: &str, name: &str) -> PyResult<Bound<'py, PyBytes>> {
+    fn device_buffer<'py>(
+        &self,
+        py: Python<'py>,
+        kind: &str,
+        name: &str,
+    ) -> PyResult<Bound<'py, PyBytes>> {
         let bytes = self.board()?.device_buffer(kind, name).map_err(error)?;
         Ok(PyBytes::new(py, &bytes))
     }

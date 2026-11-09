@@ -1,5 +1,6 @@
 //! Explicit, bounded CPU/bus observation. No device consumes these records.
 pub mod calls;
+pub mod ranges;
 use super::{Board, State, factory::MemoryMap, scalar};
 use fujimod_emulator_cpu::{Access, Cpu, Hook, HookId, HookRange, Model, Register, arm};
 use serde_json::{Value, json};
@@ -512,6 +513,7 @@ impl Board {
 pub struct FunctionWatch {
     pub recorder: Rc<RefCell<calls::Recorder>>,
     contexts: Vec<Box<FunctionContext>>,
+    pub range_counts: Option<Rc<RefCell<ranges::RangeCounts>>>,
     hooks: Vec<(usize, HookId)>,
 }
 struct FunctionContext {
@@ -521,6 +523,8 @@ struct FunctionContext {
     maps: Vec<MemoryMap>,
     core: usize,
     last: Cell<Option<(u64, u64)>>,
+    range_last: Cell<Option<(u64, u64)>>,
+    range_counts: Option<Rc<RefCell<ranges::RangeCounts>>>,
     error: RefCell<Option<String>>,
 }
 impl FunctionContext {
@@ -576,6 +580,36 @@ impl FunctionContext {
         Ok(())
     }
 }
+unsafe fn function_with_ranges(pc: u64, size: u32, data: *mut c_void) {
+    let context = unsafe { &*data.cast::<FunctionContext>() };
+    let result = (|| -> Result<(), String> {
+        let (Some(state), Some(cpu)) = (context.state.upgrade(), context.cpu.upgrade()) else {
+            return Ok(());
+        };
+        let state = state.borrow();
+        let extra = cpu
+            .instruction_progress()
+            .ok_or("function watch requires exact CPU progress")?
+            .saturating_sub(state.accounted[context.core]);
+        let instructions = state
+            .total_instructions()?
+            .checked_add(extra)
+            .ok_or("function watch instruction overflow")?;
+        if context.range_last.replace(Some((pc, instructions))) != Some((pc, instructions)) {
+            context
+                .range_counts
+                .as_ref()
+                .unwrap()
+                .borrow_mut()
+                .observe(context.core, pc);
+        }
+        Ok(())
+    })();
+    if let Err(error) = result {
+        context.error.borrow_mut().get_or_insert(error);
+    }
+    unsafe { function(pc, size, data) };
+}
 unsafe fn function(pc: u64, _: u32, data: *mut c_void) {
     let context = unsafe { &*data.cast::<FunctionContext>() };
     if let Err(error) = context.observe(pc) {
@@ -597,10 +631,18 @@ impl Board {
         &self,
         recorder: calls::Recorder,
         maps: Vec<MemoryMap>,
+        ranges: Option<Vec<(u64, u64)>>,
     ) -> Result<Box<FunctionWatch>, String> {
+        let range_counts = ranges
+            .map(|ranges| {
+                ranges::RangeCounts::new(ranges, self.cpus.len())
+                    .map(|counts| Rc::new(RefCell::new(counts)))
+            })
+            .transpose()?;
         let recorder = Rc::new(RefCell::new(recorder));
         let mut watch = Box::new(FunctionWatch {
             recorder: recorder.clone(),
+            range_counts: range_counts.clone(),
             contexts: vec![],
             hooks: vec![],
         });
@@ -616,6 +658,8 @@ impl Board {
                 maps: maps.iter().filter(|m| m.core == core).cloned().collect(),
                 core,
                 last: Cell::new(None),
+                range_last: Cell::new(None),
+                range_counts: range_counts.clone(),
                 error: RefCell::new(None),
             }));
             let data = (&**watch.contexts.last().unwrap() as *const FunctionContext)
@@ -623,7 +667,11 @@ impl Board {
                 .cast();
             match unsafe {
                 cpu.install_hook(Hook::Instruction {
-                    callback: function,
+                    callback: if range_counts.is_some() {
+                        function_with_ranges
+                    } else {
+                        function
+                    },
                     data,
                     range: HookRange::All,
                 })
