@@ -119,6 +119,26 @@ fn constructor_json_defaults_to_no_fault_and_rejects_unknown_policies() {
 }
 
 #[test]
+fn cmd8_fault_after_two_responses_survives_checkpoint() {
+    let (mut host, _, mut ram) = host(Protocol::Sdhc, InitializationFault::RejectCmd8After(2));
+    setup(&mut host, &mut ram, Protocol::Sdhc);
+    for _ in 0..2 {
+        command(&mut host, &mut ram, 0x081a0000, 0x1aa);
+        due(&mut host, &mut ram);
+        assert_eq!(read(&mut host, &mut ram, 0x30, 2), 1);
+        assert_eq!(read(&mut host, &mut ram, 0x10, 4), 0x1aa);
+    }
+    let saved = host.checkpoint().unwrap();
+    for _ in 0..2 {
+        command(&mut host, &mut ram, 0x081a0000, 0x1aa);
+        due(&mut host, &mut ram);
+        assert_eq!(read(&mut host, &mut ram, 0x30, 2), 0x8000);
+        assert_eq!(read(&mut host, &mut ram, 0x32, 2), 1);
+        host.restore_checkpoint(&saved).unwrap();
+    }
+}
+
+#[test]
 fn cmd8_timeout_preserves_detect_media_and_response_and_replays_checkpoints() {
     for protocol in [Protocol::Sdhc, Protocol::Application, Protocol::Rom] {
         let (mut host, contacts, mut ram) = host(protocol, InitializationFault::RejectCmd8);

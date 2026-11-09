@@ -35,6 +35,8 @@ pub enum InitializationFault {
     None,
     /// CMD8 completes with Command Timeout Error and no response.
     RejectCmd8,
+    /// Allow this many CMD8 responses, then report command timeout.
+    RejectCmd8After(u32),
 }
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -149,6 +151,7 @@ pub struct SdHost {
     rom_fifo_ready: bool,
     faults: Vec<DataFault>,
     fault_history: Vec<DataFaultEvent>,
+    cmd8_responses: u32,
 }
 /// CMD6 status (SD Physical Layer 4.3.10) of a card whose group 1 offers
 /// default and high speed and whose groups 2-6 offer function 0 only.
@@ -233,6 +236,7 @@ impl SdHost {
             rom_fifo_ready: false,
             faults: Vec::new(),
             fault_history: Vec::new(),
+            cmd8_responses: 0,
         })
     }
     /// Declare a data CRC failure for later multi-block transfers.
@@ -781,11 +785,25 @@ impl SdHost {
             self.request = Some(r);
             return Err("SD contacts changed during transfer".into());
         }
-        if r.command == 8 && self.options.initialization_fault == InitializationFault::RejectCmd8 {
+        let reject_cmd8 = r.command == 8
+            && match self.options.initialization_fault {
+                InitializationFault::None => false,
+                InitializationFault::RejectCmd8 => true,
+                InitializationFault::RejectCmd8After(count) => self.cmd8_responses >= count,
+            };
+        if reject_cmd8 {
             self.regs
                 .set(0x32, self.regs.get(0x32) | COMMAND_TIMEOUT_ERROR);
             self.regs.set(0x30, self.regs.get(0x30) | ERROR_INTERRUPT);
             return self.signal(cx);
+        }
+        if r.command == 8
+            && matches!(
+                self.options.initialization_fault,
+                InitializationFault::RejectCmd8After(_)
+            )
+        {
+            self.cmd8_responses = self.cmd8_responses.saturating_add(1);
         }
         r.due = None;
         self.response = r.response;
@@ -1210,6 +1228,8 @@ struct Snapshot {
     reads: StorageReads,
     contacts: u8,
     initialization_fault: InitializationFault,
+    #[serde(default)]
+    cmd8_responses: u32,
     regs: Registers,
     clocks: Clocks,
     state: State,
@@ -1246,6 +1266,7 @@ impl Device for SdHost {
             reads: &'a StorageReads,
             contacts: u8,
             initialization_fault: InitializationFault,
+            cmd8_responses: u32,
             regs: &'a Registers,
             clocks: &'a Clocks,
             state: State,
@@ -1271,6 +1292,7 @@ impl Device for SdHost {
                 reads: &self.reads,
                 contacts: self.contacts.checkpoint_level(),
                 initialization_fault: self.options.initialization_fault,
+                cmd8_responses: self.cmd8_responses,
                 regs: &self.regs,
                 clocks: &self.clocks,
                 state: self.state,
@@ -1312,6 +1334,7 @@ impl Device for SdHost {
         let s: Snapshot = saved.decode(self.name())?;
         self.fifo.restore(&s.fifo, s.fifo_position)?;
         self.card = s.card;
+        self.cmd8_responses = s.cmd8_responses;
         self.reads = s.reads;
         self.contacts.restore_level(s.contacts);
         self.regs = s.regs;
@@ -1348,7 +1371,8 @@ impl Device for SdHost {
             "clocks":self.clocks.save(),"state":self.state,"app":self.app,"block_length":self.block_length,"bus_width":self.bus_width,
             "response":self.response,"request":request,"fifo":fujimod_emulator_devices::state::bytes(&fifo),"scratch":fujimod_emulator_devices::state::bytes(&self.scratch),
             "fifo_position":fifo_position,"rom_fifo_ready":self.rom_fifo_ready,
-            "initialization_fault":self.options.initialization_fault,"faults":self.faults,"fault_history":self.fault_history});
+            "initialization_fault":self.options.initialization_fault,"cmd8_responses":self.cmd8_responses,
+            "faults":self.faults,"fault_history":self.fault_history});
         if self.access_mode != 0 {
             value["access_mode"] = self.access_mode.into();
         }
@@ -1448,6 +1472,7 @@ impl Device for SdHost {
             "request":self.request.as_ref().map(|r| serde_json::json!({"command":r.command,
                 "cursor":r.cursor,"quantity":r.quantity,"deadline":r.due})),
             "clocks":self.clocks.save(), "initialization_fault":self.options.initialization_fault,
+            "cmd8_responses":self.cmd8_responses,
             "data_faults":self.faults, "fault_history":self.fault_history
         })
     }
