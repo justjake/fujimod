@@ -207,18 +207,18 @@ def wait_steps(board: WaitBoard, predicate: Callable[[], T], description: str, *
                                   **({'contact_watch': True} if contacts else {}))
             report.continuations += 1
             if published:
-                continuation_stop = getattr(board.native, 'continuation_stop', None)
-                stop = continuation_stop() if callable(continuation_stop) else None
+                stop = board.native.continuation_stop()
                 if stop is None:
                     if contacts:
                         cause = 'contact-queue'
-                    elif not profile_stops and not callable(continuation_stop):
-                        cause = 'device-publication'
                     else:
                         raise RuntimeError('Native run reported a continuation stop without a cause')
                 elif stop.get('kind') == 'device':
+                    device = stop.get('device')
+                    if not isinstance(device, str) or not device:
+                        raise RuntimeError('Native continuation stop returned an invalid device name')
                     cause = 'device-publication'
-                    perf.record_wait_stop(wait_counter, cause, stop.get('device'))
+                    perf.record_wait_stop(wait_counter, cause, device)
                 elif stop.get('kind') == 'store':
                     cause = 'watched-store'
                 else:
