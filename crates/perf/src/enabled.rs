@@ -84,13 +84,26 @@ static DEVICES: [[CellCounts; PHASE_COUNT]; MAX_DEVICES] =
     [const { [const { CellCounts::new() }; PHASE_COUNT] }; MAX_DEVICES];
 static ENGINES: [CellCounts; MAX_CORES] = [const { CellCounts::new() }; MAX_CORES];
 static BYTES: [AtomicU64; BYTE_COUNT] = [const { AtomicU64::new(0) }; BYTE_COUNT];
-static WAITS: Mutex<BTreeMap<String, WaitCounts>> = Mutex::new(BTreeMap::new());
+static WAITS: Mutex<WaitLedger> = Mutex::new(WaitLedger::new());
+
+struct WaitLedger {
+    descriptions: BTreeMap<String, usize>,
+    waits: Vec<WaitCounts>,
+}
+
+impl WaitLedger {
+    const fn new() -> Self {
+        Self { descriptions: BTreeMap::new(), waits: Vec::new() }
+    }
+}
 
 #[derive(Default)]
 struct WaitCounts {
+    description: String,
     predicate_evaluations: u64,
     continuations: u64,
     stops: BTreeMap<String, u64>,
+    device_stops: BTreeMap<String, u64>,
 }
 static DEVICE_NAMES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 static COUNTER_BASELINE: Mutex<Option<Vec<Result<BTreeMap<String, u64>, String>>>> =
@@ -226,7 +239,7 @@ impl Reporter for TraceReporter {
 }
 
 fn reset_ledger() {
-    WAITS.lock().unwrap_or_else(|e| e.into_inner()).clear();
+    *WAITS.lock().unwrap_or_else(|e| e.into_inner()) = WaitLedger::new();
     for span in &SPANS {
         span.count.store(0, Ordering::Relaxed);
         span.raw.store(0, Ordering::Relaxed);
@@ -291,33 +304,48 @@ pub fn begin_guide(id: &str) {
 }
 
 /// Count a predicate evaluation for an interned wait description.
-pub fn record_wait_evaluation(description: &str) {
+pub fn begin_wait(description: &str) -> usize {
     if !ACTIVE.load(Ordering::Relaxed) {
-        return;
+        return usize::MAX;
     }
-    let mut waits = WAITS.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(wait) = waits.get_mut(description) {
+    let mut ledger = WAITS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(index) = ledger.descriptions.get(description) {
+        return *index;
+    }
+    let index = ledger.waits.len();
+    ledger.waits.push(WaitCounts {
+        description: description.to_owned(),
+        ..WaitCounts::default()
+    });
+    ledger.descriptions.insert(description.to_owned(), index);
+    index
+}
+
+pub fn record_wait_evaluation(index: usize) {
+    if !ACTIVE.load(Ordering::Relaxed) || index == usize::MAX { return; }
+    let mut ledger = WAITS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(wait) = ledger.waits.get_mut(index) {
         wait.predicate_evaluations += 1;
-    } else {
-        waits.insert(description.to_owned(), WaitCounts { predicate_evaluations: 1, ..WaitCounts::default() });
     }
 }
 
-/// Count a continuation and its stop cause for an interned wait description.
-pub fn record_wait_stop(description: &str, cause: &str) {
-    if !ACTIVE.load(Ordering::Relaxed) {
-        return;
-    }
-    let mut waits = WAITS.lock().unwrap_or_else(|e| e.into_inner());
-    if !waits.contains_key(description) {
-        waits.insert(description.to_owned(), WaitCounts::default());
-    }
-    let wait = waits.get_mut(description).expect("wait inserted");
+pub fn record_wait_stop(index: usize, cause: &str, device: Option<&str>) {
+    if !ACTIVE.load(Ordering::Relaxed) || index == usize::MAX { return; }
+    let mut ledger = WAITS.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(wait) = ledger.waits.get_mut(index) else { return; };
     wait.continuations += 1;
-    if let Some(count) = wait.stops.get_mut(cause) {
-        *count += 1;
+    if let Some(device) = device {
+        if let Some(count) = wait.device_stops.get_mut(device) {
+            *count += 1;
+        } else {
+            wait.device_stops.insert(device.to_owned(), 1);
+        }
     } else {
-        wait.stops.insert(cause.to_owned(), 1);
+        if let Some(count) = wait.stops.get_mut(cause) {
+            *count += 1;
+        } else {
+            wait.stops.insert(cause.to_owned(), 1);
+        }
     }
 }
 
@@ -357,12 +385,18 @@ pub fn end_guide() -> GuideSummary {
             })
         })
         .collect();
-    let waits = WAITS.lock().unwrap_or_else(|e| e.into_inner()).iter()
-        .map(|(description, counts)| WaitSummary {
-            description: description.clone(),
-            predicate_evaluations: counts.predicate_evaluations,
-            continuations: counts.continuations,
-            stops: counts.stops.clone(),
+    let waits = WAITS.lock().unwrap_or_else(|e| e.into_inner()).waits.iter()
+        .map(|counts| {
+            let mut stops = counts.stops.clone();
+            for (device, count) in &counts.device_stops {
+                stops.insert(format!("device:{device}"), *count);
+            }
+            WaitSummary {
+                description: counts.description.clone(),
+                predicate_evaluations: counts.predicate_evaluations,
+                continuations: counts.continuations,
+                stops,
+            }
         }).collect();
     let names = DEVICE_NAMES.lock().unwrap_or_else(|e| e.into_inner());
     let mut devices = Vec::new();
@@ -1005,11 +1039,13 @@ mod tests {
     fn wait_counters_are_keyed_by_description_and_stop_cause() {
         let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         begin_guide("wait-counters");
-        record_wait_evaluation("display frame");
-        record_wait_evaluation("display frame");
-        record_wait_stop("display frame", "device:display-timing");
-        record_wait_stop("display frame", "deadline");
-        record_wait_evaluation("menu ready");
+        let display = begin_wait("display frame");
+        record_wait_evaluation(display);
+        record_wait_evaluation(display);
+        record_wait_stop(display, "device-publication", Some("display-timing"));
+        record_wait_stop(display, "deadline", None);
+        let menu = begin_wait("menu ready");
+        record_wait_evaluation(menu);
         let summary = end_guide();
         let wait = summary.waits.iter().find(|wait| wait.description == "display frame").unwrap();
         assert_eq!(wait.predicate_evaluations, 2);

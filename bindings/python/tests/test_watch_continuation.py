@@ -142,7 +142,7 @@ def test_native_device_publication_stops_and_read_sets_resolve_graph_names():
         machine.cpus[0].reg_write({'Arm32':{'R':0}},0x300)
         machine.cpus[0].reg_write({'Arm32':{'R':1}},0xfff86000)
         assert machine.run(20,device_watches=['idle'])
-        assert machine.native.continuation_stop() == {'kind': 'device', 'id': 0}
+        assert machine.native.continuation_stop() == {'kind': 'device', 'id': 0, 'device': 'idle'}
         assert machine.instructions == 1
         assert machine.cpus[0].reg_read('Pc') == 0x10004
         assert machine.cpus[0].reg_read({'Arm32':{'R':0}}) == 0x300

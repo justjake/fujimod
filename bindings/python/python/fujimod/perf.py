@@ -105,12 +105,16 @@ def add_bytes(counter: str, count: int) -> None:
     _native.add_bytes(counter, count)
 
 
-def record_wait_evaluation(description: str) -> None:
-    _native.record_wait_evaluation(description)
+def begin_wait(description: str) -> int:
+    return _native.begin_wait(description)
 
 
-def record_wait_stop(description: str, cause: str) -> None:
-    _native.record_wait_stop(description, cause)
+def record_wait_evaluation(index: int) -> None:
+    _native.record_wait_evaluation(index)
+
+
+def record_wait_stop(index: int, cause: str, device: str | None = None) -> None:
+    _native.record_wait_stop(index, cause, device)
 
 
 def write_chrome_trace(path: str | PathLike[str]) -> None:

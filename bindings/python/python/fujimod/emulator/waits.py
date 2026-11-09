@@ -172,6 +172,7 @@ def wait_steps(board: WaitBoard, predicate: Callable[[], T], description: str, *
     start, tick = board.instructions, board.virtual_ticks
     report = stops if stops is not None else WaitStops()
     polls = 0
+    wait_counter = perf.begin_wait(description)
     properties = dict(instructions=0, ticks=0, polls=0, continuations=0)
     with perf.span('wait', wait_kind(description), properties):
       try:
@@ -182,7 +183,7 @@ def wait_steps(board: WaitBoard, predicate: Callable[[], T], description: str, *
             finally:
                 reads = json.loads(board.native.read_set_end())
             polls += 1
-            perf.record_wait_evaluation(description)
+            perf.record_wait_evaluation(wait_counter)
             if value:
                 return value
             remaining = instruction_limit - (board.instructions - start)
@@ -206,19 +207,24 @@ def wait_steps(board: WaitBoard, predicate: Callable[[], T], description: str, *
                                   **({'contact_watch': True} if contacts else {}))
             report.continuations += 1
             if published:
-                stop = board.native.continuation_stop()
+                continuation_stop = getattr(board.native, 'continuation_stop', None)
+                stop = continuation_stop() if callable(continuation_stop) else None
                 if stop is None:
                     if contacts:
                         cause = 'contact-queue'
+                    elif not profile_stops and not callable(continuation_stop):
+                        cause = 'device-publication'
                     else:
                         raise RuntimeError('Native run reported a continuation stop without a cause')
                 elif stop.get('kind') == 'device':
-                    cause = f"device:{stop.get('device')}"
+                    cause = 'device-publication'
+                    perf.record_wait_stop(wait_counter, cause, stop.get('device'))
                 elif stop.get('kind') == 'store':
                     cause = 'watched-store'
                 else:
                     cause = str(stop.get('kind', 'unknown'))
-                perf.record_wait_stop(description, cause)
+                if not (stop is not None and stop.get('kind') == 'device'):
+                    perf.record_wait_stop(wait_counter, cause)
                 if profile_stops and stop is not None:
                     _record_continuation_stop(report, stop)
             else:
@@ -228,7 +234,7 @@ def wait_steps(board: WaitBoard, predicate: Callable[[], T], description: str, *
                     cause = 'tick-limit'
                 else:
                     cause = 'instruction-limit'
-                perf.record_wait_stop(description, cause)
+                perf.record_wait_stop(wait_counter, cause)
             if after_run is not None:
                 after_run()
             # A due device effect can publish at the current tick before any
