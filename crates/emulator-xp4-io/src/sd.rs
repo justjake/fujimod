@@ -30,8 +30,8 @@ pub struct Options {
     pub capabilities_2: u32,
     /// Slot status halfword (+0xfc) and host controller version (+0xfe).
     pub slot_and_version: u32,
-    /// Offsets of vendor words beyond the standard bank that read back their
-    /// last write.
+    /// Offsets of vendor words that read back their last write; a declared
+    /// offset takes precedence over the standard bank.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub vendor_offsets: Vec<u64>,
 }
@@ -93,7 +93,7 @@ impl Controller {
         let offset = address
             .checked_sub(self.options.base)
             .ok_or("SD access below the register bank")?;
-        if size == 4 && offset >= BANK && self.options.vendor_offsets.contains(&offset) {
+        if size == 4 && self.options.vendor_offsets.contains(&offset) {
             return Ok(match value {
                 Some(v) => {
                     self.vendor.insert(offset, v as u32);
@@ -268,7 +268,7 @@ mod tests {
             capabilities: 0x25e8_30b0,
             capabilities_2: 0x2077,
             slot_and_version: 0x0102_0000,
-            vendor_offsets: vec![0x1e0],
+            vendor_offsets: vec![0x100, 0x1e0],
         };
         Controller::new(options, card, Contacts::new(true, false), None).unwrap()
     }
@@ -288,6 +288,7 @@ mod tests {
         let base = 0x80000;
         let mut d = controller(base);
         let mut h = TestHost::new();
+        assert_eq!(read(&mut d, &mut h, base + 0x100), 0);
         assert_eq!(read(&mut d, &mut h, base + 0x1e0), 0);
         write(&mut d, &mut h, base + 0x1e0, 0x400);
         assert_eq!(read(&mut d, &mut h, base + 0x1e0), 0x400);

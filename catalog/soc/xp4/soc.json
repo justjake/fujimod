@@ -1251,7 +1251,7 @@
           "sd_hosts": [
             {
               "base": 4294721536,
-              "basis": "SDHCI host of one X-T3 slot, read on an X-T3 with a card in each slot: present state +0x24 = 0x01f70000 (card inserted, state stable, card detect level set, write protect clear, CMD and DAT lines high), capabilities +0x40 = 0x25e830b0 (3.3 V, 1.8 V, 64-bit bus), capabilities 2 +0x44 = 0x2077 (SDR50, SDR104, DDR50), version +0xfe = 0x0102 (SDHCI 3.00), clock control +0x2c = 0x0003 or 0x0203 and timeout +0x2e = 0xe. The standard bank starts at the page base. Slot 1 is the host at 0xfffc4000 and slot 2 the host at 0xfffc8000; 0xfffc6000 and 0xfffca000 did not answer reads with UHS-I cards (reported to carry the UHS-II interfaces). The firmware also reads and writes the vendor words at +0x1e0 and +0x1e4; their values are not read from the camera, so they read back their last write. The interrupt line is not known: the host without a line refuses the firmware's first interrupt enable. Clock settle and transfer times are assumed, not measured.",
+              "basis": "SDHCI host of one X-T3 slot, read on an X-T3 with a card in each slot: present state +0x24 = 0x01f70000 (card inserted, state stable, card detect level set, write protect clear, CMD and DAT lines high), capabilities +0x40 = 0x25e830b0 (3.3 V, 1.8 V, 64-bit bus), capabilities 2 +0x44 = 0x2077 (SDR50, SDR104, DDR50), version +0xfe = 0x0102 (SDHCI 3.00), clock control +0x2c = 0x0003 or 0x0203 and timeout +0x2e = 0xe. The standard bank starts at the page base (it also appears at +0x200). Slot 1 is the host at 0xfffc4000. The interrupt line is the one the firmware registers for the slot's first interface: logical id 0x59 (interrupt 230) for slot 1 and 0x5b (interrupt 237) for slot 2, registered by the SD command routine 0x1083c3c with handlers 0x1084004 and 0x1083fbc; the second interfaces (ids 0x5a and 0x5c, interrupts 235 and 242) are on the pages 0xfffc6000 and 0xfffca000, which did not answer reads with UHS-I cards (reported to carry the UHS-II interfaces). The vendor words +0x100, +0x108, +0x10c, +0x110, +0x114, +0x124, +0x130, +0x150, +0x154, +0x1e0 and +0x1e4 are programmed by the driver; their meanings are not decoded, so they read back their last write. Clock settle and transfer times are assumed, not measured.",
               "capabilities": 635973808,
               "capabilities_2": 8311,
               "clock_ticks": 8,
@@ -1259,13 +1259,23 @@
               "slot_and_version": 16908288,
               "transfer_ticks": 4800,
               "vendor_offsets": [
+                256,
+                264,
+                268,
+                272,
+                276,
+                292,
+                304,
+                336,
+                340,
                 480,
                 484
-              ]
+              ],
+              "irq_route": 230
             },
             {
               "base": 4294737920,
-              "basis": "SDHCI host of one X-T3 slot, read on an X-T3 with a card in each slot: present state +0x24 = 0x01f70000 (card inserted, state stable, card detect level set, write protect clear, CMD and DAT lines high), capabilities +0x40 = 0x25e830b0 (3.3 V, 1.8 V, 64-bit bus), capabilities 2 +0x44 = 0x2077 (SDR50, SDR104, DDR50), version +0xfe = 0x0102 (SDHCI 3.00), clock control +0x2c = 0x0003 or 0x0203 and timeout +0x2e = 0xe. The standard bank starts at the page base. Slot 1 is the host at 0xfffc4000 and slot 2 the host at 0xfffc8000; 0xfffc6000 and 0xfffca000 did not answer reads with UHS-I cards (reported to carry the UHS-II interfaces). The firmware also reads and writes the vendor words at +0x1e0 and +0x1e4; their values are not read from the camera, so they read back their last write. The interrupt line is not known: the host without a line refuses the firmware's first interrupt enable. Clock settle and transfer times are assumed, not measured.",
+              "basis": "SDHCI host of one X-T3 slot, read on an X-T3 with a card in each slot: present state +0x24 = 0x01f70000 (card inserted, state stable, card detect level set, write protect clear, CMD and DAT lines high), capabilities +0x40 = 0x25e830b0 (3.3 V, 1.8 V, 64-bit bus), capabilities 2 +0x44 = 0x2077 (SDR50, SDR104, DDR50), version +0xfe = 0x0102 (SDHCI 3.00), clock control +0x2c = 0x0003 or 0x0203 and timeout +0x2e = 0xe. The standard bank starts at the page base (it also appears at +0x200). Slot 2 is the host at 0xfffc8000. The interrupt line is the one the firmware registers for the slot's first interface: logical id 0x59 (interrupt 230) for slot 1 and 0x5b (interrupt 237) for slot 2, registered by the SD command routine 0x1083c3c with handlers 0x1084004 and 0x1083fbc; the second interfaces (ids 0x5a and 0x5c, interrupts 235 and 242) are on the pages 0xfffc6000 and 0xfffca000, which did not answer reads with UHS-I cards (reported to carry the UHS-II interfaces). The vendor words +0x100, +0x108, +0x10c, +0x110, +0x114, +0x124, +0x130, +0x150, +0x154, +0x1e0 and +0x1e4 are programmed by the driver; their meanings are not decoded, so they read back their last write. Clock settle and transfer times are assumed, not measured.",
               "capabilities": 635973808,
               "capabilities_2": 8311,
               "clock_ticks": 8,
@@ -1273,9 +1283,19 @@
               "slot_and_version": 16908288,
               "transfer_ticks": 4800,
               "vendor_offsets": [
+                256,
+                264,
+                268,
+                272,
+                276,
+                292,
+                304,
+                336,
+                340,
                 480,
                 484
-              ]
+              ],
+              "irq_route": 237
             }
           ]
         },
