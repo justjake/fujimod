@@ -1216,6 +1216,17 @@
                 }
               ],
               "basis": "X-T3 5.11 DRAM controller channel 3 apply word at 0xff535384. Each register script of 71 writes ends with 1 written here and the routine waits for it to read 0; the word completes at once and reads 0. Other words read back their last write."
+            },
+            {
+              "base": 4294246400,
+              "size": 4096,
+              "idle_bits": [
+                {
+                  "offset": 0,
+                  "mask": 1
+                }
+              ],
+              "basis": "X-T3 5.11 resets the unit at 0x1057e34 by writing 0 to +0x000 and waits for bit 0 to read 1. A camera in REC reads 1 there. Other words read back their last write; nothing else in this block is modeled."
             }
           ]
         },
