@@ -6644,14 +6644,18 @@
           "status": "available",
           "errors": []
         },
-        "controls": {
+        "card-files": {
           "status": "unavailable",
           "errors": [
             {
-              "locator": "controls",
-              "reason": "ControlIdsError: No catalog firmware, body, and physical-control records are published"
+              "locator": "card_files.locate",
+              "reason": "MissingMechanism: Stock card routines located (path_open, open, read, write, close, seek, unlink, opendir), but X-Processor 5 has no card mechanism: stock_sdk is the X-Processor 4 asynchronous SDK, and mailbox needs a reserved RAM region and an AArch64 file-service build"
             }
           ]
+        },
+        "controls": {
+          "status": "available",
+          "errors": []
         },
         "facts": {
           "status": "unavailable",
@@ -6676,11 +6680,7 @@
           "errors": [
             {
               "locator": "flash_error",
-              "reason": "mapped loader missing"
-            },
-            {
-              "locator": "publication",
-              "reason": "No catalog firmware and body record is published"
+              "reason": "NOR installed JEDEC identity is not established"
             }
           ]
         },
@@ -6712,26 +6712,12 @@
           ]
         },
         "settings": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "settings",
-              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "state": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "boot_rom_error",
-              "reason": "xp5: no established safely readable boot ROM extent"
-            },
-            {
-              "locator": "publication",
-              "reason": "No catalog firmware and body record is published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "ui_setting_names": {
           "status": "available",
@@ -6740,15 +6726,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: card open: 0 checked routines in a mapped section"
-            }
-          ]
         }
       }
     },
