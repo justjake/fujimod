@@ -2322,3 +2322,20 @@ fn declared_parent_candidates_must_all_be_read_before_selecting_a_unique_parent(
         }
     });
 }
+
+#[test]
+fn caption_priority_skips_whitespace_without_trimming_a_meaningful_label() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.layout.caption_words = 3;
+        facts.firmware.menus.layout.caption_word_order = Some(vec![1, 2]);
+        let mut backend = Synthetic::new();
+        backend.word(12288 + 4, 28720);
+        backend.word(12288 + 8, 28800);
+        backend.bytes[28720..28723].copy_from_slice(b" \t\0");
+        backend.bytes[28800..28811].copy_from_slice(b"  LABEL  \0\0");
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let value = remote.read(&menu("shooting").with_key(10).into()).await.unwrap();
+        assert_eq!(value.menu().unwrap().label, "  LABEL  ");
+    });
+}

@@ -630,7 +630,7 @@ impl<B: Backend> Memory<'_, B> {
                 continue;
             }
             let text = self.text(resource).await?;
-            if !text.is_empty() {
+            if !text.trim().is_empty() {
                 return Ok(text);
             }
         }

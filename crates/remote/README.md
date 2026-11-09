@@ -69,6 +69,8 @@ Caption records contain `caption_words` 32-bit resource IDs. Omitted
 more words, otherwise word 0). An explicit order lists only the word indices
 the resolver tries, in priority order; it must be nonempty, contain unique
 indices below `caption_words`, and use a valid 1–64 word extent.
+Empty or whitespace-only decoded captions are skipped. A caption containing
+text retains its original spacing.
 
 Build `Facts` with `Facts::from_selection(&selection, manifest)`. A reference is
 resolved on every use; duplicate or missing rows and option names produce an
