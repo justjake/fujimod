@@ -16,8 +16,8 @@
     "capacity": 65536
   },
   "window": {
-    "address": 43102208,
-    "size": 15470592
+    "address": 0,
+    "size": 1610612736
   },
   "code_checks": [
     {
@@ -142,12 +142,23 @@
   "scopes": [
     {
       "name": "quick",
-      "basis": "Initialized firmware section containing the checked bulk probes; other RAM extents are not established.",
+      "basis": "Mapped update ranges in the RAM window through the highest located transfer-state address, rounded to 1 MiB. Static BSS and heap extents beyond it are not established.",
       "ranges": [
         {
           "name": "firmware",
-          "address": 43102208,
-          "size": 15470592
+          "address": 0,
+          "size": 65011712
+        }
+      ]
+    },
+    {
+      "name": "full",
+      "basis": "The recorded RAM capture window; its first 16 KiB and high SRAM are excluded.",
+      "ranges": [
+        {
+          "name": "ram",
+          "address": 0,
+          "size": 1610612736
         }
       ]
     }
