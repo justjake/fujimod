@@ -2,10 +2,7 @@
 
 use crate::{Inputs, RenderedBatch, batch};
 use fujimod_emulator_devices::record::{Result, Unsupported};
-use fujimod_emulator_gpu::{
-    CoverageEdge, CoverageRequest, EdgeCoordinates, FillRule, SampleGrid, SurfaceExtent,
-    SurfaceFormat, SurfaceKey, SurfaceLayout,
-};
+use fujimod_emulator_gpu::{SurfaceExtent, SurfaceFormat, SurfaceKey, SurfaceLayout};
 use fujimod_emulator_graphics::render;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
@@ -260,56 +257,67 @@ pub(super) async fn render_async(
     }
 
     let plans = render::coverage_plans(draws)?;
-    let edge_sets: Vec<Vec<CoverageEdge>> = plans
-        .iter()
-        .map(|plan| {
-            plan.edges
-                .iter()
-                .map(|&(start, end)| {
-                    let coordinates = [start.0, start.1, end.0, end.1];
-                    if coordinates
-                        .iter()
-                        .any(|coordinate| coordinate.abs() > 16_777_216.0)
-                    {
-                        return fail("Graphics UI fill edge exceeds the GPU coordinate range");
-                    }
-                    Ok(CoverageEdge::from_f64([start.0, start.1], [end.0, end.1]))
-                })
-                .collect::<Result<_>>()
-        })
-        .collect::<Result<_>>()?;
-    let requests: Vec<_> = plans
-        .iter()
-        .zip(&edge_sets)
-        .map(|(plan, edges)| {
-            let sample_grid = match plan.samples {
-                1 => SampleGrid::OneByOne,
-                2 => SampleGrid::TwoByTwo,
-                4 => SampleGrid::FourByFour,
-                _ => return fail("Graphics UI uses an unsupported coverage sample grid"),
-            };
-            Ok(CoverageRequest {
-                bounds: plan.bounds(),
-                edges,
-                edge_coordinates: EdgeCoordinates::FloatPixel,
-                fill_rule: if plan.nonzero {
-                    FillRule::NonZero
-                } else {
-                    FillRule::EvenOdd
-                },
-                sample_grid,
-                stroke_radius: None,
-            })
-        })
-        .collect::<Result<_>>()?;
-
     let device = context.device();
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("EXR2 vector GPU coverage and paint"),
+        label: Some("EXR2 vector GPU paint"),
     });
-    let coverage = super::coverage_kernel()?
-        .encode_batch(context, &mut encoder, &requests)
-        .map_err(|error| Unsupported(format!("Graphics UI GPU coverage {error}")))?;
+    // Coverage controls both the pixels and the guest-visible completion time.
+    // The reference scanline rasterizer produces the same counts for each run.
+    let mut counts = Vec::<u32>::new();
+    let mut rasters = Vec::with_capacity(plans.len());
+    for plan in &plans {
+        if !matches!(plan.samples, 1 | 2 | 4) {
+            return fail("Graphics UI uses an unsupported coverage sample grid");
+        }
+        let bounds = plan.bounds();
+        if bounds[1] > 2048 || bounds[3] > 2048 {
+            return fail("Graphics UI coverage exceeds the GPU bounds");
+        }
+        if plan.edges.iter().any(|&(start, end)| {
+            [start.0, start.1, end.0, end.1]
+                .iter()
+                .any(|v| v.abs() > 16_777_216.0)
+        }) {
+            return fail("Graphics UI fill edge exceeds the GPU coordinate range");
+        }
+        let length = plan
+            .width
+            .checked_mul(plan.height)
+            .and_then(|n| n.checked_add(counts.len()))
+            .and_then(|n| n.checked_mul(4))
+            .ok_or_else(|| Unsupported("Graphics UI coverage size overflow".into()))?;
+        let limits = device.limits();
+        if length > limits.max_storage_buffer_binding_size as usize
+            || length as u64 > limits.max_buffer_size
+        {
+            return fail("Graphics UI coverage exceeds host GPU limits");
+        }
+        let offset = u32::try_from(counts.len())
+            .map_err(|_| Unsupported("Graphics UI coverage offset overflow".into()))?;
+        let values = if plan.is_empty() {
+            Vec::new()
+        } else {
+            render::fill_counts(
+                &plan.edges,
+                plan.nonzero,
+                plan.x0,
+                plan.y0,
+                i64::from(plan.samples),
+                plan.width,
+                plan.height,
+            )?
+        };
+        rasters.push((offset, values.len()));
+        counts.extend(values.into_iter().map(u32::from));
+    }
+    let coverage_bytes = words_as_bytes(&counts);
+    let coverage_buffer = (!counts.is_empty()).then(|| {
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("EXR2 vector coverage"),
+            contents: &coverage_bytes,
+            usage: wgpu::BufferUsages::STORAGE,
+        })
+    });
     let surfaces: Vec<_> = target_bytes
         .iter()
         .map(|(key, _)| {
@@ -331,13 +339,10 @@ pub(super) async fn render_async(
         mapped_at_creation: false,
     });
 
-    if coverage.total_count() != 0 {
+    if let Some(coverage_buffer) = &coverage_buffer {
         let paint = kernel()?;
-        let coverage_buffer = coverage
-            .buffer()
-            .ok_or_else(|| Unsupported("Graphics UI GPU coverage buffer is missing".into()))?;
-        for ((draw, plan), raster) in draws.iter().zip(&plans).zip(coverage.rasters()) {
-            if plan.is_empty() || raster.length == 0 {
+        for ((draw, plan), raster) in draws.iter().zip(&plans).zip(&rasters) {
+            if plan.is_empty() || raster.1 == 0 {
                 continue;
             }
             let target_index = *target_slots
@@ -349,7 +354,7 @@ pub(super) async fn render_async(
                 .as_ref()
                 .and_then(|texture| texture_bytes.get(&image_key(texture)))
                 .map(Vec::as_slice);
-            let params = paint_parameters(draw, plan, raster.offset)?;
+            let params = paint_parameters(draw, plan, raster.0)?;
             let params_bytes = words_as_bytes(&params);
             let params_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("EXR2 vector GPU paint parameters"),
@@ -721,6 +726,8 @@ mod tests {
             ]),
         };
         let actual = render(&draws, 0, &mut host).expect("GPU paint should render");
+        let repeated = render(&draws, 0, &mut host).expect("repeated GPU paint should render");
+        assert_eq!(actual, repeated);
 
         let targets = HashMap::from([(target_address, target)]);
         let textures = HashMap::from([((texture_address, 8, 8), texture_bytes)]);
