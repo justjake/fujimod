@@ -1153,6 +1153,174 @@ fn menu_layout_rejects_before_memory_reads_when_facts_validation_is_bypassed() {
 }
 
 #[test]
+fn byte_cursor_status_uses_one_byte_and_ignores_nonzero_neighbors() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.cursor.status_width = 1;
+        facts.firmware.menus.cursor.status_stride = 1;
+        let mut backend = Synthetic::new();
+        backend.active(4096, 0);
+        backend.bytes[544] = 0xa5;
+        backend.bytes[545] = 2;
+        backend.bytes[546] = 0x5a;
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        let snapshot = result.menu().unwrap();
+        assert!(snapshot.visible);
+        assert!(!snapshot.enabled);
+        assert!(remote
+            .backend
+            .memory_requests
+            .iter()
+            .any(|request| *request == (545, 1)));
+    });
+}
+
+#[test]
+fn cursor_status_keeps_existing_four_byte_behavior() {
+    futures_lite::future::block_on(async {
+        let facts = facts();
+        assert_eq!(facts.firmware.menus.cursor.status_width, 4);
+        assert_eq!(facts.firmware.menus.cursor.status_stride, 4);
+        let mut backend = Synthetic::new();
+        backend.active(4096, 0);
+        backend.word(548, 2);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert!(!result.menu().unwrap().enabled);
+        assert!(remote
+            .backend
+            .memory_requests
+            .iter()
+            .any(|request| *request == (548, 4)));
+    });
+}
+
+#[test]
+fn two_and_eight_byte_cursor_statuses_preserve_visible_and_enabled_values() {
+    futures_lite::future::block_on(async {
+        for (width, status) in [(2u32, 1u64), (8u32, 3u64)] {
+            let mut facts = facts();
+            facts.firmware.menus.cursor.status_width = width;
+            facts.firmware.menus.cursor.status_stride = width;
+            let mut backend = Synthetic::new();
+            backend.active(4096, 0);
+            let address = 512 + 32 + u64::from(width);
+            let start = usize::try_from(address).unwrap();
+            backend.bytes[start..start + usize::try_from(width).unwrap()]
+                .copy_from_slice(&status.to_le_bytes()[..usize::try_from(width).unwrap()]);
+            let mut remote = Connection::connect(backend, facts).unwrap();
+
+            let result = remote
+                .read(&menu("shooting").with_key(20).into())
+                .await
+                .unwrap();
+            let snapshot = result.menu().unwrap();
+            assert_eq!(snapshot.visible, status != 3);
+            assert_eq!(snapshot.enabled, status < 2);
+            assert!(remote.backend.memory_requests.iter().any(|request| {
+                *request == (address, usize::try_from(width).unwrap())
+            }));
+        }
+    });
+}
+
+#[test]
+fn cursor_status_supports_padded_stride() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.cursor.status_width = 1;
+        facts.firmware.menus.cursor.status_stride = 3;
+        let mut backend = Synthetic::new();
+        backend.active(4096, 0);
+        backend.bytes[546] = 0xa5;
+        backend.bytes[547] = 2;
+        backend.bytes[548] = 0x5a;
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert!(!result.menu().unwrap().enabled);
+        assert!(remote
+            .backend
+            .memory_requests
+            .iter()
+            .any(|request| *request == (547, 1)));
+    });
+}
+
+#[test]
+fn wide_cursor_status_above_u32_is_rejected() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.cursor.status_width = 8;
+        facts.firmware.menus.cursor.status_stride = 8;
+        let mut backend = Synthetic::new();
+        backend.active(4096, 0);
+        backend.bytes[552..560].copy_from_slice(&0x1_0000_0002u64.to_le_bytes());
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let error = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap_err();
+        assert!(error.contains("Cursor status exceeds 32 bits"), "{error}");
+        assert!(remote
+            .backend
+            .memory_requests
+            .iter()
+            .any(|request| *request == (552, 8)));
+    });
+}
+
+#[test]
+fn cursor_status_layout_rejects_bad_width_alignment_overlap_and_overflow() {
+    let mut bad_width = facts();
+    bad_width.firmware.menus.cursor.status_width = 3;
+    assert!(bad_width.firmware.validate().is_err());
+
+    let mut zero_width = facts();
+    zero_width.firmware.menus.cursor.status_width = 0;
+    assert!(zero_width.firmware.validate().is_err());
+
+    let mut narrow_stride = facts();
+    narrow_stride.firmware.menus.cursor.status_width = 4;
+    narrow_stride.firmware.menus.cursor.status_stride = 2;
+    assert!(narrow_stride.firmware.validate().is_err());
+
+    let mut unaligned_offset = facts();
+    unaligned_offset.firmware.menus.cursor.status_width = 2;
+    unaligned_offset.firmware.menus.cursor.status_offset = 33;
+    assert!(unaligned_offset.firmware.validate().is_err());
+
+    let mut unaligned_stride = facts();
+    unaligned_stride.firmware.menus.cursor.status_width = 2;
+    unaligned_stride.firmware.menus.cursor.status_stride = 3;
+    assert!(unaligned_stride.firmware.validate().is_err());
+
+    let mut overlap = facts();
+    overlap.firmware.menus.cursor.status_width = 1;
+    overlap.firmware.menus.cursor.status_offset = 31;
+    assert!(overlap.firmware.validate().is_err());
+
+    let mut overflow = facts();
+    overflow.firmware.menus.cursor.status_width = 8;
+    overflow.firmware.menus.cursor.status_stride = 8;
+    overflow.firmware.menus.cursor.status_offset = u32::MAX - 3;
+    assert!(overflow.firmware.validate().is_err());
+}
+
+#[test]
 fn memory_state_rejects_wrapping_node_fields_before_followup_read() {
     futures_lite::future::block_on(async {
         let mut facts = facts();

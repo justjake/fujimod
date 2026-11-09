@@ -51,6 +51,12 @@ must fit its width. Smaller descriptor and row records are accepted when their
 declared fields form a complete valid layout. Cursor decoding retains its
 existing layout.
 
+Cursor row-status facts declare a byte `status_offset`, `status_stride` and
+`status_width`. Status widths may be 1, 2, 4 or 8 bytes; offsets and strides
+must align to that width, the stride must contain the status, and the status
+array must begin after the cursor record. Status values are interpreted as
+32-bit values, so a wider read that exceeds 32 bits is rejected.
+
 `layout.fields.type_code` is required in the catalog and accepts either a
 numeric field offset or explicit `null`. A numeric offset keeps the type-code
 read and `max_kind` check. `null` declares that the descriptor has no type-code

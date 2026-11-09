@@ -598,11 +598,11 @@ pub struct CursorLayout {
     pub size: u32,
     /// Cursor word offsets.
     pub fields: CursorFields,
-    /// Status offset.
+    /// Status byte offset from the cursor base; begins after `size`.
     pub status_offset: u32,
-    /// Status stride.
+    /// Byte stride between row statuses.
     pub status_stride: u32,
-    /// Status width.
+    /// Status scalar width in bytes (1, 2, 4 or 8).
     pub status_width: u32,
 }
 
@@ -1391,9 +1391,15 @@ impl FirmwareFacts {
                 return Err("remote menu field offset exceeds its record or overlaps".into());
             }
         }
-        if m.cursor.status_width != 4
+        if !matches!(m.cursor.status_width, 1 | 2 | 4 | 8)
             || m.cursor.status_stride < m.cursor.status_width
             || m.cursor.status_offset < m.cursor.size
+            || m.cursor.status_offset % m.cursor.status_width != 0
+            || m.cursor.status_stride % m.cursor.status_width != 0
+            || m.cursor
+                .status_offset
+                .checked_add(m.cursor.status_width)
+                .is_none()
         {
             return Err("invalid remote cursor status layout".into());
         }

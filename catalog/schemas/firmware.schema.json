@@ -334,19 +334,19 @@
           "type": "integer"
         },
         "status_offset": {
-          "description": "Status offset.",
+          "description": "Status byte offset from the cursor base; begins after `size`.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
         },
         "status_stride": {
-          "description": "Status stride.",
+          "description": "Byte stride between row statuses.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
         },
         "status_width": {
-          "description": "Status width.",
+          "description": "Status scalar width in bytes (1, 2, 4 or 8).",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"

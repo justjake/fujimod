@@ -5,7 +5,7 @@ use crate::{
     memory::{Memory, checked_indexed_address, word},
 };
 use fujimod_catalog_controls::InputTarget;
-use fujimod_catalog_remote::{MenuLayout, RootLayout};
+use fujimod_catalog_remote::{CursorLayout, MenuLayout, RootLayout};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 fn field_u64(bytes: &[u8], offset: u32, width: u8) -> Result<u64> {
@@ -77,6 +77,15 @@ fn checked_caption_order(layout: &MenuLayout) -> Result<Vec<u32>> {
         }
     }
     Ok(order)
+}
+
+fn cursor_status_address(cursor_address: u64, index: u32, layout: &CursorLayout) -> Result<u64> {
+    checked_indexed_address(
+        cursor_address,
+        u64::from(index),
+        u64::from(layout.status_stride),
+        u64::from(layout.status_offset),
+    )
 }
 
 #[derive(Clone, Debug)]
@@ -446,6 +455,15 @@ mod tests {
     }
 
     #[test]
+    fn cursor_status_address_rejects_u64_wraparound() {
+        let mut layout = crate::testing::facts().firmware.menus.cursor;
+        layout.status_offset = 32;
+        layout.status_stride = 1;
+        assert!(cursor_status_address(u64::MAX - 16, 0, &layout).is_err());
+        assert!(cursor_status_address(u64::MAX - 30, 2, &layout).is_err());
+    }
+
+    #[test]
     fn malformed_root_layouts_refuse_before_reading_memory() {
         futures_lite::future::block_on(async {
             let mut bad_width = crate::testing::facts();
@@ -624,16 +642,15 @@ impl<B: Backend> Memory<'_, B> {
         let active = state.menu_active && state.node == pointer;
         let status = if let Some(row) = row.filter(|_| active) {
             let c = &self.facts.firmware.menus;
-            self.uint(
-                checked_indexed_address(
-                    c.cursor_address,
-                    u64::from(row.index),
-                    u64::from(c.cursor.status_stride),
-                    u64::from(c.cursor.status_offset),
-                )?,
-                c.cursor.status_width as usize,
-            )
-            .await? as u32
+            let address = cursor_status_address(c.cursor_address, row.index, &c.cursor)?;
+            let value = self
+                .uint(
+                    address,
+                    usize::try_from(c.cursor.status_width)
+                        .map_err(|_| "Cursor status width exceeds host address space")?,
+                )
+                .await?;
+            u32::try_from(value).map_err(|_| "Cursor status exceeds 32 bits")?
         } else {
             0
         };
