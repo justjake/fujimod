@@ -51,6 +51,13 @@ must fit its width. Smaller descriptor and row records are accepted when their
 declared fields form a complete valid layout. Cursor decoding retains its
 existing layout.
 
+`layout.fields.type_code` is required in the catalog and accepts either a
+numeric field offset or explicit `null`. A numeric offset keeps the type-code
+read and `max_kind` check. `null` declares that the descriptor has no type-code
+field; its configured width is still validated, while the type-code bytes and
+`max_kind` are not read or applied. Other descriptor fields retain their
+ordinary extent and overlap checks.
+
 Caption records contain `caption_words` 32-bit resource IDs. Omitted
 `caption_word_order` keeps the legacy priority (word 1 then word 0 for two or
 more words, otherwise word 0). An explicit order lists only the word indices

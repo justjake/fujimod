@@ -153,7 +153,7 @@ fn packed_menu_facts() -> Facts {
     layout.size = 28;
     layout.fields = MenuFields {
         menu_id: 0,
-        type_code: 1,
+        type_code: Some(1),
         setting_id: 2,
         rows_per_page: 4,
         flags_word: 8,
@@ -233,7 +233,7 @@ fn wide_pointer_menu_facts() -> Facts {
     layout.size = 40;
     layout.fields = MenuFields {
         menu_id: 0,
-        type_code: 1,
+        type_code: Some(1),
         setting_id: 2,
         rows_per_page: 4,
         flags_word: 8,
@@ -665,6 +665,111 @@ fn set_root_caption_words(backend: &mut Synthetic, word_count: u32, words: &[u32
 }
 
 #[test]
+fn type_code_json_requires_explicit_null_to_disable_and_preserves_numeric_offsets() {
+    let numeric = serde_json::to_value(facts()).unwrap();
+    assert_eq!(numeric["firmware"]["menus"]["layout"]["fields"]["type_code"], 4);
+    let parsed: Facts = serde_json::from_value(numeric.clone()).unwrap();
+    assert_eq!(parsed.firmware.menus.layout.fields.type_code, Some(4));
+
+    let mut explicit_null = numeric.clone();
+    explicit_null["firmware"]["menus"]["layout"]["fields"]["type_code"] =
+        serde_json::Value::Null;
+    let parsed: Facts = serde_json::from_value(explicit_null).unwrap();
+    assert_eq!(parsed.firmware.menus.layout.fields.type_code, None);
+
+    let mut missing = numeric;
+    missing["firmware"]["menus"]["layout"]["fields"]
+        .as_object_mut()
+        .unwrap()
+        .remove("type_code");
+    let error = serde_json::from_value::<Facts>(missing).unwrap_err();
+    assert!(error.to_string().contains("type_code"), "{error}");
+}
+
+#[test]
+fn untyped_28_byte_descriptors_ignore_opaque_neighbor_and_keep_menu_state_and_labels() {
+    futures_lite::future::block_on(async {
+        let mut facts = packed_menu_facts();
+        let layout = &mut facts.firmware.menus.layout;
+        layout.fields.type_code = None;
+        layout.caption_words = 3;
+        layout.caption_word_order = Some(vec![2, 1, 0]);
+        facts.firmware.validate().unwrap();
+
+        let mut backend = packed_menu_backend();
+        backend.bytes[4096 + 1] = 0xa7;
+        backend.bytes[4352 + 1] = 0xfe;
+        for (address, value) in [
+            (12288, 28672),
+            (12292, 28688),
+            (12296, 28704),
+            (12544, 28704),
+            (12548, 28720),
+            (12552, 28688),
+        ] {
+            backend.word(address, value);
+        }
+        backend.active(4096, 0);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let root = remote
+            .read(&menu("shooting").with_key(10).into())
+            .await
+            .unwrap();
+        assert_eq!(root.state.current_key, Some(10));
+        assert_eq!(root.menu().unwrap().node, 4096);
+        assert_eq!(root.menu().unwrap().label, "OFF");
+
+        let nested = menu("secondary")
+            .with_key(7)
+            .via(menu("shooting").with_key(10));
+        let result = remote.read(&nested.into()).await.unwrap();
+        assert_eq!(result.menu().unwrap().node, 4352);
+        assert_eq!(result.menu().unwrap().label, "SETTING");
+    });
+}
+
+#[test]
+fn explicit_type_code_still_rejects_invalid_kind_before_row_pointer_read() {
+    futures_lite::future::block_on(async {
+        let facts = facts();
+        assert_eq!(facts.firmware.menus.layout.fields.type_code, Some(4));
+        let invalid_kind = facts.firmware.menus.layout.max_kind + 1;
+        let mut backend = Synthetic::new();
+        backend.word(4096 + 4, invalid_kind);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let error = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap_err();
+        assert!(error.contains("Invalid menu descriptor"), "{error}");
+        assert!(remote
+            .backend
+            .memory_requests
+            .iter()
+            .all(|(address, _)| *address != 8192));
+    });
+}
+
+#[test]
+fn missing_type_code_offset_does_not_weaken_other_layout_validation() {
+    let mut overlap = packed_menu_facts();
+    overlap.firmware.menus.layout.fields.type_code = None;
+    overlap.firmware.menus.layout.fields.setting_id = 0;
+    assert!(overlap.firmware.validate().is_err());
+
+    let mut bad_type_width = packed_menu_facts();
+    bad_type_width.firmware.menus.layout.fields.type_code = None;
+    bad_type_width.firmware.menus.layout.field_widths.type_code = 3;
+    assert!(bad_type_width.firmware.validate().is_err());
+
+    let mut bad_other_width = packed_menu_facts();
+    bad_other_width.firmware.menus.layout.fields.type_code = None;
+    bad_other_width.firmware.menus.layout.field_widths.setting_id = 3;
+    assert!(bad_other_width.firmware.validate().is_err());
+}
+
+#[test]
 fn explicit_caption_word_order_can_prefer_a_later_word() {
     futures_lite::future::block_on(async {
         let mut facts = facts();
@@ -969,7 +1074,7 @@ fn eight_byte_menu_scalars_above_u32_are_rejected() {
         layout.size = 40;
         layout.fields = MenuFields {
             menu_id: 0,
-            type_code: 8,
+            type_code: Some(8),
             setting_id: 12,
             rows_per_page: 16,
             flags_word: 20,

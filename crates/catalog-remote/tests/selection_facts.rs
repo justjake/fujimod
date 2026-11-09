@@ -1,6 +1,25 @@
 use fujimod_catalog::ReferenceCatalog;
 use fujimod_catalog_remote::{BuildMenuManifest, Facts, MENU_MANIFEST_SCHEMA_URI, Selection};
 
+#[cfg(feature = "schema")]
+#[test]
+fn nullable_type_code_is_required_and_accepts_integer_or_null_in_schema() {
+    let schema = serde_json::to_value(schemars::schema_for!(
+        fujimod_catalog_remote::MenuFields
+    ))
+    .unwrap();
+    let required = schema["required"].as_array().unwrap();
+    assert!(required.iter().any(|name| name == "type_code"));
+
+    let alternatives = schema["properties"]["type_code"]["anyOf"]
+        .as_array()
+        .expect("type_code schema should have integer and null alternatives");
+    assert!(alternatives.iter().any(|item| item["type"] == "null"));
+    assert!(alternatives.iter().any(|item| {
+        item["type"] == "integer" || item.get("$ref").is_some()
+    }));
+}
+
 fn remote_selection<'a>(selection: &'a fujimod_catalog::ResolvedSelection) -> Selection<'a> {
     let generated = selection.firmware.generated_facts.as_ref();
     Selection {

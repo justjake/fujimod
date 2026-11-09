@@ -392,7 +392,7 @@ pub struct MenuLayout {
     pub caption_word_order: Option<Vec<u32>>,
     /// Sentinel.
     pub sentinel: u32,
-    /// Max kind.
+    /// Maximum declared type code; ignored when no type-code field is declared.
     pub max_kind: u32,
     /// Nowrap flags.
     pub nowrap_flags: u32,
@@ -477,19 +477,21 @@ impl MenuLayout {
         }
         let f = &self.fields;
         let w = &self.field_widths;
-        validate_menu_fields(
-            self.size,
-            &[
-                ("menu_id", f.menu_id, w.menu_id),
-                ("type_code", f.type_code, w.type_code),
-                ("setting_id", f.setting_id, w.setting_id),
-                ("rows_per_page", f.rows_per_page, w.rows_per_page),
-                ("flags_word", f.flags_word, w.flags_word),
-                ("parent_pointer", f.parent_pointer, w.parent_pointer),
-                ("item_array", f.item_array, w.item_array),
-                ("handlers_pointer", f.handlers_pointer, w.handlers_pointer),
-            ],
-        )?;
+        let mut node_fields = vec![
+            ("menu_id", f.menu_id, w.menu_id),
+            ("setting_id", f.setting_id, w.setting_id),
+            ("rows_per_page", f.rows_per_page, w.rows_per_page),
+            ("flags_word", f.flags_word, w.flags_word),
+            ("parent_pointer", f.parent_pointer, w.parent_pointer),
+            ("item_array", f.item_array, w.item_array),
+            ("handlers_pointer", f.handlers_pointer, w.handlers_pointer),
+        ];
+        if let Some(offset) = f.type_code {
+            node_fields.push(("type_code", offset, w.type_code));
+        } else if !matches!(w.type_code, 1 | 2 | 4 | 8) {
+            return Err("invalid remote menu field width: type_code".into());
+        }
+        validate_menu_fields(self.size, &node_fields)?;
         validate_menu_fields(
             self.row_size,
             &[
@@ -548,8 +550,10 @@ fn validate_menu_fields(size: u32, fields: &[(&str, u32, u8)]) -> Result<(), Str
 pub struct MenuFields {
     /// Root key decoded from the descriptor.
     pub menu_id: u32,
-    /// Type code.
-    pub type_code: u32,
+    /// Declared type-code offset, or `null` when descriptors have no type field.
+    #[serde(deserialize_with = "deserialize_required_nullable_type_code")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub type_code: Option<u32>,
     /// Setting id.
     pub setting_id: u32,
     /// Rows per page.
@@ -562,6 +566,22 @@ pub struct MenuFields {
     pub item_array: u32,
     /// Handlers pointer.
     pub handlers_pointer: u32,
+}
+
+fn deserialize_required_nullable_type_code<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<u32>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<u32>::deserialize(deserializer)
+}
+
+#[cfg(feature = "schema")]
+fn nullable_u32_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "anyOf": [generator.subschema_for::<u32>(), {"type": "null"}]
+    })
 }
 
 /// Live menu cursor and status-array offsets.

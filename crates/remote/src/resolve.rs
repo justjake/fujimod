@@ -99,11 +99,18 @@ impl<B: Backend> Memory<'_, B> {
         l.validate()?;
         let raw = self.bytes(pointer, l.size as usize).await?;
         let code = field_u32(&raw, l.fields.menu_id, l.field_widths.menu_id)?;
-        let type_code = field_u32(&raw, l.fields.type_code, l.field_widths.type_code)?;
+        let type_code = l
+            .fields
+            .type_code
+            .map(|offset| field_u32(&raw, offset, l.field_widths.type_code))
+            .transpose()?;
         let _setting_id = field_u32(&raw, l.fields.setting_id, l.field_widths.setting_id)?;
         let rows_per_page = field_u32(&raw, l.fields.rows_per_page, l.field_widths.rows_per_page)?;
         let _flags_word = field_u32(&raw, l.fields.flags_word, l.field_widths.flags_word)?;
-        if !roots.contains_key(&code) || type_code > l.max_kind || rows_per_page > 1024 {
+        if !roots.contains_key(&code)
+            || type_code.is_some_and(|kind| kind > l.max_kind)
+            || rows_per_page > 1024
+        {
             return Err(format!("Invalid menu descriptor at {pointer:#x}"));
         }
         let array = field_u64(&raw, l.fields.item_array, l.field_widths.item_array)?;

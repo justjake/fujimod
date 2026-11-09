@@ -3076,10 +3076,17 @@
           "type": "integer"
         },
         "type_code": {
-          "description": "Type code.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared type-code offset, or `null` when descriptors have no type field."
         }
       },
       "required": [
@@ -3326,7 +3333,7 @@
           "description": "Node field offsets."
         },
         "max_kind": {
-          "description": "Max kind.",
+          "description": "Maximum declared type code; ignored when no type-code field is declared.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"

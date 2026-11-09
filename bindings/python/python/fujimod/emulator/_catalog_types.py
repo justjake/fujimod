@@ -3447,7 +3447,7 @@ class MenuFields(TypedDict, total=False):
     parent_pointer: Required[int]
     rows_per_page: Required[int]
     setting_id: Required[int]
-    type_code: Required[int]
+    type_code: Required[int | None]
 
 
 class MenuKeys(TypedDict, total=False):
