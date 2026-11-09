@@ -90,12 +90,13 @@ impl Lcdc {
         active: bool,
         source: u64,
         format: Option<&str>,
+        layers: usize,
     ) -> Result<(), String> {
         cx.output_status(
             self.output(),
             serde_json::json!({
                 "enabled": self.r(4) == 1, "active": active,
-                "format": format,
+                "format": format, "layers": layers,
                 "source": format!("0x{source:x}"), "sequence": self.state.sequence,
                 "width": self.r(0x14) & 0x3fff, "height": self.r(0x20) & 0x1fff,
                 "tick": cx.now(), "capture": "active-picture-phase",
@@ -106,7 +107,7 @@ impl Lcdc {
         if self.picture.is_none() && self.video.is_none() {
             return Ok(());
         }
-        let Some(output)=fujimod_framebuffer_xp4::decode(&self.state.regs,self.picture,self.video)? else {return self.status(cx,false,0,None)};
+        let Some(output)=fujimod_framebuffer_xp4::decode(&self.state.regs,self.picture,self.video)? else {return self.status(cx,false,0,None,0)};
         let (width,height)=(output.width,output.height);
         let planes:Vec<_>=output.layers.iter().map(|layer|layer.plane).collect();
         let top=planes.last().unwrap();
@@ -124,7 +125,7 @@ impl Lcdc {
             height,
             rgba,
         })?;
-        self.status(cx, true, source, Some(format))
+        self.status(cx, true, source, Some(format), planes.len())
     }
     fn register(offset: u64) -> bool {
         matches!(
@@ -200,7 +201,7 @@ impl Device for Lcdc {
         self.state.regs[offset as usize / 4] = value;
         if offset == 4
             && value == 0
-            && let Err(error) = self.status(cx, false, 0, None)
+            && let Err(error) = self.status(cx, false, 0, None, 0)
         {
             cx.fail(error);
         }
