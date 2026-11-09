@@ -8,18 +8,27 @@ struct Probe {
     due: Option<u64>,
     calls: Vec<(u64, u64)>,
     value: u64,
+    publication: Option<u64>,
+    publication_saves: usize,
 }
 struct Timer(Arc<Mutex<Probe>>);
 impl Device for Timer {
+    fn publication_generation(&self) -> Option<u64> {
+        self.0.lock().unwrap().publication
+    }
     fn name(&self) -> &'static str {
         "test-timer"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, _: u8) -> u64 {
-        self.0.lock().unwrap().calls.push((cx.now(), address));
-        self.0.lock().unwrap().value
+        let mut p = self.0.lock().unwrap();
+        p.calls.push((cx.now(), address));
+        if let Some(generation) = &mut p.publication { *generation += 1; }
+        p.value
     }
     fn write(&mut self, cx: &mut Cx<'_>, _: u64, _: u8, value: u64) {
         let mut p = self.0.lock().unwrap();
+        if (p.value != value || p.due != Some(cx.now() + 5))
+            && let Some(generation) = &mut p.publication { *generation += 1; }
         p.value = value;
         p.due = Some(cx.now() + 5);
     }
@@ -32,10 +41,12 @@ impl Device for Timer {
             p.due = None;
             p.value += 1;
             p.calls.push((cx.now(), 0));
+            if let Some(generation) = &mut p.publication { *generation += 1; }
         }
     }
     fn save(&self) -> Value {
-        let p = self.0.lock().unwrap();
+        let mut p = self.0.lock().unwrap();
+        p.publication_saves += 1;
         json!({"due":p.due,"calls":p.calls,"value":p.value})
     }
 }
@@ -1047,4 +1058,28 @@ fn serialized_interactive_cores_share_execution_before_the_host_deadline() {
     let counts = board.instruction_counts();
     assert!(counts.iter().all(|&count| count >= 64), "{counts:?}");
     assert_eq!(board.state()["timeline"]["now"], 200);
+}
+
+#[test]
+fn generation_publications_stop_at_the_same_instruction_without_serializing() {
+    for generation in [None, Some(0)] {
+        let (mut board, probe) = build_rprofile(bus::Mode::Strict, true);
+        probe.lock().unwrap().publication = generation;
+        board.run_for_instructions(2, 100).unwrap();
+        probe.lock().unwrap().publication_saves = 0;
+        board.continuation_begin(vec![], [0].into(), vec![]).unwrap();
+        board.run_until(20, 100).unwrap();
+        assert!(board.continuation_end().unwrap());
+        assert_eq!(board.instruction_counts(), vec![3]);
+        assert_eq!(probe.lock().unwrap().publication_saves == 0, generation.is_some());
+        board.write_memory(0, 0x10010, &0xe320f003u32.to_le_bytes()).unwrap();
+        board.write_register(0, Register::Pc, 0x10010).unwrap();
+        probe.lock().unwrap().publication_saves = 0;
+        board.continuation_begin(vec![], [0].into(), vec![]).unwrap();
+        board.run_until(20, 100).unwrap();
+        assert!(board.continuation_end().unwrap());
+        assert_eq!(board.instruction_counts(), vec![4]);
+        assert_eq!(probe.lock().unwrap().publication_saves == 0, generation.is_some());
+        assert_eq!(board.state()["timeline"]["now"], 7);
+    }
 }

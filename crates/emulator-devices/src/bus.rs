@@ -291,6 +291,11 @@ impl<'a> Cx<'a> {
 /// A register-level device behind one or more address windows.
 pub trait Device: Send + std::any::Any {
     fn name(&self) -> &'static str;
+    /// Host publication stamp, advanced only when `save()` would change.
+    /// Devices without a stamp retain the serialized publication comparison.
+    fn publication_generation(&self) -> Option<u64> {
+        None
+    }
     /// Frame count for a display timing output, when provided by this device.
     fn display_frame_count(&self, _output: usize) -> Result<u64, String> {
         Err("device does not provide display frame counts".into())
