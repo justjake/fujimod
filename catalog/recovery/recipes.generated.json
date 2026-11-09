@@ -15876,11 +15876,17 @@
         }
       ]
     },
-    "firmware_update": null,
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_bluetooth_button"
+        }
+      ]
+    },
     "updater": null,
     "missing": [
       "version-independent stock updater acceptance",
-      "XP5 bindings: setup/header: No unique aligned AArch64 reset register-clear sequence"
+      "XP5 bindings: SD0 vendor setup: host path includes an additional vendor-register transaction whose protocol is not implemented"
     ]
   },
   {
