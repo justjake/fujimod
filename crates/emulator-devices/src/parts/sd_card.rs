@@ -1,4 +1,4 @@
-//! An external SDHC medium. Capacity and identity are declared inputs;
+//! An external block-addressed SDHC or SDXC medium. Capacity is a declared input;
 //! missing sectors contain zeros. Media outlives controller resets.
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -82,12 +82,12 @@ impl Card {
                 (lba, crate::state::bytes(bytes))).collect::<Vec<_>>()})
     }
     pub fn new(options: Options) -> Result<Self, String> {
-        if !(0x400000..=0x4000000).contains(&options.sectors)
+        if !(0x400000..=0xfffffc00).contains(&options.sectors)
             || !options.sectors.is_multiple_of(1024)
             || !(1..=1 << 21).contains(&options.max_dirty_sectors)
         {
             return Err(
-                "SDHC requires 2..32 GiB in 1024-sector units and a bounded sparse allocation"
+                "SDHC/SDXC requires 2 GiB to below 2 TiB in 1024-sector units and a bounded sparse allocation"
                     .into(),
             );
         }
@@ -263,6 +263,19 @@ impl Card {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn sdxc_medium_retains_high_block_addresses() {
+        let mut card = Card::new(Options {
+            sectors: 0x10000000,
+            max_dirty_sectors: 2,
+        })
+        .unwrap();
+        card.write_bytes((0x10000000u64 - 1) * 512, &[0xa5; 512])
+            .unwrap();
+        assert_eq!(card.sector(0x0fffffff).unwrap(), &[0xa5; 512]);
+        assert!(card.sector(0x10000000).is_err());
+        card.validate().unwrap();
+    }
     #[test]
     fn state_retains_addresses_content_and_metadata() {
         let mut a = Card::new(Options {
