@@ -9,8 +9,6 @@ pub mod recording;
 pub mod replay;
 #[cfg(not(target_os = "emscripten"))]
 mod ui_paint;
-#[cfg(not(target_os = "emscripten"))]
-use fujimod_emulator_gpu::CoverageKernel;
 use fujimod_emulator_graphics::{batch, clear, init, regs::Registers, render, stream};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -42,8 +40,6 @@ use fujimod_emulator_devices::{Action, Record, Unsupported, Value, WordMap};
 use fujimod_perf::{DeviceWorkCounter, add_work};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
-#[cfg(not(target_os = "emscripten"))]
-use std::sync::OnceLock;
 
 pub const BASE: u64 = 0xfff78000;
 pub const SIZE: u64 = 0x5000;
@@ -2087,15 +2083,6 @@ impl Capture {
     }
 }
 
-#[cfg(not(target_os = "emscripten"))]
-fn coverage_kernel() -> Result<&'static CoverageKernel> {
-    static KERNEL: OnceLock<std::result::Result<CoverageKernel, String>> = OnceLock::new();
-    match KERNEL.get_or_init(|| fujimod_emulator_gpu::context().map(CoverageKernel::new)) {
-        Ok(kernel) => Ok(kernel),
-        Err(error) => fail(format!("Graphics UI GPU coverage {error}")),
-    }
-}
-
 #[cfg(target_arch = "wasm32")]
 fn ui_coverages(draws: &[batch::Draw]) -> Result<Vec<std::rc::Rc<render::Coverage>>> {
     draws
@@ -2352,7 +2339,6 @@ pub fn prepare_host_gpu() -> std::result::Result<(), String> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         fujimod_emulator_ip_dmp::gles::prepare_host_gpu()?;
-        coverage_kernel().map_err(|error| error.0)?;
         ui_paint::prepare().map_err(|error| error.0)
     }
     #[cfg(target_arch = "wasm32")]
