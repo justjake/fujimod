@@ -88,10 +88,10 @@ pub fn enter_irq(cpu: &dyn Cpu) -> Result<Option<IrqEntry>, String> {
     Ok(Some(IrqEntry { pc, cpsr, vector }))
 }
 
-/// Unicorn reports disabled ARM VFP operations as invalid instructions.
-/// Deliver the architectural undefined exception so the guest grants access,
-/// enables/restores its FP state and retries through its own vector.
-pub fn enter_disabled_vfp(cpu: &dyn Cpu) -> Result<bool, String> {
+/// Unicorn reports UDF and disabled VFP as invalid instructions. Accept only
+/// explicit User-mode UDF and the existing ARM lazy-VFP case; other invalid
+/// instructions still fail at the backend.
+pub(super) fn enter_supported_undefined(cpu: &dyn Cpu) -> Result<bool, String> {
     let read = |register| -> Result<u32, String> {
         let mut bytes = [0; 4];
         if cpu.read_register(register, &mut bytes)? != 4 {
@@ -100,27 +100,35 @@ pub fn enter_disabled_vfp(cpu: &dyn Cpu) -> Result<bool, String> {
         Ok(u32::from_le_bytes(bytes))
     };
     let old = read(arm::CPSR)?;
-    if old & 0x20 != 0 {
-        return Ok(false);
-    }
+    let user = old & 31 == 0x10;
+    let thumb = old & 0x20 != 0;
     let pc = read(arm::PC)?;
-    let mut bytes = [0; 4];
-    cpu.read_memory(pc as u64, &mut bytes)?;
-    let word = u32::from_le_bytes(bytes);
-    if word >> 28 == 15
-        || !matches!((word >> 8) & 15, 10 | 11)
-        || !matches!(word & 0x0e000000, 0x0c000000 | 0x0e000000)
-        || !arm::condition_passes(word >> 28, old)
-    {
-        return Ok(false);
-    }
-    let access = read(Register::Arm32(arm::Register::Cpacr))?;
-    let accessible = [20, 22].into_iter().all(|shift| {
-        let value = access >> shift & 3;
-        value == 3 || value == 1 && old & 31 != 0x10
-    });
-    if accessible && read(Register::Arm32(arm::Register::Fpexc))? & 0x40000000 != 0 {
-        return Ok(false);
+    if thumb {
+        if !user || !thumb_udf(cpu, pc)? {
+            return Ok(false);
+        }
+    } else {
+        let mut bytes = [0; 4];
+        cpu.read_memory(pc as u64, &mut bytes)?;
+        let word = u32::from_le_bytes(bytes);
+        let user_udf = user && word & 0xfff000f0 == 0xe7f000f0;
+        if !user_udf {
+            if word >> 28 == 15
+                || !matches!((word >> 8) & 15, 10 | 11)
+                || !matches!(word & 0x0e000000, 0x0c000000 | 0x0e000000)
+                || !arm::condition_passes(word >> 28, old)
+            {
+                return Ok(false);
+            }
+            let access = read(Register::Arm32(arm::Register::Cpacr))?;
+            let accessible = [20, 22].into_iter().all(|shift| {
+                let value = access >> shift & 3;
+                value == 3 || value == 1 && !user
+            });
+            if accessible && read(Register::Arm32(arm::Register::Fpexc))? & 0x40000000 != 0 {
+                return Ok(false);
+            }
+        }
     }
     let sctlr = cpu.coprocessor(
         arm::Coprocessor {
@@ -145,9 +153,26 @@ pub fn enter_disabled_vfp(cpu: &dyn Cpu) -> Result<bool, String> {
     let next = (old & !(0x1f | 0x20 | 0x0600fc00 | 0x01000000 | 0x200)) | 0x1b | 0x80;
     cpu.write_register(arm::CPSR, &next.to_le_bytes())?;
     cpu.write_register(arm::SPSR, &old.to_le_bytes())?;
-    cpu.write_register(arm::CORE[14], &pc.wrapping_add(4).to_le_bytes())?;
+    // The Armv7-R Undefined Instruction link offset is based on caller
+    // state, not the instruction width: even Thumb UDF.W uses PC + 2.
+    let link = pc.wrapping_add(if thumb { 2 } else { 4 });
+    cpu.write_register(arm::CORE[14], &link.to_le_bytes())?;
     cpu.write_register(arm::PC, &vector.to_le_bytes())?;
     Ok(true)
+}
+
+fn thumb_udf(cpu: &dyn Cpu, pc: u32) -> Result<bool, String> {
+    let mut halfword = [0; 2];
+    cpu.read_memory(pc as u64, &mut halfword)?;
+    let first = u16::from_le_bytes(halfword);
+    if first & 0xff00 == 0xde00 {
+        return Ok(true); // UDF T1
+    }
+    if first & 0xfff0 != 0xf7f0 {
+        return Ok(false);
+    }
+    cpu.read_memory(pc.wrapping_add(2) as u64, &mut halfword)?;
+    Ok(u16::from_le_bytes(halfword) & 0xf000 == 0xa000) // UDF T2
 }
 
 /// Predict only CPSR.I; the processor executes the instruction itself. Operand
