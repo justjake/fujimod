@@ -179,6 +179,7 @@ impl Board {
                     } else {
                         pc
                     };
+                    let boundary = epoch.boundary;
                     state.accounted[core] = 0;
                     let start_instructions = state.instructions[core];
                     prepared.push((
@@ -186,7 +187,7 @@ impl Board {
                         pc,
                         start_instructions,
                         room,
-                        epoch.boundary,
+                        boundary,
                         Run {
                             begin,
                             until: None,
