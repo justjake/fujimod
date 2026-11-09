@@ -8,6 +8,7 @@ mod flash;
 use display_tree::DISPLAY;
 #[cfg(target_os = "macos")]
 pub mod fskit;
+pub mod read_only;
 mod service;
 mod transport;
 pub mod usb;

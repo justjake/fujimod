@@ -1,7 +1,7 @@
 use fujimod_usb::ff80::commands::memory::DebugMemoryLimits;
 use std::{num::NonZeroU32, path::PathBuf};
 
-const USAGE: &str = "Usage: fujimod-mount --firmware ID [--device BUS-OR-SERIAL] [--read-limit BYTES] [--write-limit BYTES] [--flash-reader ARTIFACT] [--benchmark | --benchmark-usb] MOUNTPOINT\nRequires macOS 15.4+. Installs the signed filesystem extension on first use; macOS may require enabling it in System Settings.";
+const USAGE: &str = "Usage: fujimod-mount --firmware ID [--device BUS-OR-SERIAL] [--read-limit BYTES] [--write-limit BYTES] [--flash-reader ARTIFACT] [--read-only] [--benchmark | --benchmark-usb] MOUNTPOINT\nRequires macOS 15.4+. Installs the signed filesystem extension on first use; macOS may require enabling it in System Settings.";
 #[cfg(target_os = "macos")]
 mod benchmark;
 /// Exit status when the camera has no installed file service, as on stock firmware.
@@ -14,6 +14,7 @@ struct Options {
     mount: PathBuf,
     limits: DebugMemoryLimits,
     flash_reader: Option<PathBuf>,
+    read_only: bool,
     benchmark: bool,
     benchmark_usb: bool,
 }
@@ -25,6 +26,7 @@ fn options(args: impl Iterator<Item = String>) -> std::result::Result<Options, S
     let mut flash_reader = std::env::var_os("FUJIMOD_FLASH_READER").map(PathBuf::from);
     let mut read = NonZeroU32::new(256).expect("constant");
     let mut benchmark = false;
+    let mut read_only = false;
     let mut benchmark_usb = false;
     let mut write = read;
     while let Some(arg) = args.next() {
@@ -33,6 +35,7 @@ fn options(args: impl Iterator<Item = String>) -> std::result::Result<Options, S
             "--device" => device = Some(args.next().ok_or(USAGE)?),
             "--flash-reader" => flash_reader = Some(PathBuf::from(args.next().ok_or(USAGE)?)),
             "--benchmark" => benchmark = true,
+            "--read-only" => read_only = true,
             "--benchmark-usb" => benchmark_usb = true,
             "--read-limit" | "--write-limit" => {
                 let n = args
@@ -59,6 +62,7 @@ fn options(args: impl Iterator<Item = String>) -> std::result::Result<Options, S
         mount: mount.ok_or(USAGE)?,
         limits: DebugMemoryLimits { read, write },
         flash_reader,
+        read_only,
         benchmark,
         benchmark_usb,
     })
@@ -79,8 +83,7 @@ async fn main() {
 
 #[cfg(target_os = "macos")]
 async fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
-    use fujimod_camera_mount::{CameraFs, fskit::Adapter, usb::UsbDevice};
-    use std::os::unix::fs::MetadataExt;
+    use fujimod_camera_mount::{CameraFs, usb::UsbDevice};
     if std::env::args().skip(1).any(|a| a == "--help" || a == "-h") {
         println!("{USAGE}");
         return Ok(());
@@ -111,13 +114,34 @@ async fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     let fatal = device.fatal();
-    let fs = CameraFs::new(device, regions.clone()).map_err(std::io::Error::from_raw_os_error)?;
+    let (mount, benchmark) = (options.mount, options.benchmark);
+    if options.read_only {
+        let device = fujimod_camera_mount::read_only::ReadOnly(device);
+        let fs = CameraFs::new(device, regions.clone()).map_err(std::io::Error::from_raw_os_error)?;
+        serve(fs, mount, benchmark, metadata, regions, fatal).await
+    } else {
+        let fs = CameraFs::new(device, regions.clone()).map_err(std::io::Error::from_raw_os_error)?;
+        serve(fs, mount, benchmark, metadata, regions, fatal).await
+    }
+}
+
+#[cfg(target_os = "macos")]
+async fn serve<D: fujimod_camera_mount::Device + 'static>(
+    fs: fujimod_camera_mount::CameraFs<D>,
+    mount: std::path::PathBuf,
+    benchmark: bool,
+    metadata: std::fs::Metadata,
+    regions: Vec<fujimod_camera_mount::Region>,
+    fatal: std::sync::Arc<std::sync::atomic::AtomicBool>,
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    use fujimod_camera_mount::fskit::Adapter;
+    use std::os::unix::fs::MetadataExt;
     let adapter = Adapter::new(fs, metadata.uid(), metadata.gid());
     let cleanup = adapter.clone();
     let mounted = fskit_rs::mount(
         adapter,
         fskit_rs::MountOptions {
-            mount_point: options.mount.clone(),
+            mount_point: mount.clone(),
             force: false,
             ..Default::default()
         },
@@ -132,10 +156,10 @@ async fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
     };
     println!(
         "Mounted {}. Press Ctrl+C to unmount.",
-        options.mount.display()
+        mount.display()
     );
-    if options.benchmark {
-        let mount = options.mount.clone();
+    if benchmark {
+        let mount = mount.clone();
         let result = tokio::task::spawn_blocking(move || benchmark::run(&mount, &regions)).await?;
         // Unmount even when the benchmark reports an I/O error.
         drop(session);
