@@ -1,6 +1,6 @@
 [package]
 name = "fujimod-emulator-xp4-io"
-description = "XP4 power serial links, SPI, ADC, RTC, timers, requests, temperature and USB PHY"
+description = "XP4 power serial links, SPI, ADC, RTC, timers, requests, temperature, SD host and USB PHY"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
