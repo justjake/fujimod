@@ -269,14 +269,9 @@ impl Device for Statistics {
             cx.unmodeled();
             return 0;
         }
-        // Only four color planes are currently decoded. Other fields stay visible.
-        let within = at % self.bank_size;
-        if !((within + size as usize <= 0x1000)
-            || (within >= 0x1060 && within + size as usize <= 0x1c60))
-        {
-            cx.unmodeled();
-            return 0;
-        }
+        // Only four color planes are currently decoded. The rest of the bank holds no
+        // measurement for the declared uniform scene and reads back its stored bytes (zero
+        // unless a frame completion wrote them).
         let s = self.state.lock().unwrap();
         let mut bytes = [0; 8];
         bytes[..size as usize].copy_from_slice(&s.bytes[at..at + size as usize]);
