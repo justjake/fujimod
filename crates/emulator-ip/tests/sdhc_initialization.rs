@@ -120,7 +120,7 @@ fn constructor_json_defaults_to_no_fault_and_rejects_unknown_policies() {
 
 #[test]
 fn cmd8_fault_after_two_responses_survives_checkpoint() {
-    let (mut host, _, mut ram) = host(Protocol::Sdhc, InitializationFault::RejectCmd8After(2));
+    let (mut host, _, mut ram) = host(Protocol::Sdhc, InitializationFault::RejectCmd8OnceAfter(2));
     setup(&mut host, &mut ram, Protocol::Sdhc);
     for _ in 0..2 {
         command(&mut host, &mut ram, 0x081a0000, 0x1aa);
@@ -134,6 +134,9 @@ fn cmd8_fault_after_two_responses_survives_checkpoint() {
         due(&mut host, &mut ram);
         assert_eq!(read(&mut host, &mut ram, 0x30, 2), 0x8000);
         assert_eq!(read(&mut host, &mut ram, 0x32, 2), 1);
+        command(&mut host, &mut ram, 0x081a0000, 0x1aa);
+        due(&mut host, &mut ram);
+        assert_eq!(read(&mut host, &mut ram, 0x30, 2), 1);
         host.restore_checkpoint(&saved).unwrap();
     }
 }
