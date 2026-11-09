@@ -34,24 +34,33 @@ pub struct Decoder {
     waiting_input: bool,
 }
 
-// DMA streams may reserve sixteen zero bytes between SOI and the first table.
-// Keep the addressed input intact for refill/count/checkpoint accounting; only
-// the strict software codec's view omits this transport reservation.
+// Zero bytes between SOI and the first table. Encoder DMA streams reserve
+// sixteen. A stream read from a file at a 32-byte aligned offset below its SOI
+// keeps the bytes in between: a RAF's preview at offset 148 is read from 128,
+// with the SOI written at the start and the file's own SOI cleared, leaving
+// twenty zero bytes (RAF header bytes 130..147 are zero). Keep the addressed
+// input intact for refill/count/checkpoint accounting; only the strict
+// software codec's view omits this reservation.
 fn codec_stream(source: &Arc<[u8]>) -> Arc<[u8]> {
-    let end = source.len().min(18);
-    if source.len() > 2
-        && source.starts_with(&[255, 216])
-        && source[2..end].iter().all(|&byte| byte == 0)
-    {
-        let mut bytes = Vec::with_capacity(source.len().saturating_sub(16));
-        bytes.extend_from_slice(&source[..2]);
-        if source.len() > 18 {
-            bytes.extend_from_slice(&source[18..]);
-        }
-        bytes.into()
-    } else {
-        source.clone()
+    let zeros = |end: usize| {
+        source[2..end.min(source.len())]
+            .iter()
+            .all(|&byte| byte == 0)
+    };
+    if source.len() <= 2 || !source.starts_with(&[255, 216]) || !zeros(18) {
+        return source.clone();
     }
+    let reserved = if source.len() > 22 && zeros(22) && source[22] == 255 {
+        20
+    } else {
+        16
+    };
+    let mut bytes = Vec::with_capacity(source.len().saturating_sub(reserved));
+    bytes.extend_from_slice(&source[..2]);
+    if source.len() > 2 + reserved {
+        bytes.extend_from_slice(&source[2 + reserved..]);
+    }
+    bytes.into()
 }
 
 // Marker lengths exclude embedded marker-like data. Within entropy FF00
@@ -464,6 +473,18 @@ mod pixel_tests {
         assert_eq!(&*codec_stream(&source), &[255, 216, 255, 217]);
         assert_eq!(&*source, &bytes);
         bytes[8] = 1;
+        let source: Arc<[u8]> = bytes.into();
+        assert!(complete_jpeg(&codec_stream(&source)).is_err());
+    }
+
+    #[test]
+    fn aligned_file_read_prefix_of_twenty_zero_bytes_is_reserved() {
+        let mut bytes = vec![255, 216];
+        bytes.extend_from_slice(&[0; 20]);
+        bytes.extend_from_slice(&[255, 217]);
+        let source: Arc<[u8]> = bytes.clone().into();
+        assert_eq!(&*codec_stream(&source), &[255, 216, 255, 217]);
+        bytes[20] = 1;
         let source: Arc<[u8]> = bytes.into();
         assert!(complete_jpeg(&codec_stream(&source)).is_err());
     }

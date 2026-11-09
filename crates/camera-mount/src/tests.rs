@@ -409,3 +409,25 @@ async fn adapter_splits_reads_larger_than_one_device_exchange() {
         .unwrap();
     assert_eq!(data.len(), length);
 }
+
+#[test]
+fn read_only_device_reads_the_card_and_refuses_every_change() {
+    let device = TestDevice::default();
+    device
+        .0
+        .lock()
+        .unwrap()
+        .files
+        .insert("A:\\DCIM\\IMAGE.JPG".into(), (0..128).collect());
+    let mut fs = CameraFs::new(read_only::ReadOnly(device.clone()), vec![]).unwrap();
+    let folder = fs.lookup(SD, "DCIM").unwrap();
+    let image = fs.lookup(folder.id, "IMAGE.JPG").unwrap();
+    assert_eq!(fs.read(image.id, 4, 4).unwrap(), vec![4, 5, 6, 7]);
+    assert_eq!(fs.write(image.id, 0, b"x").err(), Some(libc::EROFS));
+    assert_eq!(fs.create(SD, "new.bin", false).err(), Some(libc::EROFS));
+    assert_eq!(fs.truncate(image.id, 0).err(), Some(libc::EROFS));
+    assert_eq!(fs.remove(folder.id, "IMAGE.JPG").err(), Some(libc::EROFS));
+    let state = device.0.lock().unwrap();
+    assert_eq!(state.files.len(), 1);
+    assert_eq!(state.files["A:\\DCIM\\IMAGE.JPG"], (0..128).collect::<Vec<u8>>());
+}

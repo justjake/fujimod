@@ -20,6 +20,7 @@ pub struct PowerCycle {
     logic_inputs: Vec<String>,
     builder: Box<dyn ColdBoot>,
     retained: Option<durable::Media>,
+    ram: Vec<(u64, usize)>,
 }
 impl PowerCycle {
     pub fn new(clock: String, media: durable::Spec, builder: Box<dyn ColdBoot>) -> Self {
@@ -29,7 +30,13 @@ impl PowerCycle {
             logic_inputs: Vec::new(),
             builder,
             retained: None,
+            ram: Vec::new(),
         }
+    }
+    /// Retain declared physical RAM ranges across reconstructed epochs.
+    pub fn with_retained_ram(mut self, ranges: Vec<(u64, usize)>) -> Self {
+        self.ram = ranges;
+        self
     }
     /// Preserve the declared external input levels across loss of power.
     pub fn with_logic_inputs(mut self, inputs: Vec<String>) -> Self {
@@ -136,6 +143,21 @@ impl Session {
                 let next_power = next_power.lock().map_err(|_| "power alarm poisoned")?;
                 if next_power.supply() != Supply::On || next_power.packet() != Some(packet) {
                     return Err("cold constructor did not retain power-controller state".into());
+                }
+            }
+            // Copy once from the old board to the freshly reconstructed board.
+            // The bounded buffer avoids a second full-RAM allocation.
+            if !cycle.ram.is_empty() {
+                let mut buffer = vec![0; 1024 * 1024];
+                for &(base, size) in &cycle.ram {
+                    let mut offset = 0;
+                    while offset < size {
+                        let count = buffer.len().min(size - offset);
+                        let address = base.checked_add(offset as u64).ok_or("retained RAM range overflows")?;
+                        self.board.inspect_physical(address, &mut buffer[..count])?;
+                        next.board.write_physical(address, &buffer[..count])?;
+                        offset += count;
+                    }
                 }
             }
             cycle

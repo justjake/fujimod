@@ -837,6 +837,11 @@ impl Prepared {
 /// Construct an unexecuted strict board from explicitly selected files.
 /// No directory search, downloaded image, captured default or firmware patch is used.
 pub fn open(options: Options) -> Result<Session, String> {
+    open_with_ram_fill(options, None)
+}
+
+/// Boot with a deterministic initial RAM byte and retain RAM over restarts.
+pub fn open_with_ram_fill(options: Options, ram_fill: Option<u8>) -> Result<Session, String> {
     let mut prepared = prepare(&options.configuration_id, &options.overlays)?;
     if options.access_point.is_some() || options.capability_reply.is_some() {
         prepared.set_mt5931(options.access_point, options.capability_reply)?;
@@ -865,7 +870,7 @@ pub fn open(options: Options) -> Result<Session, String> {
             .transpose()?
             .unwrap_or_default(),
     };
-    open_prepared(prepared, inputs)
+    open_prepared_with_ram_fill(prepared, inputs, ram_fill)
 }
 
 impl Prepared {
@@ -935,23 +940,31 @@ fn camera_sections(
 struct RestartBuilder {
     prepared: Prepared,
     inputs: InputBytes,
+    ram_fill: Option<u8>,
 }
 impl fujimod_emulator_session::power_cycle::ColdBoot for RestartBuilder {
     fn build(&mut self, tick: u64, counts: Vec<u64>, packet: [u8; 16]) -> Result<Session, String> {
         open_prepared_epoch(
-            self.prepared.duplicate()?, self.inputs.clone(), Some((tick, counts, packet)),
+            self.prepared.duplicate()?, self.inputs.clone(), Some((tick, counts, packet)), self.ram_fill,
         )
     }
 }
 
 /// Construct an unexecuted strict board from a prepared run and byte inputs.
 pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, String> {
+    open_prepared_with_ram_fill(prepared, inputs, None)
+}
+
+pub fn open_prepared_with_ram_fill(prepared: Prepared, inputs: InputBytes, ram_fill: Option<u8>) -> Result<Session, String> {
+    let ram = if ram_fill.is_some() {
+        prepared.execution.ram.iter().map(|r| (r.base, r.size)).collect()
+    } else { Vec::new() };
     let cycle = if prepared.resolved.reference.firmware.id == "x70-110" {
-        Some(RestartBuilder { prepared: prepared.duplicate()?, inputs: inputs.clone() })
+        Some(RestartBuilder { prepared: prepared.duplicate()?, inputs: inputs.clone(), ram_fill })
     } else {
         None
     };
-    let mut session = open_prepared_epoch(prepared, inputs, None)?;
+    let mut session = open_prepared_epoch(prepared, inputs, None, ram_fill)?;
     if let Some(builder) = cycle {
         let media = fujimod_emulator_session::durable::Spec {
             cards: session.contacts.keys().cloned().collect(),
@@ -959,7 +972,7 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
         };
         session.configure_power_cycle(fujimod_emulator_session::power_cycle::PowerCycle::new(
             "clocks".into(), media, Box::new(builder),
-        ).with_logic_inputs(vec!["usb_cable".into()]))?;
+        ).with_logic_inputs(vec!["usb_cable".into()]).with_retained_ram(ram))?;
     }
     Ok(session)
 }
@@ -968,6 +981,7 @@ fn open_prepared_epoch(
     prepared: Prepared,
     inputs: InputBytes,
     epoch: Option<(u64, Vec<u64>, [u8; 16])>,
+    ram_fill: Option<u8>,
 ) -> Result<Session, String> {
     prepared
         .update
@@ -986,6 +1000,7 @@ fn open_prepared_epoch(
         return Err("NAND image must be at most 256 MiB".into());
     }
     let mut session_definition = prepared.to_json();
+    session_definition["inputs"]["ram_fill"] = json!(ram_fill);
     session_definition["inputs"]["nand_selected"] = json!(inputs.nand.is_some());
     session_definition["inputs"]["settings_selected"] = json!(inputs.settings.is_some());
     let InputBytes {
@@ -1163,6 +1178,9 @@ fn open_prepared_epoch(
     };
     let bus = Bus::from_graph(bus_mode, built.graph)?;
     let mut options = factory::Options::new(engine);
+    if epoch.is_none() {
+        if let Some(byte) = ram_fill { options = options.with_ram_fill(byte); }
+    }
     if let Some((tick, counts, _)) = epoch {
         options = options.with_epoch(tick, counts);
     }

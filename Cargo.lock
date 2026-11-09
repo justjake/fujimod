@@ -3172,6 +3172,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-sync-protocol"
+version = "0.1.0"
+dependencies = [
+ "prost",
+ "prost-build",
+]
+
+[[package]]
 name = "fujimod-unicorn-sys"
 version = "0.1.0"
 dependencies = [

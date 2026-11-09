@@ -17,7 +17,7 @@ use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine};
 use serde::{Deserialize, Serialize};
 use std::sync::{
     Arc,
-    atomic::{AtomicU16, Ordering},
+    atomic::{AtomicBool, AtomicU16, Ordering},
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -130,6 +130,7 @@ fn read_media(
 }
 pub struct SdHost {
     options: Options,
+    register_gate: Option<Arc<AtomicBool>>,
     // Guest media transfers since the last explicit card replacement. Host
     // inspection and contact removal do not affect this passive ledger.
     reads: StorageReads,
@@ -188,6 +189,16 @@ fn default_speed(mode: &u8) -> bool {
     *mode == 0
 }
 impl SdHost {
+    /// Connect a physical gate controlling visibility of the register bank.
+    pub fn with_register_gate(mut self, gate: Arc<AtomicBool>) -> Self {
+        self.register_gate = Some(gate);
+        self
+    }
+    fn registers_enabled(&self) -> bool {
+        self.register_gate
+            .as_ref()
+            .is_none_or(|gate| gate.load(Ordering::Relaxed))
+    }
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
         Self::construct(options, wiring.card, wiring.contacts, Some(wiring.irq))
     }
@@ -217,6 +228,7 @@ impl SdHost {
         let clocks = Clocks::new(&[(options.base + 0x2c, options.clock_ticks)])?;
         Ok(Self {
             options,
+            register_gate: None,
             reads: StorageReads::default(),
             card,
             contacts,
@@ -295,6 +307,17 @@ impl SdHost {
         }
         Ok(())
     }
+    fn latch_normal(&mut self, status: u16) {
+        let enabled = status & self.regs.get(0x34);
+        self.regs.set(0x30, self.regs.get(0x30) | enabled);
+    }
+    fn latch_error(&mut self, status: u16) {
+        let enabled = status & self.regs.get(0x36);
+        if enabled != 0 {
+            self.regs.set(0x32, self.regs.get(0x32) | enabled);
+            self.regs.set(0x30, self.regs.get(0x30) | ERROR_INTERRUPT);
+        }
+    }
     /// Data CRC error status ends the transfer at the failing byte position.
     fn data_error(&mut self, cx: &mut Cx<'_>, r: Request) -> Result<(), String> {
         let sector = match r.payload {
@@ -309,8 +332,8 @@ impl SdHost {
             sector,
             transferred: r.cursor,
         });
-        self.regs.set(0x32, self.regs.get(0x32) | DATA_CRC_ERROR);
-        self.finish(cx, r, ERROR_INTERRUPT)
+        self.latch_error(DATA_CRC_ERROR);
+        self.finish(cx, r, 0)
     }
     pub fn card(&self) -> &Card {
         &self.card
@@ -675,18 +698,13 @@ impl SdHost {
             // No card answers the command: the controller reports a command
             // timeout and the error interrupt at once. The timeout interval
             // is not measured, so none is modeled.
-            self.regs
-                .set(0x32, self.regs.get(0x32) | COMMAND_TIMEOUT_ERROR);
-            self.regs.set(0x30, self.regs.get(0x30) | ERROR_INTERRUPT);
+            self.latch_error(COMMAND_TIMEOUT_ERROR);
             return self.signal(cx);
         }
         let argument = self.regs.word(8);
         let mut r = self.plan(word, argument)?;
         if rom && r.command != 17 && word as u16 != 0 {
             return Err("ROM non-data command has transfer mode bits".into());
-        }
-        if rom && self.regs.get(0x34) & 3 != 3 {
-            return Err("ROM command requires status enabled".into());
         }
         if r.quantity != 0 {
             if self.regs.get(4) & 0xfff
@@ -767,7 +785,7 @@ impl SdHost {
         self.bus_width = r.bus_width;
         self.access_mode = r.access_mode;
         self.response = r.response;
-        self.regs.set(0x30, self.regs.get(0x30) | status);
+        self.latch_normal(status);
         self.signal(cx)
     }
     fn complete(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
@@ -802,9 +820,7 @@ impl SdHost {
             self.cmd8_responses = self.cmd8_responses.saturating_add(1);
         }
         if reject_cmd8 {
-            self.regs
-                .set(0x32, self.regs.get(0x32) | COMMAND_TIMEOUT_ERROR);
-            self.regs.set(0x30, self.regs.get(0x30) | ERROR_INTERRUPT);
+            self.latch_error(COMMAND_TIMEOUT_ERROR);
             return self.signal(cx);
         }
         r.due = None;
@@ -817,11 +833,7 @@ impl SdHost {
                 0
             };
             let status = 1 | busy_end;
-            return self.finish(
-                cx,
-                r,
-                status & if rom { self.regs.get(0x34) } else { u16::MAX },
-            );
+            return self.finish(cx, r, status);
         }
         if r.transfer != Transfer::Dma {
             // On an SDHC host the response precedes the first block: a PIO
@@ -840,7 +852,7 @@ impl SdHost {
                         .ok_or("SD PIO deadline overflow")?,
                 );
                 self.request = Some(r);
-                self.regs.set(0x30, self.regs.get(0x30) | 1);
+                self.latch_normal(1);
                 return self.signal(cx);
             }
             if r.phase == Phase::Sector && r.transfer == Transfer::PioWrite {
@@ -884,7 +896,7 @@ impl SdHost {
             r.phase = Phase::Ready;
             self.fifo.rewind();
             self.request = Some(r);
-            self.regs.set(0x30, self.regs.get(0x30) | status);
+            self.latch_normal(status);
             return self.signal(cx);
         }
         if r.fault == Some(r.cursor) {
@@ -932,10 +944,10 @@ impl SdHost {
         if r.cursor < r.quantity {
             r.phase = Phase::Boundary;
             self.request = Some(r);
-            self.regs.set(0x30, self.regs.get(0x30) | 9);
+            self.latch_normal(9);
             self.signal(cx)
         } else {
-            self.finish(cx, r, 3 & if rom { self.regs.get(0x34) } else { u16::MAX })
+            self.finish(cx, r, 3)
         }
     }
     fn pio(&mut self, cx: &mut Cx<'_>, write: Option<u32>) -> Result<u32, String> {
@@ -1384,6 +1396,9 @@ impl Device for SdHost {
         "sdhci-memory-card"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
+        if !self.registers_enabled() {
+            return 0;
+        }
         self.fifo.publish(false);
         let value = self.read_register(cx, address, size);
         if cx.refusal().is_none() {
@@ -1394,6 +1409,9 @@ impl Device for SdHost {
         value
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
+        if !self.registers_enabled() {
+            return;
+        }
         self.fifo.publish(false);
         if address == self.options.base + 0x2c && matches!(size, 2 | 4) {
             if value > u32::MAX as u64
@@ -1479,6 +1497,9 @@ impl Device for SdHost {
         })
     }
     fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
+        if self.register_gate.is_some() {
+            return Vec::new();
+        }
         let address = self.options.base + 0x20;
         let end = window_base.saturating_add(window_size);
         let mut reads = Vec::new();
@@ -1547,6 +1568,31 @@ mod tests {
         let mut cx = h.cx();
         m.write(&mut cx, BASE + 0x3e, 2, 0x1400);
         assert!(cx.refusal().is_some());
+    }
+    #[test]
+    fn status_enables_control_latching_and_reset_clears_enables() {
+        let mut m = host(Protocol::Sdhc);
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        write(&mut m, &mut h, 0x34, 2, 2);
+        command(&mut m, &mut h, 0, 0);
+        due(&mut m, &mut h);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2), 0);
+        write(&mut m, &mut h, 0x34, 2, 3);
+        command(&mut m, &mut h, 0, 0);
+        due(&mut m, &mut h);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 1, 1);
+        m.contacts.set(false, false);
+        write(&mut m, &mut h, 0x30, 2, 0xffff);
+        command(&mut m, &mut h, 0, 0);
+        assert_eq!(read(&mut m, &mut h, 0x32, 2), 0);
+        write(&mut m, &mut h, 0x36, 2, 1);
+        command(&mut m, &mut h, 0, 0);
+        assert_eq!(read(&mut m, &mut h, 0x32, 2), 1);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 0x8000, 0x8000);
+        write(&mut m, &mut h, 0x2f, 1, 1);
+        assert_eq!(read(&mut m, &mut h, 0x34, 2), 0);
+        assert_eq!(read(&mut m, &mut h, 0x36, 2), 0);
     }
     #[test]
     fn a_word_aligned_base_inside_a_page_is_accepted() {
@@ -1923,6 +1969,7 @@ mod tests {
         let mut m = host(Protocol::Application);
         let mut h = Ram::new(0x10000);
         setup(&mut m, &mut h);
+        write(&mut m, &mut h, 0x36, 2, 0xffff);
         m.state = State::Transfer;
         h.bytes[0x1000..0x1400].fill(0x77);
         m.inject_data_fault(DataFault {

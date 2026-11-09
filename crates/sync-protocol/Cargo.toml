@@ -1,0 +1,17 @@
+[package]
+name = "fujimod-sync-protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "Photo sync wire format shared with the camera's sync-client library"
+
+[lib]
+doctest = false
+
+[dependencies]
+prost = "0.14"
+
+[build-dependencies]
+prost-build = "0.14"

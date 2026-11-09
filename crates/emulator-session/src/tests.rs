@@ -1,5 +1,6 @@
 use super::*;
 mod portable;
+mod ram_option;
 use fujimod_emulator::board::{
     bus::{Bus, Mode},
     factory,

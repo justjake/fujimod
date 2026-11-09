@@ -1,5 +1,5 @@
 //! Eight-channel flash-storage/general DMA.
-use crate::flash_storage::{self, Shared};
+use crate::flash_storage::{self, Medium};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -19,13 +19,13 @@ struct State {
 }
 pub struct Dma {
     state: State,
-    flash_storage: Shared,
+    medium: Medium,
 }
 impl Dma {
-    pub fn new(flash_storage: Shared) -> Self {
+    pub fn new(medium: Medium) -> Self {
         Self {
             state: State::default(),
-            flash_storage,
+            medium,
         }
     }
     fn touches_flash(&self, n: usize) -> bool {
@@ -44,6 +44,13 @@ impl Dma {
     }
     fn irq(&self, cx: &mut Cx<'_>) {
         cx.set_irq(225, self.state.pending != 0);
+    }
+    /// The NOR controller's completion flag; the NAND boot path polls the DMA
+    /// pending register directly and has no controller handshake to notify.
+    fn set_controller_complete(&self, complete: bool) {
+        if let crate::flash_storage::Medium::Nor(s) = &self.medium {
+            s.lock().unwrap().session.controller_complete = complete;
+        }
     }
     fn copy(&mut self, cx: &mut Cx<'_>, n: usize) -> Result<(), String> {
         let r = &mut self.state.channels[n];
@@ -72,20 +79,19 @@ impl Dma {
                 .ok_or("DMA source overflow")?;
             let b = if (flash_storage::BASE..flash_storage::BASE + flash_storage::SIZE).contains(&a)
             {
-                self.flash_storage
-                    .lock()
-                    .unwrap()
-                    .read_device(a - flash_storage::BASE, sr)?
+                self.medium.read_device(a - flash_storage::BASE, sr)?
             } else {
                 cx.ram_bytes(a, sr)?
             };
             bytes.extend_from_slice(&b);
         }
         if (flash_storage::BASE..flash_storage::BASE + flash_storage::SIZE).contains(&dst) {
-            if ds != dr as u64 {
-                return Err("noncontiguous flash storage program DMA".into());
-            }
-            let mut s = self.flash_storage.lock().unwrap();
+            let mut s = match &self.medium {
+                crate::flash_storage::Medium::Nor(s) => s.lock().unwrap(),
+                crate::flash_storage::Medium::Nand(_) => {
+                    return Err("serial NAND storage takes no DMA program path".into())
+                }
+            };
             if !s.session.program_mode {
                 return Err("DMA to flash storage without controller program mode".into());
             }
@@ -193,11 +199,7 @@ impl Device for Dma {
                         }
                         self.state.busy |= bit;
                         if self.touches_flash(c) {
-                            self.flash_storage
-                                .lock()
-                                .unwrap()
-                                .session
-                                .controller_complete = false;
+                            self.set_controller_complete(false);
                         }
                         self.state.generation[c] += 1;
                         // Timing is an explicit functional approximation, not measured silicon latency.
@@ -244,11 +246,7 @@ impl Device for Dma {
         // The real aperture DMA also completes the serial-controller path
         // polled/ACKed by14721dc. Never notify on cancellation or copy failure.
         if touches_flash {
-            self.flash_storage
-                .lock()
-                .unwrap()
-                .session
-                .controller_complete = true;
+            self.set_controller_complete(true);
         }
         self.state.busy &= !(1 << n);
         self.state.pending |= 1 << n;
@@ -282,7 +280,7 @@ mod tests {
             flash_storage::Storage::new((0..32).collect()).unwrap(),
         ));
         let mut bus = TestBus::default();
-        bus.register(0xff939000, 0x1000, Box::new(Dma::new(storage.clone())))
+        bus.register(0xff939000, 0x1000, Box::new(Dma::new(crate::flash_storage::Medium::Nor(storage.clone()))))
             .unwrap();
         let mut h = RecordingHost {
             ram: vec![0xff; 64],
@@ -365,7 +363,7 @@ mod tests {
             flash_storage::Storage::new((0..32).collect()).unwrap(),
         ));
         let mut bus = TestBus::default();
-        bus.register(0xff939000, 0x1000, Box::new(Dma::new(storage.clone())))
+        bus.register(0xff939000, 0x1000, Box::new(Dma::new(crate::flash_storage::Medium::Nor(storage.clone()))))
             .unwrap();
         let mut h = RecordingHost {
             ram: vec![0xff; 64],
@@ -421,7 +419,7 @@ mod tests {
             flash_storage::Storage::new((0..32).collect()).unwrap(),
         ));
         let mut bus = TestBus::default();
-        bus.register(0xff939000, 0x1000, Box::new(Dma::new(storage.clone())))
+        bus.register(0xff939000, 0x1000, Box::new(Dma::new(crate::flash_storage::Medium::Nor(storage.clone()))))
             .unwrap();
         let mut h = RecordingHost {
             ram: vec![0xff; 64],

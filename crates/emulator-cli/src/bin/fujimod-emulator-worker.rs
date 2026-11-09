@@ -488,11 +488,27 @@ impl Worker {
                         pins: c.pins(),
                         channel: mailbox::Channel::default(),
                     }),
-                    storage: storage_image
-                        .map(|s| {
-                            Ok::<_, String>(Arc::new(Mutex::new(flash_storage::Storage::new(s)?)))
-                        })
-                        .transpose()?,
+                    storage: {
+                        // The flash-storage window's `medium` option selects
+                        // the backing device enum, matching definition.rs.
+                        let medium = fujimod_emulator_xp5_board::definition::storage_medium(
+                            &windows,
+                        );
+                        storage_image
+                            .map(|s| match medium.as_str() {
+                                "nor" => flash_storage::Storage::new(s).map(|st| {
+                                    flash_storage::Medium::Nor(Arc::new(Mutex::new(st)))
+                                }),
+                                "serial-nand" => {
+                                    fujimod_emulator_xp5_storage::nand_storage::NandStorage::new(s)
+                                        .map(|st| {
+                                            flash_storage::Medium::Nand(Arc::new(Mutex::new(st)))
+                                        })
+                                }
+                                other => Err(format!("unknown flash storage medium {other}")),
+                            })
+                            .transpose()?
+                    },
                     displays: displays
                         .into_iter()
                         .map(Scanout::config)
