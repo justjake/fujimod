@@ -188,7 +188,10 @@ pub fn enter(cpu: &dyn Cpu, exception: arm::Exception) -> Result<(), String> {
             Operation::Read
         },
     )? {
-        return Err("native abort is not explained by an actual MPU permission denial".into());
+        return Err(format!(
+            "native {} abort at pc {pc:#010x}, address {address:#010x}, is not explained by an actual MPU permission denial",
+            if data { "data" } else { "prefetch" },
+        ));
     }
     cp(
         cpu,

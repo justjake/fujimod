@@ -35,8 +35,8 @@ pub enum InitializationFault {
     None,
     /// CMD8 completes with Command Timeout Error and no response.
     RejectCmd8,
-    /// Allow this many CMD8 responses, then report command timeout.
-    RejectCmd8After(u32),
+    /// Allow this many CMD8 responses, then time out one CMD8.
+    RejectCmd8OnceAfter(u32),
 }
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -151,7 +151,7 @@ pub struct SdHost {
     rom_fifo_ready: bool,
     faults: Vec<DataFault>,
     fault_history: Vec<DataFaultEvent>,
-    cmd8_responses: u32,
+    cmd8_responses: u64,
 }
 /// CMD6 status (SD Physical Layer 4.3.10) of a card whose group 1 offers
 /// default and high speed and whose groups 2-6 offer function 0 only.
@@ -789,21 +789,23 @@ impl SdHost {
             && match self.options.initialization_fault {
                 InitializationFault::None => false,
                 InitializationFault::RejectCmd8 => true,
-                InitializationFault::RejectCmd8After(count) => self.cmd8_responses >= count,
+                InitializationFault::RejectCmd8OnceAfter(count) => {
+                    self.cmd8_responses == u64::from(count)
+                }
             };
+        if r.command == 8
+            && matches!(
+                self.options.initialization_fault,
+                InitializationFault::RejectCmd8OnceAfter(_)
+            )
+        {
+            self.cmd8_responses = self.cmd8_responses.saturating_add(1);
+        }
         if reject_cmd8 {
             self.regs
                 .set(0x32, self.regs.get(0x32) | COMMAND_TIMEOUT_ERROR);
             self.regs.set(0x30, self.regs.get(0x30) | ERROR_INTERRUPT);
             return self.signal(cx);
-        }
-        if r.command == 8
-            && matches!(
-                self.options.initialization_fault,
-                InitializationFault::RejectCmd8After(_)
-            )
-        {
-            self.cmd8_responses = self.cmd8_responses.saturating_add(1);
         }
         r.due = None;
         self.response = r.response;
@@ -1229,7 +1231,7 @@ struct Snapshot {
     contacts: u8,
     initialization_fault: InitializationFault,
     #[serde(default)]
-    cmd8_responses: u32,
+    cmd8_responses: u64,
     regs: Registers,
     clocks: Clocks,
     state: State,
@@ -1266,7 +1268,7 @@ impl Device for SdHost {
             reads: &'a StorageReads,
             contacts: u8,
             initialization_fault: InitializationFault,
-            cmd8_responses: u32,
+            cmd8_responses: u64,
             regs: &'a Registers,
             clocks: &'a Clocks,
             state: State,
