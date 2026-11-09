@@ -76,6 +76,14 @@ error with the candidates found. Stock menu IDs are root indices or catalog
 roles. Use `via` to identify a shared submenu occurrence. Mod rows and stable
 option identities come from the installed build's menu manifest.
 
+Each observation reads the root map, then loads only the requested descriptors,
+explicit `via` path, declared parent candidates and applicable parent chain.
+Descriptors are cached for that observation. If a descriptor has no usable
+parent, a bounded graph search resolves or reports ambiguous opening rows using
+the same cache. An unrelated descriptor is not fetched merely to read a root.
+Every declared parent candidate must be readable before a unique parent can be
+selected; a failed candidate read cannot resolve an ambiguity.
+
 `BoardRemote::new(session, facts, options)` borrows or owns an in-process
 `Session`. Its checked physical panel and contact acknowledgment driver must
 already be connected. Continuations use exact store/device watches and yield

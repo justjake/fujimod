@@ -1093,7 +1093,7 @@ fn wide_row_child_pointer_is_not_truncated_to_a_low_address() {
         let mut backend = wide_pointer_menu_backend();
         backend.bytes[8192 + 8..8192 + 16].copy_from_slice(&high_child.to_le_bytes());
         let mut remote = Connection::connect(backend, wide_pointer_menu_facts()).unwrap();
-        remote.read(&menu("shooting").into()).await.unwrap();
+        remote.read(&menu("shooting").with_key(10).into()).await.unwrap();
         assert!(remote.backend.memory_requests.iter().any(|(address, _)| *address == high_child));
         assert!(!remote.backend.memory_requests.iter().any(|(address, _)| *address == 24576));
     });
@@ -2187,5 +2187,138 @@ fn parameter_independent_control_requires_every_declared_state_and_keeps_other_g
                 .unwrap()
                 .contains("conditions")
         );
+    });
+}
+
+#[test]
+fn reading_a_menu_does_not_fetch_unrelated_descriptors() {
+    futures_lite::future::block_on(async {
+        let mut backend = Synthetic::new();
+        // The second root is not a valid descriptor. It must still be refused
+        // when explicitly requested, without blocking an independent root.
+        backend.word(4352, 0xffff);
+        let mut remote = Connection::connect(backend, facts()).unwrap();
+        let value = remote
+            .read(&menu("shooting").with_key(10).into())
+            .await
+            .unwrap();
+        assert!(value.menu().unwrap().exists);
+        assert!(
+            !remote
+                .backend
+                .memory_requests
+                .iter()
+                .any(|(address, _)| *address == 4352)
+        );
+        let error = remote.read(&menu("1").into()).await.unwrap_err();
+        assert!(error.contains("Invalid menu descriptor"), "{error}");
+        assert!(
+            remote
+                .backend
+                .memory_requests
+                .iter()
+                .any(|(address, _)| *address == 4352)
+        );
+    });
+}
+
+#[test]
+fn reading_a_root_does_not_follow_its_unrequested_child_values() {
+    futures_lite::future::block_on(async {
+        let backend = wide_pointer_menu_backend();
+        let mut remote = Connection::connect(backend, wide_pointer_menu_facts()).unwrap();
+        let value = remote.read(&menu("shooting").into()).await.unwrap();
+        assert!(value.menu().unwrap().exists);
+        assert!(
+            !remote
+                .backend
+                .memory_requests
+                .iter()
+                .any(|(address, _)| *address == 4352)
+        );
+        assert!(
+            !remote
+                .backend
+                .memory_requests
+                .iter()
+                .any(|(address, _)| *address == 8448)
+        );
+    });
+}
+
+#[test]
+fn ancestry_search_preserves_previously_read_descriptors() {
+    futures_lite::future::block_on(async {
+        let mut backend = Synthetic::new();
+        backend.node(4352, 1, 0, 8448, 12544);
+        let mut remote = Connection::connect(backend, facts()).unwrap();
+        let value = remote.read(&menu("1").into()).await.unwrap();
+        assert_eq!(value.menu().unwrap().ancestors.len(), 1);
+        for address in [4096, 4352] {
+            assert_eq!(
+                remote
+                    .backend
+                    .memory_requests
+                    .iter()
+                    .filter(|request| **request == (address, 32))
+                    .count(),
+                1
+            );
+        }
+    });
+}
+
+#[test]
+fn declared_parent_candidates_must_all_be_read_before_selecting_a_unique_parent() {
+    fn item(name: &str, address: u64) -> serde_json::Value {
+        let mut value = json!({"name":name,"mod":"test","identity":format!("test/{name}"),
+            "label_text":name,"surfaces":["menu"],"options":[]});
+        for field in [
+            "binding",
+            "parent",
+            "parent_item",
+            "label",
+            "page",
+            "open_page",
+            "event",
+            "input",
+            "activate",
+            "fn_action",
+            "key",
+            "q_assignable",
+            "choice_capacity",
+            "choice_count",
+        ] {
+            value[field] = json!(0);
+        }
+        value["address"] = json!(address);
+        value
+    }
+    futures_lite::future::block_on(async {
+        for unreadable_alternative in [false, true] {
+            let mut facts = facts();
+            let mut setting = item("setting", 200);
+            setting["key"] = json!(20);
+            setting["parent_item"] = json!(100);
+            let mut parent = item("parent", 100);
+            parent["page"] = json!(4096);
+            parent["open_page"] = json!(if unreadable_alternative { 0x100000 } else { 0 });
+            facts.menu_manifest = Some(serde_json::from_value(json!({
+                "$schema":fujimod_catalog_remote::MENU_MANIFEST_SCHEMA_URI,
+                "schema":1,"firmware_id":facts.firmware.firmware_id,
+                "firmware_sha256":facts.firmware.firmware_sha256,"elf_sha256":"00".repeat(32),
+                "artifacts":[],"items":[parent,setting],"symbols":{},"memory":[],"owner_constants":{},
+                "walkthrough":{"menu":null,"qfn":null,"binding":null,"canvas":null,
+                    "choice_sets":{},"binding_choices":{},"canvas_hosts":{},
+                    "requirements":[],"option_requirements":[],"screen_requirements":[]}
+            })).unwrap());
+            let mut remote = Connection::connect(Synthetic::new(), facts).unwrap();
+            let result = remote.read(&menu("setting").into()).await;
+            if unreadable_alternative {
+                assert!(result.unwrap_err().contains("Unmapped synthetic memory"));
+            } else {
+                assert_eq!(result.unwrap().menu().unwrap().label, "SETTING");
+            }
+        }
     });
 }
