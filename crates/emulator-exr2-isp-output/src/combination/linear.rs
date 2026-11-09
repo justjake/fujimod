@@ -1,5 +1,9 @@
-//! Declared packed-422 signed Q8 four-source arithmetic. Rounding, clipping
-//! and neutral chroma bias are explicit approximations, not silicon results.
+//! Packed-422 signed Q8 four-source arithmetic: every byte, chroma included,
+//! is an uncentered Q8 sum of the source bytes, rounded and clamped once at
+//! the end. A camera run (three primaries and a constant Y 0, Cb Cr 255 with
+//! coefficients 256, 256, 256, -256) matched this on all 16,384 output bytes:
+//! neutral inputs give chroma 3 * 128 - 255 = 129. Rounding of fractional
+//! coefficients is an approximation, not a silicon result.
 use super::Prepared;
 use fujimod_emulator_devices::Cx;
 use fujimod_emulator_imaging::exr2_isp::dma::{Raster, physical};
@@ -96,19 +100,13 @@ pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared
                     physical(source.address + (y * source.pitch) as u64, row_bytes)?,
                     &mut row,
                 )?;
-                for (offset, (sum, &value)) in sums.iter_mut().zip(&row).enumerate() {
-                    let bias = if offset % 4 >= 2 { 128 } else { 0 };
-                    *sum += coefficient * (i32::from(value) - bias);
+                for (sum, &value) in sums.iter_mut().zip(&row) {
+                    *sum += coefficient * i32::from(value);
                 }
             }
         }
-        for (offset, (&sum, pixel)) in sums
-            .iter()
-            .zip(&mut pixels[y * row_bytes..(y + 1) * row_bytes])
-            .enumerate()
-        {
-            let bias = if offset % 4 >= 2 { 128 } else { 0 };
-            *pixel = (((sum + 128) >> 8) + bias).clamp(0, 255) as u8;
+        for (&sum, pixel) in sums.iter().zip(&mut pixels[y * row_bytes..(y + 1) * row_bytes]) {
+            *pixel = ((sum + 128) >> 8).clamp(0, 255) as u8;
         }
     }
     Ok(Prepared {
@@ -145,10 +143,10 @@ pub(super) mod tests {
         )
     }
     #[test]
-    fn signed_difference_and_average_use_actual_source_bytes_and_clip() {
+    fn uncentered_difference_and_average_use_actual_source_bytes_and_clip() {
         let (mut host, mut words) = fixture();
         let result = prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0)).unwrap();
-        assert_eq!(result.pixels, [0, 230, 0, 255, 170, 0, 128, 1]);
+        assert_eq!(result.pixels, [0, 230, 0, 240, 170, 0, 0, 0]);
         assert!(host.effects.is_empty());
         words.insert(0x60, 0x00800080);
         let result = prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0)).unwrap();
@@ -162,6 +160,20 @@ pub(super) mod tests {
                 .pixels,
             result.pixels
         );
+    }
+    #[test]
+    fn four_input_bias_matches_the_camera_law() {
+        let (mut host, mut words) = fixture();
+        host.ram[0x10000..0x10008].copy_from_slice(&[60, 70, 128, 128, 90, 30, 140, 120]);
+        host.ram[0x20000..0x20008].copy_from_slice(&[0, 0, 255, 255, 0, 0, 255, 255]);
+        words.insert(4, 0x44);
+        for (offset, value) in [(0x18, 0x10000), (0x20, 0x10000), (0x24, 8), (0x28, 0x20000), (0x2c, 8)] {
+            words.insert(offset, value);
+        }
+        words.insert(0x60, 0x01000100);
+        words.insert(0x64, 0x03000100);
+        let result = prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0)).unwrap();
+        assert_eq!(result.pixels, [180, 210, 129, 129, 255, 90, 165, 105]);
     }
     #[test]
     fn invalid_coefficients_sources_and_partial_aliases_refuse_without_effects() {
@@ -192,7 +204,7 @@ pub(super) mod tests {
         // The fourth lane is retained even when only three sources participate.
         words.insert(0x64, 0x01000100);
         let result = prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0)).unwrap();
-        assert_eq!(result.pixels, [255, 255, 0, 255, 255, 0, 128, 128]);
+        assert_eq!(result.pixels, [255, 255, 30, 255, 255, 0, 255, 255]);
         assert_eq!(result.bytes, 32);
         words.insert(0x64, 0xffff0100);
         assert_eq!(
