@@ -161,6 +161,7 @@ def test_device_publications_at_the_current_tick_are_progress():
     def publish(*args, **kwargs):
         nonlocal publications
         publications += 1
+        board.native.stop = {'kind': 'device', 'id': 0, 'device': 'sink'}
         return True
 
     def ready():
