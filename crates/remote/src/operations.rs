@@ -548,6 +548,16 @@ pub async fn screenshot<R: Remote + ?Sized>(r: &mut R, deadline: u64) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fujimod_catalog_controls::{ControlOperation, InputTarget};
+
+    fn assert_direction_actions(facts: &Facts, resolved: &Control, direction: &str) {
+        for (operation, asserted) in [(ControlOperation::Press, true), (ControlOperation::Release, false)] {
+            let action = facts.physical_controls.action(&facts.control_ids, resolved.id(), operation).unwrap();
+            assert_eq!(action.asserted, asserted);
+            assert_eq!(action.inputs.len(), 1);
+            assert_eq!(action.inputs[0].debug_key.as_deref(), Some(direction.to_uppercase().as_str()));
+        }
+    }
 
     #[test]
     fn navigation_resolves_declared_pad_directions() {
@@ -555,6 +565,7 @@ mod tests {
         for direction in ["up", "down", "left", "right"] {
             let resolved = navigation_control(&facts, direction).unwrap();
             assert_eq!(resolved.id(), format!("selector.{direction}"));
+            assert_direction_actions(&facts, &resolved, direction);
         }
     }
 
@@ -570,9 +581,17 @@ mod tests {
             controls.insert(format!("selector_{direction}_button"), button);
         }
         facts.physical_controls = serde_json::from_value(document).unwrap();
+        for input in &mut facts.control_ids.inputs {
+            if let InputTarget::Control { control_id } = &mut input.target {
+                if let Some(direction) = control_id.strip_prefix("selector.") {
+                    *control_id = format!("selector_{direction}_button");
+                }
+            }
+        }
         for direction in ["up", "down", "left", "right"] {
             let resolved = navigation_control(&facts, direction).unwrap();
             assert_eq!(resolved.id(), format!("selector_{direction}_button"));
+            assert_direction_actions(&facts, &resolved, direction);
         }
     }
 
