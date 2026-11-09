@@ -265,3 +265,26 @@ fn mismatched_build_and_invalid_scanout_fail_before_use() {
     facts.menu_manifest = Some(manifest);
     assert!(facts.validate().unwrap_err().contains("different firmware"));
 }
+
+#[test]
+fn xt20_profile_resolves_packed_observations_and_explicit_unknown_metadata() {
+    use fujimod_catalog_remote::{PixelFormat, RootLayout};
+    let selected = ReferenceCatalog::bundled().unwrap().resolve_firmware("xt20-211").unwrap();
+    let facts = Facts::from_selection(&remote_selection(&selected), None).unwrap();
+    let firmware = facts.firmware;
+    assert_eq!(firmware.body_id, "xt20");
+    assert_eq!(firmware.state.widths.ui_mode, 1);
+    assert_eq!(firmware.state.widths.menu_active, 1);
+    assert_eq!(firmware.state.readiness.input_pending_width, 1);
+    assert_eq!(firmware.state.readiness.override_width, 1);
+    assert!(matches!(firmware.menus.root_layout, RootLayout::KeyedEntries {
+        stride: 8, key_offset: 0, key_width: 1, pointer_offset: 4
+    }));
+    assert_eq!(firmware.menus.layout.field_widths.menu_id, 1);
+    assert_eq!(firmware.menus.layout.fields.type_code, None);
+    assert_eq!(firmware.menus.cursor.status_width, 1);
+    assert_eq!(firmware.menus.cursor.status_stride, 1);
+    assert!(firmware.menus.q_grid.is_none());
+    assert!(firmware.scanout.instance.is_none());
+    assert_eq!(firmware.scanout.pixel_format, PixelFormat::Rgba8888Premultiplied);
+}

@@ -78,6 +78,12 @@ error with the candidates found. Stock menu IDs are root indices or catalog
 roles. Use `via` to identify a shared submenu occurrence. Mod rows and stable
 option identities come from the installed build's menu manifest.
 
+The bundled X-T20 2.11 profile supplies packed state/menu/status layouts, live
+text and icon-font registry bindings, and a premultiplied RGBA scanout. Q-grid
+geometry and unused observation metadata remain explicit null. A glyph-only
+caption has no plain-text option name; explicit row keys still identify those
+menu entries without assigning an invented label.
+
 Each observation reads the root map, then loads only the requested descriptors,
 explicit `via` path, declared parent candidates and applicable parent chain.
 Descriptors are cached for that observation. If a descriptor has no usable
