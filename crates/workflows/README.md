@@ -5,6 +5,30 @@ operations (design: [`../WORKFLOWS.md`](../WORKFLOWS.md)). Its Rust
 implementation is shared by native Python and JavaScript/WebUSB, including
 Pyodide, over local USB or USB sharing.
 
+## `bulk`: bounded borrowed memory sources
+
+`BulkMapping::prepare_preserving` qualifies a firmware's identity, code and
+bulk/packet probes, then holds its selected E1 source until explicit `restore`.
+The caller keeps the session exclusive throughout that lifetime. Uncertain
+completion withholds restoration and further commands; dropping a mapping does
+not send USB traffic.
+
+`BulkSource::Publication` borrows a located eight-byte source/capacity pair and
+selects base zero with a per-command ceiling clamped to the session reply limit.
+It invokes no query or pattern initializer. `FirmwareBulk.window` bounds every
+target, independently of that command ceiling; physical RAM and DMA visibility
+come from the firmware's checked facts. Metadata is validated before bulk
+qualification traffic. Every borrowed source is checked before and after each
+E1 piece, and lost ownership immediately fences the session.
+
+The Publication pair is temporarily changed and reported by `overwritten()`.
+Reads covering that pair return its selected live values, rather than the
+pre-borrow bytes. Known restoration returns the original pair; it does not
+restore diagnostic pattern scratch or make a frozen framebuffer snapshot.
+No camera aperture is enabled by adding the source type. Rust workflows and
+the JavaScript memory handle can consume it; an owned Python memory binding
+remains separate work.
+
 ## `debug_mode`: persistent debug access
 
 `debug_mode::enter` / `leave` store the selected camera definition's debug

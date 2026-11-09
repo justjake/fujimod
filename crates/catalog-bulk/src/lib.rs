@@ -134,6 +134,19 @@ pub enum BulkSource {
         /// Offsets wrap modulo 2^32 rather than only counting upward.
         wrapping: bool,
     },
+    /// The host temporarily borrows an already located 8-byte publication pair
+    /// (`u32` source base, `u32` per-command capacity) and installs base zero,
+    /// so E1 offsets equal CPU addresses. Nothing is generated, queried or
+    /// allocated. Explicit restoration returns the pair's original bytes;
+    /// uncertain completion withholds restoration. The exact eight bytes are
+    /// declared independently of the target window.
+    Publication {
+        /// Address of the 32-bit source base and per-command capacity.
+        source_state: u64,
+        /// Per-command ceiling installed by the host, clamped to its reply
+        /// limit. This is not an allocation size or inferred DMA capability.
+        capacity: u32,
+    },
     /// Stock pattern setup points the 32-bit source at the registered
     /// diagnostic scratch; offsets wrap from its base.
     Pattern {
@@ -322,6 +335,40 @@ impl FirmwareBulk {
             BulkSource::Pattern { capacity: 0, .. }
             | BulkSource::PatternZeroBase { capacity: 0, .. } => {
                 return fail("pattern capacity must be positive");
+            }
+            BulkSource::Publication {
+                source_state,
+                capacity,
+            } => {
+                // The publication pair is borrowed through the cacheable view,
+                // so overlap is judged on canonical addresses.
+                let cell = *source_state & !self.code_alias;
+                if *capacity == 0
+                    || !source_state.is_multiple_of(4)
+                    || source_state
+                        .checked_add(8)
+                        .is_none_or(|end| end > 1u64 << 32)
+                    || cell.checked_add(8).is_none_or(|end| end > 1u64 << 32)
+                    || self.window.end().is_none_or(|end| end > 1u64 << 32)
+                {
+                    return fail(
+                        "publication capacity, source pair or window is not 32-bit representable",
+                    );
+                }
+                // Both cached and already aliased code addresses describe the
+                // same bytes and must be protected.
+                let spans = self
+                    .code_checks
+                    .iter()
+                    .chain(self.mapped_probe.iter())
+                    .chain(self.upload.iter().flat_map(|upload| &upload.code_checks));
+                if spans.into_iter().any(|check| {
+                    let start = check.address & !self.code_alias;
+                    let end = start.saturating_add(check.size);
+                    cell < end && start < cell + 8
+                }) {
+                    return fail("publication source pair overlaps checked code");
+                }
             }
             BulkSource::PatternZeroBase {
                 configuration_pointer,

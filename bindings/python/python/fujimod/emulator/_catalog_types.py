@@ -425,7 +425,11 @@ class BulkRange(TypedDict, total=False):
 
 
 type BulkSource = (
-    BulkSourceVariant0 | BulkSourceVariant1 | BulkSourceVariant2 | BulkSourceVariant3
+    BulkSourceVariant0
+    | BulkSourceVariant1
+    | BulkSourceVariant2
+    | BulkSourceVariant3
+    | BulkSourceVariant4
 )
 
 
@@ -453,12 +457,18 @@ class BulkSourceVariant1(TypedDict, total=False):
 
 class BulkSourceVariant2(TypedDict, total=False):
     capacity: Required[int]
+    mechanism: Required[Literal["publication"]]
+    source_state: Required[int]
+
+
+class BulkSourceVariant3(TypedDict, total=False):
+    capacity: Required[int]
     mechanism: Required[Literal["pattern"]]
     registered_buffer: Required[int]
     source_state: Required[int]
 
 
-class BulkSourceVariant3(TypedDict, total=False):
+class BulkSourceVariant4(TypedDict, total=False):
     capacity: Required[int]
     configuration_bytes: Required[int]
     configuration_pointer: Required[int]

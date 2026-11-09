@@ -55,8 +55,10 @@ fn require(condition: bool, message: &str) -> Result<()> {
     }
 }
 
-/// Bytes read through the bulk path, and diagnostic scratch the stock setup
-/// overwrote (`address`, `size`), which may lie inside the bytes read.
+/// Bytes read through the bulk path, and source setup's changed RAM extent
+/// (`address`, `size`). Pattern scratch can remain changed. A Publication pair
+/// is restored on known completion, but reads covering it contain the selected
+/// source words: this is live RAM, not a snapshot of the pre-setup state.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BulkRead {
     pub data: Vec<u8>,
@@ -109,7 +111,8 @@ impl BulkMapping {
         })
     }
     /// Borrow only the located E1 publication words. Unlike pattern setup this
-    /// does not fill diagnostic scratch, so reads preserve the requested RAM.
+    /// does not fill diagnostic scratch. The publication words themselves are
+    /// temporarily changed; Publication reports that extent as overwritten.
     /// Restore before yielding the exclusive ff80 transaction to another client.
     pub async fn prepare_preserving(
         session: &mut Session,
@@ -142,7 +145,9 @@ impl BulkMapping {
         })
     }
 
-    /// Diagnostic scratch the stock setup overwrote (`address`, `size`).
+    /// Source setup's changed RAM extent (`address`, `size`). Publication
+    /// reports its temporarily replaced pair, restored only when restoration
+    /// succeeds. Pattern scratch is not restored by closing the mapping.
     pub fn overwritten(&self) -> Option<(u64, u32)> {
         self.source.overwritten
     }
@@ -264,7 +269,11 @@ impl<'a> Qualified<'a> {
             BulkSource::Query { .. } | BulkSource::DirectQuery { .. } => {
                 Source::prepare(&mut access, bulk).await?
             }
-            _ => Source::borrow(&mut access, bulk).await?,
+            // Publication always borrows the located pair, in both prepare
+            // paths; it is never initialized from a pattern or a query.
+            BulkSource::Publication { .. }
+            | BulkSource::Pattern { .. }
+            | BulkSource::PatternZeroBase { .. } => Source::borrow(&mut access, bulk).await?,
         };
         if let Some(alignment) = alignment {
             source.window = source.window.with_alignment(alignment);
@@ -329,6 +338,7 @@ impl Access<'_> {
 }
 
 pub(crate) async fn check_identity(session: &mut Session, bulk: &FirmwareBulk) -> Result<()> {
+    bulk.validate().map_err(BulkError::Check)?;
     check_camera(session, &bulk.product, &bulk.internal_version).await
 }
 
@@ -400,7 +410,7 @@ struct Source {
 impl Source {
     async fn borrow(access: &mut Access<'_>, bulk: &FirmwareBulk) -> Result<Self> {
         let aperture = memory_range(bulk.window)?;
-        let (state, original, selected, capacity) = match &bulk.source {
+        let (state, original, selected, capacity, overwritten) = match &bulk.source {
             BulkSource::DirectQuery { .. } => return Self::prepare(access, bulk).await,
             BulkSource::Query { source_state, .. } => {
                 // The callback and diagnostic dispatcher use the cacheable
@@ -423,6 +433,23 @@ impl Source {
                 source.saved = Some((state, original.clone(), vec![original, selected]));
                 return Ok(source);
             }
+            BulkSource::Publication {
+                source_state,
+                capacity,
+            } => {
+                // Borrow the same cacheable cell the publisher writes, and use
+                // a zero base so E1 offsets are CPU addresses.
+                let state = *source_state & !bulk.code_alias;
+                let original = access.raw(state, 8).await?;
+                let capacity = (*capacity).min(access.session.max_reply_bytes().get());
+                let mut selected = vec![0; 4];
+                selected.extend(capacity.to_le_bytes());
+                require(
+                    original != selected,
+                    "Borrowed E1 publication already holds the selected source; ownership is unresolved",
+                )?;
+                (state, original, selected, capacity, Some((state, 8)))
+            }
             BulkSource::Pattern {
                 source_state,
                 registered_buffer,
@@ -433,7 +460,7 @@ impl Source {
                 let original = access.raw(*source_state, 8).await?;
                 let mut selected = vec![0; 4];
                 selected.extend(capacity.to_le_bytes());
-                (*source_state, original, selected, capacity)
+                (*source_state, original, selected, capacity, None)
             }
             BulkSource::PatternZeroBase {
                 source_state,
@@ -446,7 +473,7 @@ impl Source {
                 let original = access.raw(*source_state, 12).await?;
                 let mut selected = vec![0; 8];
                 selected.extend(capacity.to_le_bytes());
-                (*source_state, original, selected, capacity)
+                (*source_state, original, selected, capacity, None)
             }
         };
         let source = Self {
@@ -456,7 +483,7 @@ impl Source {
                 NonZeroU32::new(capacity).ok_or(fujimod_usb::Error::InvalidLength)?,
                 OffsetMode::Checked,
             )?,
-            overwritten: None,
+            overwritten,
             saved: Some((state, original.clone(), vec![original, selected.clone()])),
         };
         let outcome = async {
@@ -481,6 +508,9 @@ impl Source {
         let nonzero = |n: u32| NonZeroU32::new(n).ok_or(fujimod_usb::Error::InvalidLength);
         let aperture = memory_range(bulk.window)?;
         match bulk.source {
+            BulkSource::Publication { .. } => Err(BulkError::Check(
+                "Publication sources are borrowed, never prepared".into(),
+            )),
             BulkSource::DirectQuery {
                 tag,
                 query_base,
@@ -742,13 +772,60 @@ impl Source {
         target: BulkRange,
         progress: &mut F,
     ) -> Result<Vec<u8>> {
-        let mut reader = DataReader::new(&mut *access.session, self.window, memory_range(target)?)?;
+        self.window.validate(memory_range(target)?)?;
         let mut bytes = Vec::with_capacity(target.size as usize);
-        while let Some(chunk) = reader.next_chunk().await? {
+        while (bytes.len() as u64) < target.size {
+            // Another owner may have republished the source since the last
+            // chunk; never send an E1 request over a pair this read did not
+            // select.
+            self.check_owner(access).await?;
+            let done = bytes.len() as u64;
+            let remaining = BulkRange {
+                address: target.address + done,
+                size: target.size - done,
+            };
+            // Borrow the session for one chunk only, so the ownership check
+            // above and below can use it; DataReader keeps the reply-limit,
+            // aperture and alignment bounds of this same window.
+            let chunk = {
+                let mut reader =
+                    DataReader::new(&mut *access.session, self.window, memory_range(remaining)?)?;
+                reader.next_chunk().await?
+            };
+            let chunk = chunk.ok_or_else(|| BulkError::Check("Incomplete bulk range".into()))?;
+            self.check_owner(access).await?;
             progress(chunk.len() as u64).map_err(BulkError::Check)?;
             bytes.extend(chunk);
         }
         Ok(bytes)
+    }
+
+    /// Require the borrowed publication to still hold the bytes this read
+    /// selected, so a foreign owner is never read through or overwritten.
+    /// Non-borrowed sources have nothing to check.
+    async fn check_owner(&self, access: &mut Access<'_>) -> Result<()> {
+        let Some((address, _, allowed)) = &self.saved else {
+            return Ok(());
+        };
+        require(
+            access.session.state() == SessionState::Ready,
+            "Session completion unknown; the borrowed bulk source is not read further",
+        )?;
+        let size = allowed[0].len() as u64;
+        let current = match access.raw(*address, size).await {
+            Ok(current) => current,
+            Err(error) => {
+                access.session.invalidate_completion();
+                return Err(error);
+            }
+        };
+        if allowed.last() != Some(&current) {
+            access.session.invalidate_completion();
+            return Err(BulkError::Check(
+                "Bulk source changed owner; no further bulk data is read".into(),
+            ));
+        }
+        Ok(())
     }
 
     async fn restore(&self, access: &mut Access<'_>) -> Result<()> {

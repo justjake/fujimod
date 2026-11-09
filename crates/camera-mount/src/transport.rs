@@ -65,7 +65,9 @@ impl<'a> Transport<'a> {
                 .min()
                 .unwrap_or(1),
             Some(
-                BulkSource::Pattern { capacity, .. } | BulkSource::PatternZeroBase { capacity, .. },
+                BulkSource::Pattern { capacity, .. }
+                | BulkSource::PatternZeroBase { capacity, .. }
+                | BulkSource::Publication { capacity, .. },
             ) => *capacity,
             None => 1,
         };
@@ -393,6 +395,10 @@ mod tests {
             },
             BulkSource::Pattern {
                 registered_buffer: 0x1300,
+                source_state: 0x1400,
+                capacity: 65536,
+            },
+            BulkSource::Publication {
                 source_state: 0x1400,
                 capacity: 65536,
             },

@@ -179,6 +179,34 @@
         },
         {
           "additionalProperties": false,
+          "description": "The host temporarily borrows an already located 8-byte publication pair\n(`u32` source base, `u32` per-command capacity) and installs base zero,\nso E1 offsets equal CPU addresses. Nothing is generated, queried or\nallocated. Explicit restoration returns the pair's original bytes;\nuncertain completion withholds restoration. The exact eight bytes are\ndeclared independently of the target window.",
+          "properties": {
+            "capacity": {
+              "description": "Per-command ceiling installed by the host, clamped to its reply\nlimit. This is not an allocation size or inferred DMA capability.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "mechanism": {
+              "const": "publication",
+              "type": "string"
+            },
+            "source_state": {
+              "description": "Address of the 32-bit source base and per-command capacity.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "mechanism",
+            "source_state",
+            "capacity"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Stock pattern setup points the 32-bit source at the registered\ndiagnostic scratch; offsets wrap from its base.",
           "properties": {
             "capacity": {

@@ -206,13 +206,24 @@ fn raw_chunks(at: u32, bytes: &[u8]) -> Vec<fujimod_usb::testing::Exchange> {
         .flat_map(|(i, p)| memory_read(at + (i * 64) as u32, p))
         .collect()
 }
-fn bulk_chunks(at: u32, bytes: &[u8]) -> Vec<fujimod_usb::testing::Exchange> {
+fn borrowed_bulk_chunks(
+    at: u32,
+    bytes: &[u8],
+    capacity: u32,
+) -> Vec<fujimod_usb::testing::Exchange> {
+    let selected = words(&[0, 0, capacity]);
     bytes
-        .chunks(32)
+        .chunks(capacity as usize)
         .enumerate()
-        .flat_map(|(i, p)| data(at + (i * 32) as u32, p))
+        .flat_map(|(i, p)| {
+            let mut steps = memory_read(0x1400, &selected);
+            steps.extend(data(at + (i * capacity as usize) as u32, p));
+            steps.extend(memory_read(0x1400, &selected));
+            steps
+        })
         .collect()
 }
+
 fn invoke(entry: u64, status: u8) -> Vec<fujimod_usb::testing::Exchange> {
     let mut s = memory_read(0x1700, &[0; 8]);
     s.extend(write_verified(0x1700, &entry.to_le_bytes()));
@@ -255,16 +266,16 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
         s.extend(write(0x1400, &words(&[0, 0, 32])));
         s.extend(memory_read(0x1400, &words(&[0, 0, 32])));
         s.extend(memory_read(0x1000, b"stoc"));
-        s.extend(data(0x1000, b"stoc"));
+        s.extend(borrowed_bulk_chunks(0x1000, b"stoc", 32));
         s.extend(memory_read(0x1800, &[0; 16]));
         s.extend(memory_read(0x1000, b"stock code"));
         s.extend(memory_read(0x1600, &1u32.to_le_bytes()));
         s.extend(memory_read(0x1700, &[0; 8]));
-        s.extend(bulk_chunks(0x4000, &vec![0; 0x2000]));
+        s.extend(borrowed_bulk_chunks(0x4000, &vec![0; 0x2000], 32));
         for (i, piece) in image.chunks(64).enumerate() {
             s.extend(write_verified(0x4000 + (i * 64) as u32, piece));
         }
-        s.extend(bulk_chunks(0x4000, &image));
+        s.extend(borrowed_bulk_chunks(0x4000, &image, 32));
         s.extend(invoke(0x1800, 7));
         s.extend(memory_read(0x1700, &[0; 8]));
         s.extend(write_verified(0x1700, &0x4080u64.to_le_bytes()));
@@ -295,7 +306,7 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
                 .collect();
             s.extend(memory_read(0x4018, &result));
             let bytes = vec![if bad_control { 6 } else { 5 }; n as usize];
-            s.extend(bulk_chunks(0x4100, &bytes));
+            s.extend(borrowed_bulk_chunks(0x4100, &bytes, 32));
             observed[..24].copy_from_slice(&request);
             observed[24..64].copy_from_slice(&result);
             observed[0x100..0x100 + n as usize].copy_from_slice(&bytes);
@@ -305,12 +316,12 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
         s.extend(memory_read(0x1700, &[0; 8]));
         let mut arena = observed;
         arena.resize(0x2000, 0);
-        s.extend(bulk_chunks(0x4000, &arena));
+        s.extend(borrowed_bulk_chunks(0x4000, &arena, 32));
         for (i, piece) in vec![0; image.len()].chunks(64).enumerate() {
             s.extend(write(0x4000 + (i * 64) as u32, piece));
         }
         s.extend(raw_chunks(0x4000, &vec![0; image.len()]));
-        s.extend(bulk_chunks(0x4000, &vec![0; 0x2000]));
+        s.extend(borrowed_bulk_chunks(0x4000, &vec![0; 0x2000], 32));
         s.extend(memory_read(0x1400, &words(&[0, 0, 32])));
         s.extend(write(0x1400, &original));
         s.extend(memory_read(0x1400, &original));
@@ -459,10 +470,10 @@ fn matching_control_reads_mapped_flash_in_registered_e1_capacity_chunks() {
     steps.extend(write(0x1400, &selected));
     steps.extend(memory_read(0x1400, &selected));
     steps.extend(memory_read(0x1000, b"stoc"));
-    steps.extend(data(0x1000, b"stoc"));
-    steps.extend(data(0xf00c0000, &control));
-    steps.extend(data(0xf0100000, &first));
-    steps.extend(data(0xf0110000, &second));
+    steps.extend(borrowed_bulk_chunks(0x1000, b"stoc", capacity));
+    steps.extend(borrowed_bulk_chunks(0xf00c0000, &control, capacity));
+    steps.extend(borrowed_bulk_chunks(0xf0100000, &first, capacity));
+    steps.extend(borrowed_bulk_chunks(0xf0110000, &second, capacity));
     steps.extend(memory_read(0x1400, &selected));
     steps.extend(write(0x1400, &original));
     steps.extend(memory_read(0x1400, &original));
