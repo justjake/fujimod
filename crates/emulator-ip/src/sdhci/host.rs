@@ -1969,6 +1969,7 @@ mod tests {
         let mut m = host(Protocol::Application);
         let mut h = Ram::new(0x10000);
         setup(&mut m, &mut h);
+        write(&mut m, &mut h, 0x36, 2, 0xffff);
         m.state = State::Transfer;
         h.bytes[0x1000..0x1400].fill(0x77);
         m.inject_data_fault(DataFault {
