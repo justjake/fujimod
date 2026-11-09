@@ -12,8 +12,16 @@ impl Session {
         self.quiescent.get()
     }
     pub fn read_register(&self, core: usize, register: Register) -> Result<u64, String> {
-        self.inner.cpu(core)?;
-        self.inner.reg(core, register).map(u64::from)
+        let cpu = self.inner.cpu(core)?;
+        if matches!(register, Register::Arm32(arm::Register::D(0..=31))) {
+            let mut bytes = [0; 8];
+            if cpu.read_register(register, &mut bytes)? != bytes.len() {
+                return Err("ARMv7-A D register is not 64 bits".into());
+            }
+            Ok(u64::from_le_bytes(bytes))
+        } else {
+            self.inner.reg(core, register).map(u64::from)
+        }
     }
     pub fn write_register(
         &self,
@@ -24,6 +32,9 @@ impl Session {
         // The instruction observer may change registers while its core is live.
         // A failed board never accepts a host repair through that capability.
         self.inner.host_register_mutation(core)?;
+        if matches!(register, Register::Arm32(arm::Register::D(0..=31))) {
+            return self.inner.cpu(core)?.write_register(register, &value.to_le_bytes());
+        }
         let value = u32::try_from(value)
             .map_err(|_| "ARMv7-A scalar register exceeds 32 bits".to_owned())?;
         self.inner.write_reg(core, register, value)

@@ -300,6 +300,28 @@ impl Cluster {
             None,
         )
     }
+    fn vector_context(&self, core: usize) -> Result<driver_guard::VectorContext, String> {
+        // `secure` selects the host CP15 bank. The ordinary `cp` helper
+        // selects the non-secure bank, so it cannot establish the current
+        // security state from SCR. A32 SVC uses the world selected by SCR.NS.
+        let scr = self.cpus[core].coprocessor(
+            arm::Coprocessor {
+                cp: 15,
+                opc1: 0,
+                crn: 1,
+                crm: 1,
+                opc2: 0,
+                secure: 1,
+                wide: false,
+            },
+            None,
+        )?;
+        Ok(driver_guard::VectorContext {
+            secure_scr: u32::try_from(scr).map_err(|_| "ARMv7-A SCR is not 32 bits")?,
+            cpacr: self.reg(core, Register::Arm32(arm::Register::Cpacr))?,
+            fpexc: self.reg(core, FPEXC)?,
+        })
+    }
     fn fail(&self, core: usize, message: String) {
         self.retain_failure(message);
         let _ = self.cpus[core].stop();
@@ -526,9 +548,13 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
     // Instruction inspection uses Unicorn's architectural MMU translation too.
     let word = c.word(core, address)?;
     if let Some(guard) = unsafe { &mut (*c.state.get()).driver_guard } {
-        let result = guard.preflight(address, word, c.reg(core, arm::CPSR)?, |index| {
-            c.reg(core, arm::CORE[index])
-        });
+        let result = guard.preflight_with_vector_context(
+            address,
+            word,
+            c.reg(core, arm::CPSR)?,
+            |index| c.reg(core, arm::CORE[index]),
+            || c.vector_context(core),
+        );
         if let Err(error) = result {
             guard.failure = Some(error);
             c.cpus[core].stop()?;

@@ -21,6 +21,122 @@ pub struct DevicePolicy {
     pub model_writable: Vec<Span>,
 }
 
+/// Live vector-access state supplied by the isolated CPU caller. These values
+/// are inspected by the guard; the guard never changes them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VectorContext {
+    pub secure_scr: u32,
+    pub cpacr: u32,
+    pub fpexc: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum VectorInstruction {
+    VldrD { d: u8, rn: u8, up: bool, imm8: u8 },
+    VmovLane { d: u8 },
+    VmovPair { d: u8 },
+    NeonThreeRegister { d: u8, n: u8, m: u8 },
+}
+
+impl VectorInstruction {
+    fn d_registers(self) -> ([u8; 3], usize) {
+        match self {
+            Self::VldrD { d, .. } | Self::VmovLane { d, .. } | Self::VmovPair { d, .. } => {
+                ([d, 0, 0], 1)
+            }
+            Self::NeonThreeRegister { d, n, m } => ([d, n, m], 3),
+        }
+    }
+
+    fn uses_neon(self) -> bool {
+        matches!(self, Self::VmovLane { .. } | Self::NeonThreeRegister { .. })
+    }
+}
+
+fn decode_vector_instruction(word: u32) -> Option<VectorInstruction> {
+    let condition = word >> 28;
+    if condition == 15 {
+        // Three-register same-length Advanced SIMD forms. Q=0 is fixed by
+        // these masks; the D/N/M high extension bits remain register fields.
+        let vector_register = |low_shift: u32, high_shift: u32| {
+            (((word >> low_shift) & 15) | (((word >> high_shift) & 1) << 4)) as u8
+        };
+        if word & 0xffb0_0f50 == 0xf330_0400 || word & 0xffb0_0f50 == 0xf200_0110 {
+            return Some(VectorInstruction::NeonThreeRegister {
+                d: vector_register(12, 22),
+                n: vector_register(16, 7),
+                m: vector_register(0, 5),
+            });
+        }
+        return None;
+    }
+
+    // VLDR double precision: P=1, W=0, L=1, with U/Rn/Vd/imm8 variable.
+    if word & 0x0f30_0f00 == 0x0d10_0b00 {
+        return Some(VectorInstruction::VldrD {
+            d: (((word >> 12) & 15) | (((word >> 22) & 1) << 4)) as u8,
+            rn: ((word >> 16) & 15) as u8,
+            up: word & (1 << 23) != 0,
+            imm8: word as u8,
+        });
+    }
+
+    // VMOV.32 scalar lane transfers. The reserved fields and element width
+    // are fixed; bit 21 selects lane 0/1 and bit 7 extends the D register.
+    match word & 0x0fd0_0f7f {
+        0x0e00_0b10 | 0x0e10_0b10 => {
+            let d = (((word >> 16) & 15) | ((word >> 3) & 16)) as u8;
+            let rt = ((word >> 12) & 15) as u8;
+            if rt <= 12 {
+                return Some(VectorInstruction::VmovLane { d });
+            }
+            return None;
+        }
+        _ => {}
+    }
+
+    // VMOV between one D register and two core registers. Bit 20 selects
+    // direction; the core pair must be distinct and avoid SP/LR/PC.
+    if word & 0x0f60_0fd0 == 0x0c40_0b10 {
+        let rt2 = ((word >> 16) & 15) as u8;
+        let rt = ((word >> 12) & 15) as u8;
+        let d = ((word & 15) | ((word >> 1) & 16)) as u8;
+        if rt <= 12 && rt2 <= 12 && rt != rt2 {
+            return Some(VectorInstruction::VmovPair { d });
+        }
+    }
+    None
+}
+
+fn check_vector_context(
+    context: VectorContext,
+    cpsr: u32,
+    instruction: VectorInstruction,
+) -> Result<(), String> {
+    if cpsr & 31 != 0x13 || context.secure_scr & 1 != 0 {
+        return Err("Driver guard vector instructions require Secure SVC context".into());
+    }
+    let cp10 = (context.cpacr >> 20) & 3;
+    let cp11 = (context.cpacr >> 22) & 3;
+    if cp10 != cp11 || !matches!(cp10, 1 | 3) {
+        return Err("Driver guard vector access requires CPACR CP10/CP11 access".into());
+    }
+    if context.fpexc & (1 << 30) == 0 || context.fpexc & (1 << 31) != 0 {
+        return Err("Driver guard vector access requires FPEXC.EN=1 and FPEXC.EX=0".into());
+    }
+    if instruction.uses_neon() && context.cpacr & (1 << 31) != 0 {
+        return Err("Driver guard Advanced SIMD access is disabled by CPACR.ASEDIS".into());
+    }
+    let (registers, count) = instruction.d_registers();
+    if registers[..count].iter().any(|&d| d > 31) {
+        return Err("Driver guard vector instruction names an invalid D register".into());
+    }
+    if registers[..count].iter().any(|&d| d >= 16) && context.cpacr & (1 << 30) != 0 {
+        return Err("Driver guard D16-D31 access is disabled by CPACR.D32DIS".into());
+    }
+    Ok(())
+}
+
 pub struct Guard {
     pub core: usize,
     executable: Vec<Span>,
@@ -334,6 +450,19 @@ impl Guard {
         cpsr: u32,
         reg: impl Fn(usize) -> Result<u32, String>,
     ) -> Result<(), String> {
+        self.preflight_with_vector_context(pc, word, cpsr, reg, || {
+            Err("Driver guard vector access context is unavailable".into())
+        })
+    }
+
+    pub fn preflight_with_vector_context(
+        &mut self,
+        pc: u64,
+        word: u32,
+        cpsr: u32,
+        reg: impl Fn(usize) -> Result<u32, String>,
+        vector_context: impl FnOnce() -> Result<VectorContext, String>,
+    ) -> Result<(), String> {
         if cpsr & (0x20 | 0x200) != 0 || cpsr & 0xc0 != 0xc0 {
             return Err("Driver guard requires little-endian ARM state with IRQ/FIQ masked".into());
         }
@@ -365,6 +494,52 @@ impl Guard {
             self.accepted += 1;
             return Ok(());
         }
+        let mut accesses: Vec<(u64, u64, bool)> = Vec::new();
+        let mut vector_handled = false;
+        if let Some(instruction) = decode_vector_instruction(word) {
+            check_vector_context(vector_context()?, cpsr, instruction)?;
+            match instruction {
+                VectorInstruction::VldrD { rn, up, imm8, .. } => {
+                    let base = if rn == 15 {
+                        let address = pc.checked_add(8).ok_or_else(|| {
+                            "Driver guard VLDR PC-relative base overflow".to_owned()
+                        })?;
+                        u32::try_from(address).map_err(|_| {
+                            "Driver guard VLDR PC-relative base exceeds A32 address space"
+                                .to_owned()
+                        })?
+                    } else {
+                        reg(rn as usize)?
+                    };
+                    let offset = u32::from(imm8) * 4;
+                    let address = if up {
+                        base.checked_add(offset)
+                    } else {
+                        base.checked_sub(offset)
+                    }
+                    .ok_or_else(|| "Driver guard VLDR address overflow/underflow".to_owned())?;
+                    let end = u64::from(address)
+                        .checked_add(8)
+                        .filter(|&end| end <= (1u64 << 32))
+                        .ok_or_else(|| {
+                            "Driver guard VLDR range wraps A32 address space".to_owned()
+                        })?;
+                    if address & 3 != 0 || end <= u64::from(address) {
+                        return Err(
+                            "Driver guard VLDR requires a word-aligned D-register load".into()
+                        );
+                    }
+                    accesses.push((u64::from(address), 8, false));
+                    vector_handled = true;
+                }
+                VectorInstruction::VmovLane { .. }
+                | VectorInstruction::VmovPair { .. }
+                | VectorInstruction::NeonThreeRegister { .. } => {
+                    self.accepted += 1;
+                    return Ok(());
+                }
+            }
+        }
         if condition == 15 {
             // ARMv7 DMB/DSB have eight defined domain/access options. Keep
             // reserved and ARMv8 load-only options outside this A32 guard.
@@ -385,131 +560,67 @@ impl Guard {
                 reg(index)
             }
         };
-        let rn = ((word >> 16) & 15) as usize;
-        let load = word & (1 << 20) != 0;
-        let mut accesses: Vec<(u64, u64, bool)> = Vec::new();
-        match (word >> 25) & 7 {
-            2 | 3 => {
-                if word & (1 << 25) != 0 && word & (1 << 4) != 0 {
-                    // A32 register-only extension, byte-order and bit-field
-                    // families. The masks keep reserved/media encodings out.
-                    let extend = matches!(
-                        word & 0x0ff003f0,
-                        0x06800070 | 0x06a00070 | 0x06b00070 | 0x06c00070 | 0x06e00070 | 0x06f00070
-                    );
-                    let reverse = matches!(
-                        word & 0x0fff0ff0,
-                        0x06bf0f30 | 0x06bf0fb0 | 0x06ff0f30 | 0x06ff0fb0
-                    );
-                    let bitfield =
-                        matches!(word & 0x0fe00070, 0x07a00050 | 0x07e00050 | 0x07c00010);
-                    let divide = matches!(word & 0x0ff0f0f0, 0x0710f010 | 0x0730f010);
-                    if extend || reverse || bitfield || divide {
-                        self.accepted += 1;
-                        return Ok(());
-                    }
-                    return Err(format!(
-                        "Driver guard unsupported media instruction {word:#010x} at {pc:#x}"
-                    ));
-                }
-                let offset = if word & (1 << 25) == 0 {
-                    word & 0xfff
-                } else {
-                    let value = r((word & 15) as usize)?;
-                    let shift = (word >> 7) & 31;
-                    match (word >> 5) & 3 {
-                        0 => value << shift,
-                        1 => {
-                            if shift == 0 {
-                                0
-                            } else {
-                                value >> shift
-                            }
+        if !vector_handled {
+            let rn = ((word >> 16) & 15) as usize;
+            let load = word & (1 << 20) != 0;
+            match (word >> 25) & 7 {
+                2 | 3 => {
+                    if word & (1 << 25) != 0 && word & (1 << 4) != 0 {
+                        // A32 register-only extension, byte-order and bit-field
+                        // families. The masks keep reserved/media encodings out.
+                        let extend = matches!(
+                            word & 0x0ff003f0,
+                            0x06800070
+                                | 0x06a00070
+                                | 0x06b00070
+                                | 0x06c00070
+                                | 0x06e00070
+                                | 0x06f00070
+                        );
+                        let reverse = matches!(
+                            word & 0x0fff0ff0,
+                            0x06bf0f30 | 0x06bf0fb0 | 0x06ff0f30 | 0x06ff0fb0
+                        );
+                        let bitfield =
+                            matches!(word & 0x0fe00070, 0x07a00050 | 0x07e00050 | 0x07c00010);
+                        let divide = matches!(word & 0x0ff0f0f0, 0x0710f010 | 0x0730f010);
+                        if extend || reverse || bitfield || divide {
+                            self.accepted += 1;
+                            return Ok(());
                         }
-                        2 => {
-                            if shift == 0 {
-                                ((value as i32) >> 31) as u32
-                            } else {
-                                ((value as i32) >> shift) as u32
-                            }
-                        }
-                        _ => {
-                            if shift == 0 {
-                                ((u32::from(c)) << 31) | (value >> 1)
-                            } else {
-                                value.rotate_right(shift)
-                            }
-                        }
-                    }
-                };
-                let base = r(rn)?;
-                let adjusted = if word & (1 << 23) != 0 {
-                    base.wrapping_add(offset)
-                } else {
-                    base.wrapping_sub(offset)
-                };
-                let address = if word & (1 << 24) != 0 {
-                    adjusted
-                } else {
-                    base
-                };
-                accesses.push((
-                    address as u64,
-                    if word & (1 << 22) != 0 { 1 } else { 4 },
-                    !load,
-                ));
-            }
-            4 => {
-                let count = (word & 0xffff).count_ones();
-                if count == 0 || rn == 15 || word & (1 << 22) != 0 {
-                    return Err("Driver guard unsupported block transfer".into());
-                }
-                let base = r(rn)?;
-                let before = word & (1 << 24) != 0;
-                let up = word & (1 << 23) != 0;
-                let first = if up {
-                    base.wrapping_add(if before { 4 } else { 0 })
-                } else {
-                    base.wrapping_sub(4 * count)
-                        .wrapping_add(if before { 0 } else { 4 })
-                };
-                for index in 0..count {
-                    accesses.push((first.wrapping_add(index * 4) as u64, 4, !load));
-                }
-            }
-            0 if word & 0x90 == 0x90 => {
-                let kind = (word >> 5) & 3;
-                if kind == 0 {
-                    let exclusive_load = matches!(word & 0x0ff00fff, 0x01900f9f | 0x01f00f9f);
-                    let exclusive_store = matches!(word & 0x0ff00ff0, 0x01800f90 | 0x01e00f90);
-                    if exclusive_load || exclusive_store {
-                        let width = if word & (1 << 22) != 0 { 2 } else { 4 };
-                        let rd = ((word >> 12) & 15) as usize;
-                        let rt = (word & 15) as usize;
-                        let address = r(rn)?;
-                        if rn == 15
-                            || rd == 15
-                            || address & (width - 1) != 0
-                            || (exclusive_store && (rt == 15 || rd == rn || rd == rt))
-                        {
-                            return Err("Driver guard invalid exclusive access".into());
-                        }
-                        // The CPU owns the exclusive monitor. This guard only
-                        // admits the complete RAM access before execution.
-                        accesses.push((address as u64, u64::from(width), exclusive_store));
-                    } else if word & 0x0fc000f0 != 0x00000090
-                        && word & 0x0f8000f0 != 0x00800090
-                        && word & 0x0ff000f0 != 0x00600090
-                    {
                         return Err(format!(
-                            "Driver guard unsupported atomic/misc instruction {word:#010x} at {pc:#x}"
+                            "Driver guard unsupported media instruction {word:#010x} at {pc:#x}"
                         ));
                     }
-                } else {
-                    let offset = if word & (1 << 22) != 0 {
-                        ((word >> 4) & 0xf0) | (word & 15)
+                    let offset = if word & (1 << 25) == 0 {
+                        word & 0xfff
                     } else {
-                        r((word & 15) as usize)?
+                        let value = r((word & 15) as usize)?;
+                        let shift = (word >> 7) & 31;
+                        match (word >> 5) & 3 {
+                            0 => value << shift,
+                            1 => {
+                                if shift == 0 {
+                                    0
+                                } else {
+                                    value >> shift
+                                }
+                            }
+                            2 => {
+                                if shift == 0 {
+                                    ((value as i32) >> 31) as u32
+                                } else {
+                                    ((value as i32) >> shift) as u32
+                                }
+                            }
+                            _ => {
+                                if shift == 0 {
+                                    ((u32::from(c)) << 31) | (value >> 1)
+                                } else {
+                                    value.rotate_right(shift)
+                                }
+                            }
+                        }
                     };
                     let base = r(rn)?;
                     let adjusted = if word & (1 << 23) != 0 {
@@ -522,31 +633,101 @@ impl Guard {
                     } else {
                         base
                     };
-                    let (width, write) = match (kind, load) {
-                        (1, _) => (2, !load),
-                        (2, true) => (1, false),
-                        (3, true) => (2, false),
-                        (2, false) => (8, false),
-                        (3, false) => (8, true),
-                        _ => unreachable!(),
-                    };
-                    if width == 8 {
-                        let rd = (word >> 12) & 15;
-                        if rd & 1 != 0 || rd >= 14 {
-                            return Err("Driver guard invalid doubleword pair".into());
-                        }
-                        accesses.push((address as u64, 4, write));
-                        accesses.push((address.wrapping_add(4) as u64, 4, write));
+                    accesses.push((
+                        address as u64,
+                        if word & (1 << 22) != 0 { 1 } else { 4 },
+                        !load,
+                    ));
+                }
+                4 => {
+                    let count = (word & 0xffff).count_ones();
+                    if count == 0 || rn == 15 || word & (1 << 22) != 0 {
+                        return Err("Driver guard unsupported block transfer".into());
+                    }
+                    let base = r(rn)?;
+                    let before = word & (1 << 24) != 0;
+                    let up = word & (1 << 23) != 0;
+                    let first = if up {
+                        base.wrapping_add(if before { 4 } else { 0 })
                     } else {
-                        accesses.push((address as u64, width, write));
+                        base.wrapping_sub(4 * count)
+                            .wrapping_add(if before { 0 } else { 4 })
+                    };
+                    for index in 0..count {
+                        accesses.push((first.wrapping_add(index * 4) as u64, 4, !load));
                     }
                 }
-            }
-            0 | 1 | 5 => (),
-            _ => {
-                return Err(format!(
-                    "Driver guard unsupported coprocessor/system instruction {word:#010x} at {pc:#x}"
-                ));
+                0 if word & 0x90 == 0x90 => {
+                    let kind = (word >> 5) & 3;
+                    if kind == 0 {
+                        let exclusive_load = matches!(word & 0x0ff00fff, 0x01900f9f | 0x01f00f9f);
+                        let exclusive_store = matches!(word & 0x0ff00ff0, 0x01800f90 | 0x01e00f90);
+                        if exclusive_load || exclusive_store {
+                            let width = if word & (1 << 22) != 0 { 2 } else { 4 };
+                            let rd = ((word >> 12) & 15) as usize;
+                            let rt = (word & 15) as usize;
+                            let address = r(rn)?;
+                            if rn == 15
+                                || rd == 15
+                                || address & (width - 1) != 0
+                                || (exclusive_store && (rt == 15 || rd == rn || rd == rt))
+                            {
+                                return Err("Driver guard invalid exclusive access".into());
+                            }
+                            // The CPU owns the exclusive monitor. This guard only
+                            // admits the complete RAM access before execution.
+                            accesses.push((address as u64, u64::from(width), exclusive_store));
+                        } else if word & 0x0fc000f0 != 0x00000090
+                            && word & 0x0f8000f0 != 0x00800090
+                            && word & 0x0ff000f0 != 0x00600090
+                        {
+                            return Err(format!(
+                                "Driver guard unsupported atomic/misc instruction {word:#010x} at {pc:#x}"
+                            ));
+                        }
+                    } else {
+                        let offset = if word & (1 << 22) != 0 {
+                            ((word >> 4) & 0xf0) | (word & 15)
+                        } else {
+                            r((word & 15) as usize)?
+                        };
+                        let base = r(rn)?;
+                        let adjusted = if word & (1 << 23) != 0 {
+                            base.wrapping_add(offset)
+                        } else {
+                            base.wrapping_sub(offset)
+                        };
+                        let address = if word & (1 << 24) != 0 {
+                            adjusted
+                        } else {
+                            base
+                        };
+                        let (width, write) = match (kind, load) {
+                            (1, _) => (2, !load),
+                            (2, true) => (1, false),
+                            (3, true) => (2, false),
+                            (2, false) => (8, false),
+                            (3, false) => (8, true),
+                            _ => unreachable!(),
+                        };
+                        if width == 8 {
+                            let rd = (word >> 12) & 15;
+                            if rd & 1 != 0 || rd >= 14 {
+                                return Err("Driver guard invalid doubleword pair".into());
+                            }
+                            accesses.push((address as u64, 4, write));
+                            accesses.push((address.wrapping_add(4) as u64, 4, write));
+                        } else {
+                            accesses.push((address as u64, width, write));
+                        }
+                    }
+                }
+                0 | 1 | 5 => (),
+                _ => {
+                    return Err(format!(
+                        "Driver guard unsupported coprocessor/system instruction {word:#010x} at {pc:#x}"
+                    ));
+                }
             }
         }
         let stores = accesses.iter().filter(|a| a.2).count();
@@ -599,9 +780,9 @@ impl Guard {
                 && self.model_readable.is_empty()
                 && self.model_writable.is_empty()
             {
-                "MMU-off little-endian A32 integer routine; explicit RAM ranges; no device access"
+                "MMU-off little-endian A32 routine; explicit RAM ranges; vector opcodes require per-instruction Secure SVC context; no device access"
             } else {
-                "MMU-off little-endian A32 integer routine; explicit RAM and device policies"
+                "MMU-off little-endian A32 routine; explicit RAM and device policies; vector opcodes require per-instruction Secure SVC context"
             },
         }
     }
@@ -630,6 +811,7 @@ pub struct Snapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::Cell;
 
     fn guard() -> Guard {
         Guard::new(
@@ -642,6 +824,295 @@ mod tests {
             vec![(0, 0x5000)],
         )
         .unwrap()
+    }
+
+    fn vector_guard(readable: Vec<Span>) -> Guard {
+        Guard::new(
+            0,
+            vec![(0x1000, 0x2000)],
+            readable,
+            vec![],
+            0x4000,
+            16,
+            vec![(0, 1u64 << 32)],
+        )
+        .unwrap()
+    }
+
+    fn vector_context() -> VectorContext {
+        VectorContext {
+            secure_scr: 0,
+            cpacr: (1 << 20) | (1 << 22),
+            fpexc: 1 << 30,
+        }
+    }
+
+    fn vector_preflight(guard: &mut Guard, pc: u64, word: u32) -> Result<(), String> {
+        guard.preflight_with_vector_context(pc, word, 0xd3, |_| Ok(0x3000), || Ok(vector_context()))
+    }
+
+    #[test]
+    fn vector_allowlist_admits_only_the_supported_vfp_and_neon_forms() {
+        let mut guard = vector_guard(vec![(0x3000, 0x3010), (0x1130, 0x1138)]);
+        for (pc, word) in [
+            (0x1000, 0xeddf0b4a), // VLDR.64 D16, [PC, #0x128]
+            (0x1000, 0xed920b00),   // VLDR.64 D0, [R2]
+            (0x1000, 0xee013b90),   // VMOV.32 D17[0], R3
+            (0x1000, 0xee113b90),   // VMOV.32 R3, D17[0]
+            (0x1000, 0xec410b30),   // VMOV D16, R0, R1
+            (0x1000, 0xec510b30),   // VMOV R0, R1, D16
+            (0x1000, 0xf37124a0),   // VSHL.U64 D18, D16, D17
+            (0x1000, 0xf24221b3),   // VAND D18, D18, D19
+        ] {
+            assert!(
+                vector_preflight(&mut guard, pc, word).is_ok(),
+                "{word:#010x}"
+            );
+        }
+        assert_eq!(guard.snapshot().accepted_instructions, 8);
+        assert!(guard.snapshot().stores.is_empty());
+    }
+
+    #[test]
+    fn vector_access_context_is_live_fail_closed_and_only_needed_for_executed_vectors() {
+        let word = 0xee013b90;
+        let mut guard = vector_guard(vec![]);
+        let queried = Cell::new(false);
+        assert!(
+            guard
+                .preflight_with_vector_context(
+                    0x1000,
+                    word,
+                    0xd3,
+                    |_| Ok(0),
+                    || {
+                        queried.set(true);
+                        Ok(vector_context())
+                    }
+                )
+                .is_ok()
+        );
+        assert!(queried.get());
+
+        let queried = Cell::new(false);
+        assert!(
+            guard
+                .preflight_with_vector_context(
+                    0x1000,
+                    word & 0x0fff_ffff,
+                    0xd3,
+                    |_| Ok(0),
+                    || {
+                        queried.set(true);
+                        Ok(vector_context())
+                    }
+                )
+                .is_ok()
+        );
+        assert!(!queried.get(), "false conditional must skip context reads");
+        assert!(guard.preflight(0x1000, word, 0xd3, |_| Ok(0)).is_err());
+
+        let mut denied = vector_guard(vec![]);
+        for context in [
+            VectorContext {
+                secure_scr: 1,
+                ..vector_context()
+            },
+            VectorContext {
+                cpacr: 0,
+                ..vector_context()
+            },
+            VectorContext {
+                cpacr: (2 << 20) | (1 << 22),
+                ..vector_context()
+            },
+            VectorContext {
+                cpacr: (1 << 20) | (3 << 22),
+                ..vector_context()
+            },
+            VectorContext {
+                fpexc: 0,
+                ..vector_context()
+            },
+            VectorContext {
+                fpexc: (1 << 30) | (1 << 31),
+                ..vector_context()
+            },
+            VectorContext {
+                cpacr: (1 << 20) | (1 << 22) | (1 << 31),
+                ..vector_context()
+            },
+            VectorContext {
+                cpacr: (1 << 20) | (1 << 22) | (1 << 30),
+                ..vector_context()
+            },
+        ] {
+            assert!(
+                denied
+                    .preflight_with_vector_context(0x1000, word, 0xd3, |_| Ok(0), || Ok(context))
+                    .is_err()
+            );
+        }
+        for mode in [0x10, 0x1a, 0x1b] {
+            assert!(
+                denied
+                    .preflight_with_vector_context(
+                        0x1000,
+                        word,
+                        0xc0 | mode,
+                        |_| Ok(0),
+                        || { Ok(vector_context()) }
+                    )
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn vector_decoder_rejects_neighboring_vfp_neon_and_store_forms() {
+        let mut guard = vector_guard(vec![(0x3000, 0x3010)]);
+        let rejected = [
+            0xeddf0b4a ^ (1 << 20),  // VSTR.64
+            0xeddf0b4a ^ (1 << 21),  // VLDM/VSTM class neighbor
+            0xeddf0b4a | (15 << 28), // unconditional VFP transfer
+            0xee013b90 ^ (1 << 23),
+            0xee013b90 ^ (1 << 22),
+            0xee013b90 ^ (1 << 6),
+            0xee013b90 ^ (1 << 5),
+            0xee013b90 ^ (1 << 4),
+            0xee01fb90,             // Rt=PC
+            0xec4f0b30,             // pair includes PC
+            0xec410b30 ^ (1 << 16), // duplicate core pair
+            0xf37124a0 ^ (1 << 24), // signed VSHL
+            0xf37124a0 ^ (1 << 20), // wrong element size
+            0xf37124a0 | (1 << 6),  // Q form
+            0xf37124a0 ^ (1 << 10), // neighboring NEON opcode
+            0xf24221b3 ^ (1 << 24), // other logic op
+            0xf24221b3 | (1 << 6),  // Q form
+            0xf400070f,             // vector structure load/store space
+            0xf480070f,
+        ];
+        for word in rejected {
+            assert!(
+                guard
+                    .preflight_with_vector_context(
+                        0x1000,
+                        word,
+                        0xd3,
+                        |_| Ok(0x3000),
+                        || Ok(vector_context()),
+                    )
+                    .is_err(),
+                "unexpectedly admitted {word:#010x}"
+            );
+        }
+    }
+
+    #[test]
+    fn vldr_preflights_complete_word_aligned_range_with_checked_pc_and_offset() {
+        let mut exact = vector_guard(vec![(0x1130, 0x1138)]);
+        assert!(vector_preflight(&mut exact, 0x1000, 0xeddf0b4a).is_ok());
+
+        let mut negative_pc = vector_guard(vec![(0x11e0, 0x11e8)]);
+        assert!(vector_preflight(&mut negative_pc, 0x1300, 0xed5f0b4a).is_ok());
+
+        let mut short = vector_guard(vec![(0x1130, 0x1137)]);
+        assert!(vector_preflight(&mut short, 0x1000, 0xeddf0b4a).is_err());
+
+        let mut split = vector_guard(vec![(0x3000, 0x3004), (0x3004, 0x3008)]);
+        assert!(
+            split
+                .preflight_with_vector_context(
+                    0x1000,
+                    0xed920b00,
+                    0xd3,
+                    |_| Ok(0x3000),
+                    || { Ok(vector_context()) }
+                )
+                .is_err()
+        );
+
+        let mut misaligned = vector_guard(vec![(0x3000, 0x3010)]);
+        assert!(
+            misaligned
+                .preflight_with_vector_context(
+                    0x1000,
+                    0xed920b00,
+                    0xd3,
+                    |_| Ok(0x3002),
+                    || { Ok(vector_context()) }
+                )
+                .is_err()
+        );
+
+        let mut crossing = vector_guard(vec![(0xffff_fffc, 1u64 << 32)]);
+        assert!(
+            crossing
+                .preflight_with_vector_context(
+                    0x1000,
+                    0xed920b00,
+                    0xd3,
+                    |_| Ok(0xffff_fffc),
+                    || { Ok(vector_context()) }
+                )
+                .is_err()
+        );
+
+        for (word, base, pc) in [
+            (0xed120b02, 4, 0x1000),            // subtracting offset underflows
+            (0xed920b02, u32::MAX - 3, 0x1000), // addition overflows A32
+            (0xeddf0b00, 0, 0xfffffff8),        // PC+8 leaves A32 space
+        ] {
+            let mut overflow = vector_guard(vec![(0, 0x4000)]);
+            assert!(
+                overflow
+                    .preflight_with_vector_context(
+                        pc,
+                        word,
+                        0xd3,
+                        |_| Ok(base),
+                        || { Ok(vector_context()) }
+                    )
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn vldr_never_uses_mmio_even_when_a_four_byte_device_read_is_allowed() {
+        let mut guard = Guard::new(
+            0,
+            vec![(0x1000, 0x2000)],
+            vec![],
+            vec![],
+            0x4000,
+            16,
+            vec![(0, 0x5000)],
+        )
+        .unwrap()
+        .with_mmio(
+            vec![MmioAccess {
+                start: 0xfffd8000,
+                end: 0xfffd8008,
+                width: 4,
+                read: true,
+                write: false,
+            }],
+            vec![(0xfffd8000, 0xfffd8100)],
+        )
+        .unwrap();
+        assert!(
+            guard
+                .preflight_with_vector_context(
+                    0x1000,
+                    0xed920b00,
+                    0xd3,
+                    |_| Ok(0xfffd8000),
+                    || { Ok(vector_context()) }
+                )
+                .is_err()
+        );
+        assert!(guard.snapshot().mmio_accesses.is_empty());
     }
 
     #[test]
