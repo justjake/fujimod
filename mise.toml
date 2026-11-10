@@ -10,15 +10,15 @@ rust = [
   { version = "nightly-2026-10-10", profile = "minimal",
     components = ["rust-src"], targets = ["wasm32-unknown-unknown"] },
 ]
+emsdk = "6.0.13"
+cmake = "4.4.4"
+ninja = "1.13.2"
 "conda:clang" = "23.1.4"
 "conda:clang-tools" = "23.1.4"
 "conda:lld" = "23.1.4"
 "conda:ccache" = "4.14.3"
 "conda:ffmpeg" = "9.0.2"
 "conda:protobuf" = "7.36.2"
-emsdk = "6.0.13"
-cmake = "4.4.4"
-ninja = "1.13.2"
 "cargo:cargo-hakari" = "0.9.39"
 "cargo:cargo-llvm-cov" = "0.9.1"
 
