@@ -24,6 +24,11 @@ pub struct FakeCamera {
     pub clamp: Option<Field>,
     /// Fail the USB transfer that starts conversion number N (1-based).
     pub fail_conversion: Option<usize>,
+    /// Refuse conversion number N (1-based, counting attempts).
+    pub refuse_conversion: Option<usize>,
+    /// Accept conversion number N but never produce its image.
+    pub drop_conversion: Option<usize>,
+    attempts: usize,
     /// A session left open by an earlier controller.
     pub session_open: bool,
     /// Converted images the JPEG reader cannot parse.
@@ -51,6 +56,9 @@ impl FakeCamera {
             refuse_profile: false,
             clamp: None,
             fail_conversion: None,
+            refuse_conversion: None,
+            drop_conversion: None,
+            attempts: 0,
             session_open: false,
             unreadable_output: false,
             pending: None,
@@ -215,6 +223,13 @@ impl FakeCamera {
                 self.respond(code, id, None);
             }
             0x1016 if params[0] == START_RAW_CONVERSION => {
+                self.attempts += 1;
+                if self.refuse_conversion == Some(self.attempts) {
+                    return self.fail(0x2019, id);
+                }
+                if self.drop_conversion == Some(self.attempts) {
+                    return self.respond(code, id, None);
+                }
                 self.conversions += 1;
                 let film = self.profile.get(Field::FilmSimulation).unwrap() as u16;
                 let mut jpeg = crate::jpeg::synthetic(6240, 4160, 160, &[(0x1401, film)]);

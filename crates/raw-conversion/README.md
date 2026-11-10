@@ -95,7 +95,8 @@ kept, and `inspect_error` says why.
 is converted for it, in three cases: the body's profile has no word for a
 setting the job names (`missing`), the camera refuses the profile (`reason`),
 or the read-back differs from what was sent for a setting the job names
-(`adjusted`). Missing or changed base settings are recorded and the job still
+(`adjusted`). A conversion the camera refuses or never finishes within
+the timeout is also `unsupported`, with the `reason`. Missing or changed base settings are recorded and the job still
 converts.
 
 ## Protocol

@@ -341,7 +341,16 @@ pub async fn execute<P: Pipe>(
             record(&options.out, entry)?;
             continue;
         }
-        let jpeg = convert(session, options.conversion_timeout).await?;
+        let jpeg = match convert(session, options.conversion_timeout).await? {
+            Ok(jpeg) => jpeg,
+            Err(reason) => {
+                entry.status = "unsupported".into();
+                log(&format!("{}: skipped, {reason}", job.id));
+                entry.reason = Some(reason);
+                record(&options.out, entry)?;
+                continue;
+            }
+        };
         // The camera no longer holds the image: save it before reading it.
         let name = format!("{}.jpg", job.id);
         let partial = options.out.join(format!("{name}.partial"));
@@ -462,16 +471,28 @@ async fn handles<P: Pipe>(session: &mut Session<P>) -> Result<Vec<u32>, String> 
 }
 
 /// Starts the conversion, waits for a new object, downloads and deletes it.
-/// Objects that were already present are left alone.
-async fn convert<P: Pipe>(session: &mut Session<P>, timeout: Duration) -> Result<Vec<u8>, String> {
+/// Objects that were already present are left alone. The inner error is a
+/// conversion the camera refused or never finished; the run goes on without it.
+async fn convert<P: Pipe>(
+    session: &mut Session<P>,
+    timeout: Duration,
+) -> Result<Result<Vec<u8>, String>, String> {
     let before: BTreeSet<u32> = handles(session).await?.into_iter().collect();
-    call(
-        session,
-        ptp::SET_DEVICE_PROP_VALUE,
-        &[START_RAW_CONVERSION],
-        Some(&0u16.to_le_bytes()),
-    )
-    .await?;
+    let start = session
+        .call(
+            ptp::SET_DEVICE_PROP_VALUE,
+            &[START_RAW_CONVERSION],
+            Some(&0u16.to_le_bytes()),
+        )
+        .await;
+    match start {
+        Err(ptp::Error::Response { code, .. }) => {
+            return Ok(Err(format!(
+                "camera refused the conversion with {code:#06x}"
+            )));
+        }
+        other => other.map_err(|e| e.to_string())?,
+    };
     let poll = Duration::from_millis(500);
     let deadline = std::time::Instant::now() + timeout;
     let handle = loop {
@@ -483,13 +504,13 @@ async fn convert<P: Pipe>(session: &mut Session<P>, timeout: Duration) -> Result
             break h;
         }
         if std::time::Instant::now() >= deadline {
-            return Err(format!("no converted image after {timeout:?}"));
+            return Ok(Err(format!("no converted image after {timeout:?}")));
         }
         futures_timer::Delay::new(poll).await;
     };
     let jpeg = call(session, ptp::GET_OBJECT, &[handle], None).await?.data;
     call(session, ptp::DELETE_OBJECT, &[handle, 0], None).await?;
-    Ok(jpeg)
+    Ok(Ok(jpeg))
 }
 
 fn record(out: &Path, mut entry: Entry) -> Result<(), String> {
@@ -679,6 +700,35 @@ mod tests {
             std::fs::read(s.options.out.join(&out.file)).unwrap().len(),
             out.bytes
         );
+        std::fs::remove_dir_all(&s.dir).unwrap();
+    }
+
+    #[test]
+    fn refused_or_unfinished_conversions_are_skipped() {
+        let s = setup("noconvert");
+        let mut camera = FakeCamera::new(512);
+        camera.refuse_conversion = Some(1);
+        camera.drop_conversion = Some(2);
+        let (result, camera) = run(&s, camera);
+        result.unwrap();
+        let entries = manifest(&s);
+        assert!(
+            entries[0]
+                .reason
+                .as_ref()
+                .unwrap()
+                .contains("refused the conversion")
+        );
+        assert!(
+            entries[1]
+                .reason
+                .as_ref()
+                .unwrap()
+                .contains("no converted image")
+        );
+        assert_eq!(entries[1].status, "unsupported");
+        assert!(entries[2..].iter().all(|e| e.status == "converted"));
+        assert_eq!(camera.conversions, 2);
         std::fs::remove_dir_all(&s.dir).unwrap();
     }
 
