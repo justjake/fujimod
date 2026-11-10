@@ -93,7 +93,8 @@ fn writes_optional_release_metadata() {
     .unwrap();
     assert_eq!(manifest["date"], "2026-11-10");
     assert_eq!(manifest["commit"], "abcdef0123456789");
-    assert_eq!(manifest["notes"], ["First note", "Second note"]);
+    assert_eq!(manifest["notes"][0], "First note");
+    assert_eq!(manifest["notes"][1], "Second note");
 }
 
 #[test]
