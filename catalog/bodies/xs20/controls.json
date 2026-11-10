@@ -37,6 +37,19 @@
     ]
   },
   "analog_levels": null,
+  "boot": {
+    "service": {
+      "hold": [
+        {
+          "id": "focus_stick.up"
+        },
+        {
+          "id": "shutter_button",
+          "stage": "full"
+        }
+      ]
+    }
+  },
   "controls": {
     "movie_recording_button": {
       "name": "Movie recording button",
