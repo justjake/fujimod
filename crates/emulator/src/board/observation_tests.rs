@@ -216,7 +216,7 @@ fn a7_watch_records_both_page_table_aliases_with_the_physical_address() {
 #[test]
 fn memory_watch_samples_per_core_ram_at_each_read() {
     let mut board = a7_board();
-    let mut code = store_at(0x2000, 0x11, 0);
+    let mut code = store_at(0x2000, 0x11, 0).to_vec();
     code.extend([0xe300_0000, 0xe340_0010, 0xe590_1000]); // r0 = 0x100000; ldr r1, [r0]
     code.extend(store_at(0x2000, 0x22, 0));
     code.extend([0xe300_0000, 0xe340_0010, 0xe590_1000, 0xeaff_fffe]);
