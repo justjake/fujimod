@@ -3053,6 +3053,17 @@
           ],
           "description": "Declared usb."
         },
+        "usb_phy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareUsbPhy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared XP4 USB PHY programming port."
+        },
         "xpp_i2c": {
           "anyOf": [
             {
@@ -3612,6 +3623,34 @@
         "diagnostic_headers",
         "flash_dat_bias",
         "nand_layouts"
+      ],
+      "type": "object"
+    },
+    "HardwareUsbPhy": {
+      "additionalProperties": false,
+      "description": "XP4 USB PHY programming port, separate from the device controller.",
+      "properties": {
+        "base": {
+          "description": "Declared base of the indexed control, parallel and readback words.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "size"
       ],
       "type": "object"
     },

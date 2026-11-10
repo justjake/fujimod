@@ -324,6 +324,17 @@
           ],
           "description": "Declared USB port: the cable's VBUS pin and the link speed a host\nnegotiates."
         },
+        "usb_phy_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetUsbPhy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared USB PHY programming-port state."
+        },
         "zone_statistics": {
           "anyOf": [
             {
@@ -3017,6 +3028,38 @@
         "vbus_bank",
         "vbus_pin",
         "speed"
+      ],
+      "type": "object"
+    },
+    "ResetUsbPhy": {
+      "additionalProperties": false,
+      "description": "USB PHY programming-port state at reset: the 32 indexed register bytes and\nthe parallel-interface configuration word.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "parallel": {
+          "description": "Parallel-interface configuration word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "registers": {
+          "description": "Register bytes selected by the control word's index.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "parallel",
+        "registers"
       ],
       "type": "object"
     },

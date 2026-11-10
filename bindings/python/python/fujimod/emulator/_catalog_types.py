@@ -3072,6 +3072,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     spi: NotRequired[dict[str, HardwareSpi] | None]
     temperature: NotRequired[HardwareAdc | None]
     usb: NotRequired[HardwareUsbRegisters | None]
+    usb_phy: NotRequired[HardwareUsbPhy | None]
     xpp_i2c: NotRequired[HardwareXppI2cBuses | None]
     xpp_sd: NotRequired[HardwareXppSdHost | None]
     xpp_usb: NotRequired[HardwareXppUsb | None]
@@ -3256,6 +3257,12 @@ class HardwareUsb(TypedDict, total=False):
     out_endpoints: Required[list[list[int]]]
     packet_bytes: Required[int]
     transfer_ticks: Required[int]
+
+
+class HardwareUsbPhy(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    size: Required[int]
 
 
 class HardwareUsbRegisters(TypedDict, total=False):

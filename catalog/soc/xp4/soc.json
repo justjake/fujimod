@@ -1240,6 +1240,11 @@
               "basis": "X-T3 5.11 resets the unit by writing 0 to +0x000 and waits for bit 0 to read 1. Other words read back their last write; nothing else in this block is modeled."
             }
           ],
+          "usb_phy": {
+            "base": 4289869824,
+            "basis": "Indexed USB PHY programming port: a control word at +0x000 (register index in bits 12:8, data in bits 7:0, write strobe at bit 16), a parallel-interface word at +0x004 and the selected register's readback at +0x400. No analog or link-ready behavior is modeled.",
+            "size": 4096
+          },
           "xpp_usb": {
             "base": 4289724416,
             "size": 65536,

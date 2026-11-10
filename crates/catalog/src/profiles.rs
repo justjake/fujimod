@@ -1283,6 +1283,20 @@ pub struct XppUsb {
     pub transaction_ticks: u64,
 }
 
+/// XP4 USB PHY programming port, separate from the device controller.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareUsbPhy"))]
+pub struct UsbPhy {
+    /// Declared base of the indexed control, parallel and readback words.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Declared size.
+    pub size: u64,
+}
+
 /// X-Processor Pro power control: supply hold and power domains.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -2035,6 +2049,9 @@ pub struct RegisterLayouts {
     /// Declared X-Processor Pro USB device controller.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub xpp_usb: Option<XppUsb>,
+    /// Declared XP4 USB PHY programming port.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usb_phy: Option<UsbPhy>,
     /// Declared interrupts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interrupts: Option<Interrupts>,

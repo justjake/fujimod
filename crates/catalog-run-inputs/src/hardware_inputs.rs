@@ -901,6 +901,21 @@ pub struct UsbCableInput {
     pub speed: String,
 }
 
+/// USB PHY programming-port state at reset: the 32 indexed register bytes and
+/// the parallel-interface configuration word.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetUsbPhy"))]
+pub struct UsbPhyInput {
+    /// Declared basis.
+    pub basis: String,
+    /// Parallel-interface configuration word.
+    pub parallel: u64,
+    /// Register bytes selected by the control word's index.
+    pub registers: Vec<u8>,
+}
+
 /// Seconds count in four consecutive sub-CPU registers, least significant
 /// byte first, that advances with device time while its hold register's bit 0
 /// is set.
@@ -1267,6 +1282,9 @@ pub struct HardwareReset {
     /// negotiates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usb_cable: Option<UsbCableInput>,
+    /// Declared USB PHY programming-port state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usb_phy_input: Option<UsbPhyInput>,
     /// Declared temperature input.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temperature_input: Option<TemperatureInput>,
