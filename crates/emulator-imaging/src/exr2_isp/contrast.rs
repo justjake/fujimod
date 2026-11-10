@@ -59,84 +59,6 @@ fn scaled_energies(
         u32::try_from(fine).map_err(|_| "fine contrast overflows")?,
     ))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn declared_luma_depth_preserves_weak_cell_energy_before_normalization() {
-        let l = ImageLayout {
-            width: 8,
-            height: 4,
-            stride: 16,
-        };
-        let pixels = (0..4)
-            .flat_map(|_| (0..4).flat_map(|i| [i * 2, i * 2 + 1, 128, 128]))
-            .collect::<Vec<u8>>();
-        assert_eq!(
-            scaled_energies(&pixels, l, [0, 0, 8, 4], 8).unwrap(),
-            (0, 0)
-        );
-        assert_eq!(
-            scaled_energies(&pixels, l, [0, 0, 8, 4], 12).unwrap(),
-            (20, 28)
-        );
-        assert!(scaled_energies(&pixels, l, [0, 0, 8, 4], 13).is_err());
-    }
-    #[test]
-    fn programmed_grid_and_band_sample_only_their_pixel_windows() {
-        let l = ImageLayout {
-            width: 12,
-            height: 8,
-            stride: 24,
-        };
-        let pixels = (0..8)
-            .flat_map(|_| {
-                (0..6).flat_map(|i| {
-                    [
-                        if i < 2 {
-                            0
-                        } else if i == 2 {
-                            0
-                        } else {
-                            255
-                        },
-                        if i < 2 { 0 } else { 255 },
-                        128,
-                        128,
-                    ]
-                })
-            })
-            .collect::<Vec<u8>>();
-        let mut r = [0; 1024];
-        r[0x100 / 4] = 0x00021003;
-        r[0x104 / 4] = 0x00011001;
-        r[0x10c / 4] = 2 << 16 | 7;
-        r[0x110 / 4] = 1 << 16 | 1;
-        let (grid, bands) = banks(
-            &r,
-            &pixels,
-            l,
-            &Arithmetic::SquaredHorizontalGradients { luma_bits: 8 },
-        )
-        .unwrap();
-        let word = |o: usize| u32::from_le_bytes(grid[o..o + 4].try_into().unwrap());
-        assert_eq!(word(0), 56);
-        assert_eq!(word(0x400), 508);
-        assert_eq!(word(4), 0);
-        assert_eq!(u64::from_le_bytes(bands[..8].try_into().unwrap()), 508);
-        r[0x100 / 4] = 0x1fff1003;
-        assert!(
-            banks(
-                &r,
-                &pixels,
-                l,
-                &Arithmetic::SquaredHorizontalGradients { luma_bits: 8 }
-            )
-            .is_err()
-        );
-    }
-}
 pub fn banks(
     r: &[u32],
     pixels: &[u8],
@@ -187,4 +109,76 @@ pub fn banks(
         bands[i * 8..i * 8 + 8].copy_from_slice(&u64::from(fine).to_le_bytes());
     }
     Ok((grid, bands))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn declared_luma_depth_preserves_weak_cell_energy_before_normalization() {
+        let l = ImageLayout {
+            width: 8,
+            height: 4,
+            stride: 16,
+        };
+        let pixels = (0..4)
+            .flat_map(|_| (0..4).flat_map(|i| [i * 2, i * 2 + 1, 128, 128]))
+            .collect::<Vec<u8>>();
+        assert_eq!(
+            scaled_energies(&pixels, l, [0, 0, 8, 4], 8).unwrap(),
+            (0, 0)
+        );
+        assert_eq!(
+            scaled_energies(&pixels, l, [0, 0, 8, 4], 12).unwrap(),
+            (20, 28)
+        );
+        assert!(scaled_energies(&pixels, l, [0, 0, 8, 4], 13).is_err());
+    }
+    #[test]
+    fn programmed_grid_and_band_sample_only_their_pixel_windows() {
+        let l = ImageLayout {
+            width: 12,
+            height: 8,
+            stride: 24,
+        };
+        let pixels = (0..8)
+            .flat_map(|_| {
+                (0..6).flat_map(|i| {
+                    [
+                        if i <= 2 { 0 } else { 255 },
+                        if i < 2 { 0 } else { 255 },
+                        128,
+                        128,
+                    ]
+                })
+            })
+            .collect::<Vec<u8>>();
+        let mut r = [0; 1024];
+        r[0x100 / 4] = 0x00021003;
+        r[0x104 / 4] = 0x00011001;
+        r[0x10c / 4] = 2 << 16 | 7;
+        r[0x110 / 4] = 1 << 16 | 1;
+        let (grid, bands) = banks(
+            &r,
+            &pixels,
+            l,
+            &Arithmetic::SquaredHorizontalGradients { luma_bits: 8 },
+        )
+        .unwrap();
+        let word = |o: usize| u32::from_le_bytes(grid[o..o + 4].try_into().unwrap());
+        assert_eq!(word(0), 56);
+        assert_eq!(word(0x400), 508);
+        assert_eq!(word(4), 0);
+        assert_eq!(u64::from_le_bytes(bands[..8].try_into().unwrap()), 508);
+        r[0x100 / 4] = 0x1fff1003;
+        assert!(
+            banks(
+                &r,
+                &pixels,
+                l,
+                &Arithmetic::SquaredHorizontalGradients { luma_bits: 8 }
+            )
+            .is_err()
+        );
+    }
 }

@@ -26,6 +26,32 @@ pub struct UiEventCodes {
     pub ui_event_codes: BTreeMap<String, u32>,
 }
 
+impl UiEventCodes {
+    pub fn validate(&self) -> Result<(), String> {
+        fujimod_catalog_identity::validate_id(&self.id)?;
+        fujimod_catalog_identity::validate_id(&self.firmware_id)?;
+        let mut ids = BTreeSet::new();
+        if self.schema_uri != UI_EVENT_CODES_SCHEMA_URI
+            || self.schema != 1
+            || self.id != format!("{}-ui-event-codes", self.firmware_id)
+            || self.firmware_sha256.len() != 64
+            || !self.firmware_sha256.bytes().all(|c| c.is_ascii_hexdigit())
+            || self.ui_event_codes.is_empty()
+            || self.ui_event_codes.iter().any(|(name, id)| {
+                name.is_empty()
+                    || !name
+                        .bytes()
+                        .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == b'_')
+                    || *id == 0
+                    || !ids.insert(*id)
+            })
+        {
+            return Err("invalid stock event-name identities".into());
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -61,31 +87,5 @@ mod tests {
         let mut value = codes();
         value.firmware_id = "other-100".into();
         assert!(value.validate().is_err());
-    }
-}
-
-impl UiEventCodes {
-    pub fn validate(&self) -> Result<(), String> {
-        fujimod_catalog_identity::validate_id(&self.id)?;
-        fujimod_catalog_identity::validate_id(&self.firmware_id)?;
-        let mut ids = BTreeSet::new();
-        if self.schema_uri != UI_EVENT_CODES_SCHEMA_URI
-            || self.schema != 1
-            || self.id != format!("{}-ui-event-codes", self.firmware_id)
-            || self.firmware_sha256.len() != 64
-            || !self.firmware_sha256.bytes().all(|c| c.is_ascii_hexdigit())
-            || self.ui_event_codes.is_empty()
-            || self.ui_event_codes.iter().any(|(name, id)| {
-                name.is_empty()
-                    || !name
-                        .bytes()
-                        .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == b'_')
-                    || *id == 0
-                    || !ids.insert(*id)
-            })
-        {
-            return Err("invalid stock event-name identities".into());
-        }
-        Ok(())
     }
 }

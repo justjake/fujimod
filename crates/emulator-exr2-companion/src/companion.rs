@@ -1081,12 +1081,7 @@ mod tests {
         setup(&mut model, &mut host);
         assert_eq!(write(&mut model, &mut host, CHANNEL_CONTROL, 0x40001), None);
         assert_eq!(
-            write(
-                &mut model,
-                &mut host,
-                DESCRIPTOR_POINTER,
-                (RAM_BASE + 0x100) as u64
-            ),
+            write(&mut model, &mut host, DESCRIPTOR_POINTER, RAM_BASE + 0x100),
             None
         );
         assert!(write(&mut model, &mut host, TRANSFER_CONTROL, 1).is_some());

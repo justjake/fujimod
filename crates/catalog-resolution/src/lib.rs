@@ -253,18 +253,17 @@ pub fn validate_selection(
     }
 
     if let Some(preset) = &configuration.preset {
-        if let Some(id) = &preset.firmware_profile_id {
-            if !selection
+        if let Some(id) = &preset.firmware_profile_id
+            && !selection
                 .firmware
                 .layouts
                 .as_ref()
                 .is_some_and(|layouts| layouts.profiles.contains_key(id))
-            {
-                return Err(format!(
-                    "firmware {} has no layout profile {id}",
-                    selection.firmware.id
-                ));
-            }
+        {
+            return Err(format!(
+                "firmware {} has no layout profile {id}",
+                selection.firmware.id
+            ));
         }
         if !preset.native_device_inputs.is_empty() && selection.soc.id != "exr2" {
             return Err("native EXR2 input policies require an EXR2 SoC".into());

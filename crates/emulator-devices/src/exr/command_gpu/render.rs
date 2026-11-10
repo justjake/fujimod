@@ -265,7 +265,7 @@ impl Renderer {
             cx.ram_read(at, &mut px)?;
             let vy = (d.height - 1 - row) as f32 + 0.5;
             let mut loaded_row = -1i64;
-            for (k, out) in px.chunks_exact_mut(4).enumerate() {
+            for (k, out) in px.as_chunks_mut::<4>().0.iter_mut().enumerate() {
                 let s = if image {
                     let vx = (x0 + k as i64) as f32 + 0.5;
                     let u = (m[0] * vx + m[1] * vy + m[2]).floor() as i64;
@@ -290,7 +290,7 @@ impl Renderer {
                 let oa = a * 255 + da * (255 - a);
                 for c in 0..3 {
                     let num = u32::from(s[c]) * a * 255 + u32::from(out[c]) * da * (255 - a);
-                    out[c] = if oa == 0 { 0 } else { (num / oa) as u8 };
+                    out[c] = num.checked_div(oa).map_or(0, |value| value as u8);
                 }
                 out[3] = (oa / 255) as u8;
             }

@@ -151,7 +151,12 @@ impl CommandGpu {
             if self.options.render {
                 let mut bytes = vec![0u8; list.words as usize * 16];
                 cx.ram_read(list.address, &mut bytes)?;
-                let words: Vec<u32> = bytes.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+                let words: Vec<u32> = bytes
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                    .collect();
                 if !self.state.renderer.seeded() {
                     self.state.renderer.seed(&self.options.render_registers)?;
                 }
@@ -162,7 +167,12 @@ impl CommandGpu {
                 // (lists of 1, 2, 3 and 5 units end their batch terminator at words 3, 7, 11 and 19).
                 let mut bytes = vec![0u8; list.words as usize * 16];
                 cx.ram_read(list.address, &mut bytes)?;
-                let words = bytes.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+                let words = bytes
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                    .collect();
                 self.state.recorded.push(RecordedList {
                     channel: list.channel,
                     address: list.address,

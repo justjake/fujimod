@@ -284,7 +284,7 @@ impl Gpu {
             contents: &data_bytes,
             usage: wgpu::BufferUsages::STORAGE,
         });
-        let byte_count = (bytes_per_row as usize)
+        let byte_count = bytes_per_row
             .checked_mul(bbox_height)
             .ok_or("SMAPH paint output buffer size overflow")?;
         let output = device.create_buffer(&wgpu::BufferDescriptor {

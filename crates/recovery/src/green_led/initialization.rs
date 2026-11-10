@@ -137,8 +137,9 @@ impl Binding {
                     .as_ref()
                     .ok_or_else(|| image::Error::Invalid("Missing XP5 lamp setup".into()))?
                     .lamp;
-                let mmio =
-                    |address: u64| (0xf0000000..0xfffff000).contains(&address) && address % 4 == 0;
+                let mmio = |address: u64| {
+                    (0xf0000000..0xfffff000).contains(&address) && address.is_multiple_of(4)
+                };
                 require(
                     [lamp.pio_base, lamp.clock_address, lamp.reset_address]
                         .into_iter()

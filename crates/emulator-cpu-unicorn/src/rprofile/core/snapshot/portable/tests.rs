@@ -242,12 +242,12 @@ fn whole_domain_rebinding_preserves_exclusives_and_later_aba_writes_invalidate_t
         let target = &processor.cpu;
         let saved = target.import_snapshot(&bytes).unwrap();
         target.restore(saved.as_ref()).unwrap();
-        domain(&target, &monitors);
+        domain(target, &monitors);
         if aba {
-            words(&target, 0x2000, &[37]);
+            words(target, 0x2000, &[37]);
         }
-        resume(&target, 1).unwrap();
-        assert_eq!(get(&target, arm::CORE[2]), u32::from(aba));
+        resume(target, 1).unwrap();
+        assert_eq!(get(target, arm::CORE[2]), u32::from(aba));
         let mut bytes = [0; 4];
         target.read_memory(0x2000, &mut bytes).unwrap();
         assert_eq!(u32::from_le_bytes(bytes), if aba { 37 } else { 44 });

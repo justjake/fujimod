@@ -420,8 +420,10 @@ fn serviced_deadline_precedes_interactive_mmio_catch_up() {
         let mut bytes = [0; 12];
         board.read_physical(0x3000, &mut bytes).unwrap();
         let words: Vec<_> = bytes
-            .chunks_exact(4)
-            .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|b| u32::from_le_bytes(*b))
             .collect();
         if words[0] == 1 {
             break words;

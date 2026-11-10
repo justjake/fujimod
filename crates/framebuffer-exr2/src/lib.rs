@@ -567,10 +567,10 @@ impl Compositor {
         };
         let rectangles = crate::rectangles::decode(&self.pipes[i], self.rectangle_composition)?;
         crate::rectangles::compose(&mut frame, &rectangles);
-        if let Some(rgb) = &frame.rgb {
-            if let Some(png) = host.encode_png(rgb, frame.width, frame.height)? {
-                frame.png = Some(png);
-            }
+        if let Some(rgb) = &frame.rgb
+            && let Some(png) = host.encode_png(rgb, frame.width, frame.height)?
+        {
+            frame.png = Some(png);
         }
         Ok(Some(frame))
     }

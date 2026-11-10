@@ -743,12 +743,16 @@ mod tests {
                             source[i + 1] = (value >> 4) as u8;
                         }
                     }
-                    let stored = if packing == Packing::Packed12 { value << 2 } else { value };
-                    let v = ((u64::from(stored.saturating_sub(127))
+                    let stored = if packing == Packing::Packed12 {
+                        value << 2
+                    } else {
+                        value
+                    };
+                    let v = (((u64::from(stored.saturating_sub(127))
                         * gains[cfa.color(x, y)]
                         * exposure)
                         >> 16)
-                        * u64::from(gain(x, y))
+                        * u64::from(gain(x, y)))
                         >> 11;
                     let i = y * (24 * 2 + 8) + x * 2;
                     calibrated[i..i + 2].copy_from_slice(&(v.min(16383) as u16).to_le_bytes());
@@ -835,7 +839,12 @@ mod tests {
             &mut out,
         )
         .unwrap();
-        assert!(out.chunks_exact(4).all(|p| p == [64, 64, 128, 128]));
+        assert!(
+            out.as_chunks::<4>()
+                .0
+                .iter()
+                .all(|p| *p == [64, 64, 128, 128])
+        );
         cfa.render(
             &raw,
             &film,

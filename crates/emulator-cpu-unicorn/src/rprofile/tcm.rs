@@ -50,7 +50,7 @@ pub(super) struct Bank {
 impl Bank {
     pub fn extent(&self) -> Option<(u64, usize)> {
         let r = self.register.get();
-        (r & 1 != 0 && self.memory.len() != 0)
+        (r & 1 != 0 && !self.memory.is_empty())
             .then_some(((r & 0xfffff000) as u64, self.memory.len()))
     }
 }

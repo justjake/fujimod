@@ -2,7 +2,7 @@
 name = "fujimod-emulator-cpu-unicorn"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.95"
 publish = false
 
 [lib]

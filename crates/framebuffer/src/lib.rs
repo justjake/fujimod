@@ -44,13 +44,7 @@ impl Output {
     ) -> std::result::Result<Vec<u8>, String> {
         let mut rgba = canvas(self.width, self.height)?;
         for l in &self.layers {
-            raster::composite(
-                |a, n| read(a, n),
-                l.plane,
-                self.width,
-                self.height,
-                &mut rgba,
-            )?;
+            raster::composite(&mut read, l.plane, self.width, self.height, &mut rgba)?;
         }
         Ok(rgba)
     }
@@ -68,7 +62,7 @@ pub fn pixel_bytes(width: u32, height: u32) -> std::result::Result<usize, String
 }
 pub fn canvas(width: u32, height: u32) -> std::result::Result<Vec<u8>, String> {
     let mut rgba = vec![0; pixel_bytes(width, height)?];
-    for p in rgba.chunks_exact_mut(4) {
+    for p in rgba.as_chunks_mut::<4>().0 {
         p[3] = 255;
     }
     Ok(rgba)
@@ -96,7 +90,12 @@ pub fn bmp(width: u32, height: u32, rgba: &[u8]) -> std::result::Result<Vec<u8>,
     word(70, 0x73524742);
     b[26..28].copy_from_slice(&1u16.to_le_bytes());
     b[28..30].copy_from_slice(&32u16.to_le_bytes());
-    for (d, s) in b[122..].chunks_exact_mut(4).zip(rgba.chunks_exact(4)) {
+    for (d, s) in b[122..]
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .zip(rgba.as_chunks::<4>().0)
+    {
         d.copy_from_slice(&[s[2], s[1], s[0], s[3]]);
     }
     Ok(b)

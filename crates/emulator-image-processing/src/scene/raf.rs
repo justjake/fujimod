@@ -187,12 +187,12 @@ fn parse_fuji_ifd(tiff_buf: &[u8; 2048]) -> io::Result<(u16, u16, u16, u16, u16)
     // Extract and validate RawImageFullWidth (0xf001) and RawImageFullHeight (0xf002).
     let raw_width = fuji_tags
         .get(&0xf001u16)
-        .map(|(_, _, v)| *v as u32)
+        .map(|(_, _, v)| *v)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing tag 0xf001"))?;
 
     let raw_height = fuji_tags
         .get(&0xf002u16)
-        .map(|(_, _, v)| *v as u32)
+        .map(|(_, _, v)| *v)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing tag 0xf002"))?;
 
     if (raw_width, raw_height) != (4992, 3296) {
@@ -297,8 +297,7 @@ pub fn read_raf<R: Read + Seek>(mut file: R) -> io::Result<RafScene> {
         && cfa_offset < raw_offset
         && raw_offset < (1u64 << 31)
         && jpeg_size >= 2048
-        && cfa_size >= 128
-        && cfa_size <= 32768)
+        && (128..=32768).contains(&cfa_size))
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -486,8 +485,8 @@ fn compute_counts(
 /// Averages all sites of each CFA color within each 6×6 cell.
 pub fn raf_to_radiance_rgb(scene: &RafScene) -> RafRadianceRgb {
     // Output dimensions: one cell per 6 pixels.
-    let cell_width = (scene.width as usize + 5) / 6;
-    let cell_height = (scene.height as usize + 5) / 6;
+    let cell_width = (scene.width as usize).div_ceil(6);
+    let cell_height = (scene.height as usize).div_ceil(6);
 
     let mut rgb_cells = vec![[0f32; 3]; cell_width * cell_height];
 
@@ -532,7 +531,7 @@ pub fn raf_to_radiance_rgb(scene: &RafScene) -> RafRadianceRgb {
 /// - Exposure time (tag 0x829A): type 5 (rational), count 1
 /// - F-number (tag 0x829D): type 5 (rational), count 1
 /// - Fujifilm maker notes (tag 0x927C): DevelopmentDynamicRange (0x1403, type 3 u16)
-/// Returns error if any required tag is missing or unparsable.
+///   Returns error if any required tag is missing or unparsable.
 fn parse_exif(jpeg_data: &[u8]) -> io::Result<RecordedExposure> {
     // Find EXIF marker (0xFFE1) and get TIFF base offset.
     let exif_start = find_exif_ifd(jpeg_data)?;
@@ -876,7 +875,7 @@ mod tests {
         raf_data.extend_from_slice(&(2196u32).to_be_bytes()); // cfa at 148+2048
         raf_data.extend_from_slice(&(256u32).to_be_bytes()); // cfa size 256
         raf_data.extend_from_slice(&(2452u32).to_be_bytes()); // raw at 2196+256
-        raf_data.extend_from_slice(&((2048u32 + 4992 * 3296 * 2) as u32).to_be_bytes()); // raw size
+        raf_data.extend_from_slice(&(2048u32 + 4992 * 3296 * 2).to_be_bytes()); // raw size
 
         // JPEG placeholder (2048 bytes, minimal valid JPEG header for EXIF parsing).
         let mut jpeg = vec![0xFFu8, 0xD8]; // SOI
@@ -948,7 +947,7 @@ mod tests {
         tiff[at..at + 2].copy_from_slice(&(0xf008u16).to_le_bytes());
         tiff[at + 2..at + 4].copy_from_slice(&(4u16).to_le_bytes());
         tiff[at + 4..at + 8].copy_from_slice(&(1u32).to_le_bytes());
-        tiff[at + 8..at + 12].copy_from_slice(&((2048u32 + 4992 * 3296 * 2) as u32).to_le_bytes());
+        tiff[at + 8..at + 12].copy_from_slice(&(2048u32 + 4992 * 3296 * 2).to_le_bytes());
         // Add black level tag (0xf00a) at offset 256.
         raf_data.extend_from_slice(&tiff);
 
@@ -970,67 +969,67 @@ mod tests {
     #[test]
     fn test_exif_parsing_debug() {
         // Debug test to verify EXIF parsing on real RAF file
-        if let Ok(raf_path) = std::env::var("FUJIMOD_TEST_RAF") {
-            if let Ok(mut file) = std::fs::File::open(&raf_path) {
-                let mut header_buf = [0u8; 148];
-                use std::io::Read;
-                if file.read_exact(&mut header_buf).is_ok() {
-                    let jpeg_off = u32::from_be_bytes([
-                        header_buf[84],
-                        header_buf[85],
-                        header_buf[86],
-                        header_buf[87],
-                    ]) as u64;
-                    let jpeg_sz = u32::from_be_bytes([
-                        header_buf[88],
-                        header_buf[89],
-                        header_buf[90],
-                        header_buf[91],
-                    ]) as u64;
+        if let Ok(raf_path) = std::env::var("FUJIMOD_TEST_RAF")
+            && let Ok(mut file) = std::fs::File::open(&raf_path)
+        {
+            let mut header_buf = [0u8; 148];
+            use std::io::Read;
+            if file.read_exact(&mut header_buf).is_ok() {
+                let jpeg_off = u32::from_be_bytes([
+                    header_buf[84],
+                    header_buf[85],
+                    header_buf[86],
+                    header_buf[87],
+                ]) as u64;
+                let jpeg_sz = u32::from_be_bytes([
+                    header_buf[88],
+                    header_buf[89],
+                    header_buf[90],
+                    header_buf[91],
+                ]) as u64;
 
-                    eprintln!("JPEG at offset {}, size {}", jpeg_off, jpeg_sz);
+                eprintln!("JPEG at offset {}, size {}", jpeg_off, jpeg_sz);
 
-                    // Seek and read
-                    use std::io::Seek;
-                    file.seek(std::io::SeekFrom::Start(jpeg_off)).ok();
-                    let read_size = std::cmp::min(jpeg_sz as usize, 65536);
-                    let mut jpeg_buf = vec![0u8; read_size];
-                    if let Ok(n) = file.read(&mut jpeg_buf) {
-                        eprintln!("Read {} bytes of JPEG (requested {})", n, jpeg_buf.len());
+                // Seek and read
+                use std::io::Seek;
+                file.seek(std::io::SeekFrom::Start(jpeg_off)).ok();
+                let read_size = std::cmp::min(jpeg_sz as usize, 65536);
+                let mut jpeg_buf = vec![0u8; read_size];
+                if let Ok(n) = file.read(&mut jpeg_buf) {
+                    eprintln!("Read {} bytes of JPEG (requested {})", n, jpeg_buf.len());
 
-                        // Try to find and parse EXIF
-                        match parse_exif(&jpeg_buf[..n]) {
-                            Ok(exp) => {
+                    // Try to find and parse EXIF
+                    match parse_exif(&jpeg_buf[..n]) {
+                        Ok(exp) => {
+                            eprintln!(
+                                "SUCCESS: ISO {}, {:.6}s, f/{:.1}, DR{}",
+                                exp.iso, exp.seconds, exp.f_number, exp.dynamic_range
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!("FAILED to parse EXIF: {}", e);
+
+                            // Try manual parsing for debugging
+                            eprintln!("Attempting manual EXIF debug...");
+                            if let Ok(exif_start_pos) = find_exif_ifd(&jpeg_buf[..n]) {
                                 eprintln!(
-                                    "SUCCESS: ISO {}, {:.6}s, f/{:.1}, DR{}",
-                                    exp.iso, exp.seconds, exp.f_number, exp.dynamic_range
+                                    "Found EXIF at position {}, slice len={}",
+                                    exif_start_pos,
+                                    n - exif_start_pos
                                 );
-                            }
-                            Err(e) => {
-                                eprintln!("FAILED to parse EXIF: {}", e);
-
-                                // Try manual parsing for debugging
-                                eprintln!("Attempting manual EXIF debug...");
-                                if let Ok(exif_start_pos) = find_exif_ifd(&jpeg_buf[..n]) {
+                                let tags =
+                                    parse_ifd(&jpeg_buf[exif_start_pos..n], 0).unwrap_or_default();
+                                eprintln!("Main IFD has {} tags", tags.len());
+                                for (tag, (typ, count, val)) in &tags {
                                     eprintln!(
-                                        "Found EXIF at position {}, slice len={}",
-                                        exif_start_pos,
-                                        n - exif_start_pos
+                                        "  Tag 0x{:04x}: type={}, count={}, value=0x{:08x}",
+                                        tag, typ, count, val
                                     );
-                                    let tags = parse_ifd(&jpeg_buf[exif_start_pos..n], 0)
-                                        .unwrap_or_default();
-                                    eprintln!("Main IFD has {} tags", tags.len());
-                                    for (tag, (typ, count, val)) in &tags {
-                                        eprintln!(
-                                            "  Tag 0x{:04x}: type={}, count={}, value=0x{:08x}",
-                                            tag, typ, count, val
-                                        );
-                                    }
-                                    if let Some((_, _, exif_off)) = tags.get(&0x8769u16) {
-                                        eprintln!("Found ExifIFD at offset {}", exif_off);
-                                    } else {
-                                        eprintln!("ExifIFD tag (0x8769) NOT FOUND in main IFD!");
-                                    }
+                                }
+                                if let Some((_, _, exif_off)) = tags.get(&0x8769u16) {
+                                    eprintln!("Found ExifIFD at offset {}", exif_off);
+                                } else {
+                                    eprintln!("ExifIFD tag (0x8769) NOT FOUND in main IFD!");
                                 }
                             }
                         }

@@ -766,15 +766,14 @@ impl RunFactoryOptions {
                 return Err("run HDMI EDID identity is invalid".into());
             }
         }
-        if let Some(format) = &self.sd_card_format {
-            if format.label.is_empty()
+        if let Some(format) = &self.sd_card_format
+            && (format.label.is_empty()
                 || format.label.len() > 11
                 || !format.label.is_ascii()
                 || !format.sectors_per_cluster.is_power_of_two()
-                || format.sectors_per_cluster > 128
-            {
-                return Err("run card format is invalid".into());
-            }
+                || format.sectors_per_cluster > 128)
+        {
+            return Err("run card format is invalid".into());
         }
         Ok(())
     }

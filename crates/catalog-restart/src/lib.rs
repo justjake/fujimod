@@ -438,8 +438,7 @@ impl FirmwareRestart {
             constants,
             code_checks,
         }) = &m.early_boot
-        {
-            if *spi_channel > 3
+            && (*spi_channel > 3
                 || code_checks.len() != 2
                 || code_checks
                     .iter()
@@ -453,10 +452,9 @@ impl FirmwareRestart {
                 || constants.exr2_restart_alarm_enable != m.power_off.alarm.enable
                 || constants.restart_gpio_pin >= 16
                 || constants.restart_power_gpio_bank >= 16
-                || constants.restart_panel_gpio_bank >= 16
-            {
-                return fail("invalid early-boot restart mechanism");
-            }
+                || constants.restart_panel_gpio_bank >= 16)
+        {
+            return fail("invalid early-boot restart mechanism");
         }
         if let Some(timer) = &m.deferred_timer {
             if timer.kind != "software-timer-callback-v1"

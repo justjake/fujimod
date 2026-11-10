@@ -87,7 +87,7 @@ impl SensorImageLight {
     }
 }
 
-fn soc_profile<'a>(resolved: &'a ResolvedConfiguration) -> Result<&'a SocProfile, String> {
+fn soc_profile(resolved: &ResolvedConfiguration) -> Result<&SocProfile, String> {
     let selection = resolved
         .configuration
         .preset
@@ -118,7 +118,7 @@ fn flat_reference(reference: [u32; 3]) -> [u32; 3] {
 }
 
 /// The selected body hardware profile of a resolved run.
-fn body_profile<'a>(resolved: &'a ResolvedConfiguration) -> Result<&'a BodyProfile, String> {
+fn body_profile(resolved: &ResolvedConfiguration) -> Result<&BodyProfile, String> {
     let choice = resolved
         .configuration
         .preset
@@ -228,7 +228,7 @@ fn encoder_nodes(body: &Body, profile: &BodyProfile) -> Result<Vec<Value>, Strin
 }
 
 fn hex_bytes(text: &str, label: &str) -> Result<Vec<u8>, String> {
-    if text.len() % 2 != 0 {
+    if !text.len().is_multiple_of(2) {
         return Err(format!("{label} is not whole bytes of hexadecimal"));
     }
     (0..text.len())
@@ -251,7 +251,9 @@ fn buffer_words(assets: &BTreeMap<String, Vec<u8>>, asset: &str) -> Result<Vec<u
         ));
     }
     Ok(data
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|word| u32::from_le_bytes([word[0], word[1], word[2], word[3]]))
         .collect())
 }

@@ -461,8 +461,8 @@ fn function_body(prepared: &PreparedBlock, environment: &Environment) -> Result<
     // Parameters keep their ABI indices. Allocate only TCI registers this body
     // reads or modifies, followed by its control/memory scratch and wide pair.
     let mut locals = [u32::MAX; 26];
-    for n in 0..4 {
-        locals[n] = n as u32;
+    for (n, local) in locals.iter_mut().enumerate().take(4) {
+        *local = n as u32;
     }
     let mut next = 4;
     for n in 0..16 {

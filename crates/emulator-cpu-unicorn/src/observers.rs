@@ -73,7 +73,7 @@ impl Ranges {
         // the map, be empty). Coalescing the whole map on every removal made
         // each watch cost grow with every installed observer.
         let low = self.0.range(..begin).next_back().map_or(begin, |(&a, _)| a);
-        let high = end.checked_add(1).unwrap_or(u64::MAX);
+        let high = end.saturating_add(1);
         let mut previous: &[(usize, Hook)] =
             self.0.range(..low).next_back().map_or(&[], |(_, h)| h);
         let mut redundant = vec![];

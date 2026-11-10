@@ -2,7 +2,6 @@
 use fujimod_catalog_service::Definition;
 use fujimod_catalog_firmware_identity::FirmwareIdentity;
 use fujimod_usb_app80::operations::Service;
-use fujimod_usb_app80_types::catalog::Command;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.len() != 3 {

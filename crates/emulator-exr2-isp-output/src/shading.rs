@@ -81,7 +81,7 @@ mod tests {
         for i in [6, 14, 22] {
             points[i] = 3072;
         }
-        for (i, p) in points.chunks_exact(2).enumerate() {
+        for (i, p) in points.as_chunks::<2>().0.iter().enumerate() {
             r[0x1c / 4 + i] = p[0] << 16 | p[1];
         }
         r
@@ -127,7 +127,7 @@ mod tests {
             let points: Vec<u32> = (0..28)
                 .map(|i| (i * i * 727 + i * 31 + 1000) % 16384)
                 .collect();
-            for (i, p) in points.chunks_exact(2).enumerate() {
+            for (i, p) in points.as_chunks::<2>().0.iter().enumerate() {
                 r[0x1c / 4 + i] = p[0] << 16 | p[1];
             }
             let s = Shading::from_registers(|o| r[o / 4]).unwrap().unwrap();

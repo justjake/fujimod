@@ -342,10 +342,10 @@ mod tests {
             assert!(cx.refusal().is_some());
             assert_eq!(read(&mut d, &mut h, fifth), u64::from(CONTROL_LOCK_HELD));
         }
-        for index in 0..CONTROL.len() - 1 {
+        for control in &CONTROL[..CONTROL.len() - 1] {
             for bit in [1 << 28, 1 << 29, 1 << 30, 1 << 31] {
                 let mut cx = h.cx();
-                let at = 0x10000 + CONTROL[index];
+                let at = 0x10000 + control;
                 d.write(&mut cx, at, 4, u64::from(CONTROL_POWERED | bit));
                 assert!(cx.refusal().is_some());
                 assert_eq!(read(&mut d, &mut h, at), u64::from(CONTROL_LOCK_HELD));

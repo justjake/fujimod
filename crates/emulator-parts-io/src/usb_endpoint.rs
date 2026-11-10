@@ -98,9 +98,7 @@ impl Queue {
         }
     }
     fn push(&mut self, payload: &[u8]) -> Result<(), String> {
-        if self.bytes.len() + payload.len() > self.limit
-            || self.packets.len() >= self.limit / 32 + 1
-        {
+        if self.bytes.len() + payload.len() > self.limit || self.packets.len() > self.limit / 32 {
             return Err("USB IN queue is full".into());
         }
         self.bytes.extend(payload);

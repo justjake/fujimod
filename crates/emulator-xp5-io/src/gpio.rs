@@ -80,7 +80,7 @@ impl Gpio {
     /// External pad levels at the selected boot handoff. Construction performs
     /// no guest access; an input route whose level is active sees it as an
     /// initially active level, as for the default pads.
-    pub fn with_initial_inputs(mut self, inputs: Vec<InitialInput>) -> Result<Self, String> {
+    pub fn with_initial_inputs(self, inputs: Vec<InitialInput>) -> Result<Self, String> {
         if inputs.iter().enumerate().any(|(i, input)| {
             input.port >= 20
                 || input.pin >= 16
@@ -194,9 +194,14 @@ impl Device for Gpio {
             };
             if r == 0 {
                 let risen = !old & pins.ports[p].registers[0];
-                for pin in 0..16 {
+                for (pin, edges) in pins.ports[p]
+                    .output_rising_edges
+                    .iter_mut()
+                    .enumerate()
+                    .take(16)
+                {
                     if risen & (1 << pin) != 0 {
-                        pins.ports[p].output_rising_edges[pin] += 1;
+                        *edges += 1;
                     }
                 }
             }

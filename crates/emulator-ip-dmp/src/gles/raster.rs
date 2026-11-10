@@ -1007,8 +1007,8 @@ fn fragment_coverage_state(
         bytes[i..i + 2].copy_from_slice(&((previous & !bits) | (word & bits)).to_le_bytes());
     }
     if matches!(format, ColorTargetFormat::Rgba8) {
-        for c in 0..4 {
-            if state.color_mask.0[c] {
+        for (c, &enabled) in state.color_mask.0.iter().enumerate() {
+            if enabled {
                 out.mark_written(address, i + 3 - c, 1);
             }
         }

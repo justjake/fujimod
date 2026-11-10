@@ -118,7 +118,8 @@ impl<'a> Volume<'a> {
             self.usable,
             "Card volume fenced after an uncertain operation",
         )?;
-        let result = match &mut self.backend {
+
+        match &mut self.backend {
             Backend::Sdk(sdk) => {
                 let result = sdk.transfer(request).await;
                 if sdk.host.session.state() == SessionState::Ready && sdk.idle() {
@@ -147,8 +148,7 @@ impl<'a> Volume<'a> {
                 }
                 result
             }
-        };
-        result
+        }
     }
 
     /// Caller validates readable regions. Only read access is exposed; an

@@ -1212,7 +1212,12 @@ fn decode_pixel_run<const BYTES: usize>(
     if BYTES == 4 {
         output.copy_from_slice(source);
     } else {
-        for (pixel_word, pixel) in source.chunks_exact(4).zip(output.chunks_exact_mut(BYTES)) {
+        for (pixel_word, pixel) in source
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(output.as_chunks_mut::<BYTES>().0)
+        {
             pixel.copy_from_slice(&pixel_word[..BYTES]);
         }
     }
@@ -1316,7 +1321,7 @@ fn validate_key(key: SurfaceKey, gpu: &Gpu) -> Result<(usize, usize), String> {
         return Err("host GPU surface extent must be nonzero".into());
     }
     if key.layout == SurfaceLayout::Morton8x8
-        && (extent.width % TILE_SIDE != 0 || extent.height % TILE_SIDE != 0)
+        && (!extent.width.is_multiple_of(TILE_SIDE) || !extent.height.is_multiple_of(TILE_SIDE))
     {
         return Err("host GPU Morton surface extent must be a multiple of 8 pixels".into());
     }
@@ -1334,7 +1339,7 @@ fn validate_key(key: SurfaceKey, gpu: &Gpu) -> Result<(usize, usize), String> {
     key.guest_address
         .checked_add(byte_len as u64)
         .ok_or("host GPU surface guest address overflow")?;
-    let storage_limit = gpu.device.limits().max_storage_buffer_binding_size as u64;
+    let storage_limit = gpu.device.limits().max_storage_buffer_binding_size;
     if byte_len as u64 > storage_limit
         || (pixel_count as u64) * 8 > storage_limit
         || (pixel_count as u64) * 4 > storage_limit
@@ -1458,11 +1463,13 @@ mod tests {
         let full = (1u32 << BYTES) - 1;
         let tiles_per_row = key.extent.width.div_ceil(TILE_SIDE) as usize;
         for (index, (pixel_word, pixel)) in pixels
-            .chunks_exact(4)
-            .zip(bytes.chunks_exact_mut(BYTES))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(bytes.as_chunks_mut::<BYTES>().0)
             .enumerate()
         {
-            let pixel_word = u32::from_le_bytes(pixel_word.try_into().unwrap());
+            let pixel_word = u32::from_le_bytes(*pixel_word);
             pixel.copy_from_slice(&pixel_word.to_le_bytes()[..BYTES]);
             let (mask_word, lane) = match key.layout {
                 SurfaceLayout::Linear => {

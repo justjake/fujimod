@@ -348,8 +348,8 @@ impl FirmwareBulk {
         if self.code_checks.is_empty() || self.probes.is_empty() {
             return fail("stock code checks and probes are required");
         }
-        if let Some(upload) = &self.upload {
-            if !matches!(upload.pointer_bytes, 4 | 8)
+        if let Some(upload) = &self.upload
+            && (!matches!(upload.pointer_bytes, 4 | 8)
                 || !upload.pointer.is_multiple_of(upload.pointer_bytes)
                 || !upload.capacity_address.is_multiple_of(4)
                 || u64::from(upload.pointer) + u64::from(upload.pointer_bytes) > 1u64 << 32
@@ -358,10 +358,9 @@ impl FirmwareBulk {
                         < u64::from(upload.pointer) + u64::from(upload.pointer_bytes))
                 || upload.piece_bytes == 0
                 || !upload.address_alignment.is_power_of_two()
-                || upload.code_checks.is_empty()
-            {
-                return fail("invalid upload destination contract");
-            }
+                || upload.code_checks.is_empty())
+        {
+            return fail("invalid upload destination contract");
         }
         for check in self
             .code_checks

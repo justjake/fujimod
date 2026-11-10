@@ -172,6 +172,8 @@ pub struct BlockCommand {
 }
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+// Deserialized once per board description, so the variant size difference costs nothing.
+#[allow(clippy::large_enum_variant)]
 pub enum Model {
     Gpio {
         base: u64,
@@ -540,7 +542,7 @@ impl Device for Timers {
 }
 /// Bytes of a hexadecimal node field.
 fn hex(text: &str) -> Result<Vec<u8>, String> {
-    if text.len() % 2 != 0 {
+    if !text.len().is_multiple_of(2) {
         return Err("live-view host image is not whole bytes of hexadecimal".into());
     }
     (0..text.len())
@@ -627,10 +629,9 @@ pub fn build(
             sensor_image: Some(image),
             ..
         } = &node.model
+            && let Some(radiance) = film_radiance
         {
-            if let Some(radiance) = film_radiance {
-                zone_source = Some((image.width, image.height, hex(&image.rgb)?, radiance));
-            }
+            zone_source = Some((image.width, image.height, hex(&image.rgb)?, radiance));
         }
     }
     // The imaging chip's integration value, shared with the statistics engine.

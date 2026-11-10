@@ -907,8 +907,9 @@ fn receive_batch(
     }
     // Stock asks for the padded lengths of the listed batch and the SDIO
     // transport rounds that extent up to whole 512-byte blocks.
-    let block_padded =
-        quantity % SDIO_BLOCK_BYTES == 0 && quantity > total && quantity - total < SDIO_BLOCK_BYTES;
+    let block_padded = quantity.is_multiple_of(SDIO_BLOCK_BYTES)
+        && quantity > total
+        && quantity - total < SDIO_BLOCK_BYTES;
     if count == 0 || (total != quantity && !block_padded) {
         return Err(format!(
             "MT5931 {name} extent {quantity} does not match the queued packets"

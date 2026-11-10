@@ -17,73 +17,6 @@ pub struct Nvic {
     pub regs: BTreeMap<u64, u32>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn masked_and_nested_mailbox_irqs_keep_pending_state() {
-        let mut n = Nvic::new(600_000_000);
-        n.enabled[1] = (1 << 23) | (1 << 26); // IRQ55/58
-        n.priority[71] = 0x40;
-        n.priority[74] = 0x20;
-        n.pend(55);
-        n.pend(58);
-        assert_eq!(n.next(1, 0, 0), None);
-        assert!(n.wake_pending()); // WFI wakes even with PRIMASK set.
-        assert_eq!(n.next(0, 0x20, 0), None);
-        assert_eq!(n.next(0, 0, 0), Some(74));
-        n.enter(74);
-        assert_eq!(n.next(0, 0, 0), None);
-        n.active.pop();
-        assert_eq!(n.next(0, 0, 0), Some(71));
-        n.enter(71);
-        assert_eq!(n.pending[1], 0);
-    }
-    #[test]
-    fn systick_coalesces_and_pendsv_waits_for_higher_priority_return() {
-        let mut n = Nvic::new(600_000_000);
-        n.write(0x14, 4, 5_999_999, 0).unwrap();
-        n.write(0x10, 4, 7, 0).unwrap();
-        n.priority[15] = 0x80;
-        n.priority[14] = 0xff;
-        n.write(0xd04, 4, 1 << 28, 0).unwrap();
-        n.tick(10_000_000);
-        assert_eq!(n.next(0, 0, 0), Some(15));
-        n.enter(15);
-        assert_eq!(n.next(0, 0, 0), None);
-        n.active.pop();
-        assert_eq!(n.next(0, 0, 0), Some(14));
-        assert_ne!(n.read(0x10, 4, 10_000_000).unwrap() & (1 << 16), 0);
-        assert_eq!(n.read(0x10, 4, 10_000_000).unwrap() & (1 << 16), 0);
-        n.tick(1_000_000_000);
-        assert_eq!(n.deadline, 1_010_000_000);
-    }
-    #[test]
-    fn systick_phase_is_independent_of_tick_frequency() {
-        let mut initial = Nvic::new(600_000_000);
-        initial.write(0x14, 4, 5_999_999, 0).unwrap();
-        initial.write(0x10, 4, 7, 0).unwrap();
-        let before = serde_json::to_value(&initial).unwrap();
-        initial.tick(9_999_999);
-        assert_eq!(serde_json::to_value(&initial).unwrap(), before);
-        let mut frequent = initial.clone();
-        for now in [10, 11, 20, 33, 40, 50, 63] {
-            frequent.tick(now * 1_000_000);
-        }
-        let mut delayed = initial;
-        delayed.tick(63_000_000);
-        assert_eq!(delayed.deadline, 70_000_000);
-        assert_eq!(
-            serde_json::to_value(&frequent).unwrap(),
-            serde_json::to_value(&delayed).unwrap()
-        );
-        // A checkpoint retains the absolute phase across a later service gap.
-        let mut restored: Nvic =
-            serde_json::from_value(serde_json::to_value(&delayed).unwrap()).unwrap();
-        restored.tick(97_000_000);
-        assert_eq!(restored.deadline, 100_000_000);
-    }
-}
 impl Nvic {
     pub fn new(clock_hz: u64) -> Self {
         Self {
@@ -287,5 +220,73 @@ impl Nvic {
             _ => return Err(format!("unmodeled SCS write {o:#x}/{n}={v:#x}")),
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn masked_and_nested_mailbox_irqs_keep_pending_state() {
+        let mut n = Nvic::new(600_000_000);
+        n.enabled[1] = (1 << 23) | (1 << 26); // IRQ55/58
+        n.priority[71] = 0x40;
+        n.priority[74] = 0x20;
+        n.pend(55);
+        n.pend(58);
+        assert_eq!(n.next(1, 0, 0), None);
+        assert!(n.wake_pending()); // WFI wakes even with PRIMASK set.
+        assert_eq!(n.next(0, 0x20, 0), None);
+        assert_eq!(n.next(0, 0, 0), Some(74));
+        n.enter(74);
+        assert_eq!(n.next(0, 0, 0), None);
+        n.active.pop();
+        assert_eq!(n.next(0, 0, 0), Some(71));
+        n.enter(71);
+        assert_eq!(n.pending[1], 0);
+    }
+    #[test]
+    fn systick_coalesces_and_pendsv_waits_for_higher_priority_return() {
+        let mut n = Nvic::new(600_000_000);
+        n.write(0x14, 4, 5_999_999, 0).unwrap();
+        n.write(0x10, 4, 7, 0).unwrap();
+        n.priority[15] = 0x80;
+        n.priority[14] = 0xff;
+        n.write(0xd04, 4, 1 << 28, 0).unwrap();
+        n.tick(10_000_000);
+        assert_eq!(n.next(0, 0, 0), Some(15));
+        n.enter(15);
+        assert_eq!(n.next(0, 0, 0), None);
+        n.active.pop();
+        assert_eq!(n.next(0, 0, 0), Some(14));
+        assert_ne!(n.read(0x10, 4, 10_000_000).unwrap() & (1 << 16), 0);
+        assert_eq!(n.read(0x10, 4, 10_000_000).unwrap() & (1 << 16), 0);
+        n.tick(1_000_000_000);
+        assert_eq!(n.deadline, 1_010_000_000);
+    }
+    #[test]
+    fn systick_phase_is_independent_of_tick_frequency() {
+        let mut initial = Nvic::new(600_000_000);
+        initial.write(0x14, 4, 5_999_999, 0).unwrap();
+        initial.write(0x10, 4, 7, 0).unwrap();
+        let before = serde_json::to_value(&initial).unwrap();
+        initial.tick(9_999_999);
+        assert_eq!(serde_json::to_value(&initial).unwrap(), before);
+        let mut frequent = initial.clone();
+        for now in [10, 11, 20, 33, 40, 50, 63] {
+            frequent.tick(now * 1_000_000);
+        }
+        let mut delayed = initial;
+        delayed.tick(63_000_000);
+        assert_eq!(delayed.deadline, 70_000_000);
+        assert_eq!(
+            serde_json::to_value(&frequent).unwrap(),
+            serde_json::to_value(&delayed).unwrap()
+        );
+        // A checkpoint retains the absolute phase across a later service gap.
+        let mut restored: Nvic =
+            serde_json::from_value(serde_json::to_value(&delayed).unwrap()).unwrap();
+        restored.tick(97_000_000);
+        assert_eq!(restored.deadline, 100_000_000);
     }
 }

@@ -162,113 +162,6 @@ impl Spi {
         Ok(0)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use fujimod_emulator_devices::Host;
-    #[derive(Default)]
-    struct Clock {
-        now: u64,
-        records: Vec<Record>,
-    }
-    impl Host for Clock {
-        fn now(&self) -> u64 {
-            self.now
-        }
-        fn schedule(&mut self, _: usize, _: u64, _: u64) {}
-        fn set_irq(&mut self, _: u32, _: bool) {
-            panic!("polling SPI has no IRQ")
-        }
-        fn raise_irq(&mut self, _: usize, _: u32) -> Result<(), String> {
-            unreachable!()
-        }
-        fn ram_read(&self, _: u64, _: &mut [u8]) -> Result<(), String> {
-            unreachable!()
-        }
-        fn ram_write(&mut self, _: u64, _: &[u8]) -> Result<(), String> {
-            unreachable!()
-        }
-        fn record(&mut self, r: Record) {
-            self.records.push(r);
-        }
-    }
-    fn trace(pc: u64, pin: bool) -> (Value, Vec<Record>) {
-        let mut m = Spi::new(0x1000, Box::new(FixedPin(pin)));
-        let mut h = Clock::default();
-        for (o, v) in [(0, 0xc7), (0x10, 2), (4, 0xa), (8, 0x12), (8, 0x34)] {
-            let mut cx = Cx::new(&mut h, 3, pc, 0);
-            m.write(&mut cx, 0x1000 + o, 4, v);
-            assert_eq!(cx.refusal(), None);
-        }
-        assert_eq!(m.next_deadline(0), Some(16));
-        let before = m.save();
-        h.now = 15;
-        m.event(&mut Cx::new(&mut h, 1, pc, 0), 1);
-        assert_eq!(m.save(), before);
-        h.now = 16;
-        m.event(&mut Cx::new(&mut h, 1, pc, 0), 1);
-        assert_eq!(m.next_deadline(16), Some(32));
-        assert_eq!(m.rx.front(), Some(&(if pin { 255 } else { 0 })));
-        let before = m.save();
-        assert_eq!(m.save(), before);
-        assert_eq!(
-            m.read(&mut Cx::new(&mut h, 0, pc, 0), 0x1008, 4),
-            if pin { 255 } else { 0 }
-        );
-        assert!(m.rx.is_empty());
-        // Disabling aborts the queued shift; its old scheduled token is inert.
-        m.write(&mut Cx::new(&mut h, 0, pc, 0), 0x1004, 4, 8);
-        h.now = 32;
-        m.event(&mut Cx::new(&mut h, 0, pc, 0), 2);
-        assert!(m.rx.is_empty());
-        assert_eq!(m.next_deadline(32), None);
-        assert_eq!(h.records.len(), 1);
-        (m.save(), h.records)
-    }
-    #[test]
-    fn pin_sampling_fifo_deadlines_and_cancel_ignore_program_state() {
-        for pin in [false, true] {
-            assert_eq!(trace(0x2000, pin), trace(0x123456, pin));
-        }
-    }
-    #[test]
-    fn pending_fifo_words_keep_their_edges_after_restore() {
-        let mut source = Spi::new(0x1000, Box::new(FixedPin(true)));
-        let mut clock = Clock::default();
-        for (offset, value) in [(0, 0xc7), (0x10, 2), (4, 0xa), (8, 0x12), (8, 0x34)] {
-            source.write(&mut Cx::new(&mut clock, 0, 0, 0), 0x1000 + offset, 4, value);
-        }
-        let mut resumed = Spi::new(0x1000, Box::new(FixedPin(true)));
-        resumed.restore(&source.save()).unwrap();
-        for (now, token) in [(15, 1), (16, 1), (31, 2), (32, 2)] {
-            clock.now = now;
-            source.event(&mut Cx::new(&mut clock, 0, 0x1000, 0), token);
-            resumed.event(&mut Cx::new(&mut clock, 3, 0xdead0000, 0), token);
-            assert_eq!(source.save(), resumed.save());
-        }
-        assert_eq!(source.rx, [255, 255]);
-    }
-    #[test]
-    fn queued_words_keep_their_clock_edges_when_events_are_delivered_late() {
-        let mut outcomes = vec![];
-        for calls in [[16, 32], [64, 64]] {
-            let mut m = Spi::new(0x1000, Box::new(FixedPin(false)));
-            let mut h = Clock::default();
-            for (o, v) in [(0, 0xc7), (0x10, 2), (4, 0xb), (8, 0x12), (8, 0x34)] {
-                m.write(&mut Cx::new(&mut h, 0, 0, 0), 0x1000 + o, 4, v);
-            }
-            for (i, now) in calls.into_iter().enumerate() {
-                h.now = now;
-                m.event(&mut Cx::new(&mut h, 0, 0, 0), i as u64 + 1);
-            }
-            assert_eq!(m.rx, [0x12, 0x34]);
-            assert_eq!(m.next_deadline(h.now), None);
-            outcomes.push((m.save(), h.records));
-        }
-        assert_eq!(outcomes[0], outcomes[1]);
-    }
-}
 impl Device for Spi {
     fn name(&self) -> &'static str {
         match self.base {
@@ -383,5 +276,112 @@ impl Device for Spi {
         self.pending = state.pending;
         self.generation = state.generation;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fujimod_emulator_devices::Host;
+    #[derive(Default)]
+    struct Clock {
+        now: u64,
+        records: Vec<Record>,
+    }
+    impl Host for Clock {
+        fn now(&self) -> u64 {
+            self.now
+        }
+        fn schedule(&mut self, _: usize, _: u64, _: u64) {}
+        fn set_irq(&mut self, _: u32, _: bool) {
+            panic!("polling SPI has no IRQ")
+        }
+        fn raise_irq(&mut self, _: usize, _: u32) -> Result<(), String> {
+            unreachable!()
+        }
+        fn ram_read(&self, _: u64, _: &mut [u8]) -> Result<(), String> {
+            unreachable!()
+        }
+        fn ram_write(&mut self, _: u64, _: &[u8]) -> Result<(), String> {
+            unreachable!()
+        }
+        fn record(&mut self, r: Record) {
+            self.records.push(r);
+        }
+    }
+    fn trace(pc: u64, pin: bool) -> (Value, Vec<Record>) {
+        let mut m = Spi::new(0x1000, Box::new(FixedPin(pin)));
+        let mut h = Clock::default();
+        for (o, v) in [(0, 0xc7), (0x10, 2), (4, 0xa), (8, 0x12), (8, 0x34)] {
+            let mut cx = Cx::new(&mut h, 3, pc, 0);
+            m.write(&mut cx, 0x1000 + o, 4, v);
+            assert_eq!(cx.refusal(), None);
+        }
+        assert_eq!(m.next_deadline(0), Some(16));
+        let before = m.save();
+        h.now = 15;
+        m.event(&mut Cx::new(&mut h, 1, pc, 0), 1);
+        assert_eq!(m.save(), before);
+        h.now = 16;
+        m.event(&mut Cx::new(&mut h, 1, pc, 0), 1);
+        assert_eq!(m.next_deadline(16), Some(32));
+        assert_eq!(m.rx.front(), Some(&(if pin { 255 } else { 0 })));
+        let before = m.save();
+        assert_eq!(m.save(), before);
+        assert_eq!(
+            m.read(&mut Cx::new(&mut h, 0, pc, 0), 0x1008, 4),
+            if pin { 255 } else { 0 }
+        );
+        assert!(m.rx.is_empty());
+        // Disabling aborts the queued shift; its old scheduled token is inert.
+        m.write(&mut Cx::new(&mut h, 0, pc, 0), 0x1004, 4, 8);
+        h.now = 32;
+        m.event(&mut Cx::new(&mut h, 0, pc, 0), 2);
+        assert!(m.rx.is_empty());
+        assert_eq!(m.next_deadline(32), None);
+        assert_eq!(h.records.len(), 1);
+        (m.save(), h.records)
+    }
+    #[test]
+    fn pin_sampling_fifo_deadlines_and_cancel_ignore_program_state() {
+        for pin in [false, true] {
+            assert_eq!(trace(0x2000, pin), trace(0x123456, pin));
+        }
+    }
+    #[test]
+    fn pending_fifo_words_keep_their_edges_after_restore() {
+        let mut source = Spi::new(0x1000, Box::new(FixedPin(true)));
+        let mut clock = Clock::default();
+        for (offset, value) in [(0, 0xc7), (0x10, 2), (4, 0xa), (8, 0x12), (8, 0x34)] {
+            source.write(&mut Cx::new(&mut clock, 0, 0, 0), 0x1000 + offset, 4, value);
+        }
+        let mut resumed = Spi::new(0x1000, Box::new(FixedPin(true)));
+        resumed.restore(&source.save()).unwrap();
+        for (now, token) in [(15, 1), (16, 1), (31, 2), (32, 2)] {
+            clock.now = now;
+            source.event(&mut Cx::new(&mut clock, 0, 0x1000, 0), token);
+            resumed.event(&mut Cx::new(&mut clock, 3, 0xdead0000, 0), token);
+            assert_eq!(source.save(), resumed.save());
+        }
+        assert_eq!(source.rx, [255, 255]);
+    }
+    #[test]
+    fn queued_words_keep_their_clock_edges_when_events_are_delivered_late() {
+        let mut outcomes = vec![];
+        for calls in [[16, 32], [64, 64]] {
+            let mut m = Spi::new(0x1000, Box::new(FixedPin(false)));
+            let mut h = Clock::default();
+            for (o, v) in [(0, 0xc7), (0x10, 2), (4, 0xb), (8, 0x12), (8, 0x34)] {
+                m.write(&mut Cx::new(&mut h, 0, 0, 0), 0x1000 + o, 4, v);
+            }
+            for (i, now) in calls.into_iter().enumerate() {
+                h.now = now;
+                m.event(&mut Cx::new(&mut h, 0, 0, 0), i as u64 + 1);
+            }
+            assert_eq!(m.rx, [0x12, 0x34]);
+            assert_eq!(m.next_deadline(h.now), None);
+            outcomes.push((m.save(), h.records));
+        }
+        assert_eq!(outcomes[0], outcomes[1]);
     }
 }

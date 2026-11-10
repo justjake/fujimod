@@ -340,10 +340,10 @@ fn register(name: &str) -> bool {
 impl BootPatchUnit {
     fn validate(&self) -> Result<(), String> {
         if !self.name.is_ascii()
-            || self.address % 4 != 0
+            || !self.address.is_multiple_of(4)
             || self.size == 0
             || self.address.checked_add(self.size).is_none()
-            || self.dat_offset % 4 != 0
+            || !self.dat_offset.is_multiple_of(4)
             || self.sha256.len() != 64
             || !self.sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
         {
@@ -355,9 +355,9 @@ impl BootPatchUnit {
 
 impl BootPatchRange {
     fn validate(&self, what: &str) -> Result<(), String> {
-        if self.address % 4 != 0
+        if !self.address.is_multiple_of(4)
             || self.size == 0
-            || self.size % 4 != 0
+            || !self.size.is_multiple_of(4)
             || self.address.checked_add(self.size).is_none()
             || self.address + self.size > 0x1_0000_0000
         {

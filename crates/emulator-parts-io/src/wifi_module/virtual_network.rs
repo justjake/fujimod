@@ -106,10 +106,10 @@ impl AccessPoint {
         if self.host_port == 0 || self.local_port == 0 {
             return Err("virtual host and local ports must be nonzero".into());
         }
-        if let Some(passphrase) = &self.wpa2_passphrase {
-            if !(8..=63).contains(&passphrase.len()) {
-                return Err("virtual WPA2 passphrase must be 8..=63 bytes".into());
-            }
+        if let Some(passphrase) = &self.wpa2_passphrase
+            && !(8..=63).contains(&passphrase.len())
+        {
+            return Err("virtual WPA2 passphrase must be 8..=63 bytes".into());
         }
         if let Some(ntp) = &self.ntp {
             ntp.validate()?;
@@ -395,20 +395,11 @@ impl Network {
         if destination_port == DNS_PORT && ap.dns_servers.contains(&destination) {
             return self.receive_dns(ap, source, destination, source_port, payload);
         }
-        if destination_port == NTP_PORT {
-            if let Some(ntp) = &ap.ntp {
-                if destination == ntp.address {
-                    return self.receive_ntp(
-                        ap,
-                        ntp,
-                        source,
-                        destination,
-                        source_port,
-                        payload,
-                        now_ms,
-                    );
-                }
-            }
+        if destination_port == NTP_PORT
+            && let Some(ntp) = &ap.ntp
+            && destination == ntp.address
+        {
+            return self.receive_ntp(ap, ntp, source, destination, source_port, payload, now_ms);
         }
         Vec::new()
     }
@@ -1344,8 +1335,10 @@ mod tests {
     #[test]
     fn dns_answers_the_configured_name() {
         let ap = ap();
-        let mut network = Network::default();
-        network.guest_mac = Some([2, 0, 0, 0, 0, 2]);
+        let mut network = Network {
+            guest_mac: Some([2, 0, 0, 0, 0, 2]),
+            ..Default::default()
+        };
         let reply = network.receive(&ap, &dns_query("ota.test"), 0);
         assert_eq!(reply.len(), 1);
         let ethernet = EthernetFrame::new_checked(&reply[0]).unwrap();
@@ -1366,8 +1359,10 @@ mod tests {
     #[test]
     fn dns_and_ntp_answer_the_configured_time_server() {
         let ap = ap_with_ntp();
-        let mut network = Network::default();
-        network.guest_mac = Some([2, 0, 0, 0, 0, 2]);
+        let mut network = Network {
+            guest_mac: Some([2, 0, 0, 0, 0, 2]),
+            ..Default::default()
+        };
         let lookup = network.receive(&ap, &dns_query("time.test"), 0);
         assert_eq!(lookup.len(), 1);
         let ethernet = EthernetFrame::new_checked(&lookup[0]).unwrap();
@@ -1403,8 +1398,10 @@ mod tests {
     #[test]
     fn ntp_ignores_responses_other_addresses_and_missing_servers() {
         let ap = ap_with_ntp();
-        let mut network = Network::default();
-        network.guest_mac = Some([2, 0, 0, 0, 0, 2]);
+        let mut network = Network {
+            guest_mac: Some([2, 0, 0, 0, 0, 2]),
+            ..Default::default()
+        };
         let response = ntp_query_to([192, 168, 4, 1], (4 << 3) | 4, [1; 8]);
         assert!(network.receive(&ap, &response, 0).is_empty());
         let elsewhere = ntp_query_to([192, 168, 4, 2], (4 << 3) | 3, [1; 8]);
@@ -1463,8 +1460,10 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         let mut ap = ap();
         ap.local_port = port;
-        let mut network = Network::default();
-        network.guest_mac = Some([2, 0, 0, 0, 0, 2]);
+        let mut network = Network {
+            guest_mac: Some([2, 0, 0, 0, 0, 2]),
+            ..Default::default()
+        };
         let syn = tcp_packet(40000, 443, 1000, 0, (true, false, false, false), &[]);
         let frames = network.receive(&ap, &syn, 0);
         assert_eq!(frames.len(), 1);
@@ -1501,8 +1500,10 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         let mut ap = ap();
         ap.local_port = port;
-        let mut network = Network::default();
-        network.guest_mac = Some([2, 0, 0, 0, 0, 2]);
+        let mut network = Network {
+            guest_mac: Some([2, 0, 0, 0, 0, 2]),
+            ..Default::default()
+        };
         let syn = tcp_packet(40001, 443, 2000, 0, (true, false, false, false), &[]);
         let frames = network.receive(&ap, &syn, 0);
         let ethernet = EthernetFrame::new_checked(&frames[0]).unwrap();

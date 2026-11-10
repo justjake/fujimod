@@ -20,7 +20,9 @@ fn has_zero_chroma(source: &[u8], raster: &Raster) -> bool {
         .take(raster.height)
         .any(|row| {
             row[..raster.width * 2]
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .any(|pair| pair[2] == 0 || pair[3] == 0)
         })
 }
@@ -216,7 +218,9 @@ impl Scaler {
             && r[0x60 / 4] == r[0x64 / 4];
         let last_row_tagged = tagged
             && self.source[(src.height - 1) * src.pitch..][..src.width * 2]
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .any(|pair| pair[2] == 0 || pair[3] == 0);
         if tagged && ((!identity && !centered) || (identity && last_row_tagged)) {
             return Err("scaler zero-chroma validity tags are unsupported".into());

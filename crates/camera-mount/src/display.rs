@@ -120,11 +120,8 @@ impl Profile {
             let mut words = BTreeMap::new();
             let base = ranges[0].0;
             for ((a, _), bytes) in ranges.iter().zip(&before) {
-                for (i, b) in bytes.chunks_exact(4).enumerate() {
-                    words.insert(
-                        a - base + i as u64 * 4,
-                        u32::from_le_bytes(b.try_into().unwrap()),
-                    );
+                for (i, b) in bytes.as_chunks::<4>().0.iter().enumerate() {
+                    words.insert(a - base + i as u64 * 4, u32::from_le_bytes(*b));
                 }
             }
             let mut read_error: Option<String> = None;
@@ -208,7 +205,7 @@ impl Profile {
                     p.regs.insert(o as u32, v);
                     p.written.insert(o as u32);
                 }
-                let convert=|frame:fujimod_framebuffer::frame::Frame|->Result<(u32,u32,Vec<u8>),String>{let rgb=frame.rgb.ok_or("Display has no pixels")?;Ok((frame.width as u32,frame.height as u32,rgb.chunks_exact(3).flat_map(|p|[p[0],p[1],p[2],255]).collect()))};
+                let convert=|frame:fujimod_framebuffer::frame::Frame|->Result<(u32,u32,Vec<u8>),String>{let rgb=frame.rgb.ok_or("Display has no pixels")?;Ok((frame.width as u32,frame.height as u32,rgb.as_chunks::<3>().0.iter().flat_map(|p|[p[0],p[1],p[2],255]).collect()))};
                 let render = |c: &Compositor,
                               read: &mut dyn FnMut(u64, usize) -> Result<Vec<u8>, String>|
                  -> Result<Option<(u32, u32, Vec<u8>)>, String> {

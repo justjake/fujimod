@@ -102,10 +102,10 @@ impl Device for Mailbox {
         }
         drop(s);
         for (mask, line) in [(1, self.pins.request), (8, self.pins.control)] {
-            if (old ^ causes) & mask != 0 {
-                if let Err(e) = cx.set_core_irq(self.pins.companion, line, causes & mask != 0) {
-                    cx.fail(e);
-                }
+            if (old ^ causes) & mask != 0
+                && let Err(e) = cx.set_core_irq(self.pins.companion, line, causes & mask != 0)
+            {
+                cx.fail(e);
             }
         }
         for (mask, line) in [

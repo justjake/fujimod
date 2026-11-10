@@ -37,320 +37,6 @@ pub trait Controls: Send {
         false
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use fujimod_emulator_imaging::exposure::Exposure;
-    use fujimod_emulator_imaging::scene::{Frame, SensorFrames};
-    use std::sync::{Arc, Mutex};
-
-    #[test]
-    fn cropped_samples_keep_full_raster_projection_and_cfa_phase() {
-        use fujimod_emulator_image_processing::raw::RawView;
-        let frames = Arc::new(Mutex::new(SensorFrames::new(
-            Frame::new(
-                8,
-                4,
-                FramePixels::Rgb24((0..32).flat_map(|i| [32 + i, 96 + i, 192 + i]).collect()),
-            )
-            .unwrap(),
-        )));
-        let mut sensor = Sensor::new(
-            Options {
-                width: 8,
-                height: 4,
-                image_area: [0, 0, 8, 4],
-                cfa: (0..36).map(|i| ((i / 6 + i % 6) % 3) as u8).collect(),
-                black: 0,
-                full_scale: 4095,
-                reference_white: [256; 3],
-            },
-            frames,
-        )
-        .unwrap();
-        sensor.latch(10).unwrap();
-        let mut full = vec![0; 8 * 4 * 2];
-        sensor
-            .encode(Packing::U16, [0, 0, 8, 4], &mut full)
-            .unwrap();
-        let mut crop = vec![0; 4 * 2 * 3 / 2];
-        sensor
-            .encode(Packing::Packed12, [1, 1, 4, 2], &mut crop)
-            .unwrap();
-        let full = RawView {
-            bytes: &full,
-            width: 8,
-            height: 4,
-            pitch: 16,
-            packing: Packing::U16,
-        };
-        let crop = RawView {
-            bytes: &crop,
-            width: 4,
-            height: 2,
-            pitch: 6,
-            packing: Packing::Packed12,
-        };
-        for y in 0..2 {
-            for x in 0..4 {
-                assert_eq!(crop.sample(x, y), full.sample(x + 1, y + 1));
-            }
-        }
-    }
-
-    #[test]
-    fn raw_keeps_sampled_exposure_and_focus_across_new_commands_and_restore() {
-        let frames = Arc::new(Mutex::new(SensorFrames::new(
-            Frame::new(
-                64,
-                8,
-                FramePixels::Rgb24(
-                    (0..64 * 8)
-                        .flat_map(|i| [if i % 2 == 0 { 0 } else { 255 }; 3])
-                        .collect::<Vec<_>>()
-                        .into(),
-                ),
-            )
-            .unwrap(),
-        )));
-        let wire = Arc::new(Mutex::new(Exposure::default()));
-        let iris = Arc::new(Mutex::new(8.));
-        let mut sensor = Sensor::new(
-            Options {
-                width: 6,
-                height: 6,
-                image_area: [0, 0, 6, 6],
-                cfa: vec![0, 1, 2].repeat(12),
-                black: 0,
-                full_scale: 16380,
-                reference_white: [256; 3],
-            },
-            frames.clone(),
-        )
-        .unwrap();
-        sensor
-            .attach_controls(
-                Box::new(
-                    crate::xtrans16::Sensor::new(
-                        crate::xtrans16::Options {
-                            pixel_clock_hz: 33_000_000,
-                            shutter: None,
-                            rolling_references: vec![],
-                            mode_change_frames: 0,
-                            preview_field: None,
-                        },
-                        wire.clone(),
-                        iris.clone(),
-                    )
-                    .unwrap(),
-                ),
-                Calibration {
-                    full_scale: 16380,
-                    reference_white: [256; 3],
-                    saturation_lux_seconds: 1.,
-                    color_sample_weights: [2, 5, 2],
-                },
-                wire.clone(),
-                iris,
-            )
-            .unwrap();
-        let focus = Arc::new(Mutex::new(0.));
-        sensor.attach_projection(
-            fujimod_emulator_image_formation::optics::Projection::new(
-                fujimod_emulator_imaging::optics::Spec {
-                    focus: "lens".into(),
-                    focal_length_mm: 18.5,
-                    subject_distance_mm: 2000.,
-                    sensor_width_mm: 1.,
-                    relative_illumination: fujimod_emulator_imaging::optics::Illumination::Uniform,
-                },
-                focus.clone(),
-            )
-            .unwrap(),
-        );
-        sensor.timing(330, 100, None).unwrap();
-        sensor.latch(1).unwrap();
-        // Latching captures focus; raster work is deferred until RAW DMA.
-        *focus.lock().unwrap() = 18.5 * 18.5 / (2000. - 18.5);
-        let mut first = vec![0; 72];
-        sensor
-            .encode(Packing::U16, [0, 0, 6, 6], &mut first)
-            .unwrap();
-        let frozen = sensor.freeze_readout(Packing::U16, [0, 0, 6, 6]).unwrap();
-        // Prepared readout offsets must preserve the scalar sampling law,
-        // including crop coordinates, CFA phase, packing, and row partitions.
-        for area in [[0, 0, 6, 6], [1, 1, 4, 4]] {
-            sensor.image_area = area;
-            for (packing, window) in [
-                (Packing::U16, [0, 0, 6, 6]),
-                (Packing::Packed12, [0, 0, 6, 6]),
-                (Packing::U16, [1, 1, 4, 4]),
-                (Packing::Packed12, [1, 1, 4, 4]),
-            ] {
-                let mut readout = sensor.freeze_readout(packing, window).unwrap();
-                assert!(readout.samples.is_some());
-                let row = packing.row_bytes(window[2]);
-                let mut accelerated = vec![0; row * window[3]];
-                readout.write_rows(0..2, &mut accelerated[..row * 2]);
-                readout.write_rows(2..window[3], &mut accelerated[row * 2..]);
-                readout.samples = None;
-                let mut scalar = vec![0; accelerated.len()];
-                readout.encode(&mut scalar).unwrap();
-                assert_eq!(accelerated, scalar);
-            }
-        }
-        sensor.image_area = [0, 0, 6, 6];
-        let saved = sensor.checkpoint().unwrap();
-        let saved_frames = frames.lock().unwrap().clone();
-        let saved_exposure = *wire.lock().unwrap();
-        let before = sensor.fingerprint();
-        let corrupt = saved.clone().with_children(vec![]);
-        assert!(sensor.restore_checkpoint(&corrupt).is_err());
-        assert_eq!(sensor.fingerprint(), before);
-        assert_eq!(*wire.lock().unwrap(), saved_exposure);
-        sensor.command(&[0x81, 5, 50, 0, 0, 0, 0, 0]).unwrap();
-        frames
-            .lock()
-            .unwrap()
-            .set_frame(Frame::new(1, 1, FramePixels::Rgb24(vec![255; 3].into())).unwrap());
-        let mut actual = vec![0; 72];
-        sensor
-            .encode(Packing::U16, [0, 0, 6, 6], &mut actual)
-            .unwrap();
-        assert_eq!(actual, first);
-        sensor.latch(2).unwrap();
-        sensor
-            .encode(Packing::U16, [0, 0, 6, 6], &mut actual)
-            .unwrap();
-        assert_ne!(actual, first);
-        let mut frozen_pixels = vec![0; 72];
-        frozen.encode(&mut frozen_pixels).unwrap();
-        assert_eq!(frozen_pixels, first);
-        let changed_exposure = *wire.lock().unwrap();
-        sensor.restore_checkpoint(&saved).unwrap();
-        assert_eq!(*wire.lock().unwrap(), changed_exposure);
-        // The graph owns peer wire and scene values; restore them in place.
-        *wire.lock().unwrap() = saved_exposure;
-        *frames.lock().unwrap() = saved_frames;
-        assert_eq!(sensor.fingerprint(), before);
-        sensor
-            .encode(Packing::U16, [0, 0, 6, 6], &mut actual)
-            .unwrap();
-        assert_eq!(actual, first);
-    }
-
-    #[test]
-    fn owned_raw_row_jobs_keep_the_accepted_frame_and_full_raster_coordinates() {
-        fujimod_emulator_devices::work::configure(2).unwrap();
-        for packing in [Packing::U16, Packing::Packed12] {
-            let frames = Arc::new(Mutex::new(SensorFrames::new(
-                Frame::new(
-                    256,
-                    256,
-                    FramePixels::Raw16((0..256 * 256).map(|i| (i % 4096) as u16).collect()),
-                )
-                .unwrap(),
-            )));
-            let mut sensor = Sensor::new(
-                Options {
-                    width: 256,
-                    height: 256,
-                    image_area: [0, 0, 256, 256],
-                    cfa: vec![0, 1, 2].repeat(12),
-                    black: 0,
-                    full_scale: 4095,
-                    reference_white: [256; 3],
-                },
-                frames.clone(),
-            )
-            .unwrap();
-            sensor.latch(1).unwrap();
-            let window = [1, 1, 254, 254];
-            let row = packing.row_bytes(window[2]);
-            let mut expected = vec![0; row * window[3]];
-            sensor.encode(packing, window, &mut expected).unwrap();
-            let frozen = sensor.freeze_readout(packing, window).unwrap();
-            assert!(frozen.encode(&mut []).is_err());
-            let mut actual = fujimod_emulator_devices::work::Buffer::default();
-            actual.defer_rows(row, window[3], move |rows, bytes| {
-                frozen.write_rows(rows, bytes)
-            });
-            frames
-                .lock()
-                .unwrap()
-                .set_frame(Frame::new(1, 1, FramePixels::Raw16(vec![0])).unwrap());
-            sensor.latch(2).unwrap();
-            assert_eq!(actual.as_slice(), expected);
-        }
-        fujimod_emulator_devices::work::configure(0).unwrap();
-    }
-
-    #[test]
-    fn rgb_light_fills_only_the_image_area_while_raw_keeps_clock_coordinates() {
-        let frames = Arc::new(Mutex::new(SensorFrames::new(
-            Frame::new(
-                2,
-                2,
-                FramePixels::Rgb24(vec![0, 0, 0, 85, 85, 85, 170, 170, 170, 255, 255, 255].into()),
-            )
-            .unwrap(),
-        )));
-        let options = |area| Options {
-            width: 8,
-            height: 6,
-            image_area: area,
-            cfa: vec![0, 1, 2].repeat(12),
-            black: 7,
-            full_scale: 4095,
-            reference_white: [256; 3],
-        };
-        for area in [
-            [0, 0, 0, 4],
-            [7, 0, 2, 1],
-            [0, 5, 1, 2],
-            [usize::MAX, 0, 2, 1],
-        ] {
-            assert!(Sensor::new(options(area), frames.clone()).is_err());
-        }
-        let mut sensor = Sensor::new(options([2, 1, 4, 4]), frames.clone()).unwrap();
-        let mut bytes = vec![0; 8 * 6 * 2];
-        sensor
-            .encode(Packing::U16, [0, 0, 8, 6], &mut bytes)
-            .unwrap();
-        for y in 0..6 {
-            for x in 0..8 {
-                let expected = if (2..6).contains(&x) && (1..5).contains(&y) {
-                    let level = [0, 85, 170, 255][((y - 1) / 2) * 2 + (x - 2) / 2];
-                    7 + sensor.linear[0][level]
-                } else {
-                    7
-                };
-                let i = (y * 8 + x) * 2;
-                assert_eq!(
-                    u16::from_le_bytes([bytes[i], bytes[i + 1]]),
-                    expected,
-                    "{x},{y}"
-                );
-            }
-        }
-        let saved = sensor.checkpoint().unwrap();
-        let different = Sensor::new(options([0, 0, 8, 6]), frames.clone()).unwrap();
-        assert!(different.validate_checkpoint(&saved).is_err());
-        frames
-            .lock()
-            .unwrap()
-            .set_frame(Frame::new(8, 6, FramePixels::Raw16((0..48).collect())).unwrap());
-        sensor.latch(1).unwrap();
-        sensor
-            .encode(Packing::U16, [0, 0, 8, 6], &mut bytes)
-            .unwrap();
-        assert_eq!(
-            bytes,
-            (0u16..48).flat_map(u16::to_le_bytes).collect::<Vec<_>>()
-        );
-    }
-}
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
@@ -820,5 +506,319 @@ impl FrozenReadout {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fujimod_emulator_imaging::exposure::Exposure;
+    use fujimod_emulator_imaging::scene::{Frame, SensorFrames};
+    use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn cropped_samples_keep_full_raster_projection_and_cfa_phase() {
+        use fujimod_emulator_image_processing::raw::RawView;
+        let frames = Arc::new(Mutex::new(SensorFrames::new(
+            Frame::new(
+                8,
+                4,
+                FramePixels::Rgb24((0..32).flat_map(|i| [32 + i, 96 + i, 192 + i]).collect()),
+            )
+            .unwrap(),
+        )));
+        let mut sensor = Sensor::new(
+            Options {
+                width: 8,
+                height: 4,
+                image_area: [0, 0, 8, 4],
+                cfa: (0..36).map(|i| ((i / 6 + i % 6) % 3) as u8).collect(),
+                black: 0,
+                full_scale: 4095,
+                reference_white: [256; 3],
+            },
+            frames,
+        )
+        .unwrap();
+        sensor.latch(10).unwrap();
+        let mut full = vec![0; 8 * 4 * 2];
+        sensor
+            .encode(Packing::U16, [0, 0, 8, 4], &mut full)
+            .unwrap();
+        let mut crop = vec![0; 4 * 2 * 3 / 2];
+        sensor
+            .encode(Packing::Packed12, [1, 1, 4, 2], &mut crop)
+            .unwrap();
+        let full = RawView {
+            bytes: &full,
+            width: 8,
+            height: 4,
+            pitch: 16,
+            packing: Packing::U16,
+        };
+        let crop = RawView {
+            bytes: &crop,
+            width: 4,
+            height: 2,
+            pitch: 6,
+            packing: Packing::Packed12,
+        };
+        for y in 0..2 {
+            for x in 0..4 {
+                assert_eq!(crop.sample(x, y), full.sample(x + 1, y + 1));
+            }
+        }
+    }
+
+    #[test]
+    fn raw_keeps_sampled_exposure_and_focus_across_new_commands_and_restore() {
+        let frames = Arc::new(Mutex::new(SensorFrames::new(
+            Frame::new(
+                64,
+                8,
+                FramePixels::Rgb24(
+                    (0..64 * 8)
+                        .flat_map(|i| [if i % 2 == 0 { 0 } else { 255 }; 3])
+                        .collect::<Vec<_>>()
+                        .into(),
+                ),
+            )
+            .unwrap(),
+        )));
+        let wire = Arc::new(Mutex::new(Exposure::default()));
+        let iris = Arc::new(Mutex::new(8.));
+        let mut sensor = Sensor::new(
+            Options {
+                width: 6,
+                height: 6,
+                image_area: [0, 0, 6, 6],
+                cfa: [0, 1, 2].repeat(12),
+                black: 0,
+                full_scale: 16380,
+                reference_white: [256; 3],
+            },
+            frames.clone(),
+        )
+        .unwrap();
+        sensor
+            .attach_controls(
+                Box::new(
+                    crate::xtrans16::Sensor::new(
+                        crate::xtrans16::Options {
+                            pixel_clock_hz: 33_000_000,
+                            shutter: None,
+                            rolling_references: vec![],
+                            mode_change_frames: 0,
+                            preview_field: None,
+                        },
+                        wire.clone(),
+                        iris.clone(),
+                    )
+                    .unwrap(),
+                ),
+                Calibration {
+                    full_scale: 16380,
+                    reference_white: [256; 3],
+                    saturation_lux_seconds: 1.,
+                    color_sample_weights: [2, 5, 2],
+                },
+                wire.clone(),
+                iris,
+            )
+            .unwrap();
+        let focus = Arc::new(Mutex::new(0.));
+        sensor.attach_projection(
+            fujimod_emulator_image_formation::optics::Projection::new(
+                fujimod_emulator_imaging::optics::Spec {
+                    focus: "lens".into(),
+                    focal_length_mm: 18.5,
+                    subject_distance_mm: 2000.,
+                    sensor_width_mm: 1.,
+                    relative_illumination: fujimod_emulator_imaging::optics::Illumination::Uniform,
+                },
+                focus.clone(),
+            )
+            .unwrap(),
+        );
+        sensor.timing(330, 100, None).unwrap();
+        sensor.latch(1).unwrap();
+        // Latching captures focus; raster work is deferred until RAW DMA.
+        *focus.lock().unwrap() = 18.5 * 18.5 / (2000. - 18.5);
+        let mut first = vec![0; 72];
+        sensor
+            .encode(Packing::U16, [0, 0, 6, 6], &mut first)
+            .unwrap();
+        let frozen = sensor.freeze_readout(Packing::U16, [0, 0, 6, 6]).unwrap();
+        // Prepared readout offsets must preserve the scalar sampling law,
+        // including crop coordinates, CFA phase, packing, and row partitions.
+        for area in [[0, 0, 6, 6], [1, 1, 4, 4]] {
+            sensor.image_area = area;
+            for (packing, window) in [
+                (Packing::U16, [0, 0, 6, 6]),
+                (Packing::Packed12, [0, 0, 6, 6]),
+                (Packing::U16, [1, 1, 4, 4]),
+                (Packing::Packed12, [1, 1, 4, 4]),
+            ] {
+                let mut readout = sensor.freeze_readout(packing, window).unwrap();
+                assert!(readout.samples.is_some());
+                let row = packing.row_bytes(window[2]);
+                let mut accelerated = vec![0; row * window[3]];
+                readout.write_rows(0..2, &mut accelerated[..row * 2]);
+                readout.write_rows(2..window[3], &mut accelerated[row * 2..]);
+                readout.samples = None;
+                let mut scalar = vec![0; accelerated.len()];
+                readout.encode(&mut scalar).unwrap();
+                assert_eq!(accelerated, scalar);
+            }
+        }
+        sensor.image_area = [0, 0, 6, 6];
+        let saved = sensor.checkpoint().unwrap();
+        let saved_frames = frames.lock().unwrap().clone();
+        let saved_exposure = *wire.lock().unwrap();
+        let before = sensor.fingerprint();
+        let corrupt = saved.clone().with_children(vec![]);
+        assert!(sensor.restore_checkpoint(&corrupt).is_err());
+        assert_eq!(sensor.fingerprint(), before);
+        assert_eq!(*wire.lock().unwrap(), saved_exposure);
+        sensor.command(&[0x81, 5, 50, 0, 0, 0, 0, 0]).unwrap();
+        frames
+            .lock()
+            .unwrap()
+            .set_frame(Frame::new(1, 1, FramePixels::Rgb24(vec![255; 3].into())).unwrap());
+        let mut actual = vec![0; 72];
+        sensor
+            .encode(Packing::U16, [0, 0, 6, 6], &mut actual)
+            .unwrap();
+        assert_eq!(actual, first);
+        sensor.latch(2).unwrap();
+        sensor
+            .encode(Packing::U16, [0, 0, 6, 6], &mut actual)
+            .unwrap();
+        assert_ne!(actual, first);
+        let mut frozen_pixels = vec![0; 72];
+        frozen.encode(&mut frozen_pixels).unwrap();
+        assert_eq!(frozen_pixels, first);
+        let changed_exposure = *wire.lock().unwrap();
+        sensor.restore_checkpoint(&saved).unwrap();
+        assert_eq!(*wire.lock().unwrap(), changed_exposure);
+        // The graph owns peer wire and scene values; restore them in place.
+        *wire.lock().unwrap() = saved_exposure;
+        *frames.lock().unwrap() = saved_frames;
+        assert_eq!(sensor.fingerprint(), before);
+        sensor
+            .encode(Packing::U16, [0, 0, 6, 6], &mut actual)
+            .unwrap();
+        assert_eq!(actual, first);
+    }
+
+    #[test]
+    fn owned_raw_row_jobs_keep_the_accepted_frame_and_full_raster_coordinates() {
+        fujimod_emulator_devices::work::configure(2).unwrap();
+        for packing in [Packing::U16, Packing::Packed12] {
+            let frames = Arc::new(Mutex::new(SensorFrames::new(
+                Frame::new(
+                    256,
+                    256,
+                    FramePixels::Raw16((0..256 * 256).map(|i| (i % 4096) as u16).collect()),
+                )
+                .unwrap(),
+            )));
+            let mut sensor = Sensor::new(
+                Options {
+                    width: 256,
+                    height: 256,
+                    image_area: [0, 0, 256, 256],
+                    cfa: [0, 1, 2].repeat(12),
+                    black: 0,
+                    full_scale: 4095,
+                    reference_white: [256; 3],
+                },
+                frames.clone(),
+            )
+            .unwrap();
+            sensor.latch(1).unwrap();
+            let window = [1, 1, 254, 254];
+            let row = packing.row_bytes(window[2]);
+            let mut expected = vec![0; row * window[3]];
+            sensor.encode(packing, window, &mut expected).unwrap();
+            let frozen = sensor.freeze_readout(packing, window).unwrap();
+            assert!(frozen.encode(&mut []).is_err());
+            let mut actual = fujimod_emulator_devices::work::Buffer::default();
+            actual.defer_rows(row, window[3], move |rows, bytes| {
+                frozen.write_rows(rows, bytes)
+            });
+            frames
+                .lock()
+                .unwrap()
+                .set_frame(Frame::new(1, 1, FramePixels::Raw16(vec![0])).unwrap());
+            sensor.latch(2).unwrap();
+            assert_eq!(actual.as_slice(), expected);
+        }
+        fujimod_emulator_devices::work::configure(0).unwrap();
+    }
+
+    #[test]
+    fn rgb_light_fills_only_the_image_area_while_raw_keeps_clock_coordinates() {
+        let frames = Arc::new(Mutex::new(SensorFrames::new(
+            Frame::new(
+                2,
+                2,
+                FramePixels::Rgb24(vec![0, 0, 0, 85, 85, 85, 170, 170, 170, 255, 255, 255].into()),
+            )
+            .unwrap(),
+        )));
+        let options = |area| Options {
+            width: 8,
+            height: 6,
+            image_area: area,
+            cfa: [0, 1, 2].repeat(12),
+            black: 7,
+            full_scale: 4095,
+            reference_white: [256; 3],
+        };
+        for area in [
+            [0, 0, 0, 4],
+            [7, 0, 2, 1],
+            [0, 5, 1, 2],
+            [usize::MAX, 0, 2, 1],
+        ] {
+            assert!(Sensor::new(options(area), frames.clone()).is_err());
+        }
+        let mut sensor = Sensor::new(options([2, 1, 4, 4]), frames.clone()).unwrap();
+        let mut bytes = vec![0; 8 * 6 * 2];
+        sensor
+            .encode(Packing::U16, [0, 0, 8, 6], &mut bytes)
+            .unwrap();
+        for y in 0..6 {
+            for x in 0..8 {
+                let expected = if (2..6).contains(&x) && (1..5).contains(&y) {
+                    let level = [0, 85, 170, 255][((y - 1) / 2) * 2 + (x - 2) / 2];
+                    7 + sensor.linear[0][level]
+                } else {
+                    7
+                };
+                let i = (y * 8 + x) * 2;
+                assert_eq!(
+                    u16::from_le_bytes([bytes[i], bytes[i + 1]]),
+                    expected,
+                    "{x},{y}"
+                );
+            }
+        }
+        let saved = sensor.checkpoint().unwrap();
+        let different = Sensor::new(options([0, 0, 8, 6]), frames.clone()).unwrap();
+        assert!(different.validate_checkpoint(&saved).is_err());
+        frames
+            .lock()
+            .unwrap()
+            .set_frame(Frame::new(8, 6, FramePixels::Raw16((0..48).collect())).unwrap());
+        sensor.latch(1).unwrap();
+        sensor
+            .encode(Packing::U16, [0, 0, 8, 6], &mut bytes)
+            .unwrap();
+        assert_eq!(
+            bytes,
+            (0u16..48).flat_map(u16::to_le_bytes).collect::<Vec<_>>()
+        );
     }
 }

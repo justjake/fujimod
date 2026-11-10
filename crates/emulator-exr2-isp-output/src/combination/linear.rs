@@ -23,7 +23,7 @@ pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared
     if word(4) & !0x70 != 4
         || !(1..=4).contains(&count)
         || width == 0
-        || width % 2 != 0
+        || !width.is_multiple_of(2)
         || height == 0
         || word(0x38) & !0x1fff1fff != 0
         || word(0x3c) & !0x03ff03ff != 0
@@ -249,7 +249,8 @@ pub(super) mod tests {
         for (address, pattern) in [(first, [100, 240, 10, 250]), (second, [201, 11, 251, 11])] {
             for y in 0..height {
                 for pixel in host.ram[address + y * pitch..address + y * pitch + row_bytes]
-                    .chunks_exact_mut(4)
+                    .as_chunks_mut::<4>()
+                    .0
                 {
                     pixel.copy_from_slice(&pattern);
                 }
@@ -274,8 +275,10 @@ pub(super) mod tests {
         assert!(
             result
                 .pixels
-                .chunks_exact(4)
-                .all(|p| p == [151, 126, 131, 131])
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|p| *p == [151, 126, 131, 131])
         );
         assert!(host.ram[output..].iter().all(|&byte| byte == 0xee));
         assert!(host.effects.is_empty());

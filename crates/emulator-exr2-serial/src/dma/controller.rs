@@ -61,7 +61,9 @@ impl Controller {
                 if mapping.base >= BASE && end <= CHANNELS_END {
                     let first = ((mapping.base - BASE) / 0x40) as u8;
                     let last = ((end - 1 - BASE) / 0x40) as u8;
-                    if (mapping.base - BASE) % 0x40 != 0 || (end - BASE) % 0x40 != 0 {
+                    if !(mapping.base - BASE).is_multiple_of(0x40)
+                        || !(end - BASE).is_multiple_of(0x40)
+                    {
                         return Err(
                             "EXR II DMA channel mode must own complete channel windows".into()
                         );

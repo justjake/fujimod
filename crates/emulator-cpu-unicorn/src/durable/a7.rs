@@ -93,19 +93,17 @@ impl State {
         let registers = array(arm::CORE.map(|r| context.get32(r)))?;
         let scalar = array(SCALARS.map(|r| context.get32(r)))?;
         let vectors = array((0..16).map(|i| context.get(Register::Arm32(arm::Register::Q(i)))))?;
-        let banks = (|| {
-            array(MODES.map(|mode| {
-                context.put32(arm::CPSR, cpsr & !31 | mode)?;
-                Ok(Bank {
-                    registers: array((8..15).map(|i| context.get32(arm::CORE[i])))?,
-                    spsr: if matches!(mode, 0x10 | 0x1f) {
-                        None
-                    } else {
-                        Some(context.get32(arm::SPSR)?)
-                    },
-                })
-            }))
-        })();
+        let banks = array(MODES.map(|mode| {
+            context.put32(arm::CPSR, cpsr & !31 | mode)?;
+            Ok(Bank {
+                registers: array((8..15).map(|i| context.get32(arm::CORE[i])))?,
+                spsr: if matches!(mode, 0x10 | 0x1f) {
+                    None
+                } else {
+                    Some(context.get32(arm::SPSR)?)
+                },
+            })
+        }));
         let restored = context.put32(arm::CPSR, cpsr);
         let banks = banks?;
         restored?;

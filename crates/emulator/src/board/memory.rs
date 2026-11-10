@@ -366,7 +366,7 @@ impl Memory {
             let end = base
                 .checked_add(backing.len() as u64)
                 .ok_or("physical memory range overflow")?;
-            if backing.len() == 0 || *base < previous_end {
+            if backing.is_empty() || *base < previous_end {
                 return Err("empty or overlapping physical memory".into());
             }
             previous_end = end;

@@ -876,11 +876,10 @@ impl fujimod_emulator_devices::Device for DisplayTiming {
     }
     fn write(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, a: u64, size: u8, value: u64) {
         let before = self.publication_state();
-        let result = self.write_published(cx, a, size, value);
+        self.write_published(cx, a, size, value);
         if self.publication_state() != before {
             self.publication_generation = self.publication_generation.wrapping_add(1);
         }
-        result
     }
     fn advance(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>) {
         if (self.output_hold_high() || !self.state.has_withheld())
@@ -891,11 +890,10 @@ impl fujimod_emulator_devices::Device for DisplayTiming {
             return self.advance_published(cx);
         }
         let before = self.publication_state();
-        let result = self.advance_published(cx);
+        self.advance_published(cx);
         if self.publication_state() != before {
             self.publication_generation = self.publication_generation.wrapping_add(1);
         }
-        result
     }
     fn next_deadline(&self, now: u64) -> Option<u64> {
         if now > self.ceiling {

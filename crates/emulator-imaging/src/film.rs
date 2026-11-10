@@ -94,8 +94,8 @@ impl Film {
             return Err("film luma bounds are not ordered".into());
         }
         self.bounds = bounds;
-        for row in 0..3 {
-            self.matrix[row] = [
+        for (row, values) in self.matrix.iter_mut().enumerate().take(3) {
+            *values = [
                 signed(r(0x400 + row * 8), 13),
                 signed(r(0x400 + row * 8) >> 16, 13),
                 signed(r(0x404 + row * 8), 13),
@@ -118,8 +118,8 @@ impl Film {
         let widths: [usize; 9] = std::array::from_fn(|i| {
             16 << ((r(if i < 8 { 0x500 } else { 0x504 }) >> (if i < 8 { i * 4 } else { 0 })) & 7)
         });
-        for x in 0..4096 {
-            self.gain[x] = bezier(&table, &[64, 64, 128, 256, 512, 1024, 2048], x) as u16;
+        for (x, gain) in self.gain.iter_mut().enumerate().take(4096) {
+            *gain = bezier(&table, &[64, 64, 128, 256, 512, 1024, 2048], x) as u16;
         }
         for (channel, curve) in self.curves.iter_mut().enumerate() {
             let slot: [i64; 28] =
@@ -529,13 +529,15 @@ mod tests {
             assert!((at(&byte0, offset) - measured).abs() < 0.04, "{offset}");
         }
         assert!((at(&equal, 8.8) - 1.21).abs() < 0.08 && (at(&equal, 90.0) - 1.0).abs() < 0.01);
-        let mut film = Film::default();
-        film.chroma = [1024, 0, 1024, 0];
-        film.bands = [(0, 256); 5];
-        film.bounds = [255; 4];
-        film.curves = std::array::from_fn(|_| (0..4096).map(|x| (x * 4) as u16).collect());
-        film.matrix = [[1024, 0, 0], [0, 1024, 0], [0, 0, 1024]];
-        film.gain = vec![2048; 4096];
+        let mut film = Film {
+            chroma: [1024, 0, 1024, 0],
+            bands: [(0, 256); 5],
+            bounds: [255; 4],
+            curves: std::array::from_fn(|_| (0..4096).map(|x| (x * 4) as u16).collect()),
+            matrix: [[1024, 0, 0], [0, 1024, 0], [0, 0, 1024]],
+            gain: vec![2048; 4096],
+            ..Default::default()
+        };
         let plain = film.develop([9000, 5000, 3000]);
         film.hue = Some(half);
         let staged = film.develop([9000, 5000, 3000]);
@@ -556,12 +558,14 @@ mod tests {
         };
         let stage = HueStage::from_still(sepia).unwrap();
         assert_eq!(stage.tint, [-15, 17]);
-        let mut film = Film::default();
-        film.bands = [(0, 256); 5];
-        film.bounds = [255; 4];
-        film.curves = std::array::from_fn(|_| (0..4096).map(|x| (x * 4) as u16).collect());
-        film.matrix = [[1024, 0, 0], [0, 1024, 0], [0, 0, 1024]];
-        film.gain = vec![2048; 4096];
+        let mut film = Film {
+            bands: [(0, 256); 5],
+            bounds: [255; 4],
+            curves: std::array::from_fn(|_| (0..4096).map(|x| (x * 4) as u16).collect()),
+            matrix: [[1024, 0, 0], [0, 1024, 0], [0, 0, 1024]],
+            gain: vec![2048; 4096],
+            ..Default::default()
+        };
         let gray = film.develop([6000, 6000, 6000]);
         film.hue = Some(stage);
         let toned = film.develop([6000, 6000, 6000]);

@@ -337,7 +337,9 @@ impl ImageResources for Images {
             return Err("sensor RAW input must contain exactly width * height U16 samples".into());
         }
         let samples = bytes
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
             .collect();
         let frame = Frame::new(width, height, FramePixels::Raw16(samples))?;

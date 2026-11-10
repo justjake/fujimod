@@ -256,7 +256,7 @@ impl Service {
             word(&read(session, limits, facts.configuration_pointer, 4).await?) & !ALIAS;
         let slots = read(session, limits, facts.worker_slots, 100).await?;
         require(
-            slots.chunks_exact(20).any(|row| {
+            slots.as_chunks::<20>().0.iter().any(|row| {
                 word(&row[4..]) == 1 && word(row) != 0 && row[8..].iter().all(|b| *b == 0)
             }),
             "CPU1 synchronization worker is unavailable or busy",
@@ -398,12 +398,12 @@ impl Service {
                 read(session, limits, bootstrap, 32).await? == stub,
                 "Bootstrap ownership changed",
             )?;
-            if result.is_err() {
-                if let Some(raw) = raw {
-                    query
-                        .call(session, limits, bootstrap, raw, [0, facts.release], false)
-                        .await?;
-                }
+            if result.is_err()
+                && let Some(raw) = raw
+            {
+                query
+                    .call(session, limits, bootstrap, raw, [0, facts.release], false)
+                    .await?;
             }
             write(session, limits, bootstrap, &original).await?;
             query.sync(session, limits, facts).await?;

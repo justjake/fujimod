@@ -195,20 +195,6 @@ impl TextureFormat {
         }
     }
 
-    pub(super) fn code(self) -> u32 {
-        match self {
-            Self::Rgba8 => 0,
-            Self::Rgb8 => 1,
-            Self::Rgb5A1 => 2,
-            Self::Rgb565 => 3,
-            Self::Rgba4 => 4,
-            Self::LuminanceAlpha8 => 5,
-            Self::Luminance8 => 7,
-            Self::Alpha8 => 8,
-            Self::Other(value) => value,
-        }
-    }
-
     pub(super) fn bytes_per_pixel(self) -> Result<usize, String> {
         match self {
             Self::Rgba8 => Ok(4),

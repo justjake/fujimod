@@ -190,7 +190,7 @@ impl Mailbox<'_> {
                 return Ok(());
             }
         }
-        Err(fail(&format!(
+        Err(fail(format!(
             "File-service operation 5 failed: {status:#x}"
         )))
     }
@@ -277,7 +277,7 @@ impl Mailbox<'_> {
                         break;
                     }
                     let raw = self.read(self.p[6], count).await?;
-                    for row in raw.chunks_exact(24) {
+                    for row in raw.as_chunks::<24>().0 {
                         let mut legacy = row.to_vec();
                         legacy[23] = 0;
                         let entry = decode_entries(&legacy)?.remove(0);
@@ -418,9 +418,8 @@ pub(super) async fn prepare<'a>(
     hint: Option<u32>,
 ) -> Result<Mailbox<'a>> {
     require(
-        start % 32 == 0
-            && size >= 64
-            && size <= 16 * 1024 * 1024
+        start.is_multiple_of(32)
+            && (64..=16 * 1024 * 1024).contains(&size)
             && (alias == 0 || alias.is_power_of_two())
             && start & alias == 0,
         "Invalid file-service reservation",

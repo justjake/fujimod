@@ -187,13 +187,17 @@ fn pending_pair_restores_typed_children_without_replaying_dma() {
 
 #[test]
 fn coarse_service_preserves_the_complete_long_transfer_state() {
-    let mut fine = Clock::default();
-    fine.ram = (0x1000..0x1083)
-        .map(|a| (a, (a - 0x1000) as u8))
-        .chain((0x2000..0x2083).map(|a| (a, 0xee)))
-        .collect();
-    let mut coarse = Clock::default();
-    coarse.ram = fine.ram.clone();
+    let mut fine = Clock {
+        ram: (0x1000..0x1083)
+            .map(|a| (a, (a - 0x1000) as u8))
+            .chain((0x2000..0x2083).map(|a| (a, 0xee)))
+            .collect(),
+        ..Default::default()
+    };
+    let mut coarse = Clock {
+        ram: fine.ram.clone(),
+        ..Default::default()
+    };
     let mut a = start_count(&mut fine, 131);
     let mut b = start_count(&mut coarse, 131);
     for tick in (64..=131 * 64).step_by(64) {
