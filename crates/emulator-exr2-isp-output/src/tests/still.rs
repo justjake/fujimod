@@ -146,7 +146,6 @@ fn raw_writeback_refuses_unmodeled_layouts_before_dma() {
         (0x60, 0x9000),
         (0x40, 8 << 16 | 8),
         (0x4c, 14),
-        (8, 0x100),
     ] {
         let (mut d, mut h) = raw_writeback();
         write(&mut d, &mut h, 0xfff40000 + offset, value);
@@ -192,6 +191,47 @@ fn raw_writeback_supports_eight_rows_plus_64_byte_displacement() {
         assert_eq!(
             &h.ram[destination + y * pitch + 24..destination + (y + 1) * pitch],
             &before[destination + y * pitch + 24..destination + (y + 1) * pitch]
+        );
+    }
+    assert_eq!(h.irqs, [(0, 61)]);
+}
+
+/// X30 1.03 FINE+RAW programs a packed 12-bit source (0x08 bit 8) with 0x44 =
+/// 0x4c = 0x1000 samples and the writeback window 8 rows plus 48 bytes (32
+/// samples) before the source: the window keeps the source's packing.
+#[test]
+fn raw_writeback_keeps_packed_samples_eight_rows_plus_32_samples_earlier() {
+    let (mut d, mut h) = raw_writeback();
+    let samples = 0x1000;
+    let pitch = samples * 3 / 2;
+    let row = 12 * 3 / 2;
+    let source = 0x28000;
+    let destination = source - (8 * pitch + 48);
+    for y in 0..12 {
+        for x in 0..row {
+            h.ram[source + y * pitch + x] = (y * 16 + x) as u8;
+        }
+    }
+    for (offset, value) in [
+        (8, 0x100),
+        (0x44, samples),
+        (0x4c, samples),
+        (0x50, source),
+        (0x60, destination),
+    ] {
+        write(&mut d, &mut h, 0xfff40000 + offset, value as u32);
+    }
+    let before = h.ram.clone();
+    write(&mut d, &mut h, 0xfff40004, 3);
+    advance_from_checkpoint(&mut d, &mut h, 4);
+    for y in 0..12 {
+        assert_eq!(
+            &h.ram[destination + y * pitch..destination + y * pitch + row],
+            &before[source + y * pitch..source + y * pitch + row]
+        );
+        assert_eq!(
+            &h.ram[destination + y * pitch + row..destination + (y + 1) * pitch],
+            &before[destination + y * pitch + row..destination + (y + 1) * pitch]
         );
     }
     assert_eq!(h.irqs, [(0, 61)]);
