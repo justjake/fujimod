@@ -102,6 +102,7 @@ fn rejects_out_of_bounds_release_metadata() {
     let (abc, empty) = write_sources(&directory);
     for (name, value) in [
         ("--date", "2026-1-10"),
+        ("--date", "2026-02-30"),
         ("--commit", "ABCDEF0"),
         ("--note", &"x".repeat(65)),
     ] {

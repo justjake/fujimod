@@ -302,12 +302,32 @@ impl Release {
 
 fn valid_date(value: &str) -> bool {
     let bytes = value.as_bytes();
-    bytes.len() == 10
-        && bytes[0..4].iter().all(u8::is_ascii_digit)
-        && bytes[4] == b'-'
-        && bytes[5..7].iter().all(u8::is_ascii_digit)
-        && bytes[7] == b'-'
-        && bytes[8..10].iter().all(u8::is_ascii_digit)
+    if bytes.len() != 10
+        || !bytes[0..4].iter().all(u8::is_ascii_digit)
+        || bytes[4] != b'-'
+        || !bytes[5..7].iter().all(u8::is_ascii_digit)
+        || bytes[7] != b'-'
+        || !bytes[8..10].iter().all(u8::is_ascii_digit)
+    {
+        return false;
+    }
+    let year = u16::from(bytes[0] - b'0') * 1000
+        + u16::from(bytes[1] - b'0') * 100
+        + u16::from(bytes[2] - b'0') * 10
+        + u16::from(bytes[3] - b'0');
+    let month = u8::from(bytes[5] - b'0') * 10 + u8::from(bytes[6] - b'0');
+    let day = u8::from(bytes[8] - b'0') * 10 + u8::from(bytes[9] - b'0');
+    if year == 0 || !(1..=12).contains(&month) {
+        return false;
+    }
+    let leap_year = year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
+    let days_in_month = match month {
+        2 if leap_year => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    };
+    (1..=days_in_month).contains(&day)
 }
 
 fn valid_commit(value: &str) -> bool {
@@ -533,6 +553,9 @@ mod tests {
         Release {
             firmware: "example-cam".into(),
             version: "1.2.3".into(),
+            date: None,
+            commit: None,
+            notes: None,
             files,
         }
     }
