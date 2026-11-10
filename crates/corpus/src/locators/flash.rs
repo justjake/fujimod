@@ -135,6 +135,26 @@ impl<L: Lookup> Locator<'_, L> {
     ) -> Result<Routine> {
         one(self.small_routines(limit, verify), name)
     }
+    /// The routine nominated by `name`, or, when no function in this unit
+    /// carries that name, the unique small routine accepted by `verify`. A
+    /// nominated routine that fails `verify` is an error, not a reason to
+    /// search by shape.
+    fn named_or_small(
+        &self,
+        name: &str,
+        limit: u64,
+        verify: impl Fn(&Routine) -> bool,
+    ) -> Result<Routine> {
+        let nominated = self
+            .index
+            .find(Some(name), None, Some(self.firmware), Some(&self.unit))
+            .map_err(|e| e.to_string())?;
+        if nominated.is_empty() {
+            self.small_routine(limit, verify, name)
+        } else {
+            self.named(name, verify)
+        }
+    }
 }
 pub(super) fn number(text: &str) -> Result<u64> {
     if let Some(hex) = text.strip_prefix("0x") {
@@ -393,11 +413,10 @@ pub fn flash<L: Lookup>(
     } else {
         let id = jedec_id.ok_or("NOR installed JEDEC identity is not established")?;
         let is_selector = |r: &Routine| r.has("add", "x3, x3, #0x20") && r.has("cmp", "w2, #5");
-        let selector = if firmware_names_flash_read(index, firmware)? {
-            locator.named("flash_select_supported_jedec_id", is_selector)?
-        } else {
-            locator.small_routine(0x60, is_selector, "flash_select_supported_jedec_id")?
-        };
+        // A firmware can carry a borrowed `flash_read` name without one for
+        // the selector, so the selector's own name decides the search.
+        let selector =
+            locator.named_or_small("flash_select_supported_jedec_id", 0x60, is_selector)?;
         let hits = index
             .select(
                 Some(firmware),
@@ -1541,6 +1560,9 @@ mod tests {
     }
 
     fn candidates(second: u32) -> Index {
+        routines(second, &["candidate"])
+    }
+    fn routines(second: u32, names: &[&str]) -> Index {
         let mut index = Index::new();
         // Two self-authored MOV-immediate/RET routines with the same nominated
         // name. Only decoded semantics, not the name count, selects a result.
@@ -1565,7 +1587,7 @@ mod tests {
                         .map(|address| Boundary {
                             address,
                             ranges: vec![(address, address + 8)],
-                            names: vec!["candidate".into()],
+                            names: names.iter().map(|name| (*name).into()).collect(),
                             annotations: vec![],
                             references: vec![],
                         })
@@ -1644,6 +1666,45 @@ mod tests {
         assert!(!nor_geometry_matches(&record, 0x10000, 0x2000, 0x100));
         assert!(!nor_geometry_matches(&record, 0x10000, 0x1000, 0x200));
         assert!(!nor_geometry_matches(&record[..0x28], 0x10000, 0x1000, 0x100));
+    }
+
+    #[test]
+    fn an_absent_name_falls_back_to_the_shape_but_a_wrong_nomination_does_not() {
+        // No function carries the name: the unique accepted shape is used.
+        let index = routines(2, &[]);
+        let locator = Locator {
+            index: &index,
+            firmware: "test",
+            unit: "main".into(),
+        };
+        let routine = locator
+            .named_or_small("selector", 8, |r| r.has("mov", "x0, #2"))
+            .unwrap();
+        assert_eq!(routine.header.key.address, 0x1008);
+        // Two accepted shapes stay ambiguous.
+        let index = routines(1, &[]);
+        let locator = Locator {
+            index: &index,
+            firmware: "test",
+            unit: "main".into(),
+        };
+        assert!(
+            locator
+                .named_or_small("selector", 8, |r| r.has("mov", "x0, #1"))
+                .is_err()
+        );
+        // A nomination that fails verification is not replaced by a shape search.
+        let index = routines(2, &["selector"]);
+        let locator = Locator {
+            index: &index,
+            firmware: "test",
+            unit: "main".into(),
+        };
+        assert!(
+            locator
+                .named_or_small("selector", 8, |r| r.has("mov", "x0, #3"))
+                .is_err()
+        );
     }
 
     #[test]
