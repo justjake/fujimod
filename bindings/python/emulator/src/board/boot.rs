@@ -110,14 +110,11 @@ impl Board {
         }
         let owner = Owner::new(self.session_mut()?);
         let result = py.detach(move || owner.run(instruction_limit));
-        // Cold reconstruction replaces the CPUs and their hooks. Refuse an
-        // incomplete observation and never remove old hook IDs from new CPUs.
-        if self.memory_watch.as_ref().is_some_and(|watch| !watch.is_live())
-            || self.function_watch.as_ref().is_some_and(|watch| !watch.is_live())
-        {
-            self.memory_watch.take();
+        // Cold reconstruction replaces the CPUs and their hooks. Memory
+        // watch records remain available with an incomplete-observation error.
+        if self.function_watch.as_ref().is_some_and(|watch| !watch.is_live()) {
             self.function_watch.take();
-            return Err(error("boot restarted while passive watches were active".into()));
+            return Err(error("boot restarted while a function watch was active".into()));
         }
         result
     }

@@ -12,7 +12,9 @@ impl Board {
                 let _ = session.board.function_watch_end(&mut watch);
             }
             if let Some(mut watch) = self.memory_watch.take() {
-                let _ = session.board.memory_watch_end(&mut watch);
+                if watch.is_live() {
+                    let _ = session.board.memory_watch_end(&mut watch);
+                }
             }
             for (core, mut points) in std::mem::take(&mut self.instruction_points) {
                 let _ = session.board.instruction_points_end(core, &mut points);
