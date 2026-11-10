@@ -1,11 +1,12 @@
 //! FFF40000 still processor and its addressed calibration banks. Register
 //! geometry drives RAW reads and IRQ61 output. Nearest six-by-six CFA color
 //! uses programmed black, WB/exposure, radial shading and the measured film
-//! law. Spatial filtering remains unmodeled.
+//! law, with the approximate hue stage of FFF44500 bit 12. Spatial filtering
+//! remains unmodeled.
 use fujimod_emulator_imaging::exr2_isp::dma::{Raster, Transfer, physical};
 use fujimod_emulator_imaging::exr2_isp::word;
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
-use fujimod_emulator_imaging::film::{Film, still_offset};
+use fujimod_emulator_imaging::film::{Film, HueStage, still_offset};
 use fujimod_emulator_image_processing::raw::{Cfa, Packing, RawView};
 use fujimod_emulator_devices::{Cx, Device};
 use std::sync::Arc;
@@ -135,6 +136,7 @@ impl StillProcessor {
         let shading = crate::shading::Shading::from_registers(|o| self.r[(0x8000 + o) / 4])?;
         self.film
             .update(|o| self.r[(0x14000 + still_offset(o).unwrap()) / 4])?;
+        self.film.hue = HueStage::from_still(|o| self.r[(0x14000 + o) / 4]);
         // The still filter consumes its surrounding RAW context. For
         // 4944x3296 -> 4896x3264, output (0,0) maps to RAW (24,16). These are
         // cropped pixel windows, rather than full-field resampling coordinates.
