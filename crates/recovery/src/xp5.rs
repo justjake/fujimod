@@ -407,6 +407,9 @@ pub(crate) fn package_with_storage(
                     && op.address.is_multiple_of(2)
                     && op.mask <= u16::MAX.into()
                     && op.value & !op.mask == 0,
+                5 => mmio(op.address) && op.mask <= u16::MAX.into()
+                    && op.value & !op.mask == 0,
+                6 => op.address == 0 && op.mask == 0 && (1..=1000).contains(&op.value),
                 _ => false,
             };
             require(
@@ -670,7 +673,7 @@ mod tests {
         changed.initializer.sha256 = "0".repeat(64);
         assert!(package(&data, &changed, None, 0).is_err());
         let mut changed = s.clone();
-        changed.board.operations[0].kind = 5;
+        changed.board.operations[0].kind = 7;
         assert!(package(&data, &changed, Some(ram.clone()), 0).is_err());
         let mut changed = s.clone();
         changed.gate_offset = 0x940;
