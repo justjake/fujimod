@@ -471,6 +471,21 @@ fn r_profile_watch_samples_task_context_at_instruction_execution() {
 }
 
 #[test]
+fn many_watch_ranges_keep_exact_filtering_after_backend_grouping() {
+    let mut board = r5f_board();
+    words(&board, 0x10000, &[0xe3a0_1011, 0xe580_1000, 0xe580_1004, 0xeaff_fffe]);
+    board.write_register(0, arm::CORE[0], 0x10080).unwrap();
+    let ranges = (0..300).map(|i| (0x10080 + i * 16, 0x10084 + i * 16)).collect();
+    let mut watch = board.memory_watch_begin(ranges, 8, board.mappings().to_vec()).unwrap();
+    run(&mut board, 3);
+    let rows = records(&watch);
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0]["source"], "cpu-write");
+    assert_eq!(rows[0]["physical"], 0x10080);
+    board.memory_watch_end(&mut watch).unwrap();
+}
+
+#[test]
 fn watch_refuses_processors_it_cannot_observe() {
     let mut graph = a7_graph();
     graph.processors[0].model = Model::ArmV8A;

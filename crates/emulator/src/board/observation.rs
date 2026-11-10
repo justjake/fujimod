@@ -19,9 +19,9 @@ pub struct Records {
 }
 impl Records {
     fn overlaps(&self, address: u64, bytes: u64) -> bool {
-        self.ranges
-            .iter()
-            .any(|&(lo, hi)| address < hi && lo < address.saturating_add(bytes))
+        let end = address.saturating_add(bytes);
+        let index = self.ranges.partition_point(|&(_, hi)| hi <= address);
+        self.ranges.get(index).is_some_and(|&(lo, _)| lo < end)
     }
     fn push(&mut self, row: Value) {
         if self.violation.is_some() {
@@ -264,6 +264,31 @@ pub(super) fn union(mut ranges: Vec<Span>) -> Vec<Span> {
     }
     out
 }
+
+// Limit backend hook count without widening the ranges recorded by Records.
+// Joining the smallest gaps minimizes callbacks on unwatched addresses.
+fn compact_hooks(ranges: Vec<Span>, maximum: usize) -> Vec<Span> {
+    let ranges = union(ranges);
+    if ranges.len() <= maximum {
+        return ranges;
+    }
+    let mut gaps: Vec<_> = ranges.windows(2).enumerate()
+        .map(|(index, pair)| (pair[1].0 - pair[0].1, index)).collect();
+    gaps.sort_unstable();
+    let mut join = vec![false; gaps.len()];
+    for &(_, index) in gaps.iter().take(ranges.len() - maximum) {
+        join[index] = true;
+    }
+    let mut result = vec![ranges[0]];
+    for (index, &(lo, hi)) in ranges.iter().enumerate().skip(1) {
+        if join[index - 1] {
+            result.last_mut().unwrap().1 = hi;
+        } else {
+            result.push((lo, hi));
+        }
+    }
+    result
+}
 impl Board {
     pub fn transaction_watch_begin(&self, ranges: Vec<Span>, limit: usize) -> Result<(), String> {
         self.state
@@ -323,7 +348,7 @@ impl Board {
         // which would send every access through the slow path, so they stay
         // refused.
         if ranges.is_empty()
-            || ranges.len() > 256
+            || ranges.len() > 16384
             || limit == 0
             || limit > 1 << 22
             || ranges.iter().any(|&(lo, hi)| lo >= hi || hi > 1 << 32)
@@ -395,7 +420,7 @@ impl Board {
             let data = (&**watch.contexts.last().unwrap() as *const MemoryContext)
                 .cast_mut()
                 .cast();
-            for (begin, end) in union(spans) {
+            for (begin, end) in compact_hooks(spans, 256) {
                 let mut hooks = vec![Hook::Memory {
                     callback: access,
                     data,
