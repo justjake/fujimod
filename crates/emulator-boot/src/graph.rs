@@ -143,10 +143,11 @@ fn build_processor(
                     atcm: bank(state.atcm)?,
                 },
                 data_cache: state.data_cache.map(|cache| {
-                    fujimod_emulator_cpu_unicorn::rprofile::data_cache::Geometry {
+                    fujimod_emulator_cpu_unicorn::rprofile::data_cache::Options {
                         line_bytes: cache.line_bytes,
                         sets: cache.sets,
                         ways: cache.ways,
+                        checked: Vec::new(),
                     }
                 }),
                 ..Default::default()

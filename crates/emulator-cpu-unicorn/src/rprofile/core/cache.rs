@@ -146,6 +146,16 @@ impl Execution {
         let Some((physical, policy)) = self.cache_policy(address)? else {
             return Ok(());
         };
+        if !self.data_cache.borrow().as_ref().unwrap().checks(physical) {
+            return Ok(());
+        }
+        if std::env::var_os("FUJIMOD_DCACHE_COUNT").is_some() {
+            static COUNTS: [std::sync::atomic::AtomicU64; 8] = [const { std::sync::atomic::AtomicU64::new(0) }; 8];
+            let n = COUNTS[self.id.get() & 7].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if n & ((1 << 24) - 1) == 0 {
+                eprintln!("DCACHE-COUNT core {} accesses {}M", self.id.get(), n >> 20);
+            }
+        }
         let write = access == Access::Write;
         let hazard = self.data_cache.borrow_mut().as_mut().unwrap().access(
             write,

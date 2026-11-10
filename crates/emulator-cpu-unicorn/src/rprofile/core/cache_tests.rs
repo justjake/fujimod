@@ -11,7 +11,7 @@
 //! 0x2008.
 use super::tests::{run, set, words};
 use super::*;
-use crate::rprofile::data_cache::Geometry;
+use crate::rprofile::data_cache;
 
 const TABLE: u32 = 0x2000;
 const STATIC: u32 = 0x2008;
@@ -40,15 +40,16 @@ fn cluster() -> (Core, Core, Backing) {
     let memory = Memory::default();
     let backing = Backing::aligned_zeros(0x10000, 4096).unwrap();
     let options = Options {
-        data_cache: Some(Geometry {
+        data_cache: Some(data_cache::Options {
             line_bytes: 32,
             sets: 128,
             ways: 4,
+            checked: vec![(0, 0x10000)],
         }),
         ..Options::default()
     };
     let make = || {
-        let cpu = super::tests::processor_with_options(&memory, options);
+        let cpu = super::tests::processor_with_options(&memory, options.clone());
         unsafe {
             for address in [0, UNCACHED as u64] {
                 cpu.map_physical(

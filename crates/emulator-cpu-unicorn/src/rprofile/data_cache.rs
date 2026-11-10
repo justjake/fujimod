@@ -49,6 +49,32 @@ impl Geometry {
     }
 }
 
+/// The data-cache model of one processor: its geometry and the physical
+/// ranges whose accesses the model follows. Following every access to RAM
+/// costs a slow-path callback per load and store, so a run names the memory
+/// it checks; an empty list checks nothing. Accesses elsewhere are not seen,
+/// so their evictions are not either: a checked line stays resident until
+/// checked traffic or maintenance removes it.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Options {
+    pub line_bytes: u32,
+    pub sets: u32,
+    pub ways: u32,
+    /// Physical `[begin, end)` ranges.
+    #[serde(default)]
+    pub checked: Vec<(u64, u64)>,
+}
+impl Options {
+    pub fn geometry(&self) -> Geometry {
+        Geometry {
+            line_bytes: self.line_bytes,
+            sets: self.sets,
+            ways: self.ways,
+        }
+    }
+}
+
 /// How a data access through one address uses the L1 data cache.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Policy {
@@ -264,18 +290,27 @@ const EMPTY: u32 = u32::MAX;
 /// One processor's data cache: the line in each way of each set.
 pub(crate) struct Cache {
     core: usize,
+    checked: Vec<(u64, u64)>,
     lines: std::sync::Arc<Lines>,
     ways: Vec<u32>,
     next: Vec<u8>,
 }
 impl Cache {
-    pub fn new(core: usize, lines: std::sync::Arc<Lines>) -> Result<Self, String> {
+    pub fn new(
+        core: usize,
+        lines: std::sync::Arc<Lines>,
+        checked: Vec<(u64, u64)>,
+    ) -> Result<Self, String> {
+        if checked.iter().any(|&(begin, end)| begin >= end || end > 1 << 32) {
+            return Err("invalid checked data-cache range".into());
+        }
         if core >= MAX_PROCESSORS {
             return Err("data-cache model supports at most eight processors".into());
         }
         let geometry = lines.geometry();
         Ok(Self {
             core,
+            checked,
             lines,
             ways: vec![EMPTY; (geometry.sets * geometry.ways) as usize],
             next: vec![0; geometry.sets as usize],
@@ -283,6 +318,16 @@ impl Cache {
     }
     pub fn geometry(&self) -> Geometry {
         self.lines.geometry()
+    }
+    /// The part of `begin..end` (physical) this model follows.
+    pub fn checked_parts(&self, begin: u64, end: u64) -> impl Iterator<Item = (u64, u64)> + '_ {
+        self.checked
+            .iter()
+            .map(move |&(b, e)| (b.max(begin), e.min(end)))
+            .filter(|&(b, e)| b < e)
+    }
+    pub fn checks(&self, physical: u64) -> bool {
+        self.checked.iter().any(|&(b, e)| b <= physical && physical < e)
     }
     fn mine(&self) -> u8 {
         1 << self.core

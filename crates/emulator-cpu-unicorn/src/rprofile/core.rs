@@ -50,7 +50,7 @@ const SCTLR: arm::Coprocessor = arm::Coprocessor {
 /// SCTLR.V: exception vectors at 0xffff0000.
 const SCTLR_V: u64 = 1 << 13;
 
-#[derive(Clone, Copy, Default, serde::Deserialize)]
+#[derive(Clone, Default, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
     pub cp14_identity: u32,
@@ -61,7 +61,7 @@ pub struct Options {
     /// Private, non-coherent write-back L1 data cache. Processors sharing
     /// memory that declare one refuse cross-processor dirty-line hazards.
     #[serde(default)]
-    pub data_cache: Option<super::data_cache::Geometry>,
+    pub data_cache: Option<super::data_cache::Options>,
 }
 pub struct Wiring {
     pub memory: Memory,
@@ -311,10 +311,11 @@ impl Core {
         });
         let owner: Rc<dyn crate::memory::CodeOwner> = e.clone();
         e.id.set(e.memory.register(Rc::downgrade(&owner)));
-        if let Some(geometry) = options.data_cache {
+        if let Some(cache) = &options.data_cache {
             *e.data_cache.borrow_mut() = Some(super::data_cache::Cache::new(
                 e.id.get(),
-                e.memory.shared().data_lines(geometry)?,
+                e.memory.shared().data_lines(cache.geometry())?,
+                cache.checked.clone(),
             )?);
         }
         unsafe {
@@ -360,7 +361,7 @@ impl Core {
                 range: HookRange::All,
             })?;
             e.cpu.hook_watched(stores, true)?;
-            if options.data_cache.is_some() {
+            if options.data_cache.as_ref().is_some_and(|cache| !cache.checked.is_empty()) {
                 // Every access to watched RAM reaches this hook; map_ram
                 // watches all external RAM.
                 let accesses = e.cpu.install_hook(Hook::Memory {
