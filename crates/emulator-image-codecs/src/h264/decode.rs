@@ -330,6 +330,7 @@ mod tests {
             bitrate: 1_000_000,
             max_qp: 20,
             gop: 4,
+            level_idc: 42,
         }
     }
     fn input(bright: bool) -> Vec<u8> {
