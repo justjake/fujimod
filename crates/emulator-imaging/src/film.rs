@@ -188,13 +188,15 @@ impl Film {
         }
         let (shift, gain) = self.bands[band];
         let mut f = gain + ((shift * y) >> 8);
+        let mut tint = [0, 0];
         if let Some(hue) = &self.hue {
             f = (f * hue.gain(cb, cr)) >> 10;
+            tint = hue.tint;
         }
         [
             y as u8,
-            (128 + ((cb * f + 512) >> 10)).clamp(0, 255) as u8,
-            (128 + ((cr * f + 512) >> 10)).clamp(0, 255) as u8,
+            (128 + ((cb * f + 512) >> 10) + tint[0]).clamp(0, 255) as u8,
+            (128 + ((cr * f + 512) >> 10) + tint[1]).clamp(0, 255) as u8,
         ]
     }
     #[inline(always)]
@@ -216,11 +218,19 @@ impl Film {
 /// with `d` the hue `atan2(Cr, Cb)` minus bank 0's axis: byte 0 governs two
 /// opposite lobes and byte 1 the hues between them. `window` is a triangle of
 /// height 0.45 and half-width 15 deg at `d = 3 deg`, whatever the bytes.
+///
+/// With no bank 0 axis, the stage's form for Sepia (`0, 0, 512, 136, -120`),
+/// bank 0's vector (`FFF4454c`, Cr low, Cb high) is also added to the output
+/// chroma in eighths of a level: an assumed law, chosen so that Sepia's
+/// constants give a sepia-strength warm tint, not a measured one.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct HueStage {
     axis: f64,
     window: f64,
     bytes: [f64; 2],
+    /// Output (Cb, Cr) offset in levels.
+    #[serde(default)]
+    tint: [i32; 2],
 }
 impl HueStage {
     /// From FFF44000-relative still words, or None when the stage is off.
@@ -234,10 +244,13 @@ impl HueStage {
         if cr == 0 && cb == 0 {
             // Bank 1 alone keeps nothing at bytes 0, 0: without an axis,
             // byte 1 applies everywhere.
+            let eighths = |v: i32| (v + 4).div_euclid(8);
+            let w = r(0x54c);
             return Some(Self {
                 axis: 0.0,
                 window: 0.0,
                 bytes: [bytes[1]; 2],
+                tint: [eighths(signed(w >> 16, 13)), eighths(signed(w, 13))],
             });
         }
         // Bank 0 alone keeps 1.7 times the window of both factory banks, and
@@ -248,6 +261,7 @@ impl HueStage {
             axis: libm::atan2(f64::from(cr), f64::from(cb)).to_degrees(),
             window: 0.45 * banks * libm::pow(width, 2.5),
             bytes,
+            tint: [0, 0],
         })
     }
     /// Q10 chroma gain for chroma (cb, cr).
@@ -529,6 +543,30 @@ mod tests {
         for c in 1..3 {
             assert!(((i32::from(plain[c]) - 128) / 2 - (i32::from(staged[c]) - 128)).abs() <= 1);
         }
+    }
+    #[test]
+    fn hue_stage_without_an_axis_tints_gray() {
+        // Sepia's code constants: no axis, width 512, vector (136, -120).
+        let sepia = |o: usize| match o {
+            0x500 => 1 << 12,
+            0x548 => 512,
+            0x54c => (136 & 0x1fff) | (-120i32 as u32 & 0x1fff) << 16,
+            0x55c => 0x0010_0010,
+            _ => 0,
+        };
+        let stage = HueStage::from_still(sepia).unwrap();
+        assert_eq!(stage.tint, [-15, 17]);
+        let mut film = Film::default();
+        film.bands = [(0, 256); 5];
+        film.bounds = [255; 4];
+        film.curves = std::array::from_fn(|_| (0..4096).map(|x| (x * 4) as u16).collect());
+        film.matrix = [[1024, 0, 0], [0, 1024, 0], [0, 0, 1024]];
+        film.gain = vec![2048; 4096];
+        let gray = film.develop([6000, 6000, 6000]);
+        film.hue = Some(stage);
+        let toned = film.develop([6000, 6000, 6000]);
+        assert_eq!((gray[1], gray[2]), (128, 128));
+        assert_eq!((toned[0], toned[1], toned[2]), (gray[0], 113, 145));
     }
     #[test]
     fn zero_and_signed_matrix_law() {
