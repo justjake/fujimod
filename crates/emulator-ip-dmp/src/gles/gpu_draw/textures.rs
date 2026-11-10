@@ -1,4 +1,4 @@
-//! Intern immutable texture uploads within one command list. Sampler controls
+//! Intern immutable texture uploads within one render segment. Sampler controls
 //! remain per draw; only layout and register-addressed image bytes form the key.
 use super::super::draw_state::TextureFormat;
 use super::{DrawState, Reader, recorded_memory_range};
