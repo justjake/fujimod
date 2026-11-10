@@ -1193,6 +1193,15 @@ impl Cpu for Core {
             "translation_invalidations",
             "tb_restore_lookups",
             "tb_restart_lookups",
+            "translation_invalidations_restore_nocache",
+            "translation_invalidations_exec_nocache",
+            "translation_invalidations_io_recompile",
+            "translation_invalidations_guest_store",
+            "translation_invalidations_exit_address",
+            "translation_invalidations_embedder",
+            "translation_invalidations_watchpoint",
+            "translation_invalidations_restart",
+            "translation_invalidations_physical_write",
         ];
         let values = unsafe { std::slice::from_raw_parts(read(self.raw), names.len()) };
         Ok(names.into_iter().zip(values.iter().copied()).collect())
