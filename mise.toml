@@ -4,12 +4,23 @@ pnpm = "12.18.0"
 python = "3.14.8"
 uv = "0.13.1"
 rust = [
-  { version = "1.99.1", profile = "minimal", components = ["rustfmt", "clippy"] },
-  { version = "nightly-2026-10-10", profile = "minimal", components = ["rust-src"] },
+  { version = "1.99.1", profile = "minimal",
+    components = ["rustfmt", "clippy", "llvm-tools-preview"],
+    targets = ["wasm32-unknown-unknown"] },
+  { version = "nightly-2026-10-10", profile = "minimal",
+    components = ["rust-src"], targets = ["wasm32-unknown-unknown"] },
 ]
+"conda:clang" = "23.1.4"
+"conda:clang-tools" = "23.1.4"
+"conda:lld" = "23.1.4"
+"conda:ccache" = "4.14.3"
+"conda:ffmpeg" = "9.0.2"
+"conda:protobuf" = "7.36.2"
 emsdk = "6.0.13"
 cmake = "4.4.4"
 ninja = "1.13.2"
+"cargo:cargo-hakari" = "0.9.39"
+"cargo:cargo-llvm-cov" = "0.9.1"
 
 [tasks.commit]
 description = "Commit chosen paths or hunks to the checked-out branch and push"
