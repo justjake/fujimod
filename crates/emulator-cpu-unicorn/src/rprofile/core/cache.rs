@@ -16,12 +16,12 @@ fn system(crn: u32, crm: u32, opc2: u32) -> arm::Coprocessor {
 }
 
 impl Execution {
-    /// The cache operation of an MCR word, when this processor models a cache.
-    pub(super) fn data_cache_operation(&self, word: u32, thumb: bool) -> Option<Operation> {
-        let word = if thumb { word.rotate_left(16) } else { word };
+    /// The cache operation of an ARM MCR word, when this processor models a
+    /// cache. Thumb instructions are all observed.
+    pub(super) fn data_cache_operation(&self, word: u32) -> Option<Operation> {
         if self.data_cache.borrow().is_none()
             || word & 0x0f10_0f10 != 0x0e00_0f10
-            || !thumb && word >> 28 == 15
+            || word >> 28 == 15
         {
             return None;
         }
@@ -31,6 +31,29 @@ impl Execution {
             word & 15,
             (word >> 5) & 7,
         )
+    }
+
+    /// Whether an ARM word reads CCSIDR, which this processor answers from its
+    /// cache geometry. Set/way walks size themselves from it.
+    pub(super) fn reads_cache_geometry(&self, word: u32) -> bool {
+        self.data_cache.borrow().is_some()
+            && word >> 28 != 15
+            && word & 0x0fff_0fff == 0x0e30_0f10
+    }
+
+    /// CCSIDR for the CSSELR selection: the level-1 data cache, or none.
+    pub(super) fn cache_geometry_register(&self) -> Result<u32, String> {
+        let selection = self.cpu.coprocessor(
+            arm::Coprocessor {
+                opc1: 2,
+                ..system(0, 0, 0)
+            },
+            None,
+        )?;
+        Ok(match (selection, self.data_cache.borrow().as_ref()) {
+            (0, Some(cache)) => cache.geometry().ccsidr(),
+            _ => 0,
+        })
     }
 
     /// Account for a cache maintenance or attribute write before it executes.

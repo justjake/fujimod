@@ -633,7 +633,8 @@ impl Execution {
                 .at(address)
                 .is_empty()
                 || special(word)
-                || self.data_cache_operation(word, false).is_some()
+                || self.data_cache_operation(word).is_some()
+                || self.reads_cache_geometry(word)
                 || self.loop_candidate(address, word)
             {
                 InstructionDisposition::ObserveAndEndBlock
@@ -1008,6 +1009,19 @@ impl Execution {
         }
         if cp == 15 && word & (1 << 20) == 0 {
             self.data_cache_instruction(word, opc1, crn, crm, opc2, cpsr)?;
+        }
+        if cp == 15
+            && word & (1 << 20) != 0
+            && (opc1, crn, crm, opc2) == (1, 0, 0, 0)
+            && self.data_cache.borrow().is_some()
+            && (self.thumb.get() || arm::condition_passes(word >> 28, cpsr))
+        {
+            let target = ((word >> 12) & 15) as usize;
+            if target == 15 {
+                return Err("R-profile CCSIDR transfer to PC is unmodeled".into());
+            }
+            self.set(arm::CORE[target], self.cache_geometry_register()?)?;
+            return self.complete(replaced, address, size, cpsr);
         }
         if cp == 15 && opc1 == 0 && crn == 9 && crm == 1 {
             if opc2 > 1 {

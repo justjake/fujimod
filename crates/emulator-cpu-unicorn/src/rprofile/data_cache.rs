@@ -47,6 +47,11 @@ impl Geometry {
     fn shift(self) -> u32 {
         self.line_bytes.trailing_zeros()
     }
+    /// CCSIDR for the level-1 data cache: write-through, write-back,
+    /// read-allocate and write-allocate supported.
+    pub fn ccsidr(self) -> u32 {
+        0xf << 28 | (self.sets - 1) << 13 | (self.ways - 1) << 3 | (self.shift() - 4)
+    }
 }
 
 /// The data-cache model of one processor: its geometry and the physical

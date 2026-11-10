@@ -210,6 +210,13 @@ fn a_disabled_data_cache_holds_no_lines() {
 }
 
 #[test]
+fn ccsidr_reports_the_geometry_set_way_walks_need() {
+    let (core0, _core1, _backing) = cluster();
+    execute(&core0, 0x1100, 0, &[0xee30_0f10]).unwrap(); // mrc p15, 1, r0, c0, c0, 0
+    assert_eq!(super::tests::get(&core0, arm::CORE[0]), 0xf00f_e019);
+}
+
+#[test]
 fn snapshots_restore_dirty_lines() {
     let (core0, core1, _backing) = cluster();
     let clean = core1.capture(None).unwrap();
