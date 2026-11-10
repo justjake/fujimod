@@ -5702,11 +5702,18 @@
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "ways": {
+          "description": "Associativity.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
         "line_bytes",
-        "sets"
+        "sets",
+        "ways"
       ],
       "type": "object"
     },

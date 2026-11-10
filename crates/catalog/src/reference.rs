@@ -390,6 +390,8 @@ pub struct DataCacheGeometry {
     pub line_bytes: u32,
     /// Number of sets.
     pub sets: u32,
+    /// Associativity.
+    pub ways: u32,
 }
 
 /// A tightly coupled memory reset state.

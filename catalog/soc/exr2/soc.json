@@ -31,7 +31,8 @@
         },
         "data_cache": {
           "line_bytes": 32,
-          "sets": 128
+          "sets": 128,
+          "ways": 4
         }
       }
     },
@@ -62,7 +63,8 @@
         },
         "data_cache": {
           "line_bytes": 32,
-          "sets": 128
+          "sets": 128,
+          "ways": 4
         }
       }
     }

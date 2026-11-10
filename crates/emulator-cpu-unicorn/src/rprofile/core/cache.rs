@@ -63,20 +63,22 @@ impl Execution {
             || std::cell::RefMut::map(self.data_cache.borrow_mut(), |c| c.as_mut().unwrap());
         match operation {
             Operation::Attributes => self.cache_spans_stale.set(true),
-            Operation::CleanLine => {
-                // Lines exist only at write-back or write-through addresses;
-                // maintenance through an uncached alias reaches no line.
+            Operation::Line { clean, invalidate } => {
+                // Lines exist only at cacheable addresses; maintenance
+                // through an uncached alias reaches no line.
                 if let Some((physical, policy)) = self.cache_policy(value()? as u64)?
                     && policy != Policy::NonCacheable
                 {
-                    cache().clean_line(physical);
+                    cache().maintain_line(physical, clean, invalidate);
                 }
             }
-            Operation::CleanSet => {
-                let set = (value()? >> geometry.line_bytes.trailing_zeros()) & (geometry.sets - 1);
-                cache().clean_set(set as usize);
+            Operation::Way { clean, invalidate } => {
+                let value = value()?;
+                let set = (value >> geometry.line_bytes.trailing_zeros()) & (geometry.sets - 1);
+                let way = value.checked_shr(32 - geometry.ways.trailing_zeros()).unwrap_or(0);
+                cache().maintain_way(set as usize, way as usize, clean, invalidate);
             }
-            Operation::CleanAll => cache().clean_all(),
+            Operation::InvalidateAll => cache().invalidate_all(),
         }
         Ok(())
     }
@@ -121,6 +123,9 @@ impl Execution {
             .filter_map(|map| Some((map.address, map.end(), map.physical?)))
             .collect();
         *self.cache_spans.borrow_mut() = data_cache::spans(sctlr, &regions, &maps);
+        if std::env::var_os("FUJIMOD_DCACHE_DEBUG").is_some() {
+            eprintln!("DCACHE core {} sctlr {sctlr:#x} regions {regions:x?} spans {:x?}", self.id.get(), self.cache_spans.borrow());
+        }
         self.cache_spans_stale.set(false);
         Ok(())
     }
@@ -152,24 +157,48 @@ impl Execution {
         let Some(hazard) = hazard else {
             return Ok(());
         };
+        if std::env::var_os("FUJIMOD_DCACHE_LOG").is_some() {
+            static SEEN: std::sync::Mutex<Option<std::collections::HashSet<(u32, String)>>> = std::sync::Mutex::new(None);
+            let pc = self.scalar(arm::PC)?;
+            let key = format!("{hazard:?}");
+            let key = key.split(" line").next().unwrap().to_string() + &match hazard { data_cache::Hazard::Dirty{holder, pc, ..} => format!("{holder}{pc:x}"), _ => String::new() };
+            let mut seen = SEEN.lock().unwrap();
+            if seen.get_or_insert_default().insert((pc, key)) {
+                eprintln!("DCACHE-HAZARD core {} {} {address:#x} {policy:?} pc {pc:#x} {hazard:x?}", self.id.get(), if write {"W"} else {"R"});
+            }
+            self.data_cache.borrow_mut().as_mut().unwrap().forgive(&hazard);
+            return self.data_access(access, address, size);
+        }
         let cache = self.data_cache.borrow();
-        let line = cache.as_ref().unwrap().line_address(hazard.line);
-        let line_bytes = cache.as_ref().unwrap().geometry().line_bytes;
-        let holder = if hazard.holder.core == self.id.get() {
-            "its own data cache".to_string()
-        } else {
-            format!("processor {}'s data cache", hazard.holder.core)
-        };
-        Err(format!(
+        let cache = cache.as_ref().unwrap();
+        let access = format!(
             "data-cache coherence hazard: processor {} {} {bytes} byte(s) at {address:#x} \
-             ({policy:?}, pc {:#x}) in physical line {line:#x}..{:#x}, which {holder} holds \
-             dirty since its store at pc {:#x}; that cache must clean the line before \
-             another agent uses its memory, or the data must use an uncached alias",
+             ({policy:?}, pc {:#x})",
             self.id.get(),
             if write { "writes" } else { "reads" },
             self.scalar(arm::PC)?,
-            line + line_bytes as u64,
-            hazard.holder.pc,
-        ))
+        );
+        let range = |line: u64| {
+            let begin = cache.line_address(line);
+            format!("{begin:#x}..{:#x}", begin + cache.geometry().line_bytes as u64)
+        };
+        Err(match hazard {
+            data_cache::Hazard::Stale { line } => format!(
+                "{access} hits physical line {} in its data cache after another agent changed \
+                 that memory; invalidate the line before using it, or use an uncached alias",
+                range(line),
+            ),
+            data_cache::Hazard::Dirty { line, holder, pc } => format!(
+                "{access} reaches memory of physical line {}, which {} holds dirty since its \
+                 store at pc {pc:#x}; that cache must clean the line first, or the data must \
+                 use an uncached alias",
+                range(line),
+                if holder == self.id.get() {
+                    "its own data cache".to_string()
+                } else {
+                    format!("processor {holder}'s data cache")
+                },
+            ),
+        })
     }
 }

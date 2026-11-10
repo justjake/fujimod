@@ -1397,6 +1397,7 @@ class CursorLayout(TypedDict, total=False):
 class DataCacheGeometry(TypedDict, total=False):
     line_bytes: Required[int]
     sets: Required[int]
+    ways: Required[int]
 
 
 class DebugKey(TypedDict, total=False):

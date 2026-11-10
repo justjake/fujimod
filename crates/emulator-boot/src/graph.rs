@@ -146,6 +146,7 @@ fn build_processor(
                     fujimod_emulator_cpu_unicorn::rprofile::data_cache::Geometry {
                         line_bytes: cache.line_bytes,
                         sets: cache.sets,
+                        ways: cache.ways,
                     }
                 }),
                 ..Default::default()

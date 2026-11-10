@@ -315,7 +315,7 @@ impl Core {
             *e.data_cache.borrow_mut() = Some(super::data_cache::Cache::new(
                 e.id.get(),
                 e.memory.shared().data_lines(geometry)?,
-            ));
+            )?);
         }
         unsafe {
             let r = &mut *record.as_ptr();

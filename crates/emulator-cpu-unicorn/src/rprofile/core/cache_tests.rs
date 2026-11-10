@@ -1,13 +1,14 @@
-//! Cross-processor dirty-line refusals.
+//! Cross-processor data-cache refusals.
 //!
 //! Regression for an X-E2S camera run (2026-11-10, first shot after power-on
 //! of a two-core development job). Core 1 filled lookup tables in ordinary
-//! cached `.bss`. CPU0 then stored its own statics that shared those 32-byte
-//! lines, and CPU0's eviction later wrote its stale copy of the table bytes
-//! back: whole rows of the job's output took zero table entries. Execution,
-//! whose memory is coherent across processors, completed the same job with
-//! correct output. Here the shared line is 0x2000..0x2020: core 1 stores the
-//! last table byte at 0x2000 and CPU0 stores a static at 0x2008.
+//! cached `.bss`. CPU0's statics shared those 32-byte lines, and CPU0 stored
+//! to them after core 1's fill: its eviction then wrote CPU0's stale copy of
+//! the table bytes back, and whole rows of the job's output took zero table
+//! entries. Execution, whose memory is coherent across processors, completed
+//! the same job with correct output. Here the shared line is 0x2000..0x2020:
+//! core 1 stores the last table byte at 0x2000 and CPU0 stores a static at
+//! 0x2008.
 use super::tests::{run, set, words};
 use super::*;
 use crate::rprofile::data_cache::Geometry;
@@ -42,6 +43,7 @@ fn cluster() -> (Core, Core, Backing) {
         data_cache: Some(Geometry {
             line_bytes: 32,
             sets: 128,
+            ways: 4,
         }),
         ..Options::default()
     };
@@ -93,16 +95,25 @@ fn execute(cpu: &Core, at: u64, address: u32, code: &[u32]) -> Result<(), String
 }
 
 #[test]
+fn a_store_into_a_stale_copy_of_another_cores_line_is_refused() {
+    // The camera's sequence: CPU0 holds the line, core 1 writes its table
+    // half and cleans it to memory, then CPU0 stores into its old copy.
+    let (core0, core1, _backing) = cluster();
+    execute(&core0, 0x1100, STATIC, &[LDRB]).unwrap();
+    execute(&core1, 0x1000, TABLE, &[STRB, DCCMVAC]).unwrap();
+    let error = execute(&core0, 0x1200, STATIC, &[STRB]).unwrap_err();
+    assert!(error.contains("data-cache coherence hazard"), "{error}");
+    assert!(error.contains("processor 0 writes 1 byte(s) at 0x2008"), "{error}");
+    assert!(error.contains("hits physical line 0x2000..0x2020"), "{error}");
+}
+
+#[test]
 fn a_store_into_a_line_another_core_holds_dirty_is_refused() {
     let (core0, core1, _backing) = cluster();
     execute(&core1, 0x1000, TABLE, &[STRB]).unwrap();
     let error = execute(&core0, 0x1100, STATIC, &[STRB]).unwrap_err();
-    assert!(error.contains("data-cache coherence hazard"), "{error}");
-    assert!(
-        error.contains("processor 0 writes 1 byte(s) at 0x2008"),
-        "{error}"
-    );
-    assert!(error.contains("physical line 0x2000..0x2020"), "{error}");
+    assert!(error.contains("processor 0 writes 1 byte(s) at 0x2008"), "{error}");
+    assert!(error.contains("reaches memory of physical line 0x2000..0x2020"), "{error}");
     assert!(error.contains("processor 1's data cache"), "{error}");
     assert!(error.contains("store at pc 0x1000"), "{error}");
 }
@@ -112,10 +123,7 @@ fn a_load_from_a_line_another_core_holds_dirty_is_refused() {
     let (core0, core1, _backing) = cluster();
     execute(&core1, 0x1000, TABLE, &[STRB]).unwrap();
     let error = execute(&core0, 0x1100, STATIC, &[LDRB]).unwrap_err();
-    assert!(
-        error.contains("processor 0 reads 1 byte(s) at 0x2008"),
-        "{error}"
-    );
+    assert!(error.contains("processor 0 reads 1 byte(s) at 0x2008"), "{error}");
 }
 
 #[test]
@@ -132,18 +140,35 @@ fn tables_written_through_the_uncached_alias_share_lines_safely() {
     let (core0, core1, _backing) = cluster();
     execute(&core1, 0x1000, UNCACHED | TABLE, &[STRB]).unwrap();
     execute(&core0, 0x1100, STATIC, &[STRB, LDRB]).unwrap();
+    execute(&core1, 0x1200, UNCACHED | TABLE, &[LDRB]).unwrap_err();
 }
 
 #[test]
-fn cleaning_by_address_or_by_set_and_way_releases_the_line() {
-    for clean in [DCCMVAC, DCCISW] {
-        let (core0, core1, _backing) = cluster();
-        execute(&core1, 0x1000, TABLE, &[STRB, clean]).unwrap();
-        execute(&core0, 0x1100, STATIC, &[STRB]).unwrap();
-        // CPU0 now holds the line; core 1 must not read it either.
-        let error = execute(&core1, 0x1200, TABLE, &[LDRB]).unwrap_err();
-        assert!(error.contains("processor 0's data cache"), "{error}");
+fn cleaning_and_invalidating_hand_the_line_over() {
+    // Clean+invalidate by set/way (set 0, way 0) drops the line from core 1.
+    let (core0, core1, _backing) = cluster();
+    execute(&core1, 0x1000, TABLE, &[STRB, DCCISW]).unwrap();
+    execute(&core0, 0x1100, STATIC, &[STRB, DCCMVAC]).unwrap();
+    execute(&core1, 0x1200, TABLE, &[LDRB]).unwrap();
+    // A clean alone leaves core 1 a copy that CPU0's later store makes stale.
+    let (core0, core1, _backing) = cluster();
+    execute(&core1, 0x1000, TABLE, &[STRB, DCCMVAC]).unwrap();
+    execute(&core0, 0x1100, STATIC, &[STRB, DCCMVAC]).unwrap();
+    let error = execute(&core1, 0x1200, TABLE, &[LDRB]).unwrap_err();
+    assert!(error.contains("hits physical line 0x2000..0x2020"), "{error}");
+}
+
+#[test]
+fn eviction_writes_a_dirty_line_back() {
+    // Four more lines of the same set evict the table line round-robin.
+    let (core0, core1, _backing) = cluster();
+    execute(&core1, 0x1000, TABLE, &[STRB]).unwrap();
+    for way in 1..4 {
+        execute(&core1, 0x1100, TABLE + way * 0x1000, &[LDRB]).unwrap();
     }
+    execute(&core0, 0x1200, STATIC, &[LDRB]).unwrap_err();
+    execute(&core1, 0x1100, TABLE + 0x4000, &[LDRB]).unwrap();
+    execute(&core0, 0x1200, STATIC, &[STRB]).unwrap();
 }
 
 #[test]
@@ -158,9 +183,7 @@ fn maintenance_through_the_uncached_alias_cleans_nothing() {
 fn a_disabled_data_cache_holds_no_lines() {
     let (core0, core1, _backing) = cluster();
     let sctlr = core1.coprocessor(system(1, 0, 0), None).unwrap();
-    core1
-        .coprocessor(system(1, 0, 0), Some(sctlr & !0b100))
-        .unwrap();
+    core1.coprocessor(system(1, 0, 0), Some(sctlr & !0b100)).unwrap();
     execute(&core1, 0x1000, TABLE, &[STRB]).unwrap();
     execute(&core0, 0x1100, STATIC, &[STRB]).unwrap();
 }
@@ -173,9 +196,9 @@ fn snapshots_restore_dirty_lines() {
     let dirty = core1.capture(None).unwrap();
     let exported = core1.import_captured(&dirty.export().unwrap()).unwrap();
     core1.restore_captured(clean.as_ref()).unwrap();
-    execute(&core0, 0x1100, STATIC, &[LDRB]).unwrap();
+    execute(&core0, 0x1100, STATIC, &[LDRB, DCCISW]).unwrap();
     for saved in [dirty.as_ref(), exported.as_ref()] {
         core1.restore_captured(saved).unwrap();
-        assert!(execute(&core0, 0x1100, STATIC, &[LDRB]).is_err());
+        assert!(execute(&core0, 0x1100, STATIC, &[LDRB, DCCISW]).is_err());
     }
 }

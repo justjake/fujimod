@@ -40,7 +40,7 @@ struct State {
     failure: Option<String>,
     /// Dirty data-cache lines and the PCs of the stores that dirtied them.
     #[serde(default)]
-    data_cache: Vec<(u32, u32)>,
+    data_cache: Option<crate::rprofile::data_cache::Saved>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
