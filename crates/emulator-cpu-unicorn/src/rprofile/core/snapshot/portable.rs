@@ -38,6 +38,9 @@ struct State {
     hint: Option<u8>,
     exception: Option<(u8, u32)>,
     failure: Option<String>,
+    /// Dirty data-cache lines and the PCs of the stores that dirtied them.
+    #[serde(default)]
+    data_cache: Option<crate::rprofile::data_cache::Saved>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -151,6 +154,7 @@ pub(super) fn export(saved: &Saved) -> Result<Vec<u8>, String> {
         hint: pending_hint,
         exception: pending_exception,
         failure,
+        data_cache,
     } = saved;
     let tcm = tcm
         .iter()
@@ -190,6 +194,7 @@ pub(super) fn export(saved: &Saved) -> Result<Vec<u8>, String> {
         hint: pending_hint.map(hint),
         exception: pending_exception.map(exception),
         failure: failure.clone(),
+        data_cache: data_cache.clone(),
     })
 }
 impl Imported {
@@ -267,6 +272,7 @@ impl Imported {
             hint: state.hint.map(decode_hint).transpose()?,
             exception: state.exception.map(decode_exception).transpose()?,
             failure: state.failure.clone(),
+            data_cache: state.data_cache.clone(),
         })
     }
     pub(super) fn bind(&self, cpu: &Core) -> Result<Saved, String> {

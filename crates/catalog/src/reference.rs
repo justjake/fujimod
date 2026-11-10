@@ -370,6 +370,27 @@ pub struct RProfileState {
     pub atcm: TcmState,
     /// BTCM state after reset.
     pub btcm: TcmState,
+    /// Private, non-coherent write-back L1 data cache, as CCSIDR reports it.
+    pub data_cache: Option<DataCacheGeometry>,
+}
+
+/// L1 data-cache geometry.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct DataCacheGeometry {
+    /// Line size in bytes.
+    pub line_bytes: u32,
+    /// Number of sets.
+    pub sets: u32,
+    /// Associativity.
+    pub ways: u32,
 }
 
 /// A tightly coupled memory reset state.

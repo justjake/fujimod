@@ -77,7 +77,7 @@ impl Board {
                 graph
                     .processors
                     .iter()
-                    .filter_map(|p| p.rprofile)
+                    .filter_map(|p| p.rprofile.clone())
                     .flat_map(|p| [p.tcm.atcm.bytes, p.tcm.btcm.bytes]),
             )
             .try_fold(0usize, |sum, n| {

@@ -111,12 +111,14 @@ struct State {
 pub struct SharedMemory {
     state: Arc<Mutex<State>>,
     monitors: exclusive::Shared,
+    data_lines: Arc<std::sync::OnceLock<Arc<crate::rprofile::data_cache::Lines>>>,
 }
 impl Default for SharedMemory {
     fn default() -> Self {
         Self {
             state: Arc::new(Mutex::new(State::default())),
             monitors: Arc::new(Mutex::new(exclusive::Monitors::default())),
+            data_lines: Arc::default(),
         }
     }
 }
@@ -131,6 +133,22 @@ impl SharedMemory {
     }
     pub fn exclusive_domain(&self) -> exclusive::Shared {
         self.monitors.clone()
+    }
+    /// The dirty-line owners shared by every data cache of this memory space.
+    pub(crate) fn data_lines(
+        &self,
+        geometry: crate::rprofile::data_cache::Geometry,
+    ) -> Result<Arc<crate::rprofile::data_cache::Lines>, String> {
+        if let Some(lines) = self.data_lines.get() {
+            if lines.geometry() != geometry {
+                return Err(
+                    "processors sharing memory declare different data-cache geometry".into(),
+                );
+            }
+            return Ok(lines.clone());
+        }
+        let lines = Arc::new(crate::rprofile::data_cache::Lines::new(geometry)?);
+        Ok(self.data_lines.get_or_init(|| lines).clone())
     }
 }
 #[derive(Default)]
