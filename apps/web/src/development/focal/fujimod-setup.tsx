@@ -195,7 +195,7 @@ export function SetupPage(props: {
       overlay={overlay()}
     >
       <header class="mx-margin px-[6px] pt-[16px] pb-[20px]">
-        <Release version={RELEASE.version} scale={3} class="text-hero" />
+        <Release version={RELEASE.version} class="text-hero" />
         <p class="mt-[10px] text-detail text-secondary">
           {RELEASE.date}&ensp;{RELEASE.commit}&ensp;•&ensp;{RELEASE.age}
         </p>
@@ -320,7 +320,7 @@ function StatusCard(props: { icon: JSX.Element; version: string; detail: string 
     <Group class="mt-[8px]">
       <div class="focal-bevel flex flex-col items-center py-[26px]">
         {props.icon}
-        <Release version={props.version} scale={2} class="mt-[18px] text-card" />
+        <Release version={props.version} class="mt-[18px] text-card" />
         <div class="mt-[10px] text-detail text-secondary">{props.detail}</div>
       </div>
     </Group>
@@ -376,9 +376,9 @@ export function UpdatePage(props: { state: UpdateState; top?: boolean }) {
       <Show when={['available', 'downloading', 'downloaded'].includes(s().phase)}>
         <Group class="mt-[8px]">
           <div class="focal-bevel px-pad pt-[16px] pb-[18px]">
-            <div class="flex items-end justify-between">
-              <Release version={UPDATE.version} scale={2} class="text-card" />
-              <span class="mb-[6px] text-detail text-secondary">
+            <div class="flex items-baseline justify-between">
+              <Release version={UPDATE.version} class="text-card" />
+              <span class="text-detail text-secondary">
                 {UPDATE.date}&ensp;{UPDATE.size}
               </span>
             </div>
