@@ -209,10 +209,8 @@ impl Film {
 }
 
 /// X70/X-E2S still hue stage (FFF44500 bit 12, FFF44544..5c). An approximate
-/// fit to the X-E2S 1.11 camera tables (x70view
-/// decomp/mods/hue-stage-probe/README.md), not a recovered law; the Python
-/// oracle `emulator/film_stage.py` carries the same constants and the residual
-/// tests. Luma and chroma direction are kept; chroma magnitude is scaled by
+/// fit to X-E2S 1.11 camera measurements of card ÷ stock chroma by hue, not a
+/// recovered law. Luma and chroma direction are kept; chroma magnitude is scaled by
 /// `max(sqrt(A b0^2 + (1-A) b1^2) / 16, keep)`, with
 /// `A = cos^2(clamp(0.75 |d + 10| + 17, 0, 90) deg)` and `d` the hue
 /// `atan2(Cr, Cb)` minus bank 0's axis. `keep` is the small term bytes 0, 0
@@ -498,7 +496,7 @@ mod tests {
 
     #[test]
     fn hue_stage_matches_the_camera_byte_table() {
-        // Factory red banks 7 and 1 (axis 103.3 deg), decomp/mods/hue-stage-probe.
+        // Factory Partial Color red banks 7 and 1 (axis 103.3 deg).
         let words = |enable: u32, bytes: u32| {
             move |o: usize| match o {
                 0x500 => enable,
