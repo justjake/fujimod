@@ -59,6 +59,7 @@ struct MemoryContext {
     records: Rc<RefCell<Records>>,
     maps: Vec<MemoryMap>,
     core: usize,
+    sample_address: Option<u64>,
 }
 impl MemoryContext {
     fn record(
@@ -143,8 +144,15 @@ impl MemoryContext {
             .timeline
             .now()
             .saturating_add(elapsed.min(u64::MAX as u128) as u64);
+        // Optional debugger-supplied per-core RAM sample, taken at the access.
+        // A sample can be unavailable during early boot; observation continues.
+        let sample = (source == "cpu-read").then_some(self.sample_address).flatten().and_then(|address| {
+            let mut bytes = [0u8; 4];
+            cpu.read_memory(address, &mut bytes).ok()?;
+            Some(u32::from_le_bytes(bytes))
+        });
         records.push(
-            json!({"source":source,"address":address,"physical":physical,"size":size,
+            json!({"sample":sample,"source":source,"address":address,"physical":physical,"size":size,
             "value":value,"before":before,"byte_order":byte_order,
             "core":self.core,"pc":scalar(&*cpu,Register::Pc)?,
             "instructions":instructions,"tick":tick}),
@@ -256,6 +264,19 @@ impl Board {
         limit: usize,
         maps: Vec<MemoryMap>,
     ) -> Result<Box<MemoryWatch>, String> {
+        self.memory_watch_begin_with_samples(ranges, limit, maps, vec![])
+    }
+
+    pub fn memory_watch_begin_with_samples(
+        &self,
+        ranges: Vec<Span>,
+        limit: usize,
+        maps: Vec<MemoryMap>,
+        sample_addresses: Vec<u64>,
+    ) -> Result<Box<MemoryWatch>, String> {
+        if !sample_addresses.is_empty() && sample_addresses.len() != self.cpus.len() {
+            return Err("Memory watch samples require one address per core".into());
+        }
         // A memory hook's bounds and the address it reports are physical: the
         // backend checks them after the processor's own MMU/MPU translation
         // (`cputlb.c` dispatches `UC_HOOK_MEM_*` with the translated page), so
@@ -329,6 +350,7 @@ impl Board {
                 records: records.clone(),
                 maps: maps.iter().filter(|m| m.core == core).cloned().collect(),
                 core,
+                sample_address: sample_addresses.get(core).copied(),
             }));
             let data = (&**watch.contexts.last().unwrap() as *const MemoryContext)
                 .cast_mut()

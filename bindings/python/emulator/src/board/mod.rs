@@ -340,8 +340,9 @@ impl Board {
         serde_json::to_string(&batch).map_err(|e| error(e.to_string()))
     }
 
-    #[pyo3(signature=(ranges,limit=1_000_000))]
-    fn memory_watch_begin(&mut self, ranges: Vec<(u64, u64)>, limit: usize) -> PyResult<()> {
+    #[pyo3(signature=(ranges,limit=1_000_000,sample_addresses=None))]
+    fn memory_watch_begin(&mut self, ranges: Vec<(u64, u64)>, limit: usize,
+                          sample_addresses: Option<Vec<u64>>) -> PyResult<()> {
         if self.memory_watch.is_some() {
             return Err(error("Another memory watch is active".into()));
         }
@@ -350,7 +351,7 @@ impl Board {
                 .map_err(|e| error(e.to_string()))?;
         self.memory_watch = Some(
             self.board()?
-                .memory_watch_begin(ranges, limit, maps)
+                .memory_watch_begin_with_samples(ranges, limit, maps, sample_addresses.unwrap_or_default())
                 .map_err(error)?,
         );
         Ok(())

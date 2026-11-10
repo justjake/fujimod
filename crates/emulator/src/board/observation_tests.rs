@@ -214,6 +214,26 @@ fn a7_watch_records_both_page_table_aliases_with_the_physical_address() {
 }
 
 #[test]
+fn memory_watch_samples_per_core_ram_at_each_read() {
+    let mut board = a7_board();
+    let mut code = store_at(0x2000, 0x11, 0);
+    code.extend([0xe300_0000, 0xe340_0010, 0xe590_1000]); // r0 = 0x100000; ldr r1, [r0]
+    code.extend(store_at(0x2000, 0x22, 0));
+    code.extend([0xe300_0000, 0xe340_0010, 0xe590_1000, 0xeaff_fffe]);
+    words(&board, CODE, &code);
+    let mut watch = board.memory_watch_begin_with_samples(
+        vec![WATCH], 8, board.mappings().to_vec(), vec![0x2000],
+    ).unwrap();
+    run(&mut board, code.len() as u64 - 1);
+    let rows = records(&watch);
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert_eq!(rows[0]["sample"], 0x11);
+    assert_eq!(rows[1]["sample"], 0x22);
+    assert_eq!(rows[0]["pc"], CODE + 24);
+    board.memory_watch_end(&mut watch).unwrap();
+}
+
+#[test]
 fn a7_watch_records_a_board_alias_window_with_the_canonical_physical_address() {
     // The XPP maps DRAM at 0 and a second, uncached window at 0x40000000 over
     // the same backing. A page table can put either address on a watched byte.
