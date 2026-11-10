@@ -109,7 +109,17 @@ impl Board {
             ));
         }
         let owner = Owner::new(self.session_mut()?);
-        py.detach(move || owner.run(instruction_limit))
+        let result = py.detach(move || owner.run(instruction_limit));
+        // Cold reconstruction replaces the CPUs and their hooks. Refuse an
+        // incomplete observation and never remove old hook IDs from new CPUs.
+        if self.memory_watch.as_ref().is_some_and(|watch| !watch.is_live())
+            || self.function_watch.as_ref().is_some_and(|watch| !watch.is_live())
+        {
+            self.memory_watch.take();
+            self.function_watch.take();
+            return Err(error("boot restarted while passive watches were active".into()));
+        }
+        result
     }
     fn screenshot<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         Ok(PyBytes::new(

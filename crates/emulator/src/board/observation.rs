@@ -53,6 +53,11 @@ pub struct MemoryWatch {
     contexts: Vec<Box<MemoryContext>>,
     hooks: Vec<(usize, HookId)>,
 }
+impl MemoryWatch {
+    pub fn is_live(&self) -> bool {
+        self.contexts.iter().all(|context| context.cpu.upgrade().is_some())
+    }
+}
 struct MemoryContext {
     state: Weak<RefCell<State>>,
     cpu: Weak<dyn Cpu>,
@@ -639,6 +644,10 @@ unsafe fn function(pc: u64, _: u32, data: *mut c_void) {
     }
 }
 impl FunctionWatch {
+    pub fn is_live(&self) -> bool {
+        self.contexts.iter().all(|context| context.cpu.upgrade().is_some())
+    }
+
     pub fn check(&self) -> Result<(), String> {
         for context in &self.contexts {
             if let Some(error) = &*context.error.borrow() {
