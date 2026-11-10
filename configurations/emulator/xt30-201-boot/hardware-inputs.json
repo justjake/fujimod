@@ -1,0 +1,124 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "xt30-201-boot",
+  "body_id": "xt30",
+  "reset": {
+    "kernel_unit": "kernel",
+    "loader_handoff": {
+      "address": 9437184,
+      "size": 1488,
+      "fill": 0,
+      "words": [
+        {
+          "offset": 320,
+          "value": 50178,
+          "name": "startup flags"
+        }
+      ],
+      "basis": "Declared virtual startup inputs for a bounded application-boot scenario."
+    },
+    "spi_inputs": {
+      "1": {
+        "level": "low",
+        "basis": "Declared virtual startup inputs for a bounded application-boot scenario.",
+        "power_registers": {
+          "chip_select": {
+            "port": 12,
+            "pin": 5,
+            "active_high": true
+          },
+          "inputs": {
+            "0": 0,
+            "1": 0,
+            "2": 0,
+            "3": 512,
+            "4": 0,
+            "5": 0,
+            "6": 0,
+            "16": 0,
+            "32": 0,
+            "34": 0,
+            "35": 0
+          },
+          "rtc_ticks_per_second": 54000000,
+          "ambient_celsius": 25,
+          "basis": "Declared virtual startup inputs for a bounded application-boot scenario."
+        }
+      },
+      "4": {
+        "level": "low",
+        "basis": "Declared virtual startup inputs for a bounded application-boot scenario."
+      },
+      "5": {
+        "level": "low",
+        "basis": "Declared virtual startup inputs for a bounded application-boot scenario."
+      }
+    },
+    "serial_flash": {
+      "contents": "registered-update",
+      "jedec_id": 0,
+      "geometry": {
+        "erase_bytes": 131072,
+        "page_bytes": 256,
+        "erase_ticks": 4096,
+        "page_ticks": 512,
+        "basis": "Declared virtual startup inputs for a bounded application-boot scenario."
+      },
+      "basis": "Declared virtual startup inputs for a bounded application-boot scenario."
+    },
+    "adc_input": {
+      "samples": [
+        0,
+        0,
+        2048,
+        0,
+        2048,
+        4095,
+        0,
+        0,
+        0,
+        4095,
+        2048,
+        4095
+      ],
+      "ambient_celsius": 25,
+      "thermal_channels": [
+        2,
+        4,
+        10
+      ],
+      "basis": "Declared virtual startup inputs for a bounded application-boot scenario."
+    },
+    "gpio_input": {
+      "levels": [
+        18435,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        96,
+        0,
+        16,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "basis": "Declared virtual startup inputs for a bounded application-boot scenario."
+    },
+    "temperature_input": {
+      "millicelsius": 25000,
+      "basis": "Declared virtual startup inputs for a bounded application-boot scenario."
+    },
+    "processed_frame_input": {
+      "frame_period_ticks": 900900,
+      "luma": 128,
+      "basis": "Declared virtual startup inputs for a bounded application-boot scenario."
+    }
+  }
+}
