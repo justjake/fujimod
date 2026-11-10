@@ -380,11 +380,16 @@ fn draw_segments(draws: &[Draw]) -> Result<Vec<DrawSegment>, String> {
     let mut segments = Vec::new();
     let mut start = 0;
     let mut dirty_surfaces = Vec::<SurfaceKey>::new();
+    let mut known_surfaces = BTreeMap::<u64, SurfaceKey>::new();
     for (index, draw) in draws.iter().enumerate() {
         if draw.vertex.indices.is_empty() {
             continue;
         }
         let (_, color_key, depth_key) = draw_surface_keys(&draw.state)?;
+        remember_surface_key(&mut known_surfaces, color_key)?;
+        if draw.state.depth_test.enabled || draw.state.stencil_test.enabled {
+            remember_surface_key(&mut known_surfaces, depth_key)?;
+        }
         let textures = texture_ranges(&draw.state)?;
         let mut refresh = BTreeMap::<u64, SurfaceKey>::new();
         for surface in &dirty_surfaces {
@@ -426,6 +431,23 @@ fn draw_segments(draws: &[Draw]) -> Result<Vec<DrawSegment>, String> {
         });
     }
     Ok(segments)
+}
+
+fn remember_surface_key(
+    surfaces: &mut BTreeMap<u64, SurfaceKey>,
+    key: SurfaceKey,
+) -> Result<(), String> {
+    if let Some(existing) = surfaces.get(&key.guest_address) {
+        if *existing != key {
+            return Err(format!(
+                "DMP host GPU target {:#x} changes format or extent within one list",
+                key.guest_address
+            ));
+        }
+    } else {
+        surfaces.insert(key.guest_address, key);
+    }
+    Ok(())
 }
 
 fn draw_surface_keys(state: &DrawState) -> Result<(SurfaceExtent, SurfaceKey, SurfaceKey), String> {
