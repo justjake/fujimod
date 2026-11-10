@@ -161,7 +161,12 @@ pub(super) fn render(
     let mut draw_count = 0usize;
     for segment in segments {
         let mut requested = expected_snapshots.cloned().unwrap_or_default();
-        requested.extend(segment.refresh_addresses.iter().map(|&address| (address, vec![])));
+        requested.extend(
+            segment
+                .refresh_addresses
+                .iter()
+                .map(|&address| (address, vec![])),
+        );
         let requested_snapshots = (!requested.is_empty()).then_some(requested);
         let rendered = render_segment(
             &draws[segment.start..segment.end],
@@ -423,9 +428,7 @@ fn draw_segments(draws: &[Draw]) -> Result<Vec<DrawSegment>, String> {
     Ok(segments)
 }
 
-fn draw_surface_keys(
-    state: &DrawState,
-) -> Result<(SurfaceExtent, SurfaceKey, SurfaceKey), String> {
+fn draw_surface_keys(state: &DrawState) -> Result<(SurfaceExtent, SurfaceKey, SurfaceKey), String> {
     let (width, height) = state.targets.extent.dimensions()?;
     let extent = SurfaceExtent {
         width: width as u32,
@@ -469,11 +472,7 @@ fn texture_ranges(state: &DrawState) -> Result<Vec<(u64, usize)>, String> {
         for level in 1..=texture.max_level {
             let width = texture.width >> level;
             let height = texture.height >> level;
-            if width == 0
-                || height == 0
-                || !width.is_multiple_of(8)
-                || !height.is_multiple_of(8)
-            {
+            if width == 0 || height == 0 || !width.is_multiple_of(8) || !height.is_multiple_of(8) {
                 break;
             }
             let address = texture
