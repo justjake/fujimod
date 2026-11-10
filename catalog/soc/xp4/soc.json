@@ -1167,7 +1167,7 @@
                   "value": 0
                 }
               ],
-              "basis": "X-T3 5.11 writes 1 to +0x01c at 0x11148a0 and waits for it to read 0; the command completes at once and the word reads 0. Other words read back their last write; nothing else in this block is modeled."
+              "basis": "X-T3 5.11 writes 1 to +0x01c and waits for it to read 0; the command completes at once and the word reads 0. Other words read back their last write; nothing else in this block is modeled."
             },
             {
               "base": 4283453440,
@@ -1226,7 +1226,7 @@
                   "mask": 1
                 }
               ],
-              "basis": "X-T3 5.11 resets the unit at 0x1057e34 by writing 0 to +0x000 and waits for bit 0 to read 1. A camera in REC reads 1 there. Other words read back their last write; nothing else in this block is modeled."
+              "basis": "X-T3 5.11 resets the unit by writing 0 to +0x000 and waits for bit 0 to read 1. A camera in REC reads 1 there. Other words read back their last write; nothing else in this block is modeled."
             },
             {
               "base": 4294393856,
@@ -1237,7 +1237,7 @@
                   "mask": 1
                 }
               ],
-              "basis": "X-T3 5.11 resets the unit at 0x1055a0c by writing 0 to +0x000 and waits for bit 0 to read 1, as at 0xfff50000. Other words read back their last write; nothing else in this block is modeled."
+              "basis": "X-T3 5.11 resets the unit by writing 0 to +0x000 and waits for bit 0 to read 1. Other words read back their last write; nothing else in this block is modeled."
             }
           ],
           "xpp_usb": {
@@ -1246,12 +1246,12 @@
             "irq_route": 246,
             "command_ticks": 48,
             "transaction_ticks": 6000,
-            "basis": "DesignWare USB3 device controller of X-T3 5.11: DCTL at +0xc704 is set at 0x1d8a14c and the interrupt handler 0x1d89408 registers through logical id 0x49, whose descriptor names interrupt 246. The command and transaction latencies are those of the X-T20 controller; the X-T3 values are not measured."
+            "basis": "DesignWare USB3 device controller register block; the core registers start at +0xc100. The interrupt line and the command and transaction latencies are declared values for this body. The latencies are not measured."
           },
           "sd_hosts": [
             {
               "base": 4294721536,
-              "basis": "SDHCI host of one X-T3 slot, read on an X-T3 with a card in each slot: present state +0x24 = 0x01f70000 (card inserted, state stable, card detect level set, write protect clear, CMD and DAT lines high), capabilities +0x40 = 0x25e830b0 (3.3 V, 1.8 V, 64-bit bus), capabilities 2 +0x44 = 0x2077 (SDR50, SDR104, DDR50), version +0xfe = 0x0102 (SDHCI 3.00), clock control +0x2c = 0x0003 or 0x0203 and timeout +0x2e = 0xe. The standard bank starts at the page base (it also appears at +0x200). Slot 1 is the host at 0xfffc4000. The interrupt line is the one the firmware registers for the slot's first interface: logical id 0x59 (interrupt 230) for slot 1 and 0x5b (interrupt 237) for slot 2, registered by the SD command routine 0x1083c3c with handlers 0x1084004 and 0x1083fbc; the second interfaces (ids 0x5a and 0x5c, interrupts 235 and 242) are on the pages 0xfffc6000 and 0xfffca000, which did not answer reads with UHS-I cards (reported to carry the UHS-II interfaces). The vendor words +0x100, +0x108, +0x10c, +0x110, +0x114, +0x124, +0x130, +0x150, +0x154, +0x1e0 and +0x1e4 are programmed by the driver; their meanings are not decoded, so they read back their last write. Clock settle and transfer times are assumed, not measured.",
+              "basis": "SDHCI host page of one card slot. The present-state, capability and version words follow the standard SDHCI layout, and the clock and timeout words are programmed by the driver. The interrupt line is declared for the slot. The vendor words are programmed by the driver; their meanings are not decoded, so they read back their last write. Clock settle and transfer times are assumed, not measured.",
               "capabilities": 635973808,
               "capabilities_2": 8311,
               "clock_ticks": 8,
@@ -1275,7 +1275,7 @@
             },
             {
               "base": 4294737920,
-              "basis": "SDHCI host of one X-T3 slot, read on an X-T3 with a card in each slot: present state +0x24 = 0x01f70000 (card inserted, state stable, card detect level set, write protect clear, CMD and DAT lines high), capabilities +0x40 = 0x25e830b0 (3.3 V, 1.8 V, 64-bit bus), capabilities 2 +0x44 = 0x2077 (SDR50, SDR104, DDR50), version +0xfe = 0x0102 (SDHCI 3.00), clock control +0x2c = 0x0003 or 0x0203 and timeout +0x2e = 0xe. The standard bank starts at the page base (it also appears at +0x200). Slot 2 is the host at 0xfffc8000. The interrupt line is the one the firmware registers for the slot's first interface: logical id 0x59 (interrupt 230) for slot 1 and 0x5b (interrupt 237) for slot 2, registered by the SD command routine 0x1083c3c with handlers 0x1084004 and 0x1083fbc; the second interfaces (ids 0x5a and 0x5c, interrupts 235 and 242) are on the pages 0xfffc6000 and 0xfffca000, which did not answer reads with UHS-I cards (reported to carry the UHS-II interfaces). The vendor words +0x100, +0x108, +0x10c, +0x110, +0x114, +0x124, +0x130, +0x150, +0x154, +0x1e0 and +0x1e4 are programmed by the driver; their meanings are not decoded, so they read back their last write. Clock settle and transfer times are assumed, not measured.",
+              "basis": "SDHCI host page of one card slot. The present-state, capability and version words follow the standard SDHCI layout, and the clock and timeout words are programmed by the driver. The interrupt line is declared for the slot. The vendor words are programmed by the driver; their meanings are not decoded, so they read back their last write. Clock settle and transfer times are assumed, not measured.",
               "capabilities": 635973808,
               "capabilities_2": 8311,
               "clock_ticks": 8,
