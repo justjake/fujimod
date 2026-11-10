@@ -21,7 +21,6 @@ import {
   Check,
   SWATCHES,
   type FileState,
-  type HueCursor,
 } from './components';
 import { hueColor } from './palette';
 
@@ -72,7 +71,7 @@ export type SetupPopup =
   | { kind: 'swatch'; row: ColorRow; cursor: number }
   | { kind: 'choice'; row: 'startUp' | 'shutDown'; cursor: number }
   /** `original` is restored when the popup is backed out of. */
-  | { kind: 'hue'; cursor: HueCursor; original: number | null };
+  | { kind: 'hue'; original: number | null };
 
 export interface SetupState {
   focus: SetupTarget;
@@ -161,9 +160,7 @@ function SetupPopup(props: { state: SetupState; anchor: number }) {
           />
         )}
       </Match>
-      <Match when={hue()}>
-        {(p) => <HuePopup anchor={props.anchor} hue={props.state.hue} cursor={p().cursor} />}
-      </Match>
+      <Match when={hue()}>{() => <HuePopup anchor={props.anchor} hue={props.state.hue} />}</Match>
     </Switch>
   );
 }
@@ -317,8 +314,8 @@ function mib(value: number) {
 
 function StatusCard(props: { icon: JSX.Element; version: string; detail: string }) {
   return (
-    <Group class="mt-[8px]">
-      <div class="focal-bevel flex flex-col items-center py-[26px]">
+    <Group class="mt-[8px] overflow-hidden rounded-[16px]">
+      <div class="flex flex-col items-center py-[26px]">
         {props.icon}
         <Release version={props.version} class="mt-[18px] text-card" />
         <div class="mt-[10px] text-detail text-secondary">{props.detail}</div>
@@ -396,14 +393,14 @@ export function UpdatePage(props: { state: UpdateState; top?: boolean }) {
           </div>
         </Group>
         <Group class="mt-gap">
-          <div class="focal-bevel px-pad pt-[14px] pb-[16px] text-[26px] leading-[34px]">
+          <div class="focal-bevel px-pad pt-[14px] pb-[16px] text-[26px] leading-[34px] text-secondary">
             <p>
               FujiMod stores up to two system versions in{' '}
               <span class="whitespace-nowrap">
                 <SdCard /> {SYSTEM_PATH}
               </span>
             </p>
-            <div class="my-[12px]">
+            <div class="my-[12px] text-label">
               <SlotLine slot="A" held={RELEASE} />
               <SlotLine slot="B" held={slotB()} />
             </div>

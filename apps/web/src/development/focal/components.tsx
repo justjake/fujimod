@@ -1,6 +1,6 @@
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
-import { palette, hueTrack } from './palette';
+import { palette, hueColor } from './palette';
 import { WORDMARK_CAP_ROWS, WORDMARK_HEIGHT, WORDMARK_PATH, WORDMARK_WIDTH } from './wordmark';
 
 /* ---- Icons ------------------------------------------------------------------ */
@@ -489,36 +489,41 @@ export function ChoicePopup(props: {
   );
 }
 
-export type HueCursor = 'track' | 'reset';
+/** BACKGROUND COLOR offers this many hues, evenly spaced. */
+export const HUE_STEPS = 24;
+export const HUE_STEP = 360 / HUE_STEPS;
 
-/** BACKGROUND COLOR: LEFT/RIGHT move the hue on the track (the page retints as
- * it moves); RESET returns to gray. */
-export function HuePopup(props: { anchor: number; hue: number | null; cursor: HueCursor }) {
+/** BACKGROUND COLOR: a row of hue segments with the default gray first, in a
+ * bar above its row. LEFT/RIGHT move through them and the page retints as the
+ * selection moves. */
+export function HuePopup(props: { anchor: number; hue: number | null }) {
+  const height = 76;
+  const above = () => props.anchor - 29 - 8 - height;
+  const top = () => (above() >= 52 ? above() : props.anchor + 29 + 8);
+  const selected = 'outline-[3px] outline-offset-[2px] outline-white';
   return (
-    <PopupFrame anchor={props.anchor} width={320} height={80 + 52}>
+    <>
+      <div class="absolute inset-0 bg-black/35" />
       <div
-        class={`flex h-[80px] items-center px-pad ${props.cursor === 'track' ? 'bg-focus' : ''}`}
+        class="absolute inset-x-margin flex items-center gap-[14px] border border-popup-border bg-popup px-pad shadow-[0_8px_28px_rgb(0_0_0/0.6)]"
+        style={{ top: `${top()}px`, height: `${height}px` }}
       >
-        <div
-          class="relative h-[24px] flex-1 border border-black"
-          style={{ background: hueTrack() }}
-        >
-          <Show when={props.hue !== null}>
-            <span
-              class="absolute -top-[8px] -bottom-[8px] w-[10px] -translate-x-1/2 border border-black bg-white"
-              style={{ left: `${((props.hue ?? 0) / 360) * 100}%` }}
-            />
-          </Show>
+        <span
+          class={`size-[44px] shrink-0 border border-black ${props.hue === null ? selected : ''}`}
+          style={{ background: hueColor(null) }}
+        />
+        <div class="flex h-[28px] flex-1 gap-[2px]">
+          <For each={Array.from({ length: HUE_STEPS }, (_, i) => i * HUE_STEP)}>
+            {(hue) => (
+              <span
+                class={`flex-1 border border-black ${props.hue === hue ? selected : ''}`}
+                style={{ background: hueColor(hue) }}
+              />
+            )}
+          </For>
         </div>
       </div>
-      <div
-        class={`flex h-popup-row items-center border-t border-popup-separator px-pad text-row uppercase ${
-          props.cursor === 'reset' ? 'bg-focus' : ''
-        } ${props.hue === null ? 'text-disabled' : ''}`}
-      >
-        RESET
-      </div>
-    </PopupFrame>
+    </>
   );
 }
 

@@ -30,8 +30,3 @@ export function palette(hue: number | null): Palette {
 export function hueColor(hue: number | null): string {
   return hue === null ? hsv(0, 0, 0.62) : hsv(hue, 0.7, 0.62);
 }
-
-export function hueTrack(): string {
-  const stops = Array.from({ length: 13 }, (_, i) => hueColor(i * 30));
-  return `linear-gradient(to right, ${stops.join(', ')})`;
-}

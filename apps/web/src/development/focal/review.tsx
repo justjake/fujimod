@@ -1,7 +1,7 @@
 import { render } from '@solidjs/web';
 import { For, Match, Switch, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
-import { SWATCHES } from './components';
+import { HUE_STEP, HUE_STEPS, SWATCHES } from './components';
 import {
   BackupPage,
   BootPage,
@@ -140,7 +140,7 @@ function Device() {
           },
         });
       case 'background':
-        return patch({ popup: { kind: 'hue', cursor: 'track', original: s.hue } });
+        return patch({ popup: { kind: 'hue', original: s.hue } });
       case 'startUp':
         return patch({ popup: { kind: 'choice', row: 'startUp', cursor: s.startUp } });
       case 'shutDown':
@@ -173,12 +173,12 @@ function Device() {
       return;
     }
     if (popup?.kind === 'hue') {
-      if (key === 'ArrowUp' || key === 'ArrowDown')
-        return patch({ popup: { ...popup, cursor: popup.cursor === 'track' ? 'reset' : 'track' } });
-      if ((key === 'ArrowLeft' || key === 'ArrowRight') && popup.cursor === 'track')
-        return patch({ hue: ((s.hue ?? 210) + (key === 'ArrowLeft' ? -6 : 6) + 360) % 360 });
-      if (key === 'Enter')
-        return patch({ hue: popup.cursor === 'reset' ? null : s.hue, popup: undefined });
+      if (key === 'ArrowLeft' || key === 'ArrowRight') {
+        const index = s.hue === null ? -1 : s.hue / HUE_STEP;
+        const next = Math.max(-1, Math.min(HUE_STEPS - 1, index + (key === 'ArrowLeft' ? -1 : 1)));
+        return patch({ hue: next < 0 ? null : next * HUE_STEP });
+      }
+      if (key === 'Enter') return patch({ popup: undefined });
       if (key === 'Escape') return patch({ hue: popup.original, popup: undefined });
       return;
     }
@@ -324,26 +324,26 @@ export const STATES: { id: string; title: string; note?: string; view: () => JSX
   {
     id: 'hue-picker',
     title: 'BACKGROUND COLOR picker',
-    note: 'LEFT/RIGHT move the hue and the page retints as it moves; every gray takes the hue at its own value.',
+    note: 'LEFT/RIGHT step through the default gray and 24 hues; the page retints as the selection moves, every gray taking the hue at its own value.',
     view: () => (
       <SetupPage
         state={setupState({
           focus: 'background',
-          hue: 215,
-          popup: { kind: 'hue', cursor: 'track', original: null },
+          hue: 210,
+          popup: { kind: 'hue', original: null },
         })}
       />
     ),
   },
   {
     id: 'hue-reset',
-    title: 'BACKGROUND COLOR picker, RESET',
+    title: 'BACKGROUND COLOR picker, default gray',
     view: () => (
       <SetupPage
         state={setupState({
           focus: 'background',
-          hue: 215,
-          popup: { kind: 'hue', cursor: 'reset', original: 215 },
+          hue: null,
+          popup: { kind: 'hue', original: 210 },
         })}
       />
     ),
@@ -351,7 +351,7 @@ export const STATES: { id: string; title: string; note?: string; view: () => JSX
   {
     id: 'setup-background-tinted',
     title: 'BACKGROUND COLOR, blue',
-    view: () => <SetupPage state={setupState({ focus: 'background', hue: 215 })} />,
+    view: () => <SetupPage state={setupState({ focus: 'background', hue: 210 })} />,
   },
   {
     id: 'setup-orange',
