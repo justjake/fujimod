@@ -21,7 +21,18 @@ pub(super) struct Watch {
 unsafe fn entered(pc: u64, _: u32, data: *mut c_void) {
     let watch = unsafe { &*data.cast::<Watch>() };
     let mut entries = watch.entries.borrow_mut();
-    if entries.0.contains_key(&(watch.core, pc)) {
+    // XT5_WATCH_ALL: record every entry (bounded), keyed by a sequence number.
+    let all = std::env::var_os("XT5_WATCH_ALL").is_some();
+    let key = if all {
+        let n = entries.0.len();
+        if n >= 200_000 {
+            return;
+        }
+        (watch.core + 16 * (n + 1), pc)
+    } else {
+        (watch.core, pc)
+    };
+    if entries.0.contains_key(&key) {
         return;
     }
     let (Some(state), Some(cpus)) = (watch.state.upgrade(), watch.cpus.upgrade()) else {
@@ -71,11 +82,32 @@ unsafe fn entered(pc: u64, _: u32, data: *mut c_void) {
             })
         })
         .collect();
+    // AArch64 frame-pointer backtrace (x30, then saved {fp, lr} pairs).
+    let mut backtrace = vec![];
+    if cpu.model().architecture() == Architecture::Arm64 {
+        if let Ok(lr) = super::scalar(cpu, Register::X(30)) {
+            backtrace.push(lr);
+        }
+        let mut fp = super::scalar(cpu, Register::X(29)).unwrap_or(0);
+        for _ in 0..16 {
+            let mut frame = [0u8; 16];
+            if fp == 0 || fp & 7 != 0 || state.memory.read_host(fp, &mut frame).is_err() {
+                break;
+            }
+            let next = u64::from_le_bytes(frame[..8].try_into().unwrap());
+            backtrace.push(u64::from_le_bytes(frame[8..].try_into().unwrap()));
+            if next <= fp {
+                break;
+            }
+            fp = next;
+        }
+    }
+    let sp = super::scalar(cpu, Register::Sp).unwrap_or(0);
     entries.0.insert(
-        (watch.core, pc),
+        key,
         json!({"core":watch.core,"pc":pc,
         "instructions":counts,"tick":state.timeline.now().saturating_add(elapsed),
-        "arguments":arguments,"argument_bus_memory":argument_memory}),
+        "arguments":arguments,"argument_bus_memory":argument_memory,"backtrace":backtrace,"sp":sp}),
     );
 }
 impl Board {
