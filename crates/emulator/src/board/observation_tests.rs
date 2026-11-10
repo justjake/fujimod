@@ -234,6 +234,15 @@ fn memory_watch_samples_per_core_ram_at_each_read() {
 }
 
 #[test]
+fn memory_watch_detects_the_loss_of_its_board() {
+    let board = a7_board();
+    let watch = board.memory_watch_begin(vec![WATCH], 8, board.mappings().to_vec()).unwrap();
+    assert!(watch.is_live());
+    drop(board);
+    assert!(!watch.is_live());
+}
+
+#[test]
 fn a7_watch_records_a_board_alias_window_with_the_canonical_physical_address() {
     // The XPP maps DRAM at 0 and a second, uncached window at 0x40000000 over
     // the same backing. A page table can put either address on a watched byte.
