@@ -31,6 +31,8 @@ pub(crate) struct ProxyIo {
     pub input: u8,
     pub output: u8,
     pub packet_size: usize,
+    /// The OUT endpoint's wMaxPacketSize.
+    pub output_packet_size: usize,
     pub timeout: Duration,
     /// Steps sent since the last sync, in order: sequence, stage, and the OUT
     /// length each must transfer (None for IN).
