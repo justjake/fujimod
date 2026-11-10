@@ -430,7 +430,7 @@ fn run() -> Result<(), String> {
         .configuration
         .execution
         .as_ref()
-        .map(|e| e.instructions_per_tick.clone())
+        .map(|e| e.instructions_per_tick)
         .ok_or("configuration has no execution policy")?;
     let mut graph = assemble_with_starts(selection, DRAM_LIMIT, rate, Some(ticks_per_second), &starts)?;
     // Execute-in-place: stage0 runs code from the flash aperture, which the
@@ -729,7 +729,7 @@ fn run() -> Result<(), String> {
             fujimod_emulator_devices::parts::sd_card::Options { sectors, max_dirty_sectors: 0x10_0000 },
         )?;
         let mut loaded = 0u64;
-        for (lba, sector) in bytes.chunks_exact(512).enumerate() {
+        for (lba, sector) in bytes.as_chunks::<512>().0.iter().enumerate() {
             if sector.iter().any(|b| *b != 0) {
                 card.write_bytes(lba as u64 * 512, sector)?;
                 loaded += 1;
@@ -908,9 +908,22 @@ fn run() -> Result<(), String> {
             *frame_count.entry(frame.output).or_default() += 1;
             if let (true, Some(dir)) = (args.all_frames, &args.frames_dir) {
                 std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-                let rgb: Vec<u8> = frame.rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
-                let png = fujimod_recording::Frame::rgb(frame.width, frame.height, rgb)?.png().map(|p| p.to_vec())?;
-                let path = dir.join(format!("output{}-seq{:04}-t{}ms.png", frame.output, frame.sequence, board.now() / 1_000_000));
+                let rgb: Vec<u8> = frame
+                    .rgba
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .flat_map(|p| [p[0], p[1], p[2]])
+                    .collect();
+                let png = fujimod_recording::Frame::rgb(frame.width, frame.height, rgb)?
+                    .png()
+                    .map(|p| p.to_vec())?;
+                let path = dir.join(format!(
+                    "output{}-seq{:04}-t{}ms.png",
+                    frame.output,
+                    frame.sequence,
+                    board.now() / 1_000_000
+                ));
                 std::fs::write(&path, png).map_err(|e| e.to_string())?;
             }
             latest.insert(frame.output, frame);
@@ -990,8 +1003,16 @@ fn run() -> Result<(), String> {
     if let Some(dir) = &args.frames_dir {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         for (output, frame) in &latest {
-            let rgb: Vec<u8> = frame.rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
-            let png = fujimod_recording::Frame::rgb(frame.width, frame.height, rgb)?.png().map(|p| p.to_vec())?;
+            let rgb: Vec<u8> = frame
+                .rgba
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .flat_map(|p| [p[0], p[1], p[2]])
+                .collect();
+            let png = fujimod_recording::Frame::rgb(frame.width, frame.height, rgb)?
+                .png()
+                .map(|p| p.to_vec())?;
             let path = dir.join(format!("output{output}.png"));
             std::fs::write(&path, png).map_err(|e| e.to_string())?;
             eprintln!("frame output {output}: {}x{} seq {} -> {}", frame.width, frame.height, frame.sequence, path.display());

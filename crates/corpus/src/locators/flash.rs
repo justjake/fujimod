@@ -583,8 +583,10 @@ fn xpp_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<
                 .step_by(4)
             {
                 if bytes
-                    .chunks_exact(4)
-                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|b| u32::from_le_bytes(*b))
                     .ne(PREFIX)
                 {
                     continue;
@@ -646,8 +648,10 @@ fn xpp_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<
                 .step_by(4)
             {
                 let words: Vec<_> = bytes
-                    .chunks_exact(4)
-                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|b| u32::from_le_bytes(*b))
                     .collect();
                 if words[..WAIT_PREFIX.len()] != WAIT_PREFIX
                     || words[WAIT_PREFIX.len()] & 0x0f00_0000 != 0x0b00_0000
@@ -1003,8 +1007,10 @@ fn xp4_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<
                 .step_by(4)
             {
                 if bytes
-                    .chunks_exact(4)
-                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|b| u32::from_le_bytes(*b))
                     .ne(PREFIX)
                 {
                     continue;
@@ -1031,8 +1037,10 @@ fn xp4_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<
                     continue;
                 };
                 let words: Vec<_> = code
-                    .chunks_exact(4)
-                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|b| u32::from_le_bytes(*b))
                     .collect();
                 if !CHECKED.iter().all(|&(i, expected)| {
                     let actual = words[i];
@@ -1065,8 +1073,10 @@ fn xp4_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<
                     .map_err(|e| e.to_string())?
                     .ok_or("unmapped XP4 flash address translator")?;
                 let translated: Vec<u32> = translated
-                    .chunks_exact(4)
-                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|b| u32::from_le_bytes(*b))
                     .collect();
                 if translated
                     != [
@@ -1097,8 +1107,10 @@ fn xp4_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<
                     .map_err(|e| e.to_string())?
                     .ok_or("unmapped XP4 stock flash reader")?;
                 let reader_words: Vec<u32> = reader_bytes
-                    .chunks_exact(4)
-                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|b| u32::from_le_bytes(*b))
                     .collect();
                 let initialized = reader_words
                     .windows(4)
@@ -1136,7 +1148,7 @@ fn xp4_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<
     }
     let (enabled, indexed_routine, translator_routine, reader_routine, cache_routine, byte_reader) =
         matches.pop().unwrap();
-    let origin = u64::from(image_origin);
+    let origin = image_origin;
     if origin != 0x274 {
         return Err("XP4 update origin differs from its registered DAT bias".into());
     }
@@ -1211,8 +1223,10 @@ fn xp4_packet_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> 
         .map_err(|error| error.to_string())?
         .ok_or("unmapped XP4 packet flash reader")?;
     let words: Vec<u32> = reader_bytes
-        .chunks_exact(4)
-        .map(|bytes| u32::from_le_bytes(bytes.try_into().unwrap()))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|bytes| u32::from_le_bytes(*bytes))
         .collect();
     verify_xp4_packet_reader(
         &words,
@@ -1340,8 +1354,10 @@ fn locate_xp4_byte_reader<L: Lookup>(
                     continue;
                 }
                 if bytes
-                    .chunks_exact(4)
-                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|b| u32::from_le_bytes(*b))
                     .ne(prefix)
                 {
                     continue;
@@ -1368,8 +1384,10 @@ fn locate_xp4_byte_reader<L: Lookup>(
                     continue;
                 };
                 let words: Vec<_> = code
-                    .chunks_exact(4)
-                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|b| u32::from_le_bytes(*b))
                     .collect();
                 if words[2] != 0xe150_0003
                     || words[9..13] != [0xe3a0_3001, 0xe1a0_2005, 0xe1a0_1000, 0xe1a0_0004]

@@ -139,18 +139,17 @@ impl Renderer {
             let gained = u64::from(wb) * digital * LIVE_FRONT_END_GAIN_Q10;
             ((gained + (1 << 19)) >> 20).min(32767) as u32
         });
-        if let Some(old) = &self.previous {
-            if Arc::ptr_eq(&old.exposure.frame, &exposure.frame)
-                && old.exposure.exposure == exposure.exposure
-                && old.exposure.aperture_squared == exposure.aperture_squared
-                && old.exposure.focus_shift_mm == exposure.focus_shift_mm
-                && old.exposure.view == exposure.view
-                && old.gain == gain
-                && old.digital_gain_q10 == digital as u32
-                && old.film.matches(|o| p.words[o / 4])
-            {
-                return Ok(Some(old.clone()));
-            }
+        if let Some(old) = &self.previous
+            && Arc::ptr_eq(&old.exposure.frame, &exposure.frame)
+            && old.exposure.exposure == exposure.exposure
+            && old.exposure.aperture_squared == exposure.aperture_squared
+            && old.exposure.focus_shift_mm == exposure.focus_shift_mm
+            && old.exposure.view == exposure.view
+            && old.gain == gain
+            && old.digital_gain_q10 == digital as u32
+            && old.film.matches(|o| p.words[o / 4])
+        {
+            return Ok(Some(old.clone()));
         }
         let mut film = self
             .previous
@@ -384,7 +383,11 @@ impl Image {
                         let mut memo = FilmPixels::new(&self.film);
                         for (local_y, row) in rows.chunks_exact_mut(layout.stride).enumerate() {
                             let y = range.start + local_y;
-                            for (x, pair) in row[..layout.width * 2].chunks_exact_mut(4).enumerate()
+                            for (x, pair) in row[..layout.width * 2]
+                                .as_chunks_mut::<4>()
+                                .0
+                                .iter_mut()
+                                .enumerate()
                             {
                                 let left =
                                     self.color(frame.sample(x * 2, y, [width, height]), &mut memo);
@@ -422,7 +425,12 @@ impl Image {
             }
             for (y, row) in out.chunks_exact_mut(layout.stride).enumerate() {
                 let sy = ((2 * y + 1) * height / (2 * layout.height)).min(height - 1);
-                for (x, pair) in row[..layout.width * 2].chunks_exact_mut(4).enumerate() {
+                for (x, pair) in row[..layout.width * 2]
+                    .as_chunks_mut::<4>()
+                    .0
+                    .iter_mut()
+                    .enumerate()
+                {
                     let sample = |x: usize| {
                         colors
                             [sy * width + ((2 * x + 1) * width / (2 * layout.width)).min(width - 1)]
@@ -500,7 +508,7 @@ impl Image {
                 }
             }
         }
-        for (word, count) in out.chunks_exact_mut(4).zip(bins) {
+        for (word, count) in out.as_chunks_mut::<4>().0.iter_mut().zip(bins) {
             word.copy_from_slice(&count.to_le_bytes());
         }
         if cache.len() == 8 {
@@ -608,7 +616,9 @@ mod tests {
             .unwrap();
         assert!(
             clipped
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .all(|p| u16::from_le_bytes([p[0], p[1]]) == 16383)
         );
     }
@@ -675,7 +685,12 @@ mod tests {
         let mut output = vec![0; layout.bytes().unwrap()];
         for (y, row) in output.chunks_exact_mut(layout.stride).enumerate() {
             let source_y = ((2 * y + 1) * height / (2 * layout.height)).min(height - 1);
-            for (x, pair) in row[..layout.width * 2].chunks_exact_mut(4).enumerate() {
+            for (x, pair) in row[..layout.width * 2]
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .enumerate()
+            {
                 let sample = |x: usize| {
                     colors[source_y * width
                         + ((2 * x + 1) * width / (2 * layout.width)).min(width - 1)]
@@ -782,7 +797,9 @@ mod tests {
         assert_eq!(pixels.len(), 432);
         assert!(
             pixels
-                .chunks_exact(36)
+                .as_chunks::<36>()
+                .0
+                .iter()
                 .all(|r| r[32..].iter().all(|v| *v == 0))
         );
         parameters.lock().unwrap().words[0] = 1;
@@ -856,16 +873,18 @@ mod tests {
         assert_eq!(output, restored.render(layout, 0).unwrap());
         // The two-pixel black/white pattern averages in linear irradiance;
         // point sampling before film would select alternating endpoints.
-        assert!(output.chunks_exact(4).all(|p| p[0] == p[1]));
-        assert!(output.chunks_exact(4).all(|p| p == &output[..4]));
+        assert!(output.as_chunks::<4>().0.iter().all(|p| p[0] == p[1]));
+        assert!(output.as_chunks::<4>().0.iter().all(|p| p == &output[..4]));
         assert_eq!(before, frame.fingerprint());
         let mut bins = [0; 1024];
         frame
             .histogram([64, 48], [0, 0, 64, 48], &mut bins)
             .unwrap();
         let total: u32 = bins
-            .chunks_exact(4)
-            .map(|w| u32::from_le_bytes(w.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|w| u32::from_le_bytes(*w))
             .sum();
         assert_eq!(total, 64 * 48 / 2);
         assert_eq!(frame.histograms.lock().unwrap().len(), 1);

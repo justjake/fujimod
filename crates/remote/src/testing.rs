@@ -162,6 +162,12 @@ impl Synthetic {
         self.word(532, 0);
     }
 }
+
+impl Default for Synthetic {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl Backend for Synthetic {
     fn now(&self) -> u64 {
         self.now

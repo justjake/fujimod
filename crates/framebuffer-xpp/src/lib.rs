@@ -61,6 +61,8 @@ impl Decoder<'_> {
     /// 1024 x 682 (video) until its next commit, and a frame is scanned in
     /// between. The law is inferred from that sequence, not measured on the
     /// panel.
+    // Err(()) only says the layer setup is unsupported; callers fall back without a reason.
+    #[allow(clippy::result_unit_err)]
     pub fn compose(
         &self,
         mut read: impl FnMut(u64, usize) -> Result<Vec<u8>, String>,
@@ -75,7 +77,7 @@ impl Decoder<'_> {
         }
         let (width, height) = Self::extent(self.word(OUTPUT_SIZE)).ok_or(())?;
         let mut rgba = vec![0; width as usize * height as usize * 4];
-        for pixel in rgba.chunks_exact_mut(4) {
+        for pixel in rgba.as_chunks_mut::<4>().0 {
             pixel[3] = 255;
         }
         let mut top = 0;
@@ -108,9 +110,8 @@ impl Decoder<'_> {
                     work_height: h,
                     order: PixelOrder::YyCbCr,
                 };
-                raster::composite(|a, n| read(a, n), plane, width, height, &mut rgba)
-                    .map_err(|_| ())?;
-                for pixel in rgba.chunks_exact_mut(4) {
+                raster::composite(&mut read, plane, width, height, &mut rgba).map_err(|_| ())?;
+                for pixel in rgba.as_chunks_mut::<4>().0 {
                     pixel.swap(0, 2);
                 }
                 top = buffer;
@@ -128,7 +129,12 @@ impl Decoder<'_> {
             for (y, row) in pixels.chunks_exact(w as usize * 4).enumerate() {
                 let row = &row[..shown_w * 4];
                 let line = &mut rgba[y * width as usize * 4..][..shown_w * 4];
-                for (out, src) in line.chunks_exact_mut(4).zip(row.chunks_exact(4)) {
+                for (out, src) in line
+                    .as_chunks_mut::<4>()
+                    .0
+                    .iter_mut()
+                    .zip(row.as_chunks::<4>().0)
+                {
                     let keep = 255 - u32::from(src[3]);
                     for n in 0..3 {
                         let value = u32::from(src[n]) + (u32::from(out[n]) * keep + 127) / 255;

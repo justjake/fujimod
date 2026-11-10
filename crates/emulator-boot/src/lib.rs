@@ -397,8 +397,7 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
             Ok(Generated {
                 name: asset.id.clone(),
                 pattern: asset.pattern.clone(),
-                size: usize::try_from(asset.size)
-                    .map_err(|_| format!("scene asset {} exceeds host address space", asset.id))?,
+                size: asset.size,
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
@@ -522,7 +521,7 @@ impl Prepared {
             )?,
             devices_value: self.devices_value.clone(),
             scene: self.scene.clone(),
-            execution_policy: self.execution_policy.clone(),
+            execution_policy: self.execution_policy,
             quantum: self.quantum,
             update: self.update.clone(),
             flash_offset: self.flash_offset,
@@ -654,13 +653,12 @@ fn set_clock_recursive(
     match value {
         Value::Object(map) => {
             // Check if this object has a "clock" key with "initial_seconds"
-            if let Some(clock_obj) = map.get_mut("clock") {
-                if let Value::Object(clock_map) = clock_obj {
-                    if clock_map.contains_key("initial_seconds") {
-                        clock_map.insert("initial_seconds".to_string(), json!(clock_seconds));
-                        *count += 1;
-                    }
-                }
+            if let Some(clock_obj) = map.get_mut("clock")
+                && let Value::Object(clock_map) = clock_obj
+                && clock_map.contains_key("initial_seconds")
+            {
+                clock_map.insert("initial_seconds".to_string(), json!(clock_seconds));
+                *count += 1;
             }
             // Recurse into all values
             for v in map.values_mut() {
@@ -710,7 +708,7 @@ fn split_managed_spares(
     }
     let mut rows = std::collections::BTreeSet::new();
     let mut spares = Vec::with_capacity(count);
-    for entry in entries.chunks_exact(MANAGED_SPARE_ENTRY_BYTES) {
+    for entry in entries.as_chunks::<MANAGED_SPARE_ENTRY_BYTES>().0 {
         let row = u32::from_be_bytes(entry[..4].try_into().map_err(|_| "NAND spare row")?);
         let tag: [u8; 16] = entry[4..].try_into().map_err(|_| "NAND spare tag")?;
         if !rows.insert(row) {
@@ -1178,8 +1176,10 @@ fn open_prepared_epoch(
     };
     let bus = Bus::from_graph(bus_mode, built.graph)?;
     let mut options = factory::Options::new(engine);
-    if epoch.is_none() {
-        if let Some(byte) = ram_fill { options = options.with_ram_fill(byte); }
+    if epoch.is_none()
+        && let Some(byte) = ram_fill
+    {
+        options = options.with_ram_fill(byte);
     }
     if let Some((tick, counts, _)) = epoch {
         options = options.with_epoch(tick, counts);
@@ -1578,7 +1578,8 @@ fn to_rec_inner(session: &mut Session, instruction_limit: u64) -> Result<RecRepo
                 .first_start
                 .as_ref()
                 .ok_or("selected firmware has no first-start menu facts")?;
-            let result = if u64::from(report.menu_node) == menu.menu_node {
+
+            if u64::from(report.menu_node) == menu.menu_node {
                 let children = u64::from(word(session, menu.menu_node + menu.children_offset)?);
                 for (row, language) in menu.languages.iter().enumerate() {
                     if word(session, children + row as u64 * menu.row_bytes)? != language.key {
@@ -1625,13 +1626,12 @@ fn to_rec_inner(session: &mut Session, instruction_limit: u64) -> Result<RecRepo
                 }
             } else {
                 if word(session, u64::from(report.menu_node))? == menu.date_kind {
-                    setup_calendar(session, &spec, inputs, &menu, end, &mut presses)?;
+                    setup_calendar(session, &spec, inputs, menu, end, &mut presses)?;
                 }
                 presses += 1;
                 confirmations += 1;
                 press_setup_key(session, &spec, start, end)
-            };
-            result
+            }
         } else {
             advance(session, &spec, end, None)
         };

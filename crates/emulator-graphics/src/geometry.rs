@@ -139,7 +139,9 @@ pub fn paths(draw: &Draw) -> Result<Vec<(Vec<Point>, bool)>> {
     for (code, flags, values) in &draw.geometry {
         let mut points = Vec::with_capacity(values.len() / 2);
         for pair in values
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .filter(|_| matches!(code, 0x28 | 0x29 | 0x30 | 0x31))
         {
             let point = (pair[0], pair[1]);

@@ -46,7 +46,7 @@ impl WordWindow {
                 "word window must fit its caller-qualified low DRAM aperture",
             ));
         }
-        if start % 4 != 0 || size % 4 != 0 || size > CAPACITY {
+        if !start.is_multiple_of(4) || !size.is_multiple_of(4) || size > CAPACITY {
             return Err(WordReadError::Window(
                 "word window needs four-byte alignment and 4..48 bytes in whole words",
             ));
@@ -110,8 +110,10 @@ pub async fn read(
     let offset = range.address().0.wrapping_sub(SOURCE);
     let raw = session.read_data(offset, range.length()).await?;
     let words = raw
-        .chunks_exact(4)
-        .map(|word| u32::from_le_bytes(word.try_into().expect("four bytes")))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|word| u32::from_le_bytes(*word))
         .collect();
     Ok(WordRead {
         address: range.address().0,

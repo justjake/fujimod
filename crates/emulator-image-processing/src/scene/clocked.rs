@@ -147,12 +147,11 @@ impl ClockedFrames {
                 .map_err(|_| "frame source poisoned")?
                 .source,
             ImageSource::Sensor
-        ) {
-            if let Some(period) = &self.frame_period {
-                let period = *period.lock().map_err(|_| "frame period poisoned")?;
-                if period > 0 {
-                    return Ok(period);
-                }
+        ) && let Some(period) = &self.frame_period
+        {
+            let period = *period.lock().map_err(|_| "frame period poisoned")?;
+            if period > 0 {
+                return Ok(period);
             }
         }
         Ok(external_period)
@@ -383,14 +382,13 @@ impl Device for ClockedFrames {
             }
             return;
         }
-        if self.phase.is_none() {
-            if let Err(error) = self
+        if self.phase.is_none()
+            && let Err(error) = self
                 .selected_period()
                 .and_then(|p| self.clock.set_period(p, cx.now()))
-            {
-                cx.fail(error);
-                return;
-            }
+        {
+            cx.fail(error);
+            return;
         }
         let physical = self.uses_sensor_clock();
         let edge = if physical {
@@ -481,11 +479,11 @@ impl Device for ClockedFrames {
         } else {
             image.radiance = None;
         }
-        if let Some(optics) = &mut self.optics {
-            if let Err(e) = optics.render(&mut image, changed) {
-                cx.fail(e);
-                return;
-            }
+        if let Some(optics) = &mut self.optics
+            && let Err(e) = optics.render(&mut image, changed)
+        {
+            cx.fail(e);
+            return;
         }
         image.edge = Some(edge);
         drop(image);

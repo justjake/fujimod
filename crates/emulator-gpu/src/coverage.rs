@@ -191,7 +191,7 @@ impl CoverageKernel {
             }
             let stroke_radius = request
                 .stroke_radius
-                .map(|radius| quantized_grid_coordinate(radius))
+                .map(quantized_grid_coordinate)
                 .transpose()?;
 
             let width = (x1 - x0) as usize;

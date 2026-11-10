@@ -5,7 +5,7 @@ use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_devices::parts::touch_input::ContactInput;
 use fujimod_emulator_devices::capability::StatisticsCadence;
 use fujimod_emulator_exr2_resources::SensorFrame;
-use std::{collections::VecDeque, sync::Arc};
+use std::{collections::VecDeque, rc::Rc};
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Boundary {
@@ -266,7 +266,7 @@ impl Entry {
 const AUTOMATIC_INPUT_INTERVAL: usize = 16;
 
 struct Mark {
-    saved: Arc<Snapshot>,
+    saved: Rc<Snapshot>,
     cursor: usize,
 }
 pub struct History {
@@ -351,7 +351,7 @@ impl History {
     /// Capture before an external transaction, not from a host read or getter.
     pub fn mark(&mut self, session: &Session) -> Result<(), String> {
         let previous = self.marks.back().map(|m| m.saved.as_ref());
-        let saved = Arc::new(session.checkpoint(previous)?);
+        let saved = Rc::new(session.checkpoint(previous)?);
         self.marks.push_back(Mark {
             saved,
             cursor: self.log.len(),

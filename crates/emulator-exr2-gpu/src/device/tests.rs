@@ -126,7 +126,7 @@ fn dmp_upload(words: &mut Vec<u32>, index: u16, data: &[u32], increment: bool) {
             | u32::from(index),
     );
     words.extend_from_slice(&data[1..]);
-    if data.len() % 2 == 0 {
+    if data.len().is_multiple_of(2) {
         words.push(0xa5a5a5a5);
     }
 }
@@ -333,7 +333,7 @@ fn x70_frame_job(
     let (mut gpu, mut host, mut controllers) = setup_with_options(options);
     enable(&mut controllers, &mut host, 1);
     let mut commands = dmp_quads(quads);
-    if commands.len() % 2 != 0 {
+    if !commands.len().is_multiple_of(2) {
         commands.push(0);
     }
     let ticks = gles_job_ticks(&mut gpu, &mut host, &commands);

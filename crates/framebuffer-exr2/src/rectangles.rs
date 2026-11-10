@@ -218,7 +218,7 @@ pub fn compose(frame: &mut Frame, rectangles: &[Rectangle]) {
                 let x1 = (x1 as usize).min(frame.width);
                 for y in (y0 as usize).min(frame.height)..(y1 as usize).min(frame.height) {
                     let span = &mut rgb[(y * frame.width + x0) * 3..(y * frame.width + x1) * 3];
-                    for pixel in span.chunks_exact_mut(3) {
+                    for pixel in span.as_chunks_mut::<3>().0 {
                         for (value, color) in pixel.iter_mut().zip(r.rgb) {
                             *value = ((u32::from(*value) * (128 - r.opacity)
                                 + u32::from(color) * r.opacity

@@ -30,7 +30,7 @@ fn equivalent_byte_lanes_reordering_and_redundant_state_are_accepted() {
     let mut rewritten = Vec::new();
     // Reorder all independent fill-state writes. Split full writes into
     // low/high halfword operations with irrelevant bits in unselected lanes.
-    for pair in fill_state().chunks_exact(2).rev() {
+    for pair in fill_state().as_chunks::<2>().0.iter().rev() {
         let index = pair[0] & 0xffff;
         write(&mut rewritten, index, 3, pair[1] | 0xffff0000);
         write(&mut rewritten, index, 12, pair[1] | 0x0000ffff);
@@ -50,7 +50,9 @@ fn equivalent_byte_lanes_reordering_and_redundant_state_are_accepted() {
 fn malformed_or_unsupported_state_refuses_before_any_rendering() {
     let (path, mut fill) = lists();
     let blend = fill
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .position(|pair| pair[0] & 0xffff == 0x1a0)
         .unwrap()
         * 2
@@ -59,7 +61,9 @@ fn malformed_or_unsupported_state_refuses_before_any_rendering() {
     assert!(parse_clear(&path, &fill, 32768, 32768, None, None).is_err());
     let (_, mut fill) = lists();
     let fence = fill
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .position(|pair| pair[0] & 0xffff == 0xad)
         .unwrap()
         * 2
@@ -74,7 +78,7 @@ fn a_fill_with_a_partially_written_ramp_filter_state_is_refused() {
     let (path, fill) = lists();
     let mut rewritten = Vec::new();
     // Only the low halfword of the inactive ramp/filter state is written.
-    for pair in fill_state().chunks_exact(2) {
+    for pair in fill_state().as_chunks::<2>().0 {
         let (index, lanes) = (
             pair[0] & 0xffff,
             if pair[0] & 0xffff == 0x16c { 3 } else { 15 },

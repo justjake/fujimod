@@ -74,6 +74,8 @@ struct RunState {
     discovery: Discovery,
     failure: Option<String>,
     redirected: Option<u32>,
+    // Native hooks hold raw pointers into each box; boxing keeps them stable as the Vec grows.
+    #[allow(clippy::vec_box)]
     pages: BTreeMap<u64, Vec<Box<MmioHook>>>,
     cbar_reads: u64,
     gic: Gic,
@@ -106,6 +108,8 @@ struct Cluster {
     dram_alias: Option<u64>,
     memory: Vec<memory::Window>,
     frozen_nor: Option<fujimod_emulator_xp4_storage::storage::ImmutableView>,
+    // Native hooks hold raw pointers into each box; boxing keeps them stable as the Vec grows.
+    #[allow(clippy::vec_box)]
     hooks: Vec<Box<Hook>>,
     labels: Vec<u32>,
     cbar: Option<u32>,
@@ -660,7 +664,7 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
         && cp_read != 0x0e100fb0
         && cp_read != 0x0e9f0f10
         && !(cp_read == 0x0e300f10 && c.cache_ids.is_some())
-        && !matches!(hint, 0x0320f002 | 0x0320f003 | 0x0320f004)
+        && !matches!(hint, 0x0320f002..=0x0320f004)
     {
         return Ok(());
     }
@@ -1284,15 +1288,12 @@ impl Session {
             devices.get_or_insert_with(devices::Devices::empty).standalone_dma(input)?;
         }
         let boot_wiring = xpp_boot.as_ref().map(|b| b.options.clone());
-        if let Some(wiring) = &boot_wiring {
-            if xpp_reset_gates != Some(wiring.selector_base)
+        if let Some(wiring) = &boot_wiring
+            && (xpp_reset_gates != Some(wiring.selector_base)
                 || xpp_power != Some(wiring.clock_base)
-                || xpp_dram != Some((wiring.ddr_base, wiring.refresh_level))
-            {
-                return Err(
-                    "Cold boot requires matching reset, power and DRAM declarations".into(),
-                );
-            }
+                || xpp_dram != Some((wiring.ddr_base, wiring.refresh_level)))
+        {
+            return Err("Cold boot requires matching reset, power and DRAM declarations".into());
         }
         let boot_lines = match xpp_boot {
             Some(boot) => Some(
@@ -2216,10 +2217,10 @@ impl Session {
             // Unicorn reports disabled VFP as an invalid instruction rather than
             // delivering ARM's undefined exception. Let the guest's vector enable
             // and restore its FP context; never enable it from the host.
-            if matches!(&exit, Err(ExecutionError::InvalidInstruction(_))) {
-                if c.disabled_vfp_exception(core)? {
-                    exit = Ok(Exit::Stopped);
-                }
+            if matches!(&exit, Err(ExecutionError::InvalidInstruction(_)))
+                && c.disabled_vfp_exception(core)?
+            {
+                exit = Ok(Exit::Stopped);
             }
             match exit {
                 Ok(Exit::Stopped) => (),

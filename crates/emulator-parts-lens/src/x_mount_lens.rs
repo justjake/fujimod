@@ -140,24 +140,24 @@ impl Unit {
             self.state.phase = phase;
             self.state.event_tick = Some(now);
         }
-        if let Phase::Starting { at } = self.state.phase {
-            if at <= now {
-                self.state.phase = match self.timing.busy_ticks {
-                    Some(busy) => Phase::Busy {
-                        until: at
-                            .checked_add(busy)
-                            .ok_or("X-mount lens busy clock overflow")?,
-                    },
-                    None => Phase::Ready,
-                };
-                self.state.event_tick = Some(at);
-            }
+        if let Phase::Starting { at } = self.state.phase
+            && at <= now
+        {
+            self.state.phase = match self.timing.busy_ticks {
+                Some(busy) => Phase::Busy {
+                    until: at
+                        .checked_add(busy)
+                        .ok_or("X-mount lens busy clock overflow")?,
+                },
+                None => Phase::Ready,
+            };
+            self.state.event_tick = Some(at);
         }
-        if let Phase::Busy { until } = self.state.phase {
-            if until <= now {
-                self.state.phase = Phase::Released;
-                self.state.event_tick = Some(until);
-            }
+        if let Phase::Busy { until } = self.state.phase
+            && until <= now
+        {
+            self.state.phase = Phase::Released;
+            self.state.event_tick = Some(until);
         }
         Ok(())
     }
@@ -174,31 +174,19 @@ impl Unit {
                     && state
                         .event_tick
                         .and_then(|start| start.checked_add(self.timing.startup_ticks))
-                        == Some(at) =>
-            {
-                ()
-            }
+                        == Some(at) => {}
             Phase::Ready
                 if self.timing.busy_ticks.is_none()
                     && state.pins.active()
-                    && state.event_tick.is_some() =>
-            {
-                ()
-            }
+                    && state.event_tick.is_some() => {}
             Phase::Busy { until }
                 if self.timing.busy_ticks.is_some()
                     && state.pins.active()
-                    && state.event_tick.is_some_and(|start| start < until) =>
-            {
-                ()
-            }
+                    && state.event_tick.is_some_and(|start| start < until) => {}
             Phase::Released
                 if self.timing.busy_ticks.is_some()
                     && state.pins.active()
-                    && state.event_tick.is_some() =>
-            {
-                ()
-            }
+                    && state.event_tick.is_some() => {}
             _ => return Err("invalid X-mount lens power phase/deadline".into()),
         }
         Ok(())

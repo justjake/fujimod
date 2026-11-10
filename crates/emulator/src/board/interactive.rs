@@ -339,13 +339,12 @@ impl Board {
         }
         state.active_slice = None;
         for mut entry in entries {
-            if let Some(exit) = entry.exit {
-                if let Err(e) =
+            if let Some(exit) = entry.exit
+                && let Err(e) =
                     state.finish_exit(&*self.cpus[entry.core], entry.core, entry.pc, exit)
-                {
-                    entry.failed = true;
-                    error.get_or_insert(e);
-                }
+            {
+                entry.failed = true;
+                error.get_or_insert(e);
             }
             let instructions =
                 state.instructions[entry.core].saturating_sub(entry.start_instructions);

@@ -23,8 +23,10 @@ impl Cache {
                 .filter(|s| s.destination == 2)
                 .map(|s| {
                     s.bytes
-                        .chunks_exact(4)
-                        .map(|v| u32::from_le_bytes(v.try_into().unwrap()))
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .map(|v| u32::from_le_bytes(*v))
                         .max()
                         .unwrap_or(0)
                 })

@@ -27,8 +27,10 @@ impl Board {
         }
         let built = fujimod_emulator_xpp::board::build(graph, json(devices)?, &loaded, mode)
             .map_err(error)?;
-        let mut resources = fujimod_emulator_exr2_resources::Resources::default();
-        resources.encoders = built.encoders;
+        let mut resources = fujimod_emulator_exr2_resources::Resources {
+            encoders: built.encoders,
+            ..Default::default()
+        };
         for (name, level, node) in built.inputs {
             if resources
                 .wires

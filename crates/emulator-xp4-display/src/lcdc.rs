@@ -198,10 +198,11 @@ impl Device for Lcdc {
             }
         }
         self.state.regs[offset as usize / 4] = value;
-        if offset == 4 && value == 0 {
-            if let Err(error) = self.status(cx, false, 0, None) {
-                cx.fail(error);
-            }
+        if offset == 4
+            && value == 0
+            && let Err(error) = self.status(cx, false, 0, None)
+        {
+            cx.fail(error);
         }
         if offset == 8 && value != 0 && self.picture.is_none() && self.video.is_none() {
             // Pixel transport is a separate unsupported hardware boundary.
@@ -220,12 +221,12 @@ impl Device for Lcdc {
                 }
             };
             let phase = self.state.phase;
-            if phase == 1 {
-                if let Err(error) = self.capture(cx) {
-                    self.state.deadline = None;
-                    cx.fail(error);
-                    return;
-                }
+            if phase == 1
+                && let Err(error) = self.capture(cx)
+            {
+                self.state.deadline = None;
+                cx.fail(error);
+                return;
             }
             cx.set_irq(self.irqs[phase], true);
             cx.set_irq(self.irqs[phase], false);

@@ -314,8 +314,8 @@ impl Decompressor {
     fn whole_transfer_blocks(word: u32, source_row: u32, destination_row: u32) -> bool {
         let block = |shift: u32| 16 << ((word >> shift) & 3);
         word & !0x3000_3000 == 0
-            && source_row % block(12) == 0
-            && destination_row % block(28) == 0
+            && source_row.is_multiple_of(block(12))
+            && destination_row.is_multiple_of(block(28))
     }
     fn raster_kind_for(regs: &[u32]) -> Result<RasterKind, String> {
         let r = |o: usize| regs[o / 4];
@@ -700,7 +700,7 @@ impl Decompressor {
                 // The measured 8-bit sample points (16→19, 21→24, 240→255)
                 // fit this empirical curve. The register's exact operation
                 // and its ordering relative to filtering remain unknown.
-                for sample in self.output[..row_bytes * h].chunks_exact_mut(2) {
+                for sample in self.output[..row_bytes * h].as_chunks_mut::<2>().0 {
                     let value = u16::from_le_bytes([sample[0], sample[1]]);
                     let adjusted = (u32::from(value) + u32::from(value) / 16 + 2).min(255);
                     sample.copy_from_slice(&(adjusted as u16).to_le_bytes());
@@ -746,20 +746,20 @@ impl Decompressor {
             if v != u32::MAX && v & !0xf01 != 0 {
                 return Err("unsupported decompressor W1C bits".into());
             }
-            if let Some(r) = &mut self.state.resize {
-                if self.options.resize != ResizeMode::AwaitResult {
-                    if r.owner != cx.cpu
-                        || !matches!(
-                            r.phase,
-                            Phase::Completed | Phase::Acknowledged | Phase::Released
-                        )
-                        || !matches!(v, 1 | u32::MAX)
-                    {
-                        return Err("MOVRSZ ACK before completion or by different owner".into());
-                    }
-                    if self.state.regs[0x88 / 4] & v & 1 != 0 {
-                        r.phase = Phase::Acknowledged;
-                    }
+            if let Some(r) = &mut self.state.resize
+                && self.options.resize != ResizeMode::AwaitResult
+            {
+                if r.owner != cx.cpu
+                    || !matches!(
+                        r.phase,
+                        Phase::Completed | Phase::Acknowledged | Phase::Released
+                    )
+                    || !matches!(v, 1 | u32::MAX)
+                {
+                    return Err("MOVRSZ ACK before completion or by different owner".into());
+                }
+                if self.state.regs[0x88 / 4] & v & 1 != 0 {
+                    r.phase = Phase::Acknowledged;
                 }
             }
             self.set(o, self.r(o) & !v);

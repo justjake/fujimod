@@ -662,14 +662,7 @@ fn counter_deltas() -> Vec<CoreCounters> {
 pub fn set_cpu_counters(counters: Vec<Result<BTreeMap<String, u64>, String>>) {
     let converted = counters
         .into_iter()
-        .map(|values| {
-            values.map(|values| {
-                values
-                    .into_iter()
-                    .map(|(name, value)| (name, value))
-                    .collect()
-            })
-        })
+        .map(|values| values.map(|values| values.into_iter().collect()))
         .collect::<Vec<_>>();
     let mut baseline = COUNTER_BASELINE.lock().unwrap_or_else(|e| e.into_inner());
     if baseline.is_none() {

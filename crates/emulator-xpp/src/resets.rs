@@ -187,14 +187,15 @@ impl Device for Gates {
         "xpp-reset-gates"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
-        if address == self.base && size == 4 {
-            if let Some((contacts, normal, card)) = &self.selector {
-                return u64::from(if contacts.iter().all(|v| v.high()) {
-                    *card
-                } else {
-                    *normal
-                });
-            }
+        if address == self.base
+            && size == 4
+            && let Some((contacts, normal, card)) = &self.selector
+        {
+            return u64::from(if contacts.iter().all(|v| v.high()) {
+                *card
+            } else {
+                *normal
+            });
         }
         match self.offset(address, size) {
             Some(offset) => self.words.get(&offset).copied().unwrap_or(0).into(),

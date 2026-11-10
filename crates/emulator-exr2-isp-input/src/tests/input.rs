@@ -54,10 +54,18 @@ fn raw_readback_keeps_neutral_light_across_sensor_window_origins() {
         h.now = 7;
         assert!(outputs.lock().unwrap().transfers[0].write(&mut h.cx()).unwrap());
         let pixels = h.ram[0x9000..0x9000 + 72].to_vec();
-        assert!(pixels.chunks_exact(4).all(|p| p[0] > 0 && p[0] < 255
-            && p[0] == p[1] && p[2..] == [128, 128]));
-        if let Some(expected) = &reference { assert_eq!(&pixels, expected); }
-        else { reference = Some(pixels); }
+        assert!(
+            pixels
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|p| p[0] > 0 && p[0] < 255 && p[0] == p[1] && p[2..] == [128, 128])
+        );
+        if let Some(expected) = &reference {
+            assert_eq!(&pixels, expected);
+        } else {
+            reference = Some(pixels);
+        }
     }
 }
 fn input_options() -> fujimod_emulator_imaging::exr2_isp::options::input::Options {
@@ -266,7 +274,7 @@ fn physical_sensor_latch_and_both_input_sources_share_one_edge() {
     use fujimod_emulator_imaging::scene::{Frame, FramePixels, SensorFrames};
     use std::sync::{Arc, Mutex};
     let frames = Arc::new(Mutex::new(SensorFrames::new(
-        Frame::new(2, 1, FramePixels::Raw16(vec![100, 200].into())).unwrap(),
+        Frame::new(2, 1, FramePixels::Raw16(vec![100, 200])).unwrap(),
     )));
     let mut w = input_wiring();
     w.frame_period = Some(Arc::new(Mutex::new(10)));
@@ -980,8 +988,8 @@ fn raw_readback_waits_for_both_outputs_then_eof() {
     h.now = 7;
     {
         let mut out = outputs.lock().unwrap();
-        for i in 0..2 {
-            assert!(out.transfers[i].write(&mut h.cx()).unwrap());
+        for (i, transfer) in out.transfers.iter_mut().enumerate().take(2) {
+            assert!(transfer.write(&mut h.cx()).unwrap());
             Irq {
                 core: 0,
                 line: 44 + i as u32,
@@ -1461,9 +1469,18 @@ fn raw_readback_retains_captured_color_phase_after_sensor_capture_is_disabled() 
             (0x3ac, 0xc003), (0x3b8, 0xfb000000), (0x390, 1),
         ] { write(&mut device, &mut h, 0xfff10000 + offset, value); }
         h.now = 7;
-        assert!(outputs.lock().unwrap().transfers[0].write(&mut h.cx()).unwrap());
-        assert!(h.ram[0x9000..0x9048].chunks_exact(4)
-            .all(|p| p[0] == p[1] && p[2..] == [128, 128]));
+        assert!(
+            outputs.lock().unwrap().transfers[0]
+                .write(&mut h.cx())
+                .unwrap()
+        );
+        assert!(
+            h.ram[0x9000..0x9048]
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|p| p[0] == p[1] && p[2..] == [128, 128])
+        );
     }
 }
 

@@ -151,12 +151,11 @@ async fn run() -> Result<()> {
         let (exporter, gate, token) = (exporter.clone(), gate.clone(), token.clone());
         std::thread::spawn(move || {
             futures_lite::future::block_on(async move {
-                if let Ok(socket) = async_tungstenite::accept_async(stream).await {
-                    if let Err(error) =
+                if let Ok(socket) = async_tungstenite::accept_async(stream).await
+                    && let Err(error) =
                         controller(socket, exporter, gate, token, format!("local-{counter}")).await
-                    {
-                        eprintln!("USB agent: {error}");
-                    }
+                {
+                    eprintln!("USB agent: {error}");
                 }
             })
         });

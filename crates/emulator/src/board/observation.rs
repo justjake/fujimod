@@ -51,6 +51,8 @@ impl Records {
 }
 pub struct MemoryWatch {
     pub records: Rc<RefCell<Records>>,
+    // Native hooks hold raw pointers into each box; boxing keeps them stable as the Vec grows.
+    #[allow(clippy::vec_box)]
     contexts: Vec<Box<MemoryContext>>,
     hooks: Vec<(usize, HookId)>,
 }
@@ -157,35 +159,34 @@ impl MemoryContext {
         // Optional debugger-supplied per-core RAM sample, taken at the access.
         // A sample can be unavailable during early boot; observation continues.
         let mut sample_path = Vec::new();
-        if source == "cpu-read" || source == "cpu-fetch" {
-            if let Some(root) = self.sample_address {
-                let mut sample_address = root;
-                for index in 0..=self.sample_offsets.len() {
-                    let mut bytes = [0u8; 4];
-                    if cpu.read_memory(sample_address, &mut bytes).is_err() {
-                        break;
-                    }
-                    let value = if byte_order == "little" {
-                        u32::from_le_bytes(bytes)
-                    } else {
-                        u32::from_be_bytes(bytes)
-                    };
-                    sample_path.push(value);
-                    if index == self.sample_offsets.len() {
-                        break;
-                    }
-                    let Some(next) = u64::from(value).checked_add(self.sample_offsets[index])
-                    else {
-                        break;
-                    };
-                    let Some((lo, hi)) = self.sample_bounds else {
-                        break;
-                    };
-                    if next < lo || next.checked_add(4).is_none_or(|end| end > hi) {
-                        break;
-                    }
-                    sample_address = next;
+        if (source == "cpu-read" || source == "cpu-fetch")
+            && let Some(root) = self.sample_address
+        {
+            let mut sample_address = root;
+            for index in 0..=self.sample_offsets.len() {
+                let mut bytes = [0u8; 4];
+                if cpu.read_memory(sample_address, &mut bytes).is_err() {
+                    break;
                 }
+                let value = if byte_order == "little" {
+                    u32::from_le_bytes(bytes)
+                } else {
+                    u32::from_be_bytes(bytes)
+                };
+                sample_path.push(value);
+                if index == self.sample_offsets.len() {
+                    break;
+                }
+                let Some(next) = u64::from(value).checked_add(self.sample_offsets[index]) else {
+                    break;
+                };
+                let Some((lo, hi)) = self.sample_bounds else {
+                    break;
+                };
+                if next < lo || next.checked_add(4).is_none_or(|end| end > hi) {
+                    break;
+                }
+                sample_address = next;
             }
         }
         let sample = sample_path.first().copied();
@@ -652,6 +653,8 @@ impl Board {
 
 pub struct FunctionWatch {
     pub recorder: Rc<RefCell<calls::Recorder>>,
+    // Native hooks hold raw pointers into each box; boxing keeps them stable as the Vec grows.
+    #[allow(clippy::vec_box)]
     contexts: Vec<Box<FunctionContext>>,
     pub range_counts: Option<Rc<RefCell<ranges::RangeCounts>>>,
     hooks: Vec<(usize, HookId)>,

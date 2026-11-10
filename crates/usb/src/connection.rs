@@ -135,7 +135,7 @@ pub async fn interfaces(info: &Device) -> Result<Vec<InterfaceSelection>> {
             .iter()
             .filter(|i| {
                 bulk_pair(
-                    &i.endpoints
+                    i.endpoints
                         .iter()
                         .filter(|e| e.kind == "bulk")
                         .map(|e| e.address)
@@ -160,7 +160,7 @@ pub async fn interfaces(info: &Device) -> Result<Vec<InterfaceSelection>> {
             .iter()
             .filter(|i| {
                 bulk_pair(
-                    &i.endpoints
+                    i.endpoints
                         .iter()
                         .filter(|e| e.kind == "bulk")
                         .map(|e| e.address)
@@ -245,7 +245,7 @@ impl Connection {
                 })
                 .ok_or(Error::InvalidInterface)?;
             let (input_address, output_address) = bulk_pair(
-                &descriptor
+                descriptor
                     .endpoints
                     .iter()
                     .filter(|e| e.kind == "bulk")
@@ -289,7 +289,7 @@ impl Connection {
                 .filter(|e| e.kind == "bulk")
                 .collect();
             let (input, output) =
-                bulk_pair(&endpoints.iter().map(|e| e.address).collect::<Vec<_>>())?;
+                bulk_pair(endpoints.iter().map(|e| e.address).collect::<Vec<_>>())?;
             let packet_size = usize::from(
                 endpoints
                     .iter()
@@ -768,10 +768,10 @@ mod tests {
     use super::*;
     #[test]
     fn endpoint_selection_never_silently_chooses_first_pair() {
-        assert_eq!(bulk_pair(&[0x82, 0x03]).unwrap(), (0x82, 3));
-        assert!(bulk_pair(&[0x81, 0x82, 3]).is_err());
-        assert!(bulk_pair(&[0x81]).is_err());
-        assert!(bulk_pair(&[0x80, 0]).is_err());
+        assert_eq!(bulk_pair([0x82, 0x03]).unwrap(), (0x82, 3));
+        assert!(bulk_pair([0x81, 0x82, 3]).is_err());
+        assert!(bulk_pair([0x81]).is_err());
+        assert!(bulk_pair([0x80, 0]).is_err());
     }
     #[test]
     fn unfinished_transfer_has_a_deadline() {

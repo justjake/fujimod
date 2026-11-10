@@ -298,15 +298,12 @@ impl State {
                     return Ok(());
                 }
                 let started = host.now_millis();
-                if !self.engines.contains_key(&engine) {
+                if let std::collections::btree_map::Entry::Vacant(e) = self.engines.entry(engine) {
                     let metadata = host.metadata(engine)?;
-                    self.engines.insert(
-                        engine,
-                        Engine {
-                            compiler: Compiler::new(&metadata.names)?,
-                            environment: metadata.environment,
-                        },
-                    );
+                    e.insert(Engine {
+                        compiler: Compiler::new(&metadata.names)?,
+                        environment: metadata.environment,
+                    });
                 }
                 let target = self.engines.get_mut(&engine).expect("engine was inserted");
                 let prepared = match target.compiler.prepare(code, start) {
@@ -322,12 +319,10 @@ impl State {
                         function: Value::Constant(pointer),
                         ..
                     } = instruction.operation
+                        && !target.environment.helpers.contains_key(&pointer)
+                        && let Some(kind) = host.helper(pointer)?
                     {
-                        if !target.environment.helpers.contains_key(&pointer) {
-                            if let Some(kind) = host.helper(pointer)? {
-                                target.environment.helpers.insert(pointer, kind);
-                            }
-                        }
+                        target.environment.helpers.insert(pointer, kind);
                     }
                 }
                 let code = match target.compiler.lower(&prepared, &target.environment) {

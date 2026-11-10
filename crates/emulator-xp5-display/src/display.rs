@@ -190,7 +190,7 @@ impl Display {
             return Ok(());
         }
         let mut rgba = vec![0; width as usize * height as usize * 4];
-        for p in rgba.chunks_exact_mut(4) {
+        for p in rgba.as_chunks_mut::<4>().0 {
             p[3] = 255;
         }
         for p in &captured {
@@ -549,7 +549,7 @@ mod tests {
             ram: vec![0; 256],
             ..Default::default()
         };
-        for p in h.ram.chunks_exact_mut(4) {
+        for p in h.ram.as_chunks_mut::<4>().0 {
             p.copy_from_slice(&[255, 0, 255, 255]);
         }
         h.ram[36..44].copy_from_slice(&[0, 0, 255, 255, 0, 255, 0, 255]);

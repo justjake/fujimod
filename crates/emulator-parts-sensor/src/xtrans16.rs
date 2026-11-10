@@ -272,14 +272,16 @@ impl Controls for Sensor {
     }
 
     fn command(&mut self, bytes: &[u8]) -> Result<(), String> {
-        if bytes.len() % 8 != 0
+        if !bytes.len().is_multiple_of(8)
             || bytes
-                .chunks_exact(8)
+                .as_chunks::<8>()
+                .0
+                .iter()
                 .any(|b| b[0] != 0x81 || b[3..].iter().any(|&v| v != 0))
         {
             return Err("X-Trans sensor requires81/address/value words".into());
         }
-        for b in bytes.chunks_exact(8) {
+        for b in bytes.as_chunks::<8>().0 {
             if b[1] == 0 {
                 let changed = b[2] & 0xfc != self.state.registers[0] & 0xfc;
                 let restarted = b[2] & 1 == 0 && self.state.registers[0] & 1 != 0;

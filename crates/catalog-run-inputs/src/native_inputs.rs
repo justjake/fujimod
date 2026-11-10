@@ -1288,14 +1288,14 @@ impl RunNativeDeviceInputs {
                     return Err("native graphics execution limits are invalid".into());
                 }
             }
-            Self::Usb(input) => {
+            Self::Usb(input)
                 if input.endpoints.as_ref().is_some_and(|endpoints| {
                     endpoints.packet_bytes == 0
                         || endpoints.dma_limit == 0
                         || endpoints.transfer_ticks == 0
-                }) {
-                    return Err("native USB queue limits are invalid".into());
-                }
+                }) =>
+            {
+                return Err("native USB queue limits are invalid".into());
             }
             _ => {}
         }

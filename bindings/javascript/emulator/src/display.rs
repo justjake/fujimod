@@ -36,7 +36,7 @@ impl Session {
             return Ok(());
         }
         let mut rgba = Vec::with_capacity(frame.width * frame.height * 4);
-        for pixel in rgb.chunks_exact(3) {
+        for pixel in rgb.as_chunks::<3>().0 {
             rgba.extend_from_slice(pixel);
             rgba.push(255);
         }
@@ -68,8 +68,10 @@ fn matches_rgb(rgba: &[u8], rgb: &[u8]) -> bool {
     rgb.len().is_multiple_of(3)
         && rgba.len() == rgb.len() / 3 * 4
         && rgba
-            .chunks_exact(4)
-            .zip(rgb.chunks_exact(3))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(rgb.as_chunks::<3>().0)
             .all(|(a, b)| a[..3] == *b && a[3] == 255)
 }
 

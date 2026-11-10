@@ -313,66 +313,6 @@ impl FastMmioRead {
         }
     }
 }
-
-#[cfg(test)]
-mod fast_mmio_read_tests {
-    use super::*;
-
-    #[test]
-    fn halfword_snapshots_require_the_declared_width_and_policy() {
-        let value = Arc::new(AtomicU16::new(0x1234));
-        let read = FastMmioRead::atomic_u16(2, value.clone());
-        assert_eq!(read.read(2, 2), Some(0x1234));
-        assert_eq!(read.read_at(2, 2, None), None);
-        read.set_enabled(true);
-        for size in [1, 4] { assert_eq!(read.read_at(2, size, None), None); }
-        assert_eq!(read.read_at(0, 2, None), None);
-        value.store(0xabcd, Ordering::Release);
-        assert_eq!(read.read_at(2, 2, None), Some(0xabcd));
-    }
-
-    #[test]
-    fn consuming_reads_never_run_for_inspection_disabled_policies_or_other_widths() {
-        let consumed = Arc::new(AtomicU32::new(0));
-        let count = consumed.clone();
-        let read = FastMmioRead::consuming_u32(0x20, Arc::new(move || Some(count.fetch_add(1, Ordering::Relaxed))));
-        assert_eq!(read.read(0x20, 4), None);
-        assert_eq!(read.read_at(0x20, 4, None), None);
-        read.set_enabled(true);
-        assert_eq!(read.read_at(0x20, 2, None), None);
-        assert_eq!(read.read_at(0x21, 4, None), None);
-        assert_eq!(read.read_at(0x20, 4, None), Some(0));
-        assert_eq!(read.read(0x20, 4), None);
-        read.set_enabled(false);
-        assert_eq!(read.read_at(0x20, 4, None), None);
-        assert_eq!(consumed.load(Ordering::Relaxed), 1);
-    }
-
-    #[test]
-    fn clocked_reads_are_not_constant_loop_inputs_and_decline_past_validity() {
-        let read =
-            FastMmioRead::clocked_u32(0x20, Arc::new(|tick| (tick < 20).then_some(tick as u32)));
-        assert_eq!(read.read(0x20, 4), None);
-        assert_eq!(read.read_at(0x20, 4, Some(19)), None);
-        read.set_enabled(true);
-        assert_eq!(read.read(0x20, 4), None);
-        assert_eq!(read.read_at(0x20, 4, None), None);
-        assert_eq!(read.read_at(0x20, 4, Some(19)), Some(19));
-        assert_eq!(read.read_at(0x20, 4, Some(20)), None);
-        assert_eq!(read.read_at(0x21, 4, Some(19)), None);
-        assert_eq!(read.read_at(0x20, 2, Some(19)), None);
-    }
-
-    #[test]
-    fn atomic_snapshots_remain_constant_inputs_for_exact_loop_proofs() {
-        let value = Arc::new(AtomicU32::new(7));
-        let read = FastMmioRead::atomic_u32(0x30, value);
-        assert_eq!(read.read(0x30, 4), Some(7));
-        assert_eq!(read.read_at(0x30, 4, None), None);
-        read.set_enabled(true);
-        assert_eq!(read.read_at(0x30, 4, None), Some(7));
-    }
-}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Fault {
     ReadUnmapped,
@@ -933,4 +873,69 @@ pub trait Cpu {
 pub struct CpuState {
     pub architecture: Vec<u8>,
     pub backings: Vec<usize>,
+}
+
+#[cfg(test)]
+mod fast_mmio_read_tests {
+    use super::*;
+
+    #[test]
+    fn halfword_snapshots_require_the_declared_width_and_policy() {
+        let value = Arc::new(AtomicU16::new(0x1234));
+        let read = FastMmioRead::atomic_u16(2, value.clone());
+        assert_eq!(read.read(2, 2), Some(0x1234));
+        assert_eq!(read.read_at(2, 2, None), None);
+        read.set_enabled(true);
+        for size in [1, 4] {
+            assert_eq!(read.read_at(2, size, None), None);
+        }
+        assert_eq!(read.read_at(0, 2, None), None);
+        value.store(0xabcd, Ordering::Release);
+        assert_eq!(read.read_at(2, 2, None), Some(0xabcd));
+    }
+
+    #[test]
+    fn consuming_reads_never_run_for_inspection_disabled_policies_or_other_widths() {
+        let consumed = Arc::new(AtomicU32::new(0));
+        let count = consumed.clone();
+        let read = FastMmioRead::consuming_u32(
+            0x20,
+            Arc::new(move || Some(count.fetch_add(1, Ordering::Relaxed))),
+        );
+        assert_eq!(read.read(0x20, 4), None);
+        assert_eq!(read.read_at(0x20, 4, None), None);
+        read.set_enabled(true);
+        assert_eq!(read.read_at(0x20, 2, None), None);
+        assert_eq!(read.read_at(0x21, 4, None), None);
+        assert_eq!(read.read_at(0x20, 4, None), Some(0));
+        assert_eq!(read.read(0x20, 4), None);
+        read.set_enabled(false);
+        assert_eq!(read.read_at(0x20, 4, None), None);
+        assert_eq!(consumed.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn clocked_reads_are_not_constant_loop_inputs_and_decline_past_validity() {
+        let read =
+            FastMmioRead::clocked_u32(0x20, Arc::new(|tick| (tick < 20).then_some(tick as u32)));
+        assert_eq!(read.read(0x20, 4), None);
+        assert_eq!(read.read_at(0x20, 4, Some(19)), None);
+        read.set_enabled(true);
+        assert_eq!(read.read(0x20, 4), None);
+        assert_eq!(read.read_at(0x20, 4, None), None);
+        assert_eq!(read.read_at(0x20, 4, Some(19)), Some(19));
+        assert_eq!(read.read_at(0x20, 4, Some(20)), None);
+        assert_eq!(read.read_at(0x21, 4, Some(19)), None);
+        assert_eq!(read.read_at(0x20, 2, Some(19)), None);
+    }
+
+    #[test]
+    fn atomic_snapshots_remain_constant_inputs_for_exact_loop_proofs() {
+        let value = Arc::new(AtomicU32::new(7));
+        let read = FastMmioRead::atomic_u32(0x30, value);
+        assert_eq!(read.read(0x30, 4), Some(7));
+        assert_eq!(read.read_at(0x30, 4, None), None);
+        read.set_enabled(true);
+        assert_eq!(read.read_at(0x30, 4, None), Some(7));
+    }
 }

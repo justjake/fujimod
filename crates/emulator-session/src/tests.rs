@@ -250,8 +250,8 @@ fn scene_rgb_prepares_only_the_next_sensor_exposure() {
     let input = input.lock().unwrap();
     assert_eq!(input.current.white_luminance, 1000.);
     assert_eq!(input.latched.white_luminance, 10000.);
-    assert!(matches!(&input.current.pixels,FramePixels::Rgb24(bytes) if bytes.as_ref()==&[4,5,6]));
-    assert!(matches!(&input.latched.pixels,FramePixels::Rgb24(bytes) if bytes.as_ref()==&[1,2,3]));
+    assert!(matches!(&input.current.pixels,FramePixels::Rgb24(bytes) if bytes.as_ref()==[4,5,6]));
+    assert!(matches!(&input.latched.pixels,FramePixels::Rgb24(bytes) if bytes.as_ref()==[1,2,3]));
     assert_eq!(input.edge, None);
     assert_eq!(session.board.now(), 0);
 }
@@ -550,8 +550,8 @@ fn rust_card_insertion_drives_the_declared_native_gpio_contacts() {
     );
     assert!(!pads.input_level(detect).unwrap());
     assert!(!pads.input_level(protect).unwrap());
-    assert_eq!(session.card_state("sd").unwrap().present, false);
-    assert_eq!(session.card_state("sd").unwrap().protected, true);
+    assert!(!session.card_state("sd").unwrap().present);
+    assert!(session.card_state("sd").unwrap().protected);
     session
         .board
         .write_memory(0, 0, &0xeafffffeu32.to_le_bytes())

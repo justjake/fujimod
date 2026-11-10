@@ -283,7 +283,9 @@ impl ExposedFrame {
                 || dimensions.iter().any(|&n| n > 8192)
                 || pixels.len() != dimensions[0] * dimensions[1] * 6
                 || pixels
-                    .chunks_exact(2)
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
                     .any(|word| u16::from_le_bytes([word[0], word[1]]) > 16383)
             {
                 return Err("invalid exposed-frame filtered pixel checkpoint".into());

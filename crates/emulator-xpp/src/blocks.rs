@@ -1540,7 +1540,7 @@ mod tests {
         // Until the firmware programs the color unit the declared pair is written.
         advance(&mut unit, &mut h, 10);
         assert_eq!(h.ram[0x1000..0x1004], [16, 16, 128, 128]);
-        let mut frame = |unit: &mut Block, h: &mut TestHost, now| {
+        let frame = |unit: &mut Block, h: &mut TestHost, now| {
             h.ram[0x1000..0x1100].fill(0);
             advance(unit, h, now);
             h.ram[0x1000..0x1004].to_vec()

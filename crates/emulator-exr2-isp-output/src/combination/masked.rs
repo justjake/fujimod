@@ -22,10 +22,10 @@ pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared
     if source_count == 0
         || scale > 4
         || width == 0
-        || width % 2 != 0
+        || !width.is_multiple_of(2)
         || height == 0
-        || width % scale != 0
-        || height % scale != 0
+        || !width.is_multiple_of(scale)
+        || !height.is_multiple_of(scale)
         || word(0x38) & !0x1fff1fff != 0
         || word(0x3c) & !0x03ff03ff != 0
         || output_window == 0

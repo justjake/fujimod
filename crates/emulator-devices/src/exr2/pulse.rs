@@ -593,14 +593,15 @@ impl Device for PulseUnit {
             a if a == BASE + 0x18 => s.route_high as u64,
             _ => match Self::locate(address, size) {
                 Some((ch, word)) => {
-                    if word == 2 && self.pins.one_shots & (1 << ch) != 0 {
-                        if let Some(start) = s.channels[ch].start {
-                            let divisor = DIVISORS[(s.channels[ch].words[0] & 3) as usize];
-                            let elapsed = cx.now().saturating_sub(start);
-                            return u64::from(
-                                s.channels[ch].words[2].saturating_sub((elapsed / divisor) as u32),
-                            );
-                        }
+                    if word == 2
+                        && self.pins.one_shots & (1 << ch) != 0
+                        && let Some(start) = s.channels[ch].start
+                    {
+                        let divisor = DIVISORS[(s.channels[ch].words[0] & 3) as usize];
+                        let elapsed = cx.now().saturating_sub(start);
+                        return u64::from(
+                            s.channels[ch].words[2].saturating_sub((elapsed / divisor) as u32),
+                        );
                     }
                     if word == 2
                         && self.pins.readbacks & (1 << ch) != 0

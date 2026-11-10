@@ -128,7 +128,7 @@ impl Aperture {
     pub fn new(base: u64, size: u64, image: Vec<u8>) -> Result<Self, String> {
         if base & 0xfff != 0
             || size == 0
-            || size % GRANULE != 0
+            || !size.is_multiple_of(GRANULE)
             || image.len() as u64 > size
             || base.checked_add(size).is_none_or(|end| end > 1 << 32)
         {
@@ -426,6 +426,8 @@ impl FlashController {
                         format!("Unsupported serial-flash address command {opcode:#04x}")
                     })?;
                 let (lo, hi) = self.window(chip_select);
+                // Register byte offset 0x04, written like the others as offset / 4.
+                #[allow(clippy::eq_op)]
                 let offset = u64::from(self.registers[0x04 / 4])
                     .checked_sub(self.aperture.base())
                     .filter(|offset| (lo..hi).contains(offset))
@@ -1146,7 +1148,7 @@ mod tests {
         put(&mut d, &mut h, 0x20, 0x43);
         aperture.store(WINDOW + 0x1200, &[0; 4]).unwrap();
         let mut cx = Cx::new(&mut h, 0, 0, 0);
-        d.write(&mut cx, BASE + 0x00, 4, 0x05);
+        d.write(&mut cx, BASE, 4, 0x05);
         assert!(cx.refusal().unwrap().contains("abandoned"));
         let mut cx = Cx::new(&mut h, 0, 0, 0);
         d.write(&mut cx, BASE + 0x30, 4, 1);

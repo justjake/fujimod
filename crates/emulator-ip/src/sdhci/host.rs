@@ -1186,8 +1186,9 @@ impl SdHost {
                 },
             );
         }
-        if offset == 0 && self.request.is_some() {
-            let r = self.request.as_mut().unwrap();
+        if offset == 0
+            && let Some(r) = self.request.as_mut()
+        {
             if r.phase != Phase::Boundary
                 || self.regs.get(0x30) & 8 != 0
                 || value != self.regs.word(0)
@@ -1223,8 +1224,7 @@ impl SdHost {
             return Err(format!(
                 "SD configuration changed during CMD{} ({:?}, byte {} of {}): offset {offset:#x} size {size} value {value:#x}",
                 r.command, r.phase, r.cursor, r.quantity
-            )
-            .into());
+            ));
         }
         // Power-control bits 12-15 select SDHCI 4 VDD2, used only by UHS-II
         // cards; GFX 50R 0xcac8e4 sets them. They are stored with no effect.
@@ -1449,10 +1449,11 @@ impl Device for SdHost {
                 cx.fail("SD clock changed during command");
             } else {
                 self.clocks.write(cx, address, 2, value & 0xffff);
-                if size == 4 && cx.refusal().is_none() {
-                    if let Err(e) = self.store(cx, 0x2e, 2, (value >> 16) as u32) {
-                        cx.fail(e);
-                    }
+                if size == 4
+                    && cx.refusal().is_none()
+                    && let Err(e) = self.store(cx, 0x2e, 2, (value >> 16) as u32)
+                {
+                    cx.fail(e);
                 }
             }
             if cx.refusal().is_none() {
@@ -1549,6 +1550,48 @@ impl Device for SdHost {
         address != self.options.base + 0x20
             && (self.valid(address.wrapping_sub(self.options.base) as usize, size)
                 || address == self.options.base + 0x2c && matches!(size, 2 | 4))
+    }
+}
+
+impl fujimod_emulator_devices::capability::CardSlot for SdHost {
+    fn card(&self) -> &fujimod_emulator_devices::parts::sd_card::Card {
+        SdHost::card(self)
+    }
+    fn busy(&self) -> bool {
+        SdHost::busy(self)
+    }
+    fn readable_card(
+        &self,
+        revision: Option<u64>,
+    ) -> std::result::Result<&fujimod_emulator_devices::parts::sd_card::Card, String> {
+        SdHost::readable_card(self, revision)
+    }
+    fn replace_card(
+        &mut self,
+        card: fujimod_emulator_devices::parts::sd_card::Card,
+    ) -> std::result::Result<fujimod_emulator_devices::parts::sd_card::Card, String> {
+        SdHost::replace_card(self, card)
+    }
+    fn retain_card(
+        &mut self,
+        card: fujimod_emulator_devices::parts::sd_card::Card,
+    ) -> std::result::Result<(), String> {
+        SdHost::retain_card(self, card)
+    }
+    fn initialize_revision(&mut self, revision: u64) -> std::result::Result<(), String> {
+        SdHost::initialize_revision(self, revision)
+    }
+    fn inject_data_fault(&mut self, fault: DataFault) -> std::result::Result<(), String> {
+        SdHost::inject_data_fault(self, fault)
+    }
+    fn clear_data_faults(&mut self) -> std::result::Result<(), String> {
+        SdHost::clear_data_faults(self)
+    }
+    fn data_faults(&self) -> &[DataFault] {
+        SdHost::data_faults(self)
+    }
+    fn fault_history(&self) -> &[DataFaultEvent] {
+        SdHost::fault_history(self)
     }
 }
 
@@ -2335,47 +2378,5 @@ mod tests {
         due(&mut m, &mut h);
         assert!(h.effects.contains(&Effect::Write(0x40001000, 512)));
         assert_eq!(&h.bytes[0x1000..0x1200], &[0x7b; 512]);
-    }
-}
-
-impl fujimod_emulator_devices::capability::CardSlot for SdHost {
-    fn card(&self) -> &fujimod_emulator_devices::parts::sd_card::Card {
-        SdHost::card(self)
-    }
-    fn busy(&self) -> bool {
-        SdHost::busy(self)
-    }
-    fn readable_card(
-        &self,
-        revision: Option<u64>,
-    ) -> std::result::Result<&fujimod_emulator_devices::parts::sd_card::Card, String> {
-        SdHost::readable_card(self, revision)
-    }
-    fn replace_card(
-        &mut self,
-        card: fujimod_emulator_devices::parts::sd_card::Card,
-    ) -> std::result::Result<fujimod_emulator_devices::parts::sd_card::Card, String> {
-        SdHost::replace_card(self, card)
-    }
-    fn retain_card(
-        &mut self,
-        card: fujimod_emulator_devices::parts::sd_card::Card,
-    ) -> std::result::Result<(), String> {
-        SdHost::retain_card(self, card)
-    }
-    fn initialize_revision(&mut self, revision: u64) -> std::result::Result<(), String> {
-        SdHost::initialize_revision(self, revision)
-    }
-    fn inject_data_fault(&mut self, fault: DataFault) -> std::result::Result<(), String> {
-        SdHost::inject_data_fault(self, fault)
-    }
-    fn clear_data_faults(&mut self) -> std::result::Result<(), String> {
-        SdHost::clear_data_faults(self)
-    }
-    fn data_faults(&self) -> &[DataFault] {
-        SdHost::data_faults(self)
-    }
-    fn fault_history(&self) -> &[DataFaultEvent] {
-        SdHost::fault_history(self)
     }
 }

@@ -21,13 +21,24 @@ pub(super) fn poison(core:Identity,message:String)->String {
     if !errors.iter().any(|(owner,_)|*owner==core) {errors.push((core,message.clone()));}
     message
 }
-pub(super) fn views(core:Identity)->Vec<(u64,usize)> {
-    let mut ranges=MAPPINGS.lock().unwrap().iter().filter(|m|m.core==core && m.frozen && m.mapped)
-        .map(|m|(m.address,m.address+m.bytes as u64)).collect::<Vec<_>>();
-    ranges.sort_unstable();let mut merged:Vec<(u64,u64)>=vec![];
-    for (start,end) in ranges {
-        if let Some(last)=merged.last_mut() {if start<=last.1 {last.1=last.1.max(end);continue;}}
-        merged.push((start,end));
+pub(super) fn views(core: Identity) -> Vec<(u64, usize)> {
+    let mut ranges = MAPPINGS
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|m| m.core == core && m.frozen && m.mapped)
+        .map(|m| (m.address, m.address + m.bytes as u64))
+        .collect::<Vec<_>>();
+    ranges.sort_unstable();
+    let mut merged: Vec<(u64, u64)> = vec![];
+    for (start, end) in ranges {
+        if let Some(last) = merged.last_mut()
+            && start <= last.1
+        {
+            last.1 = last.1.max(end);
+            continue;
+        }
+        merged.push((start, end));
     }
     merged.into_iter().map(|(start,end)|(start,(end-start)as usize)).collect()
 }

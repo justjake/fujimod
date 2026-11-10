@@ -1521,14 +1521,13 @@ mod tests {
     }
     unsafe fn redirect_pc(address: u64, _: u32, data: *mut c_void) {
         let context = unsafe { &mut *data.cast::<Redirect<'_>>() };
-        if address == 0x1000 {
-            if let Err(error) = context
+        if address == 0x1000
+            && let Err(error) = context
                 .cpu
                 .write_register(Register::Pc, &0x1004u32.to_le_bytes())
-            {
-                context.error = Some(error);
-                let _ = context.cpu.stop();
-            }
+        {
+            context.error = Some(error);
+            let _ = context.cpu.stop();
         }
     }
     #[test]

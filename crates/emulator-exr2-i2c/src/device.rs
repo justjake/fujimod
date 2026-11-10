@@ -81,18 +81,18 @@ impl I2cController {
     }
     fn settle_touch(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
         let (ready, reads) = (self.touch_ready(), self.touch_reads());
-        if let Some(panel) = &mut self.engine.parts.touch {
-            if let Some(frame) = panel.controller.tick(cx.now(), reads, ready)? {
-                let row = self
-                    .engine
-                    .parts
-                    .prefixed_registers
-                    .iter_mut()
-                    .find(|r| r.0 == panel.options.register)
-                    .ok_or("touch report register is absent")?;
-                row.1 = frame.to_vec();
-                cx.raise_irq(panel.options.core, panel.options.irq.into())?;
-            }
+        if let Some(panel) = &mut self.engine.parts.touch
+            && let Some(frame) = panel.controller.tick(cx.now(), reads, ready)?
+        {
+            let row = self
+                .engine
+                .parts
+                .prefixed_registers
+                .iter_mut()
+                .find(|r| r.0 == panel.options.register)
+                .ok_or("touch report register is absent")?;
+            row.1 = frame.to_vec();
+            cx.raise_irq(panel.options.core, panel.options.irq.into())?;
         }
         Ok(())
     }

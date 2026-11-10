@@ -13,7 +13,7 @@ use fujimod_framebuffer::raster::PixelOrder;
 use fujimod_emulator_xp5_board::board;
 use fujimod_emulator_xp5_display::display;
 use serde::Deserialize;
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, rc::Rc, sync::Arc, time::Duration};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -139,7 +139,7 @@ pub struct Session {
     pub(super) construction: Option<super::snapshot::Construction>,
     pub(super) capture_order: std::cell::Cell<u64>,
     pub core: fujimod_emulator_session::Session,
-    pub(super) reset_image: Option<Arc<fujimod_emulator_session::checkpoint::Snapshot>>,
+    pub(super) reset_image: Option<Rc<fujimod_emulator_session::checkpoint::Snapshot>>,
     pub(super) powered_on: bool,
     pub(super) generation: u64,
     /// Identifies this session in its checkpoint IDs and input logs.
@@ -336,7 +336,7 @@ impl Session {
             history: None,
             failed: false,
         };
-        session.reset_image = session.core.checkpoint(None).ok().map(Arc::new);
+        session.reset_image = session.core.checkpoint(None).ok().map(Rc::new);
         Ok(session)
     }
     pub fn run(&mut self, until: u64) -> Result<(), String> {

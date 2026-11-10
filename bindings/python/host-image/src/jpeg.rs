@@ -38,9 +38,8 @@ pub fn jpeg_decode_yycbcr<'py>(
     rows: usize,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let capacity = pitch.checked_mul(rows).and_then(|n| n.checked_mul(2));
-    if width < 2
-        || width > 65535
-        || width % 2 != 0
+    if !(2..=65535).contains(&width)
+        || !width.is_multiple_of(2)
         || height == 0
         || height > 65535
         || u64::from(width) * u64::from(height) > 32_000_000
@@ -98,9 +97,8 @@ pub fn jpeg_encode_yycbcr<'py>(
     tables: Vec<u32>,
     restart: u32,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    if width < 2
-        || width > 65535
-        || width % 2 != 0
+    if !(2..=65535).contains(&width)
+        || !width.is_multiple_of(2)
         || height == 0
         || height > 65535
         || u64::from(width) * u64::from(height) > 32_000_000

@@ -35,7 +35,7 @@ fn prefilter_deadlines_reset_ack_and_busy_refusal() {
 #[test]
 fn statistics_latches_only_addressed_roi_and_publishes_at_due() {
     let mut h = TestHost::new();
-    for b in h.ram[0x8000..0x8048].chunks_exact_mut(2) {
+    for b in h.ram[0x8000..0x8048].as_chunks_mut::<2>().0 {
         b.copy_from_slice(&100u16.to_le_bytes());
     }
     let mut d = RawStatistics::new(

@@ -73,8 +73,8 @@ impl Decoder<'_> {
             || address & 3 != 0
             || x + w > width
             || y + h > height
-            || ((w - 1) * dx >> 12) >= sw
-            || ((h - 1) * dy >> 12) >= sh
+            || (((w - 1) * dx) >> 12) >= sw
+            || (((h - 1) * dy) >> 12) >= sh
         {
             return Err("Invalid XP4 LCDC picture geometry/address".into());
         }
