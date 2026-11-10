@@ -43,7 +43,8 @@
           },
           "rtc_ticks_per_second": 54000000,
           "ambient_celsius": 25,
-          "basis": "Declared virtual startup inputs for a bounded application-boot scenario."
+          "basis": "Declared virtual startup inputs for a bounded application-boot scenario.",
+          "rtc_basis": "Virtual unset RTC. The counter advances from guest ticks after a stock start command."
         }
       },
       "4": {
