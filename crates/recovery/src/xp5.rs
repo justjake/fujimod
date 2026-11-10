@@ -400,8 +400,17 @@ pub(crate) fn package_with_storage(
         put(&mut program, cfg + 8, u32::from(board.timeout_setting))?;
         put(&mut program, cfg + 12, board.operations.len() as u32)?;
         for (n, op) in board.operations.iter().enumerate() {
+            let valid = match op.kind {
+                0 | 1 => mmio(op.address),
+                2 => true,
+                3 | 4 => (0xf0000000..0xfffff000).contains(&op.address)
+                    && op.address.is_multiple_of(2)
+                    && op.mask <= u16::MAX.into()
+                    && op.value & !op.mask == 0,
+                _ => false,
+            };
             require(
-                op.kind <= 2 && (op.kind == 2 || mmio(op.address)),
+                valid,
                 "Invalid XP5 SD operation",
             )?;
             let at = cfg + 16 + n * 24;
@@ -661,7 +670,7 @@ mod tests {
         changed.initializer.sha256 = "0".repeat(64);
         assert!(package(&data, &changed, None, 0).is_err());
         let mut changed = s.clone();
-        changed.board.operations[0].kind = 3;
+        changed.board.operations[0].kind = 5;
         assert!(package(&data, &changed, Some(ram.clone()), 0).is_err());
         let mut changed = s.clone();
         changed.gate_offset = 0x940;
