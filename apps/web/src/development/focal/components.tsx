@@ -79,7 +79,7 @@ export function DialKey() {
 
 export function SdCard() {
   return (
-    <svg width="17" height="21" viewBox="0 0 17 21" class="inline-block align-[-3px]">
+    <svg viewBox="0 0 17 21" class="inline-block h-[0.95em] w-[0.77em] align-[-0.16em]">
       <path d="M0 1a1 1 0 011-1h10l6 6v14a1 1 0 01-1 1H1a1 1 0 01-1-1z" fill="white" />
       <text
         x="7.5"
