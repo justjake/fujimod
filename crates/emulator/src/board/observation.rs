@@ -162,7 +162,11 @@ impl MemoryContext {
                     if cpu.read_memory(sample_address, &mut bytes).is_err() {
                         break;
                     }
-                    let value = u32::from_le_bytes(bytes);
+                    let value = if byte_order == "little" {
+                        u32::from_le_bytes(bytes)
+                    } else {
+                        u32::from_be_bytes(bytes)
+                    };
                     sample_path.push(value);
                     if index == self.sample_offsets.len() {
                         break;
