@@ -37,7 +37,6 @@ export const UPDATE = {
   version: '0.0.4',
   date: '2026-11-09',
   commit: 'b81c3e0',
-  size: '3.1 MiB',
   notes: ['Wi-Fi software updates', 'Faster menu scrolling', 'Halation keeps highlight color'],
 };
 export const CAMERA = { model: 'X70', modsOn: 36, mods: 36 };
@@ -50,7 +49,8 @@ const AUTOMATIC_NOTE = 'Boot FM_EXR2.BIN if present on the SD card.';
 const BACKUP_FIRST = 'Back up internal storage first';
 const SYSTEM_PATH = '/FUJIMOD/SYSTEM/X70-110';
 
-export type Version = { version: string; date: string; commit: string };
+/** Shown everywhere in the build overlay's order: version, commit, date. */
+export type Version = { version: string; commit: string; date: string };
 export type ColorRow = 'rec' | 'setup' | 'play';
 export type Colors = Record<ColorRow, string>;
 export const DEFAULT_COLORS: Colors = { rec: '#b91000', setup: '#0068d8', play: '#008c32' };
@@ -197,7 +197,7 @@ export function SetupPage(props: {
       <header class="mx-margin px-[6px] pt-[16px] pb-[20px]">
         <Release version={RELEASE.version} class="text-hero" />
         <p class="mt-[10px] text-detail text-secondary">
-          {RELEASE.date}&ensp;{RELEASE.commit}&ensp;•&ensp;{RELEASE.age}
+          {RELEASE.commit}&ensp;{RELEASE.date}&ensp;•&ensp;{RELEASE.age}
         </p>
         <div class="mt-[14px] flex items-baseline justify-between text-row">
           <span>{CAMERA.model}</span>
@@ -334,8 +334,9 @@ function SlotLine(props: { slot: string; held: Version | null }) {
       <Show when={props.held} fallback={<span class="text-secondary">none</span>}>
         {(held) => (
           <span class="flex gap-[18px]">
-            <span>{held().version}</span>
-            <span>{held().commit}</span>
+            <span>
+              {held().version}-{held().commit}
+            </span>
             <span>{held().date}</span>
           </span>
         )}
@@ -379,7 +380,7 @@ export function UpdatePage(props: { state: UpdateState; top?: boolean }) {
             <div class="flex items-baseline justify-between">
               <Release version={UPDATE.version} class="text-card" />
               <span class="text-detail text-secondary">
-                {UPDATE.date}&ensp;{UPDATE.size}
+                {UPDATE.commit}&ensp;{UPDATE.date}
               </span>
             </div>
             <ul class="mt-[14px] flex flex-col gap-[6px] text-[24px] leading-[30px]">
@@ -411,7 +412,7 @@ export function UpdatePage(props: { state: UpdateState; top?: boolean }) {
         </Group>
         <div class="mt-gap">
           <Show when={s().phase === 'available'}>
-            <Button label="DOWNLOAD" focused />
+            <Button label="DOWNLOAD" value={`${mib(total())} MiB`} focused />
           </Show>
           <Show when={s().phase === 'downloaded'}>
             <Button label="RESTART TO UPDATE" focused />

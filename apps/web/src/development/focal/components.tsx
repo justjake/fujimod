@@ -339,12 +339,13 @@ export function Row(props: {
   );
 }
 
-/** A color well inset in its row, beveled like the rows: a light hairline on
- * top, a dark one below, and a slight fall-off from top to bottom. */
+/** A color well inset in its row by the same distance from top, right and
+ * bottom, beveled like the rows: a light hairline on top, a dark one below,
+ * and a slight fall-off from top to bottom. */
 export function Swatch(props: { color: string }) {
   return (
     <span
-      class="absolute top-[9px] right-[16px] bottom-[11px] w-[160px] border border-black"
+      class="absolute top-[9px] right-[9px] bottom-[9px] w-[160px] border border-black"
       style={{
         background: `linear-gradient(rgb(255 255 255 / 0.1), rgb(0 0 0 / 0.14)), ${props.color}`,
         'box-shadow':
@@ -355,7 +356,13 @@ export function Swatch(props: { color: string }) {
 }
 
 /** A rectangular button with the X100VI bevel, filled. */
-export function Button(props: { label: string; focused?: boolean; color?: string }) {
+/** `value` follows the label as written, not uppercased (a size in MiB). */
+export function Button(props: {
+  label: string;
+  value?: string;
+  focused?: boolean;
+  color?: string;
+}) {
   return (
     <div
       data-focused={props.focused ? '' : undefined}
@@ -369,6 +376,9 @@ export function Button(props: { label: string; focused?: boolean; color?: string
         <span class="absolute top-[1px] bottom-[2px] left-0 w-stripe bg-white" />
       </Show>
       {props.label}
+      <Show when={props.value}>
+        <span class="ml-[0.4em] normal-case">{props.value}</span>
+      </Show>
     </div>
   );
 }
