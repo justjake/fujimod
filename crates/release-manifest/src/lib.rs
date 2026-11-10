@@ -28,6 +28,12 @@ pub enum Error {
     InvalidFirmware,
     #[error("version must not be empty and must not contain control characters")]
     InvalidVersion,
+    #[error("date must be YYYY-MM-DD")]
+    InvalidDate,
+    #[error("commit must contain 7 to 40 lowercase hexadecimal digits")]
+    InvalidCommit,
+    #[error("release notes must contain at most 8 strings of at most 64 bytes each")]
+    InvalidNotes,
     #[error("a release needs at least one path=file pair")]
     NoFiles,
     #[error(
@@ -105,6 +111,9 @@ impl ReleaseFile {
 pub struct Release {
     firmware: String,
     version: String,
+    date: Option<String>,
+    commit: Option<String>,
+    notes: Option<Vec<String>>,
     files: Vec<ReleaseFile>,
 }
 
@@ -150,6 +159,9 @@ impl Release {
         let release = Self {
             firmware,
             version,
+            date: None,
+            commit: None,
+            notes: None,
             files: entries,
         };
         release.check_store_names()?;
@@ -164,6 +176,30 @@ impl Release {
     /// The version written to the manifest.
     pub fn version(&self) -> &str {
         &self.version
+    }
+
+    /// Sets optional release provenance and short release notes.
+    pub fn with_metadata(
+        mut self,
+        date: Option<String>,
+        commit: Option<String>,
+        notes: Option<Vec<String>>,
+    ) -> Result<Self, Error> {
+        if date.as_deref().is_some_and(|value| !valid_date(value)) {
+            return Err(Error::InvalidDate);
+        }
+        if commit.as_deref().is_some_and(|value| !valid_commit(value)) {
+            return Err(Error::InvalidCommit);
+        }
+        if notes.as_ref().is_some_and(|values| {
+            values.len() > 8 || values.iter().any(|value| value.len() > 64)
+        }) {
+            return Err(Error::InvalidNotes);
+        }
+        self.date = date;
+        self.commit = commit;
+        self.notes = notes;
+        Ok(self)
     }
 
     /// The files in manifest order.
@@ -182,6 +218,12 @@ impl Release {
         struct Manifest<'a> {
             firmware: &'a str,
             version: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            date: &'a Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            commit: &'a Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            notes: &'a Option<Vec<String>>,
             fs: BTreeMap<&'a str, ManifestFile>,
         }
 
@@ -201,6 +243,9 @@ impl Release {
         let mut text = serde_json::to_string_pretty(&Manifest {
             firmware: &self.firmware,
             version: &self.version,
+            date: &self.date,
+            commit: &self.commit,
+            notes: &self.notes,
             fs,
         })
         .expect("release manifests are serializable");
@@ -253,6 +298,24 @@ impl Release {
             }
         }
     }
+}
+
+fn valid_date(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    bytes.len() == 10
+        && bytes[0..4].iter().all(u8::is_ascii_digit)
+        && bytes[4] == b'-'
+        && bytes[5..7].iter().all(u8::is_ascii_digit)
+        && bytes[7] == b'-'
+        && bytes[8..10].iter().all(u8::is_ascii_digit)
+}
+
+fn valid_commit(value: &str) -> bool {
+    (7..=40).contains(&value.len())
+        && value
+            .as_bytes()
+            .iter()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
 }
 
 /// The first 11 uppercase hexadecimal digits of a SHA-256 as `XXXXXXXX.YYY`.
