@@ -2287,6 +2287,10 @@
           "status": "available",
           "errors": []
         },
+        "card-files": {
+          "status": "available",
+          "errors": []
+        },
         "controls": {
           "status": "available",
           "errors": []
@@ -2309,6 +2313,10 @@
           "errors": []
         },
         "memory-reservations": {
+          "status": "available",
+          "errors": []
+        },
+        "nand-boot": {
           "status": "available",
           "errors": []
         },
@@ -2353,14 +2361,6 @@
           "errors": []
         },
         "versions": {
-          "status": "available",
-          "errors": []
-        },
-        "nand-boot": {
-          "status": "available",
-          "errors": []
-        },
-        "card-files": {
           "status": "available",
           "errors": []
         }
