@@ -523,7 +523,7 @@ mod tests {
     use futures_lite::future::block_on;
 
     const JOBS: &str = r#"{
-      "base": {"white_balance_as_shot": "ON", "dynamic_range": 100, "color_space": "SRGB",
+      "base": {"white_balance": "AS_SHOT", "dynamic_range": 100, "color_space": "SRGB",
                "image_size": "L_3_2", "image_quality": "FINE", "grain": "OFF", "clarity": 0},
       "jobs": [
         {"id": "provia", "raf": "base", "settings": {"film": "PROVIA"}},

@@ -58,7 +58,7 @@ to convert. Both mode changes are made on the camera.
 
 ```json
 {
-  "base": {"white_balance_as_shot": "ON", "dynamic_range": 100, "color_space": "SRGB",
+  "base": {"white_balance": "AS_SHOT", "dynamic_range": 100, "color_space": "SRGB",
            "image_size": "L_3_2", "image_quality": "FINE", "grain": "OFF"},
   "jobs": [
     {"id": "provia", "raf": "base", "settings": {"film": "PROVIA"}},
