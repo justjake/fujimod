@@ -23,7 +23,7 @@ impl Boot for CatalogBoot {
             .as_deref()
             .map(|bytes| <[u8; 20]>::try_from(bytes).map_err(|_| "MT5931 capability fixture must be 20 bytes"))
             .transpose()?;
-        boot::open_with_ram_fill(boot::Options {
+        boot::open(boot::Options {
             configuration_id: inputs.configuration_id,
             overlays: inputs.overlays,
             update: inputs.update,
@@ -35,7 +35,7 @@ impl Boot for CatalogBoot {
             camera: inputs.camera,
             access_point,
             capability_reply,
-        }, inputs.ram_fill)
+        })
     }
     fn to_rec(&self, session: &mut Session, limit: u64) -> Result<String, String> {
         let report = boot::to_rec(session, limit)?;

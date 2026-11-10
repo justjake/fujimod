@@ -2069,6 +2069,7 @@
   "hardware": {
     "blocks": {},
     "interrupt_inputs": [],
+    "power_on_ram_fill": 255,
     "profiles": {
       "exr2-service-transports": {
         "cpu_model": "Cortex-R5F proxy for R4",

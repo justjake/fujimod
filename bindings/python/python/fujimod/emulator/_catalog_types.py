@@ -5612,6 +5612,7 @@ class SocHardware(TypedDict, total=False):
     companion: NotRequired[CompanionHardware | None]
     interrupt_controller: NotRequired[InterruptControllerHardware | None]
     interrupt_inputs: Required[list[ControllerInterruptInput]]
+    power_on_ram_fill: NotRequired[int | None]
     profiles: NotRequired[dict[str, SocProfile]]
 
 

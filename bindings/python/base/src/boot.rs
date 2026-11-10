@@ -20,8 +20,6 @@ pub struct Inputs {
     pub access_point: Option<String>,
     /// Explicit 20-byte MT5931 capability fixture.
     pub capability_reply: Option<Vec<u8>>,
-    /// Initial physical RAM byte; also retain RAM across restarts.
-    pub ram_fill: Option<u8>,
 }
 
 pub trait Boot: Sync {

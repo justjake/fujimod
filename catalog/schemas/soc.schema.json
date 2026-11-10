@@ -4394,6 +4394,16 @@
           },
           "type": "array"
         },
+        "power_on_ram_fill": {
+          "description": "The byte every RAM cell holds at power-on, as read on a camera. Absent\nwhen unmeasured; the emulator then starts RAM zeroed.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "profiles": {
           "additionalProperties": {
             "$ref": "#/$defs/SocProfile"
