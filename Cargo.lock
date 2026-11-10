@@ -3099,6 +3099,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-raw-conversion"
+version = "0.1.0"
+dependencies = [
+ "fujimod-usb",
+ "fujimod-workspace-hack",
+ "futures-lite",
+ "futures-timer",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "fujimod-recording"
 version = "0.1.0"
 dependencies = [

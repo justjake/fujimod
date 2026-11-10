@@ -131,6 +131,7 @@
       "fujimod-framebuffer-xp5",
       "fujimod-framebuffer-xpp",
       "fujimod-perf",
+      "fujimod-raw-conversion",
       "fujimod-recovery",
       "fujimod-runtime-install"
     ]

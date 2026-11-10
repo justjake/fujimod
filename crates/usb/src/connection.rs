@@ -493,6 +493,42 @@ impl Connection {
         }
         Session::open(self.io, self.max_reply_bytes, trace).await
     }
+
+    /// Hands the claimed bulk endpoints to a class protocol other than FF80,
+    /// such as PTP. No FF80 framing or control envelopes are sent.
+    pub fn into_bulk(self) -> Result<BulkPipe> {
+        if self.uncertain {
+            return Err(Error::CompletionUnknown);
+        }
+        Ok(BulkPipe { io: self.io })
+    }
+}
+
+/// Raw bulk transfers on an opened local, owned or proxied interface.
+pub struct BulkPipe {
+    io: Backend,
+}
+impl BulkPipe {
+    /// One OUT transfer; an empty slice sends a zero-length packet.
+    pub async fn write(&mut self, bytes: &[u8]) -> Result<()> {
+        self.io.write(bytes).await
+    }
+    /// One IN transfer of at most `maximum` bytes, rounded up to whole packets.
+    pub async fn read(&mut self, maximum: usize) -> Result<Vec<u8>> {
+        self.io.read(maximum).await
+    }
+    /// The OUT endpoint's wMaxPacketSize, which decides when a transfer needs
+    /// a terminating zero-length packet.
+    pub fn packet_size(&self) -> usize {
+        match &self.io {
+            Backend::Usb(io) => io.output.max_packet_size(),
+            Backend::Proxy(io) => io.packet_size,
+            _ => 512,
+        }
+    }
+    pub async fn close(mut self) -> Result<()> {
+        self.io.release().await
+    }
 }
 
 pub(crate) fn bulk_pair<A: std::borrow::Borrow<u8>>(
