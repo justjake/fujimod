@@ -2,8 +2,11 @@
 //! is an uncentered Q8 sum of the source bytes, rounded and clamped once at
 //! the end. A camera run (three primaries and a constant Y 0, Cb Cr 255 with
 //! coefficients 256, 256, 256, -256) matched this on all 16,384 output bytes:
-//! neutral inputs give chroma 3 * 128 - 255 = 129. Rounding of fractional
-//! coefficients is an approximation, not a silicon result.
+//! neutral inputs give chroma 3 * 128 - 255 = 129. A second run weighted the
+//! constant by -264 (below the stock driver's -256 limit, which the 10-bit lane
+//! holds): luma read round(264 * 43 / 256) = 44 levels off, not 45, so the sum
+//! rounds to nearest. Weights down to the lane's -512 are accepted; above 256
+//! remains unmeasured.
 use super::Prepared;
 use fujimod_emulator_devices::Cx;
 use fujimod_emulator_imaging::exr2_isp::dma::{Raster, physical};
@@ -66,7 +69,7 @@ pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared
         } else {
             value as i32
         };
-        if !(-256..=256).contains(coefficient) {
+        if !(-512..=256).contains(coefficient) {
             return Err("combination signed-sum coefficient exceeds Q8 range".into());
         }
         if *coefficient == 0 {
@@ -176,10 +179,24 @@ pub(super) mod tests {
         assert_eq!(result.pixels, [180, 210, 129, 129, 255, 90, 165, 105]);
     }
     #[test]
+    fn a_weight_below_minus_256_rounds_to_nearest() {
+        let (mut host, mut words) = fixture();
+        host.ram[0x10000..0x10008].copy_from_slice(&[20, 21, 128, 128, 60, 10, 128, 128]);
+        host.ram[0x20000..0x20008].copy_from_slice(&[43, 43, 255, 255, 43, 43, 255, 255]);
+        words.insert(4, 0x44);
+        for (offset, value) in [(0x18, 0x10000), (0x20, 0x10000), (0x24, 8), (0x28, 0x20000), (0x2c, 8)] {
+            words.insert(offset, value);
+        }
+        words.insert(0x60, 0x01000100);
+        words.insert(0x64, (((-264i32) as u32 & 1023) << 16) | 0x100);
+        let result = prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0)).unwrap();
+        assert_eq!(result.pixels, [16, 19, 121, 121, 136, 0, 121, 121]);
+    }
+    #[test]
     fn invalid_coefficients_sources_and_partial_aliases_refuse_without_effects() {
         for (offset, value) in [
             (0x60, 257),
-            (0x60, 0x200),
+            (0x60, 0x400),
             (0x18, 0),
             (0x30, 0x10004),
             (4, 0x124),
