@@ -222,7 +222,7 @@ fn memory_watch_samples_per_core_ram_at_each_read() {
     code.extend([0xe300_0000, 0xe340_0010, 0xe590_1000, 0xeaff_fffe]);
     words(&board, CODE, &code);
     let mut watch = board.memory_watch_begin_with_samples(
-        vec![WATCH], 8, board.mappings().to_vec(), vec![0x2000],
+        vec![WATCH], 8, board.mappings().to_vec(), vec![0x2000], vec![], None,
     ).unwrap();
     run(&mut board, code.len() as u64 - 1);
     let rows = records(&watch);
@@ -230,6 +230,22 @@ fn memory_watch_samples_per_core_ram_at_each_read() {
     assert_eq!(rows[0]["sample"], 0x11);
     assert_eq!(rows[1]["sample"], 0x22);
     assert_eq!(rows[0]["pc"], CODE + 24);
+    board.memory_watch_end(&mut watch).unwrap();
+}
+
+#[test]
+fn memory_watch_captures_bounded_pointer_chain_at_read() {
+    let mut board = a7_board();
+    words(&board, 0x2000, &[0x2100]);
+    words(&board, 0x2108, &[0x2200]);
+    words(&board, 0x2208, &[0x3300]);
+    words(&board, CODE, &[0xe300_0000, 0xe340_0010, 0xe590_1000, 0xeaff_fffe]);
+    let mut watch = board.memory_watch_begin_with_samples(
+        vec![WATCH], 8, board.mappings().to_vec(), vec![0x2000], vec![8, 8], Some((0x2000, 0x3000)),
+    ).unwrap();
+    run(&mut board, 3);
+    let rows = records(&watch);
+    assert_eq!(rows[0]["sample_path"], serde_json::json!([0x2100, 0x2200, 0x3300]));
     board.memory_watch_end(&mut watch).unwrap();
 }
 

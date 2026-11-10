@@ -65,6 +65,8 @@ struct MemoryContext {
     maps: Vec<MemoryMap>,
     core: usize,
     sample_address: Option<u64>,
+    sample_offsets: Vec<u64>,
+    sample_bounds: Option<Span>,
 }
 impl MemoryContext {
     fn record(
@@ -151,13 +153,34 @@ impl MemoryContext {
             .saturating_add(elapsed.min(u64::MAX as u128) as u64);
         // Optional debugger-supplied per-core RAM sample, taken at the access.
         // A sample can be unavailable during early boot; observation continues.
-        let sample = (source == "cpu-read").then_some(self.sample_address).flatten().and_then(|address| {
-            let mut bytes = [0u8; 4];
-            cpu.read_memory(address, &mut bytes).ok()?;
-            Some(u32::from_le_bytes(bytes))
-        });
+        let mut sample_path = Vec::new();
+        if source == "cpu-read" {
+            if let Some(root) = self.sample_address {
+                let mut sample_address = root;
+                for index in 0..=self.sample_offsets.len() {
+                    let mut bytes = [0u8; 4];
+                    if cpu.read_memory(sample_address, &mut bytes).is_err() {
+                        break;
+                    }
+                    let value = u32::from_le_bytes(bytes);
+                    sample_path.push(value);
+                    if index == self.sample_offsets.len() {
+                        break;
+                    }
+                    let Some(next) = u64::from(value).checked_add(self.sample_offsets[index]) else {
+                        break;
+                    };
+                    let Some((lo, hi)) = self.sample_bounds else { break };
+                    if next < lo || next.checked_add(4).is_none_or(|end| end > hi) {
+                        break;
+                    }
+                    sample_address = next;
+                }
+            }
+        }
+        let sample = sample_path.first().copied();
         records.push(
-            json!({"sample":sample,"source":source,"address":address,"physical":physical,"size":size,
+            json!({"sample":sample,"sample_path":sample_path,"source":source,"address":address,"physical":physical,"size":size,
             "value":value,"before":before,"byte_order":byte_order,
             "core":self.core,"pc":scalar(&*cpu,Register::Pc)?,
             "instructions":instructions,"tick":tick}),
@@ -269,7 +292,7 @@ impl Board {
         limit: usize,
         maps: Vec<MemoryMap>,
     ) -> Result<Box<MemoryWatch>, String> {
-        self.memory_watch_begin_with_samples(ranges, limit, maps, vec![])
+        self.memory_watch_begin_with_samples(ranges, limit, maps, vec![], vec![], None)
     }
 
     pub fn memory_watch_begin_with_samples(
@@ -278,9 +301,15 @@ impl Board {
         limit: usize,
         maps: Vec<MemoryMap>,
         sample_addresses: Vec<u64>,
+        sample_offsets: Vec<u64>,
+        sample_bounds: Option<Span>,
     ) -> Result<Box<MemoryWatch>, String> {
-        if !sample_addresses.is_empty() && sample_addresses.len() != self.cpus.len() {
-            return Err("Memory watch samples require one address per core".into());
+        if (!sample_addresses.is_empty() && sample_addresses.len() != self.cpus.len())
+            || sample_offsets.len() > 4
+            || (!sample_offsets.is_empty() && (sample_addresses.is_empty() || sample_bounds.is_none()))
+            || sample_bounds.is_some_and(|(lo, hi)| lo >= hi || hi > 1 << 32)
+        {
+            return Err("Invalid per-core memory watch sample specification".into());
         }
         // A memory hook's bounds and the address it reports are physical: the
         // backend checks them after the processor's own MMU/MPU translation
@@ -356,6 +385,8 @@ impl Board {
                 maps: maps.iter().filter(|m| m.core == core).cloned().collect(),
                 core,
                 sample_address: sample_addresses.get(core).copied(),
+                sample_offsets: sample_offsets.clone(),
+                sample_bounds,
             }));
             let data = (&**watch.contexts.last().unwrap() as *const MemoryContext)
                 .cast_mut()
