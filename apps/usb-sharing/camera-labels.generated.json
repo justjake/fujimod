@@ -101,7 +101,7 @@
   },
   "xe5-112": {
     "name": "x-e5",
-    "description": "Fujifilm X-E5"
+    "description": "Fujifilm X-E5 (X-Processor 5)"
   },
   "xf1-101": {
     "name": "xf1",
@@ -129,11 +129,11 @@
   },
   "xm1-101": {
     "name": "x-m1",
-    "description": "Fujifilm X-M1"
+    "description": "Fujifilm X-M1 (EXR Processor 2)"
   },
   "xm1-120": {
     "name": "x-m1",
-    "description": "Fujifilm X-M1"
+    "description": "Fujifilm X-M1 (EXR Processor 2)"
   },
   "xm1-150": {
     "name": "x-m1",
@@ -153,7 +153,7 @@
   },
   "xpro3-200": {
     "name": "x-pro3",
-    "description": "Fujifilm X-Pro3"
+    "description": "Fujifilm X-Pro3 (X-Processor 4)"
   },
   "xq1-121": {
     "name": "xq1",
@@ -189,11 +189,11 @@
   },
   "xt2-441": {
     "name": "x-t2",
-    "description": "Fujifilm X-T2"
+    "description": "Fujifilm X-T2 (X-Processor Pro)"
   },
   "xt20-211": {
     "name": "x-t20",
-    "description": "Fujifilm X-T20"
+    "description": "Fujifilm X-T20 (X-Processor Pro)"
   },
   "xt200-116": {
     "name": "x-t200",
@@ -205,7 +205,7 @@
   },
   "xt30-201": {
     "name": "x-t30",
-    "description": "Fujifilm X-T30"
+    "description": "Fujifilm X-T30 (X-Processor 4)"
   },
   "xt30ii-204": {
     "name": "x-t30-ii",
@@ -221,7 +221,7 @@
   },
   "xt5-431": {
     "name": "x-t5",
-    "description": "Fujifilm X-T5"
+    "description": "Fujifilm X-T5 (X-Processor 5)"
   },
   "xt50-132": {
     "name": "x-t50",
