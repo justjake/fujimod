@@ -249,7 +249,7 @@ export function SetupPage(props: {
         />
       </Group>
 
-      <Section title="APPEARANCE" />
+      <Section title="Appearance" />
       <Group>
         <For each={colorRows}>
           {(entry) => (
@@ -329,7 +329,7 @@ function StatusCard(props: { icon: JSX.Element; version: string; detail: string 
 
 function SlotLine(props: { slot: string; held: Version | null }) {
   return (
-    <div class="flex items-baseline gap-[22px] text-[26px] leading-[36px]">
+    <div class="flex items-baseline gap-[22px]">
       <span class="w-[18px] font-bold">{props.slot}</span>
       <Show when={props.held} fallback={<span class="text-secondary">none</span>}>
         {(held) => (
@@ -396,14 +396,14 @@ export function UpdatePage(props: { state: UpdateState; top?: boolean }) {
           </div>
         </Group>
         <Group class="mt-gap">
-          <div class="focal-bevel px-pad pt-[14px] pb-[16px] text-detail text-secondary">
+          <div class="focal-bevel px-pad pt-[14px] pb-[16px] text-[26px] leading-[34px]">
             <p>
               FujiMod stores up to two system versions in{' '}
               <span class="whitespace-nowrap">
                 <SdCard /> {SYSTEM_PATH}
               </span>
             </p>
-            <div class="my-[12px] text-label">
+            <div class="my-[12px]">
               <SlotLine slot="A" held={RELEASE} />
               <SlotLine slot="B" held={slotB()} />
             </div>
