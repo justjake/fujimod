@@ -340,7 +340,7 @@ fn host_render_to_texture_with_linear_minification_matches_cpu_within_one_list()
         ([-0.13, 0.91, -0.5, 1.], [0., 1.]),
     ] {
         upload(&mut words, 0x433, &packed(position), true);
-        upload(&mut words, 0x433, &packed([1., 1., uv[0], uv[1]]), true);
+        upload(&mut words, 0x433, &packed([uv[0], uv[1], 1., 1.]), true);
     }
 
     for (register, value) in [
@@ -366,7 +366,7 @@ fn host_render_to_texture_with_linear_minification_matches_cpu_within_one_list()
         ([-0.13, 0.91, -0.5, 1.], [0., 1.]),
     ] {
         upload(&mut words, 0x433, &packed(position), true);
-        upload(&mut words, 0x433, &packed([1., 1., uv[0], uv[1]]), true);
+        upload(&mut words, 0x433, &packed([uv[0], uv[1], 1., 1.]), true);
     }
 
     let mut cpu = Engine::default();
