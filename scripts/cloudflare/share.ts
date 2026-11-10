@@ -11,10 +11,19 @@ import { MIMEType, parseArgs } from 'node:util';
 const worker = fileURLToPath(new URL('../../apps/usb-sharing/', import.meta.url));
 const wrapper = fileURLToPath(new URL('./wrangler.ts', import.meta.url));
 
+/** True for C0 control characters and DEL, which no share path may contain. */
+function hasControlCharacter(text: string): boolean {
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
 export function shareUrl(key: string, direct = false): string {
   if (
     !key ||
-    /[\x00-\x1f\x7f\\]/.test(key) ||
+    hasControlCharacter(key) ||
+    key.includes('\\') ||
     key.split('/').some((part) => !part || part === '.' || part === '..')
   )
     throw Error(

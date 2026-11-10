@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { optimizeWasm } from '../../emulator/wasm-optimization.mts';
 
-test('final optimization preserves shared memory, imported calls and atomic operations', () => {
+await test('final optimization preserves shared memory, imported calls and atomic operations', () => {
   const sdk = process.env.EMSDK;
   assert.ok(sdk, 'Run with the pinned Emscripten SDK.');
   const directory = mkdtempSync(join(tmpdir(), 'fujimod-wasm-opt-'));

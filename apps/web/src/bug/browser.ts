@@ -61,7 +61,7 @@ try {
         await readFile(`${directory}/report.tar`),
       );
       assert.equal(form.get('description'), 'The menu stopped responding after a mod callback.');
-      const metadata = JSON.parse(String(form.get('metadata')));
+      const metadata = JSON.parse(form.get('metadata') as string);
       assert.equal(metadata.bytes, guide.bug_report.bytes);
       assert.equal(metadata.archive, undefined);
     }
@@ -87,7 +87,7 @@ try {
         window.__reportUpload = {
           digest: [...new Uint8Array(digest)].map((n) => n.toString(16).padStart(2, '0')).join(''),
           description: body.get('description'),
-          metadata: JSON.parse(String(body.get('metadata'))),
+          metadata: JSON.parse(body.get('metadata') as string),
         };
       }
       return send(...args);

@@ -18,8 +18,8 @@ export function build(output: string): string {
   );
   const version = project.version,
     requiresPython = project['requires-python'];
-  assert.equal(typeof version, 'string');
-  assert.equal(typeof requiresPython, 'string');
+  assert(typeof version === 'string');
+  assert(typeof requiresPython === 'string');
   const dist = `fujimod-${version}.dist-info`,
     source = join(root, 'python');
   const files = new Map<string, Uint8Array>();

@@ -33,12 +33,14 @@ function mount(props: Parameters<typeof BugReport>[0]) {
 function button(host: HTMLElement, name: string) {
   return [...host.querySelectorAll('button')].find((n) => n.textContent === name)!;
 }
-HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
-  this.open = true;
-};
-HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
-  this.open = false;
-};
+if (!HTMLDialogElement.prototype.showModal)
+  HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+    this.open = true;
+  };
+if (!HTMLDialogElement.prototype.close)
+  HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+    this.open = false;
+  };
 const dialog = (host: HTMLElement) => host.querySelector<HTMLDialogElement>('dialog.contribute')!;
 /** Opens the Contribute dialog and presses Upload, with an optional message. */
 function contribute(host: HTMLElement, message?: string) {
@@ -173,8 +175,8 @@ test('failed upload retains USB report; retry reuses ID and deletes only after d
   }
 });
 test("USB reports show their screen and time, list the camera's others and offer the next", async () => {
-  URL.createObjectURL ??= () => 'blob:screen';
-  URL.revokeObjectURL ??= () => {};
+  if (!URL.createObjectURL) URL.createObjectURL = () => 'blob:screen';
+  if (!URL.revokeObjectURL) URL.revokeObjectURL = () => {};
   const first = reportTar({ 'screen.bmp': Uint8Array.of(0x42, 0x4d, 1) }, '2026-10-27T14:04:05');
   const qr = { ...link, bytes: first.length };
   const second = reportTar({ 'state.json': Uint8Array.of(123, 125) }, '2026-10-26T09:30:00');

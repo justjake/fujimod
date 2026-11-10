@@ -143,7 +143,7 @@ export function EmulatorFeedback(props: {
     <>
       {props.children(actions)}
       <dialog
-        ref={dialog}
+        ref={(element) => (dialog = element)}
         id="feedback-dialog"
         aria-labelledby="feedback-title"
         onClose={() => {

@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 
-test('the installed station has matching provenance and bounded geometry and texture costs', async () => {
+await test('the installed station has matching provenance and bounded geometry and texture costs', async () => {
   const root = new URL('environments/crouch-end-station/', import.meta.url);
   const manifest = JSON.parse(await readFile(new URL('environment.json', root), 'utf8'));
   const bytes = await readFile(new URL('assets/scene.glb', root));
@@ -50,7 +50,7 @@ test('the installed station has matching provenance and bounded geometry and tex
   }
 });
 
-test('the camera fits its geometry budget and retains every authored control and dial face', async () => {
+await test('the camera fits its geometry budget and retains every authored control and dial face', async () => {
   const bytes = await readFile(
     new URL('assets/x70.glb', import.meta.url),
   );

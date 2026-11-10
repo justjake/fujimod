@@ -205,7 +205,7 @@ export function LayoutInspector(props: { session?: ControlSession; editor: Layou
               <Icon name="check" size={22} />
             </button>
             <input
-              ref={picker}
+              ref={(element) => (picker = element)}
               class="visually-hidden"
               type="file"
               accept=".json,application/json"
