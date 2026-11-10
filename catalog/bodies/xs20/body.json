@@ -1,0 +1,40 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "xs20",
+  "soc_id": "xp5",
+  "dram_bytes": 1610612736,
+  "nand": null,
+  "sensor": null,
+  "lens": null,
+  "display": null,
+  "microcontroller": null,
+  "power_control": null,
+  "card_slot": null,
+  "control_bus_chips": [],
+  "connections": [],
+  "parts": [],
+  "wiring": [],
+  "hardware": {
+    "serial_attachments": [],
+    "gpio_feedback": [],
+    "keypad_samples": {},
+    "thermal_connection_ids": [],
+    "bus_drain": {
+      "address": 1610612736,
+      "processor_ids": [
+        "core0",
+        "core1",
+        "core2",
+        "core3"
+      ],
+      "basis": "The stock firmware drains the bus with a discarded read of the first address past its DRAM map: helper 0x14c9130 (slot 1) and classifier 0x14c8f4c read 0x60000000, and the app memory map 0x2e24fb8 ends there (Linux 0x40000000+0x10000000, shared 0x50000000+0xff00000, rpmsg 0x5ff00000+0x100000)."
+    },
+    "profiles": {
+      "xs20": {
+        "limits": [],
+        "dram_basis": "The firmware memory map and the supplied Linux device tree (identical to X-T5 4.31's, SHA-256 9cb8691a..., mem=256M) end at 1.5 GiB; installed capacity is unmeasured."
+      }
+    }
+  }
+}

@@ -91,7 +91,7 @@ pub fn decode(
         "uyvy" => [1, 3, 0, 2],
         _ => return Err(invalid("Unknown display packing")),
     };
-    if !rgb565 && width % 2 != 0 {
+    if !rgb565 && !width.is_multiple_of(2) {
         return Err(invalid("YUV 4:2:2 requires an even width"));
     }
     let row_bytes = width * 2;
@@ -109,7 +109,12 @@ pub fn decode(
             let source = &data[(row * stride) as usize..(row * stride + row_bytes) as usize];
             let target = &mut result[(row * width * 3) as usize..((row + 1) * width * 3) as usize];
             if rgb565 {
-                for (word, rgb) in source.chunks_exact(2).zip(target.chunks_exact_mut(3)) {
+                for (word, rgb) in source
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .zip(target.as_chunks_mut::<3>().0)
+                {
                     let v = u16::from_le_bytes([word[0], word[1]]);
                     let (r, g, b) = ((v >> 11) & 31, (v >> 5) & 63, v & 31);
                     rgb.copy_from_slice(&[
@@ -120,7 +125,12 @@ pub fn decode(
                 }
             } else {
                 let matrix = matrix.unwrap();
-                for (word, rgb) in source.chunks_exact(4).zip(target.chunks_exact_mut(6)) {
+                for (word, rgb) in source
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .zip(target.as_chunks_mut::<6>().0)
+                {
                     let [y0, y1, cb, cr] = channels.map(|i| word[i]);
                     rgb[..3].copy_from_slice(&matrix.color(y0, cb, cr));
                     rgb[3..].copy_from_slice(&matrix.color(y1, cb, cr));

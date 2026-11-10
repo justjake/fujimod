@@ -9,7 +9,7 @@ fn board() -> Board {
         "dma_mappings":[{"address":65536,"physical":65536,"size":4096,"permissions":3}],
         "peripherals":[],"decoders":[],"instructions_per_tick":[1,1]
     })).unwrap();
-    let mut board = graph
+    let board = graph
         .build(
             factory::Options::new(factory::Engine::Unicorn)
                 .with_translation_cache_size_bytes(1 << 20),

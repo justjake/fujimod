@@ -26,7 +26,9 @@ pub struct HdmiSink {
 
 impl HdmiSink {
     pub fn new(options: Options) -> Result<Self, String> {
-        if !options.edid.is_empty() && (options.edid.len() % 128 != 0 || options.edid.len() > 512) {
+        if !options.edid.is_empty()
+            && (!options.edid.len().is_multiple_of(128) || options.edid.len() > 512)
+        {
             return Err("HDMI EDID must contain one to four whole 128-byte blocks".into());
         }
         if options.connected && options.edid.is_empty() {
@@ -73,7 +75,8 @@ impl HdmiSink {
         let state: State = serde_json::from_value(value.clone())
             .map_err(|error| format!("invalid HDMI sink state: {error}"))?;
         if state.edid != self.state.edid
-            || !state.edid.is_empty() && (state.edid.len() % 128 != 0 || state.edid.len() > 512)
+            || !state.edid.is_empty()
+                && (!state.edid.len().is_multiple_of(128) || state.edid.len() > 512)
         {
             return Err("HDMI sink EDID differs from checkpoint".into());
         }

@@ -12,6 +12,7 @@ doctest = false
 
 [dependencies]
 prost = "0.14"
+fujimod-workspace-hack.workspace = true
 
 [build-dependencies]
 prost-build = "0.14"

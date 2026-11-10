@@ -326,12 +326,21 @@ impl SerialFlashController {
         if !write {
             return Ok(self.regs[o / 4] as u64);
         }
-        if o == 0x90 || o == 0x94 {
-            if (o == 0x90 && value & 1 != 0) || self.due.is_some_and(|(_, token)| token == 1) {
-                self.port.lock().unwrap().nor.check_command(
-                    if o == 0x90 { value } else { self.regs[0x90 / 4] },
-                    if o == 0x94 { value } else { self.regs[0x94 / 4] })?;
-            }
+        if (o == 0x90 || o == 0x94)
+            && ((o == 0x90 && value & 1 != 0) || self.due.is_some_and(|(_, token)| token == 1))
+        {
+            self.port.lock().unwrap().nor.check_command(
+                if o == 0x90 {
+                    value
+                } else {
+                    self.regs[0x90 / 4]
+                },
+                if o == 0x94 {
+                    value
+                } else {
+                    self.regs[0x94 / 4]
+                },
+            )?;
         }
         match o {
             0 => self.regs[0] = (value & !0x80000000) | (self.regs[0] & 0x80000000),
@@ -482,10 +491,12 @@ impl Device for SerialFlashController {
     fn advance(&mut self, cx: &mut Cx<'_>) {
         let mut port = self.port.lock().unwrap();
         port.nor.complete(cx);
-        if port.program_data.is_some() {
-            if let Some(request) = &port.request {
-                if let Err(e) = port.nor.check_mutation(request.address, request.size) { cx.fail(e); return; }
-            }
+        if port.program_data.is_some()
+            && let Some(request) = &port.request
+            && let Err(e) = port.nor.check_mutation(request.address, request.size)
+        {
+            cx.fail(e);
+            return;
         }
         if let Some((arrived, bytes)) = port.program_data.take() {
             let Some(request) = port
@@ -511,8 +522,16 @@ impl Device for SerialFlashController {
         if !self.due.is_some_and(|(at, t)| at <= cx.now() && t == token) {
             return;
         }
-        if token == 1 {
-            if let Err(e) = self.port.lock().unwrap().nor.check_command(self.regs[0x90 / 4], self.regs[0x94 / 4]) { cx.fail(e); return; }
+        if token == 1
+            && let Err(e) = self
+                .port
+                .lock()
+                .unwrap()
+                .nor
+                .check_command(self.regs[0x90 / 4], self.regs[0x94 / 4])
+        {
+            cx.fail(e);
+            return;
         }
         let accepted_at = self.due.unwrap().0;
         self.due = None;
@@ -675,12 +694,19 @@ impl DmaController {
         let dst = u64::from(c.regs[0x18 / 4]);
         let write = (FLASH..FLASH + FLASH_SIZE).contains(&dst);
         if !(FLASH..FLASH + FLASH_SIZE).contains(&src) && !write {
-            if c.regs[0x20 / 4] & 4 != 0 {
-                if let Some(receiver) = &self.receiver {
-                    let mux = *self.mux.get(&(0xfff4a500 + (n / 2) as u64 * 4)).unwrap_or(&0);
-                    let request = ((mux >> ((n % 2) * 8)) & 63) as u8;
-                    return receiver.lock().ok()?.ready_at(dst as u32, request, c.regs[4] as usize + 1).map(|at| at.max(c.submitted_at).max(self.mux_changed[n]));
-                }
+            if c.regs[0x20 / 4] & 4 != 0
+                && let Some(receiver) = &self.receiver
+            {
+                let mux = *self
+                    .mux
+                    .get(&(0xfff4a500 + (n / 2) as u64 * 4))
+                    .unwrap_or(&0);
+                let request = ((mux >> ((n % 2) * 8)) & 63) as u8;
+                return receiver
+                    .lock()
+                    .ok()?
+                    .ready_at(dst as u32, request, c.regs[4] as usize + 1)
+                    .map(|at| at.max(c.submitted_at).max(self.mux_changed[n]));
             }
             return Some(c.submitted_at);
         }
@@ -772,11 +798,16 @@ impl DmaController {
                 return Err("Invalid or overflowing standalone XP4 DMA submission".into());
             }
         }
-        if write && o == 0x28 && value & 0x10000001 == 0x10000001 {
-            if let Some(port) = &self.port {
-                let c = &self.channels[n];
-                port.lock().unwrap().nor.check_mutation(u64::from(c.regs[0x18 / 4]), c.regs[0x10 / 4] as usize + 1)?;
-            }
+        if write
+            && o == 0x28
+            && value & 0x10000001 == 0x10000001
+            && let Some(port) = &self.port
+        {
+            let c = &self.channels[n];
+            port.lock()
+                .unwrap()
+                .nor
+                .check_mutation(u64::from(c.regs[0x18 / 4]), c.regs[0x10 / 4] as usize + 1)?;
         }
         self.admit(cx);
         let c = &mut self.channels[n];
@@ -852,20 +883,24 @@ impl DmaController {
             cx.ram_bytes(src, size)?
         };
         if !program && c.regs[0x20 / 4] & 4 != 0 {
-            if c.regs[0x1c / 4] != 0x20000 || c.regs[0x20 / 4] != 0x20004 || size % 4 != 0 {
+            if c.regs[0x1c / 4] != 0x20000 || c.regs[0x20 / 4] != 0x20004 || !size.is_multiple_of(4)
+            {
                 return Err("Unsupported transmit word geometry".into());
             }
             let mux = *self.mux.get(&(0xfff4a500 + (n / 2) as u64 * 4)).unwrap_or(&0);
             let request = ((mux >> ((n % 2) * 8)) & 63) as u8;
             self.receiver.as_ref().ok_or("Missing transmit receiver")?.lock().map_err(|_| "Transmit receiver lock poisoned")?
                 .accept(completed_at, dst as u32, request, &data)?;
-            for (index, word) in data.chunks_exact(4).enumerate() {
-                cx.record(Record::new("XP4 discovery transmit receiver accepted word", [
-                    ("destination", Field::int(dst)),
-                    ("request", Field::int(u64::from(request))),
-                    ("index", Field::int(index as u64)),
-                    ("value", Field::int(u64::from(u32::from_le_bytes(word.try_into().unwrap())))),
-                ]));
+            for (index, word) in data.as_chunks::<4>().0.iter().enumerate() {
+                cx.record(Record::new(
+                    "XP4 discovery transmit receiver accepted word",
+                    [
+                        ("destination", Field::int(dst)),
+                        ("request", Field::int(u64::from(request))),
+                        ("index", Field::int(index as u64)),
+                        ("value", Field::int(u64::from(u32::from_le_bytes(*word)))),
+                    ],
+                ));
             }
 
         } else if program {
@@ -966,10 +1001,9 @@ impl Device for DmaController {
         if n < 16
             && self.channels[n].submitted
             && self.channels[n].due.is_some_and(|at| at <= cx.now())
+            && let Err(e) = self.complete(cx, n)
         {
-            if let Err(e) = self.complete(cx, n) {
-                cx.fail(e);
-            }
+            cx.fail(e);
         }
     }
     fn save(&self) -> Value {

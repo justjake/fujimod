@@ -4,6 +4,8 @@
 //! snapshot and throughput laws
 //! remain declared software assumptions, not measured hardware semantics.
 //! Command validation, records and completion tokens live here.
+
+#![recursion_limit = "256"]
 pub mod construct;
 pub mod recording;
 pub mod replay;
@@ -2322,18 +2324,6 @@ impl CommandProcessor {
     }
 }
 
-#[cfg(test)]
-mod send_tests {
-    #[test]
-    fn shared_model_and_receipts_are_send() {
-        fn require_send<T: Send>() {}
-        require_send::<super::CommandProcessor>();
-        require_send::<fujimod_emulator_devices::Value>();
-        require_send::<fujimod_emulator_devices::Record>();
-        require_send::<fujimod_emulator_devices::Action>();
-    }
-}
-
 /// Compile reusable native graphics pipelines before interactive execution.
 pub fn prepare_host_gpu() -> std::result::Result<(), String> {
     #[cfg(not(target_arch = "wasm32"))]
@@ -2344,5 +2334,17 @@ pub fn prepare_host_gpu() -> std::result::Result<(), String> {
     #[cfg(target_arch = "wasm32")]
     {
         Err("Native host GPU preparation requires a desktop target".into())
+    }
+}
+
+#[cfg(test)]
+mod send_tests {
+    #[test]
+    fn shared_model_and_receipts_are_send() {
+        fn require_send<T: Send>() {}
+        require_send::<super::CommandProcessor>();
+        require_send::<fujimod_emulator_devices::Value>();
+        require_send::<fujimod_emulator_devices::Record>();
+        require_send::<fujimod_emulator_devices::Action>();
     }
 }

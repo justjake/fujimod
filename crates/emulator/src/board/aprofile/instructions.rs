@@ -7,6 +7,74 @@ fn system(encoding: u16) -> Register {
     Register::Arm64System(arm::SystemRegister::from_encoding(encoding))
 }
 
+impl State {
+    pub(in crate::board) fn aarch64_before(
+        &mut self,
+        cpu: &dyn Cpu,
+        core: usize,
+        pc: u64,
+    ) -> Result<bool, String> {
+        if self.aprofile[core].is_none() || cpu.features().architectural_exits {
+            return Ok(false);
+        }
+        if fujimod_emulator_cpu::arm64::enter_interrupt(cpu, self.pins[core].0, self.pins[core].1)?
+        {
+            cpu.stop()?;
+            return Ok(true);
+        }
+        let mut bytes = [0; 4];
+        cpu.read_virtual(pc, Access::Fetch, &mut bytes)?;
+        let word = u32::from_le_bytes(bytes);
+        self.aarch64_instruction(cpu, core, pc, word)
+    }
+    pub(in crate::board) fn aarch64_instruction(
+        &mut self,
+        cpu: &dyn Cpu,
+        core: usize,
+        pc: u64,
+        word: u32,
+    ) -> Result<bool, String> {
+        let pstate = scalar(cpu, Register::Pstate)?;
+        if word & 0xffd00000 == 0xd5100000 {
+            let encoding = ((word >> 5) & 0xffff) as u16;
+            let r = arm::SystemRegister::from_encoding(encoding);
+            let framework = fujimod_emulator_cpu::arm64::framework_instruction(word);
+            if framework {
+                if encoding == 0xf665 && pstate & 12 != 12 {
+                    return Err("ICC_SRE_EL3 requires EL3".into());
+                }
+                if pstate & 12 == 0 {
+                    return Err("AArch64 EL0 framework register access is unsupported".into());
+                }
+                let read = word & (1 << 21) != 0;
+                let rt = (word & 31) as u64;
+                let syndrome = (0x18 << 26)
+                    | (u64::from(r.op0) << 20)
+                    | (u64::from(r.op1) << 14)
+                    | (u64::from(r.crn) << 10)
+                    | (u64::from(r.crm) << 1)
+                    | (u64::from(r.op2) << 17)
+                    | (rt << 5)
+                    | u64::from(read);
+                self.system_register(cpu, core, syndrome)?;
+                cpu.stop()?;
+            }
+            return Ok(false);
+        }
+        let hint = match word {
+            0xd503205f => Hint::WaitForEvent,
+            0xd503207f => Hint::WaitForInterrupt,
+            0xd503209f => Hint::SendEvent,
+            0xd50320bf => Hint::SendEventLocal,
+            _ => return Ok(false),
+        };
+        set(cpu, Register::Pc, pc.wrapping_add(4))?;
+        self.hint(core, hint);
+        cpu.stop()?;
+        Ok(false)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -286,73 +354,5 @@ mod tests {
         assert_eq!(scalar(cpu, system(0xc200)).unwrap(), 5);
         assert_eq!(scalar(cpu, Register::Pstate).unwrap(), 0x3c5);
         assert_eq!(state.instructions, [0]);
-    }
-}
-
-impl State {
-    pub(in crate::board) fn aarch64_before(
-        &mut self,
-        cpu: &dyn Cpu,
-        core: usize,
-        pc: u64,
-    ) -> Result<bool, String> {
-        if self.aprofile[core].is_none() || cpu.features().architectural_exits {
-            return Ok(false);
-        }
-        if fujimod_emulator_cpu::arm64::enter_interrupt(cpu, self.pins[core].0, self.pins[core].1)?
-        {
-            cpu.stop()?;
-            return Ok(true);
-        }
-        let mut bytes = [0; 4];
-        cpu.read_virtual(pc, Access::Fetch, &mut bytes)?;
-        let word = u32::from_le_bytes(bytes);
-        self.aarch64_instruction(cpu, core, pc, word)
-    }
-    pub(in crate::board) fn aarch64_instruction(
-        &mut self,
-        cpu: &dyn Cpu,
-        core: usize,
-        pc: u64,
-        word: u32,
-    ) -> Result<bool, String> {
-        let pstate = scalar(cpu, Register::Pstate)?;
-        if word & 0xffd00000 == 0xd5100000 {
-            let encoding = ((word >> 5) & 0xffff) as u16;
-            let r = arm::SystemRegister::from_encoding(encoding);
-            let framework = fujimod_emulator_cpu::arm64::framework_instruction(word);
-            if framework {
-                if encoding == 0xf665 && pstate & 12 != 12 {
-                    return Err("ICC_SRE_EL3 requires EL3".into());
-                }
-                if pstate & 12 == 0 {
-                    return Err("AArch64 EL0 framework register access is unsupported".into());
-                }
-                let read = word & (1 << 21) != 0;
-                let rt = (word & 31) as u64;
-                let syndrome = (0x18 << 26)
-                    | (u64::from(r.op0) << 20)
-                    | (u64::from(r.op1) << 14)
-                    | (u64::from(r.crn) << 10)
-                    | (u64::from(r.crm) << 1)
-                    | (u64::from(r.op2) << 17)
-                    | (rt << 5)
-                    | u64::from(read);
-                self.system_register(cpu, core, syndrome)?;
-                cpu.stop()?;
-            }
-            return Ok(false);
-        }
-        let hint = match word {
-            0xd503205f => Hint::WaitForEvent,
-            0xd503207f => Hint::WaitForInterrupt,
-            0xd503209f => Hint::SendEvent,
-            0xd50320bf => Hint::SendEventLocal,
-            _ => return Ok(false),
-        };
-        set(cpu, Register::Pc, pc.wrapping_add(4))?;
-        self.hint(core, hint);
-        cpu.stop()?;
-        Ok(false)
     }
 }

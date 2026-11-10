@@ -163,7 +163,7 @@ impl BootRom {
         if self.routines.mount == 0 || self.routines.open == 0 || self.routines.read == 0 {
             return Err("boot-ROM file routines are required".into());
         }
-        if self.command_table.bytes == 0 || self.command_table.bytes % 8 != 0 {
+        if self.command_table.bytes == 0 || !self.command_table.bytes.is_multiple_of(8) {
             return Err("invalid command table".into());
         }
         if self.power_hold.bit >= 32 {
@@ -179,7 +179,7 @@ impl BootRom {
         {
             return Err("boot-ROM NAND routines are required".into());
         }
-        if self.load_address % 4 != 0 {
+        if !self.load_address.is_multiple_of(4) {
             return Err("invalid boot-ROM handoff address".into());
         }
         Ok(())

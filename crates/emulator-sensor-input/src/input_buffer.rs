@@ -291,8 +291,10 @@ mod tests {
                 Some(statistics.clone()),
             )
             .unwrap();
-            let mut host = RecordingHost::default();
-            host.now = 10;
+            let mut host = RecordingHost {
+                now: 10,
+                ..Default::default()
+            };
             input.write(&mut Cx::new(&mut host, cpu, pc, 0), 0x200000, 4, 0);
             assert_eq!(input.next_deadline(10), Some(18));
             let saved = input.save();

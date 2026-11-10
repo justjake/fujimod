@@ -287,11 +287,10 @@ impl Device for Scanout {
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
         let before = self.publication_state();
-        let result = self.write_published(cx, address, size, value);
+        self.write_published(cx, address, size, value);
         if self.publication_state() != before {
             self.publication_generation = self.publication_generation.wrapping_add(1);
         }
-        result
     }
     fn next_deadline(&self, _now: u64) -> Option<u64> {
         self.deadlines.values().min().copied()
@@ -304,11 +303,10 @@ impl Device for Scanout {
             return;
         }
         let before = self.publication_state();
-        let result = self.advance_published(cx);
+        self.advance_published(cx);
         if self.publication_state() != before {
             self.publication_generation = self.publication_generation.wrapping_add(1);
         }
-        result
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
         scanout::address(address, size.into()).is_ok()
@@ -331,8 +329,112 @@ impl Device for Scanout {
     }
 }
 
-/// The host supplies only addressed memory. Color conversion stays in Rust.
+impl fujimod_emulator_devices::capability::ScanoutSource for Scanout {
+    fn metadata(&self) -> serde_json::Value {
+        Scanout::metadata(self)
+    }
+    fn frame(
+        &self,
+        instance: usize,
+        pixels: bool,
+        read: &mut dyn FnMut(u64, usize) -> std::result::Result<Vec<u8>, String>,
+        diagnostic_hashes: bool,
+    ) -> std::result::Result<Option<fujimod_framebuffer::frame::Frame>, String> {
+        Scanout::frame(
+            self,
+            instance,
+            pixels,
+            &mut Observation {
+                read,
+                diagnostic_hashes,
+            },
+        )
+    }
+    fn main_frame(
+        &self,
+        instance: usize,
+        pixels: bool,
+        read: &mut dyn FnMut(u64, usize) -> std::result::Result<Vec<u8>, String>,
+        diagnostic_hashes: bool,
+    ) -> std::result::Result<Option<fujimod_framebuffer::frame::Frame>, String> {
+        Scanout::main_frame(
+            self,
+            instance,
+            pixels,
+            &mut Observation {
+                read,
+                diagnostic_hashes,
+            },
+        )
+    }
+}
 
+/// Reset completion tokens: bit0 is the pipe, bit1 the requesting CPU,
+/// and the remaining bits the generation. Core indices are 0 and 1.
+pub fn reset_token(pipe: usize, generation: i64, cpu: i64) -> u64 {
+    (generation as u64) << 2 | ((cpu as u64) & 1) << 1 | pipe as u64
+}
+pub fn reset_fields(token: u64) -> (usize, i64, i64) {
+    (
+        (token & 1) as usize,
+        (token >> 2) as i64,
+        ((token >> 1) & 1) as i64,
+    )
+}
+/// Guest writes return their record and two-tick reset deadline in order.
+fn write_registers(
+    compositor: &mut Compositor,
+    cpu: i64,
+    a: u64,
+    size: u32,
+    v: u32,
+    actions: &mut Vec<fujimod_emulator_devices::Action>,
+) -> fujimod_framebuffer::Result<()> {
+    let (i, o) = scanout::address(a, size)?;
+    let p = &mut compositor.pipes[i];
+    let old = p.regs.get_or_zero(o);
+    p.regs.insert(o, v);
+    p.written.insert(o);
+    if o == 0 && old & 0x10000 != 0 && v & 0x10000 == 0 {
+        // Clearing bit 16 starts reset. No other bit is made ready;
+        // existing configuration is retained (reset behavior is unmeasured).
+        p.generation += 1;
+        actions.push(fujimod_emulator_devices::Action::Log(Record::new(
+            "Image-engine reset start",
+            [
+                ("instance", EventValue::int(i as i64)),
+                ("cpu", EventValue::int(cpu)),
+            ],
+        )));
+        actions.push(fujimod_emulator_devices::Action::Schedule {
+            delay: 2,
+            token: reset_token(i, p.generation, cpu),
+        });
+    }
+    Ok(())
+}
+fn complete(
+    compositor: &mut Compositor,
+    token: u64,
+    _now: i64,
+    actions: &mut Vec<fujimod_emulator_devices::Action>,
+) {
+    let (i, generation, cpu) = reset_fields(token);
+    let p = &mut compositor.pipes[i];
+    if generation == p.generation {
+        p.regs.insert(0, p.regs.get_or_zero(0) | 0x10000);
+        p.reset_completions += 1;
+        actions.push(fujimod_emulator_devices::Action::Log(Record::new(
+            "Image-engine reset complete",
+            [
+                ("instance", EventValue::int(i as i64)),
+                ("cpu", EventValue::int(cpu)),
+            ],
+        )));
+    }
+}
+
+/// The host supplies only addressed memory. Color conversion stays in Rust.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -687,110 +789,5 @@ mod tests {
         assert_eq!(reads.get(), 2);
         assert_eq!(d.next_deadline(0), None);
         assert!(host.effects.is_empty());
-    }
-}
-
-impl fujimod_emulator_devices::capability::ScanoutSource for Scanout {
-    fn metadata(&self) -> serde_json::Value {
-        Scanout::metadata(self)
-    }
-    fn frame(
-        &self,
-        instance: usize,
-        pixels: bool,
-        read: &mut dyn FnMut(u64, usize) -> std::result::Result<Vec<u8>, String>,
-        diagnostic_hashes: bool,
-    ) -> std::result::Result<Option<fujimod_framebuffer::frame::Frame>, String> {
-        Scanout::frame(
-            self,
-            instance,
-            pixels,
-            &mut Observation {
-                read,
-                diagnostic_hashes,
-            },
-        )
-    }
-    fn main_frame(
-        &self,
-        instance: usize,
-        pixels: bool,
-        read: &mut dyn FnMut(u64, usize) -> std::result::Result<Vec<u8>, String>,
-        diagnostic_hashes: bool,
-    ) -> std::result::Result<Option<fujimod_framebuffer::frame::Frame>, String> {
-        Scanout::main_frame(
-            self,
-            instance,
-            pixels,
-            &mut Observation {
-                read,
-                diagnostic_hashes,
-            },
-        )
-    }
-}
-
-/// Reset completion tokens: bit0 is the pipe, bit1 the requesting CPU,
-/// and the remaining bits the generation. Core indices are 0 and 1.
-pub fn reset_token(pipe: usize, generation: i64, cpu: i64) -> u64 {
-    (generation as u64) << 2 | ((cpu as u64) & 1) << 1 | pipe as u64
-}
-pub fn reset_fields(token: u64) -> (usize, i64, i64) {
-    (
-        (token & 1) as usize,
-        (token >> 2) as i64,
-        ((token >> 1) & 1) as i64,
-    )
-}
-    /// Guest writes return their record and two-tick reset deadline in order.
-fn write_registers(
-    compositor: &mut Compositor,
-    cpu: i64,
-    a: u64,
-    size: u32,
-    v: u32,
-    actions: &mut Vec<fujimod_emulator_devices::Action>,
-) -> fujimod_framebuffer::Result<()> {
-    let (i, o) = scanout::address(a, size)?;
-    let p = &mut compositor.pipes[i];
-    let old = p.regs.get_or_zero(o);
-    p.regs.insert(o, v);
-    p.written.insert(o);
-    if o == 0 && old & 0x10000 != 0 && v & 0x10000 == 0 {
-        // Clearing bit 16 starts reset. No other bit is made ready;
-        // existing configuration is retained (reset behavior is unmeasured).
-        p.generation += 1;
-        actions.push(fujimod_emulator_devices::Action::Log(Record::new(
-            "Image-engine reset start",
-            [
-                ("instance", EventValue::int(i as i64)),
-                ("cpu", EventValue::int(cpu)),
-            ],
-        )));
-        actions.push(fujimod_emulator_devices::Action::Schedule {
-            delay: 2,
-            token: reset_token(i, p.generation, cpu),
-        });
-    }
-    Ok(())
-}
-fn complete(
-    compositor: &mut Compositor,
-    token: u64,
-    _now: i64,
-    actions: &mut Vec<fujimod_emulator_devices::Action>,
-) {
-    let (i, generation, cpu) = reset_fields(token);
-    let p = &mut compositor.pipes[i];
-    if generation == p.generation {
-        p.regs.insert(0, p.regs.get_or_zero(0) | 0x10000);
-        p.reset_completions += 1;
-        actions.push(fujimod_emulator_devices::Action::Log(Record::new(
-            "Image-engine reset complete",
-            [
-                ("instance", EventValue::int(i as i64)),
-                ("cpu", EventValue::int(cpu)),
-            ],
-        )));
     }
 }

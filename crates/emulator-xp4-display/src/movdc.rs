@@ -83,7 +83,7 @@ impl Movdc {
         if self.r(8) != 0x100
             || selector.is_none_or(|selector| self.r(0xd8) != 0x10000002 | selector << 16)
             || self.r(0xd4) & !0x10070000 != 0
-            || width % (8 << exponent) != 0
+            || !width.is_multiple_of(8 << exponent)
             || self.r(0x18) & !0x07ff07ff != 0
             || self.r(0xc0) > 3
             || self.r(0xc8) != 0

@@ -395,7 +395,7 @@ mod tests {
                     out[local_y * 1024] = 7;
                 }
             });
-            for row in bytes.chunks_exact(1024) {
+            for row in bytes.as_chunks::<1024>().0 {
                 assert_eq!(row[0], 7);
                 assert!(row[1..].iter().all(|&v| v == 0));
             }

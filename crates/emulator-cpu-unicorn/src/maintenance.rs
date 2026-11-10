@@ -20,12 +20,13 @@ pub struct Owner {
 }
 
 pub(crate) fn shared_selector(cp: arm::Coprocessor) -> bool {
-    cp.cp == 15 && !cp.wide && cp.crn == 8 && match (cp.crm, cp.opc1, cp.opc2) {
-        (3, 0, 0 | 1 | 2 | 3 | 5 | 7) => true,
-        (3, 4, 0 | 1 | 4 | 5) => true,
-        (0, 4, 1 | 5) => true,
-        _ => false,
-    }
+    cp.cp == 15
+        && !cp.wide
+        && cp.crn == 8
+        && matches!(
+            (cp.crm, cp.opc1, cp.opc2),
+            (3, 0, 0 | 1 | 2 | 3 | 5 | 7) | (3, 4, 0 | 1 | 4 | 5) | (0, 4, 1 | 5)
+        )
 }
 
 impl Core {

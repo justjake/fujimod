@@ -85,8 +85,8 @@ pub struct LensUnit {
 }
 impl LensUnit {
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
-        if let Protocol::Banked { clock, .. } = options.protocol {
-            if clock.iter().any(|clock| {
+        if let Protocol::Banked { clock, .. } = options.protocol
+            && clock.iter().any(|clock| {
                 matches!(
                     clock,
                     BankedClock::EncoderStages {
@@ -95,9 +95,9 @@ impl LensUnit {
                         ticks_per_quantum: 0
                     }
                 )
-            }) {
-                return Err("banked lens clock quantum must be positive".into());
-            }
+            })
+        {
+            return Err("banked lens clock quantum must be positive".into());
         }
         if matches!(options.protocol, Protocol::MixedWidth { period_ticks: 0 }) {
             return Err("mixed-width lens requires a positive period scale".into());
@@ -476,8 +476,9 @@ impl LensUnit {
         }
         if self.zoom.is_some() {
             let (direction, clock) = self.zoom_clock()?;
-            let z = self.zoom.as_mut().unwrap();
-            if z.direction != direction || z.clock != clock {
+            if let Some(z) = self.zoom.as_mut()
+                && (z.direction != direction || z.clock != clock)
+            {
                 z.due = match clock {
                     Some(c) => Some(
                         at.checked_add(Self::zoom_period(z, c)?)

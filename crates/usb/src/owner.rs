@@ -567,8 +567,7 @@ impl DeviceOwner {
         if let Operation::TransferIn { endpoint, .. }
         | Operation::TransferOut { endpoint, .. }
         | Operation::ClearHalt { endpoint } = &op
-        {
-            if !self
+            && !self
                 .descriptor
                 .interfaces
                 .iter()
@@ -581,9 +580,8 @@ impl DeviceOwner {
                 .any(|ep| {
                     ep.address == *endpoint && matches!(ep.kind.as_str(), "bulk" | "interrupt")
                 })
-            {
-                return Err(error("Endpoint unavailable"));
-            }
+        {
+            return Err(error("Endpoint unavailable"));
         }
         if matches!(&op, Operation::ControlIn { length, .. } if *length > u16::MAX as usize)
             || matches!(&op, Operation::ControlOut { data, .. } if data.len() > u16::MAX as usize)
@@ -791,9 +789,7 @@ impl Exporter {
         self.devices.get(device).is_some_and(|d| d.owns(controller))
     }
     pub fn abandon(&self, controller: &str) -> bool {
-        self.devices
-            .values()
-            .fold(false, |held, d| d.abandon(controller) || held)
+        self.devices.values().any(|d| d.abandon(controller))
     }
     pub fn fenced(&self, device: &str) -> bool {
         self.devices.get(device).is_some_and(|d| d.fenced())

@@ -31,7 +31,7 @@ pub(crate) fn tag_managed_blocks(
     spare: &mut BTreeMap<u32, Vec<u8>>,
 ) -> Result<(), String> {
     let block_bytes = geometry.page_bytes as u64 * geometry.pages_per_block as u64;
-    if physical_offset % block_bytes != 0 || !bytes.is_multiple_of(block_bytes) {
+    if !physical_offset.is_multiple_of(block_bytes) || !bytes.is_multiple_of(block_bytes) {
         return Err("Managed NAND input must cover whole blocks".into());
     }
     for n in 0..bytes / block_bytes {

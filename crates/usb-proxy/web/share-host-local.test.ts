@@ -3,7 +3,7 @@ import test from 'node:test';
 import { ShareHost } from './peer.ts';
 import { exporterFixture } from './exporter-fixture.ts';
 
-test('stopping a share frees its exporter handle without shutting down the Rust owner', () => {
+await test('stopping a share frees its exporter handle without shutting down the Rust owner', () => {
   const calls: string[] = [];
   const device = exporterFixture(
     {

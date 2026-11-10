@@ -36,8 +36,7 @@ impl Requests {
         let mut blocks = Vec::new();
         for &(address, ticks) in inputs {
             if address & 3 != 0
-                || address > 0xffff_fffc
-                || address < REQUEST_OFFSET
+                || !(REQUEST_OFFSET..=0xffff_fffc).contains(&address)
                 || !(1..=1_000_000).contains(&ticks)
                 || words
                     .insert(

@@ -563,9 +563,7 @@ mod tests {
             Default::default(),
         )
         .unwrap();
-        medium
-            .program(3, &vec![0x55; 512], &vec![0x33; 16])
-            .unwrap();
+        medium.program(3, &vec![0x55; 512], &[0x33; 16]).unwrap();
         let state = medium.clone();
         let saved = medium.checkpoint().unwrap();
         let envelope = Checkpoint::encode("medium-keyframe", &saved).unwrap();

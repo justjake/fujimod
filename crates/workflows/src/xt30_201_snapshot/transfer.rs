@@ -49,7 +49,7 @@ impl PublishedSnapshot {
         let start = buffer.address().0;
         // Match the publisher's allocation contract, not installed DRAM size.
         if start == 0
-            || start % 64 != 0
+            || !start.is_multiple_of(64)
             || buffer.length().get() != SNAPSHOT_BYTES as u32
             || u64::from(start) + SNAPSHOT_BYTES as u64 > 0x2000_0000
         {

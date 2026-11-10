@@ -251,7 +251,7 @@ pub fn assemble_with_starts(
 ) -> Result<factory::Graph, String> {
     let soc = &selection.soc;
     let body = &selection.body;
-    if dram_address_space_limit_bytes == 0 || dram_address_space_limit_bytes % 4096 != 0 {
+    if dram_address_space_limit_bytes == 0 || !dram_address_space_limit_bytes.is_multiple_of(4096) {
         return Err("DRAM address-space limit must be positive and page-aligned".into());
     }
     if body.soc_id != soc.id {

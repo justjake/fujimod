@@ -89,7 +89,7 @@ impl Sdk<'_, '_> {
         };
         let padded = size.checked_add(31).ok_or(Error::AddressOverflow)? & !31;
         require(
-            address % 32 == 0 && padded <= self.p.chunk_bytes,
+            address.is_multiple_of(32) && padded <= self.p.chunk_bytes,
             "Invalid owned E1 range",
         )?;
         let original = self.host.read(source, 8).await?;
@@ -154,7 +154,7 @@ impl Sdk<'_, '_> {
             base >= self.p.pool_begin + 4
                 && u64::from(base) + u64::from(self.p.chunk_bytes) + u64::from(DATA_RESERVATION)
                     <= u64::from(self.p.pool_begin) + u64::from(self.p.pool_bytes)
-                && base % 4 == 0,
+                && base.is_multiple_of(4),
             "Allocation outside the located RAM pool",
         )?;
         self.base = Some(base);

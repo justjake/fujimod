@@ -222,7 +222,9 @@ impl Endpoints for ModelEndpoints {
             let mut reply = vec![0; 128];
             reply[..4].copy_from_slice(&0x150000u32.to_le_bytes());
             for (pair, word) in reply[16..]
-                .chunks_exact_mut(2)
+                .as_chunks_mut::<2>()
+                .0
+                .iter_mut()
                 .zip("Synthetic endpoint".encode_utf16())
             {
                 pair.copy_from_slice(&word.to_le_bytes());

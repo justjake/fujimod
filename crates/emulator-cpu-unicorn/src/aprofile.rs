@@ -309,7 +309,7 @@ impl Execution {
         {
             return Err("Thumb execution is unsupported by the counted ARMv7-A backend".into());
         }
-        if b.bytes == 0 || b.bytes % 4 != 0 {
+        if b.bytes == 0 || !b.bytes.is_multiple_of(4) {
             return Err("invalid A-profile block span".into());
         }
         let n = u64::from(b.bytes / 4);

@@ -38,7 +38,7 @@ fn upload(words: &mut Vec<u32>, index: u16, data: &[u32], increment: bool) {
             | index as u32,
     );
     words.extend_from_slice(&data[1..]);
-    if data.len() % 2 == 0 {
+    if data.len().is_multiple_of(2) {
         words.push(0xa5a5a5a5);
     }
 }
@@ -514,9 +514,7 @@ fn host_render_path_matches_dmp_fragment_state_regressions() {
         (0x306, 2 << 8),
         (0x307, 0x1f11),
     ]);
-    if assert_host_gpu_matches_cpu(&depth_stencil_words, |_, length| vec![0; length]).is_none() {
-        return;
-    }
+    if assert_host_gpu_matches_cpu(&depth_stencil_words, |_, length| vec![0; length]).is_none() {}
 }
 
 #[cfg(not(target_arch = "wasm32"))]

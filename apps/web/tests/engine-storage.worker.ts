@@ -66,6 +66,7 @@ async function exercise(): Promise<StorageResult> {
   const retained = [...new Uint8Array((await store.saved(camera.id))!.durable)];
   const second = await store.save(camera.id, first.revision, save([7, 8])),
     two = await descriptor();
+  // oxlint-disable-next-line typescript/unbound-method -- restored and called with the store as receiver.
   const original = IDBObjectStore.prototype.put;
   let quota = '';
   try {

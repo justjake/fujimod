@@ -283,7 +283,7 @@ impl Gic {
                 }
                 // This implementation has no legacy interface: SRE/DIB/DFB
                 // are RAO/WI; Enable is retained per core.
-                Ok(7 | u64::from(self.state.interfaces[core].system_register_enable) * 8)
+                Ok(7 | (u64::from(self.state.interfaces[core].system_register_enable) * 8))
             }
             0xc230 => {
                 if let Some(v) = value {
@@ -305,7 +305,7 @@ impl Gic {
                     }
                     self.state.interfaces[core].split_eoi = v & 2 != 0;
                 }
-                Ok(0x700 | u64::from(self.state.interfaces[core].split_eoi) * 2)
+                Ok(0x700 | (u64::from(self.state.interfaces[core].split_eoi) * 2))
             }
             0xc665 => Ok(7), // System interface only; SRE/DIB/DFB are RAO/WI.
             0xc666 | 0xc667 => {
@@ -407,7 +407,7 @@ impl Gic {
         size: u8,
         value: Option<u64>,
     ) -> Result<u64, String> {
-        if !matches!(size, 1 | 2 | 4 | 8) || offset % u64::from(size) != 0 {
+        if !matches!(size, 1 | 2 | 4 | 8) || !offset.is_multiple_of(u64::from(size)) {
             return Err("GICv3 MMIO width/alignment".into());
         }
         if private && offset < 0x10000 {
@@ -520,12 +520,12 @@ impl Gic {
                     continue;
                 }
                 let line = self.line_mut(core, id);
-                if let Some(v) = value {
-                    if id >= 16 {
-                        line.edge = v & (2 << (n * 2)) != 0;
-                    }
+                if let Some(v) = value
+                    && id >= 16
+                {
+                    line.edge = v & (2 << (n * 2)) != 0;
                 }
-                out |= u64::from(line.edge) * 2 << (n * 2);
+                out |= (u64::from(line.edge) * 2) << (n * 2);
             }
             return Ok(out);
         }
@@ -615,6 +615,48 @@ impl Gic {
         self.state = s;
         self.refresh();
         Ok(())
+    }
+}
+
+impl fujimod_emulator_devices::gic::InterruptController for Gic {
+    fn pins(&self, core: usize) -> Result<(bool, bool), String> {
+        Gic::pins(self, core)
+    }
+    fn set_spi(&mut self, id: usize, high: bool) -> Result<(), String> {
+        Gic::set_spi(self, id, high)
+    }
+    fn set_ppi(&mut self, core: usize, id: usize, high: bool) -> Result<(), String> {
+        Gic::set_ppi(self, core, id, high)
+    }
+    fn system(&mut self, core: usize, register: u16, value: Option<u64>) -> Result<u64, String> {
+        Gic::system(self, core, register, value)
+    }
+    fn distributor(
+        &mut self,
+        _core: usize,
+        offset: u64,
+        size: u8,
+        value: Option<u64>,
+    ) -> Result<u64, String> {
+        Gic::distributor(self, offset, size, value)
+    }
+    fn redistributor(
+        &mut self,
+        core: usize,
+        offset: u64,
+        size: u8,
+        value: Option<u64>,
+    ) -> Result<u64, String> {
+        Gic::redistributor(self, core, offset, size, value)
+    }
+    fn save(&self) -> Value {
+        Gic::save(self)
+    }
+    fn restore(&mut self, state: &Value) -> Result<(), String> {
+        Gic::restore(self, state)
+    }
+    fn boxed_clone(&self) -> Box<dyn fujimod_emulator_devices::gic::InterruptController> {
+        Box::new(self.clone())
     }
 }
 
@@ -780,47 +822,5 @@ mod tests {
         // Architecture-reserved and unimplemented trailing IDs are RAZ/WI.
         assert_eq!(g.distributor(0x17c, 4, Some(u32::MAX.into())).unwrap(), 0);
         assert_eq!(g.distributor(0x880, 4, Some(u32::MAX.into())).unwrap(), 0);
-    }
-}
-
-impl fujimod_emulator_devices::gic::InterruptController for Gic {
-    fn pins(&self, core: usize) -> Result<(bool, bool), String> {
-        Gic::pins(self, core)
-    }
-    fn set_spi(&mut self, id: usize, high: bool) -> Result<(), String> {
-        Gic::set_spi(self, id, high)
-    }
-    fn set_ppi(&mut self, core: usize, id: usize, high: bool) -> Result<(), String> {
-        Gic::set_ppi(self, core, id, high)
-    }
-    fn system(&mut self, core: usize, register: u16, value: Option<u64>) -> Result<u64, String> {
-        Gic::system(self, core, register, value)
-    }
-    fn distributor(
-        &mut self,
-        _core: usize,
-        offset: u64,
-        size: u8,
-        value: Option<u64>,
-    ) -> Result<u64, String> {
-        Gic::distributor(self, offset, size, value)
-    }
-    fn redistributor(
-        &mut self,
-        core: usize,
-        offset: u64,
-        size: u8,
-        value: Option<u64>,
-    ) -> Result<u64, String> {
-        Gic::redistributor(self, core, offset, size, value)
-    }
-    fn save(&self) -> Value {
-        Gic::save(self)
-    }
-    fn restore(&mut self, state: &Value) -> Result<(), String> {
-        Gic::restore(self, state)
-    }
-    fn boxed_clone(&self) -> Box<dyn fujimod_emulator_devices::gic::InterruptController> {
-        Box::new(self.clone())
     }
 }

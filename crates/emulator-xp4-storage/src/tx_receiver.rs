@@ -19,7 +19,11 @@ impl TxReceiver {
     }
     /// Explicit receiver-side input; an offer admits one entire word batch.
     pub fn offer(&mut self, at: u64, bytes: usize) -> Result<(), String> {
-        if self.offer.is_some() || bytes == 0 || bytes % 4 != 0 || bytes > self.capacity - self.bytes.len() {
+        if self.offer.is_some()
+            || bytes == 0
+            || !bytes.is_multiple_of(4)
+            || bytes > self.capacity - self.bytes.len()
+        {
             return Err("Invalid or overlapping receiver offer".into());
         }
         self.offer = Some((at, bytes));

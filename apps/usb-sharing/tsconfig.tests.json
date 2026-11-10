@@ -12,5 +12,5 @@
     "typeRoots": ["./node_modules/@types"],
     "skipLibCheck": true
   },
-  "include": ["*.test.ts", "test-runtime.ts", "scripts/*.ts"]
+  "include": ["*.test.ts", "test-runtime.ts", "camera-labels.ts", "scripts/*.ts"]
 }

@@ -11,7 +11,7 @@ impl Execution {
     }
     pub(super) fn declare_tcm(&self, bank: usize) -> Result<(), String> {
         let memory = &self.tcm[bank].memory;
-        if memory.len() == 0 {
+        if memory.is_empty() {
             return Ok(());
         }
         let physical = self.tcm_physical(bank)?;

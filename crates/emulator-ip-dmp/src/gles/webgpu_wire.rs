@@ -216,8 +216,10 @@ mod tests {
 
     #[test]
     fn webgpu_result_restores_written_ranges_and_snapshots() {
-        let mut engine = Engine::default();
-        engine.written_ranges = vec![(0x1000, 4)];
+        let engine = Engine {
+            written_ranges: vec![(0x1000, 4)],
+            ..Default::default()
+        };
         let snapshots = vec![(0x1000, vec![1, 2, 3, 4])];
         let bytes = encode_webgpu_result(&engine, &snapshots).unwrap();
         let mut restored = Engine::default();

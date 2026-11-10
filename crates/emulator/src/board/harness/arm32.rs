@@ -221,7 +221,7 @@ impl Guard {
     fn mmio_permits(&self, address: u64, size: u64, write: bool) -> bool {
         self.mmio.iter().any(|entry| {
             size == u64::from(entry.width)
-                && address % size == 0
+                && address.is_multiple_of(size)
                 && contains(&[(entry.start, entry.end)], address, size)
                 && if write { entry.write } else { entry.read }
         })

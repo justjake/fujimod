@@ -315,8 +315,8 @@ fn valid_date(value: &str) -> bool {
         + u16::from(bytes[1] - b'0') * 100
         + u16::from(bytes[2] - b'0') * 10
         + u16::from(bytes[3] - b'0');
-    let month = u8::from(bytes[5] - b'0') * 10 + u8::from(bytes[6] - b'0');
-    let day = u8::from(bytes[8] - b'0') * 10 + u8::from(bytes[9] - b'0');
+    let month = (bytes[5] - b'0') * 10 + (bytes[6] - b'0');
+    let day = (bytes[8] - b'0') * 10 + (bytes[9] - b'0');
     if year == 0 || !(1..=12).contains(&month) {
         return false;
     }
@@ -595,10 +595,10 @@ mod tests {
                         return Err(format!("missing {name}"));
                     }
                 }
-                if let Some(limit) = schema.get("maxProperties").and_then(Value::as_u64) {
-                    if object.len() > limit as usize {
-                        return Err("too many properties".into());
-                    }
+                if let Some(limit) = schema.get("maxProperties").and_then(Value::as_u64)
+                    && object.len() > limit as usize
+                {
+                    return Err("too many properties".into());
                 }
                 let properties = schema.get("properties").and_then(Value::as_object);
                 if schema.get("additionalProperties") == Some(&Value::Bool(false)) {
@@ -616,28 +616,28 @@ mod tests {
                         }
                     }
                 }
-                if let Some(additional) = schema.get("additionalProperties") {
-                    if additional.is_object() {
-                        for (name, child) in object {
-                            if !properties.is_some_and(|items| items.contains_key(name)) {
-                                validate(child, additional, root)
-                                    .map_err(|error| format!("{name}: {error}"))?;
-                            }
+                if let Some(additional) = schema.get("additionalProperties")
+                    && additional.is_object()
+                {
+                    for (name, child) in object {
+                        if !properties.is_some_and(|items| items.contains_key(name)) {
+                            validate(child, additional, root)
+                                .map_err(|error| format!("{name}: {error}"))?;
                         }
                     }
                 }
             }
             Some("string") => {
                 let text = value.as_str().ok_or("expected string")?;
-                if let Some(minimum) = schema.get("minLength").and_then(Value::as_u64) {
-                    if text.len() < minimum as usize {
-                        return Err(format!("shorter than {minimum}"));
-                    }
+                if let Some(minimum) = schema.get("minLength").and_then(Value::as_u64)
+                    && text.len() < minimum as usize
+                {
+                    return Err(format!("shorter than {minimum}"));
                 }
-                if let Some(maximum) = schema.get("maxLength").and_then(Value::as_u64) {
-                    if text.len() > maximum as usize {
-                        return Err(format!("longer than {maximum}"));
-                    }
+                if let Some(maximum) = schema.get("maxLength").and_then(Value::as_u64)
+                    && text.len() > maximum as usize
+                {
+                    return Err(format!("longer than {maximum}"));
                 }
                 if schema.get("pattern").and_then(Value::as_str)
                     == Some("^[0-9a-fA-F]{64}$")
@@ -652,15 +652,15 @@ mod tests {
                     .as_u64()
                     .or_else(|| value.as_i64().and_then(|v| u64::try_from(v).ok()))
                     .ok_or("expected non-negative integer")?;
-                if let Some(minimum) = schema.get("minimum").and_then(Value::as_u64) {
-                    if number < minimum {
-                        return Err(format!("less than {minimum}"));
-                    }
+                if let Some(minimum) = schema.get("minimum").and_then(Value::as_u64)
+                    && number < minimum
+                {
+                    return Err(format!("less than {minimum}"));
                 }
-                if let Some(maximum) = schema.get("maximum").and_then(Value::as_u64) {
-                    if number > maximum {
-                        return Err(format!("greater than {maximum}"));
-                    }
+                if let Some(maximum) = schema.get("maximum").and_then(Value::as_u64)
+                    && number > maximum
+                {
+                    return Err(format!("greater than {maximum}"));
                 }
             }
             Some("boolean") => {
@@ -668,10 +668,10 @@ mod tests {
             }
             Some("array") => {
                 let array = value.as_array().ok_or("expected array")?;
-                if let Some(maximum) = schema.get("maxItems").and_then(Value::as_u64) {
-                    if array.len() > maximum as usize {
-                        return Err(format!("longer than {maximum}"));
-                    }
+                if let Some(maximum) = schema.get("maxItems").and_then(Value::as_u64)
+                    && array.len() > maximum as usize
+                {
+                    return Err(format!("longer than {maximum}"));
                 }
                 if let Some(items) = schema.get("items") {
                     for item in array {

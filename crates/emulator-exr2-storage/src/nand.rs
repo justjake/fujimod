@@ -184,7 +184,10 @@ impl NandController {
             || config & 0x10000000 != 0
             || app && !matches!((config >> 20) & 7, 3 | 4)
             || verify && !app
-            || rom && (!(512..=2048).contains(&count) || count % 512 != 0 || config != 0x401000)
+            || rom
+                && (!(512..=2048).contains(&count)
+                    || !count.is_multiple_of(512)
+                    || config != 0x401000)
             || !rom && self.get(0x8a8) != 0x100000
         {
             return Err("unsupported NAND receive DMA setup or interrupt mode".into());
@@ -201,7 +204,7 @@ impl NandController {
         let page = self.medium.options().page_bytes;
         if count == 0
             || count > self.scratch.len()
-            || count % page != 0
+            || !count.is_multiple_of(page)
             || (row as u64) * page as u64 + count as u64 > self.medium.options().bytes
         {
             return Err("NAND program extent exceeds medium".into());
@@ -214,7 +217,7 @@ impl NandController {
             if !matches!(config, 0x80301000 | 0x80401000)
                 || self.get(0x804) != 0x10001
                 || self.get(0x828) != 0x100000
-                || source % if config == 0x80401000 { 64 } else { 32 } != 0
+                || !source.is_multiple_of(if config == 0x80401000 { 64 } else { 32 })
             {
                 return Err("unsupported NAND transmit DMA setup".into());
             }
@@ -244,7 +247,7 @@ impl NandController {
             (0x802064, 0x00107001),
         ];
         if sector > 3
-            || column % 0x210 != 0
+            || !column.is_multiple_of(0x210)
             || setups[sector] != (command, self.get(0x1c))
             || self.get(0x5c) != 0x1010
             || self.get(0x18) != 0x8093
@@ -356,7 +359,7 @@ impl NandController {
                         || (row % 32) as usize + units > 32
                         || self.get(0x20) != ((row << 8) & 0xffff00)
                         || self.get(0x24) != (row >> 16) & 255)
-                || !small && (units % 4 != 0 || self.get(0x20) != 0)
+                || !small && (!units.is_multiple_of(4) || self.get(0x20) != 0)
             {
                 return Err("unsupported NAND program setup".into());
             }
@@ -719,10 +722,10 @@ impl Device for NandController {
                         self.set(4, self.get(4) & !4);
                         self.set(0x810, 0);
                         self.set(0x890, 0);
-                    } else if value & 0x800000 != 0 {
-                        if let Err(error) = self.start(cx, value) {
-                            cx.fail(error);
-                        }
+                    } else if value & 0x800000 != 0
+                        && let Err(error) = self.start(cx, value)
+                    {
+                        cx.fail(error);
                     }
                 }
             }
@@ -732,12 +735,11 @@ impl Device for NandController {
         self.pending.map(|p| p.due)
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
-        if let Some(p) = self.pending {
-            if p.due <= cx.now() {
-                if let Err(error) = self.complete(cx, p) {
-                    cx.fail(error);
-                }
-            }
+        if let Some(p) = self.pending
+            && p.due <= cx.now()
+            && let Err(error) = self.complete(cx, p)
+        {
+            cx.fail(error);
         }
     }
     fn pollable(&self, address: u64, size: u8) -> bool {

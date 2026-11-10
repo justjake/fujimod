@@ -24,14 +24,14 @@ pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared
         || mask_scale > 4
         || width == 0
         || height == 0
-        || width % 16 != 0
-        || height % 8 != 0
+        || !width.is_multiple_of(16)
+        || !height.is_multiple_of(8)
         || word(0x38) & !0x1fff1fff != 0
         || word(0x3c) & !0x03ff03ff != 0
         || tile_out == 0
         || tile_in <= tile_out
-        || tile_in % 8 != 0
-        || tile_out % 8 != 0
+        || !tile_in.is_multiple_of(8)
+        || !tile_out.is_multiple_of(8)
         || format & !0x70007000 != 0
         || input_alignment > 16
         || output_alignment > 16

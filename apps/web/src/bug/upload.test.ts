@@ -15,7 +15,7 @@ test('explicit upload omits inline descriptor bytes and validates the acknowledg
     await uploadReport(new Blob([tar]), { ...link, archive: 'unused' }, 'Frozen menu', id);
     const init = fetcher.mock.calls[0]?.[1] as RequestInit;
     const body = init.body as FormData;
-    expect(JSON.parse(String(body.get('metadata'))).archive).toBeUndefined();
+    expect(JSON.parse(body.get('metadata') as string).archive).toBeUndefined();
     expect(body.get('description')).toBe('Frozen menu');
     fetcher.mockResolvedValueOnce(Response.json({ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }));
     await expect(uploadReport(new Blob([tar]), link, '', id)).rejects.toThrow('did not confirm');

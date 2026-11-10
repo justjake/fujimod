@@ -56,7 +56,7 @@ pub fn histogram_luma(
             let begin = left / 2 * 4;
             let end = begin + (right - left).div_ceil(2) * 4;
             for row in source.chunks_exact(input.stride).skip(top).take(height) {
-                for pair in row[begin..end].chunks_exact(4) {
+                for pair in row[begin..end].as_chunks::<4>().0 {
                     bins[pair[left % 2] as usize] += 1;
                 }
             }
@@ -71,7 +71,7 @@ pub fn histogram_luma(
             }
         }
     }
-    for (word, bin) in output.chunks_exact_mut(4).zip(bins) {
+    for (word, bin) in output.as_chunks_mut::<4>().0.iter_mut().zip(bins) {
         word.copy_from_slice(&bin.to_le_bytes());
     }
     Ok(())

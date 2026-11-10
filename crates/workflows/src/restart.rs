@@ -363,8 +363,10 @@ mod tests {
         .unwrap();
         let contract = deferred_guard_contract(&restart, 600_000).unwrap();
         let words: Vec<u32> = contract
-            .chunks_exact(4)
-            .map(|bytes| u32::from_le_bytes(bytes.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|bytes| u32::from_le_bytes(*bytes))
             .collect();
         assert_eq!(words.len(), 7);
         assert_eq!(words[0], 0x93d4bc);

@@ -39,6 +39,8 @@ fn json<T: serde::de::DeserializeOwned>(value: &str) -> PyResult<T> {
     serde_json::from_str(value).map_err(|e| PyValueError::new_err(e.to_string()))
 }
 
+// One value per board, so the variant size difference costs nothing.
+#[allow(clippy::large_enum_variant)]
 enum Backend {
     Graph(fujimod_emulator_session::Session),
     Xp5(Box<xp5::Opened>),
@@ -211,10 +213,10 @@ impl Board {
 impl Drop for Board {
     fn drop(&mut self) {
         self.clear_observation();
-        if let Some(mut driver) = self.driver.take() {
-            if let Ok(session) = self.session() {
-                let _ = session.board.harness_end(&mut driver);
-            }
+        if let Some(mut driver) = self.driver.take()
+            && let Ok(session) = self.session()
+        {
+            let _ = session.board.harness_end(&mut driver);
         }
     }
 }
@@ -392,10 +394,10 @@ impl Board {
             .call_method1("loads", (value.to_string(),))
     }
     fn memory_watch_end(&mut self) -> PyResult<()> {
-        if let Some(mut watch) = self.memory_watch.take() {
-            if watch.is_live() {
-                self.board()?.memory_watch_end(&mut watch).map_err(error)?;
-            }
+        if let Some(mut watch) = self.memory_watch.take()
+            && watch.is_live()
+        {
+            self.board()?.memory_watch_end(&mut watch).map_err(error)?;
         }
         Ok(())
     }
@@ -729,10 +731,10 @@ impl Board {
     }
     fn __clear__(&mut self) {
         self.clear_observation();
-        if let Some(mut driver) = self.driver.take() {
-            if let Ok(session) = self.session() {
-                let _ = session.board.harness_end(&mut driver);
-            }
+        if let Some(mut driver) = self.driver.take()
+            && let Ok(session) = self.session()
+        {
+            let _ = session.board.harness_end(&mut driver);
         }
         if let Some(Backend::Xp4(session)) = &self.backend {
             session.__clear__();

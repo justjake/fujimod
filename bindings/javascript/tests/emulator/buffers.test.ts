@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { copyBuffer, copySpan, packBuffers } from '../../dist/emulator/buffers.js';
 
-test('buffer helpers copy borrowed spans and preserve file offsets', () => {
+await test('buffer helpers copy borrowed spans and preserve file offsets', () => {
   const source = new Uint8Array([9, 1, 2, 8]);
   const copy = copyBuffer(source.subarray(1, 3));
   assert.deepEqual([...copy], [1, 2]);

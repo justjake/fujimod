@@ -14,7 +14,7 @@ test('reports retain small registers and identify bulk data with its exact byte 
   assert.deepEqual(result.registers, [4, 5]);
   assert.equal(result.pixels.sha256, await digest(data));
   assert.equal(result.pixels.length, data.length);
-  assert.deepEqual(result.pixels.preview, [...data.slice(0, 32)]);
+  assert.deepEqual(result.pixels.preview, Array.from(data.slice(0, 32)));
   assert.equal(source.pixels.length, data.length);
   assert(JSON.stringify(result).length < 1024);
 });

@@ -407,8 +407,10 @@ fn histogram_samples_the_guest_window_and_latches_pixels_before_dma() {
         .unwrap();
     advance(&mut d, &mut m, 15);
     let bins: Vec<u32> = m.bytes[0xa000..0xa400]
-        .chunks_exact(4)
-        .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| u32::from_le_bytes(*b))
         .collect();
     assert_eq!(bins[77], 2400 * 800 / 2);
     assert_eq!(bins.iter().sum::<u32>(), 2400 * 800 / 2);
@@ -427,8 +429,10 @@ fn histogram_samples_the_guest_window_and_latches_pixels_before_dma() {
     advance(&mut d, &mut m, 30);
     advance(&mut d, &mut m, 35);
     let bins: Vec<u32> = m.bytes[0xb000..0xb400]
-        .chunks_exact(4)
-        .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| u32::from_le_bytes(*b))
         .collect();
     assert_eq!(bins[29], 2448 * 809 / 2);
     assert_eq!(bins.iter().sum::<u32>(), 2448 * 809 / 2);
@@ -457,8 +461,10 @@ fn histogram_crop_clips_present_samples_without_resizing_or_padding() {
     )
     .unwrap();
     let bins: Vec<u32> = bytes
-        .chunks_exact(4)
-        .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| u32::from_le_bytes(*b))
         .collect();
     for luma in [20, 40, 60, 80] {
         assert_eq!(bins[luma], 1);

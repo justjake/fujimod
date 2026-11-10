@@ -14,12 +14,14 @@ const selection = {
 vi.mock('fujimod', () => ({ catalog: { selections: () => [selection] } }));
 const { BugReports } = await import('./BugReports');
 
-HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
-  this.open = true;
-};
-HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
-  this.open = false;
-};
+if (!HTMLDialogElement.prototype.showModal)
+  HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+    this.open = true;
+  };
+if (!HTMLDialogElement.prototype.close)
+  HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+    this.open = false;
+  };
 let cleanup: (() => void) | undefined;
 afterEach(() => {
   cleanup?.();

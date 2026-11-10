@@ -140,11 +140,12 @@ impl Transmitter {
             || TX_STORED_OFFSETS
                 .iter()
                 .any(|offset| TX + *offset == address)
-            || (TX + 0x17c..TX + 0x1fc).contains(&address) && (address - (TX + 0x17c)) % 4 == 0
+            || (TX + 0x17c..TX + 0x1fc).contains(&address)
+                && (address - (TX + 0x17c)).is_multiple_of(4)
             || DDC_STORED_OFFSETS
                 .iter()
                 .any(|offset| DDC + *offset == address)
-            || (BRIDGE..BRIDGE + 28).contains(&address) && (address - BRIDGE) % 4 == 0
+            || (BRIDGE..BRIDGE + 28).contains(&address) && (address - BRIDGE).is_multiple_of(4)
     }
 
     fn address_kind(address: u64, size: u8) -> Option<Kind> {
@@ -197,8 +198,8 @@ impl Transmitter {
                 .all(|address| Self::is_stored(*address))
             && state.edid_request.is_some() == state.edid_deadline.is_some()
             && (state.edid_request.is_none() || state.generation != 0)
-            && state.registers.get(&HPD_STATUS).is_none()
-            && state.registers.get(&READY_STATUS).is_none()
+            && !state.registers.contains_key(&HPD_STATUS)
+            && !state.registers.contains_key(&READY_STATUS)
     }
 }
 
@@ -359,6 +360,12 @@ impl Device for Transmitter {
     }
 }
 
+impl fujimod_emulator_devices::capability::HdmiOutput for Transmitter {
+    fn set_connected(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, connected: bool) {
+        Transmitter::set_connected(self, cx, connected)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -511,11 +518,5 @@ mod tests {
                 .restore(&json!({"state":{},"sink":{},"edid_ticks":2}))
                 .is_err()
         );
-    }
-}
-
-impl fujimod_emulator_devices::capability::HdmiOutput for Transmitter {
-    fn set_connected(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, connected: bool) {
-        Transmitter::set_connected(self, cx, connected)
     }
 }

@@ -139,7 +139,7 @@ impl Device for FrameClock {
             return Err("Display frame checkpoint has unexpected parts".into());
         }
         let next: u64 = saved.decode(self.name())?;
-        if next == 0 || next % self.period != 0 {
+        if next == 0 || !next.is_multiple_of(self.period) {
             return Err("Invalid display frame checkpoint".into());
         }
         Ok(())
@@ -374,16 +374,17 @@ impl Device for Output {
         let Some(offset) = self.offset(cx, address, size) else {
             return;
         };
-        if offset == 0 && value <= u32::MAX.into() {
-            if let Some(ticks) = self.handshake_ticks {
-                if value & (1 << 16) != 0 {
-                    self.handshake.status = false;
-                    self.handshake.due = None;
-                } else if self.word(0) & (1 << 16) != 0 {
-                    self.handshake.due = cx.now().checked_add(ticks);
-                    if self.handshake.due.is_none() {
-                        cx.fail("Display handshake deadline overflow");
-                    }
+        if offset == 0
+            && value <= u32::MAX.into()
+            && let Some(ticks) = self.handshake_ticks
+        {
+            if value & (1 << 16) != 0 {
+                self.handshake.status = false;
+                self.handshake.due = None;
+            } else if self.word(0) & (1 << 16) != 0 {
+                self.handshake.due = cx.now().checked_add(ticks);
+                if self.handshake.due.is_none() {
+                    cx.fail("Display handshake deadline overflow");
                 }
             }
         }
@@ -518,7 +519,7 @@ impl Output {
         }
         match self.scanout {
             Some(scanout) => {
-                if state.capture.next == 0 || state.capture.next % scanout.period != 0 {
+                if state.capture.next == 0 || !state.capture.next.is_multiple_of(scanout.period) {
                     return Err("Invalid display output checkpoint".into());
                 }
             }
@@ -844,7 +845,7 @@ mod tests {
         host.ram[0x40..0x4c].copy_from_slice(&[255, 0, 0, 255, 0, 0, 0, 0, 9, 9, 9, 255]);
         host.ram[0x4c..0x58].fill(9);
         // A 4 x 2 packed 4:2:2 video plane, every pair the same blue.
-        for row in host.ram[0x80..0x90].chunks_exact_mut(4) {
+        for row in host.ram[0x80..0x90].as_chunks_mut::<4>().0 {
             row.copy_from_slice(&[81, 81, 90, 240]);
         }
         let write = |out: &mut Output, host: &mut Screen, offset: u64, value: u32| {

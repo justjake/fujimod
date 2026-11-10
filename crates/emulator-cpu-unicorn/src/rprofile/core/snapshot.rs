@@ -3,7 +3,6 @@
 //! Ordinary physical RAM and shared monitor rollback belong to the board.
 use super::*;
 use fujimod_emulator_cpu::memory::pages::Image;
-use sha2::{Digest, Sha256};
 use std::any::Any;
 use std::sync::atomic::Ordering;
 mod portable;
@@ -169,13 +168,12 @@ impl Core {
     ) -> Result<Box<dyn Snapshot>, String> {
         let e = &self.execution;
         e.checkpoint_boundary()?;
-        if let Some(previous) = previous {
-            if previous.owner() != self.identity()
+        if let Some(previous) = previous
+            && (previous.owner() != self.identity()
                 || !(previous.as_any().is::<Saved>()
-                    || previous.as_any().is::<portable::Imported>())
-            {
-                return Err("CPU snapshot belongs to a different processor/backend".into());
-            }
+                    || previous.as_any().is::<portable::Imported>()))
+        {
+            return Err("CPU snapshot belongs to a different processor/backend".into());
         }
         let context = e.cpu.snapshot(None)?;
         let tcm = std::array::from_fn(|bank| {

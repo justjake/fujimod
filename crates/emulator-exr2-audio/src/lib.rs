@@ -302,7 +302,7 @@ mod tests {
         );
         assert_eq!(write(&mut model, BASES[0] + CHANNEL_ENABLE as u64, 1), None);
         assert_eq!(write(&mut model, BASES[0] + 0x20, 0x1234), None);
-        assert_eq!(write(&mut model, BASES[0] + 0, 1), None);
+        assert_eq!(write(&mut model, BASES[0], 1), None);
         assert_eq!(read(&mut model, BASES[0]), (0, None));
         assert!(write(&mut model, BASES[0] + CONTROL as u64, 0x0003_0000).is_some());
         assert!(write(&mut model, BASES[0] + FORMAT as u64, 3).is_some());

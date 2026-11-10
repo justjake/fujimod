@@ -506,7 +506,7 @@ impl Device for LensPort {
 }
 impl LensPort {
     fn check(&self, link: &Link, line: &Line) -> Result<(), String> {
-        if line.poll_at % self.timing.poll != 0 || link.page_size > 1 << 15 {
+        if !line.poll_at.is_multiple_of(self.timing.poll) || link.page_size > 1 << 15 {
             return Err("Invalid lens checkpoint".into());
         }
         Ok(())

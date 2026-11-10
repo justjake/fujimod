@@ -265,37 +265,36 @@ impl<F: Sessions> Client<F> {
         let result = async {
             match op {
                 Operation::Card(request) => {
-                    if self.service.is_none() {
-                        if let Some(facts) =
+                    if self.service.is_none()
+                        && let Some(facts) =
                             self.capability.as_ref().and_then(|c| c.service.as_ref())
-                        {
-                            if session
-                                .device_info(InfoSelector::Product)
+                    {
+                        if session
+                            .device_info(InfoSelector::Product)
+                            .await?
+                            .text
+                            .trim()
+                            != self.product
+                            || session
+                                .device_info(InfoSelector::InternalVersion)
                                 .await?
                                 .text
                                 .trim()
-                                != self.product
-                                || session
-                                    .device_info(InfoSelector::InternalVersion)
-                                    .await?
-                                    .text
-                                    .trim()
-                                    != self.internal_version
-                            {
-                                return Err(Error::Card(
-                                    "Connected camera differs from the mounted firmware".into(),
-                                ));
-                            }
-                            self.service = Some(
-                                crate::service::Service::install(
-                                    &mut session,
-                                    self.limits,
-                                    self.bulk.as_ref().ok_or(Error::OutsideDataWindow)?,
-                                    facts,
-                                )
-                                .await?,
-                            );
+                                != self.internal_version
+                        {
+                            return Err(Error::Card(
+                                "Connected camera differs from the mounted firmware".into(),
+                            ));
                         }
+                        self.service = Some(
+                            crate::service::Service::install(
+                                &mut session,
+                                self.limits,
+                                self.bulk.as_ref().ok_or(Error::OutsideDataWindow)?,
+                                facts,
+                            )
+                            .await?,
+                        );
                     }
                     let owned =
                         if let Some(service) = &self.service {
@@ -454,14 +453,14 @@ impl<F: Sessions> Client<F> {
                 return Err(error);
             }
         }
-        if std::env::var_os("FUJIMOD_MOUNT_TRACE").is_some() {
-            if let Some((kind, size)) = metric {
-                eprintln!(
-                    "{}",
-                    serde_json::json!({"mount_io":kind,"bytes":size,
+        if std::env::var_os("FUJIMOD_MOUNT_TRACE").is_some()
+            && let Some((kind, size)) = metric
+        {
+            eprintln!(
+                "{}",
+                serde_json::json!({"mount_io":kind,"bytes":size,
                     "seconds":started.elapsed().as_secs_f64(),"acquisition_seconds":acquisition_seconds,"success":result.is_ok()})
-                );
-            }
+            );
         }
         result
     }
@@ -680,14 +679,13 @@ impl Device for UsbDevice {
             if a >= 0xff000000 {
                 cache = None;
             }
-            if let Some((base, bytes)) = &cache {
-                if a >= *base
-                    && a.checked_add(n as u64)
-                        .is_some_and(|end| end <= *base + bytes.len() as u64)
-                {
-                    let offset = (a - base) as usize;
-                    return Ok(bytes[offset..offset + n].to_vec());
-                }
+            if let Some((base, bytes)) = &cache
+                && a >= *base
+                && a.checked_add(n as u64)
+                    .is_some_and(|end| end <= *base + bytes.len() as u64)
+            {
+                let offset = (a - base) as usize;
+                return Ok(bytes[offset..offset + n].to_vec());
             }
             let requested = n;
             let n = if a < 0xff000000 && n < 262144 {

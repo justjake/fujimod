@@ -206,7 +206,7 @@ fn build(
                 &node.name,
                 spec,
                 &node.windows,
-                &mut resources,
+                &resources,
                 &built.node_ids,
             )?)
         } else {

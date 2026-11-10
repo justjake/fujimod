@@ -346,9 +346,9 @@ impl FaceDetector {
             || ADDRESS_WORDS.contains(&offset)
             || MODE_WORDS.iter().any(|(known, _)| *known == offset)
             || matches!(offset, 0x10 | 0x40 | 0x44 | 0x570)
-            || (0x84..0x144).contains(&offset) && (offset - 0x84) % 12 == 0
-            || (0x88..0x148).contains(&offset) && (offset - 0x88) % 12 == 0
-            || (0x80..0x140).contains(&offset) && (offset - 0x80) % 12 == 0
+            || (0x84..0x144).contains(&offset) && (offset - 0x84).is_multiple_of(12)
+            || (0x88..0x148).contains(&offset) && (offset - 0x88).is_multiple_of(12)
+            || (0x80..0x140).contains(&offset) && (offset - 0x80).is_multiple_of(12)
             || Self::in_range(offset, 0x280, 0x3e8)
             || Self::in_range(offset, 0x470, 0x4c0)
             || Self::in_range(offset, 0x4c0, 0x4d8)
@@ -868,8 +868,8 @@ impl FaceDetector {
                         .all(|shift| (value >> shift) & 7 <= 4)
             }
             0x570 => value <= 0xff,
-            0x84..=0x13c if (offset - 0x84) % 12 == 0 => value & !0x03ffffff == 0,
-            0x88..=0x140 if (offset - 0x88) % 12 == 0 => {
+            0x84..=0x13c if (offset - 0x84).is_multiple_of(12) => value & !0x03ffffff == 0,
+            0x88..=0x140 if (offset - 0x88).is_multiple_of(12) => {
                 value & 3 == 0 && (0x40000000..0x60000000).contains(&value)
             }
             _ => Self::is_config_offset(offset),

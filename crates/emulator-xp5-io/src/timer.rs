@@ -194,15 +194,17 @@ impl Device for Timer {
             return (g.control | ((g.pending as u32) << 16)) as u64;
         }
         if let Some((n, w)) = self.general_register(offset) {
-            if n == 9 && w == 0 && self.general[n].control & 3 == 3 {
-                if let Some(pins) = &self.focus_capture {
-                    // Logical18/selector33 -> general9. The timer scales
-                    // the captured low13 bits by8 to compare with lens steps.
-                    let pulses = pins.lock().unwrap().focus_pulses;
-                    return self.general[n].words[0].wrapping_add(
-                        (pulses.wrapping_sub(self.general[n].capture_origin) / 8) as u32,
-                    ) as u64;
-                }
+            if n == 9
+                && w == 0
+                && self.general[n].control & 3 == 3
+                && let Some(pins) = &self.focus_capture
+            {
+                // Logical18/selector33 -> general9. The timer scales
+                // the captured low13 bits by8 to compare with lens steps.
+                let pulses = pins.lock().unwrap().focus_pulses;
+                return self.general[n].words[0]
+                    .wrapping_add((pulses.wrapping_sub(self.general[n].capture_origin) / 8) as u32)
+                    as u64;
             }
             // While a general channel runs, word 0 reads its live down-count.
             // X-T5 4.31 stage0's microsecond delay (0xFF80196C) polls 0x110
@@ -303,10 +305,10 @@ impl Device for Timer {
             g.words[w] = value;
             if w == 0 {
                 g.count.value = value;
-                if n == 9 {
-                    if let Some(pins) = &self.focus_capture {
-                        g.capture_origin = pins.lock().unwrap().focus_pulses;
-                    }
+                if n == 9
+                    && let Some(pins) = &self.focus_capture
+                {
+                    g.capture_origin = pins.lock().unwrap().focus_pulses;
                 }
             }
             if w == 1 {
@@ -383,12 +385,11 @@ impl Device for Timer {
         cx.set_irq(52 + n as u32, false);
         // M-core routing maps reload channels 8..15 to IRQs 9..16; reload channels
         // 0..7 have no M-core route.
-        if n >= 8 {
-            if let Some(cpu) = self.companion_cpu {
-                if let Err(e) = cx.raise_irq(cpu, (n + 1) as u32) {
-                    cx.fail(e);
-                }
-            }
+        if n >= 8
+            && let Some(cpu) = self.companion_cpu
+            && let Err(e) = cx.raise_irq(cpu, (n + 1) as u32)
+        {
+            cx.fail(e);
         }
         self.schedule(cx, n);
     }

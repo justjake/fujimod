@@ -92,7 +92,9 @@ impl Scene {
                 return Err("scene rgb requires width*height*3 samples".into());
             }
             values
-                .chunks_exact(3)
+                .as_chunks::<3>()
+                .0
+                .iter()
                 .map(|p| Ok([sample(&p[0])?, sample(&p[1])?, sample(&p[2])?]))
                 .collect::<Result<Vec<_>, String>>()?
         } else if let Some(values) = value.get("luma").and_then(Value::as_array) {
@@ -329,21 +331,23 @@ mod tests {
     }
     #[test]
     fn area_average_keeps_a_small_bright_region() {
-        let mut scene = Scene::default();
-        scene.width = 20;
-        scene.height = 20;
-        scene.rgb = (0..400)
-            .map(|i| {
-                if i % 20 < 5 && i / 20 < 4 {
-                    [4000; 3]
-                } else {
-                    [0; 3]
-                }
-            })
-            .collect();
-        scene.samples_per_cell = 1;
-        scene.black_level = 0;
-        scene.signal_shift = 0;
+        let scene = Scene {
+            width: 20,
+            height: 20,
+            rgb: (0..400)
+                .map(|i| {
+                    if i % 20 < 5 && i / 20 < 4 {
+                        [4000; 3]
+                    } else {
+                        [0; 3]
+                    }
+                })
+                .collect(),
+            samples_per_cell: 1,
+            black_level: 0,
+            signal_shift: 0,
+            ..Default::default()
+        };
         assert_eq!(word(&scene.planes(1, 1, false), 0, 0, 0), 200);
         assert_eq!(word(&scene.planes(7, 7, false), 0, 1, 1), 1200);
         assert_eq!(word(&scene.planes(7, 7, false), 0, 6, 6), 0);

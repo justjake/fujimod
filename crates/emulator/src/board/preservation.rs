@@ -580,13 +580,13 @@ impl PreservationContext {
         };
         let stored = value as u64 & mask;
         let mut after = [0; MAX_CPU_STORE];
-        for index in 0..width.get() {
+        for (index, byte) in after.iter_mut().enumerate().take(width.get()) {
             let shift = if byte_order {
                 (width.get() - 1 - index) * 8
             } else {
                 index * 8
             };
-            after[index] = (stored >> shift) as u8;
+            *byte = (stored >> shift) as u8;
         }
         let mut changed = None;
         for range in &self.merged {

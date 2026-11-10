@@ -149,9 +149,14 @@ impl SerialFlashController {
         }
         let mut port = self.port.lock().unwrap();
         if state.next.is_some_and(|(_, token)| token == 1) {
-            port.nor.check_command(registers[0x90 / 4], registers[0x94 / 4])?;
+            port.nor
+                .check_command(registers[0x90 / 4], registers[0x94 / 4])?;
         }
-        if let Some(request) = &state.stream { if request.write { port.nor.check_mutation(request.address, request.size)?; } }
+        if let Some(request) = &state.stream
+            && request.write
+        {
+            port.nor.check_mutation(request.address, request.size)?;
+        }
         port.nor.restore_state(state.nor)?;
         port.request = state.stream;
         port.program_data = state.program_fifo;
