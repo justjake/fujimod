@@ -226,6 +226,15 @@ fn register_with_resources(
                 )?),
             )?;
         }
+        "bringup-stub" => {
+            let options: fujimod_emulator_xp5_io::bringup_stub::Options =
+                toml::Value::Table(window.options.clone()).try_into().map_err(|e| format!("bring-up stub options: {e}"))?;
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(fujimod_emulator_xp5_io::bringup_stub::BringupStub::new(window.base, window.size, options)?),
+            )?;
+        }
         "write-only-registers" => {
             if !window.options.is_empty() {
                 return Err("write-only-registers takes no options".into());

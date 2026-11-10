@@ -613,6 +613,8 @@ pub enum RunRectangleProfile {
 pub enum RunSdCardProfile {
     #[serde(rename = "declared-blank-sdhc-default-speed-unmeasured")]
     DeclaredBlankSdhcDefaultSpeedUnmeasured,
+    #[serde(rename = "declared-blank-sdhc-high-speed-unmeasured")]
+    DeclaredBlankSdhcHighSpeedUnmeasured,
 }
 
 /// Closed selection for secondary bus profile.

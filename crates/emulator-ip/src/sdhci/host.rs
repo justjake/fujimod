@@ -1740,6 +1740,29 @@ mod tests {
         assert_eq!((bytes[16], mode), (1, 1));
     }
     #[test]
+    fn switch_function_sdma_queries_and_selects_only_supported_high_speed() {
+        for high_speed in [false, true] {
+            let mut m = host(Protocol::Sdhc);
+            m.options.high_speed = high_speed;
+            let mut h = Ram::new(0x10000);
+            setup(&mut m, &mut h);
+            m.state = State::Transfer;
+            write(&mut m, &mut h, 4, 2, 64);
+            write(&mut m, &mut h, 6, 2, 1);
+            for argument in [1, 0x80fffff1] {
+                h.bytes[0x1000..0x1044].fill(0xcc);
+                write(&mut m, &mut h, 0, 4, 0x1000);
+                command(&mut m, &mut h, 0x063a0011, argument);
+                due(&mut m, &mut h);
+                assert_eq!(read(&mut m, &mut h, 0x30, 2) & 3, 3);
+                assert_eq!(h.bytes[0x100d] & 3, if high_speed { 3 } else { 1 });
+                assert_eq!(h.bytes[0x1010] & 15, if high_speed { 1 } else { 15 });
+                assert_eq!(&h.bytes[0x1040..0x1044], &[0xcc; 4]);
+                assert_eq!(m.access_mode, u8::from(high_speed && argument >> 31 != 0));
+            }
+        }
+    }
+    #[test]
     fn state_distinguishes_media_with_the_same_diagnostic_summary() {
         let mut a = host(Protocol::Sdhc);
         let mut b = host(Protocol::Sdhc);
