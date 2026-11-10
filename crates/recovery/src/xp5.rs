@@ -111,7 +111,7 @@ impl Setup {
     fn verify(&self, inverted: &[u8]) -> Result<Vec<u8>> {
         let prefix = self.prefix.read(inverted)?;
         require(
-            prefix.len() == 0x40000
+            prefix.len() >= 0x800
                 && self.low_length >= 4
                 && self.low_length <= prefix.len() - 0x800,
             "XP5 prefix extent differs",
@@ -658,6 +658,17 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn startup_accepts_a_shorter_checked_setup_prefix() {
+        let (data, mut setup, ram) = fixture();
+        setup.prefix = source(&data[..0x28000]);
+        setup.proofs[0].source = setup.prefix.clone();
+        assert!(package(&data, &setup, Some(ram), 0).is_ok());
+        setup.prefix = source(&data[..0x800]);
+        setup.proofs[0].source = setup.prefix.clone();
+        assert!(package(&data, &setup, None, 0).is_err());
     }
 
     #[test]
