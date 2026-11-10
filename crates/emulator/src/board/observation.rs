@@ -588,6 +588,13 @@ impl Board {
         }
         addresses.sort_unstable();
         addresses.dedup();
+        // A skip belongs to the stop it resumes from. Once its address leaves
+        // the active set it would otherwise swallow that address's next hit.
+        if let Some(pc) = points.entry.skip.get()
+            && addresses.binary_search(&pc).is_err()
+        {
+            points.entry.skip.set(None);
+        }
         *points.entry.addresses.borrow_mut() = addresses.clone();
         if !cpu.features().instruction_progress {
             return Ok(());

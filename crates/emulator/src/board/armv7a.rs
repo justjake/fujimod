@@ -409,8 +409,19 @@ mod tests {
         b.run_for_instructions(100, 10).unwrap();
         assert_eq!(points.event(), Some(0));
         assert_eq!(b.instruction_counts(), [6]);
+        // A stop whose address is deactivated before resuming leaves no skip
+        // behind to swallow that address's next hit.
+        b.instruction_points_update(0, &mut points, vec![0x100])
+            .unwrap();
+        b.run_for_instructions(9, 10).unwrap();
+        assert_eq!(b.read_register(0, Register::Pc).unwrap(), 0);
+        b.instruction_points_update(0, &mut points, vec![0])
+            .unwrap();
+        b.run_for_instructions(100, 10).unwrap();
+        assert_eq!(points.event(), Some(0));
+        assert_eq!(b.instruction_counts(), [15]);
         b.instruction_points_end(0, &mut points).unwrap();
         b.run_for_instructions(3, 10).unwrap();
-        assert_eq!(b.instruction_counts(), [9]);
+        assert_eq!(b.instruction_counts(), [18]);
     }
 }
