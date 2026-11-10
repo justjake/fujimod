@@ -5214,7 +5214,10 @@ class RunSceneVariant2(TypedDict, total=False):
     statistics: Required[list[ApplicationStatisticsInput]]
 
 
-type RunSdCardProfile = Literal["declared-blank-sdhc-default-speed-unmeasured"]
+type RunSdCardProfile = Literal[
+    "declared-blank-sdhc-default-speed-unmeasured",
+    "declared-blank-sdhc-high-speed-unmeasured",
+]
 
 
 type RunSecondaryBusProfile = Literal[

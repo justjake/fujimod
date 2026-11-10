@@ -3183,6 +3183,7 @@ dependencies = [
 name = "fujimod-unicorn-sys"
 version = "0.1.0"
 dependencies = [
+ "cc",
  "cmake",
  "fujimod-workspace-hack",
 ]
@@ -7036,6 +7037,32 @@ dependencies = [
  "rusticata-macros",
  "thiserror",
  "time",
+]
+
+[[package]]
+name = "xt5-bringup"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-configuration",
+ "fujimod-catalog-resolution",
+ "fujimod-emulator",
+ "fujimod-emulator-boot",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-parts-controls",
+ "fujimod-emulator-session",
+ "fujimod-emulator-storage",
+ "fujimod-emulator-xp5-board",
+ "fujimod-emulator-xp5-display",
+ "fujimod-emulator-xp5-io",
+ "fujimod-emulator-xp5-storage",
+ "fujimod-firmware",
+ "fujimod-recording",
+ "fujimod-workspace-hack",
+ "serde_json",
+ "sha2 0.10.9",
+ "toml",
 ]
 
 [[package]]

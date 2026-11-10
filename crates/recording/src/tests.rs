@@ -348,6 +348,26 @@ fn touches_land_follow_the_finger_and_end_by_their_contact() {
 }
 
 #[test]
+fn touch_indices_survive_earlier_touch_pruning_during_advance() {
+    for phase in [TouchPhase::Move, TouchPhase::End] {
+        let output = Output::new();
+        let mut r = Recorder::new(output.0.clone(), 30, false).unwrap();
+        r.frame(frame(0), 0.).unwrap();
+        r.touch(TouchPhase::Start, 10., 10., 0.).unwrap();
+        r.touch(TouchPhase::End, 10., 10., 0.1).unwrap();
+        r.touch(TouchPhase::Start, 20., 20., 0.2).unwrap();
+
+        // Advancing past the first touch's ripple prunes it before updating
+        // the second touch, which moves from index 1 to index 0.
+        r.touch(phase, 22., 23., 0.7).unwrap();
+
+        assert_eq!(r.touches.len(), 1);
+        assert_eq!((r.touches[0].x, r.touches[0].y), (22., 23.));
+        assert_eq!(r.touches[0].lifted.is_some(), phase == TouchPhase::End);
+    }
+}
+
+#[test]
 fn touch_edges_are_anti_aliased() {
     // A light ring on black: the edge blends through partial coverage, and a
     // half-pixel shift of the center changes the pixels, not a whole step.

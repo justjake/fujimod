@@ -1,4 +1,30 @@
-use std::path::PathBuf;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::path::{Path, PathBuf};
+
+/// QEMU's configure, which Unicorn's CMake runs, rejects source and build
+/// directories containing spaces or colons and word-splits the compiler path.
+fn breaks_configure(path: &Path) -> bool {
+    path.to_str()
+        .is_none_or(|path| path.contains(|c: char| c.is_whitespace() || c == ':'))
+}
+
+#[cfg(unix)]
+fn link(target: &Path, alias: &Path) {
+    let _ = std::fs::remove_file(alias);
+    std::os::unix::fs::symlink(target, alias).expect("link Unicorn build alias");
+}
+
+#[cfg(windows)]
+fn link(target: &Path, alias: &Path) {
+    let _ = std::fs::remove_dir(alias);
+    let _ = std::fs::remove_file(alias);
+    if target.is_dir() {
+        std::os::windows::fs::symlink_dir(target, alias)
+    } else {
+        std::os::windows::fs::symlink_file(target, alias)
+    }
+    .expect("link Unicorn build alias");
+}
 
 fn main() {
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("emscripten") {
@@ -12,12 +38,34 @@ fn main() {
         println!("cargo:rerun-if-env-changed=CAMERA_UNICORN_STATIC_DIR");
         return;
     }
-    let source = PathBuf::from("../vendor/unicorn");
+    let source = std::env::current_dir().unwrap().join("../vendor/unicorn");
     if !source.join("CMakeLists.txt").is_file() {
         panic!("the pinned Unicorn source submodule is not initialized");
     }
 
-    let mut config = cmake::Config::new(source);
+    let out = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+    let compiler = cc::Build::new().get_compiler().path().to_path_buf();
+    let compiler = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|directory| directory.join(&compiler))
+        .find(|path| path.is_file())
+        .unwrap_or(compiler);
+    let mut config;
+    if [&source, &out, &compiler].into_iter().any(|path| breaks_configure(path)) {
+        let mut hasher = DefaultHasher::new();
+        out.hash(&mut hasher);
+        let alias = std::env::temp_dir()
+            .join(format!("fujimod-unicorn-{:016x}", hasher.finish()));
+        assert!(!breaks_configure(&alias), "no space-free directory for the Unicorn build");
+        std::fs::create_dir_all(&alias).expect("create Unicorn build alias");
+        link(&source, &alias.join("source"));
+        link(&compiler, &alias.join("cc"));
+        config = cmake::Config::new(alias.join("source"));
+        config.out_dir(&alias).define("CMAKE_C_COMPILER", alias.join("cc"));
+        // The system may clear the temporary directory between builds.
+        println!("cargo:rerun-if-changed={}", alias.join("build/libunicorn.a").display());
+    } else {
+        config = cmake::Config::new(&source);
+    }
     config
         // A compiler-path change makes CMake discard its cache and rerun
         // configuration without our -D options. Start fresh so the selected

@@ -40,6 +40,7 @@ members = [
   "crates/emulator-boot",
   "crates/emulator-session",
   "crates/emulator-cli",
+  "crates/xt5-bringup",
   "crates/emulator-cpu",
   "crates/emulator-cpu-hvf",
   "crates/emulator-cpu-unicorn",

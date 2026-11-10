@@ -394,8 +394,16 @@ fn register_base_is_an_option_and_must_be_page_aligned() {
     assert_eq!(cx.refusal(), None);
     let mut cx = h.cx();
     assert_eq!(m.read(&mut cx, 0xfff46000 + 0x10, 4), 0x1234);
+    // The default window is no longer decoded once the base moves.
     let mut cx = h.cx();
     assert_eq!(m.read(&mut cx, BASE + 0x10, 4), 0);
+    assert_eq!(cx.refusal(), Some("unmodeled register"));
+    let mut cx = h.cx();
+    m.write(&mut cx, BASE + 0x10, 4, 0x99);
+    assert_eq!(cx.refusal(), Some("unmodeled register"));
+    let mut cx = h.cx();
+    assert_eq!(m.read(&mut cx, 0xfff46000 + 0x10, 4), 0x1234);
+    assert_eq!(cx.refusal(), None);
     assert!(
         NandController::new(
             Options {

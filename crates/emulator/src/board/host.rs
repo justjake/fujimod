@@ -25,6 +25,16 @@ impl Board {
         Ok(serde_json::json!(state.bus.device_states(kind)))
     }
 
+    /// Saved GIC state, for diagnostics.
+    pub fn gic_state(&self) -> Result<serde_json::Value, String> {
+        let state = self.state.try_borrow().map_err(|_| "board is executing")?;
+        Ok(state
+            .interrupts
+            .as_ref()
+            .map(|i| i.gic.save())
+            .unwrap_or(serde_json::Value::Null))
+    }
+
     pub fn device_state_values(&self, kind: &str) -> Result<serde_json::Value, String> {
         let state = self.state.try_borrow().map_err(|_| "board is executing")?;
         self.track_device_kind(kind, &state.bus);

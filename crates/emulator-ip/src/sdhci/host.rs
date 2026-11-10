@@ -479,7 +479,12 @@ impl SdHost {
         let single =
             self.options.protocol == Protocol::Sdhc && matches!(word, 0x113a0010 | 0x113a0011);
         let pio = !rom && (matches!(word, 0x193a0026 | 0x123a0036) || single && word & 1 == 0);
-        if (rom && word >> 16 & 255 != expected) || (!rom && word != expected && !pio && !single) {
+        // CMD7 with RCA 0 deselects every card and none answers it, so a
+        // host sends it without a response (Physical Layer 7.10, 4.7.4).
+        let deselect = !rom && word == 0x07000000 && argument == 0;
+        if (rom && word >> 16 & 255 != expected)
+            || (!rom && word != expected && !pio && !single && !deselect)
+        {
             return Err(format!("Unsupported SD command {command}/{word:#x}"));
         }
         let mut request = Request {
@@ -562,9 +567,11 @@ impl SdHost {
                 self.state != State::Ready || argument != 0
             }
             3 => {
+                // Physical Layer 7.10, 4.2.2: the host may send CMD3 again in
+                // Stand-by to have the card publish a new RCA.
                 request.state = State::Standby;
                 response = rca | if rom { 0x500 } else { 0x600 };
-                self.state != State::Identification || argument != 0
+                !matches!(self.state, State::Identification | State::Standby) || argument != 0
             }
             9 if !rom => {
                 let csd = 1u128 << 126
@@ -586,7 +593,13 @@ impl SdHost {
                 } else {
                     State::Standby
                 };
-                response = if argument != 0 { 0x900 } else { 0x600 };
+                response = if deselect {
+                    0
+                } else if argument != 0 {
+                    0x900
+                } else {
+                    0x600
+                };
                 !matches!(self.state, State::Standby | State::Transfer)
                     || ![0, rca].contains(&(argument & 0xffff0000))
                     || rom && argument == 0
@@ -1637,6 +1650,18 @@ mod tests {
         }
     }
     #[test]
+    fn an_identified_card_is_deselected_and_publishes_a_new_rca_in_standby() {
+        let mut m = host(Protocol::Sdhc);
+        m.state = State::Transfer;
+        assert_eq!(m.plan(0x07000000, 0).unwrap().state, State::Standby);
+        assert!(m.plan(0x07000000, 0x12340000).is_err());
+        m.state = State::Standby;
+        assert_eq!(m.plan(0x07000000, 0).unwrap().state, State::Standby);
+        assert_eq!(m.plan(0x031a0000, 0).unwrap().state, State::Standby);
+        m.state = State::Transfer;
+        assert!(m.plan(0x031a0000, 0).is_err());
+    }
+    #[test]
     fn ocr_inquiry_keeps_idle_until_a_supported_voltage_is_selected() {
         let mut m = host(Protocol::Sdhc);
         let mut h = Ram::new(0x10000);
@@ -1738,6 +1763,29 @@ mod tests {
         assert_eq!((bytes[16], mode), (0x0f, 15));
         let (bytes, mode) = switch_status(0x00ffffff, 1);
         assert_eq!((bytes[16], mode), (1, 1));
+    }
+    #[test]
+    fn switch_function_sdma_queries_and_selects_only_supported_high_speed() {
+        for high_speed in [false, true] {
+            let mut m = host(Protocol::Sdhc);
+            m.options.high_speed = high_speed;
+            let mut h = Ram::new(0x10000);
+            setup(&mut m, &mut h);
+            m.state = State::Transfer;
+            write(&mut m, &mut h, 4, 2, 64);
+            write(&mut m, &mut h, 6, 2, 1);
+            for argument in [1, 0x80fffff1] {
+                h.bytes[0x1000..0x1044].fill(0xcc);
+                write(&mut m, &mut h, 0, 4, 0x1000);
+                command(&mut m, &mut h, 0x063a0011, argument);
+                due(&mut m, &mut h);
+                assert_eq!(read(&mut m, &mut h, 0x30, 2) & 3, 3);
+                assert_eq!(h.bytes[0x100d] & 3, if high_speed { 3 } else { 1 });
+                assert_eq!(h.bytes[0x1010] & 15, if high_speed { 1 } else { 15 });
+                assert_eq!(&h.bytes[0x1040..0x1044], &[0xcc; 4]);
+                assert_eq!(m.access_mode, u8::from(high_speed && argument >> 31 != 0));
+            }
+        }
     }
     #[test]
     fn state_distinguishes_media_with_the_same_diagnostic_summary() {

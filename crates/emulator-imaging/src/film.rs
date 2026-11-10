@@ -43,6 +43,9 @@ pub struct Film {
     chroma: [i32; 4],
     bounds: [i32; 4],
     bands: [(i32, i32); 5],
+    /// The still hue stage, when its enable bit is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hue: Option<HueStage>,
 }
 impl Default for Film {
     fn default() -> Self {
@@ -54,6 +57,7 @@ impl Default for Film {
             chroma: [0; 4],
             bounds: [0; 4],
             bands: [(0, 0); 5],
+            hue: None,
         }
     }
 }
@@ -183,7 +187,10 @@ impl Film {
             band += 1;
         }
         let (shift, gain) = self.bands[band];
-        let f = gain + ((shift * y) >> 8);
+        let mut f = gain + ((shift * y) >> 8);
+        if let Some(hue) = &self.hue {
+            f = (f * hue.gain(cb, cr)) >> 10;
+        }
         [
             y as u8,
             (128 + ((cb * f + 512) >> 10)).clamp(0, 255) as u8,
@@ -198,6 +205,61 @@ impl Film {
             (h + ((n & 1) & (h & 1))) as u8
         };
         [a[0], b[0], mean(a[1], b[1]), mean(a[2], b[2])]
+    }
+}
+
+/// X70/X-E2S still hue stage (FFF44500 bit 12, FFF44544..5c). An approximate
+/// fit to X-E2S 1.11 camera measurements of card ÷ stock chroma on a 120-patch
+/// hue target, not a recovered law. Luma and chroma direction are kept; chroma
+/// magnitude is scaled by
+/// `sqrt(cos^2(p) b0^2 + sin^2(p) b1^2) / 16 + window`, `p = d + 41 deg`,
+/// with `d` the hue `atan2(Cr, Cb)` minus bank 0's axis: byte 0 governs two
+/// opposite lobes and byte 1 the hues between them. `window` is a triangle of
+/// height 0.45 and half-width 15 deg at `d = 3 deg`, whatever the bytes.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct HueStage {
+    axis: f64,
+    window: f64,
+    bytes: [f64; 2],
+}
+impl HueStage {
+    /// From FFF44000-relative still words, or None when the stage is off.
+    pub fn from_still(r: impl Fn(usize) -> u32) -> Option<Self> {
+        if r(0x500) & 1 << 12 == 0 {
+            return None;
+        }
+        let vector = |w: u32| (signed(w, 10), signed(w >> 16, 10));
+        let (cr, cb) = vector(r(0x544));
+        let bytes = [f64::from(r(0x55c) & 31), f64::from(r(0x55c) >> 16 & 31)];
+        if cr == 0 && cb == 0 {
+            // Bank 1 alone keeps nothing at bytes 0, 0: without an axis,
+            // byte 1 applies everywhere.
+            return Some(Self {
+                axis: 0.0,
+                window: 0.0,
+                bytes: [bytes[1]; 2],
+            });
+        }
+        // Bank 0 alone keeps 1.7 times the window of both factory banks, and
+        // the window scales by (bank 0 width word / 515)^2.5.
+        let banks = if vector(r(0x550)) == (0, 0) { 1.7 } else { 1.0 };
+        let width = f64::from(r(0x548) & 0x7ff) / 515.0;
+        Some(Self {
+            axis: libm::atan2(f64::from(cr), f64::from(cb)).to_degrees(),
+            window: 0.45 * banks * libm::pow(width, 2.5),
+            bytes,
+        })
+    }
+    /// Q10 chroma gain for chroma (cb, cr).
+    pub fn gain(&self, cb: i32, cr: i32) -> i32 {
+        let hue = libm::atan2(f64::from(cr), f64::from(cb)).to_degrees();
+        let d = (hue - self.axis + 180.0).rem_euclid(360.0) - 180.0;
+        let p = (d + 41.0).to_radians();
+        let (s, c) = (libm::sin(p), libm::cos(p));
+        let [b0, b1] = self.bytes;
+        let g = libm::sqrt(c * c * b0 * b0 + s * s * b1 * b1) / 16.0
+            + self.window * (1.0 - (d - 3.0).abs() / 15.0).max(0.0);
+        libm::rint(g * 1024.0) as i32
     }
 }
 
@@ -425,6 +487,49 @@ mod tests {
         }
     }
 
+    #[test]
+    fn hue_stage_matches_the_camera_hue_map() {
+        // Factory Partial Color red banks 7 and 1 turned to 131 deg.
+        let words = |enable: u32, bytes: u32| {
+            move |o: usize| match o {
+                0x500 => enable,
+                0x544 => 0x033c_00e2,
+                0x548 => 515,
+                0x550 => 0x02bd_0174,
+                0x554 => 1736,
+                0x55c => bytes,
+                _ => 0,
+            }
+        };
+        assert!(HueStage::from_still(words(0, 0x0010_0010)).is_none());
+        let at = |stage: &HueStage, offset: f64| {
+            let (s, c) = (131.0 + offset).to_radians().sin_cos();
+            f64::from(stage.gain((100.0 * c) as i32, (100.0 * s) as i32)) / 1024.0
+        };
+        let half = HueStage::from_still(words(1 << 12, 0x0008_0008)).unwrap();
+        let byte0 = HueStage::from_still(words(1 << 12, 0x0000_0010)).unwrap();
+        let equal = HueStage::from_still(words(1 << 12, 0x0010_0010)).unwrap();
+        // Card 4 medians at these offsets from the axis.
+        for (offset, measured) in [(-130.4, 0.03), (-54.3, 0.99), (39.7, 0.18), (144.9, 1.0)] {
+            assert!((at(&half, offset) - 0.5).abs() < 0.01);
+            assert!((at(&byte0, offset) - measured).abs() < 0.04, "{offset}");
+        }
+        assert!((at(&equal, 8.8) - 1.21).abs() < 0.08 && (at(&equal, 90.0) - 1.0).abs() < 0.01);
+        let mut film = Film::default();
+        film.chroma = [1024, 0, 1024, 0];
+        film.bands = [(0, 256); 5];
+        film.bounds = [255; 4];
+        film.curves = std::array::from_fn(|_| (0..4096).map(|x| (x * 4) as u16).collect());
+        film.matrix = [[1024, 0, 0], [0, 1024, 0], [0, 0, 1024]];
+        film.gain = vec![2048; 4096];
+        let plain = film.develop([9000, 5000, 3000]);
+        film.hue = Some(half);
+        let staged = film.develop([9000, 5000, 3000]);
+        assert_eq!(plain[0], staged[0]);
+        for c in 1..3 {
+            assert!(((i32::from(plain[c]) - 128) / 2 - (i32::from(staged[c]) - 128)).abs() <= 1);
+        }
+    }
     #[test]
     fn zero_and_signed_matrix_law() {
         let mut f = Film::default();

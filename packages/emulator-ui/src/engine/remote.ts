@@ -25,7 +25,7 @@ import type {
 
 type SaveEvent = { savedAt?: number; revision?: number; error?: string };
 export type NativeDisplayState = {
-  source: 'stock' | 'glgui';
+  source: 'stock' | 'focalized-ui';
   title: string | null;
   sequence: number;
 };

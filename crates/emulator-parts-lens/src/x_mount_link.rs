@@ -2,7 +2,11 @@
 //!
 //! Supported exchanges are sync, link parameters, identification, status,
 //! ring reads, and declared read-only catalogs. Bounded command20 writes latch on sync.
-//! Unknown commands refuse. GPIO/power behavior, optical stabilization and
+//! A board may declare fixed replies for further request families; such a
+//! family answers every request with its declared payload and has no effect.
+//! A declared operation family is counted when the next sync latches it, so the
+//! powered part can report the operation on its ready output; the operation
+//! itself is not modeled. Unknown commands refuse. GPIO/power behavior, optical stabilization and
 //! boot qualification are outside this part.
 use fujimod_emulator_parts_io::serial::{Frame, Wire};
 use serde::{Deserialize, Serialize};
@@ -80,6 +84,15 @@ impl ReadCatalog {
         ((self.attributes as u16) << 11) | (self.data.len() / CATALOG_BLOCK_BYTES) as u16
     }
 }
+/// A request family answered with one declared payload, whatever the request's payload.
+/// It stands in for a command whose effect and reply are not modeled.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct FixedReply {
+    pub family: u16,
+    pub payload: u16,
+}
+
 #[derive(Clone, Copy, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 enum BulkSource {
@@ -102,6 +115,20 @@ pub struct Configuration {
     pub focus_ring: u16,
     pub detail_status: u16,
     pub read_catalogs: Vec<ReadCatalog>,
+    /// Declared stand-in replies for request families this part does not model.
+    #[serde(default)]
+    pub fixed_replies: Vec<FixedReply>,
+    /// Fixed-reply families whose request starts a lens operation at the next sync.
+    #[serde(default)]
+    pub operation_families: Vec<u16>,
+}
+impl Configuration {
+    fn fixed_reply(&self, family: u16) -> Option<u16> {
+        self.fixed_replies
+            .iter()
+            .find(|reply| reply.family == family)
+            .map(|reply| reply.payload)
+    }
 }
 #[derive(Clone, Copy, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -137,6 +164,12 @@ struct State {
     last_tick: Option<u64>,
     control20: Option<u16>,
     staged_control20: Option<u16>,
+    /// An operation-family request waits for the sync that starts it.
+    #[serde(default)]
+    staged_operation: bool,
+    /// Operations started since power-up.
+    #[serde(default)]
+    operations: u64,
 }
 
 pub struct Link {
@@ -161,10 +194,42 @@ impl Link {
                 return Err("invalid X-mount read catalog geometry/selector/metadata".into());
             }
         }
+        for (index, reply) in configuration.fixed_replies.iter().enumerate() {
+            if reply.family == 0
+                || reply.family > 0x1ff
+                || matches!(
+                    reply.family,
+                    SYNC | PARAMETERS
+                        | IDENTIFICATION
+                        | STATUS
+                        | APERTURE_RING
+                        | FOCUS_RING
+                        | DETAIL_STATUS
+                        | READ_CATALOG
+                        | CONTROL20
+                )
+                || configuration.fixed_replies[..index]
+                    .iter()
+                    .any(|other| other.family == reply.family)
+            {
+                return Err("invalid X-mount fixed reply family".into());
+            }
+        }
+        for (index, family) in configuration.operation_families.iter().enumerate() {
+            if configuration.fixed_reply(*family).is_none()
+                || configuration.operation_families[..index].contains(family)
+            {
+                return Err("X-mount operation family needs one declared fixed reply".into());
+            }
+        }
         Ok(Self {
             configuration,
             state: State::default(),
         })
+    }
+    /// Operations started by a sync since power-up.
+    pub fn operations(&self) -> u64 {
+        self.state.operations
     }
     /// Explicit external reset; serial-controller FIFO reset is a separate wire.
     pub fn reset(&mut self) {
@@ -201,6 +266,9 @@ impl Link {
             (PARAMETERS, value) if value == self.configuration.peer_parameters => {
                 Ok(Some(self.configuration.parameters))
             }
+            (family, _) if self.configuration.fixed_reply(family).is_some() => {
+                Ok(self.configuration.fixed_reply(family))
+            }
             _ => Err(format!("X-mount request is unmodeled: {:08x}", packet.0)),
         }
     }
@@ -227,7 +295,7 @@ impl Link {
             (FOCUS_RING, payload) => payload == self.configuration.focus_ring,
             (DETAIL_STATUS, payload) => payload == self.configuration.detail_status,
             (CONTROL20, 0..=1) => true,
-            _ => false,
+            (family, payload) => self.configuration.fixed_reply(family) == Some(payload),
         }
     }
     fn deliver(&mut self, packet: Packet, ack: Packet) -> Result<(), String> {
@@ -253,6 +321,16 @@ impl Link {
                 if let Some(value) = self.state.staged_control20.take() {
                     self.state.control20 = Some(value);
                 }
+                if std::mem::take(&mut self.state.staged_operation) {
+                    self.state.operations = self
+                        .state
+                        .operations
+                        .checked_add(1)
+                        .ok_or("X-mount operation counter overflow")?;
+                }
+            }
+            family if self.configuration.operation_families.contains(&family) => {
+                self.state.staged_operation = true;
             }
             _ => {}
         }

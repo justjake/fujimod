@@ -70,6 +70,8 @@ fn x_mount_lens(builder: Builder<'_>, model: Model) -> Result<Built, String> {
         transport,
         configuration,
         startup_ticks,
+        busy_ticks,
+        operation_ticks,
         pins,
         gpio,
         controllers: names,
@@ -85,7 +87,11 @@ fn x_mount_lens(builder: Builder<'_>, model: Model) -> Result<Built, String> {
         let device = crate::x_mount_connector::XMountLens::new(
             transport,
             configuration,
-            startup_ticks,
+            fujimod_emulator_parts_lens::x_mount_lens::Timing {
+                startup_ticks,
+                busy_ticks,
+                operation_ticks,
+            },
             pins,
             resources.pads(&gpio)?,
             controllers(built, names)?,

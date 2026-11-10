@@ -74,7 +74,7 @@ impl GlesLatency {
     }
 }
 /// X70 1.10 3D list latency at the 12 MHz tick (12,000 ticks per ms). Camera
-/// run of 2026-10-31: 106 GL GUI frames, touch scrolling plus key and tab
+/// run of 2026-10-31: 106 Focalized UI frames, touch scrolling plus key and tab
 /// updates. Least squares over all frames, submission to the first completion
 /// interrupt, gave 4.82 ms + 13.2 ns per filled pixel + 9.5 ns per blended
 /// pixel + 0.026 ms per draw call, maximum error 1.9 ms. That interval already
