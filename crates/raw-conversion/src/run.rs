@@ -88,6 +88,9 @@ pub struct Output {
     pub width: u16,
     pub height: u16,
     pub maker_note: BTreeMap<String, i64>,
+    /// Why the size and MakerNote could not be read; the file is still saved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inspect_error: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -126,26 +129,21 @@ pub struct Options {
 }
 
 /// Jobs already finished in `out`, with a converted file that still matches.
-pub fn finished(out: &Path) -> Result<BTreeSet<String>, String> {
+pub fn finished(out: &Path) -> BTreeSet<String> {
     let path = out.join("manifest.jsonl");
     let Ok(text) = std::fs::read_to_string(&path) else {
-        return Ok(BTreeSet::new());
+        return BTreeSet::new();
     };
     let mut done = BTreeSet::new();
-    for (n, line) in text.lines().enumerate() {
-        if line.trim().is_empty() {
-            continue;
-        }
+    for line in text.lines() {
+        // A line torn by an interruption names a job that simply runs again.
         let Ok(entry) = serde_json::from_str::<Entry>(line) else {
-            // A torn last line from an interruption; the job runs again.
-            if n + 1 == text.lines().count() {
-                continue;
-            }
-            return Err(format!("{}:{}: unreadable entry", path.display(), n + 1));
+            continue;
         };
+        // Outputs are renamed into place whole, so a matching size means intact.
         let intact = match &entry.output {
             Some(o) => {
-                std::fs::read(out.join(&o.file)).is_ok_and(|b| hex(&Sha256::digest(&b)) == o.sha256)
+                std::fs::metadata(out.join(&o.file)).is_ok_and(|m| m.len() == o.bytes as u64)
             }
             None => true,
         };
@@ -153,7 +151,7 @@ pub fn finished(out: &Path) -> Result<BTreeSet<String>, String> {
             done.insert(entry.id);
         }
     }
-    Ok(done)
+    done
 }
 
 /// One line per job, in order, with the D185 words it writes.
@@ -216,7 +214,7 @@ pub async fn execute<P: Pipe>(
     options: &Options,
     mut log: impl FnMut(&str),
 ) -> Result<(), String> {
-    let done = finished(&options.out)?;
+    let done = finished(&options.out);
     for job in &file.jobs {
         if !done.contains(&job.id) && !options.rafs.contains_key(&job.raf) {
             return Err(format!("{}: no --raf {}=PATH", job.id, job.raf));
@@ -344,11 +342,15 @@ pub async fn execute<P: Pipe>(
             continue;
         }
         let jpeg = convert(session, options.conversion_timeout).await?;
-        let summary = crate::jpeg::inspect(&jpeg).map_err(|e| format!("{}: output {e}", job.id))?;
+        // The camera no longer holds the image: save it before reading it.
         let name = format!("{}.jpg", job.id);
         let partial = options.out.join(format!("{name}.partial"));
         std::fs::write(&partial, &jpeg).map_err(|e| e.to_string())?;
         std::fs::rename(&partial, options.out.join(&name)).map_err(|e| e.to_string())?;
+        let (summary, inspect_error) = match crate::jpeg::inspect(&jpeg) {
+            Ok(s) => (s, None),
+            Err(e) => (Default::default(), Some(e)),
+        };
         log(&format!(
             "{}: {}x{} {} bytes",
             job.id,
@@ -363,6 +365,7 @@ pub async fn execute<P: Pipe>(
             width: summary.width,
             height: summary.height,
             maker_note: summary.maker_note,
+            inspect_error,
         });
         record(&options.out, entry)?;
     }
@@ -470,7 +473,7 @@ async fn convert<P: Pipe>(session: &mut Session<P>, timeout: Duration) -> Result
     )
     .await?;
     let poll = Duration::from_millis(500);
-    let mut waited = Duration::ZERO;
+    let deadline = std::time::Instant::now() + timeout;
     let handle = loop {
         if let Some(h) = handles(session)
             .await?
@@ -479,11 +482,10 @@ async fn convert<P: Pipe>(session: &mut Session<P>, timeout: Duration) -> Result
         {
             break h;
         }
-        if waited >= timeout {
+        if std::time::Instant::now() >= deadline {
             return Err(format!("no converted image after {timeout:?}"));
         }
         futures_timer::Delay::new(poll).await;
-        waited += poll;
     };
     let jpeg = call(session, ptp::GET_OBJECT, &[handle], None).await?.data;
     call(session, ptp::DELETE_OBJECT, &[handle, 0], None).await?;
@@ -494,12 +496,16 @@ fn record(out: &Path, mut entry: Entry) -> Result<(), String> {
     entry.finished_unix = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
-    let mut line = serde_json::to_string(&entry).unwrap();
+    let path = out.join("manifest.jsonl");
+    // End a line torn by an interruption so this entry starts on its own line.
+    let torn = std::fs::read(&path).is_ok_and(|t| t.last().is_some_and(|b| *b != b'\n'));
+    let mut line = if torn { "\n".to_owned() } else { String::new() };
+    line.push_str(&serde_json::to_string(&entry).unwrap());
     line.push('\n');
     let mut f = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(out.join("manifest.jsonl"))
+        .open(&path)
         .map_err(|e| e.to_string())?;
     f.write_all(line.as_bytes())
         .and_then(|_| f.sync_all())
@@ -565,6 +571,12 @@ mod tests {
             )
         })
     }
+    fn manifest_lines(s: &Setup) -> usize {
+        std::fs::read_to_string(s.options.out.join("manifest.jsonl"))
+            .unwrap()
+            .lines()
+            .count()
+    }
     fn manifest(s: &Setup) -> Vec<Entry> {
         std::fs::read_to_string(s.options.out.join("manifest.jsonl"))
             .unwrap()
@@ -625,7 +637,48 @@ mod tests {
         );
         // A converted file that no longer matches its hash is converted again.
         std::fs::write(s.options.out.join("provia.jpg"), b"x").unwrap();
-        assert!(!finished(&s.options.out).unwrap().contains("provia"));
+        assert!(!finished(&s.options.out).contains("provia"));
+        std::fs::remove_dir_all(&s.dir).unwrap();
+    }
+
+    #[test]
+    fn resumes_on_an_open_session_and_after_a_torn_manifest_line() {
+        let s = setup("torn");
+        let mut camera = FakeCamera::new(512);
+        camera.fail_conversion = Some(2);
+        let result = block_on(async {
+            let mut session = Session::open(camera).await.unwrap();
+            execute(&mut session, &s.file, &s.options, |_| {}).await
+        });
+        assert!(result.is_err());
+        let path = s.options.out.join("manifest.jsonl");
+        let mut text = std::fs::read_to_string(&path).unwrap();
+        text.push_str(r#"{"id":"acros-wc+9","raf"#);
+        std::fs::write(&path, text).unwrap();
+        // The interrupted run never closed its session.
+        let mut camera = FakeCamera::new(512);
+        camera.session_open = true;
+        let (result, _) = run(&s, camera);
+        result.unwrap();
+        assert_eq!(manifest_lines(&s), 5);
+        assert_eq!(finished(&s.options.out).len(), 4);
+        std::fs::remove_dir_all(&s.dir).unwrap();
+    }
+
+    #[test]
+    fn unreadable_output_is_saved_with_its_error() {
+        let s = setup("unreadable");
+        let mut camera = FakeCamera::new(512);
+        camera.unreadable_output = true;
+        let (result, _) = run(&s, camera);
+        result.unwrap();
+        let entry = &manifest(&s)[0];
+        let out = entry.output.as_ref().unwrap();
+        assert!(out.inspect_error.is_some());
+        assert_eq!(
+            std::fs::read(s.options.out.join(&out.file)).unwrap().len(),
+            out.bytes
+        );
         std::fs::remove_dir_all(&s.dir).unwrap();
     }
 

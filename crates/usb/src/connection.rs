@@ -297,7 +297,14 @@ impl Connection {
                     .ok_or(Error::InvalidInterface)?
                     .packet_size,
             );
-            if packet_size == 0 {
+            let output_packet_size = usize::from(
+                endpoints
+                    .iter()
+                    .find(|e| e.address == output)
+                    .ok_or(Error::InvalidInterface)?
+                    .packet_size,
+            );
+            if packet_size == 0 || output_packet_size == 0 {
                 return Err(Error::InvalidInterface);
             }
             let mut client = remote.connect().await?;
@@ -322,6 +329,7 @@ impl Connection {
                     input,
                     output,
                     packet_size,
+                    output_packet_size,
                     timeout: options.timeout,
                     unsynced: Vec::new(),
                     observation: None,
@@ -522,7 +530,7 @@ impl BulkPipe {
     pub fn packet_size(&self) -> usize {
         match &self.io {
             Backend::Usb(io) => io.output.max_packet_size(),
-            Backend::Proxy(io) => io.packet_size,
+            Backend::Proxy(io) => io.output_packet_size,
             _ => 512,
         }
     }

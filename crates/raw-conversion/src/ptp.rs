@@ -4,6 +4,7 @@
 use std::fmt;
 
 pub const RESPONSE_OK: u16 = 0x2001;
+pub const SESSION_ALREADY_OPEN: u16 = 0x201e;
 
 pub const GET_DEVICE_INFO: u16 = 0x1001;
 pub const OPEN_SESSION: u16 = 0x1002;
@@ -80,14 +81,21 @@ pub struct Session<P> {
 }
 
 impl<P: Pipe> Session<P> {
-    /// Opens session 1. OpenSession itself carries transaction id 0.
+    /// Opens session 1. OpenSession itself carries transaction id 0. A
+    /// session left open by an interrupted run is reused.
     pub async fn open(pipe: P) -> Result<Self> {
         let mut session = Self {
             pipe,
             transaction: 0,
         };
-        session.call(OPEN_SESSION, &[1], None).await?;
-        Ok(session)
+        match session.call(OPEN_SESSION, &[1], None).await {
+            Ok(_)
+            | Err(Error::Response {
+                code: SESSION_ALREADY_OPEN,
+                ..
+            }) => Ok(session),
+            Err(e) => Err(e),
+        }
     }
 
     pub async fn close(mut self) -> Result<P> {

@@ -11,21 +11,54 @@ pub struct Summary {
     pub maker_note: BTreeMap<String, i64>,
 }
 
+/// The marker and body of each segment before the scan. Fill bytes (extra
+/// 0xFF) and standalone markers (TEM, RSTn) carry no length and are skipped.
+fn segments(jpeg: &[u8]) -> impl Iterator<Item = Result<(u8, &[u8]), String>> {
+    let mut at = if jpeg.starts_with(&[0xff, 0xd8]) {
+        2
+    } else {
+        usize::MAX
+    };
+    std::iter::from_fn(move || {
+        if at == usize::MAX {
+            return None;
+        }
+        while jpeg.get(at) == Some(&0xff) && jpeg.get(at + 1) == Some(&0xff) {
+            at += 1;
+        }
+        let (Some(0xff), Some(&marker)) = (jpeg.get(at), jpeg.get(at + 1)) else {
+            let error = format!("marker expected at {at}");
+            at = usize::MAX;
+            return Some(Err(error));
+        };
+        if marker == 0x01 || (0xd0..=0xd7).contains(&marker) {
+            at += 2;
+            return Some(Ok((marker, &[][..])));
+        }
+        let length = jpeg
+            .get(at + 2..at + 4)
+            .map(|b| u16::from_be_bytes([b[0], b[1]]) as usize);
+        let body = length.and_then(|l| jpeg.get(at + 4..at + 2 + l.max(2)));
+        let Some(body) = body else {
+            at = usize::MAX;
+            return Some(Err("truncated segment".into()));
+        };
+        at = if marker == 0xda {
+            usize::MAX
+        } else {
+            at + 4 + body.len()
+        };
+        Some(Ok((marker, body)))
+    })
+}
+
 pub fn inspect(jpeg: &[u8]) -> Result<Summary, String> {
     if !jpeg.starts_with(&[0xff, 0xd8]) {
         return Err("not a JPEG".into());
     }
     let mut out = Summary::default();
-    let mut at = 2;
-    while at + 4 <= jpeg.len() {
-        if jpeg[at] != 0xff {
-            return Err(format!("marker expected at {at}"));
-        }
-        let marker = jpeg[at + 1];
-        let length = u16::from_be_bytes([jpeg[at + 2], jpeg[at + 3]]) as usize;
-        let body = jpeg
-            .get(at + 4..at + 2 + length)
-            .ok_or("truncated segment")?;
+    for segment in segments(jpeg) {
+        let (marker, body) = segment?;
         match marker {
             0xe1 if body.starts_with(b"Exif\0\0") => out.maker_note = maker_note(&body[6..]),
             // Baseline, extended or progressive frame header.
@@ -34,10 +67,8 @@ pub fn inspect(jpeg: &[u8]) -> Result<Summary, String> {
                 out.width = u16::from_be_bytes([body[3], body[4]]);
                 return Ok(out);
             }
-            0xda => break,
             _ => {}
         }
-        at += 2 + length;
     }
     Err("no frame header before the scan".into())
 }
@@ -77,11 +108,9 @@ impl Tiff<'_> {
 
 /// ISO (Exif 0x8827) from the start of a JPEG; the frame itself is not needed.
 pub fn exif_iso(jpeg: &[u8]) -> Option<u32> {
-    let mut at = 2;
-    while jpeg.get(at) == Some(&0xff) && at + 4 <= jpeg.len() {
-        let length = u16::from_be_bytes([jpeg[at + 2], jpeg[at + 3]]) as usize;
-        let body = jpeg.get(at + 4..at + 2 + length)?;
-        if jpeg[at + 1] == 0xe1 && body.starts_with(b"Exif\0\0") {
+    for segment in segments(jpeg) {
+        let (marker, body) = segment.ok()?;
+        if marker == 0xe1 && body.starts_with(b"Exif\0\0") {
             let tiff = &body[6..];
             let exif = Tiff {
                 bytes: tiff,
@@ -96,7 +125,6 @@ pub fn exif_iso(jpeg: &[u8]) -> Option<u32> {
                 _ => None,
             };
         }
-        at += 2 + length;
     }
     None
 }
@@ -206,5 +234,10 @@ mod tests {
         assert_eq!(s.maker_note["0x1047"], 32);
         assert!(inspect(b"not a jpeg").is_err());
         assert_eq!(exif_iso(&jpeg), Some(400));
+        // Fill bytes before a marker and a standalone marker are skipped.
+        let mut padded = jpeg[..2].to_vec();
+        padded.extend_from_slice(&[0xff, 0xff, 0xff, 0x01]);
+        padded.extend_from_slice(&jpeg[2..]);
+        assert_eq!(inspect(&padded).unwrap(), s);
     }
 }

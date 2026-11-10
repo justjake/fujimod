@@ -50,7 +50,7 @@ async fn main_async(args: Vec<String>) -> Result<(), String> {
         upload_each,
         conversion_timeout: timeout,
     };
-    let done = run::finished(&options.out)?;
+    let done = run::finished(&options.out);
     if dry_run {
         for line in run::describe(&file, &options, &done)? {
             println!("{line}");

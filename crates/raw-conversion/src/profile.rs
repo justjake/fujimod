@@ -186,12 +186,37 @@ pub enum ColorSpace {
 impl Settings {
     /// `other`'s fields replace this one's.
     pub fn overlay(&self, other: &Settings) -> Settings {
-        let mut base = serde_json::to_value(self).unwrap();
-        let top = serde_json::to_value(other).unwrap();
-        base.as_object_mut()
-            .unwrap()
-            .extend(top.as_object().unwrap().clone());
-        serde_json::from_value(base).unwrap()
+        Settings {
+            film: other.film.or(self.film),
+            image_size: other.image_size.or(self.image_size),
+            image_quality: other.image_quality.or(self.image_quality),
+            exposure_bias_mev: other.exposure_bias_mev.or(self.exposure_bias_mev),
+            dynamic_range: other.dynamic_range.or(self.dynamic_range),
+            dynamic_range_priority: other.dynamic_range_priority.or(self.dynamic_range_priority),
+            grain: other.grain.or(self.grain),
+            grain_size: other.grain_size.or(self.grain_size),
+            color_chrome: other.color_chrome.or(self.color_chrome),
+            color_chrome_blue: other.color_chrome_blue.or(self.color_chrome_blue),
+            white_balance_as_shot: other.white_balance_as_shot.or(self.white_balance_as_shot),
+            white_balance_shift_red: other
+                .white_balance_shift_red
+                .or(self.white_balance_shift_red),
+            white_balance_shift_blue: other
+                .white_balance_shift_blue
+                .or(self.white_balance_shift_blue),
+            highlight: other.highlight.or(self.highlight),
+            shadow: other.shadow.or(self.shadow),
+            color: other.color.or(self.color),
+            sharpness: other.sharpness.or(self.sharpness),
+            noise_reduction: other.noise_reduction.or(self.noise_reduction),
+            clarity: other.clarity.or(self.clarity),
+            lens_modulation: other.lens_modulation.or(self.lens_modulation),
+            color_space: other.color_space.or(self.color_space),
+            monochrome_warm_cool: other.monochrome_warm_cool.or(self.monochrome_warm_cool),
+            monochrome_magenta_green: other
+                .monochrome_magenta_green
+                .or(self.monochrome_magenta_green),
+        }
     }
 
     /// The words this setting list writes, in field order. JPEG output is

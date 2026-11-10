@@ -24,6 +24,10 @@ pub struct FakeCamera {
     pub clamp: Option<Field>,
     /// Fail the USB transfer that starts conversion number N (1-based).
     pub fail_conversion: Option<usize>,
+    /// A session left open by an earlier controller.
+    pub session_open: bool,
+    /// Converted images the JPEG reader cannot parse.
+    pub unreadable_output: bool,
     pending: Option<(u16, u32, Vec<u32>)>,
     incoming: Vec<u8>,
     expect_zlp: bool,
@@ -47,6 +51,8 @@ impl FakeCamera {
             refuse_profile: false,
             clamp: None,
             fail_conversion: None,
+            session_open: false,
+            unreadable_output: false,
             pending: None,
             incoming: Vec::new(),
             expect_zlp: false,
@@ -131,7 +137,15 @@ impl FakeCamera {
                 }
                 self.respond(code, id, Some(info));
             }
-            0x1002 | 0x1003 => self.respond(code, id, None),
+            0x1002 if self.session_open => self.fail(crate::ptp::SESSION_ALREADY_OPEN, id),
+            0x1002 => {
+                self.session_open = true;
+                self.respond(code, id, None)
+            }
+            0x1003 => {
+                self.session_open = false;
+                self.respond(code, id, None)
+            }
             0x1007 => {
                 let mut list = (self.objects.len() as u32).to_le_bytes().to_vec();
                 for h in self.objects.keys() {
@@ -203,7 +217,10 @@ impl FakeCamera {
             0x1016 if params[0] == START_RAW_CONVERSION => {
                 self.conversions += 1;
                 let film = self.profile.get(Field::FilmSimulation).unwrap() as u16;
-                let jpeg = crate::jpeg::synthetic(6240, 4160, 160, &[(0x1401, film)]);
+                let mut jpeg = crate::jpeg::synthetic(6240, 4160, 160, &[(0x1401, film)]);
+                if self.unreadable_output {
+                    jpeg.truncate(40);
+                }
                 self.objects.insert(self.next_handle, jpeg);
                 self.next_handle += 1;
                 self.respond(code, id, None);
