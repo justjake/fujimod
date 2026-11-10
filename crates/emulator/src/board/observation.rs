@@ -6,6 +6,7 @@ use fujimod_emulator_cpu::{Access, Cpu, Hook, HookId, HookRange, Model, Register
 use serde_json::{Value, json};
 use std::{
     cell::{Cell, RefCell},
+    collections::BTreeMap,
     ffi::c_void,
     rc::{Rc, Weak},
 };
@@ -55,7 +56,9 @@ pub struct MemoryWatch {
 }
 impl MemoryWatch {
     pub fn is_live(&self) -> bool {
-        self.contexts.iter().all(|context| context.cpu.upgrade().is_some())
+        self.contexts
+            .iter()
+            .all(|context| context.cpu.upgrade().is_some())
     }
 }
 struct MemoryContext {
@@ -171,10 +174,13 @@ impl MemoryContext {
                     if index == self.sample_offsets.len() {
                         break;
                     }
-                    let Some(next) = u64::from(value).checked_add(self.sample_offsets[index]) else {
+                    let Some(next) = u64::from(value).checked_add(self.sample_offsets[index])
+                    else {
                         break;
                     };
-                    let Some((lo, hi)) = self.sample_bounds else { break };
+                    let Some((lo, hi)) = self.sample_bounds else {
+                        break;
+                    };
                     if next < lo || next.checked_add(4).is_none_or(|end| end > hi) {
                         break;
                     }
@@ -272,8 +278,11 @@ fn compact_hooks(ranges: Vec<Span>, maximum: usize) -> Vec<Span> {
     if ranges.len() <= maximum {
         return ranges;
     }
-    let mut gaps: Vec<_> = ranges.windows(2).enumerate()
-        .map(|(index, pair)| (pair[1].0 - pair[0].1, index)).collect();
+    let mut gaps: Vec<_> = ranges
+        .windows(2)
+        .enumerate()
+        .map(|(index, pair)| (pair[1].0 - pair[0].1, index))
+        .collect();
     gaps.sort_unstable();
     let mut join = vec![false; gaps.len()];
     for &(_, index) in gaps.iter().take(ranges.len() - maximum) {
@@ -335,7 +344,8 @@ impl Board {
     ) -> Result<Box<MemoryWatch>, String> {
         if (!sample_addresses.is_empty() && sample_addresses.len() != self.cpus.len())
             || sample_offsets.len() > 4
-            || (!sample_offsets.is_empty() && (sample_addresses.is_empty() || sample_bounds.is_none()))
+            || (!sample_offsets.is_empty()
+                && (sample_addresses.is_empty() || sample_bounds.is_none()))
             || sample_bounds.is_some_and(|(lo, hi)| lo >= hi || hi > 1 << 32)
         {
             return Err("Invalid per-core memory watch sample specification".into());
@@ -473,14 +483,14 @@ impl Board {
 /// Repeated entry observations stop before the selected instruction. Resume
 /// executes that instruction once, even when it is itself a loop target.
 pub(super) struct EntryPoints {
-    addresses: Vec<u64>,
+    addresses: RefCell<Vec<u64>>,
     pause: Rc<Cell<bool>>,
     event: RefCell<Option<u64>>,
     skip: Cell<Option<u64>>,
 }
 impl EntryPoints {
     fn hit(&self, pc: u64) -> bool {
-        if self.addresses.binary_search(&pc).is_err() {
+        if self.addresses.borrow().binary_search(&pc).is_err() {
             return false;
         }
         if self.skip.get() == Some(pc) {
@@ -496,8 +506,12 @@ impl EntryPoints {
 pub struct InstructionPoints {
     cpu: Weak<dyn Cpu>,
     entry: Rc<EntryPoints>,
-    hooks: Vec<HookId>,
+    /// Installed hooks by address. A hook stays installed after its address
+    /// leaves the active set, because removing and reinstalling it discards
+    /// the translated code of its page both times.
+    hooks: BTreeMap<u64, HookId>,
 }
+const INSTRUCTION_POINTS: usize = 4096;
 unsafe fn instruction(pc: u64, _: u32, data: *mut c_void) {
     let points = unsafe { &*data.cast::<InstructionPoints>() };
     if points.entry.hit(pc)
@@ -537,47 +551,79 @@ impl Board {
     pub fn instruction_points_begin(
         &self,
         core: usize,
-        mut addresses: Vec<u64>,
+        addresses: Vec<u64>,
     ) -> Result<Box<InstructionPoints>, String> {
-        let cpu = self.cpu(core)?;
-        if addresses.len() > 4096 || addresses.iter().any(|pc| pc & 1 != 0) {
-            return Err("Instruction points require bounded aligned addresses".into());
-        }
-        addresses.sort_unstable();
-        addresses.dedup();
+        self.cpu(core)?;
         let mut points = Box::new(InstructionPoints {
             cpu: Rc::downgrade(&self.cpus[core]),
             entry: Rc::new(EntryPoints {
-                addresses: addresses.clone(),
+                addresses: RefCell::new(vec![]),
                 pause: self.host_pause.clone(),
                 event: RefCell::new(None),
                 skip: Cell::new(None),
             }),
-            hooks: vec![],
+            hooks: BTreeMap::new(),
         });
-        if !cpu.features().instruction_progress {
+        if !self.cpu(core)?.features().instruction_progress {
             // These processors use the shared all-instruction callback. Check
             // there before architectural emulation and instruction accounting.
             self.state.borrow_mut().entry_points[core].push(Rc::downgrade(&points.entry));
-            return Ok(points);
+        }
+        if let Err(error) = self.instruction_points_update(core, &mut points, addresses) {
+            self.instruction_points_end(core, &mut points)?;
+            return Err(error);
+        }
+        Ok(points)
+    }
+    /// Replace the active addresses, installing hooks only for new ones.
+    pub fn instruction_points_update(
+        &self,
+        core: usize,
+        points: &mut InstructionPoints,
+        mut addresses: Vec<u64>,
+    ) -> Result<(), String> {
+        let cpu = self.cpu(core)?;
+        if addresses.len() > INSTRUCTION_POINTS || addresses.iter().any(|pc| pc & 1 != 0) {
+            return Err("Instruction points require bounded aligned addresses".into());
+        }
+        addresses.sort_unstable();
+        addresses.dedup();
+        *points.entry.addresses.borrow_mut() = addresses.clone();
+        if !cpu.features().instruction_progress {
+            return Ok(());
+        }
+        let added = addresses
+            .iter()
+            .filter(|pc| !points.hooks.contains_key(pc))
+            .count();
+        if points.hooks.len() + added > INSTRUCTION_POINTS {
+            let inactive = points
+                .hooks
+                .keys()
+                .filter(|pc| addresses.binary_search(pc).is_err())
+                .copied()
+                .collect::<Vec<_>>();
+            for pc in inactive {
+                if let Some(hook) = points.hooks.remove(&pc) {
+                    cpu.remove_hook(hook)?;
+                }
+            }
         }
         let data = (&*points as *const InstructionPoints).cast_mut().cast();
         for pc in addresses {
-            match unsafe {
+            if points.hooks.contains_key(&pc) {
+                continue;
+            }
+            let hook = unsafe {
                 cpu.install_hook(Hook::Instruction {
                     callback: instruction,
                     data,
                     range: HookRange::Inclusive { begin: pc, end: pc },
                 })
-            } {
-                Ok(id) => points.hooks.push(id),
-                Err(error) => {
-                    self.instruction_points_end(core, &mut points)?;
-                    return Err(error);
-                }
-            }
+            }?;
+            points.hooks.insert(pc, hook);
         }
-        Ok(points)
+        Ok(())
     }
     pub fn instruction_points_end(
         &self,
@@ -590,7 +636,7 @@ impl Board {
                 .upgrade()
                 .is_some_and(|entry| !Rc::ptr_eq(&entry, &points.entry))
         });
-        for hook in points.hooks.drain(..) {
+        for hook in std::mem::take(&mut points.hooks).into_values() {
             self.cpu(core)?.remove_hook(hook)?;
         }
         Ok(())
@@ -705,7 +751,9 @@ unsafe fn function(pc: u64, _: u32, data: *mut c_void) {
 }
 impl FunctionWatch {
     pub fn is_live(&self) -> bool {
-        self.contexts.iter().all(|context| context.cpu.upgrade().is_some())
+        self.contexts
+            .iter()
+            .all(|context| context.cpu.upgrade().is_some())
     }
 
     pub fn check(&self) -> Result<(), String> {
