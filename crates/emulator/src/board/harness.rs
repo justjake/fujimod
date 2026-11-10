@@ -2,8 +2,8 @@
 //! These optional CPU observers never provide peripheral capabilities.
 pub mod arm32;
 pub mod arm64;
-use super::{Board, scalar};
-use fujimod_emulator_cpu::{Access, Cpu, Hook, HookId, HookRange, Register, arm};
+use super::{Board, State, scalar};
+use fujimod_emulator_cpu::{Access, Block, Cpu, Hook, HookId, HookRange, Model, Register, arm};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
@@ -108,10 +108,13 @@ struct Observations {
     halt: Option<Value>,
     faults: Vec<Value>,
     irq_events: Vec<Value>,
+    pending_block: Option<(usize, u64)>,
 }
 pub struct Session {
     options: Options,
     cpu: Weak<dyn Cpu>,
+    board_state: Weak<RefCell<State>>,
+    block_guard: bool,
     pause: Rc<Cell<bool>>,
     observed: RefCell<Observations>,
     hooks: Vec<HookId>,
@@ -122,6 +125,80 @@ fn contains(ranges: &[Span], address: u64, size: u64) -> Option<usize> {
             .iter()
             .position(|&(lo, hi)| lo <= address && end <= hi)
     })
+}
+
+// Instruction hooks cover the complement of these safe starts, plus explicit
+// stop points. Four bytes at each edge stay observed: a Thumb instruction may
+// span the edge, and ending the translated block there keeps range accounting
+// unambiguous even across adjacent ranges or alias boundaries.
+fn block_guard_hooks(options: &Options) -> Option<Vec<Span>> {
+    let ranges = options.ranges.as_ref()?;
+    if ranges.is_empty()
+        || options.coverage
+        || !options.count_ranges.is_empty()
+        || options.trace != 0
+        || !options.unarmed.is_empty()
+        || ranges.windows(2).any(|pair| pair[0].1 > pair[1].0)
+    {
+        return None;
+    }
+    let end = 1u64 << 32;
+    let mut boundaries = vec![0, end];
+    for &(lo, hi) in ranges {
+        boundaries.extend([lo, hi]);
+    }
+    for alias in &options.memory.aliases {
+        boundaries.extend([alias.address, alias.address + alias.size]);
+        for &(lo, hi) in ranges {
+            for boundary in [lo, hi] {
+                if let Some(offset) = boundary.checked_sub(alias.physical)
+                    && offset < alias.size
+                {
+                    boundaries.push(alias.address + offset);
+                }
+            }
+        }
+    }
+    boundaries.sort_unstable();
+    boundaries.dedup();
+    let mut safe = Vec::new();
+    for pair in boundaries.windows(2) {
+        let (lo, hi) = (pair[0], pair[1]);
+        if hi - lo > 4 && contains(ranges, options.memory.physical(lo), hi - lo).is_some() {
+            safe.push((lo, hi - 4));
+        }
+    }
+    let mut hooks = Vec::new();
+    let mut next = 0;
+    for (lo, hi) in safe {
+        if next < lo {
+            hooks.push((next, lo));
+        }
+        next = hi;
+    }
+    if next < end {
+        hooks.push((next, end));
+    }
+    for address in std::iter::once(&options.return_address)
+        .chain(options.breakpoints.iter())
+        .chain(options.stop_addresses.iter())
+    {
+        if *address < end {
+            hooks.push((*address, *address + 1));
+        }
+    }
+    hooks.sort_unstable();
+    let mut merged: Vec<Span> = Vec::new();
+    for (lo, hi) in hooks {
+        if let Some(last) = merged.last_mut()
+            && lo <= last.1
+        {
+            last.1 = last.1.max(hi);
+        } else {
+            merged.push((lo, hi));
+        }
+    }
+    Some(merged)
 }
 impl Session {
     fn physical(&self, address: u64) -> u64 {
@@ -139,11 +216,63 @@ impl Session {
             self.observed.borrow_mut().event = Some(json!({"kind":"failure","message":error}));
         }
     }
+    fn progress(&self, cpu: &dyn Cpu) -> Result<u64, String> {
+        let state = self
+            .board_state
+            .upgrade()
+            .ok_or("isolated caller board is gone")?;
+        let state = state.borrow();
+        let core = self.options.core;
+        let progress = cpu
+            .instruction_progress()
+            .ok_or("missing isolated caller progress")?;
+        let extra = progress
+            .checked_sub(state.accounted[core])
+            .ok_or("isolated caller progress moved backward")?;
+        state.instructions[core]
+            .checked_add(extra)
+            .ok_or_else(|| "isolated caller progress overflow".into())
+    }
+    fn account_block(&self, through: u64) {
+        let mut o = self.observed.borrow_mut();
+        if let Some((index, start)) = o.pending_block {
+            let count = through.saturating_sub(start);
+            o.checked += count;
+            o.accepted += count;
+            o.range_fetches[index] += count;
+            o.trace_total += count;
+            o.pending_block = Some((index, through));
+        }
+    }
+    fn block(&self, block: Block) -> Result<(), String> {
+        let cpu = self
+            .cpu
+            .upgrade()
+            .ok_or("isolated caller processor is gone")?;
+        let through = self.progress(&*cpu)?;
+        self.account_block(through);
+        let index = self
+            .options
+            .ranges
+            .as_ref()
+            .and_then(|ranges| contains(ranges, self.physical(block.address), 1));
+        let mut o = self.observed.borrow_mut();
+        o.pending_block = index.map(|index| (index, through));
+        o.entered = true;
+        Ok(())
+    }
     fn instruction(&self, pc: u64, size: u32) -> Result<(), String> {
         let cpu = self
             .cpu
             .upgrade()
             .ok_or("isolated caller processor is gone")?;
+        if self.block_guard {
+            let through = self.progress(&*cpu)?;
+            self.account_block(through.saturating_sub(1));
+            if let Some((_, start)) = self.observed.borrow_mut().pending_block.as_mut() {
+                *start = through;
+            }
+        }
         let physical = self.physical(pc);
         let mut o = self.observed.borrow_mut();
         let skipped = o.skip_once.take() == Some(pc);
@@ -306,13 +435,27 @@ impl Session {
         o.skip_once = skip_once;
     }
     pub fn state(&self) -> Value {
+        if self.block_guard
+            && let Some(cpu) = self.cpu.upgrade()
+            && let Ok(through) = self.progress(&*cpu)
+        {
+            self.account_block(through);
+        }
         let o = self.observed.borrow();
         json!({"memory":self.options.memory,"event":o.event,"faults":o.faults,"irq_events":o.irq_events,"executed":o.executed,"records":o.stores,"counts":o.counts,
             "trace":o.trace,"trace_total":o.trace_total,
-            "guard":{"enabled":self.options.ranges.is_some(),"checked_fetches":o.checked,
+            "guard":{"enabled":self.options.ranges.is_some(),"block_accounting":self.block_guard,"checked_fetches":o.checked,
                 "accepted_fetches":o.accepted,"vector_fetches":o.vector_fetches,"range_fetches":o.range_fetches,
                 "vector_range_fetches":o.vector_range_fetches,"ranges":self.options.ranges,
                 "vector_ranges":self.options.vectors,"halted":o.halt.is_some(),"halt":o.halt}})
+    }
+}
+unsafe fn block(block: Block, data: *mut c_void) {
+    let s = unsafe { &*data.cast::<Session>() };
+    if let Err(message) = s.block(block)
+        && let Some(cpu) = s.cpu.upgrade()
+    {
+        s.stop(&*cpu, json!({"kind":"failure","message":message}), false);
     }
 }
 unsafe fn instruction(pc: u64, size: u32, data: *mut c_void) {
@@ -394,6 +537,9 @@ impl Board {
         {
             return Err("invalid isolated caller observation bounds".into());
         }
+        let block_hooks = (cpu.model() == Model::CortexR5F && cpu.features().instruction_progress)
+            .then(|| block_guard_hooks(&options))
+            .flatten();
         let mut session = Box::new(Session {
             observed: RefCell::new(Observations {
                 counts: vec![0; options.count_ranges.len()],
@@ -403,17 +549,48 @@ impl Board {
             }),
             options,
             cpu: Rc::downgrade(cpu),
+            board_state: Rc::downgrade(&self.state),
+            block_guard: block_hooks.is_some(),
             pause: self.host_pause.clone(),
             hooks: vec![],
         });
         let data = (&*session as *const Session).cast_mut().cast();
-        session.hooks.push(unsafe {
-            cpu.install_hook(Hook::Instruction {
-                callback: instruction,
-                data,
-                range: HookRange::All,
-            })?
-        });
+        if let Some(ranges) = block_hooks {
+            session.hooks.push(unsafe {
+                cpu.install_hook(Hook::Block {
+                    callback: block,
+                    data,
+                    range: HookRange::All,
+                })?
+            });
+            for (lo, hi) in ranges {
+                let hook = unsafe {
+                    cpu.install_hook(Hook::Instruction {
+                        callback: instruction,
+                        data,
+                        range: HookRange::Inclusive {
+                            begin: lo,
+                            end: hi - 1,
+                        },
+                    })
+                };
+                match hook {
+                    Ok(hook) => session.hooks.push(hook),
+                    Err(error) => {
+                        self.harness_end(&mut session)?;
+                        return Err(error);
+                    }
+                }
+            }
+        } else {
+            session.hooks.push(unsafe {
+                cpu.install_hook(Hook::Instruction {
+                    callback: instruction,
+                    data,
+                    range: HookRange::All,
+                })?
+            });
+        }
         if session.options.record_stores || session.options.allowed_stores.is_some() {
             let hook = unsafe {
                 cpu.install_hook(Hook::Memory {

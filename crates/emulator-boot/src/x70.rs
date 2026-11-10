@@ -409,6 +409,7 @@ fn card_recipe(
     selection: &ResolvedSelection,
     browser: &RunBrowserCamera,
     dram_address_space_limit_bytes: u64,
+    high_speed: bool,
 ) -> Result<Value, String> {
     let slot = selection
         .body
@@ -431,6 +432,7 @@ fn card_recipe(
             "clock_ticks": 2,
             "rca": 4660,
             "ram_bytes": dram_address_space_limit_bytes,
+            "high_speed": high_speed,
         },
         "card": {
             "kind": "formatted",
@@ -2068,7 +2070,10 @@ pub(super) fn assemble(
     for rule in rules {
         let mut recipe = match (rule.name, browser) {
             ("sd", Some(browser)) => {
-                card_recipe(selection, browser, dram_address_space_limit_bytes)?
+                card_recipe(selection, browser, dram_address_space_limit_bytes,
+                    configuration.preset.as_ref().is_some_and(|p|
+                        p.factory_options.sd_card_profile == Some(
+                            fujimod_catalog_run_inputs::RunSdCardProfile::DeclaredBlankSdhcHighSpeedUnmeasured)))?
             }
             _ => model_recipe(rule.name)?,
         };
