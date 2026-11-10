@@ -17,6 +17,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::{ffi::c_void, ptr::NonNull};
 
 mod backend;
+mod cache;
 mod clock_poll;
 mod exclusive;
 mod loops;
@@ -30,6 +31,8 @@ use mapping::Mapping;
 
 #[cfg(test)]
 mod access_exit_tests;
+#[cfg(test)]
+mod cache_tests;
 #[cfg(test)]
 mod tcm_tests;
 #[cfg(test)]
@@ -55,6 +58,10 @@ pub struct Options {
     /// The processor's VINITHI input: exception vectors start at 0xffff0000 (SCTLR.V set at reset).
     #[serde(default)]
     pub high_vectors: bool,
+    /// Private, non-coherent write-back L1 data cache. Processors sharing
+    /// memory that declare one refuse cross-processor dirty-line hazards.
+    #[serde(default)]
+    pub data_cache: Option<super::data_cache::Geometry>,
 }
 pub struct Wiring {
     pub memory: Memory,
@@ -178,6 +185,9 @@ pub(super) struct Execution {
     observer_index: RefCell<observers::Index>,
     at_block: Cell<bool>,
     at_instruction: Cell<bool>,
+    data_cache: RefCell<Option<super::data_cache::Cache>>,
+    cache_spans: RefCell<Vec<super::data_cache::Span>>,
+    cache_spans_stale: Cell<bool>,
 }
 
 pub struct Core {
@@ -295,9 +305,18 @@ impl Core {
             observer_index: RefCell::new(observers::Index::default()),
             at_block: Cell::new(false),
             at_instruction: Cell::new(false),
+            data_cache: RefCell::new(None),
+            cache_spans: RefCell::new(Vec::new()),
+            cache_spans_stale: Cell::new(true),
         });
         let owner: Rc<dyn crate::memory::CodeOwner> = e.clone();
         e.id.set(e.memory.register(Rc::downgrade(&owner)));
+        if let Some(geometry) = options.data_cache {
+            *e.data_cache.borrow_mut() = Some(super::data_cache::Cache::new(
+                e.id.get(),
+                e.memory.shared().data_lines(geometry)?,
+            ));
+        }
         unsafe {
             let r = &mut *record.as_ptr();
             r.ring = (*e.ring.get()).as_mut_ptr();
@@ -341,6 +360,18 @@ impl Core {
                 range: HookRange::All,
             })?;
             e.cpu.hook_watched(stores, true)?;
+            if options.data_cache.is_some() {
+                // Every access to watched RAM reaches this hook; map_ram
+                // watches all external RAM.
+                let accesses = e.cpu.install_hook(Hook::Memory {
+                    callback: data_access,
+                    data,
+                    read: true,
+                    write: true,
+                    range: HookRange::All,
+                })?;
+                e.cpu.hook_watched(accesses, true)?;
+            }
         }
         e.cpu.precise_store_pc(true)?;
         if options.high_vectors {
@@ -597,6 +628,7 @@ impl Execution {
                 .at(address)
                 .is_empty()
                 || special(word)
+                || self.data_cache_operation(word, false).is_some()
                 || self.loop_candidate(address, word)
             {
                 InstructionDisposition::ObserveAndEndBlock
@@ -969,6 +1001,9 @@ impl Execution {
         {
             return Err("unconditional R-profile coprocessor substitution is unmodeled".into());
         }
+        if cp == 15 && word & (1 << 20) == 0 {
+            self.data_cache_instruction(word, opc1, crn, crm, opc2, cpsr)?;
+        }
         if cp == 15 && opc1 == 0 && crn == 9 && crm == 1 {
             if opc2 > 1 {
                 return Err("unmodeled R-profile TCM selector".into());
@@ -1166,6 +1201,10 @@ unsafe fn exception(exception: arm::Exception, data: *mut c_void) {
             "unmodeled R-profile architectural exception {exception:?}"
         ))
     });
+}
+unsafe fn data_access(access: Access, address: u64, size: i32, _: i64, data: *mut c_void) {
+    let e = unsafe { context(data) };
+    e.guarded(|| e.data_access(access, address, size));
 }
 unsafe fn device_boundary(_: Access, _: u64, _: i32, _: i64, _: *mut c_void) {}
 

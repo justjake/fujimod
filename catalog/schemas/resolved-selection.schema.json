@@ -5687,6 +5687,29 @@
       ],
       "type": "object"
     },
+    "DataCacheGeometry": {
+      "additionalProperties": false,
+      "description": "L1 data-cache geometry.",
+      "properties": {
+        "line_bytes": {
+          "description": "Line size in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sets": {
+          "description": "Number of sets.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "line_bytes",
+        "sets"
+      ],
+      "type": "object"
+    },
     "DebugKey": {
       "additionalProperties": false,
       "description": "One explicitly located command in the firmware's debug transport vocabulary.",
@@ -6656,7 +6679,7 @@
           "description": "Polled EXR II SPI, persistent packet, wake alarm and power-hold release.",
           "properties": {
             "code_checks": {
-              "description": "Stock loader ranges establishing the transport.",
+              "description": "The stock endpoint-table reader and power cut establishing the transport.",
               "items": {
                 "$ref": "#/$defs/CodeCheck"
               },
@@ -6664,14 +6687,14 @@
             },
             "constants": {
               "$ref": "#/$defs/EarlyBootConstants",
-              "description": "Exact C constants derived from the checked loader and power path."
+              "description": "Exact C constants derived from the endpoint table and power path."
             },
             "kind": {
               "const": "exr2_polled_alarm",
               "type": "string"
             },
             "spi_channel": {
-              "description": "SPI channel selected by the verified loader descriptor.",
+              "description": "SPI channel of the power controller's serial endpoint.",
               "format": "uint32",
               "minimum": 0,
               "type": "integer"
@@ -19846,6 +19869,17 @@
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "data_cache": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DataCacheGeometry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Private, non-coherent write-back L1 data cache, as CCSIDR reports it."
         }
       },
       "required": [

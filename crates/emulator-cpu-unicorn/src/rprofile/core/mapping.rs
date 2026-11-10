@@ -69,6 +69,10 @@ impl Execution {
             map.bytes,
             map.physical,
         );
+        if self.data_cache.borrow().is_some() {
+            self.cpu.watch_stores(map.address, map.bytes as u64)?;
+            self.cache_spans_stale.set(true);
+        }
         self.memory.apply_watches()
     }
     pub(super) fn map_external(&self, map: Mapping) -> Result<(), String> {

@@ -142,6 +142,12 @@ fn build_processor(
                     btcm: bank(state.btcm)?,
                     atcm: bank(state.atcm)?,
                 },
+                data_cache: state.data_cache.map(|cache| {
+                    fujimod_emulator_cpu_unicorn::rprofile::data_cache::Geometry {
+                        line_bytes: cache.line_bytes,
+                        sets: cache.sets,
+                    }
+                }),
                 ..Default::default()
             })
         })
@@ -767,6 +773,7 @@ mod tests {
                     bytes: 0,
                     reset_address: 0,
                 },
+                data_cache: None,
             }),
         }
     }
