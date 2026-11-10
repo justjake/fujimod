@@ -5,6 +5,7 @@ import { runtimeHeaders } from './src/security';
 import { defineConfig } from 'vite-plus';
 import { loadEnv, normalizePath, type Plugin, type Connect } from 'vite';
 import solid from '@solidjs/vite-plugin';
+import tailwindcss from '@tailwindcss/vite';
 import { wasmProofRoute } from './scripts/wasm-proof-route';
 import { localReleases } from './scripts/local-releases.ts';
 import { localMedia, previewMedia } from './scripts/local-media.ts';
@@ -257,6 +258,7 @@ export default defineConfig(({ mode, command }) => ({
       card: loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_CARD_FILES,
     }),
     watchWorkspacePackages(),
+    tailwindcss(),
     solid({
       start: {
         middleware: './src/middleware.ts',
