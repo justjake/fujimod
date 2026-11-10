@@ -104,8 +104,14 @@ fn a_store_into_a_stale_copy_of_another_cores_line_is_refused() {
     execute(&core1, 0x1000, TABLE, &[STRB, DCCMVAC]).unwrap();
     let error = execute(&core0, 0x1200, STATIC, &[STRB]).unwrap_err();
     assert!(error.contains("data-cache coherence hazard"), "{error}");
-    assert!(error.contains("processor 0 writes 1 byte(s) at 0x2008"), "{error}");
-    assert!(error.contains("hits physical line 0x2000..0x2020"), "{error}");
+    assert!(
+        error.contains("processor 0 writes 1 byte(s) at 0x2008"),
+        "{error}"
+    );
+    assert!(
+        error.contains("hits physical line 0x2000..0x2020"),
+        "{error}"
+    );
 }
 
 #[test]
@@ -113,8 +119,14 @@ fn a_store_into_a_line_another_core_holds_dirty_is_refused() {
     let (core0, core1, _backing) = cluster();
     execute(&core1, 0x1000, TABLE, &[STRB]).unwrap();
     let error = execute(&core0, 0x1100, STATIC, &[STRB]).unwrap_err();
-    assert!(error.contains("processor 0 writes 1 byte(s) at 0x2008"), "{error}");
-    assert!(error.contains("reaches memory of physical line 0x2000..0x2020"), "{error}");
+    assert!(
+        error.contains("processor 0 writes 1 byte(s) at 0x2008"),
+        "{error}"
+    );
+    assert!(
+        error.contains("reaches memory of physical line 0x2000..0x2020"),
+        "{error}"
+    );
     assert!(error.contains("processor 1's data cache"), "{error}");
     assert!(error.contains("store at pc 0x1000"), "{error}");
 }
@@ -124,7 +136,10 @@ fn a_load_from_a_line_another_core_holds_dirty_is_refused() {
     let (core0, core1, _backing) = cluster();
     execute(&core1, 0x1000, TABLE, &[STRB]).unwrap();
     let error = execute(&core0, 0x1100, STATIC, &[LDRB]).unwrap_err();
-    assert!(error.contains("processor 0 reads 1 byte(s) at 0x2008"), "{error}");
+    assert!(
+        error.contains("processor 0 reads 1 byte(s) at 0x2008"),
+        "{error}"
+    );
 }
 
 #[test]
@@ -156,7 +171,10 @@ fn cleaning_and_invalidating_hand_the_line_over() {
     execute(&core1, 0x1000, TABLE, &[STRB, DCCMVAC]).unwrap();
     execute(&core0, 0x1100, STATIC, &[STRB, DCCMVAC]).unwrap();
     let error = execute(&core1, 0x1200, TABLE, &[LDRB]).unwrap_err();
-    assert!(error.contains("hits physical line 0x2000..0x2020"), "{error}");
+    assert!(
+        error.contains("hits physical line 0x2000..0x2020"),
+        "{error}"
+    );
 }
 
 #[test]
@@ -184,7 +202,9 @@ fn maintenance_through_the_uncached_alias_cleans_nothing() {
 fn a_disabled_data_cache_holds_no_lines() {
     let (core0, core1, _backing) = cluster();
     let sctlr = core1.coprocessor(system(1, 0, 0), None).unwrap();
-    core1.coprocessor(system(1, 0, 0), Some(sctlr & !0b100)).unwrap();
+    core1
+        .coprocessor(system(1, 0, 0), Some(sctlr & !0b100))
+        .unwrap();
     execute(&core1, 0x1000, TABLE, &[STRB]).unwrap();
     execute(&core0, 0x1100, STATIC, &[STRB]).unwrap();
 }

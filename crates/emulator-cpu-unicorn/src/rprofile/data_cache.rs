@@ -262,7 +262,9 @@ impl Lines {
         Line(
             self.chunks[line as usize / CHUNK_LINES]
                 .get()
-                .map_or(0, |chunk| chunk[line as usize % CHUNK_LINES].load(Ordering::Relaxed)),
+                .map_or(0, |chunk| {
+                    chunk[line as usize % CHUNK_LINES].load(Ordering::Relaxed)
+                }),
         )
     }
     fn update(&self, line: u32, f: impl Fn(Line) -> Line) {
@@ -301,7 +303,10 @@ impl Cache {
         lines: std::sync::Arc<Lines>,
         checked: Vec<(u64, u64)>,
     ) -> Result<Self, String> {
-        if checked.iter().any(|&(begin, end)| begin >= end || end > 1 << 32) {
+        if checked
+            .iter()
+            .any(|&(begin, end)| begin >= end || end > 1 << 32)
+        {
             return Err("invalid checked data-cache range".into());
         }
         if core >= MAX_PROCESSORS {
@@ -327,7 +332,9 @@ impl Cache {
             .filter(|&(b, e)| b < e)
     }
     pub fn checks(&self, physical: u64) -> bool {
-        self.checked.iter().any(|&(b, e)| b <= physical && physical < e)
+        self.checked
+            .iter()
+            .any(|&(b, e)| b <= physical && physical < e)
     }
     fn mine(&self) -> u8 {
         1 << self.core
@@ -340,7 +347,8 @@ impl Cache {
         set * ways..(set + 1) * ways
     }
     fn find(&self, line: u32) -> Option<usize> {
-        self.slots(self.set(line)).find(|&slot| self.ways[slot] == line)
+        self.slots(self.set(line))
+            .find(|&slot| self.ways[slot] == line)
     }
     pub fn line_address(&self, line: u64) -> u64 {
         line << self.geometry().shift()
@@ -353,7 +361,9 @@ impl Cache {
     /// Memory changes: every other cache's copy is now older than memory.
     fn memory_written(&self, line: u32) {
         let mine = self.mine();
-        self.lines.update(line, |l| l.set_held(l.held(), l.stale() | (l.held() & !mine)));
+        self.lines.update(line, |l| {
+            l.set_held(l.held(), l.stale() | (l.held() & !mine))
+        });
     }
     /// Memory is read or written by something other than a cache hit. A
     /// dirty line anywhere holds newer bytes, or will overwrite these.
@@ -389,8 +399,13 @@ impl Cache {
             return;
         }
         let core = self.core;
-        self.lines
-            .update(line, |l| if l.owner() == Some(core) { l.set_owner(None, 0) } else { l });
+        self.lines.update(line, |l| {
+            if l.owner() == Some(core) {
+                l.set_owner(None, 0)
+            } else {
+                l
+            }
+        });
     }
     fn fill(&mut self, line: u32) -> Result<usize, Hazard> {
         if let Some(hazard) = self.memory_access(line) {
@@ -402,7 +417,8 @@ impl Cache {
         self.evict(slot);
         self.ways[slot] = line;
         let mine = self.mine();
-        self.lines.update(line, |l| l.set_held(l.held() | mine, l.stale() & !mine));
+        self.lines
+            .update(line, |l| l.set_held(l.held() | mine, l.stale() & !mine));
         Ok(slot)
     }
     /// A processor load or store through `policy`. `pc` is read only when a
@@ -421,7 +437,8 @@ impl Cache {
                 return Ok(Some(Hazard::Stale { line: line as u64 }));
             }
             match (policy, write, hit) {
-                (Policy::NonCacheable, _, _) | (Policy::WriteBack | Policy::WriteThrough, true, None) => {
+                (Policy::NonCacheable, _, _)
+                | (Policy::WriteBack | Policy::WriteThrough, true, None) => {
                     if let Some(hazard) = self.memory_access(line) {
                         return Ok(Some(hazard));
                     }
@@ -454,13 +471,6 @@ impl Cache {
             }
         }
         Ok(None)
-    }
-    pub fn forgive(&mut self, hazard: &Hazard) {
-        let mine = self.mine();
-        match *hazard {
-            Hazard::Stale { line } => self.lines.update(line as u32, |l| l.set_held(l.held(), l.stale() & !mine)),
-            Hazard::Dirty { line, .. } => self.lines.update(line as u32, |l| l.set_owner(None, 0)),
-        }
     }
     /// Maintenance of the line holding `physical`, if this cache holds it.
     pub fn maintain_line(&mut self, physical: u64, clean: bool, invalidate: bool) {
@@ -528,7 +538,11 @@ impl Cache {
                     Some(pc) => l.set_owner(Some(core), pc),
                     None => l,
                 };
-                let stale = if stale { l.stale() | mine } else { l.stale() & !mine };
+                let stale = if stale {
+                    l.stale() | mine
+                } else {
+                    l.stale() & !mine
+                };
                 l.set_held(l.held() | mine, stale)
             });
         }
@@ -548,8 +562,14 @@ pub struct Saved {
 pub(crate) enum Operation {
     /// SCTLR and MPU writes change cacheability.
     Attributes,
-    Line { clean: bool, invalidate: bool },
-    Way { clean: bool, invalidate: bool },
+    Line {
+        clean: bool,
+        invalidate: bool,
+    },
+    Way {
+        clean: bool,
+        invalidate: bool,
+    },
     InvalidateAll,
 }
 pub(crate) fn operation(opc1: u32, crn: u32, crm: u32, opc2: u32) -> Option<Operation> {
@@ -562,7 +582,9 @@ pub(crate) fn operation(opc1: u32, crn: u32, crm: u32, opc2: u32) -> Option<Oper
     match (opc1, crn, crm, opc2) {
         (0, 1, 0, 0) | (0, 6, _, _) => Some(Operation::Attributes),
         // DCIMVAC, DCCMVAC, DCCMVAU, DCCIMVAC.
-        (0, 7, crm, 1) => kind(crm).map(|(clean, invalidate)| Operation::Line { clean, invalidate }),
+        (0, 7, crm, 1) => {
+            kind(crm).map(|(clean, invalidate)| Operation::Line { clean, invalidate })
+        }
         // DCISW, DCCSW, DCCISW.
         (0, 7, crm @ (6 | 10 | 14), 2) => {
             kind(crm).map(|(clean, invalidate)| Operation::Way { clean, invalidate })

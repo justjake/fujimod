@@ -311,7 +311,11 @@ impl Core {
         });
         let owner: Rc<dyn crate::memory::CodeOwner> = e.clone();
         e.id.set(e.memory.register(Rc::downgrade(&owner)));
-        if let Some(cache) = &options.data_cache {
+        if let Some(cache) = options
+            .data_cache
+            .as_ref()
+            .filter(|c| !c.checked.is_empty())
+        {
             *e.data_cache.borrow_mut() = Some(super::data_cache::Cache::new(
                 e.id.get(),
                 e.memory.shared().data_lines(cache.geometry())?,
@@ -361,9 +365,9 @@ impl Core {
                 range: HookRange::All,
             })?;
             e.cpu.hook_watched(stores, true)?;
-            if options.data_cache.as_ref().is_some_and(|cache| !cache.checked.is_empty()) {
+            if e.data_cache.borrow().is_some() {
                 // Every access to watched RAM reaches this hook; map_ram
-                // watches all external RAM.
+                // watches the checked ranges.
                 let accesses = e.cpu.install_hook(Hook::Memory {
                     callback: data_access,
                     data,

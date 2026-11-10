@@ -75,7 +75,9 @@ impl Execution {
             Operation::Way { clean, invalidate } => {
                 let value = value()?;
                 let set = (value >> geometry.line_bytes.trailing_zeros()) & (geometry.sets - 1);
-                let way = value.checked_shr(32 - geometry.ways.trailing_zeros()).unwrap_or(0);
+                let way = value
+                    .checked_shr(32 - geometry.ways.trailing_zeros())
+                    .unwrap_or(0);
                 cache().maintain_way(set as usize, way as usize, clean, invalidate);
             }
             Operation::InvalidateAll => cache().invalidate_all(),
@@ -123,9 +125,6 @@ impl Execution {
             .filter_map(|map| Some((map.address, map.end(), map.physical?)))
             .collect();
         *self.cache_spans.borrow_mut() = data_cache::spans(sctlr, &regions, &maps);
-        if std::env::var_os("FUJIMOD_DCACHE_DEBUG").is_some() {
-            eprintln!("DCACHE core {} sctlr {sctlr:#x} regions {regions:x?} spans {:x?}", self.id.get(), self.cache_spans.borrow());
-        }
         self.cache_spans_stale.set(false);
         Ok(())
     }
@@ -149,13 +148,6 @@ impl Execution {
         if !self.data_cache.borrow().as_ref().unwrap().checks(physical) {
             return Ok(());
         }
-        if std::env::var_os("FUJIMOD_DCACHE_COUNT").is_some() {
-            static COUNTS: [std::sync::atomic::AtomicU64; 8] = [const { std::sync::atomic::AtomicU64::new(0) }; 8];
-            let n = COUNTS[self.id.get() & 7].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            if n & ((1 << 24) - 1) == 0 {
-                eprintln!("DCACHE-COUNT core {} accesses {}M", self.id.get(), n >> 20);
-            }
-        }
         let write = access == Access::Write;
         let hazard = self.data_cache.borrow_mut().as_mut().unwrap().access(
             write,
@@ -167,18 +159,6 @@ impl Execution {
         let Some(hazard) = hazard else {
             return Ok(());
         };
-        if std::env::var_os("FUJIMOD_DCACHE_LOG").is_some() {
-            static SEEN: std::sync::Mutex<Option<std::collections::HashSet<(u32, String)>>> = std::sync::Mutex::new(None);
-            let pc = self.scalar(arm::PC)?;
-            let key = format!("{hazard:?}");
-            let key = key.split(" line").next().unwrap().to_string() + &match hazard { data_cache::Hazard::Dirty{holder, pc, ..} => format!("{holder}{pc:x}"), _ => String::new() };
-            let mut seen = SEEN.lock().unwrap();
-            if seen.get_or_insert_default().insert((pc, key)) {
-                eprintln!("DCACHE-HAZARD core {} {} {address:#x} {policy:?} pc {pc:#x} {hazard:x?}", self.id.get(), if write {"W"} else {"R"});
-            }
-            self.data_cache.borrow_mut().as_mut().unwrap().forgive(&hazard);
-            return self.data_access(access, address, size);
-        }
         let cache = self.data_cache.borrow();
         let cache = cache.as_ref().unwrap();
         let access = format!(
@@ -190,7 +170,10 @@ impl Execution {
         );
         let range = |line: u64| {
             let begin = cache.line_address(line);
-            format!("{begin:#x}..{:#x}", begin + cache.geometry().line_bytes as u64)
+            format!(
+                "{begin:#x}..{:#x}",
+                begin + cache.geometry().line_bytes as u64
+            )
         };
         Err(match hazard {
             data_cache::Hazard::Stale { line } => format!(
