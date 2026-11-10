@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import weakref
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from os import PathLike
@@ -15,25 +16,30 @@ from typing import Any
 
 from ._native import perf as _native
 
-_boards: list[Any] = []
+# Weak, so an attached board that is dropped without close() can still be freed.
+_boards: list[weakref.ref[Any]] = []
 _DEFAULT = object()
 
 
 def attach_board(board: object) -> None:
     """Make the board the guest-progress source until it closes."""
     detach_board(board)
-    _boards.append(board)
+    _boards.append(weakref.ref(board))
     _snapshot_counters(board)
 
 
 def detach_board(board: object) -> None:
     for index in range(len(_boards) - 1, -1, -1):
-        if _boards[index] is board:
+        if (attached := _boards[index]()) is None or attached is board:
             del _boards[index]
 
 
 def _board() -> Any | None:
-    return _boards[-1] if _boards else None
+    while _boards:
+        if (board := _boards[-1]()) is not None:
+            return board
+        _boards.pop()
+    return None
 
 
 def _guest(board: Any = _DEFAULT) -> tuple[int, int]:
