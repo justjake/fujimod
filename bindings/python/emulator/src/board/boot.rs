@@ -103,13 +103,9 @@ impl Board {
     }
     #[pyo3(signature=(instruction_limit=2_000_000_000))]
     fn boot_to_rec(&mut self, py: Python<'_>, instruction_limit: u64) -> PyResult<String> {
-        if self.driver.is_some()
-            || self.memory_watch.is_some()
-            || self.function_watch.is_some()
-            || !self.instruction_points.is_empty()
-        {
+        if self.driver.is_some() || !self.instruction_points.is_empty() {
             return Err(error(
-                "boot requires no active host instrumentation or isolated call".into(),
+                "boot requires no instruction points or isolated call".into(),
             ));
         }
         let owner = Owner::new(self.session_mut()?);
