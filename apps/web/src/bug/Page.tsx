@@ -489,7 +489,7 @@ export default function BugReport(props: {
                       }
                     >
                       <p class="cd-public">Your message will be posted publicly on GitHub.</p>
-                      <Show when={fromUsb() && connected() && connection.remove}>
+                      <Show when={fromUsb() && connected() && connection.remove !== undefined}>
                         <label class="cd-check">
                           <input
                             type="checkbox"

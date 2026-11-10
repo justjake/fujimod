@@ -20,6 +20,10 @@
     "client-error-log.ts",
     "bucket.ts",
     "env.ts",
+    "contributions.ts",
+    "publications.ts",
+    "shared-files.ts",
+    "shared-files-style.ts",
     "../domain-endpoint/worker.ts"
   ]
 }

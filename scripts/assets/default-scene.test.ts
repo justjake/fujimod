@@ -9,7 +9,7 @@ import {
   originalSha256,
 } from './default-scene.ts';
 
-test('the shared RAF is the recorded original and repeated preparation preserves it', async () => {
+await test('the shared RAF is the recorded original and repeated preparation preserves it', async () => {
   const path = await prepareDefaultScene();
   assert.equal(
     createHash('sha256')

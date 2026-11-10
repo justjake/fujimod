@@ -75,7 +75,7 @@ export function ViewportControls(props: {
   };
   return (
     <div
-      ref={bar}
+      ref={(element) => (bar = element)}
       id="viewer-tools"
       class="viewport-bar"
       data-ready={String(props.feedback.ready)}
@@ -88,7 +88,7 @@ export function ViewportControls(props: {
         <span id="camera-title">{props.title}</span>
         <Show when={props.modSupported}>
           <div
-            ref={picker}
+            ref={(element) => (picker = element)}
             id="firmware-mode"
             class="firmware-picker"
             onKeyDown={(event) => {
@@ -100,7 +100,7 @@ export function ViewportControls(props: {
             }}
           >
             <button
-              ref={trigger}
+              ref={(element) => (trigger = element)}
               type="button"
               aria-haspopup="menu"
               aria-expanded={picking() ? 'true' : 'false'}

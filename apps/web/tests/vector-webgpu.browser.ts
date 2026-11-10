@@ -2,12 +2,6 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-interface VectorDiagnostics {
-  cpuRasterCalls: number;
-  cpuVectorPaintCalls: number;
-  gpuGlesLists: number;
-  gpuVectorPaintCalls: number;
-}
 interface RuntimeManifest extends Record<string, unknown> {
   dmpCpuRenderer?: boolean;
 }

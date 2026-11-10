@@ -164,12 +164,14 @@ test('sharing is an Off/On control on the camera card and never disables the too
 });
 
 test('a shared camera that goes away keeps its link, chimes and reconnects from the alert', async () => {
-  HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
-    this.open = true;
-  };
-  HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
-    this.open = false;
-  };
+  if (!HTMLDialogElement.prototype.showModal)
+    HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+      this.open = true;
+    };
+  if (!HTMLDialogElement.prototype.close)
+    HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+      this.open = false;
+    };
   const play = vi.spyOn(ownerChime, 'play');
   const link = 'https://share.test/X70';
   const test = createTestCameraModel({});
@@ -376,9 +378,10 @@ test('Contribute lists the collected files and keeps Upload in a fixed footer', 
   test.add(testCamera('X100V'));
   const host = mount(test.model);
   flush();
-  HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
-    this.open = true;
-  };
+  if (!HTMLDialogElement.prototype.showModal)
+    HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+      this.open = true;
+    };
   button(host, 'Dump configuration').click();
   await vi.waitFor(() => {
     flush();

@@ -140,12 +140,11 @@ export function Workbench(props: {
     }
   }
   async function connectSimulated(savedCamera: string) {
-    const start = props.model.connectSimulated;
-    if (!start || connecting()) return;
+    if (!props.model.connectSimulated || connecting()) return;
     setConnecting(true);
     setConnectError('');
     try {
-      await start.call(props.model, savedCamera);
+      await props.model.connectSimulated(savedCamera);
     } catch (error) {
       setConnectError(shownError(error));
     } finally {
@@ -244,7 +243,7 @@ export function Workbench(props: {
               onServiceMode={() => setWizard(Wizard.Service)}
               onConnect={() => void connect()}
               savedCameras={savedCameras()}
-              simulationAvailable={Boolean(props.model.connectSimulated)}
+              simulationAvailable={props.model.connectSimulated !== undefined}
               error={connectError()}
               onSimulated={(savedCamera) => void connectSimulated(savedCamera)}
             />

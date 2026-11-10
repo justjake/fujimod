@@ -197,6 +197,7 @@ try {
     );
     assert.equal(fixture.log.length, beforeInvalid);
     assert.equal(device.status.fenced, false);
+    // oxlint-disable-next-line typescript/unbound-method -- restored below on the same device.
     const originalIn = fixture.device.transferIn;
     fixture.device.transferIn = async () => ({
       status: 'stall',

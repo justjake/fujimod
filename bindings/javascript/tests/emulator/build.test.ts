@@ -18,11 +18,11 @@ import {
   unicornCacheMatches,
 } from '../../emulator/build.mts';
 
-test('builder reads the pinned public toolchains from the package root configuration', () => {
+await test('builder reads the pinned public toolchains from the package root configuration', () => {
   assert.deepEqual(pinnedToolchain(), { nightly: 'nightly-2026-10-10', emsdk: '6.0.13' });
 });
 
-test('generated UTF-8 encoding preserves shared-memory slices and code point boundaries', () => {
+await test('generated UTF-8 encoding preserves shared-memory slices and code point boundaries', () => {
   const encoder = new class extends TextEncoder {
     override encodeInto(text: string, target: Uint8Array<ArrayBuffer>) {
       assert(target.buffer instanceof ArrayBuffer, 'Browser encoders refuse shared destinations');
@@ -45,7 +45,7 @@ test('generated UTF-8 encoding preserves shared-memory slices and code point bou
   assert.throws(() => sharedStringEncoding(''), /Expected one/);
 });
 
-test('build options keep artifacts in the requested output and validate tool flags', () => {
+await test('build options keep artifacts in the requested output and validate tool flags', () => {
   const selected = options(
     ['--out', 'out/wasm', '--rust-simd128', '--c-simd128', '--allocator', 'emmalloc'],
     '/tmp/project',
@@ -63,7 +63,7 @@ test('build options keep artifacts in the requested output and validate tool fla
   assert.throws(() => options(['--codegen-units', '0']), /positive integer/);
 });
 
-test('build plan targets the public static library and preserves encoded Rust flags', () => {
+await test('build plan targets the public static library and preserves encoded Rust flags', () => {
   const selected = options(['--out', '/tmp/emulator', '--rust-simd128'], '/tmp/project');
   const plan = buildPlan(selected, {
     CARGO_ENCODED_RUSTFLAGS: '-C\x1fdebuginfo=0',
@@ -100,7 +100,7 @@ test('build plan targets the public static library and preserves encoded Rust fl
   assert(plan.link.includes('-sENVIRONMENT=web,worker,node'));
 });
 
-test('incremental build plan keeps the fast Cargo profile and light Emscripten link', () => {
+await test('incremental build plan keeps the fast Cargo profile and light Emscripten link', () => {
   const selected = options(['--out', '/tmp/emulator', '--incremental'], '/tmp/project');
   const plan = buildPlan(selected, { EMSDK: '/toolchain/emsdk', PATH: '/toolchain/bin' });
   assert.equal(plan.env.CARGO_PROFILE_DIST_LTO, 'off');
@@ -111,7 +111,7 @@ test('incremental build plan keeps the fast Cargo profile and light Emscripten l
   assert(!plan.link.includes('-Oz'));
 });
 
-test('Unicorn cache reuse requires the configured source and toolchain settings', () => {
+await test('Unicorn cache reuse requires the configured source and toolchain settings', () => {
   const selected = options(['--out', '/tmp/emulator'], '/tmp/project');
   const plan = buildPlan(selected, {
     EMSDK: '/toolchain/emsdk',
@@ -147,7 +147,7 @@ test('Unicorn cache reuse requires the configured source and toolchain settings'
   }
 });
 
-test('Rust flag tokenizer honors quoted groups without evaluating shell syntax', () => {
+await test('Rust flag tokenizer honors quoted groups without evaluating shell syntax', () => {
   assert.deepEqual(shellWords(`-C 'link-arg=-Wl,-u,symbol name' --cfg "feature=jit"`), [
     '-C',
     'link-arg=-Wl,-u,symbol name',
@@ -157,7 +157,7 @@ test('Rust flag tokenizer honors quoted groups without evaluating shell syntax',
   assert.throws(() => shellWords("-C 'unfinished"), /Unclosed flag quote/);
 });
 
-test('exports keep wasm-bindgen symbols from Rust objects and leave C internal', () => {
+await test('exports keep wasm-bindgen symbols from Rust objects and leave C internal', () => {
   const nm = [
     'lib.a:fujimod_emulator_javascript-1a.o: camera_press_59a8',
     'lib.a:fujimod_emulator_javascript-1a.o: _RNvCs1_4core3fmt',
@@ -200,7 +200,7 @@ export type MainModule = WasmModule & BindgenModule;
 export default function MainModuleFactory (options?: unknown): Promise<MainModule>;
 `;
 
-test('bindgen declarations move out of the Emscripten module interface', () => {
+await test('bindgen declarations move out of the Emscripten module interface', () => {
   const hoisted = hoistBindgenDeclarations(emitted);
   assert.equal(
     hoisted.slice(

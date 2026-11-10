@@ -23,7 +23,7 @@ const record: ClientErrorRecord = {
   uptime: 1234,
 };
 
-test('a log entry names the browser session, page and error, separate from the Worker', () => {
+await test('a log entry names the browser session, page and error, separate from the Worker', () => {
   const entry = clientErrorLog(record, 'US');
   assert.equal(
     entry.message,
