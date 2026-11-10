@@ -68,7 +68,17 @@
             {
               "name": "audio",
               "kind": "SerialAudioTransmitSink",
-              "refs": {}
+              "refs": {},
+              "model_choices": {
+                "option": "audio_input_profile",
+                "models": {
+                  "declared-silent-stereo-pcm48000": {
+                    "kind": "SerialAudioReceiveSource",
+                    "refs": {},
+                    "dependencies": []
+                  }
+                }
+              }
             },
             {
               "name": "pulseoutputs",
@@ -214,6 +224,11 @@
               "name": "jpegdecoder",
               "kind": "JPEGDecodeControl",
               "refs": {}
+            },
+            {
+              "name": "avccodec",
+              "kind": "AvcCodecControl",
+              "refs": {}
             }
           ],
           "construction_order": [
@@ -253,7 +268,8 @@
             "imagewarp",
             "jpegencoder",
             "rawreadback",
-            "jpegdecoder"
+            "jpegdecoder",
+            "avccodec"
           ],
           "attachment_order": [
             "windowanalysis",
@@ -292,7 +308,8 @@
             "imagewarp",
             "jpegencoder",
             "rawreadback",
-            "jpegdecoder"
+            "jpegdecoder",
+            "avccodec"
           ]
         },
         "controllers": {
