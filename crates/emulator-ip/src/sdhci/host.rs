@@ -37,6 +37,9 @@ pub enum InitializationFault {
     RejectCmd8,
     /// Allow this many CMD8 responses, then time out one CMD8.
     RejectCmd8OnceAfter(u32),
+    /// As `RejectCmd8OnceAfter`, and time out every CMD3 sent in Stand-by,
+    /// so a host cannot adopt an identified card and must identify it again.
+    RejectStandbyCmd3AndCmd8OnceAfter(u32),
 }
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -820,7 +823,8 @@ impl SdHost {
             && match self.options.initialization_fault {
                 InitializationFault::None => false,
                 InitializationFault::RejectCmd8 => true,
-                InitializationFault::RejectCmd8OnceAfter(count) => {
+                InitializationFault::RejectCmd8OnceAfter(count)
+                | InitializationFault::RejectStandbyCmd3AndCmd8OnceAfter(count) => {
                     self.cmd8_responses == u64::from(count)
                 }
             };
@@ -828,11 +832,18 @@ impl SdHost {
             && matches!(
                 self.options.initialization_fault,
                 InitializationFault::RejectCmd8OnceAfter(_)
+                    | InitializationFault::RejectStandbyCmd3AndCmd8OnceAfter(_)
             )
         {
             self.cmd8_responses = self.cmd8_responses.saturating_add(1);
         }
-        if reject_cmd8 {
+        let reject_cmd3 = r.command == 3
+            && self.state == State::Standby
+            && matches!(
+                self.options.initialization_fault,
+                InitializationFault::RejectStandbyCmd3AndCmd8OnceAfter(_)
+            );
+        if reject_cmd8 || reject_cmd3 {
             self.latch_error(COMMAND_TIMEOUT_ERROR);
             return self.signal(cx);
         }
