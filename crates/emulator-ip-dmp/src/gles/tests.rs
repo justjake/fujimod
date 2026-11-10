@@ -319,6 +319,13 @@ fn host_render_to_texture_with_linear_minification_matches_cpu_within_one_list()
     let source_address = 0x10000u64;
     let destination_address = 0x20000u64;
     let mut words = setup();
+    pair(&mut words, 0x49b, 0);
+    upload(
+        &mut words,
+        0x49c,
+        &[0x4c000000, 0x4c201000, 0x4c401000, 0x88000000],
+        false,
+    );
     for (register, value) in [
         (0x31d, source_address as u32),
         (0x31e, 0x0010_0010),
