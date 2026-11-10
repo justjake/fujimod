@@ -75,6 +75,32 @@ impl Tiff<'_> {
     }
 }
 
+/// ISO (Exif 0x8827) from the start of a JPEG; the frame itself is not needed.
+pub fn exif_iso(jpeg: &[u8]) -> Option<u32> {
+    let mut at = 2;
+    while jpeg.get(at) == Some(&0xff) && at + 4 <= jpeg.len() {
+        let length = u16::from_be_bytes([jpeg[at + 2], jpeg[at + 3]]) as usize;
+        let body = jpeg.get(at + 4..at + 2 + length)?;
+        if jpeg[at + 1] == 0xe1 && body.starts_with(b"Exif\0\0") {
+            let tiff = &body[6..];
+            let exif = Tiff {
+                bytes: tiff,
+                little: tiff.starts_with(b"II"),
+            };
+            let find = |ifd: usize, tag: u16| exif.entries(ifd).into_iter().find(|e| e.0 == tag);
+            let (.., exif_at) = find(exif.u32(4)? as usize, 0x8769)?;
+            let (_, kind, _, iso_at) = find(exif.u32(exif_at)? as usize, 0x8827)?;
+            return match kind {
+                3 => exif.u16(iso_at).map(u32::from),
+                4 => exif.u32(iso_at),
+                _ => None,
+            };
+        }
+        at += 2 + length;
+    }
+    None
+}
+
 fn maker_note(tiff: &[u8]) -> BTreeMap<String, i64> {
     let little = tiff.starts_with(b"II");
     let exif = Tiff {
@@ -127,34 +153,33 @@ fn maker_note(tiff: &[u8]) -> BTreeMap<String, i64> {
         .collect()
 }
 
-/// A minimal JPEG with an Exif Fujifilm MakerNote, for tests.
+/// A minimal JPEG with an Exif ISO and Fujifilm MakerNote, for tests.
 #[cfg(test)]
-pub fn synthetic(width: u16, height: u16, tags: &[(u16, u16)]) -> Vec<u8> {
+pub fn synthetic(width: u16, height: u16, iso: u16, tags: &[(u16, u16)]) -> Vec<u8> {
+    let entry = |out: &mut Vec<u8>, tag: u16, kind: u16, count: u32, value: u32| {
+        out.extend_from_slice(&tag.to_le_bytes());
+        out.extend_from_slice(&kind.to_le_bytes());
+        out.extend_from_slice(&count.to_le_bytes());
+        out.extend_from_slice(&value.to_le_bytes());
+    };
     let mut note = b"FUJIFILM".to_vec();
     note.extend_from_slice(&12u32.to_le_bytes());
     note.extend_from_slice(&(tags.len() as u16).to_le_bytes());
     for &(tag, value) in tags {
-        note.extend_from_slice(&tag.to_le_bytes());
-        note.extend_from_slice(&3u16.to_le_bytes());
-        note.extend_from_slice(&1u32.to_le_bytes());
-        note.extend_from_slice(&(value as u32).to_le_bytes());
+        entry(&mut note, tag, 3, 1, value as u32);
     }
-    // TIFF header, IFD0 at 8 with one ExifIFD pointer, Exif IFD at 26 with the note at 44.
+    // TIFF header; IFD0 at 8 holds the Exif IFD pointer; the Exif IFD at 26
+    // holds ISO and the MakerNote, which starts at 56.
     let mut tiff = b"II*\0".to_vec();
     tiff.extend_from_slice(&8u32.to_le_bytes());
     tiff.extend_from_slice(&1u16.to_le_bytes());
-    tiff.extend_from_slice(&0x8769u16.to_le_bytes());
-    tiff.extend_from_slice(&4u16.to_le_bytes());
-    tiff.extend_from_slice(&1u32.to_le_bytes());
-    tiff.extend_from_slice(&26u32.to_le_bytes());
+    entry(&mut tiff, 0x8769, 4, 1, 26);
     tiff.extend_from_slice(&0u32.to_le_bytes());
-    tiff.extend_from_slice(&1u16.to_le_bytes());
-    tiff.extend_from_slice(&0x927cu16.to_le_bytes());
-    tiff.extend_from_slice(&7u16.to_le_bytes());
-    tiff.extend_from_slice(&(note.len() as u32).to_le_bytes());
-    tiff.extend_from_slice(&44u32.to_le_bytes());
+    tiff.extend_from_slice(&2u16.to_le_bytes());
+    entry(&mut tiff, 0x8827, 3, 1, iso as u32);
+    entry(&mut tiff, 0x927c, 7, note.len() as u32, 56);
     tiff.extend_from_slice(&0u32.to_le_bytes());
-    assert_eq!(tiff.len(), 44);
+    assert_eq!(tiff.len(), 56);
     tiff.extend_from_slice(&note);
     let mut app1 = b"Exif\0\0".to_vec();
     app1.extend_from_slice(&tiff);
@@ -174,11 +199,12 @@ mod tests {
 
     #[test]
     fn reads_frame_size_and_maker_note() {
-        let jpeg = synthetic(6240, 4160, &[(0x1401, 0x700), (0x1047, 32)]);
+        let jpeg = synthetic(6240, 4160, 400, &[(0x1401, 0x700), (0x1047, 32)]);
         let s = inspect(&jpeg).unwrap();
         assert_eq!((s.width, s.height), (6240, 4160));
         assert_eq!(s.maker_note["0x1401"], 0x700);
         assert_eq!(s.maker_note["0x1047"], 32);
         assert!(inspect(b"not a jpeg").is_err());
+        assert_eq!(exif_iso(&jpeg), Some(400));
     }
 }

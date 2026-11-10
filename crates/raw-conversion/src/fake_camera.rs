@@ -13,6 +13,8 @@ pub struct FakeCamera {
     pub profile: Profile,
     pub raf: Option<Vec<u8>>,
     pub objects: BTreeMap<u32, Vec<u8>>,
+    /// File names and capture dates of SD card objects, by handle.
+    pub names: BTreeMap<u32, (String, String)>,
     pub next_handle: u32,
     pub uploads: usize,
     pub conversions: usize,
@@ -38,6 +40,7 @@ impl FakeCamera {
             profile: Profile(Vec::new()),
             raf: None,
             objects: BTreeMap::new(),
+            names: BTreeMap::new(),
             next_handle: 0x10,
             uploads: 0,
             conversions: 0,
@@ -49,6 +52,27 @@ impl FakeCamera {
             expect_zlp: false,
             units: VecDeque::new(),
         }
+    }
+
+    pub fn add_card_file(&mut self, name: &str, bytes: Vec<u8>) {
+        self.names
+            .insert(self.next_handle, (name.into(), "20261110T120000".into()));
+        self.objects.insert(self.next_handle, bytes);
+        self.next_handle += 1;
+    }
+    /// A RAF whose header points at a preview JPEG carrying `iso`.
+    pub fn add_card_raf(&mut self, name: &str, iso: u16, captured: &str) -> Vec<u8> {
+        let preview = crate::jpeg::synthetic(160, 120, iso, &[]);
+        let mut raf = b"FUJIFILMCCD-RAW 0201FF383501".to_vec();
+        raf.resize(84, 0);
+        raf.extend_from_slice(&100u32.to_be_bytes());
+        raf.extend_from_slice(&(preview.len() as u32).to_be_bytes());
+        raf.resize(100, 0);
+        raf.extend_from_slice(&preview);
+        raf.extend_from_slice(&[0x5a; 3000]);
+        self.add_card_file(name, raf.clone());
+        self.names.get_mut(&(self.next_handle - 1)).unwrap().1 = captured.into();
+        raf
     }
 
     fn as_shot(&self) -> Profile {
@@ -119,6 +143,28 @@ impl FakeCamera {
                 Some(o) => self.respond(code, id, Some(o)),
                 None => self.fail(0x2009, id),
             },
+            0x1008 => match (self.objects.get(&params[0]), self.names.get(&params[0])) {
+                (Some(bytes), Some((name, captured))) => {
+                    let mut info = vec![0u8; 8];
+                    info.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+                    info.extend_from_slice(&[0; 2 + 4 * 7 + 2 + 8]);
+                    crate::ptp::write_string(&mut info, name);
+                    crate::ptp::write_string(&mut info, captured);
+                    crate::ptp::write_string(&mut info, captured);
+                    crate::ptp::write_string(&mut info, "");
+                    self.respond(code, id, Some(info));
+                }
+                _ => self.fail(0x2009, id),
+            },
+            0x101b => match self.objects.get(&params[0]) {
+                Some(bytes) => {
+                    let start = (params[1] as usize).min(bytes.len());
+                    let end = (start + params[2] as usize).min(bytes.len());
+                    let part = bytes[start..end].to_vec();
+                    self.respond(code, id, Some(part));
+                }
+                None => self.fail(0x2009, id),
+            },
             0x100b => match self.objects.remove(&params[0]) {
                 Some(_) => self.respond(code, id, None),
                 None => self.fail(0x2009, id),
@@ -157,7 +203,7 @@ impl FakeCamera {
             0x1016 if params[0] == START_RAW_CONVERSION => {
                 self.conversions += 1;
                 let film = self.profile.get(Field::FilmSimulation).unwrap() as u16;
-                let jpeg = crate::jpeg::synthetic(6240, 4160, &[(0x1401, film)]);
+                let jpeg = crate::jpeg::synthetic(6240, 4160, 160, &[(0x1401, film)]);
                 self.objects.insert(self.next_handle, jpeg);
                 self.next_handle += 1;
                 self.respond(code, id, None);

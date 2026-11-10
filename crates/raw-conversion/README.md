@@ -32,6 +32,27 @@ cargo run --release -p fujimod-raw-conversion --bin fujimod-raw-convert -- \
   instead. On macOS, quit Image Capture and other apps that claim PTP
   cameras on the computer the camera is plugged into.
 
+## RAFs on the camera's SD card
+
+In USB RAW CONV. mode the camera exposes no SD card files; conversions take
+RAFs from the computer. To use RAFs shot on the body, first set CONNECTION
+MODE to USB CARD READER, where the SD card is a PTP store, and read them:
+
+```sh
+fujimod-raw-convert card list
+fujimod-raw-convert card fetch --dir RAFS base=DSCF0001.RAF iso3200=DSCF0005.RAF
+```
+
+`card list` prints each RAF's file name, ISO, capture date and size. The ISO
+comes from the Exif of the RAF's embedded preview, read with two
+GetPartialObject (`0x101B`) calls: the 92-byte RAF header holds the preview's
+big-endian offset at 84 and length at 88 (LibRaw `parse_fuji`, dcraw). `?`
+means the camera refused the partial read. `card fetch` downloads the named
+files whose local copy is missing or the wrong size, then prints the `--raf`
+flags for the conversion run. Neither command deletes or changes anything on
+the SD card. Then set CONNECTION MODE back to USB RAW CONV./BACKUP RESTORE
+to convert. Both mode changes are made on the camera.
+
 ## Job file
 
 ```json
@@ -105,5 +126,6 @@ Not yet confirmed on a camera:
   allow ±18 steps; menus show ±9.
 - libfuji comments that `0xD183` = 1 gives full-resolution JPEGs, but it
   sends 0. The manifest's frame size shows which this is.
+- That USB CARD READER is PTP, not USB mass storage, on each body.
 - Whether a loaded RAF converts more than once. `--upload-each` is the
   fallback if the second job on a RAF produces no image.
