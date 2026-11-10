@@ -4,11 +4,13 @@
 
 Run inside the approved worktree, on its branch, with every change committed.
 The branch is rebased onto ``origin/main`` and pushed to ``origin`` ``main`` as a
-fast-forward, never forced. The main checkout then syncs under its lock, as
+fast-forward, never forced. A branch that already contains ``origin/main``
+(because ``origin/main`` was merged into it) is pushed as it is, keeping the
+merge and its resolutions. The main checkout then syncs under its lock, as
 ``mise run commit`` does: its ``main`` moves to the landed commit and origin's
 changes are merged into the edits there. If origin moves before the push lands,
-the rebase repeats. A rebase conflict is aborted and reported; rebase the branch
-by hand and land again.
+the rebase repeats. A rebase conflict is aborted and reported; merge
+``origin/main`` into the branch, resolve it there, and land again.
 """
 
 import argparse
@@ -45,10 +47,16 @@ def land(worktree: Repository) -> str:
     for _ in range(ATTEMPTS):
         worktree.git("fetch", "-q", "origin", "main")
         target = worktree.output("rev-parse", "FETCH_HEAD")
-        if worktree.git("rebase", "-q", target, check=False).returncode:
+        merged = worktree.git(
+            "merge-base", "--is-ancestor", target, "HEAD", check=False
+        ).returncode == 0
+        if not merged and worktree.git(
+            "rebase", "-q", target, check=False
+        ).returncode:
             worktree.git("rebase", "--abort", check=False)
             raise Failure(
-                f"{name} conflicts with origin/main; rebase it by hand, then land again"
+                f"{name} conflicts with origin/main; merge origin/main into it, "
+                "resolve the conflicts, then land again"
             )
         head = worktree.output("rev-parse", "HEAD")
         if head == target:
