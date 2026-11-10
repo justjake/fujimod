@@ -233,7 +233,8 @@
   ],
   "parts": [
     "xt30-boot-nor",
-    "xt30-boot-power"
+    "xt30-boot-power",
+    "xt30-boot-sensor"
   ],
   "wiring": [
     {
@@ -245,6 +246,11 @@
       "source_id": "spi1",
       "target_id": "xt30-boot-power",
       "signal": "serial_data"
+    },
+    {
+      "source_id": "xt30-boot-sensor",
+      "target_id": "imaging-receiver",
+      "signal": "image_data"
     }
   ],
   "hardware": {

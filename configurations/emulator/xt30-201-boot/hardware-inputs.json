@@ -120,6 +120,22 @@
       "frame_period_ticks": 900900,
       "luma": 128,
       "basis": "Declared virtual startup inputs for a bounded application-boot scenario."
+    },
+    "sensor_input": {
+      "frame_period_ticks": 900900,
+      "frame_active_ticks": 450450,
+      "read_gate": {
+        "register": 81,
+        "mask": 8
+      },
+      "statistics_scene": {
+        "name": "virtual uniform grey",
+        "luma": 2048,
+        "samples_per_cell": 1024,
+        "black_level": 1024,
+        "signal_shift": 2
+      },
+      "basis": "Explicit virtual uniform-grey scene and frame timing."
     }
   }
 }
