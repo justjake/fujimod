@@ -1,0 +1,23 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "xs20-330-settings",
+  "firmware_id": "xs20-330",
+  "source": {
+    "flash_offset": 3145728,
+    "address": 17829888,
+    "size": 12011836,
+    "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+  },
+  "configuration": {
+    "flash_offset": 786432,
+    "bytes": 814080,
+    "sha256": "b286b715dcbe46b76cfb9fc8c566fcd25eb349d81e84c94735cc2dbd5f970c85",
+    "basis": "At startup the stock configuration initializer zero-fills the configuration store when its stored signature is invalid and, when the firmware image enables it, copies these installed flash bytes to store offset 0."
+  },
+  "defaults": null,
+  "fields": [],
+  "profile": null,
+  "settings": {},
+  "sections": []
+}
