@@ -1,6 +1,7 @@
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import { palette, hueTrack } from './palette';
+import { WORDMARK_CAP_ROWS, WORDMARK_HEIGHT, WORDMARK_PATH, WORDMARK_WIDTH } from './wordmark';
 
 /* ---- Icons ------------------------------------------------------------------ */
 
@@ -95,27 +96,36 @@ export function SdCard() {
   );
 }
 
-/** The FujiMod pixel wordmark (55x14 pixels, descender included), drawn at `scale`. */
-export function Wordmark(props: { scale: number }) {
+/** Inter's cap height, in em. */
+const CAP_HEIGHT = 0.727;
+
+/** The FujiMod pixel wordmark set as a word in the surrounding text: its
+ * capitals are the font's cap height and its baseline sits on the text's, the
+ * j's descender below it. */
+export function Wordmark() {
+  const pixel = CAP_HEIGHT / WORDMARK_CAP_ROWS;
   return (
-    <img
-      src="/brand.png"
-      alt="FujiMod"
-      width={55 * props.scale}
-      height={14 * props.scale}
-      class="[image-rendering:pixelated]"
-    />
+    <svg
+      role="img"
+      aria-label="FujiMod"
+      viewBox={`0 0 ${WORDMARK_WIDTH} ${WORDMARK_HEIGHT}`}
+      class="inline-block fill-current"
+      style={{
+        width: `${WORDMARK_WIDTH * pixel}em`,
+        height: `${WORDMARK_HEIGHT * pixel}em`,
+        'vertical-align': `-${(WORDMARK_HEIGHT - WORDMARK_CAP_ROWS) * pixel}em`,
+      }}
+    >
+      <path d={WORDMARK_PATH} />
+    </svg>
   );
 }
 
-/** The wordmark and a version, the version's baseline on the wordmark's. */
-export function Release(props: { version: string; scale: number; class?: string }) {
+/** The wordmark and a version, set as one line of text. */
+export function Release(props: { version: string; class?: string }) {
   return (
-    <div class={`flex items-end gap-[0.35em] ${props.class ?? ''}`}>
-      <Wordmark scale={props.scale} />
-      <span class="leading-none font-bold" style={{ 'margin-bottom': `${3 * props.scale}px` }}>
-        {props.version}
-      </span>
+    <div class={`leading-none font-bold whitespace-nowrap ${props.class ?? ''}`}>
+      <Wordmark /> {props.version}
     </div>
   );
 }
@@ -329,19 +339,30 @@ export function Row(props: {
   );
 }
 
-/** A color well filling the right third of its row to the row's edges; only
- * the bevel's hairlines stay drawn across it. */
+/** A color well inset in its row by the same distance from top, right and
+ * bottom, beveled like the rows: a light hairline on top, a dark one below,
+ * and a slight fall-off from top to bottom. */
 export function Swatch(props: { color: string }) {
   return (
     <span
-      class="absolute top-[1px] right-0 bottom-[2px] w-1/3 border-l border-black"
-      style={{ background: props.color }}
+      class="absolute top-[9px] right-[9px] bottom-[9px] w-[160px] border border-black"
+      style={{
+        background: `linear-gradient(rgb(255 255 255 / 0.1), rgb(0 0 0 / 0.14)), ${props.color}`,
+        'box-shadow':
+          'inset 0 1px 0 rgb(255 255 255 / 0.35), inset 0 -2px 0 rgb(0 0 0 / 0.3), 0 1px 0 rgb(255 255 255 / 0.06)',
+      }}
     />
   );
 }
 
 /** A rectangular button with the X100VI bevel, filled. */
-export function Button(props: { label: string; focused?: boolean; color?: string }) {
+/** `value` follows the label as written, not uppercased (a size in MiB). */
+export function Button(props: {
+  label: string;
+  value?: string;
+  focused?: boolean;
+  color?: string;
+}) {
   return (
     <div
       data-focused={props.focused ? '' : undefined}
@@ -355,6 +376,9 @@ export function Button(props: { label: string; focused?: boolean; color?: string
         <span class="absolute top-[1px] bottom-[2px] left-0 w-stripe bg-white" />
       </Show>
       {props.label}
+      <Show when={props.value}>
+        <span class="ml-[0.4em] normal-case">{props.value}</span>
+      </Show>
     </div>
   );
 }
