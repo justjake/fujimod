@@ -16,5 +16,5 @@
     "../python/tests/**/*.ts",
     "../python/scripts/**/*.ts"
   ],
-  "exclude": ["tests/types.ts", "tests/usb.test.ts"]
+  "exclude": ["tests/types.ts", "tests/usb.test.ts", "tests/memory.test.ts"]
 }

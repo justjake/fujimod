@@ -5,6 +5,9 @@ export { default as initialize } from '../pkg/fujimod.js';
 export type {
   Session,
   Memory,
+  MemoryReport,
+  MemoryLoan,
+  BulkProfile,
   ResetGuardResult,
   DebugModeResult,
   Device,
@@ -143,6 +146,7 @@ export const usb = Object.freeze({
   Device: native.Device,
   Exporter: native.Exporter,
   Session: native.Session,
+  BulkProfile: native.BulkProfile,
   SessionState: native.SessionState,
   ErrorKind: native.ErrorKind,
   ProtocolFailureKind: native.ProtocolFailureKind,

@@ -275,6 +275,9 @@ importers:
 
   bindings/javascript:
     devDependencies:
+      '@types/emscripten':
+        specifier: 1.41.6
+        version: 1.41.6
       '@types/node':
         specifier: ^26.6.6
         version: 26.6.6
