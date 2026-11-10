@@ -479,7 +479,12 @@ impl SdHost {
         let single =
             self.options.protocol == Protocol::Sdhc && matches!(word, 0x113a0010 | 0x113a0011);
         let pio = !rom && (matches!(word, 0x193a0026 | 0x123a0036) || single && word & 1 == 0);
-        if (rom && word >> 16 & 255 != expected) || (!rom && word != expected && !pio && !single) {
+        // CMD7 with RCA 0 deselects every card and none answers it, so a
+        // host sends it without a response (Physical Layer 7.10, 4.7.4).
+        let deselect = !rom && word == 0x07000000 && argument == 0;
+        if (rom && word >> 16 & 255 != expected)
+            || (!rom && word != expected && !pio && !single && !deselect)
+        {
             return Err(format!("Unsupported SD command {command}/{word:#x}"));
         }
         let mut request = Request {
@@ -562,9 +567,11 @@ impl SdHost {
                 self.state != State::Ready || argument != 0
             }
             3 => {
+                // Physical Layer 7.10, 4.2.2: the host may send CMD3 again in
+                // Stand-by to have the card publish a new RCA.
                 request.state = State::Standby;
                 response = rca | if rom { 0x500 } else { 0x600 };
-                self.state != State::Identification || argument != 0
+                !matches!(self.state, State::Identification | State::Standby) || argument != 0
             }
             9 if !rom => {
                 let csd = 1u128 << 126
@@ -586,7 +593,13 @@ impl SdHost {
                 } else {
                     State::Standby
                 };
-                response = if argument != 0 { 0x900 } else { 0x600 };
+                response = if deselect {
+                    0
+                } else if argument != 0 {
+                    0x900
+                } else {
+                    0x600
+                };
                 !matches!(self.state, State::Standby | State::Transfer)
                     || ![0, rca].contains(&(argument & 0xffff0000))
                     || rom && argument == 0
@@ -1635,6 +1648,18 @@ mod tests {
             assert!(m.plan(word, 0x12340600).is_ok());
             assert!(m.plan(word, 0x12350600).is_err());
         }
+    }
+    #[test]
+    fn an_identified_card_is_deselected_and_publishes_a_new_rca_in_standby() {
+        let mut m = host(Protocol::Sdhc);
+        m.state = State::Transfer;
+        assert_eq!(m.plan(0x07000000, 0).unwrap().state, State::Standby);
+        assert!(m.plan(0x07000000, 0x12340000).is_err());
+        m.state = State::Standby;
+        assert_eq!(m.plan(0x07000000, 0).unwrap().state, State::Standby);
+        assert_eq!(m.plan(0x031a0000, 0).unwrap().state, State::Standby);
+        m.state = State::Transfer;
+        assert!(m.plan(0x031a0000, 0).is_err());
     }
     #[test]
     fn ocr_inquiry_keeps_idle_until_a_supported_voltage_is_selected() {
