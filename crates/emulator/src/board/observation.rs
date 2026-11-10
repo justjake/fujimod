@@ -154,7 +154,7 @@ impl MemoryContext {
         // Optional debugger-supplied per-core RAM sample, taken at the access.
         // A sample can be unavailable during early boot; observation continues.
         let mut sample_path = Vec::new();
-        if source == "cpu-read" {
+        if source == "cpu-read" || source == "cpu-fetch" {
             if let Some(root) = self.sample_address {
                 let mut sample_address = root;
                 for index in 0..=self.sample_offsets.len() {

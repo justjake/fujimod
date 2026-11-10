@@ -452,6 +452,25 @@ fn r_profile_watch_still_records_an_identity_store() {
 }
 
 #[test]
+fn r_profile_watch_samples_task_context_at_instruction_execution() {
+    let mut board = r5f_board();
+    words(&board, 0x10000, &[0xe1a0_0000, 0xeaff_fffe]);
+    words(&board, 0x10100, &[0x10200]);
+    words(&board, 0x10208, &[0x10300]);
+    let mut watch = board.memory_watch_begin_with_samples(
+        vec![(0x10000, 0x10004)], 8, board.mappings().to_vec(),
+        vec![0x10100], vec![8], Some((0x10000, 0x14000)),
+    ).unwrap();
+    run(&mut board, 1);
+    let rows = records(&watch);
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0]["source"], "cpu-fetch");
+    assert_eq!(rows[0]["pc"], 0x10000);
+    assert_eq!(rows[0]["sample_path"], serde_json::json!([0x10200, 0x10300]));
+    board.memory_watch_end(&mut watch).unwrap();
+}
+
+#[test]
 fn watch_refuses_processors_it_cannot_observe() {
     let mut graph = a7_graph();
     graph.processors[0].model = Model::ArmV8A;
