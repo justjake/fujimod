@@ -23,16 +23,21 @@ doctest = false
 bitflags = { version = "2", default-features = false, features = ["std"] }
 bytemuck = { version = "1", default-features = false, features = ["aarch64_simd"] }
 concurrent-queue = { version = "2" }
+digest-a6292c17cd707f01 = { package = "digest", version = "0.11", features = ["alloc", "mac", "oid"] }
+fastrand = { version = "2" }
 futures-core = { version = "0.3" }
 futures-util = { version = "0.3", features = ["sink"] }
 half = { version = "2", default-features = false, features = ["num-traits"] }
 hashbrown = { version = "0.17" }
+indexmap = { version = "2", default-features = false, features = ["std"] }
 memchr = { version = "2" }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 percent-encoding = { version = "2" }
 proc-macro2 = { version = "1" }
+prost = { version = "0.14" }
 quote = { version = "1" }
+regex = { version = "1" }
 regex-automata = { version = "0.4", default-features = false, features = ["dfa-onepass", "dfa-search", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
 regex-syntax = { version = "0.8" }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
@@ -49,16 +54,21 @@ zerocopy = { version = "0.8", default-features = false, features = ["derive", "s
 bitflags = { version = "2", default-features = false, features = ["std"] }
 bytemuck = { version = "1", default-features = false, features = ["aarch64_simd"] }
 concurrent-queue = { version = "2" }
+digest-a6292c17cd707f01 = { package = "digest", version = "0.11", features = ["alloc", "mac", "oid"] }
+fastrand = { version = "2" }
 futures-core = { version = "0.3" }
 futures-util = { version = "0.3", features = ["sink"] }
 half = { version = "2", default-features = false, features = ["num-traits"] }
 hashbrown = { version = "0.17" }
+indexmap = { version = "2", default-features = false, features = ["std"] }
 memchr = { version = "2" }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 percent-encoding = { version = "2" }
 proc-macro2 = { version = "1" }
+prost = { version = "0.14" }
 quote = { version = "1" }
+regex = { version = "1" }
 regex-automata = { version = "0.4", default-features = false, features = ["dfa-onepass", "dfa-search", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
 regex-syntax = { version = "0.8" }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
@@ -75,15 +85,15 @@ zerocopy = { version = "0.8", default-features = false, features = ["derive", "s
 [target.aarch64-apple-darwin.dependencies]
 arrayvec = { version = "0.7" }
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
+byteorder = { version = "1" }
 bytes = { version = "1" }
+cipher = { version = "0.5", default-features = false, features = ["stream-wrapper"] }
 const-oid = { version = "0.9", default-features = false, features = ["db"] }
 crossbeam-utils = { version = "0.8" }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
 crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
-digest-a6292c17cd707f01 = { package = "digest", version = "0.11", features = ["alloc", "mac", "oid"] }
 errno = { version = "0.3" }
-fastrand = { version = "2" }
 form_urlencoded = { version = "1" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-io = { version = "0.3" }
@@ -97,10 +107,8 @@ indexmap = { version = "2" }
 libc = { version = "0.2" }
 naga = { version = "30", features = ["glsl-in", "msl-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
-prost = { version = "0.14" }
 prost-types = { version = "0.14" }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
-regex = { version = "1" }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
 serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
@@ -116,16 +124,16 @@ zeroize = { version = "1", features = ["zeroize_derive"] }
 [target.aarch64-apple-darwin.build-dependencies]
 arrayvec = { version = "0.7" }
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
+byteorder = { version = "1" }
 bytes = { version = "1" }
 cc = { version = "1", default-features = false, features = ["parallel"] }
+cipher = { version = "0.5", default-features = false, features = ["stream-wrapper"] }
 const-oid = { version = "0.9", default-features = false, features = ["db"] }
 crossbeam-utils = { version = "0.8" }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
 crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
-digest-a6292c17cd707f01 = { package = "digest", version = "0.11", features = ["alloc", "mac", "oid"] }
 errno = { version = "0.3" }
-fastrand = { version = "2" }
 form_urlencoded = { version = "1" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-io = { version = "0.3" }
@@ -139,10 +147,8 @@ indexmap = { version = "2" }
 libc = { version = "0.2" }
 naga = { version = "30", features = ["glsl-in", "msl-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
-prost = { version = "0.14" }
 prost-types = { version = "0.14" }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
-regex = { version = "1" }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
 serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
@@ -159,13 +165,14 @@ zeroize = { version = "1", features = ["zeroize_derive"] }
 [target.x86_64-unknown-linux-gnu.dependencies]
 arrayvec = { version = "0.7" }
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
+byteorder = { version = "1" }
+bytes = { version = "1" }
+cipher = { version = "0.5", default-features = false, features = ["stream-wrapper"] }
 const-oid = { version = "0.9", default-features = false, features = ["db"] }
 crossbeam-utils = { version = "0.8" }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
 crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
-digest-a6292c17cd707f01 = { package = "digest", version = "0.11", features = ["alloc", "mac", "oid"] }
-fastrand = { version = "2" }
 form_urlencoded = { version = "1" }
 futures-io = { version = "0.3" }
 futures-util = { version = "0.3", default-features = false, features = ["io"] }
@@ -189,14 +196,15 @@ zeroize = { version = "1", features = ["zeroize_derive"] }
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 arrayvec = { version = "0.7" }
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
+byteorder = { version = "1" }
+bytes = { version = "1" }
 cc = { version = "1", default-features = false, features = ["parallel"] }
+cipher = { version = "0.5", default-features = false, features = ["stream-wrapper"] }
 const-oid = { version = "0.9", default-features = false, features = ["db"] }
 crossbeam-utils = { version = "0.8" }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
 crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
-digest-a6292c17cd707f01 = { package = "digest", version = "0.11", features = ["alloc", "mac", "oid"] }
-fastrand = { version = "2" }
 form_urlencoded = { version = "1" }
 futures-io = { version = "0.3" }
 futures-util = { version = "0.3", default-features = false, features = ["io"] }
@@ -220,6 +228,7 @@ zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [target.wasm32-unknown-unknown.dependencies]
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
+bytes = { version = "1" }
 futures-sink = { version = "0.3" }
 js-sys = { version = "0.3" }
 libc = { version = "0.2" }
@@ -229,6 +238,7 @@ web-sys = { version = "0.3", features = ["AddEventListenerOptions", "BinaryType"
 
 [target.wasm32-unknown-unknown.build-dependencies]
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
+bytes = { version = "1" }
 futures-sink = { version = "0.3" }
 js-sys = { version = "0.3" }
 libc = { version = "0.2" }
@@ -238,14 +248,20 @@ wasm-bindgen-futures = { version = "0.4" }
 web-sys = { version = "0.3", features = ["AddEventListenerOptions", "BinaryType", "Blob", "CloseEvent", "CloseEventInit", "Document", "ErrorEvent", "FileReader", "History", "HtmlCanvasElement", "HtmlHeadElement", "HtmlImageElement", "HtmlVideoElement", "ImageBitmap", "ImageData", "Location", "MediaQueryList", "MessageEvent", "Navigator", "NodeList", "OffscreenCanvas", "ProgressEvent", "Usb", "UsbAlternateInterface", "UsbConfiguration", "UsbConnectionEvent", "UsbControlTransferParameters", "UsbDevice", "UsbDeviceFilter", "UsbDeviceRequestOptions", "UsbDirection", "UsbInTransferResult", "UsbInterface", "UsbOutTransferResult", "UsbRecipient", "UsbRequestType", "UsbTransferStatus", "VideoFrame", "WebSocket", "Window", "WorkerGlobalScope", "WorkerNavigator"] }
 
 [target.wasm32-unknown-emscripten.dependencies]
+bytes = { version = "1" }
 futures-sink = { version = "0.3" }
 js-sys = { version = "0.3" }
+libc = { version = "0.2" }
+rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
 wasm-bindgen = { version = "0.2" }
 web-sys = { version = "0.3", features = ["AddEventListenerOptions", "BinaryType", "Blob", "CloseEvent", "CloseEventInit", "Document", "ErrorEvent", "FileReader", "History", "HtmlHeadElement", "Location", "MessageEvent", "Navigator", "ProgressEvent", "Usb", "UsbAlternateInterface", "UsbConfiguration", "UsbConnectionEvent", "UsbControlTransferParameters", "UsbDevice", "UsbDeviceFilter", "UsbDeviceRequestOptions", "UsbDirection", "UsbInTransferResult", "UsbInterface", "UsbOutTransferResult", "UsbRecipient", "UsbRequestType", "UsbTransferStatus", "WebSocket", "Window", "WorkerGlobalScope", "WorkerNavigator"] }
 
 [target.wasm32-unknown-emscripten.build-dependencies]
+bytes = { version = "1" }
 futures-sink = { version = "0.3" }
 js-sys = { version = "0.3" }
+libc = { version = "0.2" }
+rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = ["visit-mut"] }
 wasm-bindgen = { version = "0.2" }
 web-sys = { version = "0.3", features = ["AddEventListenerOptions", "BinaryType", "Blob", "CloseEvent", "CloseEventInit", "Document", "ErrorEvent", "FileReader", "History", "HtmlHeadElement", "Location", "MessageEvent", "Navigator", "ProgressEvent", "Usb", "UsbAlternateInterface", "UsbConfiguration", "UsbConnectionEvent", "UsbControlTransferParameters", "UsbDevice", "UsbDeviceFilter", "UsbDeviceRequestOptions", "UsbDirection", "UsbInTransferResult", "UsbInterface", "UsbOutTransferResult", "UsbRecipient", "UsbRequestType", "UsbTransferStatus", "WebSocket", "Window", "WorkerGlobalScope", "WorkerNavigator"] }

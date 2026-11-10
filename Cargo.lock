@@ -3175,6 +3175,7 @@ dependencies = [
 name = "fujimod-sync-protocol"
 version = "0.1.0"
 dependencies = [
+ "fujimod-workspace-hack",
  "prost",
  "prost-build",
 ]
@@ -3310,8 +3311,10 @@ dependencies = [
  "arrayvec",
  "bitflags 2.13.2",
  "bytemuck",
+ "byteorder",
  "bytes",
  "cc",
+ "cipher 0.5.2",
  "concurrent-queue",
  "const-oid 0.9.6",
  "crossbeam-utils",
