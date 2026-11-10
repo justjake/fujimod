@@ -770,7 +770,7 @@ fn run() -> Result<(), String> {
             },
             channel: Default::default(),
         }),
-        storage: Some(Arc::new(Mutex::new(storage))),
+        storage: Some(flash_storage::Medium::Nor(Arc::new(Mutex::new(storage)))),
         displays,
     };
 
