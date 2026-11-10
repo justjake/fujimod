@@ -134,7 +134,6 @@ fn contains(ranges: &[Span], address: u64, size: u64) -> Option<usize> {
 fn block_guard_hooks(options: &Options) -> Option<Vec<Span>> {
     let ranges = options.ranges.as_ref()?;
     if ranges.is_empty()
-        || !options.vectors.is_empty()
         || options.coverage
         || !options.count_ranges.is_empty()
         || options.trace != 0
@@ -445,7 +444,7 @@ impl Session {
         let o = self.observed.borrow();
         json!({"memory":self.options.memory,"event":o.event,"faults":o.faults,"irq_events":o.irq_events,"executed":o.executed,"records":o.stores,"counts":o.counts,
             "trace":o.trace,"trace_total":o.trace_total,
-            "guard":{"enabled":self.options.ranges.is_some(),"checked_fetches":o.checked,
+            "guard":{"enabled":self.options.ranges.is_some(),"block_accounting":self.block_guard,"checked_fetches":o.checked,
                 "accepted_fetches":o.accepted,"vector_fetches":o.vector_fetches,"range_fetches":o.range_fetches,
                 "vector_range_fetches":o.vector_range_fetches,"ranges":self.options.ranges,
                 "vector_ranges":self.options.vectors,"halted":o.halt.is_some(),"halt":o.halt}})
