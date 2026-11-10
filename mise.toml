@@ -3,14 +3,12 @@ node = "26.12.0"
 pnpm = "12.18.0"
 python = "3.14.8"
 uv = "0.13.1"
-# Stable is the default for native builds, formatting and Clippy. The pinned
-# nightly supplies rust-src for the Wasm build.
+# The pinned nightly supplies rust-src for the Wasm build and is the one
+# toolchain for native builds, formatting and Clippy.
 rust = [
-  { version = "1.99.1", profile = "minimal",
-    components = ["rustfmt", "clippy", "llvm-tools-preview"],
-    targets = ["wasm32-unknown-unknown"] },
   { version = "nightly-2026-10-10", profile = "minimal",
-    components = ["rust-src"], targets = ["wasm32-unknown-unknown"] },
+    components = ["rust-src", "rustfmt", "clippy", "llvm-tools-preview"],
+    targets = ["wasm32-unknown-unknown"] },
 ]
 emsdk = "6.0.13"
 cmake = "4.4.4"
