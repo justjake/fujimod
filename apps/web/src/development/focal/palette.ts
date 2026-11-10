@@ -25,8 +25,13 @@ export function palette(hue: number | null): Palette {
   };
 }
 
-/** The hue track: each hue drawn bright enough to read; the chosen hue shows in the page itself. */
+/** A hue drawn bright enough to read (the page shows it at its own dark value);
+ * no hue is the matching gray. */
+export function hueColor(hue: number | null): string {
+  return hue === null ? hsv(0, 0, 0.62) : hsv(hue, 0.7, 0.62);
+}
+
 export function hueTrack(): string {
-  const stops = Array.from({ length: 13 }, (_, i) => hsv(i * 30, 0.7, 0.62));
+  const stops = Array.from({ length: 13 }, (_, i) => hueColor(i * 30));
   return `linear-gradient(to right, ${stops.join(', ')})`;
 }

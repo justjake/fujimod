@@ -77,13 +77,24 @@
       inset 0 1px 0 var(--hairline),
       inset 0 -2px 0 var(--color-shadow);
   }
-  /* The focused row: the focus bar and the SET-UP COLOR stripe, bevel kept. */
+  /* The focused row: the focus bar and the SET-UP COLOR stripe. The stripe
+     spans only the face between the hairlines, so it is exactly as tall as the
+     bar beside it. */
   .focal-focused {
+    position: relative;
     background: var(--focus);
     box-shadow:
-      inset var(--spacing-stripe) 0 0 var(--accent),
       inset 0 1px 0 var(--hairline),
       inset 0 -2px 0 var(--color-shadow);
+  }
+  .focal-focused::before {
+    content: '';
+    position: absolute;
+    top: 1px;
+    bottom: 2px;
+    left: 0;
+    width: var(--spacing-stripe);
+    background: var(--accent);
   }
 }
 

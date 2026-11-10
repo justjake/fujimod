@@ -139,8 +139,8 @@ function Device() {
             cursor: Math.max(0, SWATCH_INDEX(s.colors[target])),
           },
         });
-      case 'reset':
-        return patch({ hue: null, focus: 'background' });
+      case 'background':
+        return patch({ popup: { kind: 'hue', cursor: 'track', original: s.hue } });
       case 'startUp':
         return patch({ popup: { kind: 'choice', row: 'startUp', cursor: s.startUp } });
       case 'shutDown':
@@ -172,6 +172,16 @@ function Device() {
       if (key === 'Escape') return patch({ popup: undefined });
       return;
     }
+    if (popup?.kind === 'hue') {
+      if (key === 'ArrowUp' || key === 'ArrowDown')
+        return patch({ popup: { ...popup, cursor: popup.cursor === 'track' ? 'reset' : 'track' } });
+      if ((key === 'ArrowLeft' || key === 'ArrowRight') && popup.cursor === 'track')
+        return patch({ hue: ((s.hue ?? 210) + (key === 'ArrowLeft' ? -6 : 6) + 360) % 360 });
+      if (key === 'Enter')
+        return patch({ hue: popup.cursor === 'reset' ? null : s.hue, popup: undefined });
+      if (key === 'Escape') return patch({ hue: popup.original, popup: undefined });
+      return;
+    }
     if (popup?.kind === 'choice') {
       const count = (popup.row === 'startUp' ? START_UP_STYLES : SHUT_DOWN_STYLES).length;
       if (key === 'ArrowUp' || key === 'ArrowDown') {
@@ -187,10 +197,6 @@ function Device() {
     if (key === 'ArrowUp' || key === 'ArrowDown') {
       const next = Math.max(0, Math.min(targets.length - 1, index + (key === 'ArrowUp' ? -1 : 1)));
       return patch({ focus: targets[next] });
-    }
-    if ((key === 'ArrowLeft' || key === 'ArrowRight') && s.focus === 'background') {
-      const hue = ((s.hue ?? 210) + (key === 'ArrowLeft' ? -6 : 6) + 360) % 360;
-      return patch({ hue });
     }
     if (key === 'Enter') return select(s.focus);
   };
@@ -313,19 +319,39 @@ export const STATES: { id: string; title: string; note?: string; view: () => JSX
   {
     id: 'setup-background',
     title: 'BACKGROUND COLOR, gray',
-    note: 'LEFT/RIGHT move the hue; the track is drawn bright enough to read.',
     view: () => <SetupPage state={setupState({ focus: 'background' })} />,
+  },
+  {
+    id: 'hue-picker',
+    title: 'BACKGROUND COLOR picker',
+    note: 'LEFT/RIGHT move the hue and the page retints as it moves; every gray takes the hue at its own value.',
+    view: () => (
+      <SetupPage
+        state={setupState({
+          focus: 'background',
+          hue: 215,
+          popup: { kind: 'hue', cursor: 'track', original: null },
+        })}
+      />
+    ),
+  },
+  {
+    id: 'hue-reset',
+    title: 'BACKGROUND COLOR picker, RESET',
+    view: () => (
+      <SetupPage
+        state={setupState({
+          focus: 'background',
+          hue: 215,
+          popup: { kind: 'hue', cursor: 'reset', original: 215 },
+        })}
+      />
+    ),
   },
   {
     id: 'setup-background-tinted',
     title: 'BACKGROUND COLOR, blue',
-    note: 'Every gray takes the hue at its own value.',
     view: () => <SetupPage state={setupState({ focus: 'background', hue: 215 })} />,
-  },
-  {
-    id: 'setup-reset',
-    title: 'RESET',
-    view: () => <SetupPage state={setupState({ focus: 'reset', hue: 215 })} />,
   },
   {
     id: 'setup-orange',

@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { For, Match, Show, Switch } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import {
   Button,
@@ -6,14 +6,14 @@ import {
   DialKey,
   Done,
   Group,
-  HueTrack,
+  HuePopup,
   Key,
   ProgressBar,
+  Release,
   Row,
   Screen,
   Section,
   SegmentedBar,
-  SmallButton,
   Spinner,
   SdCard,
   Swatch,
@@ -21,7 +21,9 @@ import {
   Check,
   SWATCHES,
   type FileState,
+  type HueCursor,
 } from './components';
+import { hueColor } from './palette';
 
 /* ---- Content ------------------------------------------------------------------ */
 
@@ -38,6 +40,7 @@ export const UPDATE = {
   size: '3.1 MiB',
   notes: ['Wi-Fi software updates', 'Faster menu scrolling', 'Halation keeps highlight color'],
 };
+export const CAMERA = { model: 'X70', modsOn: 36, mods: 36 };
 export const OLDER = { version: '0.0.2', date: '2026-09-28', commit: '15c3c19' };
 const NETWORK_NOTE =
   'Connection details are kept on internal storage shared with PC\u00a0AUTO\u00a0SAVE.';
@@ -62,13 +65,14 @@ export type SetupTarget =
   | 'welcome'
   | ColorRow
   | 'background'
-  | 'reset'
   | 'startUp'
   | 'shutDown';
 
 export type SetupPopup =
   | { kind: 'swatch'; row: ColorRow; cursor: number }
-  | { kind: 'choice'; row: 'startUp' | 'shutDown'; cursor: number };
+  | { kind: 'choice'; row: 'startUp' | 'shutDown'; cursor: number }
+  /** `original` is restored when the popup is backed out of. */
+  | { kind: 'hue'; cursor: HueCursor; original: number | null };
 
 export interface SetupState {
   focus: SetupTarget;
@@ -105,14 +109,10 @@ export function setupTargets(state: SetupState): SetupTarget[] {
     'setup',
     'play',
     'background',
-    'reset',
     'startUp',
     'shutDown',
   ];
-  return all.filter(
-    (target) =>
-      (target !== 'updates' || state.connected) && (target !== 'reset' || state.hue !== null),
-  );
+  return all.filter((target) => target !== 'updates' || state.connected);
 }
 
 /* ---- FUJIMOD SET-UP ----------------------------------------------------------- */
@@ -126,29 +126,45 @@ function BootInstructions() {
 }
 
 function SetupPopup(props: { state: SetupState; anchor: number }) {
+  const popup = () => props.state.popup;
+  const swatch = () => {
+    const p = popup();
+    return p?.kind === 'swatch' ? p : undefined;
+  };
+  const choice = () => {
+    const p = popup();
+    return p?.kind === 'choice' ? p : undefined;
+  };
+  const hue = () => {
+    const p = popup();
+    return p?.kind === 'hue' ? p : undefined;
+  };
   return (
-    <Show when={props.state.popup}>
-      {(popup) => (
-        <Show
-          when={popup().kind === 'swatch'}
-          fallback={
-            <ChoicePopup
-              anchor={props.anchor}
-              options={popup().row === 'startUp' ? START_UP_STYLES : SHUT_DOWN_STYLES}
-              cursor={popup().cursor}
-              current={popup().row === 'startUp' ? props.state.startUp : props.state.shutDown}
-              description={popup().row === 'startUp' ? 'PRESS ANY BUTTON TO SKIP' : undefined}
-            />
-          }
-        >
+    <Switch>
+      <Match when={swatch()}>
+        {(p) => (
           <SwatchPopup
             anchor={props.anchor}
-            cursor={popup().cursor}
-            current={Math.max(0, SWATCH_INDEX(props.state.colors[popup().row as ColorRow]))}
+            cursor={p().cursor}
+            current={Math.max(0, SWATCH_INDEX(props.state.colors[p().row]))}
           />
-        </Show>
-      )}
-    </Show>
+        )}
+      </Match>
+      <Match when={choice()}>
+        {(p) => (
+          <ChoicePopup
+            anchor={props.anchor}
+            options={p().row === 'startUp' ? START_UP_STYLES : SHUT_DOWN_STYLES}
+            cursor={p().cursor}
+            current={p().row === 'startUp' ? props.state.startUp : props.state.shutDown}
+            description={p().row === 'startUp' ? 'PRESS ANY BUTTON TO SKIP' : undefined}
+          />
+        )}
+      </Match>
+      <Match when={hue()}>
+        {(p) => <HuePopup anchor={props.anchor} hue={props.state.hue} cursor={p().cursor} />}
+      </Match>
+    </Switch>
   );
 }
 
@@ -178,14 +194,17 @@ export function SetupPage(props: {
       top={props.top}
       overlay={overlay()}
     >
-      <header class="mx-margin px-[6px] pt-[14px] pb-[20px]">
-        <div class="flex items-baseline justify-between">
-          <h1 class="text-hero font-bold">FujiMod {RELEASE.version}</h1>
-          <span class="text-detail text-secondary">
-            {RELEASE.date}&ensp;{RELEASE.commit}
+      <header class="mx-margin px-[6px] pt-[16px] pb-[20px]">
+        <Release version={RELEASE.version} scale={3} class="text-hero" />
+        <p class="mt-[10px] text-detail text-secondary">
+          {RELEASE.date}&ensp;{RELEASE.commit}&ensp;•&ensp;{RELEASE.age}
+        </p>
+        <div class="mt-[14px] flex items-baseline justify-between text-row">
+          <span>{CAMERA.model}</span>
+          <span class="text-secondary">
+            {CAMERA.modsOn}/{CAMERA.mods} mods
           </span>
         </div>
-        <p class="mt-[8px] text-detail text-secondary">{RELEASE.age}</p>
       </header>
 
       <Group>
@@ -197,22 +216,17 @@ export function SetupPage(props: {
           onSelect={select('wifi')}
         />
         <Row
-          title="Check for updates"
+          title="CHECK FOR UPDATES"
           disabled={!s().connected}
           focused={focused('updates')}
           onSelect={select('updates')}
-          detail={
-            <span class="flex justify-between">
-              <span>last checked</span>
-              <span>{s().lastChecked}</span>
-            </span>
-          }
+          detail={`Last checked ${s().lastChecked}`}
         />
       </Group>
 
       <Group class="mt-gap">
         <Row
-          title="Boot Setup"
+          title="BOOT SETUP"
           value={s().boot}
           disclosure={false}
           detail={s().boot === 'MANUAL' ? <BootInstructions /> : AUTOMATIC_NOTE}
@@ -235,12 +249,13 @@ export function SetupPage(props: {
         />
       </Group>
 
-      <Section title="Appearance" />
+      <Section title="APPEARANCE" />
       <Group>
         <For each={colorRows}>
           {(entry) => (
             <Row
               label={entry.label}
+              disclosure={false}
               focused={focused(entry.row)}
               onSelect={select(entry.row)}
               trailing={<Swatch color={s().colors[entry.row]} />}
@@ -252,12 +267,8 @@ export function SetupPage(props: {
           disclosure={false}
           focused={focused('background')}
           onSelect={select('background')}
-          trailing={
-            <SmallButton label="RESET" focused={focused('reset')} disabled={s().hue === null} />
-          }
-        >
-          <HueTrack hue={s().hue} />
-        </Row>
+          trailing={<Swatch color={hueColor(s().hue)} />}
+        />
       </Group>
 
       <Group class="mt-gap">
@@ -304,12 +315,12 @@ function mib(value: number) {
   return value.toFixed(1);
 }
 
-function StatusCard(props: { icon: JSX.Element; title: string; detail: string }) {
+function StatusCard(props: { icon: JSX.Element; version: string; detail: string }) {
   return (
     <Group class="mt-[8px]">
       <div class="focal-bevel flex flex-col items-center py-[26px]">
         {props.icon}
-        <div class="mt-[16px] text-card font-bold">{props.title}</div>
+        <Release version={props.version} scale={2} class="mt-[18px] text-card" />
         <div class="mt-[10px] text-detail text-secondary">{props.detail}</div>
       </div>
     </Group>
@@ -354,10 +365,10 @@ export function UpdatePage(props: { state: UpdateState; top?: boolean }) {
       top={props.top}
     >
       <Show when={s().phase === 'checking'}>
-        <StatusCard icon={<Spinner />} title={`FujiMod ${RELEASE.version}`} detail="checking" />
+        <StatusCard icon={<Spinner />} version={RELEASE.version} detail="checking" />
       </Show>
       <Show when={s().phase === 'up-to-date'}>
-        <StatusCard icon={<Done />} title={`FujiMod ${RELEASE.version}`} detail="up to date" />
+        <StatusCard icon={<Done />} version={RELEASE.version} detail="up to date" />
         <Group class="mt-gap">
           <Row label="CHECK AGAIN" disclosure={false} focused />
         </Group>
@@ -365,9 +376,9 @@ export function UpdatePage(props: { state: UpdateState; top?: boolean }) {
       <Show when={['available', 'downloading', 'downloaded'].includes(s().phase)}>
         <Group class="mt-[8px]">
           <div class="focal-bevel px-pad pt-[16px] pb-[18px]">
-            <div class="flex items-baseline justify-between">
-              <h1 class="text-[32px] leading-none font-bold">FujiMod {UPDATE.version}</h1>
-              <span class="text-detail text-secondary">
+            <div class="flex items-end justify-between">
+              <Release version={UPDATE.version} scale={2} class="text-card" />
+              <span class="mb-[6px] text-detail text-secondary">
                 {UPDATE.date}&ensp;{UPDATE.size}
               </span>
             </div>
@@ -468,13 +479,13 @@ export function BootPage(props: { state: BootState }) {
   return (
     <Screen title="BOOT SETUP" hue={s().hue} accent={s().accent} focus={s().focus}>
       <Group class="mt-[8px]">
-        <Choice title="Manual" current={s().boot === 'MANUAL'} focused={s().focus === 'MANUAL'}>
+        <Choice title="MANUAL" current={s().boot === 'MANUAL'} focused={s().focus === 'MANUAL'}>
           <BootInstructions />
         </Choice>
       </Group>
       <Group class="mt-gap">
         <Choice
-          title="Automatic"
+          title="AUTOMATIC"
           current={s().boot === 'AUTOMATIC'}
           focused={s().focus === 'AUTOMATIC'}
           disabled={!s().backedUp}

@@ -95,6 +95,31 @@ export function SdCard() {
   );
 }
 
+/** The FujiMod pixel wordmark (55x14 pixels, descender included), drawn at `scale`. */
+export function Wordmark(props: { scale: number }) {
+  return (
+    <img
+      src="/brand.png"
+      alt="FujiMod"
+      width={55 * props.scale}
+      height={14 * props.scale}
+      class="[image-rendering:pixelated]"
+    />
+  );
+}
+
+/** The wordmark and a version, the version's baseline on the wordmark's. */
+export function Release(props: { version: string; scale: number; class?: string }) {
+  return (
+    <div class={`flex items-end gap-[0.35em] ${props.class ?? ''}`}>
+      <Wordmark scale={props.scale} />
+      <span class="leading-none font-bold" style={{ 'margin-bottom': `${3 * props.scale}px` }}>
+        {props.version}
+      </span>
+    </div>
+  );
+}
+
 export function Spinner() {
   return (
     <svg width="44" height="44" viewBox="0 0 44 44">
@@ -260,13 +285,14 @@ export function Row(props: {
   children?: JSX.Element;
 }) {
   const disclosure = () => props.disclosure ?? true;
+  const tall = () => Boolean(props.children || props.detail);
   return (
     <div
       data-focused={props.focused ? '' : undefined}
       onClick={() => props.onSelect?.()}
       class={`relative flex min-h-row flex-col justify-center pl-pad ${
         disclosure() ? 'pr-disclosure' : 'pr-pad'
-      } ${props.focused ? 'focal-focused' : 'focal-bevel'} ${props.children || props.detail ? 'pt-[14px] pb-[16px]' : ''}`}
+      } ${props.focused ? 'focal-focused' : 'focal-bevel'} ${tall() ? 'pt-[14px] pb-[16px]' : ''}`}
     >
       <div class="flex items-center gap-[12px]">
         <Show when={props.label}>
@@ -275,7 +301,7 @@ export function Row(props: {
           </span>
         </Show>
         <Show when={props.title}>
-          <span class={`text-card font-bold ${props.disabled ? 'text-disabled' : ''}`}>
+          <span class={`text-card font-bold uppercase ${props.disabled ? 'text-disabled' : ''}`}>
             {props.title}
           </span>
         </Show>
@@ -294,7 +320,8 @@ export function Row(props: {
       </Show>
       {props.children}
       <Show when={disclosure()}>
-        <span class="absolute top-1/2 right-[16px] -translate-y-1/2">
+        {/* On a tall row the chevron stays on the title line. */}
+        <span class={`absolute right-[16px] -translate-y-1/2 ${tall() ? 'top-[29px]' : 'top-1/2'}`}>
           <Disclosure dim={props.disabled} />
         </span>
       </Show>
@@ -302,15 +329,13 @@ export function Row(props: {
   );
 }
 
-/** A color well filling the right third of its row. */
+/** A color well filling the right third of its row to the row's edges; only
+ * the bevel's hairlines stay drawn across it. */
 export function Swatch(props: { color: string }) {
   return (
     <span
-      class="absolute top-[9px] right-disclosure bottom-[11px] w-[228px] border border-black"
-      style={{
-        background: props.color,
-        'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.2)',
-      }}
+      class="absolute top-[1px] right-0 bottom-[2px] w-1/3 border-l border-black"
+      style={{ background: props.color }}
     />
   );
 }
@@ -320,51 +345,24 @@ export function Button(props: { label: string; focused?: boolean; color?: string
   return (
     <div
       data-focused={props.focused ? '' : undefined}
-      class="mx-margin flex h-button items-center justify-center text-row uppercase"
+      class="relative mx-margin flex h-button items-center justify-center text-row uppercase"
       style={{
         background: props.color ?? 'var(--accent)',
-        'box-shadow': `${props.focused ? 'inset var(--spacing-stripe) 0 0 white, ' : ''}inset 0 1px 0 rgb(255 255 255 / 0.25), inset 0 -2px 0 black`,
+        'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.25), inset 0 -2px 0 black',
       }}
     >
-      {props.label}
-    </div>
-  );
-}
-
-export function SmallButton(props: { label: string; focused?: boolean; disabled?: boolean }) {
-  return (
-    <span
-      data-focused={props.focused ? '' : undefined}
-      class={`inline-flex h-[36px] w-[112px] items-center justify-center text-detail uppercase ${
-        props.disabled ? 'text-dim' : 'text-label'
-      }`}
-      style={{
-        background: props.focused ? 'var(--focus)' : '#343436',
-        'box-shadow': `${props.focused ? 'inset var(--spacing-stripe) 0 0 var(--accent), ' : ''}inset 0 1px 0 #4e4e50, inset 0 -2px 0 black`,
-      }}
-    >
-      {props.label}
-    </span>
-  );
-}
-
-export function HueTrack(props: { hue: number | null }) {
-  return (
-    <div class="relative mt-[14px] h-[18px] border border-black" style={{ background: hueTrack() }}>
-      <Show when={props.hue !== null}>
-        <span
-          class="absolute -top-[7px] -bottom-[7px] w-[8px] -translate-x-1/2 border border-black bg-white"
-          style={{ left: `${((props.hue ?? 0) / 360) * 100}%` }}
-        />
+      <Show when={props.focused}>
+        <span class="absolute top-[1px] bottom-[2px] left-0 w-stripe bg-white" />
       </Show>
+      {props.label}
     </div>
   );
 }
 
 export function ProgressBar(props: { fraction: number }) {
   return (
-    <div class="h-bar bg-track">
-      <div class="h-full bg-progress" style={{ width: `${props.fraction * 100}%` }} />
+    <div class="h-bar overflow-hidden rounded-full bg-track">
+      <div class="h-full rounded-full bg-progress" style={{ width: `${props.fraction * 100}%` }} />
     </div>
   );
 }
@@ -378,9 +376,12 @@ export function SegmentedBar(props: { files: { size: number; state: FileState }[
     <div class="flex h-bar gap-[3px]">
       <For each={props.files}>
         {(file) => (
-          <div class="h-full bg-track" style={{ flex: `${file.size} 1 0` }}>
+          <div
+            class="h-full overflow-hidden rounded-full bg-track"
+            style={{ flex: `${file.size} 1 0` }}
+          >
             <div
-              class={`h-full ${file.state === 'present' ? 'bg-present' : 'bg-progress'}`}
+              class={`h-full rounded-full ${file.state === 'present' ? 'bg-present' : 'bg-progress'}`}
               style={{ width: `${file.state === 'present' ? 100 : file.state * 100}%` }}
             />
           </div>
@@ -460,6 +461,39 @@ export function ChoicePopup(props: {
           {props.description}
         </div>
       </Show>
+    </PopupFrame>
+  );
+}
+
+export type HueCursor = 'track' | 'reset';
+
+/** BACKGROUND COLOR: LEFT/RIGHT move the hue on the track (the page retints as
+ * it moves); RESET returns to gray. */
+export function HuePopup(props: { anchor: number; hue: number | null; cursor: HueCursor }) {
+  return (
+    <PopupFrame anchor={props.anchor} width={320} height={80 + 52}>
+      <div
+        class={`flex h-[80px] items-center px-pad ${props.cursor === 'track' ? 'bg-focus' : ''}`}
+      >
+        <div
+          class="relative h-[24px] flex-1 border border-black"
+          style={{ background: hueTrack() }}
+        >
+          <Show when={props.hue !== null}>
+            <span
+              class="absolute -top-[8px] -bottom-[8px] w-[10px] -translate-x-1/2 border border-black bg-white"
+              style={{ left: `${((props.hue ?? 0) / 360) * 100}%` }}
+            />
+          </Show>
+        </div>
+      </div>
+      <div
+        class={`flex h-popup-row items-center border-t border-popup-separator px-pad text-row uppercase ${
+          props.cursor === 'reset' ? 'bg-focus' : ''
+        } ${props.hue === null ? 'text-disabled' : ''}`}
+      >
+        RESET
+      </div>
     </PopupFrame>
   );
 }
