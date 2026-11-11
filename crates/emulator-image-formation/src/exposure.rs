@@ -18,6 +18,16 @@ pub(super) fn adc(signal: f64, noise: NoiseResponse, x: usize, y: usize, color: 
     }
 }
 
+#[inline]
+fn srgb_linear(byte: u8) -> f64 {
+    let s = f64::from(byte) / 255.;
+    if s <= 0.04045 {
+        s / 12.92
+    } else {
+        libm::pow((s + 0.055) / 1.055, 2.4)
+    }
+}
+
 /// Derived optical pixels retain their full-scene law even when a readout
 /// computes only a subset. Checkpoints store materialized canonical pixels.
 #[derive(Clone)]
@@ -89,6 +99,10 @@ pub struct ExposedFrame {
     pub aperture_squared: f64,
     pub color_sample_weights: [u8; 3],
     response: [[u16; 256]; 3],
+    /// Pre-quantized sRGB input in ADC units. Charge-noise sampling consumes
+    /// the unrounded signal, so this replaces per-pixel color conversion while
+    /// retaining the exact expression order used before noise.
+    signal: [[f64; 256]; 3],
     pub(super) response_scale: [f64; 3],
     pub focus_shift_mm: Option<f64>,
     pub view: Option<fujimod_emulator_imaging::scene::view::View>,
@@ -170,21 +184,6 @@ impl ExposedFrame {
             * exposure.seconds
             * exposure.analog_gain
             / calibration.saturation_lux_seconds;
-        let response = std::array::from_fn(|c| {
-            std::array::from_fn(|v| {
-                let s = v as f64 / 255.;
-                let linear = if s <= 0.04045 {
-                    s / 12.92
-                } else {
-                    libm::pow((s + 0.055) / 1.055, 2.4)
-                };
-                libm::rint(
-                    linear * scale * calibration.full_scale as f64 * 256.
-                        / calibration.reference_white[c] as f64,
-                )
-                .clamp(0., 16383.) as u16
-            })
-        });
         // Mosaic radiance has no photometric white or reference white: its
         // counts are the RAF normalization scaled by the physical exposure.
         // The largest site sets the scale, matching the optical scene's
@@ -198,12 +197,22 @@ impl ExposedFrame {
         if response_scale.iter().any(|v| !v.is_finite() || *v < 0.) {
             return Err("physical radiance exceeds finite sensor response".into());
         }
+        let response = std::array::from_fn(|c| {
+            std::array::from_fn(|v| {
+                libm::rint(srgb_linear(v as u8) * response_scale[c])
+                    .clamp(0., 16383.) as u16
+            })
+        });
+        let signal = std::array::from_fn(|c| {
+            std::array::from_fn(|v| srgb_linear(v as u8) * response_scale[c])
+        });
         Ok(Self {
             frame,
             exposure,
             aperture_squared,
             color_sample_weights: calibration.color_sample_weights,
             response,
+            signal,
             response_scale,
             focus_shift_mm: None,
             view: None,
@@ -300,6 +309,9 @@ impl ExposedFrame {
             aperture_squared,
             color_sample_weights,
             response: std::array::from_fn(|c| std::array::from_fn(|i| response[c * 256 + i])),
+            signal: std::array::from_fn(|c| {
+                std::array::from_fn(|i| srgb_linear(i as u8) * response_scale[c])
+            }),
             response_scale,
             focus_shift_mm,
             view,
@@ -356,13 +368,13 @@ impl ExposedFrame {
             FramePixels::Rgb24(p) => {
                 if let Some(noise) = self.noise_response() {
                     std::array::from_fn(|c| {
-                        let s = f64::from(p[(sy * f.width + sx) * 3 + c]) / 255.;
-                        let linear = if s <= 0.04045 {
-                            s / 12.92
-                        } else {
-                            libm::pow((s + 0.055) / 1.055, 2.4)
-                        };
-                        adc(linear * self.response_scale[c], Some(noise), sx, sy, c)
+                        adc(
+                            self.signal[c][p[(sy * f.width + sx) * 3 + c] as usize],
+                            Some(noise),
+                            sx,
+                            sy,
+                            c,
+                        )
                     })
                 } else {
                     std::array::from_fn(|c| {
