@@ -51,6 +51,7 @@ fn card_session_with_power_alias_and_fill(
             rca: 0x1234,
             ram_bytes: 0x1000,
             initialization_fault: sdhc::InitializationFault::None,
+            latency: None,
             high_speed: false,
             ram_banks: vec![],
             dram_alias: true,
