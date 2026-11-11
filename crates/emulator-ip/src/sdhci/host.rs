@@ -162,6 +162,13 @@ pub struct SdHost {
 /// Function 15 keeps a group unchanged; an unsupported request reads 15.
 /// A switch (bit 31) selects the access mode; bus timing is not modeled.
 /// Returns the status and the group 1 selection.
+/// Bytes of one PIO block: a fixed-size status block or one sector.
+fn pio_block(r: &Request) -> usize {
+    match r.payload {
+        Payload::Metadata { len, .. } => len,
+        _ => 512,
+    }
+}
 fn switch_status(argument: u32, access_mode: u8) -> ([u8; 64], u8) {
     let mut bytes = [0; 64];
     let mut access = access_mode;
@@ -481,7 +488,12 @@ impl SdHost {
         };
         let single =
             self.options.protocol == Protocol::Sdhc && matches!(word, 0x113a0010 | 0x113a0011);
-        let pio = !rom && (matches!(word, 0x193a0026 | 0x123a0036) || single && word & 1 == 0);
+        // CMD6 also reads its 64-byte status through the data port: the X-T3
+        // fast SD card read sends 0x063a0010 on the X-Processor 4 host.
+        let pio = !rom
+            && (matches!(word, 0x193a0026 | 0x123a0036)
+                || word == 0x063a0010 && !app
+                || single && word & 1 == 0);
         // CMD7 with RCA 0 deselects every card and none answers it, so a
         // host sends it without a response (Physical Layer 7.10, 4.7.4).
         let deselect = !rom && word == 0x07000000 && argument == 0;
@@ -634,6 +646,9 @@ impl SdHost {
                 argument != 0 || self.regs.get(4) & 0xfff != 8
             }
             6 if !rom && self.options.high_speed => {
+                if pio {
+                    request.transfer = Transfer::PioRead;
+                }
                 let (bytes, selected) = switch_status(argument, self.access_mode);
                 if argument >> 31 != 0 && selected != 15 {
                     request.access_mode = selected;
@@ -645,6 +660,9 @@ impl SdHost {
                 // The card supports only default speed (group 1 function 0).
                 // Checking or switching to high speed reports result 0xF for
                 // group 1, as the SD spec defines for an unsupported function.
+                if pio {
+                    request.transfer = Transfer::PioRead;
+                }
                 let mut bytes = [0; 64];
                 bytes[13] = 1;
                 bytes[16] = 0xf;
@@ -754,12 +772,20 @@ impl SdHost {
             if !rom && r.command != 17 && enabled & 2 == 0 {
                 return Err("SD data-complete signal disabled".into());
             }
+            // A polled host leaves every signal enable clear and waits on
+            // status enabled at +0x34 (the X-Processor 4 boot ROM writes only
+            // +0x34; the X-T3 fast SD card read polls the same way).
+            let signalled = if self.regs.get(0x38) == 0 {
+                self.regs.get(0x34)
+            } else {
+                self.regs.get(0x34) & self.regs.get(0x38)
+            };
             if r.transfer == Transfer::Dma {
                 self.physical(r.address, r.quantity, rom || r.command == 17)?;
                 let boundary = 4096usize << (self.regs.get(4) >> 12 & 7);
                 if !rom
                     && r.quantity > boundary - r.address as usize % boundary
-                    && self.regs.get(0x34) & self.regs.get(0x38) & 8 == 0
+                    && signalled & 8 == 0
                 {
                     return Err("SDMA boundary interrupt disabled".into());
                 }
@@ -774,9 +800,7 @@ impl SdHost {
                 } else {
                     0x23
                 };
-                if enabled & signals & !1 != signals & !1
-                    || self.regs.get(0x34) & self.regs.get(0x38) & 1 == 0
-                {
+                if enabled & signals & !1 != signals & !1 || signalled & 1 == 0 {
                     return Err("SD PIO directional signals disabled".into());
                 }
             }
@@ -888,23 +912,29 @@ impl SdHost {
                 }
                 r.cursor += 512;
             }
-            self.regs.set(6, ((r.quantity - r.cursor) / 512) as u16);
+            let block = pio_block(&r);
+            self.regs.set(6, ((r.quantity - r.cursor) / block) as u16);
             if r.fault == Some(r.cursor) {
                 return self.data_error(cx, r);
             }
             if r.cursor == r.quantity {
                 return self.finish(cx, r, 2);
             }
-            if r.transfer == Transfer::PioRead
-                && let Payload::Read(first) = r.payload
-            {
+            if r.transfer == Transfer::PioRead {
                 let mut bytes = [0; 512];
-                read_media(
-                    &self.card,
-                    &mut self.reads,
-                    first as u64 * 512 + r.cursor as u64,
-                    &mut bytes,
-                )?;
+                match r.payload {
+                    Payload::Read(first) => read_media(
+                        &self.card,
+                        &mut self.reads,
+                        first as u64 * 512 + r.cursor as u64,
+                        &mut bytes,
+                    )?,
+                    // The CMD6 status block through the data port.
+                    Payload::Metadata { bytes: status, len } => {
+                        bytes[..len].copy_from_slice(&status[..len])
+                    }
+                    _ => {}
+                }
                 self.fifo.restore(&bytes, 0)?;
             }
             if rom {
@@ -1001,9 +1031,10 @@ impl SdHost {
         } else {
             self.fifo.read().ok_or("SD PIO FIFO is empty")?
         };
-        if self.fifo.position() == 512 {
+        let block = pio_block(r);
+        if self.fifo.position() == block {
             if !is_write {
-                r.cursor += 512;
+                r.cursor += block;
             }
             r.phase = Phase::Sector;
             r.due = Some(
@@ -1156,15 +1187,18 @@ impl SdHost {
             return self.signal(cx);
         }
         if offset == 0x2e || offset == 0x2f {
-            if value & if offset == 0x2f { !1 } else { !0x70f } != 0 {
+            // Software Reset: bit 0 all, bit 1 CMD line, bit 2 DAT line
+            // (bits 8..10 of a halfword write at +0x2e). The X-Processor 4
+            // boot ROM resets single lines through the byte (0xfff02bd8).
+            if value & if offset == 0x2f { !7 } else { !0x70f } != 0 {
                 return Err("Unsupported SD reset/timeout bits".into());
             }
-            if value & if offset == 0x2f { 1 } else { 0x700 } != 0 {
+            if value & if offset == 0x2f { 7 } else { 0x700 } != 0 {
                 self.request = None;
                 self.rom_fifo_ready = false;
                 self.regs.set(0x30, 0);
                 self.regs.set(0x32, 0);
-                if rom || offset == 0x2f || value & 0x100 != 0 {
+                if rom || value & if offset == 0x2f { 1 } else { 0x100 } != 0 {
                     self.regs = Registers::new();
                     self.response = [0; 16];
                     self.clocks.write(cx, self.options.base + 0x2c, 2, 0);

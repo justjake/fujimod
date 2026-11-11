@@ -345,13 +345,28 @@ pub fn enter(cpu: &dyn Cpu, fetch: bool) -> Result<(), String> {
     let c = Cluster(cpu);
     let core = 0;
     let pc = c.reg(core, arm::PC)?;
-    let mmu = Mmu::read(&c, core)?;
-    let (address, status, access) = if fetch {
+    let sctlr = c.cp(core, 1, 0, 0, 0)? as u32;
+    let (address, status, access) = if sctlr & 1 == 0 {
+        // With the MMU off every data access is Strongly-ordered (ARMv7-A
+        // ARM B3.2.1), so the engine's only data abort is an alignment
+        // fault. Camera run 2026-11-10: an X-T3 hung before its LED on SD
+        // card code whose unaligned loads ran with the MMU off.
+        if fetch {
+            return Err("Prefetch abort with the MMU off is unmodeled".into());
+        }
+        let transfer = transfer(&c, core, pc, c.word(core, u64::from(pc))?)?;
+        if transfer.address & (transfer.alignment - 1) == 0 {
+            return Err("Data abort with the MMU off is not an alignment fault".into());
+        }
+        (transfer.address, 1, transfer.access)
+    } else if fetch {
+        let mmu = Mmu::read(&c, core)?;
         let status = mmu
             .status(&c, pc, Access::Fetch, mmu.user)?
             .ok_or("Prefetch abort is not explained by the architectural page tables")?;
         (pc, status, Access::Fetch)
     } else {
+        let mmu = Mmu::read(&c, core)?;
         let word = c.word(core, u64::from(pc))?;
         let transfer = transfer(&c, core, pc, word)?;
         if transfer.address & (transfer.alignment - 1) != 0 {
@@ -382,7 +397,6 @@ pub fn enter(cpu: &dyn Cpu, fetch: bool) -> Result<(), String> {
     )?;
     c.write_cp(6, if fetch { 2 } else { 0 }, address)?;
     let old = c.reg(core, arm::CPSR)?;
-    let sctlr = mmu.sctlr;
     if old & 0x20 != 0 || sctlr & ((1 << 30) | (1 << 25)) != 0 {
         return Err("Unsupported Thumb/big-endian ARMv7-A exception entry".into());
     }

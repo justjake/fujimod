@@ -19,7 +19,7 @@ mod xp4;
 mod xp5;
 use image::{File, Packaging, Plan, Result, require};
 use serde::{Deserialize, Serialize};
-pub use xp4::{ColdStart, FileApi, Setup};
+pub use xp4::{ColdStart, FileApi, SdCardRead, Setup, sd_card_fast_read::PackedStage};
 pub use xp5::{
     Board as SdBoard, CodeProof as Xp5CodeProof, Flash as Xp5Flash, Lamp as Xp5Lamp,
     Operation as SdOperation, RegisterWrite as Xp5RegisterWrite, Setup as Xp5Setup,
@@ -207,6 +207,7 @@ impl Recipe {
         base: u32,
         api: &FileApi,
         workspace: u32,
+        read: SdCardRead,
     ) -> Result<(Vec<u8>, serde_json::Value)> {
         require(
             source.len() == self.source_size,
@@ -224,9 +225,10 @@ impl Recipe {
             payload,
             base,
             Some(workspace),
+            read,
         )?;
         early_led::stage(self, source, &mut bytes, base, xp4::indicator_entry()?, ((api.workspace - setup.linked_sram_base) & !0xfff) as usize - 0x1000)?;
-        let mut layout = xp4::layout(setup, api, base);
+        let mut layout = xp4::layout(setup, api, base, read)?;
         layout["workspace"] = workspace.into();
         layout["file_api"] = serde_json::json!(api);
         layout["payload_size"] = payload.len().into();
@@ -272,6 +274,28 @@ impl Recipe {
     /// and X-Pro3 cameras, with the loader holding the green lamp on; the
     /// preloaded layout from `build_startup` has not booted.
     pub fn build(&self, source: &[u8]) -> Result<Vec<File>> {
+        self.build_with_sd_card_read(source, SdCardRead::Rom)
+    }
+    /// Record FFBOOT's packed stage in an `SdCardRead::Fast` FFINIT from
+    /// this recipe, so FFINIT performs the stage before entering RAM.
+    pub fn bind_sd_card_packed_stage(&self, ffinit: &mut [u8], stage: &PackedStage) -> Result<()> {
+        require(
+            matches!(self.generation, Generation::Xp4),
+            "The fast SD card read requires XP4",
+        )?;
+        let api = self
+            .file_api
+            .as_ref()
+            .ok_or_else(|| image::Error::Invalid("Missing XP4 file API".into()))?;
+        xp4::sd_card_fast_read::bind_packed_stage(ffinit, api.load_address, stage)
+    }
+    /// `build`, with an XP4 SD card's FFBOOT read selected. Other generations
+    /// accept only `SdCardRead::Rom`.
+    pub fn build_with_sd_card_read(&self, source: &[u8], read: SdCardRead) -> Result<Vec<File>> {
+        require(
+            read == SdCardRead::Rom || matches!(self.generation, Generation::Xp4),
+            "The fast SD card read requires XP4",
+        )?;
         let missing = self.missing_facts();
         require(
             missing.is_empty(),
@@ -291,6 +315,7 @@ impl Recipe {
                 self.cold_start.as_ref().ok_or_else(missing)?,
                 self.setup.as_ref().ok_or_else(missing)?,
                 self.file_api.as_ref().ok_or_else(missing)?,
+                read,
             )?;
             files.push(File::new(&self.update_filename, source.to_vec())?);
             return Ok(files);
