@@ -570,6 +570,11 @@ fn encode_response_coordinates(
     coordinates: &Coordinates,
     noise: NoiseResponse,
 ) -> Arc<[u8]> {
+    fujimod_perf::add_work(fujimod_perf::DeviceWorkCounter::PreparedEncodes, 1);
+    fujimod_perf::add_work(
+        fujimod_perf::DeviceWorkCounter::PreparedEncodePixels,
+        linear.len() as u64,
+    );
     let mut pixels: Arc<[u8]> = std::iter::repeat_n(0, linear.len() * 6).collect();
     let width = coordinates.xs.len();
     if width == 0 {

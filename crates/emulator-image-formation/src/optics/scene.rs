@@ -63,6 +63,11 @@ impl Scene {
     /// Integrate linear scene cells over each readout pixel before optical
     /// filtering. Integer overlap weights preserve a flat field exactly.
     pub fn binned(&self, dimensions: [usize; 2]) -> Self {
+        fujimod_perf::add_work(fujimod_perf::DeviceWorkCounter::SceneBinnedCalls, 1);
+        fujimod_perf::add_work(
+            fujimod_perf::DeviceWorkCounter::SceneBinnedPixels,
+            (dimensions[0] * dimensions[1]) as u64,
+        );
         let [width, height] = dimensions;
         let [sw, sh] = self.dimensions;
         if sw % width == 0 && sh % height == 0 {

@@ -254,6 +254,11 @@ impl Image {
         grid: [usize; 2],
         windows: &[[usize; 4]],
     ) -> Result<ExposedFrame, String> {
+        fujimod_perf::add_work(fujimod_perf::DeviceWorkCounter::MeasurementWindowsCalls, 1);
+        fujimod_perf::add_work(
+            fujimod_perf::DeviceWorkCounter::MeasurementWindowPixels,
+            grid[0].saturating_mul(grid[1]) as u64,
+        );
         if grid.contains(&0) || grid.iter().any(|&v| v > 16384) {
             return Err("invalid physical readout grid".into());
         }
