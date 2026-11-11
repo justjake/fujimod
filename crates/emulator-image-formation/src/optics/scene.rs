@@ -151,22 +151,23 @@ impl Scene {
         let [sx, sy] = scale;
         let area = (sx * sy) as u64;
         let mut prefix = vec![[0u32; 3]; (width + 1) * height];
+        let mut row_prefix = Vec::new();
         for (y, out) in prefix.chunks_exact_mut(width + 1).enumerate() {
-            let mut colors = [0u64; 3];
-            for row in y * sy..(y + 1) * sy {
-                let row = &self.prefix[row * (self.dimensions[0] + 1)..][..=self.dimensions[0]];
-                for x in 0..width {
+            let mut colors = vec![[0u64; 3]; width];
+            for source_y in y * sy..(y + 1) * sy {
+                let row = self.row_prefix(source_y, &mut row_prefix);
+                for (x, color) in colors.iter_mut().enumerate() {
                     let left = row[x * sx];
                     let right = row[(x + 1) * sx];
                     for c in 0..3 {
-                        colors[c] += u64::from(right[c] - left[c]);
+                        color[c] += u64::from(right[c] - left[c]);
                     }
                 }
             }
             let mut sum = [0u32; 3];
-            for out in &mut out[1..] {
+            for (out, color) in out[1..].iter_mut().zip(colors) {
                 for c in 0..3 {
-                    sum[c] += ((colors[c] + area / 2) / area) as u32;
+                    sum[c] += ((color[c] + area / 2) / area) as u32;
                 }
                 *out = sum;
             }
