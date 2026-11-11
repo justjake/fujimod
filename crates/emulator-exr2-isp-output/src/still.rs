@@ -134,6 +134,9 @@ impl StillProcessor {
         ];
         let exposure = (self.r[0x8058 / 4] & 4095) as u16;
         let shading = crate::shading::Shading::from_registers(|o| self.r[(0x8000 + o) / 4])?;
+        let shading_gains = shading
+            .as_ref()
+            .map(|shading| shading.table(src.width, src.height));
         self.film
             .update(|o| self.r[(0x14000 + still_offset(o).unwrap()) / 4])?;
         self.film.hue = HueStage::from_still(|o| self.r[(0x14000 + o) / 4]);
@@ -205,7 +208,11 @@ impl StillProcessor {
                     black.unwrap() as u16,
                     gains,
                     exposure,
-                    |x, y| shading.as_ref().map_or(2048, |s| s.gain(x, y)),
+                    |x, y| {
+                        shading_gains
+                            .as_ref()
+                            .map_or(2048, |gains| unsafe { gains.at(x, y) })
+                    },
                     crop,
                     dst.width,
                     dst.height,

@@ -75,6 +75,27 @@ impl RawView<'_> {
             v >> 4
         }
     }
+    /// Interior CFA positions are wrapped into the validated raster before
+    /// their byte offsets are formed, so the pair lies inside `bytes`.
+    #[inline(always)]
+    unsafe fn sample_from_offset_unchecked<const PACKED12: bool>(
+        &self,
+        i: usize,
+        x: usize,
+    ) -> u16 {
+        // SAFETY: the caller passes an offset derived from a validated raster
+        // column and row. Both bytes belong to that sample.
+        let v = u16::from_le_bytes(unsafe {
+            [*self.bytes.get_unchecked(i), *self.bytes.get_unchecked(i + 1)]
+        });
+        if !PACKED12 {
+            v
+        } else if x & 1 == 0 {
+            v & 4095
+        } else {
+            v >> 4
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -423,10 +444,16 @@ impl Cfa {
                         let value = (u64::from(
                             RawView::u14(
                                 PACKED12,
-                                raw.sample_from_offset::<PACKED12>(
-                                    row_sample.byte_offset + usize::from(sample.byte_offset),
-                                    sx,
-                                ),
+                                // SAFETY: `render_rows_inner` selects this
+                                // path only with three samples of margin on
+                                // every side. Column and row wrapping above
+                                // therefore address samples inside `raw`.
+                                unsafe {
+                                    raw.sample_from_offset_unchecked::<PACKED12>(
+                                        row_sample.byte_offset + usize::from(sample.byte_offset),
+                                        sx,
+                                    )
+                                },
                             )
                             .saturating_sub(black),
                         ) * exposure_gains[c])
