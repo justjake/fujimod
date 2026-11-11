@@ -35,6 +35,10 @@ pub struct Options {
     /// writes the JPEG file from the second bank (0xbed74000).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ram_banks: Vec<(u64, u64)>,
+    /// Optional SD card timing model (diagnostic; see the SDHCI latency
+    /// module). Not part of the wiring a checkpoint must match.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latency: Option<fujimod_emulator_ip::sdhci::latency::Latency>,
 }
 type Saved = (Options, Option<u64>, BTreeMap<u64, u32>, Option<u64>);
 pub struct Controller {
@@ -62,6 +66,7 @@ impl Controller {
             rca: options.rca,
             ram_bytes: options.ram_bytes,
             initialization_fault: host::InitializationFault::None,
+            latency: options.latency.clone(),
             high_speed: options.high_speed,
             ram_banks: options.ram_banks.clone(),
         };
@@ -245,7 +250,9 @@ impl Device for Controller {
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
         let (options, _, vendor, seen): Saved = saved.decode(self.name())?;
-        if options != self.options {
+        let mut wiring = self.options.clone();
+        wiring.latency = options.latency.clone();
+        if options != wiring {
             return Err("SD wrapper checkpoint wiring differs".into());
         }
         if vendor.keys().any(|offset| !VENDOR.contains(offset))
@@ -321,6 +328,7 @@ mod tests {
                 ram_bytes: 0x10000,
                 high_speed: false,
                 ram_banks: vec![],
+                latency: None,
             };
             let mut d = Controller::new(options, card, Contacts::new(true, false), None).unwrap();
             let mut h = TestHost::new();
@@ -396,6 +404,7 @@ mod tests {
             ram_bytes: 0x10000,
             high_speed: false,
             ram_banks: vec![],
+            latency: None,
         };
         let mut gates = crate::resets::Gates::new(0xfff0a000).unwrap();
         let mut d = Controller::new(options, card, Contacts::new(true, false), None)
@@ -455,6 +464,7 @@ mod tests {
                 ram_bytes: 0x10000,
                 high_speed: false,
                 ram_banks: vec![],
+                latency: None,
             };
             Controller::new(options, card, Contacts::new(true, false), None).unwrap()
         };
