@@ -162,7 +162,7 @@ pub struct RunDramAddressSpace {
 impl RunDramAddressSpace {
     fn validate(&self) -> Result<(), String> {
         if self.limit_bytes == 0
-            || self.limit_bytes % 4096 != 0
+            || !self.limit_bytes.is_multiple_of(4096)
             || self.basis.trim().is_empty()
         {
             return Err("DRAM address-space limit must be page-aligned with a basis".into());
@@ -253,6 +253,8 @@ impl RunInstructionRate {
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
+// Catalog records are few and long-lived, so the variant size difference costs nothing.
+#[allow(clippy::large_enum_variant)]
 pub enum RunInputs {
     /// Reset inputs for an EXR2-based body.
     Exr2(Exr2RunInputs),
@@ -969,6 +971,8 @@ impl RunOverlay {
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
+// Catalog records are few and long-lived, so the variant size difference costs nothing.
+#[allow(clippy::large_enum_variant)]
 pub enum RunOverlayChange {
     /// Select a closed set of startup inputs and device policies.
     Preset { preset: RunPreset },

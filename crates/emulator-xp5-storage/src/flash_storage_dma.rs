@@ -224,9 +224,9 @@ impl Device for Dma {
                 let disabled = old & !self.state.enabled;
                 self.state.start &= !disabled;
                 self.state.busy &= !disabled;
-                for c in 0..8 {
+                for (c, generation) in self.state.generation.iter_mut().enumerate() {
                     if disabled & (1 << c) != 0 {
-                        self.state.generation[c] += 1;
+                        *generation += 1;
                     }
                 }
             }

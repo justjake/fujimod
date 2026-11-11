@@ -61,7 +61,7 @@ Every member depends on `fujimod-workspace-hack`, which
 [cargo-hakari](https://docs.rs/cargo-hakari) generates so that any package
 selection builds third-party crates with the same features and reuses one
 compiled copy. After adding or changing a dependency, run `mise run rust-hack`
-(install the tool with `cargo install cargo-hakari --version 0.9.39 --locked`);
+(`mise install` provides `cargo-hakari`);
 CI fails when the crate is out of date. `fujimod-unicorn-sys` compiles the
 Unicorn C archive with no features, so every feature set, test and binary of
 the CPU backend shares one archive per profile.

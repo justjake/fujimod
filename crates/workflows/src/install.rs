@@ -94,7 +94,7 @@ impl OwnedUpload {
         piece: NonZeroU32,
         alignment: NonZeroU32,
     ) -> Result<Self> {
-        if !alignment.get().is_power_of_two() || !address.0.is_multiple_of(alignment.get()) {
+        if !alignment.is_power_of_two() || !address.0.is_multiple_of(alignment.get()) {
             return Err(Error::InvalidLength);
         }
         let image_length = u32::try_from(bytes.len())
@@ -193,7 +193,7 @@ impl OwnedUpload {
         destination: UploadDestination,
         limits: DebugMemoryLimits,
     ) -> Result<()> {
-        let chunk = destination.capacity.get() / self.piece.get() * self.piece.get();
+        let chunk = destination.capacity.get() / self.piece * self.piece.get();
         if chunk == 0 {
             return Err(Error::InvalidLength);
         }

@@ -155,7 +155,11 @@ Safari kills a tab whose memory passes its limit: with two X70 processors at
 boot. Board construction fails with an error when the remaining heap cannot
 hold every processor's cache plus 64 MiB of headroom. The translation counters ("translations",
 "limited_translations", "translation_flushes", "translation_invalidations")
-are in the CPU exit counters.
+are in the CPU exit counters. Each invalidation also increments one
+"translation_invalidations_*" counter naming its caller: restore or execution
+of a one-shot translation, I/O recompile, a guest store to a code page, an
+emulation exit address, the embedder's translation removal, a watchpoint, an
+embedder instruction restart, or a physical write to code.
 
 | Change | ev_dial host instructions | Boot host instructions |
 |---|---|---|

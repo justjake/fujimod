@@ -81,7 +81,7 @@ pub fn white_balance(words: &BTreeMap<u64, u32>, reference: [u32; 3]) -> Result<
         return Err("Still development before the white balance was programmed".into());
     }
     Ok(std::array::from_fn(|c| {
-        let factor = (u64::from(gains[c]) * u64::from(reference[1]) << 12)
+        let factor = ((u64::from(gains[c]) * u64::from(reference[1])) << 12)
             / (u64::from(gains[1]) * u64::from(reference[c]));
         factor.min(u64::from(u32::MAX)) as u32
     }))
@@ -122,7 +122,7 @@ pub const CURVE_SLOT_CHANNELS: [usize; 3] = [0, 1, 2];
 
 /// A 14-bit linear level scaled by a Q12 white-balance factor.
 pub fn balanced(linear: u16, factor: u32) -> u16 {
-    (u64::from(linear) * u64::from(factor) >> 12).min(16383) as u16
+    ((u64::from(linear) * u64::from(factor)) >> 12).min(16383) as u16
 }
 
 /// The film law of the programmed units: the still tone unit's matrix, curves
@@ -366,7 +366,7 @@ pub fn resample(source: &[u8], s: Scale) -> Result<Vec<Vec<u8>>, String> {
         .map(|y| {
             let rows = span(y, s.step_y, s.lines);
             let mut line = Vec::with_capacity(2 * s.out_width);
-            for pair in columns.chunks_exact(2) {
+            for pair in columns.as_chunks::<2>().0 {
                 let mut out = [[0u32; 3]; 2];
                 for (pixel, xs) in out.iter_mut().zip(pair) {
                     let mut n = 0;
@@ -387,8 +387,8 @@ pub fn resample(source: &[u8], s: Scale) -> Result<Vec<Vec<u8>>, String> {
                 line.extend_from_slice(&[
                     out[0][0] as u8,
                     out[1][0] as u8,
-                    ((out[0][1] + out[1][1] + 1) / 2) as u8,
-                    ((out[0][2] + out[1][2] + 1) / 2) as u8,
+                    (out[0][1] + out[1][1]).div_ceil(2) as u8,
+                    (out[0][2] + out[1][2]).div_ceil(2) as u8,
                 ]);
             }
             line
@@ -431,8 +431,8 @@ pub(crate) mod tests {
         assert_eq!((out.len(), out[0].len()), (12, 24));
         let [y, cb, cr] = ycbcr([255, 188, 0]);
         for line in &out {
-            for p in line.chunks_exact(4) {
-                assert_eq!(p, [y as u8, y as u8, cb as u8, cr as u8]);
+            for p in line.as_chunks::<4>().0 {
+                assert_eq!(*p, [y as u8, y as u8, cb as u8, cr as u8]);
             }
         }
         assert!(develop(&raw, stride, lines, width + 8, (2, 2), None).is_err());
@@ -701,8 +701,8 @@ pub(crate) mod tests {
         let out = develop(&raw, stride, lines, width, (2, 2), Some((&film, unity))).unwrap();
         let [y, cb, cr] = film.develop([0, 16383, 0]);
         for line in &out {
-            for p in line.chunks_exact(4) {
-                assert_eq!(p, [y, y, cb, cr]);
+            for p in line.as_chunks::<4>().0 {
+                assert_eq!(*p, [y, y, cb, cr]);
             }
         }
         assert!(cb < 128 && cr < 128);

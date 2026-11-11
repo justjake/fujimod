@@ -175,7 +175,7 @@ impl Session {
         }
         let remaining = &header.observations[current.len()..];
         let cores = session.core.board.instruction_counts().len();
-        if cores == 0 || remaining.len() % cores != 0 {
+        if cores == 0 || !remaining.len().is_multiple_of(cores) {
             return Err("snapshot observation core count differs".into());
         }
         for batch in remaining.chunks_exact(cores) {

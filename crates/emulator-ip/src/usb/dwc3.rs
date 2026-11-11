@@ -338,8 +338,10 @@ impl Dwc3 {
         };
         let bytes = cx.ram_bytes(trb, 16)?;
         let w: Vec<u32> = bytes
-            .chunks_exact(4)
-            .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|b| u32::from_le_bytes(*b))
             .collect();
         if w[3] & 1 == 0 {
             return Ok(Reply::Nak);
@@ -802,15 +804,14 @@ impl Dwc3 {
                         return Err("Invalid DWC3 pending generic command".into());
                     }
                 }
-                Operation::Transaction { id, ep, setup, out } => {
-                    if *id != p.order
+                Operation::Transaction { id, ep, setup, out }
+                    if (*id != p.order
                         || *ep >= 32
                         || (*ep & 1 == 0) != out.is_some()
                         || out.as_ref().is_some_and(|v| v.len() > 1024)
-                        || *setup && (*ep != 0 || out.as_ref().is_none_or(|v| v.len() != 8))
-                    {
-                        return Err("Invalid DWC3 pending host packet".into());
-                    }
+                        || *setup && (*ep != 0 || out.as_ref().is_none_or(|v| v.len() != 8))) =>
+                {
+                    return Err("Invalid DWC3 pending host packet".into());
                 }
                 _ => {}
             }

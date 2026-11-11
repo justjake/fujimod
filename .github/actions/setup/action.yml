@@ -19,7 +19,6 @@ runs:
     - if: inputs.javascript == 'true'
       shell: bash
       run: |
-        rustup target add wasm32-unknown-unknown
         pnpm install --frozen-lockfile
         pnpm --filter fujimod run setup:tooling
         echo "$GITHUB_WORKSPACE/target/tooling/bin" >> "$GITHUB_PATH"

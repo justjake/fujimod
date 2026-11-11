@@ -149,17 +149,15 @@ impl Invocation {
             statuses,
             length,
         } = &self.expected
-        {
-            if body_prefix.len() > self.trigger.reply_capacity().get() as usize - 16
+            && (body_prefix.len() > self.trigger.reply_capacity().get() as usize - 16
                 || statuses.as_ref().is_some_and(|s| s.is_empty())
                 || length.is_some_and(|n| {
                     n < 16
                         || n > self.trigger.reply_capacity().get()
                         || body_prefix.len() > (n - 16) as usize
-                })
-            {
-                return Err(Error::InvalidLength);
-            }
+                }))
+        {
+            return Err(Error::InvalidLength);
         }
         if let ExpectedOutcome::Reply(replies) = &self.expected {
             if replies.is_empty() {

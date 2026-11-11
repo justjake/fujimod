@@ -75,8 +75,8 @@ impl IrqRoutes {
         if let Some(core) = owner {
             routes.banks[line as usize] = Some(core);
         }
-        for core in 0..2 {
-            let word = &mut routes.enabled[core][line as usize / 32];
+        for (core, enabled) in routes.enabled.iter_mut().enumerate().take(2) {
+            let word = &mut enabled[line as usize / 32];
             *word = (*word & !(1 << (line % 32))) | (u32::from(owner == Some(core)) << (line % 32));
         }
         Ok(())

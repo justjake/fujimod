@@ -477,7 +477,7 @@ impl Engine {
                 ));
             }
             // Stock XPP drivers write these in every fragment-state snapshot
-            // (0xda81f8 on X-T20 2.11). Only the observed values are modelled:
+            // (0xda81f8 on X-T20 2.11). Only the observed values are modeled:
             // 0x30b keeps its context-initial 0x100, 0x310 carries the target
             // descriptor's tiled layout code 0xb (the raster writes 8x8 Morton
             // tiles), and 0x31f=1 follows each primitive submission, whose
@@ -493,7 +493,7 @@ impl Engine {
             }
             // The stock texture-unit emitter (0xdae8cc on X-T20 2.11) writes
             // 0x288/0x298 from texture-object +0x208 right after the unit's
-            // dimensions; only a copy of those dimensions is modelled.
+            // dimensions; only a copy of those dimensions is modeled.
             0x288 | 0x298 if value != self.reg(index - 6) => {
                 return Err(format!(
                     "DMP unsupported texture extent {index:#x}={value:#x}, dimensions {:#x}",
@@ -503,7 +503,7 @@ impl Engine {
             // 0x2b1..0x2b4 are stored without effect. Their stock defaults
             // contain BT.601 YUV-to-RGB coefficients x256 (298, 408, 516), so
             // they most likely configure YUV sampling; every sampler format
-            // outside the modelled RGB/luminance/alpha set is refused.
+            // outside the modeled RGB/luminance/alpha set is refused.
             0x28d if value > 1 => return Err("DMP unsupported sampler latch control".into()),
             0x48d if value & !7 != 0 => return Err("DMP unsupported output flags".into()),
             0x431 | 0x45f if value > 1 => return Err("DMP unsupported primitive trigger".into()),

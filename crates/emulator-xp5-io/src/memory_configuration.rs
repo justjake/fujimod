@@ -53,10 +53,11 @@ impl Device for MemoryConfiguration {
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         let offset = address.wrapping_sub(self.base);
-        if size == 4 && offset == COMMIT {
-            if let Some(value) = self.state.request {
-                return u64::from(value);
-            }
+        if size == 4
+            && offset == COMMIT
+            && let Some(value) = self.state.request
+        {
+            return u64::from(value);
         }
         cx.unmodeled();
         0

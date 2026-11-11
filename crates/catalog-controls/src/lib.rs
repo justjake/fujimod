@@ -1186,15 +1186,13 @@ impl PhysicalControls {
                     ..
                 },
             ) = &control.behavior
-            {
-                if bound
+                && bound
                     .iter()
                     .any(|position| !positions.contains(&position.id))
-                {
-                    return Err(format!(
-                        "physical control {id} binds an undocumented position"
-                    ));
-                }
+            {
+                return Err(format!(
+                    "physical control {id} binds an undocumented position"
+                ));
             }
             if let Some(role) = control.role
                 && !roles.insert(role)
@@ -1588,17 +1586,20 @@ impl FirmwareControlIds {
                     }
                 }
                 if let ElectricalInput::AdcTransition {
-                    phase_map, transitions, decoder_event, calibration_offsets, ..
-                } = electrical {
-                    if *phase_map != [0, 1, 2, 3]
+                    phase_map,
+                    transitions,
+                    decoder_event,
+                    calibration_offsets,
+                    ..
+                } = electrical
+                    && (*phase_map != [0, 1, 2, 3]
                         || transitions.iter().any(|event| *event > 3)
                         || !matches!(*decoder_event, 1 | 2)
                         || calibration_offsets.centers.contains(&u16::MAX)
                         || calibration_offsets.offset == u16::MAX
-                        || input.scanner.is_some()
-                    {
-                        return Err(format!("input {} has an invalid analog encoder", input.id));
-                    }
+                        || input.scanner.is_some())
+                {
+                    return Err(format!("input {} has an invalid analog encoder", input.id));
                 }
                 if let ElectricalInput::GpioContacts { expected_levels, callback, .. } = electrical
                     && (!(2..=8).contains(&expected_levels.len())

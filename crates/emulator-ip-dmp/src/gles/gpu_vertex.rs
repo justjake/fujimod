@@ -91,7 +91,9 @@ pub(super) fn prepare_draw(
         }
         if width == 2 {
             bytes
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .map(|pair| u16::from_le_bytes([pair[0], pair[1]]) as u32)
                 .collect()
         } else {
@@ -166,9 +168,6 @@ fn prepare_packed_draw(
                 .get(*index as usize)
                 .copied()
                 .ok_or("DMP host GPU vertex index remap outside buffer")
-                .and_then(|index| {
-                    u32::try_from(index).map_err(|_| "DMP host GPU remapped vertex exceeds u32")
-                })
         })
         .collect::<Result<Vec<_>, _>>()?;
     let mode = state.raster.primitive_mode;
@@ -177,7 +176,7 @@ fn prepare_packed_draw(
         let mut triangles = Vec::with_capacity(draw_indices.len().saturating_sub(2) * 3);
         match mode {
             super::draw_state::PrimitiveMode::Triangles => {
-                triangles.extend(draw_indices.chunks_exact(3).flatten().copied());
+                triangles.extend(draw_indices.as_chunks::<3>().0.iter().flatten().copied());
             }
             super::draw_state::PrimitiveMode::TriangleStrip => {
                 for index in 2..draw_indices.len() {
@@ -212,7 +211,7 @@ fn prepare_packed_draw(
         (primitive_topology(mode)?, draw_indices)
     };
     if state.raster.flat_shading {
-        for triangle in indices.chunks_exact_mut(3) {
+        for triangle in indices.as_chunks_mut::<3>().0 {
             triangle.rotate_left(2);
         }
     }
@@ -591,9 +590,11 @@ mod tests {
     }
 
     fn test_engine() -> Engine {
-        let mut engine = Engine::default();
-        engine.code = vec![mov(0, 0), mov(1, 1), mov(2, 2), 0x22 << 26];
-        engine.operands = vec![0x8d86_c36f];
+        let mut engine = Engine {
+            code: vec![mov(0, 0), mov(1, 1), mov(2, 2), 0x22 << 26],
+            operands: vec![0x8d86_c36f],
+            ..Default::default()
+        };
         engine.regs.insert(0x48a, 0);
         engine.regs.insert(0x400, 0x200);
         engine.regs.insert(0x401, 9 | (3 << 4));

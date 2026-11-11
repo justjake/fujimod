@@ -383,8 +383,14 @@ impl Endpoint {
         let length = (u16::from_le_bytes(packet[..2].try_into().unwrap()) & 0xfff) as usize;
         // Management frames reach the chip unpadded (a 30-byte authentication
         // frame is a 46-byte transfer), while commands and data frames are
-        // padded to a word.
-        if length < 8 || length > quantity || quantity > length + 3 {
+        // padded to a word. A multi-block CMD53 carries whole 512-byte blocks,
+        // so the stock driver's TCP segments arrive as the HIF packet plus
+        // whatever the block extent holds beyond it; those tail bytes are not
+        // part of the packet.
+        let block_padded = quantity >= SDIO_BLOCK_BYTES
+            && quantity.is_multiple_of(SDIO_BLOCK_BYTES)
+            && quantity - length < SDIO_BLOCK_BYTES;
+        if length < 8 || length > quantity || (quantity > length + 3 && !block_padded) {
             return Err(format!(
                 "MT5931 unsupported HIF packet length {length}/{quantity}"
             ));
@@ -505,7 +511,8 @@ impl Endpoint {
             return Vec::new();
         }
         let control = u16::from_le_bytes([frame[0], frame[1]]);
-        let management = |frames: Vec<Vec<u8>>| frames.into_iter().map(|frame| (3, frame)).collect();
+        let management =
+            |frames: Vec<Vec<u8>>| frames.into_iter().map(|frame| (3, frame)).collect();
         match control & 0xfc {
             0xb0 => management(self.authentication(&access_point, frame)),
             0x00 => self.association(&access_point, frame),
@@ -573,7 +580,10 @@ impl Endpoint {
         }
         if let Some(state) = self.wpa2.as_mut() {
             reply.extend_from_slice(&wpa2::RSN_ELEMENT);
-            vec![(3, reply), (0, state.message1(destination, access_point.bssid))]
+            vec![
+                (3, reply),
+                (0, state.message1(destination, access_point.bssid)),
+            ]
         } else {
             vec![(3, reply)]
         }
@@ -907,8 +917,9 @@ fn receive_batch(
     }
     // Stock asks for the padded lengths of the listed batch and the SDIO
     // transport rounds that extent up to whole 512-byte blocks.
-    let block_padded =
-        quantity % SDIO_BLOCK_BYTES == 0 && quantity > total && quantity - total < SDIO_BLOCK_BYTES;
+    let block_padded = quantity.is_multiple_of(SDIO_BLOCK_BYTES)
+        && quantity > total
+        && quantity - total < SDIO_BLOCK_BYTES;
     if count == 0 || (total != quantity && !block_padded) {
         return Err(format!(
             "MT5931 {name} extent {quantity} does not match the queued packets"
@@ -1293,6 +1304,27 @@ mod tests {
         assert_eq!(endpoint.next_host_poll(0), None);
         assert!(!endpoint.poll_host(0));
         assert_eq!(endpoint.ticks, 0);
+    }
+
+    #[test]
+    fn transmit_accepts_the_block_padded_extent_stock_sends() {
+        let mut e = endpoint();
+        // One 1530-byte TCP segment lists 1530 bytes and stock sends it in
+        // three 512-byte SDIO blocks, zero filled to 1536.
+        let mut packet = vec![7u8; 1514];
+        packet.resize(1536, 0);
+        packet[..2].copy_from_slice(&1530u16.to_le_bytes());
+        packet[3] = 0;
+        packet[4] = 14;
+        let (_, change) = e.transfer(0x2c, true, &packet, 1536).unwrap();
+        assert!(change.is_some());
+        // The tail beyond the packet belongs to the block extent, not the
+        // HIF packet, so its contents are not inspected.
+        let mut dirty = packet.clone();
+        dirty[1533] = 1;
+        assert!(e.transfer(0x2c, true, &dirty, 1536).is_ok());
+        // More than one block of tail means the length field is wrong.
+        assert!(e.transfer(0x2c, true, &packet, 2048).is_err());
     }
 
     #[test]

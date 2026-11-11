@@ -305,8 +305,8 @@ impl Recorder {
         if !(x.is_finite() && y.is_finite() && x >= 0. && y >= 0.) {
             return Err("Touch position must be finite and nonnegative".into());
         }
-        let down = self.touches.iter().position(|t| t.lifted.is_none());
-        if (phase == TouchPhase::Start) == down.is_some() {
+        let has_down = self.touches.iter().any(|t| t.lifted.is_none());
+        if (phase == TouchPhase::Start) == has_down {
             return Err(match phase {
                 TouchPhase::Start => "A finger is already down",
                 _ => "No finger is down",
@@ -315,6 +315,7 @@ impl Recorder {
         }
         self.advance(time)?;
         self.idle_kept = 0.;
+        let down = self.touches.iter().position(|t| t.lifted.is_none());
         match (phase, down) {
             (TouchPhase::Start, _) => self.touches.push(Touch {
                 x,

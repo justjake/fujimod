@@ -11,11 +11,18 @@
 //! 23:12 and the list offset divided by 4 KiB in 11:0, relative to the channel's
 //! ring base. The submitter (op 7, 0x8f7e60) then polls, every 200 ticks, until
 //! the list's first word reads 0: the list is written with 0xffffffff there
-//! (0x8fb84c) so the GPU clears it when it has consumed the list. No interrupt
-//! is involved.
+//! (0x8fb84c) so the GPU clears it when it has consumed the list. A list whose
+//! descriptor flags have bit 2 set (flags 0xc instead of 0x8) also asks for a
+//! completion interrupt: when it is consumed the channel's bit in the status
+//! word +0x10 is set, and the interrupt output stays high while a status bit
+//! enabled in +0x18 is set; writing ones to +0x10 clears those bits. The
+//! driver's handler (0x8f7d78) reads +0x10, writes 0x3ffff back and signals
+//! event 0x3d for channel bits 0..7 (0x3c for bit 12, not modeled); init
+//! (0x8f81ac) writes +0x18 = 0xf0ff.
 //! The list consumption time is a declared input, one tick count per word.
 mod render;
 
+use crate::bus::InterruptLine;
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
 
@@ -25,6 +32,10 @@ const LEVELS: usize = 0x20 / 4;
 const DESCRIPTOR: u64 = 0x40;
 const RING_BASE: u64 = 0x80;
 const CHANNELS: usize = 8;
+const STATUS: usize = 0x10 / 4;
+const ENABLE: usize = 0x18 / 4;
+/// Descriptor flag (bit 26): raise the completion interrupt when this list is consumed.
+const INTERRUPT_FLAG: u32 = 1 << 26;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -54,6 +65,8 @@ struct List {
     due: u64,
     #[serde(default)]
     words: u64,
+    #[serde(default)]
+    interrupt: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -81,16 +94,21 @@ struct State {
     recorded: Vec<RecordedList>,
     #[serde(default)]
     renderer: render::Renderer,
+    /// Level last driven on the completion interrupt output.
+    #[serde(default)]
+    irq_level: bool,
 }
 
 /// The GPU's command front end.
 pub struct CommandGpu {
     options: Options,
+    irq: Option<InterruptLine>,
     state: State,
 }
 
 impl CommandGpu {
-    pub fn new(options: Options) -> Result<Self, String> {
+    /// `irq`: the completion interrupt output; without it a list asking for one refuses.
+    pub fn new(options: Options, irq: Option<InterruptLine>) -> Result<Self, String> {
         if options.base & 0xfff != 0
             || options.base.checked_add(WINDOW).is_none()
             || options.ticks_per_word == 0
@@ -99,14 +117,28 @@ impl CommandGpu {
         }
         Ok(Self {
             options,
+            irq,
             state: State {
                 registers: [0; WORDS],
                 lists: Vec::new(),
                 free_at: [0; CHANNELS],
                 recorded: Vec::new(),
                 renderer: render::Renderer::default(),
+                irq_level: false,
             },
         })
+    }
+
+    /// Drive the completion output from the enabled status bits.
+    fn publish(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
+        let high = self.state.registers[STATUS] & self.state.registers[ENABLE] != 0;
+        if high != self.state.irq_level {
+            if let Some(line) = self.irq {
+                line.drive(cx, high)?;
+            }
+            self.state.irq_level = high;
+        }
+        Ok(())
     }
 
     fn index(&self, address: u64, size: u8) -> Option<usize> {
@@ -134,8 +166,18 @@ impl CommandGpu {
         let due = start
             .checked_add(words * self.options.ticks_per_word)
             .ok_or("EXR GPU list deadline overflow")?;
+        let interrupt = descriptor & INTERRUPT_FLAG != 0;
+        if interrupt && self.irq.is_none() {
+            return Err("EXR GPU list asks for a completion interrupt, but none is wired".into());
+        }
         self.state.free_at[channel] = due;
-        self.state.lists.push(List { channel, address, due, words });
+        self.state.lists.push(List {
+            channel,
+            address,
+            due,
+            words,
+            interrupt,
+        });
         Ok(())
     }
 
@@ -151,7 +193,12 @@ impl CommandGpu {
             if self.options.render {
                 let mut bytes = vec![0u8; list.words as usize * 16];
                 cx.ram_read(list.address, &mut bytes)?;
-                let words: Vec<u32> = bytes.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+                let words: Vec<u32> = bytes
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                    .collect();
                 if !self.state.renderer.seeded() {
                     self.state.renderer.seed(&self.options.render_registers)?;
                 }
@@ -162,7 +209,12 @@ impl CommandGpu {
                 // (lists of 1, 2, 3 and 5 units end their batch terminator at words 3, 7, 11 and 19).
                 let mut bytes = vec![0u8; list.words as usize * 16];
                 cx.ram_read(list.address, &mut bytes)?;
-                let words = bytes.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+                let words = bytes
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                    .collect();
                 self.state.recorded.push(RecordedList {
                     channel: list.channel,
                     address: list.address,
@@ -175,8 +227,11 @@ impl CommandGpu {
             }
             // The first word is the fence the submitter polls.
             cx.ram_write(list.address, &0u32.to_le_bytes())?;
+            if list.interrupt {
+                self.state.registers[STATUS] |= 1 << list.channel;
+            }
         }
-        Ok(())
+        self.publish(cx)
     }
 }
 
@@ -221,7 +276,16 @@ impl Device for CommandGpu {
             cx.fail("EXR GPU FIFO level is read-only");
             return;
         }
-        self.state.registers[index] = value;
+        if index == STATUS {
+            self.state.registers[STATUS] &= !value;
+        } else {
+            self.state.registers[index] = value;
+        }
+        if (index == STATUS || index == ENABLE)
+            && let Err(error) = self.publish(cx)
+        {
+            cx.fail(error);
+        }
     }
 
     fn next_deadline(&self, _now: u64) -> Option<u64> {
@@ -268,14 +332,17 @@ mod tests {
     const BASE: u64 = 0xfff50000;
 
     fn gpu() -> CommandGpu {
-        CommandGpu::new(Options {
-            base: BASE,
-            ticks_per_word: 2,
-            setup_ticks: 10,
-            record_lists: 0,
-            render: false,
-            render_registers: vec![],
-        })
+        CommandGpu::new(
+            Options {
+                base: BASE,
+                ticks_per_word: 2,
+                setup_ticks: 10,
+                record_lists: 0,
+                render: false,
+                render_registers: vec![],
+            },
+            None,
+        )
         .unwrap()
     }
 
@@ -295,6 +362,71 @@ mod tests {
         assert_eq!(&host.ram[0x1000..0x1004], &[0; 4]);
         assert_eq!(read(&mut model, &mut host, BASE + 0x20), 0);
         assert_eq!(model.next_deadline(host.now), None);
+    }
+
+    #[test]
+    fn a_list_flagged_for_completion_sets_its_status_bit_and_holds_the_line() {
+        let line = InterruptLine::Core { core: 0, line: 63 };
+        let mut model = CommandGpu::new(
+            Options {
+                base: BASE,
+                ticks_per_word: 2,
+                setup_ticks: 10,
+                record_lists: 0,
+                render: false,
+                render_registers: vec![],
+            },
+            Some(line),
+        )
+        .unwrap();
+        let mut host = TestHost::new();
+        write(&mut model, &mut host, BASE + 0x80 + 8 * 2, 0x1000);
+        write(&mut model, &mut host, BASE + 0x18, 0xf0ff);
+        host.ram[0x1000..0x1004].copy_from_slice(&[0xff; 4]);
+        // Channel 2 with flags 0xc: 4 words at ring + 0.
+        write(
+            &mut model,
+            &mut host,
+            BASE + 0x40,
+            2 << 28 | 0xc << 24 | 3 << 12,
+        );
+        advance(&mut model, &mut host, 17);
+        assert_eq!(read(&mut model, &mut host, BASE + 0x10), 0);
+        assert_ne!(host.levels.get(&(0, 63)), Some(&true));
+        advance(&mut model, &mut host, 18);
+        assert_eq!(read(&mut model, &mut host, BASE + 0x10), 1 << 2);
+        assert_eq!(host.levels.get(&(0, 63)), Some(&true));
+        // The handler writes ones back: the bit clears and the line drops.
+        write(&mut model, &mut host, BASE + 0x10, 0x3ffff);
+        assert_eq!(read(&mut model, &mut host, BASE + 0x10), 0);
+        assert_eq!(host.levels.get(&(0, 63)), Some(&false));
+        // An ordinary list (flags 0x8) sets nothing.
+        host.ram[0x1000..0x1004].copy_from_slice(&[0xff; 4]);
+        write(
+            &mut model,
+            &mut host,
+            BASE + 0x40,
+            2 << 28 | 0x8 << 24 | 3 << 12,
+        );
+        advance(&mut model, &mut host, 40);
+        assert_eq!(read(&mut model, &mut host, BASE + 0x10), 0);
+        // A masked status bit is kept but does not raise the line.
+        write(&mut model, &mut host, BASE + 0x18, 0);
+        host.ram[0x1000..0x1004].copy_from_slice(&[0xff; 4]);
+        write(
+            &mut model,
+            &mut host,
+            BASE + 0x40,
+            2 << 28 | 0xc << 24 | 3 << 12,
+        );
+        advance(&mut model, &mut host, 80);
+        assert_eq!(read(&mut model, &mut host, BASE + 0x10), 1 << 2);
+        assert_eq!(host.levels.get(&(0, 63)), Some(&false));
+        // Without a wired line, a list asking for the interrupt refuses.
+        let mut unwired = gpu();
+        let mut cx = host.cx();
+        unwired.write(&mut cx, BASE + 0x40, 4, (0xc << 24 | 3 << 12) as u64);
+        assert!(cx.refusal().is_some());
     }
 
     #[test]
@@ -319,8 +451,34 @@ mod tests {
 
     #[test]
     fn invalid_options_and_channels_are_refused() {
-        assert!(CommandGpu::new(Options { base: BASE + 4, ticks_per_word: 1, setup_ticks: 0, record_lists: 0, render: false, render_registers: vec![] }).is_err());
-        assert!(CommandGpu::new(Options { base: BASE, ticks_per_word: 0, setup_ticks: 0, record_lists: 0, render: false, render_registers: vec![] }).is_err());
+        assert!(
+            CommandGpu::new(
+                Options {
+                    base: BASE + 4,
+                    ticks_per_word: 1,
+                    setup_ticks: 0,
+                    record_lists: 0,
+                    render: false,
+                    render_registers: vec![]
+                },
+                None
+            )
+            .is_err()
+        );
+        assert!(
+            CommandGpu::new(
+                Options {
+                    base: BASE,
+                    ticks_per_word: 0,
+                    setup_ticks: 0,
+                    record_lists: 0,
+                    render: false,
+                    render_registers: vec![]
+                },
+                None
+            )
+            .is_err()
+        );
         let mut model = gpu();
         let mut host = TestHost::new();
         let mut cx = host.cx();

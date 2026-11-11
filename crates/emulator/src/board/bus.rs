@@ -339,10 +339,8 @@ impl Bus {
                 Publication::Generation(generation) => device.publication_generation() != Some(generation),
                 Publication::State(state) => device.save() != state,
             };
-            if changed {
-                if let Some(stops) = &self.continuation {
-                    stops.borrow_mut().device(id);
-                }
+            if changed && let Some(stops) = &self.continuation {
+                stops.borrow_mut().device(id);
             }
         }
     }

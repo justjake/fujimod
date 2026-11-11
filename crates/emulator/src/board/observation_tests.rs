@@ -214,6 +214,51 @@ fn a7_watch_records_both_page_table_aliases_with_the_physical_address() {
 }
 
 #[test]
+fn memory_watch_samples_per_core_ram_at_each_read() {
+    let mut board = a7_board();
+    let mut code = store_at(0x2000, 0x11, 0).to_vec();
+    code.extend([0xe300_0000, 0xe340_0010, 0xe590_1000]); // r0 = 0x100000; ldr r1, [r0]
+    code.extend(store_at(0x2000, 0x22, 0));
+    code.extend([0xe300_0000, 0xe340_0010, 0xe590_1000, 0xeaff_fffe]);
+    words(&board, CODE, &code);
+    let mut watch = board.memory_watch_begin_with_samples(
+        vec![WATCH], 8, board.mappings().to_vec(), vec![0x2000], vec![], None,
+    ).unwrap();
+    run(&mut board, code.len() as u64 - 1);
+    let rows = records(&watch);
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert_eq!(rows[0]["sample"], 0x11);
+    assert_eq!(rows[1]["sample"], 0x22);
+    assert_eq!(rows[0]["pc"], CODE + 24);
+    board.memory_watch_end(&mut watch).unwrap();
+}
+
+#[test]
+fn memory_watch_captures_bounded_pointer_chain_at_read() {
+    let mut board = a7_board();
+    words(&board, 0x2000, &[0x2100]);
+    words(&board, 0x2108, &[0x2200]);
+    words(&board, 0x2208, &[0x3300]);
+    words(&board, CODE, &[0xe300_0000, 0xe340_0010, 0xe590_1000, 0xeaff_fffe]);
+    let mut watch = board.memory_watch_begin_with_samples(
+        vec![WATCH], 8, board.mappings().to_vec(), vec![0x2000], vec![8, 8], Some((0x2000, 0x3000)),
+    ).unwrap();
+    run(&mut board, 3);
+    let rows = records(&watch);
+    assert_eq!(rows[0]["sample_path"], serde_json::json!([0x2100, 0x2200, 0x3300]));
+    board.memory_watch_end(&mut watch).unwrap();
+}
+
+#[test]
+fn memory_watch_detects_the_loss_of_its_board() {
+    let board = a7_board();
+    let watch = board.memory_watch_begin(vec![WATCH], 8, board.mappings().to_vec()).unwrap();
+    assert!(watch.is_live());
+    drop(board);
+    assert!(!watch.is_live());
+}
+
+#[test]
 fn a7_watch_records_the_executing_stack_pointer() {
     // A read made on a stack the caller installed carries that stack pointer,
     // so an audit can tell code running on a private stack from other readers.
@@ -424,6 +469,40 @@ fn r_profile_watch_still_records_an_identity_store() {
     assert_eq!(records[0]["physical"], 0x10080);
     assert_eq!(records[0]["pc"], 0x10004);
     assert_eq!(records[0]["value"], 0x11);
+    board.memory_watch_end(&mut watch).unwrap();
+}
+
+#[test]
+fn r_profile_watch_samples_task_context_at_instruction_execution() {
+    let mut board = r5f_board();
+    words(&board, 0x10000, &[0xe1a0_0000, 0xeaff_fffe]);
+    words(&board, 0x10100, &[0x10200]);
+    words(&board, 0x10208, &[0x10300]);
+    let mut watch = board.memory_watch_begin_with_samples(
+        vec![(0x10000, 0x10004)], 8, board.mappings().to_vec(),
+        vec![0x10100], vec![8], Some((0x10000, 0x14000)),
+    ).unwrap();
+    run(&mut board, 1);
+    let rows = records(&watch);
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0]["source"], "cpu-fetch");
+    assert_eq!(rows[0]["pc"], 0x10000);
+    assert_eq!(rows[0]["sample_path"], serde_json::json!([0x10200, 0x10300]));
+    board.memory_watch_end(&mut watch).unwrap();
+}
+
+#[test]
+fn many_watch_ranges_keep_exact_filtering_after_backend_grouping() {
+    let mut board = r5f_board();
+    words(&board, 0x10000, &[0xe3a0_1011, 0xe580_1000, 0xe580_1004, 0xeaff_fffe]);
+    board.write_register(0, arm::CORE[0], 0x10080).unwrap();
+    let ranges = (0..300).map(|i| (0x10080 + i * 16, 0x10084 + i * 16)).collect();
+    let mut watch = board.memory_watch_begin(ranges, 8, board.mappings().to_vec()).unwrap();
+    run(&mut board, 3);
+    let rows = records(&watch);
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0]["source"], "cpu-write");
+    assert_eq!(rows[0]["physical"], 0x10080);
     board.memory_watch_end(&mut watch).unwrap();
 }
 

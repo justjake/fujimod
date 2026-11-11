@@ -37,15 +37,14 @@ impl Gates {
         self
     }
     fn drive_reset(&self, cx: &mut Cx<'_>) {
-        if !self.power {
-            if let Some(cpu) = self.companion_cpu {
-                if let Err(e) = cx.reset_core(
-                    cpu,
-                    self.regs.get(&0x928).copied().unwrap_or(0) & 0x200000 == 0,
-                ) {
-                    cx.fail(e);
-                }
-            }
+        if !self.power
+            && let Some(cpu) = self.companion_cpu
+            && let Err(e) = cx.reset_core(
+                cpu,
+                self.regs.get(&0x928).copied().unwrap_or(0) & 0x200000 == 0,
+            )
+        {
+            cx.fail(e);
         }
     }
     fn latch(&self, o: u64) -> bool {
@@ -109,10 +108,11 @@ impl Device for Gates {
         if !self.power && o == 0x928 && (previous ^ v as u32) & 0x200000 != 0 {
             self.drive_reset(cx);
         }
-        if !self.power && o == 0x608 {
-            if let Some(clocks) = &self.panel_clocks {
-                clocks.selector(v as u32);
-            }
+        if !self.power
+            && o == 0x608
+            && let Some(clocks) = &self.panel_clocks
+        {
+            clocks.selector(v as u32);
         }
     }
     fn save(&self) -> Value {
@@ -122,10 +122,10 @@ impl Device for Gates {
         self.regs = serde_json::from_value(v.clone())
             .map_err(|e| format!("invalid gate checkpoint: {e}"))?;
         // CPU reset state is restored by the framework with its CPU snapshot.
-        if !self.power {
-            if let Some(clocks) = &self.panel_clocks {
-                clocks.selector(self.regs.get(&0x608).copied().unwrap_or(0));
-            }
+        if !self.power
+            && let Some(clocks) = &self.panel_clocks
+        {
+            clocks.selector(self.regs.get(&0x608).copied().unwrap_or(0));
         }
         Ok(())
     }

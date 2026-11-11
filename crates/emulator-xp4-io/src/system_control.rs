@@ -119,13 +119,20 @@ impl Config {
                 return Err("XP4 graphics and configuration/request family inputs overlap".into());
             }
         }
-        if let Some(banks) = &self.retained_request_banks {
-            if banks.a_reset[15] != self.control_f03c_reset
-                || banks.a_reset.iter().zip(A_WORDS).any(|(value, (_, mask))| value & !mask != 0)
-                || banks.b_reset.iter().zip(B_WORDS).any(|(value, (_, mask))| value & !mask != 0)
-            {
-                return Err("Invalid XP4 request-bank reset inputs or conflicting A15 reset".into());
-            }
+        if let Some(banks) = &self.retained_request_banks
+            && (banks.a_reset[15] != self.control_f03c_reset
+                || banks
+                    .a_reset
+                    .iter()
+                    .zip(A_WORDS)
+                    .any(|(value, (_, mask))| value & !mask != 0)
+                || banks
+                    .b_reset
+                    .iter()
+                    .zip(B_WORDS)
+                    .any(|(value, (_, mask))| value & !mask != 0))
+        {
+            return Err("Invalid XP4 request-bank reset inputs or conflicting A15 reset".into());
         }
         Ok(())
     }
@@ -240,19 +247,25 @@ impl Device for SystemControl {
     fn name(&self) -> &'static str { "xp4-functional-system-control" }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         if address == READ_WORD_FFF48004 {
-            if size == 4 {
-                if let Some(input) = &self.config.read_word_fff48004 { return u64::from(input.value); }
+            if size == 4
+                && let Some(input) = &self.config.read_word_fff48004
+            {
+                return u64::from(input.value);
             }
             cx.unmodeled(); return 0;
         }
         if matches!(address, BOOLEAN_WRITE_PORT | SERIAL_CLOCK_SELECT) { cx.unmodeled(); return 0; }
         if !self.known(address, size) { cx.unmodeled(); return 0; }
         self.admit(cx);
-        if let Some(model) = &mut self.configuration_state {
-            if model.owns(address, size) { return model.read(cx, address, size); }
+        if let Some(model) = &mut self.configuration_state
+            && model.owns(address, size)
+        {
+            return model.read(cx, address, size);
         }
-        if let Some(model) = &mut self.selection_state {
-            if model.owns(address, size) { return model.read(cx, address, size); }
+        if let Some(model) = &mut self.selection_state
+            && model.owns(address, size)
+        {
+            return model.read(cx, address, size);
         }
         if let Some((is_a, index, _)) = self.request_word(address) {
             let banks = self.retained_banks.as_ref().unwrap();
@@ -283,11 +296,17 @@ impl Device for SystemControl {
             ]));
             return;
         }
-        if let Some(model) = &mut self.configuration_state {
-            if model.owns(address, size) { model.write(cx, address, size, value); return; }
+        if let Some(model) = &mut self.configuration_state
+            && model.owns(address, size)
+        {
+            model.write(cx, address, size, value);
+            return;
         }
-        if let Some(model) = &mut self.selection_state {
-            if model.owns(address, size) { model.write(cx, address, size, value); return; }
+        if let Some(model) = &mut self.selection_state
+            && model.owns(address, size)
+        {
+            model.write(cx, address, size, value);
+            return;
         }
         let value = value as u32;
         if let Some((is_a, index, mask)) = self.request_word(address) {

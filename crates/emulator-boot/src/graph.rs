@@ -142,6 +142,14 @@ fn build_processor(
                     btcm: bank(state.btcm)?,
                     atcm: bank(state.atcm)?,
                 },
+                data_cache: state.data_cache.map(|cache| {
+                    fujimod_emulator_cpu_unicorn::rprofile::data_cache::Options {
+                        line_bytes: cache.line_bytes,
+                        sets: cache.sets,
+                        ways: cache.ways,
+                        checked: Vec::new(),
+                    }
+                }),
                 ..Default::default()
             })
         })
@@ -243,7 +251,7 @@ pub fn assemble_with_starts(
 ) -> Result<factory::Graph, String> {
     let soc = &selection.soc;
     let body = &selection.body;
-    if dram_address_space_limit_bytes == 0 || dram_address_space_limit_bytes % 4096 != 0 {
+    if dram_address_space_limit_bytes == 0 || !dram_address_space_limit_bytes.is_multiple_of(4096) {
         return Err("DRAM address-space limit must be positive and page-aligned".into());
     }
     if body.soc_id != soc.id {
@@ -767,6 +775,7 @@ mod tests {
                     bytes: 0,
                     reset_address: 0,
                 },
+                data_cache: None,
             }),
         }
     }

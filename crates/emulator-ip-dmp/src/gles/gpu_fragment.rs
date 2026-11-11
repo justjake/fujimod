@@ -129,8 +129,10 @@ impl Gpu {
             usage: wgpu::BufferUsages::STORAGE,
         });
         let memory_words: Vec<u32> = memory
-            .chunks_exact(4)
-            .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|chunk| u32::from_le_bytes(*chunk))
             .collect();
         let memory_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("DMP fragment guest memory"),
@@ -388,10 +390,12 @@ mod tests {
 
     fn random_case(rng: &mut Random, memory: &mut [u8], index: usize) -> (Engine, FragmentInput) {
         let region = MEMORY_BASE + index * REGION_SIZE;
-        let mut engine = Engine::default();
-        engine.fog = (0..128).map(|_| rng.next()).collect();
+        let mut engine = Engine {
+            fog: (0..128).map(|_| rng.next()).collect(),
+            ..Default::default()
+        };
         set(&mut engine, 0x280, rng.below(4));
-        random_texture(rng, &mut engine, 0, (region + 0x000) as u32);
+        random_texture(rng, &mut engine, 0, region as u32);
         random_texture(rng, &mut engine, 1, (region + 0x800) as u32);
         random_combiner(rng, &mut engine, 0x2c0);
         random_combiner(rng, &mut engine, 0x2c8);

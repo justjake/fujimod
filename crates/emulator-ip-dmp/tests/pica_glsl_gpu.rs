@@ -660,7 +660,7 @@ fn randomized_programs() -> Vec<ProgramCase> {
         for operation in 0..4 {
             let relative = if (sequence + operation) % 3 == 0 {
                 saw_relative = true;
-                (next_random(&mut state) % 3 + 1) as u32
+                next_random(&mut state) % 3 + 1
             } else {
                 0
             };

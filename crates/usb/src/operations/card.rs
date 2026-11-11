@@ -222,10 +222,9 @@ impl Host<'_> {
             .io
             .as_mut()
             .filter(|io| io.admits_write(address, raw.len() as u32, capacity))
+            && io.write_owned(self.session, address, raw, capacity).await?
         {
-            if io.write_owned(self.session, address, raw, capacity).await? {
-                return Ok(());
-            }
+            return Ok(());
         }
         self.write(address, raw).await
     }
@@ -316,7 +315,9 @@ pub async fn execute(
 
 fn decode_entries(raw: &[u8]) -> Result<Vec<Entry>> {
     require(raw.len().is_multiple_of(24), "Malformed directory page")?;
-    raw.chunks_exact(24)
+    raw.as_chunks::<24>()
+        .0
+        .iter()
         .map(|row| {
             let n = row[4..]
                 .iter()

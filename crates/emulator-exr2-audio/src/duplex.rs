@@ -97,27 +97,27 @@ impl Device for Duplex {
             } else {
                 None
             };
-            if let Some(direction) = direction {
-                if direction != self.direction {
-                    if self.active() {
-                        cx.fail("active serial-audio DMA cannot change direction");
-                        return;
-                    }
-                    // Both engines expose the same inactive channel register
-                    // state. Transfer that state once, replacing only the
-                    // configuration word written by this hardware operation.
-                    let mut state = self.device().save();
-                    state["dma"]["registers"]["44"] = json!(value);
-                    let result = match direction {
-                        Direction::Receive => self.receive.restore(&state),
-                        Direction::Transmit => self.transmit.restore(&state),
-                    };
-                    if let Err(error) = result {
-                        cx.fail(error);
-                        return;
-                    }
-                    self.direction = direction;
+            if let Some(direction) = direction
+                && direction != self.direction
+            {
+                if self.active() {
+                    cx.fail("active serial-audio DMA cannot change direction");
+                    return;
                 }
+                // Both engines expose the same inactive channel register
+                // state. Transfer that state once, replacing only the
+                // configuration word written by this hardware operation.
+                let mut state = self.device().save();
+                state["dma"]["registers"]["44"] = json!(value);
+                let result = match direction {
+                    Direction::Receive => self.receive.restore(&state),
+                    Direction::Transmit => self.transmit.restore(&state),
+                };
+                if let Err(error) = result {
+                    cx.fail(error);
+                    return;
+                }
+                self.direction = direction;
             }
         }
         self.device_mut().write(cx, address, size, value);

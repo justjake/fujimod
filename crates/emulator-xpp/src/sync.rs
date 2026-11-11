@@ -165,7 +165,7 @@ impl Device for Generator {
 impl Generator {
     fn check(&self, state: &State) -> Result<(), String> {
         if state.next == 0
-            || state.next % self.period != 0
+            || !state.next.is_multiple_of(self.period)
             || state.words.keys().any(|o| o & 3 != 0 || *o > LAST_WORD)
             || (0..SOURCES.len()).any(|source| {
                 state.lines[source] && !self.frame_lines.iter().any(|(s, _)| *s == source)

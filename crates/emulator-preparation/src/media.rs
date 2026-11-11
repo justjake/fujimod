@@ -244,9 +244,7 @@ mod tests {
         )
         .unwrap();
         medium.erase(0).unwrap();
-        medium
-            .program(64, &vec![0x85; 2048], &vec![0x12; 64])
-            .unwrap();
+        medium.program(64, &vec![0x85; 2048], &[0x12; 64]).unwrap();
         let assets = BTreeMap::from([
             ("base".into(), base),
             ("saved".into(), medium.committed_image().unwrap()),

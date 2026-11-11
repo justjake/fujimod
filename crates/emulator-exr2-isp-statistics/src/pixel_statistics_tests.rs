@@ -102,8 +102,7 @@ fn repeated_source_runs_match_scalar_sampling_with_clips_and_per_row_rounding() 
                 FramePixels::Raw16(
                     (0..width * height)
                         .map(|i| ((i * 733 + i / width * 59) % 16384) as u16)
-                        .collect::<Vec<_>>()
-                        .into(),
+                        .collect::<Vec<_>>(),
                 )
             } else {
                 FramePixels::Rgb24(
@@ -218,9 +217,9 @@ fn cached_color_density_changes_without_changing_sample_pixels() {
     let new = cache.measure(&changed, [3, 2], &r).unwrap();
     assert_eq!(first.sample(0, 0, [3, 2]), changed.sample(0, 0, [3, 2]));
     assert_ne!(old, bytes(new));
-    for c in 0..3 {
+    for (c, entry) in new.iter().enumerate().take(3) {
         assert_eq!(
-            u32::from_le_bytes(new[c].bytes[..4].try_into().unwrap()),
+            u32::from_le_bytes(entry.bytes[..4].try_into().unwrap()),
             u32::from(changed.sample(0, 0, [3, 2])[c]) * 2
         );
     }
@@ -232,7 +231,7 @@ fn cached_measurements_follow_registers_grid_scene_and_exposure_after_eviction()
         Frame::new(
             3,
             2,
-            FramePixels::Rgb24(vec![0, 31, 97, 255, 100, 18, 71, 201, 255].repeat(2).into()),
+            FramePixels::Rgb24([0, 31, 97, 255, 100, 18, 71, 201, 255].repeat(2).into()),
         )
         .unwrap(),
     );

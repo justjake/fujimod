@@ -101,10 +101,8 @@ impl Gic {
         self.refresh();
     }
     pub fn pulse(&mut self, line: usize) {
-        if line < self.lines {
-            if line >= 32 {
-                self.pending[0][line] = true;
-            }
+        if line < self.lines && line >= 32 {
+            self.pending[0][line] = true;
         }
         self.refresh();
     }
@@ -176,7 +174,7 @@ impl Gic {
         write: bool,
         value: u32,
     ) -> Result<u32, String> {
-        if core >= self.cores || ![1, 2, 4].contains(&size) || offset % size != 0 {
+        if core >= self.cores || ![1, 2, 4].contains(&size) || !offset.is_multiple_of(size) {
             return Err("GIC access alignment/width".into());
         }
         if !distributor {
@@ -340,10 +338,8 @@ impl Gic {
                     } else {
                         core
                     };
-                    if write && value & (1 << bit) != 0 {
-                        if line >= 16 {
-                            array[b][line] = action % 2 == 0 || held;
-                        }
+                    if write && value & (1 << bit) != 0 && line >= 16 {
+                        array[b][line] = action % 2 == 0 || held;
                     }
                     if array[b][line] {
                         result |= 1 << bit;

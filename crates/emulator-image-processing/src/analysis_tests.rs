@@ -12,7 +12,7 @@ fn scalar(source: &[u8], input: ImageLayout, grid: [usize; 2], window: [usize; 4
         }
     }
     let mut result = [0; 1024];
-    for (word, count) in result.chunks_exact_mut(4).zip(counts) {
+    for (word, count) in result.as_chunks_mut::<4>().0.iter_mut().zip(counts) {
         word.copy_from_slice(&count.to_le_bytes());
     }
     result
@@ -77,8 +77,10 @@ fn histogram_keeps_the_maximum_window_count() {
     )
     .unwrap();
     let bins: Vec<u32> = actual
-        .chunks_exact(4)
-        .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| u32::from_le_bytes(*b))
         .collect();
     assert_eq!(bins[173], 4096 * 8192);
     assert_eq!(bins.iter().sum::<u32>(), 4096 * 8192);

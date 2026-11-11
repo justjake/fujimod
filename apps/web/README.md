@@ -240,6 +240,14 @@ server only. Keep review files outside the repository; the build rejects
 `public/review/`. `node --test scripts/local-review-files.test.ts` checks the
 mount and production build guard.
 
+`src/development/focal/` holds interactive prototypes of camera screens in
+Focal UI, built with Solid and Tailwind. `focal.css` defines every size and
+color as a Tailwind theme token in camera pixels on the 720x480 LCD, and
+`review.tsx` renders a live screen driven by the arrow keys, Enter and Esc,
+followed by a gallery of fixed states. A review page loads it with
+`<div id="focal-review"></div>` and
+`<script type="module" src="/src/development/focal/review.tsx"></script>`.
+
 `FUJIMOD_MEDIA_ROOT` enables development media from a recording workspace.
 The homepage previews `media/frontier/site` when available, otherwise
 `media/current`, and reloads when the manifest changes. The server exposes

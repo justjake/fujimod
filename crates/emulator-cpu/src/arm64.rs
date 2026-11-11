@@ -541,7 +541,7 @@ mod translation_tests {
             0x40001234
         );
         s.tcr |= 1 << 23;
-        assert!(walk(s, 0xffff_ffff_c0001234, Access::Read, &t).is_err());
+        assert!(walk(s, 0xffff_ffff_c000_1234, Access::Read, &t).is_err());
         s = state();
         s.tcr |= 1 << 59;
         assert!(walk(s, 0, Access::Read, &t).is_err());

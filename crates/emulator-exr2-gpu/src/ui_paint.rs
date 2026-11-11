@@ -177,8 +177,10 @@ fn paint_data(draw: &batch::Draw, image: Option<&[u8]>) -> Result<Vec<u32>> {
             return fail("Graphics UI texture paint snapshot is incomplete");
         }
         let words = bytes
-            .chunks_exact(4)
-            .map(|pixel| u32::from_le_bytes(pixel.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|pixel| u32::from_le_bytes(*pixel))
             .collect();
         return Ok(words);
     }
@@ -196,6 +198,9 @@ pub(super) fn render(
 }
 
 /// Paint a complete EXR2 vector batch without blocking WebGPU readback.
+// The submission guard is held across the readback awaits on purpose: it keeps
+// GPU paints serialized until their results are mapped back.
+#[allow(clippy::await_holding_lock)]
 pub(super) async fn render_async(
     draws: &[batch::Draw],
     cpu: i64,
@@ -539,7 +544,7 @@ fn words_as_bytes(words: &[u32]) -> Vec<u8> {
     // A sized copy vectorizes; collecting a flattened iterator went byte by
     // byte through every pixel of a clip mask.
     let mut bytes = vec![0; words.len() * 4];
-    for (chunk, word) in bytes.chunks_exact_mut(4).zip(words) {
+    for (chunk, word) in bytes.as_chunks_mut::<4>().0.iter_mut().zip(words) {
         chunk.copy_from_slice(&word.to_le_bytes());
     }
     bytes
@@ -740,8 +745,10 @@ mod tests {
         if actual.0[0].1.as_slice() != expected[0].1.as_slice() {
             let differences: Vec<_> = actual.0[0]
                 .1
-                .chunks_exact(4)
-                .zip(expected[0].1.chunks_exact(4))
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(expected[0].1.as_chunks::<4>().0)
                 .enumerate()
                 .filter(|(_, (actual, expected))| actual != expected)
                 .take(8)

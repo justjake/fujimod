@@ -7,7 +7,7 @@ import test from 'node:test';
 import { unzipSync } from 'fflate';
 import { build } from './build-web-wheel.ts';
 
-test('wheel records authenticate every included Python source and metadata entry', () => {
+await test('wheel records authenticate every included Python source and metadata entry', () => {
   const output = mkdtempSync(join(tmpdir(), 'fujimod-wheel-'));
   try {
     const path = build(output),

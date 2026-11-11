@@ -111,7 +111,7 @@ impl Setup {
     fn verify(&self, inverted: &[u8]) -> Result<Vec<u8>> {
         let prefix = self.prefix.read(inverted)?;
         require(
-            prefix.len() == 0x40000
+            prefix.len() >= 0x800
                 && self.low_length >= 4
                 && self.low_length <= prefix.len() - 0x800,
             "XP5 prefix extent differs",
@@ -400,8 +400,20 @@ pub(crate) fn package_with_storage(
         put(&mut program, cfg + 8, u32::from(board.timeout_setting))?;
         put(&mut program, cfg + 12, board.operations.len() as u32)?;
         for (n, op) in board.operations.iter().enumerate() {
+            let valid = match op.kind {
+                0 | 1 => mmio(op.address),
+                2 => true,
+                3 | 4 => (0xf0000000..0xfffff000).contains(&op.address)
+                    && op.address.is_multiple_of(2)
+                    && op.mask <= u16::MAX.into()
+                    && op.value & !op.mask == 0,
+                5 => mmio(op.address) && op.mask <= u16::MAX.into()
+                    && op.value & !op.mask == 0,
+                6 => op.address == 0 && op.mask == 0 && (1..=1000).contains(&op.value),
+                _ => false,
+            };
             require(
-                op.kind <= 2 && (op.kind == 2 || mmio(op.address)),
+                valid,
                 "Invalid XP5 SD operation",
             )?;
             let at = cfg + 16 + n * 24;
@@ -649,6 +661,17 @@ mod tests {
     }
 
     #[test]
+    fn startup_accepts_a_shorter_checked_setup_prefix() {
+        let (data, mut setup, ram) = fixture();
+        setup.prefix = source(&data[..0x28000]);
+        setup.proofs[0].source = setup.prefix.clone();
+        assert!(package(&data, &setup, Some(ram), 0).is_ok());
+        setup.prefix = source(&data[..0x800]);
+        setup.proofs[0].source = setup.prefix.clone();
+        assert!(package(&data, &setup, None, 0).is_err());
+    }
+
+    #[test]
     fn changed_source_and_incomplete_bindings_refuse() {
         let (data, s, ram) = fixture();
         let mut changed = data.clone();
@@ -661,7 +684,7 @@ mod tests {
         changed.initializer.sha256 = "0".repeat(64);
         assert!(package(&data, &changed, None, 0).is_err());
         let mut changed = s.clone();
-        changed.board.operations[0].kind = 3;
+        changed.board.operations[0].kind = 7;
         assert!(package(&data, &changed, Some(ram.clone()), 0).is_err());
         let mut changed = s.clone();
         changed.gate_offset = 0x940;

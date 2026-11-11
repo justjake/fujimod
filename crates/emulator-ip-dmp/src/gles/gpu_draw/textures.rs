@@ -1,7 +1,7 @@
-//! Intern immutable texture uploads within one command list. Sampler controls
+//! Intern immutable texture uploads within one render segment. Sampler controls
 //! remain per draw; only layout and register-addressed image bytes form the key.
 use super::super::draw_state::TextureFormat;
-use super::{DrawState, Reader, recorded_range};
+use super::{DrawState, Reader, recorded_memory_range};
 use std::{collections::HashMap, sync::Arc};
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
@@ -166,15 +166,13 @@ fn append_mip_level(
         .checked_mul(height)
         .and_then(|pixels| pixels.checked_mul(bytes_per_pixel))
         .ok_or("DMP draw texture size overflow")?;
-    // A list samples guest memory before any output commits. Identical DMA
-    // ranges are immutable throughout preparation, including target aliases.
+    // One segment samples a stable guest-memory view. The list renderer splits
+    // before any later draw samples a target written by an earlier segment.
     let level = match texture_dma.entry((address, size)) {
         std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
-        std::collections::hash_map::Entry::Vacant(entry) => entry.insert(
-            recorded_range(recorded_reads, address, size)
-                .map(Ok)
-                .unwrap_or_else(|| read(address, size))?,
-        ),
+        std::collections::hash_map::Entry::Vacant(entry) => {
+            entry.insert(recorded_memory_range(recorded_reads, address, size, read)?)
+        }
     };
     if level.len() != size {
         return Err(format!(

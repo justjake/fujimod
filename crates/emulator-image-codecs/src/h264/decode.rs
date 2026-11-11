@@ -67,7 +67,7 @@ impl Bits {
         Ok(if value & 1 == 0 {
             -((value / 2) as i32)
         } else {
-            ((value + 1) / 2) as i32
+            value.div_ceil(2) as i32
         })
     }
 }

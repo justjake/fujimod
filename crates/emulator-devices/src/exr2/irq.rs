@@ -62,6 +62,8 @@ pub struct Options {
 struct Pins {
     edges: [AtomicU32; 4],
     levels: [AtomicU32; 4],
+    /// Electrical input levels reported by sources that know them, whatever their sense configuration.
+    raw: [AtomicU32; 4],
     rises: [AtomicU32; 4],
     falls: [AtomicU32; 4],
     changed: AtomicBool,
@@ -134,6 +136,17 @@ impl Inputs {
             let transitions = if high { &self.0.rises } else { &self.0.falls };
             transitions[group].fetch_or(bit, Ordering::Relaxed);
             self.0.changed.store(true, Ordering::Relaxed);
+        }
+        Ok(())
+    }
+    /// Report a source's electrical level for the raw input register (`+0x40` per group of 32 lines). It
+    /// neither latches nor wakes the controller; `level` and `pulse` deliver the interrupt.
+    pub fn raw_level(&self, line: u32, high: bool) -> Result<(), String> {
+        let (group, bit) = Self::bit(line)?;
+        if high {
+            self.0.raw[group].fetch_or(bit, Ordering::Relaxed);
+        } else {
+            self.0.raw[group].fetch_and(!bit, Ordering::Relaxed);
         }
         Ok(())
     }
@@ -241,6 +254,8 @@ struct Saved {
     registers: State,
     edges: [u32; 4],
     levels: [u32; 4],
+    #[serde(default)]
+    raw: [u32; 4],
     #[serde(default)]
     rises: [u32; 4],
     #[serde(default)]
@@ -418,6 +433,14 @@ impl InterruptController {
     }
     fn read_register(&mut self, offset: u32) -> Result<u32, RegisterError> {
         Ok(match offset {
+            // Raw input levels: the electrical level of each source line that reports one, plus level-driven
+            // inputs. A source that only pulses reads 0. EXR Pro lens code 0x884330 tests line 17 (lens ready)
+            // here; its read is not a register the X70 uses.
+            0x40..=0x4c => {
+                let group = ((offset - 0x40) / 4) as usize;
+                self.inputs.0.raw[group].load(Ordering::Relaxed)
+                    | self.inputs.0.levels[group].load(Ordering::Relaxed)
+            }
             0x60..=0x6c => self.state.configuration60[((offset - 0x60) / 4) as usize],
             0x80..=0x8c => self.state.enabled[((offset - 0x80) / 4) as usize],
             0x100..=0x10c => self.state.source_config[((offset - 0x100) / 4) as usize],
@@ -558,6 +581,7 @@ impl InterruptController {
             registers: self.state.clone(),
             edges: std::array::from_fn(|i| self.inputs.0.edges[i].load(Ordering::Relaxed)),
             levels: std::array::from_fn(|i| self.inputs.0.levels[i].load(Ordering::Relaxed)),
+            raw: std::array::from_fn(|i| self.inputs.0.raw[i].load(Ordering::Relaxed)),
             rises: std::array::from_fn(|i| self.inputs.0.rises[i].load(Ordering::Relaxed)),
             falls: std::array::from_fn(|i| self.inputs.0.falls[i].load(Ordering::Relaxed)),
             changed: self.inputs.0.changed.load(Ordering::Relaxed),
@@ -602,6 +626,7 @@ impl InterruptController {
         for group in 0..4 {
             self.inputs.0.edges[group].store(saved.edges[group], Ordering::Relaxed);
             self.inputs.0.levels[group].store(saved.levels[group], Ordering::Relaxed);
+            self.inputs.0.raw[group].store(saved.raw[group], Ordering::Relaxed);
             self.inputs.0.rises[group].store(saved.rises[group], Ordering::Relaxed);
             self.inputs.0.falls[group].store(saved.falls[group], Ordering::Relaxed);
         }
@@ -898,6 +923,51 @@ mod tests {
         corrupt["registers"]["priorities"] = serde_json::json!([]);
         assert!(d.restore(&corrupt).is_err());
         assert_eq!(saved, d.save());
+    }
+}
+
+#[cfg(test)]
+mod raw_level_tests {
+    use super::*;
+    use crate::test_host::TestHost;
+
+    #[test]
+    fn raw_input_register_reads_reported_and_level_driven_lines_without_latching() {
+        let inputs = Inputs::default();
+        let mut d = InterruptController::new(
+            Options {
+                arbitration: Arbitration::ActiveBitmap,
+                edge_latch: EdgeLatch::Always,
+                level_edges: LevelEdges::Ignored,
+            },
+            Wiring {
+                base: 0xfffb3000,
+                inputs: inputs.clone(),
+                enables: None,
+                software: vec![],
+            },
+        )
+        .unwrap();
+        let mut host = TestHost::new();
+        let mut read = |d: &mut InterruptController, offset: u64| {
+            let mut cx = host.cx();
+            let value = d.read(&mut cx, 0xfffb3000 + offset, 4);
+            assert_eq!(cx.refusal(), None);
+            value
+        };
+        assert_eq!(read(&mut d, 0x40), 0);
+        inputs.raw_level(17, true).unwrap();
+        inputs.level(40, true).unwrap();
+        assert_eq!(read(&mut d, 0x40), 1 << 17);
+        assert_eq!(read(&mut d, 0x44), 1 << 8);
+        inputs.level(40, false).unwrap();
+        inputs.raw_level(17, false).unwrap();
+        assert_eq!(read(&mut d, 0x40), 0);
+        inputs.raw_level(17, true).unwrap();
+        let saved = d.save();
+        inputs.raw_level(17, false).unwrap();
+        d.restore(&saved).unwrap();
+        assert_eq!(read(&mut d, 0x40), 1 << 17);
     }
 }
 

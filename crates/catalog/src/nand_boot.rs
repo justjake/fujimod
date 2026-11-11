@@ -196,7 +196,7 @@ impl NandBootStage1 {
     fn validate(&self) -> Result<(), String> {
         if self.block_bytes == 0
             || self.image_bytes == 0
-            || self.image_bytes % self.block_bytes != 0
+            || !self.image_bytes.is_multiple_of(self.block_bytes)
             || self.blocks.is_empty()
             || self.image_sha256.len() != 64
         {
@@ -220,7 +220,7 @@ impl NandBootStage1 {
         }
         let entry = &self.entry;
         if entry.instruction.is_empty()
-            || entry.literal_address % 4 != 0
+            || !entry.literal_address.is_multiple_of(4)
             || entry.literal_address as u64 + 4 > self.image_bytes
             || entry.code_entry >= self.image_bytes
             || entry.code_first_word >> 24 != 0xeb
@@ -236,7 +236,7 @@ impl NandBootCodeSpace {
         if self.capacity == 0
             || self.address.checked_add(self.capacity).is_none()
             || self.native_offset.checked_add(self.capacity).is_none()
-            || self.address % 4 != 0
+            || !self.address.is_multiple_of(4)
         {
             return Err("invalid code-space extent".into());
         }
@@ -250,7 +250,7 @@ impl NandBootLoadRange {
             || self.file.len() > 12
             || !self.file.is_ascii()
             || self.capacity == 0
-            || self.address % 0x1000 != 0
+            || !self.address.is_multiple_of(0x1000)
         {
             return Err("invalid stage-2 file or range".into());
         }

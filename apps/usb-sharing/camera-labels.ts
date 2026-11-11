@@ -23,6 +23,9 @@ export async function cameraLabels(catalog: string, processorNames: Record<strin
   const processors = new Map<string, string>();
   for (const body of await readdir(join(catalog, 'firmware'))) {
     for (const version of await readdir(join(catalog, 'firmware', body))) {
+      // Generated facts can precede a firmware record; such releases get no processor.
+      const files = await readdir(join(catalog, 'firmware', body, version));
+      if (!files.includes('firmware.json')) continue;
       const firmware = (await read('firmware', body, version, 'firmware.json')) as {
         id: string;
         body_id: string;

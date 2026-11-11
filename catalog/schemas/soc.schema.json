@@ -601,6 +601,36 @@
       ],
       "type": "object"
     },
+    "DataCacheGeometry": {
+      "additionalProperties": false,
+      "description": "L1 data-cache geometry.",
+      "properties": {
+        "line_bytes": {
+          "description": "Line size in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sets": {
+          "description": "Number of sets.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ways": {
+          "description": "Associativity.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "line_bytes",
+        "sets",
+        "ways"
+      ],
+      "type": "object"
+    },
     "DecoderChoice": {
       "additionalProperties": false,
       "description": "A named alternate decoder state.",
@@ -4097,6 +4127,17 @@
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "data_cache": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DataCacheGeometry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Private, non-coherent write-back L1 data cache, as CCSIDR reports it."
         }
       },
       "required": [
@@ -4352,6 +4393,16 @@
             "$ref": "#/$defs/ControllerInterruptInput"
           },
           "type": "array"
+        },
+        "power_on_ram_fill": {
+          "description": "The byte every RAM cell holds at power-on, as read on a camera. Absent\nwhen unmeasured; the emulator then starts RAM zeroed.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "profiles": {
           "additionalProperties": {

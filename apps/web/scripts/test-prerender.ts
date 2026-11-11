@@ -161,7 +161,7 @@ try {
       assert.ok(states.includes(true), `${type.name()}: the tap must open its card`);
       assert.ok(
         states.slice(states.indexOf(true)).every(Boolean),
-        `${type.name()}: focus and compatibility mouse events must not close the tapped card: ${states}`,
+        `${type.name()}: focus and compatibility mouse events must not close the tapped card: ${JSON.stringify(states)}`,
       );
       assert.equal(
         await touchPage.locator('.catalog-card.on').count(),

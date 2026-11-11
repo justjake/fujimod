@@ -7,7 +7,7 @@ import {
   parseEmulatorManifest,
 } from '../../dist/emulator/module.js';
 
-test('module factory receives independent binary and asset resolution, then configures', async () => {
+await test('module factory receives independent binary and asset resolution, then configures', async () => {
   let received: { wasmBinary: ArrayBuffer; locateFile(path: string): string } | undefined;
   const configured: ModuleOptions[] = [];
   let releaseConfiguration!: () => void;
@@ -46,7 +46,7 @@ test('module factory receives independent binary and asset resolution, then conf
   assert.deepEqual(configured, [{ executionPolicy: 'exact', tcgJit: false }]);
 });
 
-test('module validation rejects modules without camera bindings', async () => {
+await test('module validation rejects modules without camera bindings', async () => {
   await assert.rejects(
     instantiateEmulatorModule(
       async () => ({}),
@@ -57,14 +57,14 @@ test('module validation rejects modules without camera bindings', async () => {
   );
 });
 
-test('guest failures are distinguished by error name', () => {
+await test('guest failures are distinguished by error name', () => {
   const guest = new Error('guest faulted');
   guest.name = 'GuestExecutionError';
   assert.equal(isGuestExecutionError(guest), true);
   assert.equal(isGuestExecutionError(new Error('refused')), false);
 });
 
-test('manifest parsing validates the versioned runtime and observation shape', () => {
+await test('manifest parsing validates the versioned runtime and observation shape', () => {
   const manifest = parseEmulatorManifest({
     schema: 1,
     abi: 1,

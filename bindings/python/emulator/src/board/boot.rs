@@ -36,7 +36,7 @@ impl<'a> Owner<'a> {
 #[pymethods]
 impl Board {
     #[staticmethod]
-    #[pyo3(signature=(*, configuration_id, update, boot_rom, overlays=Vec::new(), nand=None, settings=None, clock_seconds_2000=None, preferred_languages=Vec::new(), camera=None, access_point=None, capability_reply=None, ram_fill=None))]
+    #[pyo3(signature=(*, configuration_id, update, boot_rom, overlays=Vec::new(), nand=None, settings=None, clock_seconds_2000=None, preferred_languages=Vec::new(), camera=None, access_point=None, capability_reply=None))]
     fn from_inputs(
         configuration_id: String,
         update: PathBuf,
@@ -49,7 +49,6 @@ impl Board {
         camera: Option<PathBuf>,
         access_point: Option<String>,
         capability_reply: Option<Vec<u8>>,
-        ram_fill: Option<u8>,
     ) -> PyResult<Self> {
         let session = boot()?
             .open(Inputs {
@@ -64,7 +63,6 @@ impl Board {
             camera,
             access_point,
             capability_reply,
-            ram_fill,
             })
             .map_err(error)?;
         let graph: factory::Graph = serde_json::from_value(session.definition["execution"].clone())
@@ -77,7 +75,7 @@ impl Board {
                 graph
                     .processors
                     .iter()
-                    .filter_map(|p| p.rprofile)
+                    .filter_map(|p| p.rprofile.clone())
                     .flat_map(|p| [p.tcm.atcm.bytes, p.tcm.btcm.bytes]),
             )
             .try_fold(0usize, |sum, n| {
@@ -105,17 +103,20 @@ impl Board {
     }
     #[pyo3(signature=(instruction_limit=2_000_000_000))]
     fn boot_to_rec(&mut self, py: Python<'_>, instruction_limit: u64) -> PyResult<String> {
-        if self.driver.is_some()
-            || self.memory_watch.is_some()
-            || self.function_watch.is_some()
-            || !self.instruction_points.is_empty()
-        {
+        if self.driver.is_some() || !self.instruction_points.is_empty() {
             return Err(error(
-                "boot requires no active host instrumentation or isolated call".into(),
+                "boot requires no instruction points or isolated call".into(),
             ));
         }
         let owner = Owner::new(self.session_mut()?);
-        py.detach(move || owner.run(instruction_limit))
+        let result = py.detach(move || owner.run(instruction_limit));
+        // Cold reconstruction replaces the CPUs and their hooks. Memory
+        // watch records remain available with an incomplete-observation error.
+        if self.function_watch.as_ref().is_some_and(|watch| !watch.is_live()) {
+            self.function_watch.take();
+            return Err(error("boot restarted while a function watch was active".into()));
+        }
+        result
     }
     fn screenshot<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         Ok(PyBytes::new(

@@ -17,6 +17,7 @@ fn model(connected: bool) -> (SerialState, Pads) {
                 pin: Pin { port: 11, pin: 2 },
                 high: false,
             }],
+            high_port_input_levels: None,
         },
         fujimod_emulator_devices::exr2::gpio::Wiring { irqs: vec![] },
     )

@@ -67,7 +67,9 @@ pub fn mono12_phase_gain<'py>(
         || blacks.len() != 4
         || blacks.iter().any(|&v| v > 4095)
         || input
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .any(|v| u16::from_le_bytes([v[0], v[1]]) > 4095)
     {
         return Err(PyValueError::new_err(
@@ -89,7 +91,7 @@ pub fn mono12_phase_gain<'py>(
                 let black = blacks[phase] as u32;
                 let gain = gains[phase * 64 + gy * 8 + (x - x0) * 8 / (x1 - x0 + 1)] as u32;
                 let transformed = if value > black {
-                    (black + ((value - black) * gain >> 8)).min(4095)
+                    (black + (((value - black) * gain) >> 8)).min(4095)
                 } else {
                     value
                 };

@@ -136,7 +136,10 @@ pub fn encode(kind: Kind, word: u64, value: u64, place: u64) -> Result<u64> {
                     "Load/store scale mismatch",
                 )?;
             }
-            require(value % (1 << scale) == 0, "Unaligned load/store relocation")?;
+            require(
+                value.is_multiple_of(1 << scale),
+                "Unaligned load/store relocation",
+            )?;
             (w & !0x003ffc00) | (((value as u32 & 4095) >> scale) << 10)
         }
         ArmMov32 => return Err(Error::Invalid("MOV32 requires a pair")),

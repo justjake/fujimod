@@ -44,8 +44,8 @@ beforeAll(() => {
   script = readFileSync(bundle(), 'utf8');
 });
 
-afterAll(() => {
-  miniflare?.dispose();
+afterAll(async () => {
+  await miniflare?.dispose();
   if (outdir) rmSync(outdir, { recursive: true, force: true });
 });
 

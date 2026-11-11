@@ -7,7 +7,7 @@ import { loadNodeModule } from '../../dist/emulator/node.mjs';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
-test('Node loader resolves a module file and its adjacent Wasm binary', async () => {
+await test('Node loader resolves a module file and its adjacent Wasm binary', async () => {
   const target = resolve(packageRoot, '../../target');
   await mkdir(target, { recursive: true });
   const directory = await mkdtemp(join(target, 'javascript-emulator-node-'));
@@ -29,7 +29,7 @@ test('Node loader resolves a module file and its adjacent Wasm binary', async ()
   }
 });
 
-test('browser entry remains independent of Node builtins', async () => {
+await test('browser entry remains independent of Node builtins', async () => {
   const entry = new URL('../../dist/emulator/index.js', import.meta.url);
   const source = await readFile(entry, 'utf8');
   assert.doesNotMatch(source, /from ['"]node:/);

@@ -398,7 +398,7 @@ impl ImageInput {
         src.validate(packing.row_bytes(src.width))?;
         if src.width < 6
             || src.height < 6
-            || src.width % 2 != 0
+            || !src.width.is_multiple_of(2)
             || src.address & 1 != 0
             || r[0x3a4 / 4] & 1 != 0
         {
@@ -681,7 +681,7 @@ impl ImageInput {
             *dma = Self::prepare_raw_channel(
                 cx.now(),
                 self.options.raw_dma_ticks,
-                &r,
+                r,
                 sensor,
                 0x354,
                 0x358,
@@ -696,7 +696,7 @@ impl ImageInput {
             *raw3_dma = Self::prepare_raw_channel(
                 cx.now(),
                 self.options.raw_dma_ticks,
-                &r,
+                r,
                 sensor,
                 0x370,
                 0x374,
@@ -738,7 +738,7 @@ impl ImageInput {
         if r[0x14 / 4] & !0x3fff1fff != 0
             || r[0x18 / 4] & !0x3fff3fff != 0
             || width == 0
-            || width % 2 != 0
+            || !width.is_multiple_of(2)
             || left + width > sensor.width
             || top + height > sensor.height
         {
@@ -859,10 +859,10 @@ impl ImageInput {
         }
         // The held capture frame ends when its RAW readout lands, after the
         // RAW completion interrupt above.
-        if self.state.dma.deadline().is_none() {
-            if let Some(edge) = self.state.readout_edge.take() {
-                self.publish_frame_edge(FrameEdge { tick: now, ..edge }, cx)?;
-            }
+        if self.state.dma.deadline().is_none()
+            && let Some(edge) = self.state.readout_edge.take()
+        {
+            self.publish_frame_edge(FrameEdge { tick: now, ..edge }, cx)?;
         }
         if self.state.raw3_dma.write(cx)? {
             self.state.raw3_ack = true;

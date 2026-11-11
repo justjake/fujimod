@@ -199,12 +199,14 @@ impl ConfigurationRequests {
             {
                 return Err("Invalid unwritten XP4 configuration group checkpoint".into());
             }
-            if let Some(pending) = &self.pending[group] {
-                if pending.token == 0 || pending.token > self.generation || !tokens.insert(pending.token)
-                    || pending.at < self.inputs.completion_ticks[group] || pending.values != self.values(group)
-                {
-                    return Err("Invalid XP4 configuration/request pending checkpoint".into());
-                }
+            if let Some(pending) = &self.pending[group]
+                && (pending.token == 0
+                    || pending.token > self.generation
+                    || !tokens.insert(pending.token)
+                    || pending.at < self.inputs.completion_ticks[group]
+                    || pending.values != self.values(group))
+            {
+                return Err("Invalid XP4 configuration/request pending checkpoint".into());
             }
         }
         Ok(())
@@ -215,8 +217,10 @@ impl Device for ConfigurationRequests {
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         if !self.owns(address, size) { cx.unmodeled(); return 0; }
         self.admit(cx);
-        if let Some(model) = &mut self.base_state {
-            if model.owns(address, size) { return model.read(cx, address); }
+        if let Some(model) = &mut self.base_state
+            && model.owns(address, size)
+        {
+            return model.read(cx, address);
         }
         if let Some(index) = Self::selector(address) { return u64::from(self.staged[index]); }
         let group = Self::request(address).unwrap();
@@ -225,15 +229,20 @@ impl Device for ConfigurationRequests {
         }
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
-        if !self.owns(address, size) { cx.unmodeled(); return; }
-        if let Some(model) = &mut self.base_state {
-            if model.owns(address, size) {
-                let base = crate::base_parameter::BaseParameters::address_base(address).unwrap();
-                if self.pending[Self::group(base)].is_some() {
-                    cx.fail("XP4 parameter write while command 2 is busy"); return;
-                }
-                model.write(cx, address, value); return;
+        if !self.owns(address, size) {
+            cx.unmodeled();
+            return;
+        }
+        if let Some(model) = &mut self.base_state
+            && model.owns(address, size)
+        {
+            let base = crate::base_parameter::BaseParameters::address_base(address).unwrap();
+            if self.pending[Self::group(base)].is_some() {
+                cx.fail("XP4 parameter write while command 2 is busy");
+                return;
             }
+            model.write(cx, address, value);
+            return;
         }
         if let Some(index) = Self::selector(address) {
             let group = Self::group(DESCRIPTORS[index].0);
@@ -557,8 +566,11 @@ mod tests {
     #[test]
     fn status_one_does_not_auto_settle_and_early_stale_or_out_of_order_events_do_nothing() {
         let base = crate::base_parameter::BASES[0];
-        let mut model = ConfigurationRequests::new(parameter_inputs(1, 8, 8)).unwrap(); let mut clock = Clock::default();
-        clock.now = 100;
+        let mut model = ConfigurationRequests::new(parameter_inputs(1, 8, 8)).unwrap();
+        let mut clock = Clock {
+            now: 100,
+            ..Default::default()
+        };
         assert_eq!(read(&mut model, &mut clock, base + 0xf0, 4).unwrap(), 1);
         assert_eq!(model.next_deadline(100), None); let before = model.save();
         model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1); assert_eq!(model.save(), before);

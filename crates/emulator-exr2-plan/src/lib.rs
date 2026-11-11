@@ -87,10 +87,10 @@ impl Plan {
             .iter()
             .filter(|n| n.boot_entries.contains(&self.boot_entry))
         {
-            if let Model::CoreRelease { options, core, .. } = &node.model {
-                if released.get(*core).copied() != options["released"].as_bool() {
-                    return Err("core release reset state disagrees with execution graph".into());
-                }
+            if let Model::CoreRelease { options, core, .. } = &node.model
+                && released.get(*core).copied() != options["released"].as_bool()
+            {
+                return Err("core release reset state disagrees with execution graph".into());
             }
         }
         Ok(())

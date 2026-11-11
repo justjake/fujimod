@@ -656,10 +656,17 @@ impl Worker {
             }
             Command::InstructionPoints { core, addresses } => {
                 self.board.cpu(core)?;
-                if let Some(mut points) = self.instruction_points.remove(&core) {
-                    self.board.instruction_points_end(core, &mut points)?;
-                }
-                if !addresses.is_empty() {
+                if addresses.is_empty() {
+                    if let Some(mut points) = self.instruction_points.remove(&core) {
+                        self.board.instruction_points_end(core, &mut points)?;
+                    }
+                } else if let Some(mut points) = self.instruction_points.remove(&core) {
+                    if let Err(error) = self.board.instruction_points_update(core, &mut points, addresses) {
+                        self.board.instruction_points_end(core, &mut points)?;
+                        return Err(error);
+                    }
+                    self.instruction_points.insert(core, points);
+                } else {
                     self.instruction_points.insert(core, self.board.instruction_points_begin(core, addresses)?);
                 }
                 Ok(Value::Null)

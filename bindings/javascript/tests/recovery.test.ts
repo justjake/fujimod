@@ -7,7 +7,7 @@ await initialize({
   module_or_path: await readFile(new URL('../pkg/fujimod_bg.wasm', import.meta.url)),
 });
 
-test('recovery availability does not require an emulator board', () => {
+await test('recovery availability does not require an emulator board', () => {
   const status = sdCardTools.availability('xt30-201');
   try {
     assert.equal(status.firmwareId, 'xt30-201');
@@ -20,7 +20,7 @@ test('recovery availability does not require an emulator board', () => {
   }
 });
 
-test('recovery exposes the documented power-on combinations', () => {
+await test('recovery exposes the documented power-on combinations', () => {
   const status = sdCardTools.availability('xs10-311');
   try {
     assert.deepEqual(status.sdBootCombination, {
@@ -33,7 +33,7 @@ test('recovery exposes the documented power-on combinations', () => {
   }
 });
 
-test('located XP5 startup recipes can build recovery cards', () => {
+await test('located XP5 startup recipes can build recovery cards', () => {
   for (const firmwareId of ['xm5-130', 'x100vi-131']) {
     const status = sdCardTools.availability(firmwareId);
     try {
@@ -48,7 +48,7 @@ test('located XP5 startup recipes can build recovery cards', () => {
   }
 });
 
-test('missing generation facts and incorrect DAT bytes are refused', () => {
+await test('missing generation facts and incorrect DAT bytes are refused', () => {
   const status = sdCardTools.availability('unknown-update');
   try {
     assert.equal(status.canBuild, false);
@@ -65,7 +65,7 @@ test('missing generation facts and incorrect DAT bytes are refused', () => {
   assert.throws(() => sdCardTools.build('gfx100rf-113', new Uint8Array(4)), /Missing recovery facts/);
 });
 
-test('green LED cards cover every processor generation without an updater DAT', () => {
+await test('green LED cards cover every processor generation without an updater DAT', () => {
   for (const firmwareId of [
     'x10-201',
     'xe1-271',
@@ -95,7 +95,7 @@ test('green LED cards cover every processor generation without an updater DAT', 
   }
 });
 
-test('EXR II bodies that share a memory setup header share one card root', () => {
+await test('EXR II bodies that share a memory setup header share one card root', () => {
   const header = (firmwareId: string) => {
     const status = sdCardTools.availability(firmwareId);
     try {

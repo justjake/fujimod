@@ -58,7 +58,10 @@ impl Monitors {
             return Err("exclusive snapshot processor count differs".into());
         }
         let mut cores = self.cores.clone();
-        for (slot, words) in cores.values_mut().zip(bytes[HEADER..].chunks_exact(SLOT)) {
+        for (slot, words) in cores
+            .values_mut()
+            .zip(bytes[HEADER..].as_chunks::<SLOT>().0)
+        {
             let word = |at| u64::from_le_bytes(words[at..at + 8].try_into().unwrap());
             let granule = word(0);
             let address = word(8);

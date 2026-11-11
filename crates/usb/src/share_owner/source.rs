@@ -11,7 +11,7 @@ pub(super) enum Source {
         exporter: Exporter,
     },
     Proxy {
-        device: RemoteDevice,
+        device: Box<RemoteDevice>,
         ready: Option<std::path::PathBuf>,
         clients: Mutex<HashMap<String, Controller>>,
         claimed: Mutex<BTreeSet<String>>,
@@ -41,7 +41,7 @@ impl Source {
             return Err(error("Expected proxy camera"));
         };
         Ok(Some(Self::Proxy {
-            device,
+            device: Box::new(device),
             ready: std::env::var_os("FUJIMOD_USB_AGENT_READY").map(Into::into),
             clients: Mutex::new(HashMap::new()),
             claimed: Mutex::new(BTreeSet::new()),
@@ -212,14 +212,13 @@ mod tests {
                                         .await
                                         .unwrap()
                                 };
-                                if let Some(reply) = reply {
-                                    if socket
+                                if let Some(reply) = reply
+                                    && socket
                                         .send(Frame::Binary(reply.encode().unwrap().into()))
                                         .await
                                         .is_err()
-                                    {
-                                        break;
-                                    }
+                                {
+                                    break;
                                 }
                             }
                         })
@@ -250,7 +249,7 @@ mod tests {
             )
             .unwrap();
             let source = Source::Proxy {
-                device,
+                device: Box::new(device),
                 ready: Some(ready.clone()),
                 clients: Mutex::default(),
                 claimed: Mutex::default(),

@@ -186,7 +186,7 @@ impl Device for Shutter {
 }
 impl Shutter {
     fn check(&self, state: &State) -> Result<(), String> {
-        if state.poll_at % self.timing.poll != 0 {
+        if !state.poll_at.is_multiple_of(self.timing.poll) {
             return Err("Invalid shutter checkpoint".into());
         }
         Ok(())

@@ -480,7 +480,7 @@ fn matching_control_reads_mapped_flash_in_registered_e1_capacity_chunks() {
         &image,
         limits(),
         0x00100000,
-        (capacity * 2) as u32,
+        capacity * 2,
     ))
     .unwrap();
     assert_eq!(bytes, [first, second].concat());

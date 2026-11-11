@@ -485,11 +485,11 @@ impl Device for Encoder {
                         self.clear_sequence();
                         self.set_line(cx, false);
                     }
-                } else if !running {
-                    if let Err(error) = self.start(cx) {
-                        self.words.get_mut(&CONTROL).map(|w| *w &= !START);
-                        cx.fail(error);
+                } else if !running && let Err(error) = self.start(cx) {
+                    if let Some(w) = self.words.get_mut(&CONTROL) {
+                        *w &= !START;
                     }
+                    cx.fail(error);
                 }
             }
             INPUT_MAIN | INPUT_NEXT | INPUT_PREVIOUS | OUTPUT | OUTPUT_END | OUTPUT_NEXT => {
@@ -528,12 +528,12 @@ impl Device for Encoder {
             return;
         }
         let pending = self.pending.take().unwrap();
-        if let Some(output) = pending.output {
-            if let Err(error) = cx.ram_write(output, &pending.payload) {
-                self.clear_sequence();
-                self.set_line(cx, false);
-                return cx.fail(format!("H.264 output write failed: {error}"));
-            }
+        if let Some(output) = pending.output
+            && let Err(error) = cx.ram_write(output, &pending.payload)
+        {
+            self.clear_sequence();
+            self.set_line(cx, false);
+            return cx.fail(format!("H.264 output write failed: {error}"));
         }
         self.frames += 1;
         self.output_bytes += pending.payload.len() as u64;

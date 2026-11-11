@@ -165,75 +165,6 @@ impl PowerController {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn byte_order_checksum_and_rejected_write() {
-        let mut m = PowerController::new();
-        let reply: Vec<_> = [3, 0, 0, !3].map(|b| m.exchange(b)).into();
-        assert_eq!(reply, [3, 2, 88, !93]);
-        assert_eq!([0x92, 0x12, 0x34, !0xd8].map(|b| m.exchange(b))[3], !0xd8);
-        assert_eq!(m.register(0x12), 0x1234);
-        let _ = [0x92, 0xab, 0xcd, 0].map(|b| m.exchange(b));
-        assert_eq!(m.register(0x12), 0x1234);
-        assert_eq!(m.bad_checksums, 1);
-    }
-    #[test]
-    fn rtc_commit_rollover_and_checkpoint() {
-        fn read(m: &mut PowerController, r: u8) -> u16 {
-            let b = [r, 0, 0, !r].map(|v| m.exchange(v));
-            u16::from_be_bytes([b[1], b[2]])
-        }
-        fn write(m: &mut PowerController, r: u8, value: u16) {
-            let cmd = r | 0x80;
-            let [hi, lo] = value.to_be_bytes();
-            for byte in [cmd, hi, lo, !cmd.wrapping_add(hi).wrapping_add(lo)] {
-                m.exchange(byte);
-            }
-        }
-        let mut m = PowerController::new();
-        m.configure_rtc(0xffff, false);
-        assert_eq!(read(&mut m, 0x27) & 2, 0);
-        assert_eq!(read(&mut m, 0x23), 0xffff);
-        m.advance(1_000_000_000);
-        assert_eq!(read(&mut m, 0x24), 0); // same latched read, despite rollover
-        assert_eq!(read(&mut m, 0x23), 0);
-        assert_eq!(read(&mut m, 0x24), 1);
-        write(&mut m, 0x1d, 0x1234);
-        write(&mut m, 0x1e, 0x5678);
-        assert_eq!(read(&mut m, 0x23), 0); // staging has no effect
-        write(&mut m, 0x27, 0x202);
-        assert_eq!(read(&mut m, 0x23), 0x1234);
-        assert_eq!(read(&mut m, 0x24), 0x5678);
-        assert_eq!(read(&mut m, 0x27) & 2, 2);
-        let saved = serde_json::to_value(&m).unwrap();
-        let mut restored: PowerController = serde_json::from_value(saved).unwrap();
-        restored.advance(3_000_000_000);
-        assert_eq!(read(&mut restored, 0x23), 0x1236);
-        assert_eq!(read(&mut restored, 0x24), 0x5678);
-        write(&mut restored, 0x27, 3); // retained sleep packet, no RTC commit
-        assert_eq!(read(&mut restored, 0x23), 0x1236);
-    }
-    #[test]
-    fn rtc_uses_only_elapsed_guest_time_after_restore() {
-        let mut m = PowerController::new();
-        m.configure_rtc(700, true);
-        m.advance(1_000_000_000);
-        m.set_register(0x1d, 0x1234);
-        m.set_register(0x1e, 0x5678);
-        m.set_register(0x27, 0x202);
-        let saved = serde_json::to_value(&m).unwrap();
-        let mut restored: PowerController = serde_json::from_value(saved.clone()).unwrap();
-        assert_eq!(serde_json::to_value(&restored).unwrap(), saved);
-        restored.advance(1_000_000_000 + 5_000_000_000);
-        restored.latch_rtc();
-        let value = restored.register(0x23) as u32 | ((restored.register(0x24) as u32) << 16);
-        assert_eq!(value, 0x56781234 + 5);
-        assert_eq!(restored.register(0x27) & 2, 2);
-    }
-}
-
 /// Battery fuel gauge behind the I2C register-pointer protocol. Register 4
 /// holds a declared charge word read most-significant byte first. No chip
 /// identity or behavior for unmodeled registers is implied; I2C controller
@@ -326,5 +257,74 @@ impl crate::i2c::Registers for FuelGauge {
         }
         *self = restored;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn byte_order_checksum_and_rejected_write() {
+        let mut m = PowerController::new();
+        let reply: Vec<_> = [3, 0, 0, !3].map(|b| m.exchange(b)).into();
+        assert_eq!(reply, [3, 2, 88, !93]);
+        assert_eq!([0x92, 0x12, 0x34, !0xd8].map(|b| m.exchange(b))[3], !0xd8);
+        assert_eq!(m.register(0x12), 0x1234);
+        let _ = [0x92, 0xab, 0xcd, 0].map(|b| m.exchange(b));
+        assert_eq!(m.register(0x12), 0x1234);
+        assert_eq!(m.bad_checksums, 1);
+    }
+    #[test]
+    fn rtc_commit_rollover_and_checkpoint() {
+        fn read(m: &mut PowerController, r: u8) -> u16 {
+            let b = [r, 0, 0, !r].map(|v| m.exchange(v));
+            u16::from_be_bytes([b[1], b[2]])
+        }
+        fn write(m: &mut PowerController, r: u8, value: u16) {
+            let cmd = r | 0x80;
+            let [hi, lo] = value.to_be_bytes();
+            for byte in [cmd, hi, lo, !cmd.wrapping_add(hi).wrapping_add(lo)] {
+                m.exchange(byte);
+            }
+        }
+        let mut m = PowerController::new();
+        m.configure_rtc(0xffff, false);
+        assert_eq!(read(&mut m, 0x27) & 2, 0);
+        assert_eq!(read(&mut m, 0x23), 0xffff);
+        m.advance(1_000_000_000);
+        assert_eq!(read(&mut m, 0x24), 0); // same latched read, despite rollover
+        assert_eq!(read(&mut m, 0x23), 0);
+        assert_eq!(read(&mut m, 0x24), 1);
+        write(&mut m, 0x1d, 0x1234);
+        write(&mut m, 0x1e, 0x5678);
+        assert_eq!(read(&mut m, 0x23), 0); // staging has no effect
+        write(&mut m, 0x27, 0x202);
+        assert_eq!(read(&mut m, 0x23), 0x1234);
+        assert_eq!(read(&mut m, 0x24), 0x5678);
+        assert_eq!(read(&mut m, 0x27) & 2, 2);
+        let saved = serde_json::to_value(&m).unwrap();
+        let mut restored: PowerController = serde_json::from_value(saved).unwrap();
+        restored.advance(3_000_000_000);
+        assert_eq!(read(&mut restored, 0x23), 0x1236);
+        assert_eq!(read(&mut restored, 0x24), 0x5678);
+        write(&mut restored, 0x27, 3); // retained sleep packet, no RTC commit
+        assert_eq!(read(&mut restored, 0x23), 0x1236);
+    }
+    #[test]
+    fn rtc_uses_only_elapsed_guest_time_after_restore() {
+        let mut m = PowerController::new();
+        m.configure_rtc(700, true);
+        m.advance(1_000_000_000);
+        m.set_register(0x1d, 0x1234);
+        m.set_register(0x1e, 0x5678);
+        m.set_register(0x27, 0x202);
+        let saved = serde_json::to_value(&m).unwrap();
+        let mut restored: PowerController = serde_json::from_value(saved.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&restored).unwrap(), saved);
+        restored.advance(1_000_000_000 + 5_000_000_000);
+        restored.latch_rtc();
+        let value = restored.register(0x23) as u32 | ((restored.register(0x24) as u32) << 16);
+        assert_eq!(value, 0x56781234 + 5);
+        assert_eq!(restored.register(0x27) & 2, 2);
     }
 }

@@ -38,7 +38,7 @@ fn upload(words: &mut Vec<u32>, index: u16, data: &[u32], increment: bool) {
             | index as u32,
     );
     words.extend_from_slice(&data[1..]);
-    if data.len() % 2 == 0 {
+    if data.len().is_multiple_of(2) {
         words.push(0xa5a5a5a5);
     }
 }
@@ -315,6 +315,93 @@ fn host_render_path_matches_cpu_snapshots_and_written_ranges() {
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
+fn host_render_to_texture_with_linear_minification_matches_cpu_within_one_list() {
+    let source_address = 0x10000u64;
+    let destination_address = 0x20000u64;
+    let mut words = setup();
+    pair(&mut words, 0x49b, 0);
+    upload(
+        &mut words,
+        0x49c,
+        &[0x4c000000, 0x4c201000, 0x4c401000, 0x88000000],
+        false,
+    );
+    for (register, value) in [
+        (0x31d, source_address as u32),
+        (0x31e, 0x0010_0010),
+        (0x241, 0x420000),
+        (0x243, 0x420000),
+    ] {
+        pair(&mut words, register, value);
+    }
+    for (position, uv) in [
+        ([-0.83, -0.71, -0.5, 1.], [0., 0.]),
+        ([0.72, -0.65, -0.5, 1.], [1., 0.]),
+        ([-0.13, 0.91, -0.5, 1.], [0., 1.]),
+    ] {
+        upload(&mut words, 0x433, &packed(position), true);
+        upload(&mut words, 0x433, &packed([uv[0], uv[1], 1., 1.]), true);
+    }
+
+    for (register, value) in [
+        (0x31d, destination_address as u32),
+        (0x31e, 0x0008_0008),
+        (0x241, 0x410000),
+        (0x243, 0x410000),
+        (0x280, 1),
+        (0x282, 0x0010_0010),
+        (0x283, 6),
+        (0x284, 0),
+        (0x285, source_address as u32),
+        (0x28e, 0),
+        (0x2c0, 0x0030_0030),
+        (0x2c2, 0x0001_0001),
+        (0x2c8, 0x000f_000f),
+    ] {
+        pair(&mut words, register, value);
+    }
+    for (position, uv) in [
+        ([-0.83, -0.71, -0.5, 1.], [0., 0.]),
+        ([0.72, -0.65, -0.5, 1.], [1., 0.]),
+        ([-0.13, 0.91, -0.5, 1.], [0., 1.]),
+    ] {
+        upload(&mut words, 0x433, &packed(position), true);
+        upload(&mut words, 0x433, &packed([uv[0], uv[1], 1., 1.]), true);
+    }
+
+    let mut cpu = Engine::default();
+    let expected = cpu
+        .execute_cpu(&words, &mut |_, length| Ok(vec![0; length]))
+        .unwrap();
+    let actual = match Engine::default()
+        .execute_host_gpu(&words, &mut |_, length| Ok(vec![0; length]))
+    {
+        Ok(actual) => actual,
+        Err(error) if error.starts_with("host GPU adapter:") => {
+            eprintln!(
+                "skipping DMP host render-to-texture test because no host GPU adapter is available: {error}"
+            );
+            return;
+        }
+        Err(error) => panic!("DMP host render-to-texture path failed: {error}"),
+    };
+    assert_eq!(actual, expected);
+    let source = &actual
+        .iter()
+        .find(|(address, _)| *address == source_address)
+        .unwrap()
+        .1;
+    let destination = &actual
+        .iter()
+        .find(|(address, _)| *address == destination_address)
+        .unwrap()
+        .1;
+    assert!(source.iter().any(|byte| *byte != 0));
+    assert!(destination.iter().any(|byte| *byte != 0));
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
 fn host_render_path_matches_dmp_fragment_state_regressions() {
     for format in [0, 1, 2, 3, 4, 5, 7, 8] {
         let words = triangle_list(&[
@@ -427,9 +514,7 @@ fn host_render_path_matches_dmp_fragment_state_regressions() {
         (0x306, 2 << 8),
         (0x307, 0x1f11),
     ]);
-    if assert_host_gpu_matches_cpu(&depth_stencil_words, |_, length| vec![0; length]).is_none() {
-        return;
-    }
+    if assert_host_gpu_matches_cpu(&depth_stencil_words, |_, length| vec![0; length]).is_none() {}
 }
 
 #[cfg(not(target_arch = "wasm32"))]

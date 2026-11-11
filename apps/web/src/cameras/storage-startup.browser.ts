@@ -28,6 +28,7 @@ for (const type of [chromium, webkit]) {
       await route.fulfill({ response, body });
     });
     await context.addInitScript(() => {
+      // oxlint-disable-next-line typescript/unbound-method -- apply below supplies the store.
       const getAll = IDBObjectStore.prototype.getAll;
       IDBObjectStore.prototype.getAll = function (...args) {
         const request = getAll.apply(this, args);
@@ -110,6 +111,7 @@ for (const type of [chromium, webkit]) {
       const firmware = { id: 'storage-test', model: 'Storage test', version: '1', sha256: 'test' };
       const camera = await store.create(file, firmware, false);
       const another = { ...firmware, sha256: 'test-2' };
+      // oxlint-disable-next-line typescript/unbound-method -- called below with the store as receiver.
       const put = IDBObjectStore.prototype.put;
       let writes = 0;
       IDBObjectStore.prototype.put = function (...args) {

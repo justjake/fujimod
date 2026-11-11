@@ -218,15 +218,14 @@ impl Soc {
                     self.id, block.id
                 ));
             }
-            if let Some(core_id) = &block.processor_core_id {
-                if block.kind != SocBlockKind::InterruptController
-                    || !self.processors.iter().any(|core| core.id == *core_id)
-                {
-                    return Err(format!(
-                        "SoC {} block {} has an invalid processor-core attachment",
-                        self.id, block.id
-                    ));
-                }
+            if let Some(core_id) = &block.processor_core_id
+                && (block.kind != SocBlockKind::InterruptController
+                    || !self.processors.iter().any(|core| core.id == *core_id))
+            {
+                return Err(format!(
+                    "SoC {} block {} has an invalid processor-core attachment",
+                    self.id, block.id
+                ));
             }
         }
         for mapping in &self.mappings {
@@ -371,6 +370,27 @@ pub struct RProfileState {
     pub atcm: TcmState,
     /// BTCM state after reset.
     pub btcm: TcmState,
+    /// Private, non-coherent write-back L1 data cache, as CCSIDR reports it.
+    pub data_cache: Option<DataCacheGeometry>,
+}
+
+/// L1 data-cache geometry.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct DataCacheGeometry {
+    /// Line size in bytes.
+    pub line_bytes: u32,
+    /// Number of sets.
+    pub sets: u32,
+    /// Associativity.
+    pub ways: u32,
 }
 
 /// A tightly coupled memory reset state.
@@ -2273,18 +2293,17 @@ impl Firmware {
                     ));
                 }
             }
-            if let Some(loader) = &installation.loader_validation {
-                if loader.sections.is_empty()
+            if let Some(loader) = &installation.loader_validation
+                && (loader.sections.is_empty()
                     || loader
                         .sections
                         .iter()
-                        .any(|name| !section_names.contains(name.as_str()))
-                {
-                    return Err(format!(
-                        "firmware {} loader validation refers to missing sections",
-                        self.id
-                    ));
-                }
+                        .any(|name| !section_names.contains(name.as_str())))
+            {
+                return Err(format!(
+                    "firmware {} loader validation refers to missing sections",
+                    self.id
+                ));
             }
             for (address, label) in &installation.entry_labels {
                 let address = u64::from_str_radix(address.trim_start_matches("0x"), 16)
@@ -2297,22 +2316,19 @@ impl Firmware {
                 }
             }
         }
-        if let Some(facts) = &self.generated_facts {
-            if let Some(remote) = &facts.remote {
-                if remote
-                    .get("firmware_id")
+        if let Some(facts) = &self.generated_facts
+            && let Some(remote) = &facts.remote
+            && (remote
+                .get("firmware_id")
+                .and_then(serde_json::Value::as_str)
+                != Some(&self.id)
+                || remote.get("body_id").and_then(serde_json::Value::as_str) != Some(&self.body_id)
+                || remote
+                    .get("firmware_sha256")
                     .and_then(serde_json::Value::as_str)
-                    != Some(&self.id)
-                    || remote.get("body_id").and_then(serde_json::Value::as_str)
-                        != Some(&self.body_id)
-                    || remote
-                        .get("firmware_sha256")
-                        .and_then(serde_json::Value::as_str)
-                        != self.update.as_ref().map(|content| content.sha256.as_str())
-                {
-                    return Err("remote facts differ from firmware identity".into());
-                }
-            }
+                    != self.update.as_ref().map(|content| content.sha256.as_str()))
+        {
+            return Err("remote facts differ from firmware identity".into());
         }
         Ok(())
     }
@@ -2624,8 +2640,10 @@ impl ReferenceCatalog {
 
     /// Load the normalized reference catalog compiled into this library.
     pub fn bundled() -> Result<Self, String> {
-        let mut catalog = Self::default();
-        catalog.firmware_versions = crate::firmware_versions::FirmwareVersions::bundled()?.releases;
+        let mut catalog = Self {
+            firmware_versions: crate::firmware_versions::FirmwareVersions::bundled()?.releases,
+            ..Self::default()
+        };
         for (kind, path, bytes) in bundled_documents() {
             match kind {
                 ReferenceKind::Soc => {
@@ -3024,13 +3042,13 @@ impl ReferenceCatalog {
             let firmware = self.firmwares.get(firmware_id).ok_or_else(|| {
                 format!("boot-patch facts refer to missing firmware {firmware_id}")
             })?;
-            if let Some(update) = &firmware.update {
-                if update.sha256 != facts.update_sha256 {
-                    return Err(format!(
-                        "boot-patch facts for {firmware_id} name update {} instead of {}",
-                        facts.update_sha256, update.sha256
-                    ));
-                }
+            if let Some(update) = &firmware.update
+                && update.sha256 != facts.update_sha256
+            {
+                return Err(format!(
+                    "boot-patch facts for {firmware_id} name update {} instead of {}",
+                    facts.update_sha256, update.sha256
+                ));
             }
         }
         for (body_id, controls) in &self.physical_controls {
@@ -3090,38 +3108,35 @@ impl ReferenceCatalog {
             }
         }
         for release in &self.firmware_versions {
-            if let Some(firmware) = self.firmwares.get(&release.firmware_id) {
-                if release.version != firmware.version
+            if let Some(firmware) = self.firmwares.get(&release.firmware_id)
+                && (release.version != firmware.version
                     || firmware
                         .update
                         .as_ref()
-                        .is_none_or(|update| update.sha256 != release.update_sha256)
-                {
-                    return Err(format!(
-                        "firmware version map differs for {}",
-                        release.firmware_id
-                    ));
-                }
+                        .is_none_or(|update| update.sha256 != release.update_sha256))
+            {
+                return Err(format!(
+                    "firmware version map differs for {}",
+                    release.firmware_id
+                ));
             }
-            if let Some(bulk) = self.bulk.get(&release.firmware_id) {
-                if release.product != bulk.product
-                    || release.internal_version != bulk.internal_version
-                {
-                    return Err(format!(
-                        "bulk identity differs from firmware version map for {}",
-                        release.firmware_id
-                    ));
-                }
+            if let Some(bulk) = self.bulk.get(&release.firmware_id)
+                && (release.product != bulk.product
+                    || release.internal_version != bulk.internal_version)
+            {
+                return Err(format!(
+                    "bulk identity differs from firmware version map for {}",
+                    release.firmware_id
+                ));
             }
-            if let Some(restart) = self.restart.get(&release.firmware_id) {
-                if release.product != restart.product
-                    || release.internal_version != restart.internal_version
-                {
-                    return Err(format!(
-                        "restart identity differs from firmware version map for {}",
-                        release.firmware_id
-                    ));
-                }
+            if let Some(restart) = self.restart.get(&release.firmware_id)
+                && (release.product != restart.product
+                    || release.internal_version != restart.internal_version)
+            {
+                return Err(format!(
+                    "restart identity differs from firmware version map for {}",
+                    release.firmware_id
+                ));
             }
         }
         self.validate_controls()?;
@@ -3347,25 +3362,25 @@ impl ReferenceCatalog {
                     ));
                 }
             }
-            if let Some(display) = &body.display {
-                if let Some(route) = &display.route {
-                    block_kind(
-                        &route.controller_id,
-                        SocBlockKind::SerialController,
-                        "display",
-                    )?;
-                    if !body.connections.iter().any(|connection| {
-                        connection.id == route.select_connection_id
-                            && connection
-                                .signals
-                                .iter()
-                                .any(|signal| matches!(signal, ConnectionSignal::Gpio { .. }))
-                    }) {
-                        return Err(format!(
-                            "body {} display route has no GPIO chip-select connection",
-                            body.id
-                        ));
-                    }
+            if let Some(display) = &body.display
+                && let Some(route) = &display.route
+            {
+                block_kind(
+                    &route.controller_id,
+                    SocBlockKind::SerialController,
+                    "display",
+                )?;
+                if !body.connections.iter().any(|connection| {
+                    connection.id == route.select_connection_id
+                        && connection
+                            .signals
+                            .iter()
+                            .any(|signal| matches!(signal, ConnectionSignal::Gpio { .. }))
+                }) {
+                    return Err(format!(
+                        "body {} display route has no GPIO chip-select connection",
+                        body.id
+                    ));
                 }
             }
             if let Some(mcu) = &body.microcontroller {

@@ -68,8 +68,9 @@ addToLibrary({
   },
   unicorn_jit_host_error__sig: 'iii',
   unicorn_jit_host_error: function (pointer: number, capacity: number): number {
+    const message = Module['unicornJitHostError'];
     const bytes = new TextEncoder().encode(
-      String(Module['unicornJitHostError'] ?? 'JIT host operation failed'),
+      typeof message === 'string' ? message : 'JIT host operation failed',
     );
     if (capacity >= bytes.length && pointer !== 0) HEAPU8.set(bytes, pointer);
     return bytes.length;

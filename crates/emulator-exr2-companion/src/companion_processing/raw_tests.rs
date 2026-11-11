@@ -102,7 +102,9 @@ fn raw_dma_crop_tone_phases_statistics_and_checkpoint_complete_before_irq() {
     assert_eq!(h.ram[0x8040], 0xa5);
     assert!(
         h.ram[0x9000..0x9008]
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .all(|b| u16::from_le_bytes([b[0], b[1]]) == 128)
     );
     assert_eq!(
@@ -133,8 +135,10 @@ fn raw_mask_and_tone_are_addressed_inputs_and_invalid_requests_have_no_effects()
     advance(&mut d, &mut h, 37);
     assert!(
         h.ram[0x8000..0x8040]
-            .chunks_exact(4)
-            .all(|b| b == [73, 73, 128, 128])
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|b| *b == [73, 73, 128, 128])
     );
     for (address, value) in [
         (0x5004, 2 << 16 | 36),

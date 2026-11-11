@@ -214,8 +214,8 @@ impl Command {
         };
         let bytes = cx.ram_bytes(source, count * 8)?;
         let mut packets = Vec::with_capacity(count);
-        for bytes in bytes.chunks_exact(8) {
-            let packet: [u8; 8] = bytes.try_into().unwrap();
+        for bytes in bytes.as_chunks::<8>().0 {
+            let packet: [u8; 8] = *bytes;
             if !matches!(packet[0], 0x81 | 0x82) {
                 return Err(format!("unsupported sensor opcode {:02x}", packet[0]));
             }

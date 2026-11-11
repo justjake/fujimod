@@ -1014,7 +1014,7 @@ mod tests {
         use fujimod_emulator_devices::exr2::irq::{Arbitration, Inputs, InterruptController, Options as IrqOptions, Wiring as IrqWiring};
         let mut host = Clock::default();
         let inputs = [Inputs::default(), Inputs::default()];
-        for core in 0..2 {
+        for (core, input) in inputs.iter().enumerate() {
             let base = 0xfffb3000 + core as u64 * 0x1000;
             let mut controller = InterruptController::new(
                 IrqOptions {
@@ -1024,7 +1024,7 @@ mod tests {
                 },
                 IrqWiring {
                     base,
-                    inputs: inputs[core].clone(),
+                    inputs: input.clone(),
                     enables: None,
                     software: vec![],
                 },
@@ -1036,10 +1036,7 @@ mod tests {
                 4,
                 if core == 0 { 4 } else { 10 },
             );
-            assert_eq!(
-                inputs[core].enabled(),
-                (if core == 0 { 4u128 } else { 10 }) << 32
-            );
+            assert_eq!(input.enabled(), (if core == 0 { 4u128 } else { 10 }) << 32);
         }
         let mut timer = Timers::new(
             Options {

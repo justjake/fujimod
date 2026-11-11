@@ -168,7 +168,12 @@ impl MemoryDma {
         } else {
             let mut pattern = [0; 32];
             cx.ram_read(u64::from(source), &mut pattern)?;
-            if pattern.chunks_exact(4).any(|word| word != &pattern[..4]) {
+            if pattern
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|word| word != &pattern[..4])
+            {
                 return Err("nonuniform source is outside memory DMA fill mode".into());
             }
             Operation::Fill(pattern[..4].try_into().unwrap())
@@ -197,7 +202,7 @@ impl MemoryDma {
         }
         match pending.operation {
             Operation::Fill(pattern) => {
-                for chunk in self.scratch.chunks_exact_mut(4) {
+                for chunk in self.scratch.as_chunks_mut::<4>().0 {
                     chunk.copy_from_slice(&pattern);
                 }
                 let mut cursor = 0;
@@ -375,10 +380,10 @@ impl Device for MemoryDma {
         self.state.pending = None;
         self.state.registers[STATUS] = 0x40;
         self.publish_status();
-        if let Some(irq) = pending.irq {
-            if let Err(e) = irq.raise(cx) {
-                cx.fail(e);
-            }
+        if let Some(irq) = pending.irq
+            && let Err(e) = irq.raise(cx)
+        {
+            cx.fail(e);
         }
     }
     fn next_deadline(&self, _: u64) -> Option<u64> {
@@ -561,8 +566,10 @@ mod tests {
     fn fill_latches_seed_then_commits_at_exact_deadline_independent_of_early_advances() {
         fn run(noisy: bool) -> (Value, Vec<u8>) {
             let mut d = model();
-            let mut h = Memory::default();
-            h.now = 100;
+            let mut h = Memory {
+                now: 100,
+                ..Default::default()
+            };
             h.bytes[0x1000..0x1020].fill(0xa5);
             configure(&mut d, &mut h, 0x1500400, 0x40001000, 0x2000, 81);
             write(&mut d, &mut h, 0x28, 5).unwrap();

@@ -1394,6 +1394,12 @@ class CursorLayout(TypedDict, total=False):
     status_width: Required[int]
 
 
+class DataCacheGeometry(TypedDict, total=False):
+    line_bytes: Required[int]
+    sets: Required[int]
+    ways: Required[int]
+
+
 class DebugKey(TypedDict, total=False):
     event: Required[int]
     name: Required[str]
@@ -1527,6 +1533,59 @@ class DmaMapping(TypedDict, total=False):
     permissions: Required[int]
     physical: Required[int]
     size: Required[RegionSize]
+
+
+class EarlyBootConstants(TypedDict, total=False):
+    exr2_restart_alarm_enable: Required[int]
+    exr2_restart_alarm_high: Required[int]
+    exr2_restart_alarm_low: Required[int]
+    exr2_restart_gpio_banks: Required[int]
+    exr2_restart_gpio_base: Required[int]
+    exr2_restart_gpio_config: Required[int]
+    exr2_restart_gpio_inactive_mask: Required[int]
+    exr2_restart_gpio_mode1: Required[int]
+    exr2_restart_gpio_mode2: Required[int]
+    exr2_restart_gpio_mode3: Required[int]
+    exr2_restart_gpio_mode4: Required[int]
+    exr2_restart_gpio_output: Required[int]
+    exr2_restart_gpio_stride: Required[int]
+    exr2_restart_packet_bytes: Required[int]
+    exr2_restart_packet_register: Required[int]
+    exr2_restart_power_command: Required[int]
+    exr2_restart_power_hold: Required[int]
+    exr2_restart_power_hold_mask: Required[int]
+    exr2_restart_power_off_value: Required[int]
+    exr2_restart_spi_base: Required[int]
+    exr2_restart_spi_busy: Required[int]
+    exr2_restart_spi_control: Required[int]
+    exr2_restart_spi_count_mask: Required[int]
+    exr2_restart_spi_enable: Required[int]
+    exr2_restart_spi_fifo_control: Required[int]
+    exr2_restart_spi_fifo_reset: Required[int]
+    exr2_restart_spi_format: Required[int]
+    exr2_restart_spi_rx: Required[int]
+    exr2_restart_spi_rx_count: Required[int]
+    exr2_restart_spi_rx_ready: Required[int]
+    exr2_restart_spi_status: Required[int]
+    exr2_restart_spi_status_clear: Required[int]
+    exr2_restart_spi_tx: Required[int]
+    exr2_restart_spi_tx_count: Required[int]
+    exr2_restart_write: Required[int]
+    restart_gpio_pin: Required[int]
+    restart_panel_gpio_bank: Required[int]
+    restart_power_gpio_bank: Required[int]
+    restart_spi_format_value: Required[int]
+    restart_spi_idle_control: Required[int]
+
+
+type EarlyBootMechanism = EarlyBootMechanismVariant0
+
+
+class EarlyBootMechanismVariant0(TypedDict, total=False):
+    code_checks: Required[list[CodeCheck]]
+    constants: Required[EarlyBootConstants]
+    kind: Required[Literal["exr2_polled_alarm"]]
+    spi_channel: Required[int]
 
 
 type ElectricalInput = (
@@ -3958,6 +4017,7 @@ type PeripheralPart = (
     | PeripheralPartVariant9
     | PeripheralPartVariant10
     | PeripheralPartVariant11
+    | PeripheralPartVariant12
 )
 
 
@@ -3981,6 +4041,14 @@ class PeripheralPartVariant11(TypedDict, total=False):
     jedec_id: NotRequired[int | None]
     kind: Required[Literal["serial-nor-flash"]]
     page_bytes: NotRequired[int | None]
+
+
+class PeripheralPartVariant12(TypedDict, total=False):
+    jedec_id: NotRequired[int | None]
+    kind: Required[Literal["serial-nand-flash"]]
+    page_bytes: NotRequired[int | None]
+    pages_per_block: NotRequired[int | None]
+    spare_bytes: NotRequired[int | None]
 
 
 class PeripheralPartVariant2(TypedDict, total=False):
@@ -4229,6 +4297,7 @@ class RProfileState(TypedDict, total=False):
     atcm: Required[TcmState]
     btcm: Required[TcmState]
     cp14_identity: Required[int]
+    data_cache: NotRequired[DataCacheGeometry | None]
 
 
 class ReadinessAddresses(TypedDict, total=False):
@@ -4350,6 +4419,7 @@ class Resources(TypedDict, total=False):
 class RestartMechanism(TypedDict, total=False):
     deadline_offset: Required[int]
     deferred_timer: NotRequired[DeferredTimer | None]
+    early_boot: NotRequired[EarlyBootMechanism | None]
     parameter_bytes: Required[int]
     power_off: Required[PowerOff]
     request: Required[int]
@@ -5214,7 +5284,10 @@ class RunSceneVariant2(TypedDict, total=False):
     statistics: Required[list[ApplicationStatisticsInput]]
 
 
-type RunSdCardProfile = Literal["declared-blank-sdhc-default-speed-unmeasured"]
+type RunSdCardProfile = Literal[
+    "declared-blank-sdhc-default-speed-unmeasured",
+    "declared-blank-sdhc-high-speed-unmeasured",
+]
 
 
 type RunSecondaryBusProfile = Literal[
@@ -5539,6 +5612,7 @@ class SocHardware(TypedDict, total=False):
     companion: NotRequired[CompanionHardware | None]
     interrupt_controller: NotRequired[InterruptControllerHardware | None]
     interrupt_inputs: Required[list[ControllerInterruptInput]]
+    power_on_ram_fill: NotRequired[int | None]
     profiles: NotRequired[dict[str, SocProfile]]
 
 

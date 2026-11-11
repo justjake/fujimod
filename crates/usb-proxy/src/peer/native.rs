@@ -756,23 +756,24 @@ async fn pump(
         // congestion/receive windows; letting them sit behind an entire bulk
         // frame produces bursts, loss and expensive retransmission scans.
         let received = futures_lite::future::poll_once(network.udp.receive()).await;
-        if received.is_none() && writable {
-            if let (Some(id), Some(packet)) = (channel, packets.front()) {
-                let accepted = rtc
-                    .channel(id)
-                    .ok_or_else(|| error("data channel closed"))?
-                    .write(true, packet)
-                    .map_err(error)?;
-                if accepted {
-                    packets.pop_front();
-                } else {
-                    writable = false;
-                }
-                continue; // Drain the complete RTC output after every mutation.
+        if received.is_none()
+            && writable
+            && let (Some(id), Some(packet)) = (channel, packets.front())
+        {
+            let accepted = rtc
+                .channel(id)
+                .ok_or_else(|| error("data channel closed"))?
+                .write(true, packet)
+                .map_err(error)?;
+            if accepted {
+                packets.pop_front();
+            } else {
+                writable = false;
             }
-            // With no queued packet, wait for outbound work below. Spinning
-            // here starves the controller's first Hello and all later sends.
+            continue; // Drain the complete RTC output after every mutation.
         }
+        // With no queued packet, wait for outbound work below. Spinning
+        // here starves the controller's first Hello and all later sends.
         enum Wake {
             Out(std::result::Result<Vec<u8>, async_channel::RecvError>),
             Udp(std::io::Result<Datagram>),

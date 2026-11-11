@@ -1625,7 +1625,7 @@ mod tests {
         assert!(target[..256].iter().all(|byte| *byte == 0));
         assert_eq!(host.bytes(outside, 4).unwrap(), [0x55; 4]);
         let untouched = (256..1024)
-            .filter(|offset| 0x102000 + *offset as u64 & !3 != outside)
+            .filter(|offset| (0x102000 + *offset as u64) & !3 != outside)
             .all(|offset| target[offset] == 0xaa);
         assert!(untouched);
 

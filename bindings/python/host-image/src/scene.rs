@@ -174,7 +174,9 @@ impl HostImage {
                 let developed: Option<Vec<[u8; 3]>> = (self.width * self.height < width * height)
                     .then(|| {
                         self.pixels
-                            .chunks_exact(3)
+                            .as_chunks::<3>()
+                            .0
+                            .iter()
                             .map(|p| film.color([p[0], p[1], p[2]]))
                             .collect()
                     });
@@ -443,7 +445,7 @@ fn u32_word(value: u64) -> u32 {
 
 fn words32<'py>(py: Python<'py>, words: &[u32]) -> PyResult<Bound<'py, PyBytes>> {
     PyBytes::new_with(py, words.len() * 4, |output| {
-        for (bytes, word) in output.chunks_exact_mut(4).zip(words) {
+        for (bytes, word) in output.as_chunks_mut::<4>().0.iter_mut().zip(words) {
             bytes.copy_from_slice(&word.to_le_bytes());
         }
         Ok(())
@@ -452,7 +454,7 @@ fn words32<'py>(py: Python<'py>, words: &[u32]) -> PyResult<Bound<'py, PyBytes>>
 
 fn words64<'py>(py: Python<'py>, words: &[u64]) -> PyResult<Bound<'py, PyBytes>> {
     PyBytes::new_with(py, words.len() * 8, |output| {
-        for (bytes, word) in output.chunks_exact_mut(8).zip(words) {
+        for (bytes, word) in output.as_chunks_mut::<8>().0.iter_mut().zip(words) {
             bytes.copy_from_slice(&word.to_le_bytes());
         }
         Ok(())
@@ -545,8 +547,8 @@ pub(crate) fn virtual_scene_statistics<'py>(
     let mut rows = [[0u32; 16]; 8];
     for column in 0..program.columns.columns.0 {
         let measurement = measure(scene, program.columns.cell(column, 0));
-        for channel in 0..8 {
-            columns[channel][column] = u32_word(if channel < 4 {
+        for (channel, values) in columns.iter_mut().enumerate() {
+            values[column] = u32_word(if channel < 4 {
                 measurement.luma
             } else {
                 measurement.population
@@ -555,8 +557,8 @@ pub(crate) fn virtual_scene_statistics<'py>(
     }
     for row in 0..program.rows.rows.0 {
         let measurement = measure(scene, program.rows.cell(0, row));
-        for channel in 0..8 {
-            rows[channel][row] = u32_word(if channel < 4 {
+        for (channel, values) in rows.iter_mut().enumerate() {
+            values[row] = u32_word(if channel < 4 {
                 measurement.luma
             } else {
                 measurement.population
