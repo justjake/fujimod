@@ -65,6 +65,19 @@ impl Shading {
         let s = ((radius * self.scale) << self.shift).saturating_sub(1 << 21);
         self.gains[((s >> 20) as usize).min(9 * 1024)]
     }
+
+    /// Materialize one gain per source sample. Still rendering reads three
+    /// neighboring positions for every output pixel, so computing this table
+    /// once avoids repeating the same radius and segment lookup.
+    pub fn table(&self, width: usize, height: usize) -> Vec<u16> {
+        let mut gains = Vec::with_capacity(width * height);
+        for y in 0..height {
+            for x in 0..width {
+                gains.push(self.gain(x, y));
+            }
+        }
+        gains
+    }
 }
 
 #[cfg(test)]
@@ -140,6 +153,17 @@ mod tests {
                 }
             }
             assert_eq!(hash, expected);
+        }
+    }
+    #[test]
+    fn materialized_table_preserves_each_source_sample_gain() {
+        let r = registers(2, 2, 486);
+        let s = Shading::from_registers(|o| r[o / 4]).unwrap().unwrap();
+        let table = s.table(37, 23);
+        for y in 0..23 {
+            for x in 0..37 {
+                assert_eq!(table[y * 37 + x], s.gain(x, y));
+            }
         }
     }
     #[test]
