@@ -12562,7 +12562,17 @@
     },
     "cold_start": null,
     "file_api": null,
-    "sd_boot_combination": null,
+    "sd_boot_combination": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "iso_button"
+        },
+        {
+          "id": "movie_recording_button"
+        }
+      ]
+    },
     "firmware_update": null,
     "updater": {
       "public_version": [

@@ -38,6 +38,17 @@
   },
   "analog_levels": null,
   "boot": {
+    "sd": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "iso_button"
+        },
+        {
+          "id": "movie_recording_button"
+        }
+      ]
+    },
     "service": {
       "hold": [
         {
