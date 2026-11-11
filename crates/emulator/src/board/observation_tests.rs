@@ -214,6 +214,27 @@ fn a7_watch_records_both_page_table_aliases_with_the_physical_address() {
 }
 
 #[test]
+fn a7_watch_records_the_executing_stack_pointer() {
+    // A read made on a stack the caller installed carries that stack pointer,
+    // so an audit can tell code running on a private stack from other readers.
+    let mut board = a7_board();
+    let _mmu = Mmu::new(&board, PAGE);
+    let stack = 0x8000_0f00u32;
+    let mut code = vec![movw(13, stack as u16), movt(13, (stack >> 16) as u16)];
+    code.extend(store_at(0x8000_0000, 0x22, 0));
+    code.push(0xeaff_fffe); // b .
+    words(&board, CODE, &code);
+    let mut watch = board
+        .memory_watch_begin(vec![WATCH], 8, board.mappings().to_vec())
+        .unwrap();
+    run(&mut board, code.len() as u64 - 1);
+    let records = records(&watch);
+    assert_eq!(records.len(), 1, "{records:?}");
+    assert_eq!(records[0]["sp"], stack);
+    assert_eq!(board.memory_watch_end(&mut watch), Ok(()));
+}
+
+#[test]
 fn a7_watch_records_a_board_alias_window_with_the_canonical_physical_address() {
     // The XPP maps DRAM at 0 and a second, uncached window at 0x40000000 over
     // the same backing. A page table can put either address on a watched byte.
