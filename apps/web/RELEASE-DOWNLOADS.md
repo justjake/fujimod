@@ -141,7 +141,7 @@ SVG beside this instruction.
   (`sd` combination) and shoot normally until satisfied. 4. Install it: turn
   the camera OFF, remove and reinsert the battery, then power on holding the
   `firmware_update` combination. Release the buttons once the switch is in the
-  ON position. 5. Optional: SET-UP → FUJIMOD DEVTOOLS → BUILD OVERLAY → OFF.
+  ON position. 5. Optional: SET-UP → DEVTOOLS → BUILD OVERLAY → OFF.
 
 Disclaimer, in bold above each download button:
 

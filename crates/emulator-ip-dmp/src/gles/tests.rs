@@ -856,3 +856,70 @@ fn native_source_over_batches_preserve_order_around_masked_draws() {
     }
     let _ = assert_host_gpu_matches_cpu(&words, |_, length| vec![0x60; length]);
 }
+
+/// Stock XPP fragment-state snapshot controls (X-T20 2.11 0xda81f8 and
+/// draw producer 0xd8bf38): exact observed values are accepted and leave
+/// the drawn pixels unchanged; any other value refuses the list.
+#[test]
+fn stock_snapshot_controls_accept_observed_values_only() {
+    let mut words = setup();
+    for (register, value, mask) in [
+        (0x30b, 0x100, 0x3),
+        (0x310, 0xb, 0x1),
+        (0x2b1, 0x79c000, 0xf),
+        (0x2b2, 0x198204, 0x7),
+        (0x2b3, 0x730, 0x7),
+        (0x2b4, 0x12a, 0x3),
+        (0x282, 0x1000100, 0xf),
+        (0x288, 0x1000100, 0xf),
+        (0x292, 0x400040, 0xf),
+        (0x298, 0x400040, 0xf),
+    ] {
+        words.extend([value, mask << 16 | register]);
+    }
+    for position in [
+        [-0.75, -0.75, 0., 1.],
+        [0.75, -0.75, 0., 1.],
+        [0., 0.75, 0., 1.],
+    ] {
+        upload(&mut words, 0x433, &packed(position), true);
+        upload(&mut words, 0x433, &packed([1., 0., 0., 1.]), true);
+    }
+    words.extend([1, 0x1 << 16 | 0x31f]);
+    let mut plain = setup();
+    for (register, value) in [(0x282, 0x1000100), (0x292, 0x400040)] {
+        pair(&mut plain, register, value);
+    }
+    for position in [
+        [-0.75, -0.75, 0., 1.],
+        [0.75, -0.75, 0., 1.],
+        [0., 0.75, 0., 1.],
+    ] {
+        upload(&mut plain, 0x433, &packed(position), true);
+        upload(&mut plain, 0x433, &packed([1., 0., 0., 1.]), true);
+    }
+    let read = &mut |_: u64, n: usize| Ok(vec![0; n]);
+    let expected = Engine::default().execute_cpu(&plain, read).unwrap();
+    assert_eq!(
+        Engine::default().execute_cpu(&words, read).unwrap(),
+        expected
+    );
+    for (register, value, mask) in [
+        (0x30b, 0x101, 0x3),
+        (0x310, 0xc, 0x1),
+        (0x31f, 0, 0x1),
+        (0x288, 0x1000100, 0xf),
+        (0x298, 0x400040, 0xf),
+    ] {
+        let mut engine = Engine::default();
+        let before = serde_json::to_value(&engine).unwrap();
+        let mut refused = setup();
+        refused.extend([value, mask << 16 | register]);
+        let error = engine.execute_cpu(&refused, read).unwrap_err();
+        assert!(
+            error.contains(&format!("{register:#x}={value:#x}")),
+            "{error}"
+        );
+        assert_eq!(serde_json::to_value(&engine).unwrap(), before);
+    }
+}

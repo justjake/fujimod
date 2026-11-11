@@ -69,9 +69,10 @@ to convert. Both mode changes are made on the camera.
 
 Each job's settings are layered over `base`. Field names and values are listed
 in `src/profile.rs` (`Settings`). Values are the camera's menu steps; for
-example, `clarity: 3` is CLARITY +3. The tool rejects unknown fields,
-out-of-range values, missing films and repeated or non-file-name ids before
-it connects to a camera.
+example, `clarity: 3` is CLARITY +3. `color_space` is `SRGB` or `ADOBE_RGB`;
+`highlight` and `shadow` accept half steps such as `-1.5`. The tool rejects
+unknown fields, out-of-range values, missing films and repeated or non-file-name
+ids before it connects to a camera.
 
 The camera fills the profile from the uploaded RAF. A job overwrites only the
 words its settings produce. Every other word stays as the camera reported it.
