@@ -5,8 +5,9 @@
 //! output is high while off/starting and low after startup. With a declared
 //! busy duration it returns high that long after startup; without one it
 //! remains low. With a declared operation duration, each operation the link
-//! starts pulls a released ready output low for that long. Motion and
-//! additional connector signals are unmodeled.
+//! starts pulls a released ready output low for that long. A frame in flight
+//! when power or reset drops receives the undriven line, declared high. Motion
+//! and additional connector signals are unmodeled.
 use fujimod_emulator_parts_io::serial::{Frame, Wire};
 use super::x_mount_link::{Configuration, Link};
 use serde::{Deserialize, Serialize};
@@ -24,6 +25,10 @@ impl Pins {
         self.supplies == [Some(true); 2] && self.reset_released == Some(true)
     }
 }
+/// The byte a frame receives when the lens loses power or reset during it: the undriven receive line, declared high
+/// (not measured).
+const UNDRIVEN_BYTE: u16 = 0xff;
+
 /// Declared durations; none is measured lens timing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -294,7 +299,8 @@ impl Wire for Port {
         let candidate: SavedPower = saved.decode("powered-x-mount-lens")?;
         let unit = self.0.lock().unwrap();
         if !candidate.state.phase.serving() || token >> 32 != candidate.state.epoch as u64 {
-            return Err("X-mount lens lost power/reset during a serial frame".into());
+            // A frame cut off by power loss completes with the undriven level; the link holds nothing for it.
+            return Ok(());
         }
         unit.link
             .validate_pending(&saved.children()[0], token & u32::MAX as u64, frame)
@@ -314,7 +320,9 @@ impl Wire for Port {
     fn finish(&mut self, token: u64, frame: Frame, now: u64) -> Result<u16, String> {
         let mut unit = self.0.lock().unwrap();
         if !unit.state.phase.serving() || token >> 32 != unit.state.epoch as u64 {
-            return Err("X-mount lens lost power/reset during a serial frame".into());
+            // The camera cut power or held reset while the byte shifted: the controller still clocks it
+            // and receives the undriven line, declared high. The reset already cleared the link.
+            return Ok(UNDRIVEN_BYTE);
         }
         let operations = unit.link.operations();
         let value = unit.link.finish(token & u32::MAX as u64, frame, now)?;
