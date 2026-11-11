@@ -211,7 +211,7 @@ impl StillProcessor {
                     |x, y| {
                         shading_gains
                             .as_ref()
-                            .map_or(2048, |gains| gains[y * src.width + x])
+                            .map_or(2048, |gains| unsafe { gains.at(x, y) })
                     },
                     crop,
                     dst.width,
