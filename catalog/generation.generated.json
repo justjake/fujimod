@@ -6698,13 +6698,8 @@
           ]
         },
         "restart": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "restart",
-              "reason": "RestartCatalogError: No console callback transport facts for this firmware"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "service": {
           "status": "unavailable",
