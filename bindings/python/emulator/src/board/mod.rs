@@ -449,6 +449,17 @@ impl Board {
 
     #[pyo3(signature=(previous=None))]
     fn checkpoint(&self, previous: Option<PyRef<'_, Checkpoint>>) -> PyResult<Checkpoint> {
+        if let Some(Backend::Xp4(session)) = self.backend.as_ref() {
+            // The XP4 session keeps its own watches and refuses an active one itself.
+            let saved = session.checkpoint()?;
+            return Ok(Checkpoint {
+                saved: None,
+                bytes: None,
+                ticks: saved.ticks,
+                instruction_counts: saved.instructions.clone(),
+                xp4: Some(saved),
+            });
+        }
         if self.driver.is_some()
             || self.memory_watch.is_some()
             || self.function_watch.is_some()
@@ -470,9 +481,21 @@ impl Board {
             bytes: None,
             ticks,
             instruction_counts,
+            xp4: None,
         })
     }
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> PyResult<()> {
+        if let Some(Backend::Xp4(session)) = self.backend.as_ref() {
+            let xp4 = saved.xp4.as_ref().ok_or_else(|| {
+                PyValueError::new_err("checkpoint was not taken from an XP4 board")
+            })?;
+            return session.restore_checkpoint(xp4);
+        }
+        if saved.xp4.is_some() {
+            return Err(PyValueError::new_err(
+                "an XP4 checkpoint cannot restore a graph board",
+            ));
+        }
         if self.driver.is_some()
             || self.memory_watch.is_some()
             || self.function_watch.is_some()

@@ -10,10 +10,31 @@ use fujimod_emulator_xp4_storage::storage::{self, DmaController, SerialFlashCont
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
+mod checkpoint;
+pub use checkpoint::DevicesCheckpoint;
+
 struct Connected<T>(Arc<Mutex<T>>);
 impl<T: Device> Device for Connected<T> {
     fn name(&self) -> &'static str {
         self.0.lock().unwrap().name()
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        self.0.lock().unwrap().checkpoint()
+    }
+    fn validate_checkpoint(
+        &self,
+        state: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.0.lock().unwrap().validate_checkpoint(state)
+    }
+    fn restore_checkpoint(
+        &mut self,
+        state: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.0.lock().unwrap().restore_checkpoint(state)
+    }
+    fn has_host_request(&self) -> bool {
+        self.0.lock().unwrap().has_host_request()
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         self.0.lock().unwrap().read(cx, address, size)

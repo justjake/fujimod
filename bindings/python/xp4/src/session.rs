@@ -72,6 +72,35 @@ impl Xp4Session {
         *self.handler.borrow_mut() = callback;
         Ok(())
     }
+    pub fn checkpoint(&self) -> PyResult<fujimod_python_base::xp4_backend::Xp4Checkpoint> {
+        let saved = self
+            .inner
+            .checkpoint()
+            .map_err(fujimod_python_base::error)?;
+        Ok(fujimod_python_base::xp4_backend::Xp4Checkpoint {
+            ticks: saved.ticks(),
+            instructions: saved.per_core().to_vec(),
+            exact: saved.exact(),
+            observational_devices: saved
+                .observational_devices()
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            state: Box::new(saved),
+        })
+    }
+    pub fn restore_checkpoint(
+        &self,
+        saved: &fujimod_python_base::xp4_backend::Xp4Checkpoint,
+    ) -> PyResult<()> {
+        let saved = saved
+            .state
+            .downcast_ref::<fujimod_emulator_xp4_board::checkpoint::Checkpoint>()
+            .ok_or_else(|| {
+                fujimod_python_base::error("checkpoint belongs to a different backend".into())
+            })?;
+        self.inner.restore(saved).map_err(fujimod_python_base::error)
+    }
     pub fn ram_bytes(&self) -> usize {
         self.inner.ram_bytes()
     }
@@ -237,6 +266,15 @@ impl Xp4Session {
 }
 
 impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
+    fn checkpoint(&self) -> PyResult<fujimod_python_base::xp4_backend::Xp4Checkpoint> {
+        Xp4Session::checkpoint(self)
+    }
+    fn restore_checkpoint(
+        &self,
+        saved: &fujimod_python_base::xp4_backend::Xp4Checkpoint,
+    ) -> PyResult<()> {
+        Xp4Session::restore_checkpoint(self, saved)
+    }
     fn run_board(&self, limit: u64, quantum: usize) -> PyResult<()> {
         Xp4Session::run_board(self, limit, quantum)
     }

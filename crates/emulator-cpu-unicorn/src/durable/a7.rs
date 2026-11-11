@@ -119,6 +119,56 @@ impl State {
             thread: both(cpu, THREAD_PRIVILEGED)?,
         })
     }
+    /// Capture from the live, stopped engine instead of a detached context.
+    /// An attached translation owner cannot save a native context, so the
+    /// banks are read by switching the processor mode of the live core and
+    /// the exact CPSR is written back afterwards.
+    pub(super) fn capture_live(cpu: &Core) -> Result<Self, String> {
+        fn get32(cpu: &Core, register: Register) -> Result<u32, String> {
+            let mut out = [0; 4];
+            if cpu.read_register(register, &mut out)? != 4 {
+                return Err("CPU snapshot register width differs".into());
+            }
+            Ok(u32::from_le_bytes(out))
+        }
+        let cpsr = get32(cpu, arm::CPSR)?;
+        let registers = array(arm::CORE.map(|r| get32(cpu, r)))?;
+        let scalar = array(SCALARS.map(|r| get32(cpu, r)))?;
+        let vectors = array((0..16).map(|i| {
+            let mut out = [0; 16];
+            if cpu.read_register(Register::Arm32(arm::Register::Q(i)), &mut out)? != 16 {
+                return Err("CPU snapshot register width differs".into());
+            }
+            Ok(out)
+        }))?;
+        let banks = (|| {
+            array(MODES.map(|mode| {
+                put(cpu, arm::CPSR, cpsr & !31 | mode)?;
+                Ok(Bank {
+                    registers: array((8..15).map(|i| get32(cpu, arm::CORE[i])))?,
+                    spsr: if matches!(mode, 0x10 | 0x1f) {
+                        None
+                    } else {
+                        Some(get32(cpu, arm::SPSR)?)
+                    },
+                })
+            }))
+        })();
+        let restored = put(cpu, arm::CPSR, cpsr);
+        let banks = banks?;
+        restored?;
+        Ok(Self {
+            identity: identity(cpu)?,
+            cpsr,
+            registers,
+            scalar,
+            vectors,
+            banks,
+            cp15: array(CP15.map(|selector| both(cpu, selector)))?,
+            late: array(LATE.map(|selector| both(cpu, selector)))?,
+            thread: both(cpu, THREAD_PRIVILEGED)?,
+        })
+    }
     pub(super) fn validate(&self, cpu: &Core) -> Result<(), String> {
         if self.identity != identity(cpu)? {
             return Err("CPU snapshot architectural identity differs".into());

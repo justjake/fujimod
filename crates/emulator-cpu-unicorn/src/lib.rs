@@ -350,6 +350,42 @@ fn range(range: HookRange) -> (u64, u64) {
     }
 }
 impl Core {
+    /// Capture the engine context. The caller has already decided that an
+    /// attached translation owner may be captured.
+    pub(crate) fn snapshot_context(
+        &self,
+        _previous: Option<&dyn Snapshot>,
+    ) -> Result<Box<dyn Snapshot>, String> {
+        let mut raw = std::ptr::null_mut();
+        self.check(unsafe { (self.api.uc_context_alloc)(self.raw, &mut raw) })?;
+        let mut context = Context {
+            api: self.api.clone(),
+            raw,
+            owner: self.identity,
+            durable: Err("processor architecture has not been captured".into()),
+        };
+        self.check(unsafe { (self.api.uc_context_save)(self.raw, raw) })?;
+        context.durable = durable::capture(self, &context);
+        Ok(Box::new(context))
+    }
+    /// Restore the engine context. The caller has already decided that an
+    /// attached translation owner may be restored.
+    pub(crate) fn restore_context(&self, snapshot: &dyn Snapshot) -> Result<(), String> {
+        if frozen::any(self.identity) {
+            return Err("CPU restore with frozen backing requires owner validation".into());
+        }
+        if snapshot.owner() != self.identity {
+            return Err("CPU snapshot belongs to a different processor".into());
+        }
+        if let Some(imported) = snapshot.as_any().downcast_ref::<durable::Imported>() {
+            return imported.restore(self);
+        }
+        let context = snapshot
+            .as_any()
+            .downcast_ref::<Context>()
+            .ok_or("CPU snapshot belongs to a different backend")?;
+        self.check(unsafe { (self.api.uc_context_restore)(self.raw, context.raw) })
+    }
     fn check(&self, status: i32) -> Result<(), String> {
         check(&self.api, status)
     }
@@ -968,21 +1004,11 @@ impl Cpu for Core {
         }
         self.stop()
     }
-    fn snapshot(&self, _previous: Option<&dyn Snapshot>) -> Result<Box<dyn Snapshot>, String> {
+    fn snapshot(&self, previous: Option<&dyn Snapshot>) -> Result<Box<dyn Snapshot>, String> {
         if self.tlbi_owner.get().is_some() {
             return Err("Attached Cortex-A7 snapshots require whole-owner coordination".into());
         }
-        let mut raw = std::ptr::null_mut();
-        self.check(unsafe { (self.api.uc_context_alloc)(self.raw, &mut raw) })?;
-        let mut context = Context {
-            api: self.api.clone(),
-            raw,
-            owner: self.identity,
-            durable: Err("processor architecture has not been captured".into()),
-        };
-        self.check(unsafe { (self.api.uc_context_save)(self.raw, raw) })?;
-        context.durable = durable::capture(self, &context);
-        Ok(Box::new(context))
+        self.snapshot_context(previous)
     }
     fn restore(&self, snapshot: &dyn Snapshot) -> Result<(), String> {
         if frozen::any(self.identity) {
@@ -991,17 +1017,7 @@ impl Cpu for Core {
         if self.tlbi_owner.get().is_some() {
             return Err("Attached Cortex-A7 restore requires whole-owner coordination".into());
         }
-        if snapshot.owner() != self.identity {
-            return Err("CPU snapshot belongs to a different processor".into());
-        }
-        if let Some(imported) = snapshot.as_any().downcast_ref::<durable::Imported>() {
-            return imported.restore(self);
-        }
-        let context = snapshot
-            .as_any()
-            .downcast_ref::<Context>()
-            .ok_or("CPU snapshot belongs to a different backend")?;
-        self.check(unsafe { (self.api.uc_context_restore)(self.raw, context.raw) })
+        self.restore_context(snapshot)
     }
     fn import_snapshot(&self, bytes: &[u8]) -> Result<Box<dyn Snapshot>, String> {
         durable::import(self, bytes)

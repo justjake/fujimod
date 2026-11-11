@@ -145,7 +145,7 @@ impl Board {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Discovery {
     pub enabled: bool,
     next: u64,
@@ -158,7 +158,7 @@ pub struct Discovery {
     pub interventions: Vec<Intervention>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct Poll {
     value: u64,
     last: u64,

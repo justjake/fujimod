@@ -7,6 +7,8 @@ pub struct Checkpoint {
     pub(super) bytes: Option<Vec<u8>>,
     pub(super) ticks: u64,
     pub(super) instruction_counts: Vec<u64>,
+    /// An XP4 session's in-memory checkpoint: restorable only into the board that made it.
+    pub(super) xp4: Option<xp4_backend::Xp4Checkpoint>,
 }
 #[pymethods]
 impl Checkpoint {
@@ -18,7 +20,25 @@ impl Checkpoint {
     fn instruction_counts(&self) -> Vec<u64> {
         self.instruction_counts.clone()
     }
+    /// False when any device was captured through its observational JSON (interim, XP4 only).
+    #[getter]
+    fn exact(&self) -> bool {
+        self.xp4.as_ref().is_none_or(|saved| saved.exact)
+    }
+    /// Names of the devices captured through the observational JSON (interim, XP4 only).
+    #[getter]
+    fn observational_devices(&self) -> Vec<String> {
+        self.xp4
+            .as_ref()
+            .map(|saved| saved.observational_devices.clone())
+            .unwrap_or_default()
+    }
     fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        if self.xp4.is_some() {
+            return Err(PyValueError::new_err(
+                "an XP4 checkpoint lives in memory and has no byte form",
+            ));
+        }
         if let Some(bytes) = &self.bytes {
             return Ok(PyBytes::new(py, bytes));
         }
@@ -40,6 +60,7 @@ impl Checkpoint {
             bytes: Some(bytes),
             ticks,
             instruction_counts,
+            xp4: None,
         })
     }
 }
