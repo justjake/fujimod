@@ -9,7 +9,8 @@
 //! 0x548 the paint color (RGBA, red in bits 31:24); 0x604 = 0x140 selects image paint through the surface-to-image
 //! matrix 0x550..0x558; 0x410 segment ops (1 move, 2 line, 3 horizontal, 4 vertical, 5 quadratic, 6 cubic, 0 close,
 //! 0xf draw, 0xe integer rectangle from 0x412/0x413) with coordinates in 0x414..0x419. Surfaces have their origin at
-//! the bottom-left. Pixels are 32-bit, bytes B, G, R, A in memory. Fill is non-zero, blending is source-over.
+//! the bottom-left. Pixels are 32-bit, bytes B, G, R, A in memory. Fill is non-zero. With 0x400 bit 7 set the paint
+//! is blended source-over; otherwise it replaces the destination pixels, alpha included.
 //! Blend modes (0x600), paint control words other than image paint, stroking, scissor lists and antialiasing are
 //! not modeled.
 use crate::Cx;
@@ -17,6 +18,9 @@ use serde::{Deserialize, Serialize};
 
 const REGISTERS: usize = 0x1000;
 const CURVE_STEPS: usize = 12;
+/// 0x400 bit 7: source-over blending. Without it the paint replaces the destination, alpha included, which is how
+/// the firmware clears OSD areas (fills with paint 0x00000000).
+const BLEND: u32 = 0x80;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct Renderer {
@@ -252,7 +256,8 @@ impl Renderer {
         let m: Vec<f32> = (0..9).map(|k| f(self.reg(0x550 + k))).collect();
         let color = self.reg(0x548);
         let flat = [(color >> 8) as u8, (color >> 16) as u8, (color >> 24) as u8, color as u8];
-        if !image && flat[3] == 0 {
+        let blend = self.reg(0x400) & BLEND != 0;
+        if blend && !image && flat[3] == 0 {
             return Ok(());
         }
         let mut src_row = vec![0u8; if image { src.stride as usize } else { 0 }];
@@ -282,6 +287,10 @@ impl Renderer {
                 } else {
                     flat
                 };
+                if !blend {
+                    *out = s;
+                    continue;
+                }
                 let a = u32::from(s[3]);
                 if a == 0 {
                     continue;
@@ -302,5 +311,55 @@ impl Renderer {
             self.draws += 1;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_host::TestHost;
+
+    const SURFACE: usize = 0x2000;
+
+    fn rectangle(renderer: &mut Renderer, host: &mut TestHost, control: u32, color: u32) {
+        let words = [
+            0x0400_0000,
+            control,
+            0x0548_0000,
+            color,
+            0x0412_0001,
+            0,
+            4 | 4 << 16,
+            0x0410_0000,
+            0xe,
+            0xf000_0000,
+        ];
+        let mut cx = host.cx();
+        renderer.execute(&mut cx, &words).unwrap();
+    }
+
+    #[test]
+    fn paint_blends_with_control_bit_7_and_replaces_without_it() {
+        let mut renderer = Renderer::default();
+        renderer
+            .seed(&[(0x200, SURFACE as u32), (0x204, 16), (0x205, 3 | 3 << 16)])
+            .unwrap();
+        let mut host = TestHost::new();
+        host.ram[SURFACE..SURFACE + 64].fill(0xff);
+        // Transparent paint with blending changes nothing.
+        rectangle(&mut renderer, &mut host, BLEND, 0);
+        assert!(host.ram[SURFACE..SURFACE + 64].iter().all(|b| *b == 0xff));
+        // Without blending it clears the area to transparent, as the firmware clears OSD regions.
+        rectangle(&mut renderer, &mut host, 0, 0);
+        assert!(host.ram[SURFACE..SURFACE + 64].iter().all(|b| *b == 0));
+        // A translucent paint is stored as is, alpha included (bytes B, G, R, A).
+        rectangle(&mut renderer, &mut host, 0, 0x1122_3380);
+        assert_eq!(&host.ram[SURFACE..SURFACE + 4], &[0x33, 0x22, 0x11, 0x80]);
+        // Blended over it, an opaque paint covers it.
+        rectangle(&mut renderer, &mut host, BLEND, 0x4455_66ff);
+        assert_eq!(
+            &host.ram[SURFACE + 60..SURFACE + 64],
+            &[0x66, 0x55, 0x44, 0xff]
+        );
     }
 }

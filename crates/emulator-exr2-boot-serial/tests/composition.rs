@@ -16,6 +16,7 @@ fn composed_serial_devices_complete_a_byte_through_the_shared_coordinator() {
                 pin: Pin { port: 0, pin: 0 },
                 high: false,
             }],
+            high_port_input_levels: None,
         },
         gpio::Wiring { irqs: vec![] },
     )
