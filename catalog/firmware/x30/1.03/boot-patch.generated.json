@@ -198,8 +198,8 @@
     "size": 4096
   },
   "resident_space": {
-    "address": 504365056,
-    "size": 3276800
+    "address": 271458304,
+    "size": 4194304
   },
   "stage3_resident": [
     "boot"
