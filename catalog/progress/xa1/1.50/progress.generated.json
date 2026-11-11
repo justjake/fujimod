@@ -8,7 +8,7 @@
     "located": 30,
     "total": 34
   },
-  "boot_rom": null,
+  "boot_rom": "X70",
   "tracks": [
     {
       "id": "static",
@@ -42,12 +42,12 @@
         {
           "id": "flash-reader",
           "title": "Flash reader located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "state-regions",
           "title": "State-dump regions located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "restart-facts",
@@ -103,7 +103,7 @@
         {
           "id": "sd-boot-v2-patch-triggers-fire-in-emulator",
           "title": "SD boot v2: patch triggers fire in the emulator",
-          "result": "not-run"
+          "result": "stale"
         },
         {
           "id": "menu",
@@ -215,12 +215,12 @@
         {
           "id": "mod-target",
           "title": "Mod target generated from facts",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "mod-build",
           "title": "Every shipped mod built",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "walkthroughs",
@@ -230,7 +230,7 @@
         {
           "id": "sd-boot-v1-fujimod-built",
           "title": "SD boot v1: FujiMod SD image built",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "firmware-update-fujimod-built",
@@ -322,7 +322,6 @@
     }
   },
   "mods": {
-    "af": "not-run",
     "fujimod": "not-run",
     "aspect-ratio": "not-run",
     "raw-teleconverter": "not-run",
@@ -334,8 +333,17 @@
     "framing-guideline": "not-run",
     "film-sims": "not-run",
     "card-films": "not-run",
+    "multipass-curves": "not-run",
     "film-editor": "not-run",
     "film-grain": "not-run",
+    "color-chrome": "not-run",
+    "halation": "not-run",
+    "light-leaks": "not-run",
+    "film-borders": "not-run",
+    "clarity": "not-run",
+    "tone-curve": "not-run",
+    "tone-steps": "not-run",
+    "d-range-priority": "not-run",
     "highlight-meter": "not-run",
     "raw-view": "not-run",
     "f-log": "not-run",
@@ -346,15 +354,30 @@
     "overlay-opacity": "not-run",
     "menu-animations": "not-run",
     "menu-tap": "not-run",
-    "glgui": "not-run",
+    "focalized-ui": "not-run",
     "recipes": "not-run",
     "snap-focus": "not-run",
+    "recipe-exif": "not-run",
+    "hide-films": "not-run",
+    "disposable": "not-run",
+    "date-stamp": "not-run",
+    "zone-focus": "not-run",
+    "digital-focal-length": "not-run",
+    "hud-layout": "not-run",
+    "menu-order": "not-run",
+    "pixel-map": "not-run",
     "usb-debug": "not-run",
     "af-scene-capture": "not-run",
     "bug-report": "not-run",
     "sd-volume-name": "not-run",
     "date-folders": "not-run",
     "software-nd": "not-run",
-    "ota-runtime": "not-run"
+    "sd-boot-v2-runtime": "not-run",
+    "sd-boot-v2-stage1-internal-flash-install": "not-run",
+    "ota-update": "not-run",
+    "internal-data-backup": "not-run",
+    "startup-shutdown-screen": "not-run",
+    "hardware-divide": "not-run",
+    "live-view-speedups": "not-run"
   }
 }
