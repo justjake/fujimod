@@ -330,7 +330,7 @@ export default function BugReport(props: {
                         <details>
                           <summary>After restarting the camera</summary>
                           <p>
-                            Open the issue QR screen again, or enable SET UP → FUJIMOD DEVTOOLS →
+                            Open the issue QR screen again, or enable SET UP → DEVTOOLS →
                             USB DEBUGGING, then reconnect USB.
                           </p>
                         </details>
