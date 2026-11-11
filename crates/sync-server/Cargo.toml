@@ -1,0 +1,19 @@
+[package]
+name = "fujimod-sync-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "Photo sync receiver engine and destination trait"
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-sync-protocol.workspace = true
+crc32fast = "1.5"
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"

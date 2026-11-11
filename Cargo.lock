@@ -3061,6 +3061,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-sync-server"
+version = "0.1.0"
+dependencies = [
+ "crc32fast",
+ "fujimod-sync-protocol",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "fujimod-unicorn-sys"
 version = "0.1.0"
 dependencies = [
