@@ -280,5 +280,6 @@ mod tests {
 }
 
 pub mod host;
+pub mod latency;
 pub mod registers;
 pub mod uhs2;
