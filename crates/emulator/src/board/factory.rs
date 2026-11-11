@@ -232,7 +232,7 @@ impl Engines {
                 memory.clone(),
             )?));
         }
-        if let Some(config) = processor.rprofile {
+        if let Some(config) = processor.rprofile.clone() {
             Ok(Box::new(
                 fujimod_emulator_cpu_unicorn::rprofile::core::Core::new(
                     raw,

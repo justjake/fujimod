@@ -6,6 +6,7 @@ use std::cell::Cell;
 
 pub mod abort;
 pub mod core;
+pub mod data_cache;
 pub mod tcm;
 #[cfg(not(target_os = "emscripten"))]
 pub mod worker;

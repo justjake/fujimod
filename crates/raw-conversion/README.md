@@ -72,9 +72,10 @@ to convert. Both mode changes are made on the camera.
 
 Each job's settings are layered over `base`. Field names and values are listed
 in `src/profile.rs` (`Settings`). Values are the camera's menu steps; for
-example, `clarity: 3` is CLARITY +3. The tool rejects unknown fields,
-out-of-range values, missing films and repeated or non-file-name ids before
-it connects to a camera.
+example, `clarity: 3` is CLARITY +3. `color_space` is `SRGB` or `ADOBE_RGB`;
+`highlight` and `shadow` accept half steps such as `-1.5`. The tool rejects
+unknown fields, out-of-range values, missing films and repeated or non-file-name
+ids before it connects to a camera.
 
 The camera fills the profile from the uploaded RAF. A job overwrites only the
 words its settings produce. Every other word stays as the camera reported it.
@@ -130,10 +131,10 @@ Not yet confirmed on a camera:
 
 - libfuji marks film codes 18 ETERNA BLEACH BYPASS, 19 NOSTALGIC Neg. and
   20 REALA ACE as guesses. Check the output's MakerNote film mode, `0x1401`.
-- Adobe RGB: libfuji lists 2 and 3, both marked unsure, so the settings
-  name them `ADOBE_RGB_CODE2` and `ADOBE_RGB_CODE3`. The manifest's Exif
-  ColorSpace (`0xa001`) shows which one the camera honored; a code it
-  refuses is recorded as `unsupported` without converting.
+- Adobe RGB: libfuji lists 3 ("AdobeRGB", `ADOBE_RGB`) and 2 ("Adobe sRGB",
+  `ADOBE_RGB_CODE2`), both marked unsure. The manifest's Exif ColorSpace
+  (`0xa001`) shows which one the camera honored. A code it refuses is
+  recorded as `unsupported` without converting.
 - MONOCHROMATIC COLOR uses step × 10, like the other ±steps. libfuji's tables
   allow ±18 steps; menus show ±9.
 - libfuji comments that `0xD183` = 1 gives full-resolution JPEGs, but it

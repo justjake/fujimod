@@ -164,11 +164,12 @@ pub struct Settings {
     pub white_balance_shift_red: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub white_balance_shift_blue: Option<i32>,
+    /// Camera menu steps; half steps are allowed where the body offers them.
     #[serde(skip_serializing_if = "Option::is_none")]
-    /// Whole steps, or half steps on bodies that offer them.
-    pub highlight: Option<f32>,
+    pub highlight: Option<f64>,
+    /// Camera menu steps; half steps are allowed where the body offers them.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub shadow: Option<f32>,
+    pub shadow: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -204,11 +205,11 @@ pub enum ImageQuality {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ColorSpace {
     Srgb,
-    /// Adobe RGB is unconfirmed: libfuji lists 2 ("Adobe sRGB") and 3
-    /// ("AdobeRGB"), both marked unsure. Exif ColorSpace (0xA001) in the
-    /// manifest shows which one the camera honors.
+    /// libfuji's "AdobeRGB" code, 3. Unconfirmed, as is code 2 ("Adobe
+    /// sRGB"), which `AdobeRgbCode2` requests; Exif ColorSpace (0xA001) in
+    /// the manifest shows which one the camera honors.
+    AdobeRgb,
     AdobeRgbCode2,
-    AdobeRgbCode3,
 }
 
 impl Settings {
@@ -359,18 +360,11 @@ impl Settings {
                 tenths(v, -9, 9, "white balance shift blue")?,
             ));
         }
-        let halves = |v: f32, name: &str| {
-            if (v * 2.0).fract() == 0.0 && (-2.0..=4.0).contains(&v) {
-                Ok((v * 10.0) as i32 as u32)
-            } else {
-                Err(format!("{name} {v} is not a half step in -2..=4"))
-            }
-        };
         if let Some(v) = self.highlight {
-            out.push((Field::Highlight, halves(v, "highlight")?));
+            out.push((Field::Highlight, tenths_f(v, -2.0, 4.0, "highlight")?));
         }
         if let Some(v) = self.shadow {
-            out.push((Field::Shadow, halves(v, "shadow")?));
+            out.push((Field::Shadow, tenths_f(v, -2.0, 4.0, "shadow")?));
         }
         if let Some(v) = self.color {
             out.push((Field::Color, tenths(v, -4, 4, "color")?));
@@ -402,8 +396,8 @@ impl Settings {
                 Field::ColorSpace,
                 match v {
                     ColorSpace::Srgb => 1,
+                    ColorSpace::AdobeRgb => 3,
                     ColorSpace::AdobeRgbCode2 => 2,
-                    ColorSpace::AdobeRgbCode3 => 3,
                 },
             ));
         }
@@ -441,6 +435,19 @@ fn strength(v: Strength) -> u32 {
         Strength::Strong => 3,
     }
 }
+
+/// Tone steps use tenths of a step and accept the half steps the camera offers.
+fn tenths_f(v: f64, lo: f64, hi: f64, name: &str) -> Result<u32, String> {
+    if !v.is_finite() || v < lo || v > hi {
+        return Err(format!("{name} {v} is outside {lo}..={hi}"));
+    }
+    let tenths = (v * 10.0).round();
+    if (v * 10.0 - tenths).abs() > 1e-6 {
+        return Err(format!("{name} {v} is not a half step"));
+    }
+    Ok((tenths as i32) as u32)
+}
+
 fn on_off(v: OnOff) -> u32 {
     match v {
         OnOff::On => 1,
@@ -536,6 +543,23 @@ mod tests {
         );
         assert_eq!(get(Field::ColorSpace), 1);
         assert_eq!(get(Field::FileType), 7);
+    }
+
+    #[test]
+    fn adobe_rgb_and_half_step_tones() {
+        let s: Settings = serde_json::from_str(
+            r#"{"film":"PROVIA","highlight":-1.5,"shadow":0.5,"color_space":"ADOBE_RGB"}"#,
+        )
+        .unwrap();
+        let w = s.words().unwrap();
+        let get = |f| w.iter().find(|(x, _)| *x == f).unwrap().1;
+        assert_eq!(get(Field::Highlight), (-15i32) as u32);
+        assert_eq!(get(Field::Shadow), 5);
+        assert_eq!(get(Field::ColorSpace), 3);
+
+        let quarter: Settings =
+            serde_json::from_str(r#"{"film":"PROVIA","highlight":0.25}"#).unwrap();
+        assert!(quarter.words().is_err());
     }
 
     #[test]

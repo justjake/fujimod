@@ -1,22 +1,32 @@
 //! Self-contained, sparse page images. The decoder checks the constructor's
 //! extent before allocating; no live backing or previous keyframe is needed.
-use super::{Image, PAGE_BYTES, zero};
+use super::{Image, PAGE_BYTES, uniform, uniform_byte};
 use std::sync::Arc;
 
-const MAGIC: &[u8; 8] = b"FJMPAGE1";
-const HEADER: usize = 24;
+const MAGIC: &[u8; 8] = b"FJMPAGE2";
+const HEADER: usize = 32;
 
 impl Image {
-    /// Encode immutable pages, omitting zero pages. The final page contains
-    /// only the bytes inside the backing's extent.
+    fn page_bytes(&self, index: usize) -> &[u8] {
+        &self.pages[index][..PAGE_BYTES.min(self.len - index * PAGE_BYTES)]
+    }
+    /// Encode immutable pages, omitting every page filled with the image's
+    /// most common uniform byte (the power-on fill of untouched RAM). The
+    /// final page contains only the bytes inside the backing's extent.
     pub fn to_bytes(&self) -> Result<Vec<u8>, String> {
-        let nonzero = self
-            .pages
-            .iter()
-            .enumerate()
-            .filter(|(_, page)| !Arc::ptr_eq(page, zero()) && page.iter().any(|&byte| byte != 0))
+        let mut counts = [0usize; 256];
+        for index in 0..self.pages.len() {
+            if let Some(byte) = uniform_byte(self.page_bytes(index)) {
+                counts[byte as usize] += 1;
+            }
+        }
+        // Ties keep the lowest byte, so an all-zero image omits zero pages.
+        let blank = (0..=255u8).rev().max_by_key(|&byte| counts[byte as usize]).unwrap();
+        let stored = (0..self.pages.len())
+            .filter(|&index| uniform_byte(self.page_bytes(index)) != Some(blank))
+            .map(|index| (index, &self.pages[index]))
             .collect::<Vec<_>>();
-        let size = nonzero.iter().try_fold(HEADER, |size, (index, _)| {
+        let size = stored.iter().try_fold(HEADER, |size, (index, _)| {
             size.checked_add(8 + PAGE_BYTES.min(self.len - index * PAGE_BYTES))
                 .ok_or("snapshot page image size overflow")
         })?;
@@ -26,8 +36,9 @@ impl Image {
             .map_err(|_| "cannot allocate snapshot page image")?;
         bytes.extend_from_slice(MAGIC);
         bytes.extend_from_slice(&(self.len as u64).to_le_bytes());
-        bytes.extend_from_slice(&(nonzero.len() as u64).to_le_bytes());
-        for (index, page) in nonzero {
+        bytes.extend_from_slice(&(stored.len() as u64).to_le_bytes());
+        bytes.extend_from_slice(&(blank as u64).to_le_bytes());
+        for (index, page) in stored {
             bytes.extend_from_slice(&(index as u64).to_le_bytes());
             bytes.extend_from_slice(&page[..PAGE_BYTES.min(self.len - index * PAGE_BYTES)]);
         }
@@ -53,6 +64,7 @@ impl Image {
             return Err("snapshot page image extent differs".into());
         }
         let count = usize::try_from(word(16)?).map_err(|_| "snapshot page count exceeds target")?;
+        let blank = u8::try_from(word(24)?).map_err(|_| "snapshot blank page byte is not a byte")?;
         let page_count = expected_len.div_ceil(PAGE_BYTES);
         if count > page_count {
             return Err("snapshot page count exceeds extent".into());
@@ -77,8 +89,8 @@ impl Image {
                             .ok_or("snapshot page image size overflow")?,
                 )
                 .ok_or("truncated snapshot page image")?;
-            if page.iter().all(|&byte| byte == 0) {
-                return Err("snapshot page image stores a zero page".into());
+            if uniform_byte(page) == Some(blank) {
+                return Err("snapshot page image stores a blank page".into());
             }
             cursor += size;
             previous = Some(index);
@@ -90,15 +102,21 @@ impl Image {
         pages
             .try_reserve_exact(page_count)
             .map_err(|_| "cannot allocate snapshot page directory")?;
-        pages.resize(page_count, zero().clone());
+        pages.resize(page_count, uniform(blank).clone());
         cursor = HEADER;
         for _ in 0..count {
             let index = word(cursor)? as usize;
             cursor += 8;
             let size = PAGE_BYTES.min(expected_len - index * PAGE_BYTES);
-            let mut page = [0; PAGE_BYTES];
-            page[..size].copy_from_slice(&bytes[cursor..cursor + size]);
-            pages[index] = Arc::new(page);
+            let data = &bytes[cursor..cursor + size];
+            pages[index] = match uniform_byte(data) {
+                Some(byte) => uniform(byte).clone(),
+                None => {
+                    let mut page = [0; PAGE_BYTES];
+                    page[..size].copy_from_slice(data);
+                    Arc::new(page)
+                }
+            };
             cursor += size;
         }
         Ok(Self {
@@ -137,6 +155,23 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn power_on_filled_pages_are_omitted_and_restored() {
+        let mut original = vec![0xff; PAGE_BYTES * 4 + 7];
+        original[PAGE_BYTES + 42] = 99;
+        original[PAGE_BYTES * 2..PAGE_BYTES * 3].fill(0);
+        let image = unsafe { Tracker::new(original.len()).capture(original.as_ptr()) };
+        assert!(Arc::ptr_eq(&image.pages[0], &image.pages[3]));
+        let encoded = image.to_bytes().unwrap();
+        // Only the changed page and the zeroed page are stored.
+        assert_eq!(encoded.len(), HEADER + 2 * (8 + PAGE_BYTES));
+        let decoded = Image::from_bytes(&encoded, original.len()).unwrap();
+        let mut restored = vec![0; original.len()];
+        unsafe { Tracker::new(restored.len()).restore(&decoded, restored.as_mut_ptr()) }.unwrap();
+        assert_eq!(restored, original);
+        assert_eq!(decoded.to_bytes().unwrap(), encoded);
     }
 
     #[test]

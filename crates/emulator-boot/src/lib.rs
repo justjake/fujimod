@@ -835,11 +835,6 @@ impl Prepared {
 /// Construct an unexecuted strict board from explicitly selected files.
 /// No directory search, downloaded image, captured default or firmware patch is used.
 pub fn open(options: Options) -> Result<Session, String> {
-    open_with_ram_fill(options, None)
-}
-
-/// Boot with a deterministic initial RAM byte and retain RAM over restarts.
-pub fn open_with_ram_fill(options: Options, ram_fill: Option<u8>) -> Result<Session, String> {
     let mut prepared = prepare(&options.configuration_id, &options.overlays)?;
     if options.access_point.is_some() || options.capability_reply.is_some() {
         prepared.set_mt5931(options.access_point, options.capability_reply)?;
@@ -868,7 +863,7 @@ pub fn open_with_ram_fill(options: Options, ram_fill: Option<u8>) -> Result<Sess
             .transpose()?
             .unwrap_or_default(),
     };
-    open_prepared_with_ram_fill(prepared, inputs, ram_fill)
+    open_prepared(prepared, inputs)
 }
 
 impl Prepared {
@@ -938,31 +933,28 @@ fn camera_sections(
 struct RestartBuilder {
     prepared: Prepared,
     inputs: InputBytes,
-    ram_fill: Option<u8>,
 }
 impl fujimod_emulator_session::power_cycle::ColdBoot for RestartBuilder {
     fn build(&mut self, tick: u64, counts: Vec<u64>, packet: [u8; 16]) -> Result<Session, String> {
         open_prepared_epoch(
-            self.prepared.duplicate()?, self.inputs.clone(), Some((tick, counts, packet)), self.ram_fill,
+            self.prepared.duplicate()?, self.inputs.clone(), Some((tick, counts, packet)),
         )
     }
 }
 
 /// Construct an unexecuted strict board from a prepared run and byte inputs.
+/// A SoC that declares its power-on RAM contents starts with them, and its
+/// RAM is retained over restarts.
 pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, String> {
-    open_prepared_with_ram_fill(prepared, inputs, None)
-}
-
-pub fn open_prepared_with_ram_fill(prepared: Prepared, inputs: InputBytes, ram_fill: Option<u8>) -> Result<Session, String> {
-    let ram = if ram_fill.is_some() {
+    let ram = if power_on_ram_fill(&prepared).is_some() {
         prepared.execution.ram.iter().map(|r| (r.base, r.size)).collect()
     } else { Vec::new() };
     let cycle = if prepared.resolved.reference.firmware.id == "x70-110" {
-        Some(RestartBuilder { prepared: prepared.duplicate()?, inputs: inputs.clone(), ram_fill })
+        Some(RestartBuilder { prepared: prepared.duplicate()?, inputs: inputs.clone() })
     } else {
         None
     };
-    let mut session = open_prepared_epoch(prepared, inputs, None, ram_fill)?;
+    let mut session = open_prepared_epoch(prepared, inputs, None)?;
     if let Some(builder) = cycle {
         let media = fujimod_emulator_session::durable::Spec {
             cards: session.contacts.keys().cloned().collect(),
@@ -975,12 +967,16 @@ pub fn open_prepared_with_ram_fill(prepared: Prepared, inputs: InputBytes, ram_f
     Ok(session)
 }
 
+fn power_on_ram_fill(prepared: &Prepared) -> Option<u8> {
+    prepared.resolved.reference.soc.hardware.as_ref().and_then(|hardware| hardware.power_on_ram_fill)
+}
+
 fn open_prepared_epoch(
     prepared: Prepared,
     inputs: InputBytes,
     epoch: Option<(u64, Vec<u64>, [u8; 16])>,
-    ram_fill: Option<u8>,
 ) -> Result<Session, String> {
+    let ram_fill = power_on_ram_fill(&prepared);
     prepared
         .update
         .check(&inputs.update)
@@ -998,7 +994,6 @@ fn open_prepared_epoch(
         return Err("NAND image must be at most 256 MiB".into());
     }
     let mut session_definition = prepared.to_json();
-    session_definition["inputs"]["ram_fill"] = json!(ram_fill);
     session_definition["inputs"]["nand_selected"] = json!(inputs.nand.is_some());
     session_definition["inputs"]["settings_selected"] = json!(inputs.settings.is_some());
     let InputBytes {

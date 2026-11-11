@@ -1,6 +1,6 @@
 //! Immutable page versions with conservative engine/DMA dirty tracking.
 //! Keyframes never alias mutable guest backing. Only flagged pages are read
-//! after an initial capture; equal or zero candidates retain shared pages.
+//! after an initial capture; equal or uniform candidates retain shared pages.
 use crate::BackingObserver;
 mod checkpoint;
 use std::{
@@ -35,9 +35,33 @@ pub struct Tracker {
     dirty: Box<[AtomicU64]>,
     base: RefCell<Option<Image>>,
 }
-fn zero() -> &'static Arc<Page> {
-    static ZERO: OnceLock<Arc<Page>> = OnceLock::new();
-    ZERO.get_or_init(|| Arc::new([0; PAGE_BYTES]))
+/// The shared page holding `byte` in every cell. Untouched RAM keeps its
+/// power-on fill, so most pages of a fresh machine are one of these.
+fn uniform(byte: u8) -> &'static Arc<Page> {
+    static PAGES: [OnceLock<Arc<Page>>; 256] = [const { OnceLock::new() }; 256];
+    PAGES[byte as usize].get_or_init(|| Arc::new([byte; PAGE_BYTES]))
+}
+/// The byte every cell of `bytes` holds, if they are all equal.
+fn uniform_byte(bytes: &[u8]) -> Option<u8> {
+    let (&first, rest) = bytes.split_first()?;
+    rest.iter().all(|&byte| byte == first).then_some(first)
+}
+/// A retained copy of one page: the previous version when unchanged, a
+/// shared uniform page, or a new copy.
+fn retain(old: Option<&Arc<Page>>, bytes: &[u8]) -> Arc<Page> {
+    if let Some(old) = old.filter(|p| p[..bytes.len()] == *bytes) {
+        return old.clone();
+    }
+    if let Some(byte) = uniform_byte(bytes) {
+        return uniform(byte).clone();
+    }
+    let mut page = [0; PAGE_BYTES];
+    page[..bytes.len()].copy_from_slice(bytes);
+    fujimod_perf::add_bytes(
+        fujimod_perf::ByteCounter::CheckpointPagesCopied,
+        bytes.len() as u64,
+    );
+    Arc::new(page)
 }
 impl Image {
     pub fn len(&self) -> usize {
@@ -109,7 +133,6 @@ impl Tracker {
     pub unsafe fn capture(&self, pointer: *const u8) -> Image {
         let previous = self.base.borrow();
         let mut pages = Vec::with_capacity(self.len.div_ceil(PAGE_BYTES));
-        let zero_page = zero();
         for offset in (0..self.len).step_by(PAGE_BYTES) {
             let index = offset / PAGE_BYTES;
             let size = PAGE_BYTES.min(self.len - offset);
@@ -119,20 +142,7 @@ impl Tracker {
                 continue;
             }
             let bytes = unsafe { std::slice::from_raw_parts(pointer.add(offset), size) };
-            let page = if let Some(old) = old.filter(|p| p[..size] == *bytes) {
-                old.clone()
-            } else if bytes == &zero_page[..size] {
-                zero_page.clone()
-            } else {
-                let mut page = [0; PAGE_BYTES];
-                page[..size].copy_from_slice(bytes);
-                fujimod_perf::add_bytes(
-                    fujimod_perf::ByteCounter::CheckpointPagesCopied,
-                    size as u64,
-                );
-                Arc::new(page)
-            };
-            pages.push(page);
+            pages.push(retain(old, bytes));
         }
         let image = Image {
             len: self.len,
@@ -143,33 +153,19 @@ impl Tracker {
         image
     }
 
-    /// Read every page, reusing an equal previous page or the shared zero
+    /// Read every page, reusing an equal previous page or a shared uniform
     /// page. Host writes that bypass dirty tracking are still observed.
     /// # Safety
     /// Every page is readable at `pointer`; all CPUs are stopped.
     pub unsafe fn capture_all(&self, pointer: *const u8) -> Image {
         let previous = self.base.borrow();
         let mut pages = Vec::with_capacity(self.len.div_ceil(PAGE_BYTES));
-        let zero_page = zero();
         for offset in (0..self.len).step_by(PAGE_BYTES) {
             let index = offset / PAGE_BYTES;
             let size = PAGE_BYTES.min(self.len - offset);
             let old = previous.as_ref().and_then(|p| p.pages.get(index));
             let bytes = unsafe { std::slice::from_raw_parts(pointer.add(offset), size) };
-            let page = if let Some(old) = old.filter(|p| p[..size] == *bytes) {
-                old.clone()
-            } else if bytes == &zero_page[..size] {
-                zero_page.clone()
-            } else {
-                let mut page = [0; PAGE_BYTES];
-                page[..size].copy_from_slice(bytes);
-                fujimod_perf::add_bytes(
-                    fujimod_perf::ByteCounter::CheckpointPagesCopied,
-                    size as u64,
-                );
-                Arc::new(page)
-            };
-            pages.push(page);
+            pages.push(retain(old, bytes));
         }
         let image = Image {
             len: self.len,
