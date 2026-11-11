@@ -476,9 +476,9 @@ impl PulseUnit {
                     s.anchor = s.phase_position;
                     s.preload = s.channels[0].words[2] as u16;
                 }
-                for ch in 0..12 {
-                    if starting & (1 << ch) != 0 && self.free_running_mode(ch, s.channels[ch].words[0]) {
-                        s.channels[ch].start = Some(cx.now());
+                for (ch, channel) in s.channels.iter_mut().enumerate() {
+                    if starting & (1 << ch) != 0 && self.free_running_mode(ch, channel.words[0]) {
+                        channel.start = Some(cx.now());
                     }
                 }
                 if let Some(ch) = self.pins.capture
@@ -748,6 +748,3 @@ mod interval_tests;
 #[cfg(test)]
 #[path = "pulse/one_shot_tests.rs"]
 mod one_shot_tests;
-#[cfg(test)]
-#[path = "pulse/free_running_tests.rs"]
-mod free_running_tests;

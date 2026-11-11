@@ -18,7 +18,9 @@ fn unit(free_running_channels: Vec<u8>) -> PulseUnit {
             capture_channel: None,
         },
         Wiring {
-            irqs: std::array::from_fn(|ch| (ch == 7).then_some(InterruptLine::Core { core: 0, line: 27 })),
+            irqs: std::array::from_fn(|ch| {
+                (ch == 7).then_some(InterruptLine::Core { core: 0, line: 27 })
+            }),
         },
     )
     .unwrap()
@@ -61,7 +63,10 @@ fn free_running_mode_needs_its_declaration_and_an_empty_configuration() {
     write(&mut declared, &mut host, CH7 + 8, 5);
     let mut cx = host.cx();
     declared.write(&mut cx, BASE, 4, 0x0080_0080);
-    assert_eq!(cx.refusal(), Some("incomplete free-running count configuration"));
+    assert_eq!(
+        cx.refusal(),
+        Some("incomplete free-running count configuration")
+    );
     assert!(
         PulseUnit::new(
             Options {
