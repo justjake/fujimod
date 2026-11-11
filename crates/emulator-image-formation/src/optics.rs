@@ -23,7 +23,9 @@ pub struct Projection {
     binned: Mutex<Vec<Arc<Scene>>>,
     readouts: Mutex<Vec<BinnedPrepared>>,
 }
-const CACHE_PIXELS: usize = 4 * 1024 * 1024;
+// A full-resolution metering grid exceeds four megapixels. Retain the binned
+// scene while that immutable frame drives statistics for several consumers.
+const CACHE_PIXELS: usize = 16 * 1024 * 1024;
 // One full-resolution readout retains both its linear RGB16 and encoded
 // RGB16 arrays. Keep this pixel-storage budget separate from preview caches.
 const FULL_READOUT_CACHE_BYTES: usize = 256 * 1024 * 1024;
