@@ -785,6 +785,10 @@ fn stock_snapshot_controls_accept_observed_values_only() {
         (0x2b2, 0x198204, 0x7),
         (0x2b3, 0x730, 0x7),
         (0x2b4, 0x12a, 0x3),
+        (0x282, 0x1000100, 0xf),
+        (0x288, 0x1000100, 0xf),
+        (0x292, 0x400040, 0xf),
+        (0x298, 0x400040, 0xf),
     ] {
         words.extend([value, mask << 16 | register]);
     }
@@ -798,6 +802,9 @@ fn stock_snapshot_controls_accept_observed_values_only() {
     }
     words.extend([1, 0x1 << 16 | 0x31f]);
     let mut plain = setup();
+    for (register, value) in [(0x282, 0x1000100), (0x292, 0x400040)] {
+        pair(&mut plain, register, value);
+    }
     for position in [
         [-0.75, -0.75, 0., 1.],
         [0.75, -0.75, 0., 1.],
@@ -812,7 +819,13 @@ fn stock_snapshot_controls_accept_observed_values_only() {
         Engine::default().execute_cpu(&words, read).unwrap(),
         expected
     );
-    for (register, value, mask) in [(0x30b, 0x101, 0x3), (0x310, 0xc, 0x1), (0x31f, 0, 0x1)] {
+    for (register, value, mask) in [
+        (0x30b, 0x101, 0x3),
+        (0x310, 0xc, 0x1),
+        (0x31f, 0, 0x1),
+        (0x288, 0x1000100, 0xf),
+        (0x298, 0x400040, 0xf),
+    ] {
         let mut engine = Engine::default();
         let before = serde_json::to_value(&engine).unwrap();
         let mut refused = setup();
