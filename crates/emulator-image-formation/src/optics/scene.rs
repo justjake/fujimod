@@ -65,6 +65,9 @@ impl Scene {
     pub fn binned(&self, dimensions: [usize; 2]) -> Self {
         let [width, height] = dimensions;
         let [sw, sh] = self.dimensions;
+        if sw % width == 0 && sh % height == 0 {
+            return self.binned_integer(dimensions, [sw / width, sh / height]);
+        }
         // Overlap weights of each readout column, shared by every row.
         struct Column {
             first: usize,
@@ -128,6 +131,42 @@ impl Scene {
             for (out, color) in out[1..].iter_mut().zip(&colors) {
                 for c in 0..3 {
                     sum[c] += ((color[c] + area / 2) / area) as u32;
+                }
+                *out = sum;
+            }
+        }
+        Self {
+            frame: self.frame.clone(),
+            dimensions,
+            prefix,
+            sites: None,
+        }
+    }
+
+    /// Integer source/output ratios cover the still and metering grids. Each
+    /// output sample is the exact rectangular mean, so source-row prefixes can
+    /// accumulate the rectangle directly instead of evaluating overlap weights.
+    fn binned_integer(&self, dimensions: [usize; 2], scale: [usize; 2]) -> Self {
+        let [width, height] = dimensions;
+        let [sx, sy] = scale;
+        let area = (sx * sy) as u64;
+        let mut prefix = vec![[0u32; 3]; (width + 1) * height];
+        for (y, out) in prefix.chunks_exact_mut(width + 1).enumerate() {
+            let mut colors = [0u64; 3];
+            for row in y * sy..(y + 1) * sy {
+                let row = &self.prefix[row * (self.dimensions[0] + 1)..][..=self.dimensions[0]];
+                for x in 0..width {
+                    let left = row[x * sx];
+                    let right = row[(x + 1) * sx];
+                    for c in 0..3 {
+                        colors[c] += u64::from(right[c] - left[c]);
+                    }
+                }
+            }
+            let mut sum = [0u32; 3];
+            for (x, out) in out[1..].iter_mut().enumerate() {
+                for c in 0..3 {
+                    sum[c] += ((colors[c] + area / 2) / area) as u32;
                 }
                 *out = sum;
             }
