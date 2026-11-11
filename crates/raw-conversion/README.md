@@ -96,12 +96,14 @@ Fujifilm MakerNote (`maker_note`, such as film mode `0x1401`). The JPEG
 is saved before it is read, so if it cannot be parsed the file is still
 kept, and `inspect_error` says why.
 
-`status` is `converted` or `unsupported`. A job is `unsupported`, and nothing
+`status` is `converted`, `unsupported` or `failed`. A job is `unsupported`, and nothing
 is converted for it, in three cases: the body's profile has no word for a
 setting the job names (`missing`), the camera refuses the profile (`reason`),
 or the read-back differs from what was sent for a setting the job names
 (`adjusted`). A conversion the camera refuses or never finishes within
-the timeout is also `unsupported`, with the `reason`. Missing or changed base settings are recorded and the job still
+the timeout is `failed`, with the `reason`; a later run with the same
+`--out` tries it again. After a timeout the run waits one more timeout and
+deletes an image that arrives late, so the next job cannot take it. Missing or changed base settings are recorded and the job still
 converts.
 
 ## Protocol

@@ -156,7 +156,7 @@ pub fn finished(out: &Path) -> BTreeSet<String> {
             }
             None => true,
         };
-        if intact {
+        if intact && entry.status != "failed" {
             done.insert(entry.id);
         }
     }
@@ -372,7 +372,8 @@ pub async fn execute<P: Pipe>(
         let jpeg = match convert(session, options.conversion_timeout).await? {
             Ok(jpeg) => jpeg,
             Err(reason) => {
-                entry.status = "unsupported".into();
+                // A refusal or timeout may pass: a later run tries the job again.
+                entry.status = "failed".into();
                 log(&format!("{}: skipped, {reason}", job.id));
                 entry.reason = Some(reason);
                 record(&options.out, entry)?;
@@ -533,13 +534,43 @@ async fn convert<P: Pipe>(
             break h;
         }
         if std::time::Instant::now() >= deadline {
-            return Ok(Err(format!("no converted image after {timeout:?}")));
+            return Ok(Err(discard_late(session, &before, timeout).await?));
         }
         futures_timer::Delay::new(poll).await;
     };
     let jpeg = call(session, ptp::GET_OBJECT, &[handle], None).await?.data;
     call(session, ptp::DELETE_OBJECT, &[handle, 0], None).await?;
     Ok(Ok(jpeg))
+}
+
+/// After a timeout, waits one more timeout for the image the camera may still
+/// produce and deletes it, so the next job cannot take it for its own.
+async fn discard_late<P: Pipe>(
+    session: &mut Session<P>,
+    before: &BTreeSet<u32>,
+    timeout: Duration,
+) -> Result<String, String> {
+    let poll = Duration::from_millis(500);
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        let late: Vec<u32> = handles(session)
+            .await?
+            .into_iter()
+            .filter(|h| !before.contains(h))
+            .collect();
+        if !late.is_empty() {
+            for h in late {
+                call(session, ptp::DELETE_OBJECT, &[h, 0], None).await?;
+            }
+            return Ok(format!(
+                "no converted image after {timeout:?}; the late image was deleted"
+            ));
+        }
+        if std::time::Instant::now() >= deadline {
+            return Ok(format!("no converted image after {timeout:?}"));
+        }
+        futures_timer::Delay::new(poll).await;
+    }
 }
 
 fn record(out: &Path, mut entry: Entry) -> Result<(), String> {
@@ -755,9 +786,31 @@ mod tests {
                 .unwrap()
                 .contains("no converted image")
         );
-        assert_eq!(entries[1].status, "unsupported");
+        assert_eq!(entries[1].status, "failed");
         assert!(entries[2..].iter().all(|e| e.status == "converted"));
         assert_eq!(camera.conversions, 2);
+        assert!(!finished(&s.options.out).contains(&entries[0].id));
+        std::fs::remove_dir_all(&s.dir).unwrap();
+    }
+
+    #[test]
+    fn a_late_image_is_deleted_before_the_next_job() {
+        let s = setup("late");
+        let mut camera = FakeCamera::new(512);
+        camera.late_conversion = Some(1);
+        let (result, camera) = run(&s, camera);
+        result.unwrap();
+        let entries = manifest(&s);
+        assert_eq!(entries[0].status, "failed");
+        assert!(
+            entries[0]
+                .reason
+                .as_ref()
+                .unwrap()
+                .contains("late image was deleted")
+        );
+        assert!(entries[1..].iter().all(|e| e.status == "converted"));
+        assert!(camera.objects.is_empty());
         std::fs::remove_dir_all(&s.dir).unwrap();
     }
 

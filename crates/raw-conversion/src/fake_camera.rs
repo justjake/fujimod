@@ -28,6 +28,9 @@ pub struct FakeCamera {
     pub refuse_conversion: Option<usize>,
     /// Accept conversion number N but never produce its image.
     pub drop_conversion: Option<usize>,
+    /// Produce conversion number N's image only after the controller's timeout.
+    pub late_conversion: Option<usize>,
+    late: Option<(usize, Vec<u8>)>,
     attempts: usize,
     /// A session left open by an earlier controller.
     pub session_open: bool,
@@ -58,6 +61,8 @@ impl FakeCamera {
             fail_conversion: None,
             refuse_conversion: None,
             drop_conversion: None,
+            late_conversion: None,
+            late: None,
             attempts: 0,
             session_open: false,
             unreadable_output: false,
@@ -155,6 +160,16 @@ impl FakeCamera {
                 self.respond(code, id, None)
             }
             0x1007 => {
+                // A late image appears on the listing after the controller's
+                // one-second test timeout (polls every 500 ms).
+                if let Some((polls, jpeg)) = self.late.take() {
+                    if polls == 0 {
+                        self.objects.insert(self.next_handle, jpeg);
+                        self.next_handle += 1;
+                    } else {
+                        self.late = Some((polls - 1, jpeg));
+                    }
+                }
                 let mut list = (self.objects.len() as u32).to_le_bytes().to_vec();
                 for h in self.objects.keys() {
                     list.extend_from_slice(&h.to_le_bytes());
@@ -235,6 +250,10 @@ impl FakeCamera {
                 let mut jpeg = crate::jpeg::synthetic(6240, 4160, 160, &[(0x1401, film)]);
                 if self.unreadable_output {
                     jpeg.truncate(40);
+                }
+                if self.late_conversion == Some(self.attempts) {
+                    self.late = Some((4, jpeg));
+                    return self.respond(code, id, None);
                 }
                 self.objects.insert(self.next_handle, jpeg);
                 self.next_handle += 1;
