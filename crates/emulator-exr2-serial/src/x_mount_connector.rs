@@ -205,6 +205,7 @@ impl XMountLens {
         for (i, ((_, inputs), (level, active))) in self.controllers.iter().zip(signals).enumerate()
         {
             let high = level && active;
+            inputs.raw_level(self.options.ready_line, self.port.ready_high())?;
             inputs.level(self.options.ready_line, high)?;
             self.state.levels[i] = high;
             if !level && active {
