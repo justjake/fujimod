@@ -233,6 +233,35 @@ fn recipe(py: Python<'_>, firmware_id: &str) -> PyResult<Py<PyAny>> {
         .ok_or_else(|| error("Missing SD card recipe"))?;
     Ok(value(py, &serde_json::to_value(recipe).map_err(error)?)?.unbind())
 }
+/// `ffinit` (an `sd_card_read='fast'` FFINIT) with FFBOOT's packed stage
+/// recorded, so FFINIT performs the stage before entering RAM.
+#[pyfunction(signature=(firmware_id,ffinit,*,address,header,records,size))]
+fn bind_sd_card_packed_stage<'py>(
+    py: Python<'py>,
+    firmware_id: &str,
+    ffinit: &[u8],
+    address: u32,
+    header: u32,
+    records: u32,
+    size: u32,
+) -> PyResult<Bound<'py, PyBytes>> {
+    let recipe = core::Recipe::bundled(firmware_id)
+        .map_err(error)?
+        .ok_or_else(|| error("Missing SD card recipe"))?;
+    let mut bytes = ffinit.to_vec();
+    recipe
+        .bind_sd_card_packed_stage(
+            &mut bytes,
+            &core::PackedStage {
+                address,
+                header,
+                records,
+                size,
+            },
+        )
+        .map_err(error)?;
+    Ok(PyBytes::new(py, &bytes))
+}
 #[pyfunction(signature=(firmware_id,source,payload,base,api,workspace,*,sd_card_read="rom"))]
 #[allow(clippy::too_many_arguments)]
 fn compile_ffinit<'py>(
@@ -265,6 +294,7 @@ pub(crate) fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult
     module.add_function(wrap_pyfunction!(cold_plan, &module)?)?;
     module.add_function(wrap_pyfunction!(recipe, &module)?)?;
     module.add_function(wrap_pyfunction!(compile_ffinit, &module)?)?;
+    module.add_function(wrap_pyfunction!(bind_sd_card_packed_stage, &module)?)?;
     module.add_function(wrap_pyfunction!(transform, &module)?)?;
     module.add_function(wrap_pyfunction!(boot_header, &module)?)?;
     module.add_function(wrap_pyfunction!(startup_indicator, &module)?)?;

@@ -19,7 +19,7 @@ mod xp4;
 mod xp5;
 use image::{File, Packaging, Plan, Result, require};
 use serde::{Deserialize, Serialize};
-pub use xp4::{ColdStart, FileApi, SdCardRead, Setup};
+pub use xp4::{ColdStart, FileApi, SdCardRead, Setup, sd_card_fast_read::PackedStage};
 pub use xp5::{
     Board as SdBoard, CodeProof as Xp5CodeProof, Flash as Xp5Flash, Lamp as Xp5Lamp,
     Operation as SdOperation, RegisterWrite as Xp5RegisterWrite, Setup as Xp5Setup,
@@ -275,6 +275,19 @@ impl Recipe {
     /// preloaded layout from `build_startup` has not booted.
     pub fn build(&self, source: &[u8]) -> Result<Vec<File>> {
         self.build_with_sd_card_read(source, SdCardRead::Rom)
+    }
+    /// Record FFBOOT's packed stage in an `SdCardRead::Fast` FFINIT from
+    /// this recipe, so FFINIT performs the stage before entering RAM.
+    pub fn bind_sd_card_packed_stage(&self, ffinit: &mut [u8], stage: &PackedStage) -> Result<()> {
+        require(
+            matches!(self.generation, Generation::Xp4),
+            "The fast SD card read requires XP4",
+        )?;
+        let api = self
+            .file_api
+            .as_ref()
+            .ok_or_else(|| image::Error::Invalid("Missing XP4 file API".into()))?;
+        xp4::sd_card_fast_read::bind_packed_stage(ffinit, api.load_address, stage)
     }
     /// `build`, with an XP4 SD card's FFBOOT read selected. Other generations
     /// accept only `SdCardRead::Rom`.

@@ -6,8 +6,9 @@ pub mod preload;
 pub mod sd_card_fast_read;
 mod sd_loader;
 
-/// How FFINIT reads FFBOOT. An X-T3 (5.11) booted with `Fast` in about 10 s
-/// instead of 35 s with `Rom` (2026-11-10); other bodies are untested.
+/// How FFINIT reads FFBOOT. An X-T3 (5.11) reached live view in about 5 s
+/// with `Fast` and a bound packed FFBOOT stage, against about 35 s to the
+/// green LED with `Rom` (2026-11-10); other bodies are untested.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SdCardRead {
@@ -15,8 +16,10 @@ pub enum SdCardRead {
     #[default]
     Rom,
     /// The boot ROM reads the first 4 KiB; CMD18 with SDMA reads the rest,
-    /// at high speed when the SD card switches, with the boot ROM read as the
-    /// fallback.
+    /// at high speed when the SD card switches, with the CRC32 overlapping
+    /// the read and the boot ROM read as the fallback. The I-cache is on for
+    /// the load, and FFINIT performs a bound packed FFBOOT stage itself
+    /// (`Recipe::bind_sd_card_packed_stage`).
     Fast,
 }
 
@@ -526,6 +529,17 @@ pub fn ffinit(
     )?;
     if fast.is_some() {
         let config = region + symbols["ffinit_config"] as u32;
+        // A template function extends to the next template symbol.
+        let function = |name: &str| -> Result<std::ops::Range<u32>> {
+            let start = symbols[name];
+            let end = symbols
+                .values()
+                .copied()
+                .filter(|&offset| offset > start)
+                .min()
+                .ok_or_else(|| image::Error::Invalid(format!("{name} has no end")))?;
+            Ok(region + start as u32..region + end as u32)
+        };
         sd_card_fast_read::install(
             &mut output,
             base,
@@ -536,6 +550,9 @@ pub fn ffinit(
                 crc_table: region + symbols["ffinit_crc_table"] as u32,
                 expected_crc32: config + 8,
                 template_crc32: region + symbols["ffinit_crc32"] as u32,
+                ffinit_load: function("ffinit_load")?,
+                ffinit_dram_ready: function("ffinit_dram_ready")?,
+                ffinit_enter_ram: region + symbols["ffinit_enter_ram"] as u32,
             },
         )?;
     }
@@ -572,7 +589,8 @@ pub fn layout(setup: &Setup, api: &FileApi, base: u32, read: SdCardRead) -> Resu
         let placed = sd_card_fast_read::placement(base)?;
         layout["sd_card_fast_read"] = serde_json::json!({
             "read": placed.read, "crc32": placed.crc32, "config": placed.config,
-            "status": placed.status, "host": sd_card_fast_read::TOPAZ_SD_HOST,
+            "status": placed.status, "entry": placed.entry, "enter_ram": placed.enter_ram,
+            "host": sd_card_fast_read::TOPAZ_SD_HOST,
         });
     }
     Ok(layout)
