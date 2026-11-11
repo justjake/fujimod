@@ -285,7 +285,9 @@ pub struct FilmPixels<'a> {
     film: &'a Film,
     entries: Vec<(u64, [u8; 3])>,
 }
-const FILM_CACHE_ENTRIES: usize = 1 << 20;
+// A full-resolution still exhausts a 4K-entry memo, while another 960K slots
+// add no measurable hits and introduce a 16 MiB cache footprint per replay.
+const FILM_CACHE_ENTRIES: usize = 1 << 16;
 impl<'a> FilmPixels<'a> {
     pub fn new(film: &'a Film) -> Self {
         Self {
@@ -296,7 +298,7 @@ impl<'a> FilmPixels<'a> {
     #[inline(always)]
     pub fn develop(&mut self, rgb: [u16; 3]) -> [u8; 3] {
         let key = u64::from(rgb[0]) | (u64::from(rgb[1]) << 16) | (u64::from(rgb[2]) << 32);
-        let index = (key.wrapping_mul(0x9e3779b97f4a7c15) >> 44) as usize;
+        let index = (key.wrapping_mul(0x9e3779b97f4a7c15) >> 48) as usize;
         let entry = &mut self.entries[index];
         if entry.0 != key {
             *entry = (key, self.film.develop(rgb));
@@ -308,7 +310,7 @@ impl<'a> FilmPixels<'a> {
     #[inline(always)]
     pub fn luma(&mut self, rgb: [u16; 3]) -> u8 {
         let key = u64::from(rgb[0]) | (u64::from(rgb[1]) << 16) | (u64::from(rgb[2]) << 32);
-        let index = (key.wrapping_mul(0x9e3779b97f4a7c15) >> 44) as usize;
+        let index = (key.wrapping_mul(0x9e3779b97f4a7c15) >> 48) as usize;
         let entry = &mut self.entries[index];
         if entry.0 != key && entry.0 != (key | 1 << 63) {
             *entry = (key | 1 << 63, [self.film.luma(rgb), 0, 0]);
