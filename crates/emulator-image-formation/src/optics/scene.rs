@@ -164,7 +164,7 @@ impl Scene {
                 }
             }
             let mut sum = [0u32; 3];
-            for (x, out) in out[1..].iter_mut().enumerate() {
+            for out in &mut out[1..] {
                 for c in 0..3 {
                     sum[c] += ((colors[c] + area / 2) / area) as u32;
                 }
