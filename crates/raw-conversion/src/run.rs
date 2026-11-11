@@ -20,6 +20,10 @@ const RAF_FORMAT: u16 = 0xf802;
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct JobFile {
+    /// What to shoot for each RAF name, printed as the capture checklist.
+    /// When present, every job's RAF must be listed.
+    #[serde(default)]
+    pub rafs: BTreeMap<String, String>,
     /// Settings every job starts from.
     pub base: Settings,
     pub jobs: Vec<Job>,
@@ -49,6 +53,9 @@ impl JobFile {
                     .all(|c| matches!(c, 'a'..='z' | '0'..='9' | '-' | '+'))
             {
                 return Err(format!("job id {:?} is not a plain file name", job.id));
+            }
+            if !file.rafs.is_empty() && !file.rafs.contains_key(&job.raf) {
+                return Err(format!("{}: RAF {} is not in rafs", job.id, job.raf));
             }
             if !ids.insert(job.id.as_str()) {
                 return Err(format!("job id {} repeats", job.id));
@@ -88,6 +95,8 @@ pub struct Output {
     pub width: u16,
     pub height: u16,
     pub maker_note: BTreeMap<String, i64>,
+    #[serde(default)]
+    pub exif: BTreeMap<String, i64>,
     /// Why the size and MakerNote could not be read; the file is still saved.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inspect_error: Option<String>,
@@ -152,6 +161,25 @@ pub fn finished(out: &Path) -> BTreeSet<String> {
         }
     }
     done
+}
+
+/// What to shoot: one line per RAF name, in the order the jobs use them,
+/// with its job count. Described RAFs no job uses come last.
+pub fn checklist(file: &JobFile) -> Vec<String> {
+    let mut names: Vec<&String> = Vec::new();
+    for name in file.jobs.iter().map(|j| &j.raf).chain(file.rafs.keys()) {
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    names
+        .into_iter()
+        .map(|name| {
+            let jobs = file.jobs.iter().filter(|j| &j.raf == name).count();
+            let what = file.rafs.get(name).map_or("", String::as_str);
+            format!("[ ] {name:16} {jobs:4} jobs  {what}")
+        })
+        .collect()
 }
 
 /// One line per job, in order, with the D185 words it writes.
@@ -341,7 +369,16 @@ pub async fn execute<P: Pipe>(
             record(&options.out, entry)?;
             continue;
         }
-        let jpeg = convert(session, options.conversion_timeout).await?;
+        let jpeg = match convert(session, options.conversion_timeout).await? {
+            Ok(jpeg) => jpeg,
+            Err(reason) => {
+                entry.status = "unsupported".into();
+                log(&format!("{}: skipped, {reason}", job.id));
+                entry.reason = Some(reason);
+                record(&options.out, entry)?;
+                continue;
+            }
+        };
         // The camera no longer holds the image: save it before reading it.
         let name = format!("{}.jpg", job.id);
         let partial = options.out.join(format!("{name}.partial"));
@@ -365,6 +402,7 @@ pub async fn execute<P: Pipe>(
             width: summary.width,
             height: summary.height,
             maker_note: summary.maker_note,
+            exif: summary.exif,
             inspect_error,
         });
         record(&options.out, entry)?;
@@ -462,16 +500,28 @@ async fn handles<P: Pipe>(session: &mut Session<P>) -> Result<Vec<u32>, String> 
 }
 
 /// Starts the conversion, waits for a new object, downloads and deletes it.
-/// Objects that were already present are left alone.
-async fn convert<P: Pipe>(session: &mut Session<P>, timeout: Duration) -> Result<Vec<u8>, String> {
+/// Objects that were already present are left alone. The inner error is a
+/// conversion the camera refused or never finished; the run goes on without it.
+async fn convert<P: Pipe>(
+    session: &mut Session<P>,
+    timeout: Duration,
+) -> Result<Result<Vec<u8>, String>, String> {
     let before: BTreeSet<u32> = handles(session).await?.into_iter().collect();
-    call(
-        session,
-        ptp::SET_DEVICE_PROP_VALUE,
-        &[START_RAW_CONVERSION],
-        Some(&0u16.to_le_bytes()),
-    )
-    .await?;
+    let start = session
+        .call(
+            ptp::SET_DEVICE_PROP_VALUE,
+            &[START_RAW_CONVERSION],
+            Some(&0u16.to_le_bytes()),
+        )
+        .await;
+    match start {
+        Err(ptp::Error::Response { code, .. }) => {
+            return Ok(Err(format!(
+                "camera refused the conversion with {code:#06x}"
+            )));
+        }
+        other => other.map_err(|e| e.to_string())?,
+    };
     let poll = Duration::from_millis(500);
     let deadline = std::time::Instant::now() + timeout;
     let handle = loop {
@@ -483,13 +533,13 @@ async fn convert<P: Pipe>(session: &mut Session<P>, timeout: Duration) -> Result
             break h;
         }
         if std::time::Instant::now() >= deadline {
-            return Err(format!("no converted image after {timeout:?}"));
+            return Ok(Err(format!("no converted image after {timeout:?}")));
         }
         futures_timer::Delay::new(poll).await;
     };
     let jpeg = call(session, ptp::GET_OBJECT, &[handle], None).await?.data;
     call(session, ptp::DELETE_OBJECT, &[handle, 0], None).await?;
-    Ok(jpeg)
+    Ok(Ok(jpeg))
 }
 
 fn record(out: &Path, mut entry: Entry) -> Result<(), String> {
@@ -523,7 +573,7 @@ mod tests {
     use futures_lite::future::block_on;
 
     const JOBS: &str = r#"{
-      "base": {"white_balance_as_shot": "ON", "dynamic_range": 100, "color_space": "SRGB",
+      "base": {"white_balance": "AS_SHOT", "dynamic_range": 100, "color_space": "SRGB",
                "image_size": "L_3_2", "image_quality": "FINE", "grain": "OFF", "clarity": 0},
       "jobs": [
         {"id": "provia", "raf": "base", "settings": {"film": "PROVIA"}},
@@ -683,6 +733,35 @@ mod tests {
     }
 
     #[test]
+    fn refused_or_unfinished_conversions_are_skipped() {
+        let s = setup("noconvert");
+        let mut camera = FakeCamera::new(512);
+        camera.refuse_conversion = Some(1);
+        camera.drop_conversion = Some(2);
+        let (result, camera) = run(&s, camera);
+        result.unwrap();
+        let entries = manifest(&s);
+        assert!(
+            entries[0]
+                .reason
+                .as_ref()
+                .unwrap()
+                .contains("refused the conversion")
+        );
+        assert!(
+            entries[1]
+                .reason
+                .as_ref()
+                .unwrap()
+                .contains("no converted image")
+        );
+        assert_eq!(entries[1].status, "unsupported");
+        assert!(entries[2..].iter().all(|e| e.status == "converted"));
+        assert_eq!(camera.conversions, 2);
+        std::fs::remove_dir_all(&s.dir).unwrap();
+    }
+
+    #[test]
     fn bodies_without_a_setting_skip_only_jobs_that_name_it() {
         let s = setup("missing");
         let mut camera = FakeCamera::new(512);
@@ -747,6 +826,23 @@ mod tests {
         assert!(lines[0].starts_with("done"));
         assert!(lines[1].starts_with("pending acros-wc+9"));
         assert!(lines[1].contains("22=0x5a"));
+        std::fs::remove_dir_all(&s.dir).unwrap();
+    }
+
+    #[test]
+    fn checklist_lists_each_raf_with_its_jobs() {
+        let s = setup("checklist");
+        assert_eq!(checklist(&s.file).len(), 2);
+        assert!(checklist(&s.file)[0].contains("base"));
+        let path = s.dir.join("described.json");
+        std::fs::write(
+            &path,
+            r#"{"rafs":{"base":"chart at base ISO"},"base":{},
+                "jobs":[{"id":"a","raf":"base","settings":{"film":"PROVIA"}},
+                        {"id":"b","raf":"other","settings":{"film":"PROVIA"}}]}"#,
+        )
+        .unwrap();
+        assert!(JobFile::load(&path).unwrap_err().contains("not in rafs"));
         std::fs::remove_dir_all(&s.dir).unwrap();
     }
 

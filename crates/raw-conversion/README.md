@@ -17,6 +17,9 @@ cargo run --release -p fujimod-raw-conversion --bin fujimod-raw-convert -- \
   --jobs jobs.json --out OUT --raf base=DSCF0001.RAF --raf iso3200=DSCF0005.RAF [--dry-run]
 ```
 
+- `--checklist` prints what to shoot: each RAF name in job order, with its
+  job count and the description from the job file's optional `rafs` map.
+  `--dry-run` prints the checklist too.
 - `--dry-run` loads and checks the job file, then lists every job with its
   RAF, its settings and the profile words it writes (`index=value`). It also
   says whether `OUT` already has the job. It does not touch USB.
@@ -58,7 +61,7 @@ to convert. Both mode changes are made on the camera.
 
 ```json
 {
-  "base": {"white_balance_as_shot": "ON", "dynamic_range": 100, "color_space": "SRGB",
+  "base": {"white_balance": "AS_SHOT", "dynamic_range": 100, "color_space": "SRGB",
            "image_size": "L_3_2", "image_quality": "FINE", "grain": "OFF"},
   "jobs": [
     {"id": "provia", "raf": "base", "settings": {"film": "PROVIA"}},
@@ -88,7 +91,8 @@ model and firmware version from GetDeviceInfo. It also lists profile files
 in `profiles/`: `as_shot` is what the camera reported after the upload, `sent`
 is what the job wrote, and `camera` is the read-back when it differs. The
 output entry gives the JPEG's file, SHA-256, size, frame dimensions and the
-integer tags of its Fujifilm MakerNote, such as film mode `0x1401`. The JPEG
+integer tags of its Exif IFD (`exif`, such as ColorSpace `0xa001`) and of its
+Fujifilm MakerNote (`maker_note`, such as film mode `0x1401`). The JPEG
 is saved before it is read, so if it cannot be parsed the file is still
 kept, and `inspect_error` says why.
 
@@ -96,7 +100,8 @@ kept, and `inspect_error` says why.
 is converted for it, in three cases: the body's profile has no word for a
 setting the job names (`missing`), the camera refuses the profile (`reason`),
 or the read-back differs from what was sent for a setting the job names
-(`adjusted`). Missing or changed base settings are recorded and the job still
+(`adjusted`). A conversion the camera refuses or never finishes within
+the timeout is also `unsupported`, with the `reason`. Missing or changed base settings are recorded and the job still
 converts.
 
 ## Protocol
@@ -126,6 +131,10 @@ Not yet confirmed on a camera:
 
 - libfuji marks film codes 18 ETERNA BLEACH BYPASS, 19 NOSTALGIC Neg. and
   20 REALA ACE as guesses. Check the output's MakerNote film mode, `0x1401`.
+- Adobe RGB: libfuji lists 3 ("AdobeRGB", `ADOBE_RGB`) and 2 ("Adobe sRGB",
+  `ADOBE_RGB_CODE2`), both marked unsure. The manifest's Exif ColorSpace
+  (`0xa001`) shows which one the camera honored. A code it refuses is
+  recorded as `unsupported` without converting.
 - MONOCHROMATIC COLOR uses step × 10, like the other ±steps. libfuji's tables
   allow ±18 steps; menus show ±9.
 - libfuji comments that `0xD183` = 1 gives full-resolution JPEGs, but it
