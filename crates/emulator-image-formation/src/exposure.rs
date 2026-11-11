@@ -88,6 +88,19 @@ impl SampleOffsets {
         let at = row + column + channel * 2;
         u16::from_le_bytes([self.pixels[at], self.pixels[at + 1]])
     }
+    /// # Safety
+    /// `row`, `column`, and `channel` must name one of the prepared samples.
+    #[inline(always)]
+    pub unsafe fn channel_unchecked(&self, row: usize, column: usize, channel: usize) -> u16 {
+        let at = row + column + channel * 2;
+        // SAFETY: upheld by the caller.
+        u16::from_le_bytes(unsafe {
+            [
+                *self.pixels.get_unchecked(at),
+                *self.pixels.get_unchecked(at + 1),
+            ]
+        })
+    }
 }
 /// Immutable values at one physical exposure edge, shared by the preview and
 /// its pre-ISP metering windows. Subsequent host or register updates cannot

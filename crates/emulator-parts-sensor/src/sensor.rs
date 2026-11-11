@@ -429,6 +429,52 @@ impl FrozenReadout {
         let packing = self.packing;
         debug_assert!(rows.start <= rows.end && rows.end <= height);
         debug_assert_eq!(out.len(), packing.row_bytes(width) * rows.len());
+        if let Some(([sample_left, sample_top], samples)) = &self.samples
+            && *sample_left <= left
+            && *sample_top <= top
+            && left + width <= sample_left + samples.columns.len()
+            && top + rows.end <= sample_top + samples.rows.len()
+        {
+            for (local_y, y) in rows.enumerate() {
+                let y = top + y;
+                let row = samples.rows[y - sample_top];
+                for x in (0..width).step_by(2) {
+                    let color = self.cfa.color(left + x, y);
+                    let a = self.black.saturating_add(unsafe {
+                        samples.channel_unchecked(
+                            row,
+                            samples.columns[left + x - sample_left],
+                            color,
+                        )
+                    });
+                    let color = self.cfa.color(left + x + 1, y);
+                    let b = self.black.saturating_add(unsafe {
+                        samples.channel_unchecked(
+                            row,
+                            samples.columns[left + x + 1 - sample_left],
+                            color,
+                        )
+                    });
+                    match packing {
+                        Packing::U16 => {
+                            let i = (local_y * width + x) * 2;
+                            out[i..i + 2].copy_from_slice(&a.to_le_bytes());
+                            out[i + 2..i + 4].copy_from_slice(&b.to_le_bytes());
+                        }
+                        Packing::Packed12 => {
+                            let (a, b) = (a.min(4095), b.min(4095));
+                            let i = (local_y * width + x) * 3 / 2;
+                            out[i..i + 3].copy_from_slice(&[
+                                a as u8,
+                                ((a >> 8) | (b << 4)) as u8,
+                                (b >> 4) as u8,
+                            ]);
+                        }
+                    }
+                }
+            }
+            return;
+        }
         let f = &self.frame;
         let sample = |x: usize, y: usize| {
             if let Some(([left, top], samples)) = &self.samples {
