@@ -159,13 +159,13 @@
         "mask": 8
       },
       "statistics_scene": {
-        "name": "virtual uniform grey",
+        "name": "virtual uniform gray",
         "luma": 2048,
         "samples_per_cell": 1024,
         "black_level": 1024,
         "signal_shift": 2
       },
-      "basis": "Explicit virtual uniform-grey scene and frame timing."
+      "basis": "Explicit virtual uniform-gray scene and frame timing."
     }
   }
 }
