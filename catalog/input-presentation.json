@@ -191,6 +191,102 @@
     "hdmi": {
       "label": "HDMI",
       "text": "HDMI"
+    },
+    "flash_pop_up_switch": {
+      "label": "Flash pop-up",
+      "text": "Flash pop-up"
+    },
+    "mode_dial": {
+      "label": "Mode dial",
+      "text": "Mode dial"
+    },
+    "selector.press": {
+      "label": "Menu / OK",
+      "text": "MENU/OK"
+    },
+    "view_mode_button": {
+      "label": "View mode",
+      "text": "View mode"
+    },
+    "zoom_power_ring": {
+      "label": "Zoom ring",
+      "text": "Zoom ring"
+    },
+    "zoom_power_ring.increase": {
+      "label": "Zoom in",
+      "text": "Zoom in"
+    },
+    "zoom_power_ring.decrease": {
+      "label": "Zoom out",
+      "text": "Zoom out"
+    },
+    "drive_dial": {
+      "label": "Drive dial",
+      "text": "Drive dial"
+    },
+    "flash_pop_up_lever": {
+      "label": "Flash pop-up",
+      "text": "Flash pop-up"
+    },
+    "front_command_dial": {
+      "label": "Front command dial",
+      "text": "Front command dial"
+    },
+    "front_command_dial.increase": {
+      "label": "Front command right",
+      "text": "Front command right"
+    },
+    "front_command_dial.decrease": {
+      "label": "Front command left",
+      "text": "Front command left"
+    },
+    "front_command_dial.press": {
+      "label": "Front command press",
+      "text": "Front command press"
+    },
+    "diopter_adjustment_control.increase": {
+      "label": "Diopter adjustment",
+      "text": "Diopter adjustment"
+    },
+    "diopter_adjustment_control.decrease": {
+      "label": "Diopter adjustment",
+      "text": "Diopter adjustment"
+    },
+    "rear_command_dial": {
+      "label": "Rear command dial",
+      "text": "Rear command dial"
+    },
+    "rear_command_dial.increase": {
+      "label": "Rear command right",
+      "text": "Rear command right"
+    },
+    "rear_command_dial.decrease": {
+      "label": "Rear command left",
+      "text": "Rear command left"
+    },
+    "rear_command_dial.press": {
+      "label": "Rear command press",
+      "text": "Rear command press"
+    },
+    "selector_up_button": {
+      "label": "Up",
+      "icon": "up"
+    },
+    "selector_right_button": {
+      "label": "Right",
+      "icon": "right"
+    },
+    "selector_down_button": {
+      "label": "Down",
+      "icon": "down"
+    },
+    "selector_left_button": {
+      "label": "Left",
+      "icon": "left"
+    },
+    "lcd_touchscreen": {
+      "label": "Screen",
+      "text": "Screen"
     }
   },
   "icons": {
