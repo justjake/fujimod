@@ -293,6 +293,22 @@ fn transfer(c: &Cluster, core: usize, pc: u32, word: u32) -> Result<Transfer, St
     ))
 }
 
+/// With the MMU off every data access is Strongly-ordered (ARMv7-A ARM
+/// B3.2.1), so the engine's only data abort is an alignment fault: an
+/// unaligned word, halfword or doubleword access. Returns its address and
+/// access. Camera run 2026-11-10: an X-T3 hung before its LED on SD card
+/// code whose unaligned loads ran with the MMU off.
+fn mmu_off_alignment(c: &Cluster, core: usize, pc: u32, fetch: bool) -> Result<(u32, Access), String> {
+    if fetch {
+        return Err("Prefetch abort with the MMU off is unmodeled".into());
+    }
+    let transfer = transfer(c, core, pc, c.word(core, u64::from(pc))?)?;
+    if transfer.address & (transfer.alignment - 1) == 0 {
+        return Err("Data abort with the MMU off is not an alignment fault".into());
+    }
+    Ok((transfer.address, transfer.access))
+}
+
 impl Cluster {
     fn write_cp(&self, core: usize, crn: u32, opc2: u32, value: u32) -> Result<(), String> {
         self.cpus[core].coprocessor(
@@ -345,6 +361,10 @@ impl Cluster {
     }
     pub(super) fn deliver_abort(&self, core: usize, fetch: bool) -> Result<(), String> {
         let pc = self.reg(core, arm::PC)?;
+        if self.cp(core, 1, 0, 0, 0)? & 1 == 0 {
+            let (address, access) = mmu_off_alignment(self, core, pc, fetch)?;
+            return self.abort_entry(core, pc, address, 1, access);
+        }
         let mmu = Mmu::read(self, core)?;
         if fetch {
             let status = mmu
