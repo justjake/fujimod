@@ -57,6 +57,7 @@ fn card_session_with_power(epoch: Option<(u64, Vec<u64>)>, power: Option<std::sy
         gpio::Options {
             input_levels: [0; 16],
             output_levels: Vec::new(),
+            high_port_input_levels: None,
         },
         gpio::Wiring { irqs: Vec::new() },
     )
