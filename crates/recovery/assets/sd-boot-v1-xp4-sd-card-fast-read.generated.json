@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "size": 4376,
+  "symbols": {
+    "sd_card_fast_read": 2612,
+    "sd_card_fast_read_crc32": 4172,
+    "sd_card_fast_read_config": 4320,
+    "sd_card_fast_read_status": 4288
+  },
+  "fixups": [
+    52,
+    140,
+    212,
+    288,
+    392,
+    820,
+    824,
+    880,
+    1356,
+    1456,
+    1620,
+    1692,
+    2084,
+    2188,
+    2608,
+    4156,
+    4268
+  ]
+}

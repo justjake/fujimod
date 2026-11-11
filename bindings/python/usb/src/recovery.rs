@@ -177,20 +177,29 @@ fn availability(py: Python<'_>, firmware_id: &str) -> PyResult<Py<PyAny>> {
     let status = core::availability(firmware_id).map_err(error)?;
     Ok(value(py, &serde_json::to_value(status).map_err(error)?)?.unbind())
 }
-#[pyfunction(signature=(firmware_id,source,*,startup=false))]
+fn sd_card_read(name: &str) -> PyResult<core::SdCardRead> {
+    serde_json::from_value(serde_json::Value::String(name.into()))
+        .map_err(|_| error("sd_card_read must be 'rom' or 'fast'"))
+}
+#[pyfunction(signature=(firmware_id,source,*,startup=false,sd_card_read="rom"))]
 fn build<'py>(
     py: Python<'py>,
     firmware_id: &str,
     source: &[u8],
     startup: bool,
+    sd_card_read: &str,
 ) -> PyResult<Bound<'py, PyDict>> {
     let recipe = core::Recipe::bundled(firmware_id)
         .map_err(error)?
         .ok_or_else(|| error("Missing SD card recipe"))?;
+    let read = self::sd_card_read(sd_card_read)?;
+    if startup && read != core::SdCardRead::Rom {
+        return Err(error("The fast SD card read applies to the recovery card build"));
+    }
     let files = if startup {
         recipe.build_startup(source)
     } else {
-        recipe.build(source)
+        recipe.build_with_sd_card_read(source, read)
     }
     .map_err(error)?;
     let output = PyDict::new(py);
@@ -224,7 +233,8 @@ fn recipe(py: Python<'_>, firmware_id: &str) -> PyResult<Py<PyAny>> {
         .ok_or_else(|| error("Missing SD card recipe"))?;
     Ok(value(py, &serde_json::to_value(recipe).map_err(error)?)?.unbind())
 }
-#[pyfunction]
+#[pyfunction(signature=(firmware_id,source,payload,base,api,workspace,*,sd_card_read="rom"))]
+#[allow(clippy::too_many_arguments)]
 fn compile_ffinit<'py>(
     py: Python<'py>,
     firmware_id: &str,
@@ -233,6 +243,7 @@ fn compile_ffinit<'py>(
     base: u32,
     api: &Bound<'py, PyDict>,
     workspace: u32,
+    sd_card_read: &str,
 ) -> PyResult<(Bound<'py, PyBytes>, Py<PyAny>)> {
     let recipe = core::Recipe::bundled(firmware_id)
         .map_err(error)?
@@ -243,7 +254,7 @@ fn compile_ffinit<'py>(
         .extract()?;
     let api: core::FileApi = serde_json::from_str(&text).map_err(error)?;
     let (bytes, layout) = recipe
-        .compile_ffinit(source, payload, base, &api, workspace)
+        .compile_ffinit(source, payload, base, &api, workspace, self::sd_card_read(sd_card_read)?)
         .map_err(error)?;
     Ok((PyBytes::new(py, &bytes), value(py, &layout)?.unbind()))
 }
