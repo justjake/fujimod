@@ -204,6 +204,11 @@ pub enum ImageQuality {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ColorSpace {
     Srgb,
+    /// Adobe RGB is unconfirmed: libfuji lists 2 ("Adobe sRGB") and 3
+    /// ("AdobeRGB"), both marked unsure. Exif ColorSpace (0xA001) in the
+    /// manifest shows which one the camera honors.
+    AdobeRgbCode2,
+    AdobeRgbCode3,
 }
 
 impl Settings {
@@ -397,6 +402,8 @@ impl Settings {
                 Field::ColorSpace,
                 match v {
                     ColorSpace::Srgb => 1,
+                    ColorSpace::AdobeRgbCode2 => 2,
+                    ColorSpace::AdobeRgbCode3 => 3,
                 },
             ));
         }

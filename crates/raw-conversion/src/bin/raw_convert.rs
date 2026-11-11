@@ -5,7 +5,7 @@ use fujimod_usb::connection::{self, BulkPipe, Connection, DeviceFilter, Transfer
 use std::{collections::BTreeMap, num::NonZeroU32, path::PathBuf, time::Duration};
 
 const USAGE: &str = "usage:
-  fujimod-raw-convert --jobs JOBS.json --out DIR [--raf NAME=PATH]... [--dry-run] [--upload-each] [--conversion-timeout SECONDS]
+  fujimod-raw-convert --jobs JOBS.json --out DIR [--raf NAME=PATH]... [--dry-run | --checklist] [--upload-each] [--conversion-timeout SECONDS]
   fujimod-raw-convert card list
   fujimod-raw-convert card fetch --dir DIR NAME=FILE...";
 
@@ -22,6 +22,7 @@ async fn main_async(args: Vec<String>) -> Result<(), String> {
         return card(&args[1..]).await;
     }
     let (mut jobs, mut out, mut dry_run, mut upload_each) = (None, None, false, false);
+    let mut checklist = false;
     let mut rafs = BTreeMap::new();
     let mut timeout = Duration::from_secs(120);
     let mut items = args.iter();
@@ -36,6 +37,7 @@ async fn main_async(args: Vec<String>) -> Result<(), String> {
                 rafs.insert(name.to_owned(), PathBuf::from(path));
             }
             "--dry-run" => dry_run = true,
+            "--checklist" => checklist = true,
             "--upload-each" => upload_each = true,
             "--conversion-timeout" => {
                 timeout = Duration::from_secs(value()?.parse().map_err(|_| USAGE)?)
@@ -44,6 +46,16 @@ async fn main_async(args: Vec<String>) -> Result<(), String> {
         }
     }
     let file = run::JobFile::load(&jobs.ok_or(USAGE)?)?;
+    if checklist || dry_run {
+        println!("Capture checklist:");
+        for line in run::checklist(&file) {
+            println!("{line}");
+        }
+        if checklist {
+            return Ok(());
+        }
+        println!();
+    }
     let options = run::Options {
         out: out.ok_or(USAGE)?,
         rafs,
