@@ -186,11 +186,14 @@ fn exr_adc(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
 }
 
 fn exr_command_gpu(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
-    let Model::ExrCommandGpu { options } = model else {
+    let Model::ExrCommandGpu { options, irq } = model else {
         return Err("constructor called for another model kind".into());
     };
+    if let Some(irq) = irq {
+        line(irq)?;
+    }
     Ok(Built::Device(Box::new(
-        fujimod_emulator_devices::exr::command_gpu::CommandGpu::new(options)?,
+        fujimod_emulator_devices::exr::command_gpu::CommandGpu::new(options, irq)?,
     )))
 }
 
