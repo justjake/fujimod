@@ -47,7 +47,7 @@ def _guest(board: Any = _DEFAULT) -> tuple[int, int]:
     if board is None:
         return 0, 0
     try:
-        return board.instructions, board.virtual_ticks
+        return getattr(board, 'instructions', 0), getattr(board, 'virtual_ticks', 0)
     except RuntimeError:
         return 0, 0
 
