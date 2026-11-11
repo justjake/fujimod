@@ -14,6 +14,7 @@ members = [
   "crates/recovery",
   "crates/runtime-install",
   "crates/usb-proxy",
+  "crates/sync-protocol",
   "crates/catalog",
   "crates/catalog-bulk",
   "crates/catalog-card",
@@ -135,6 +136,7 @@ fujimod-framebuffer-xpp = { path = "crates/framebuffer-xpp", version = "0.1.0" }
 fujimod-framebuffer-exr2 = { path = "crates/framebuffer-exr2", version = "0.1.0" }
 fujimod-framebuffer = { path = "crates/framebuffer", version = "0.1.0" }
 fujimod-remote = { path = "crates/remote", version = "0.1.0" }
+fujimod-sync-protocol = { path = "crates/sync-protocol", version = "0.1.0" }
 fujimod-recording = { path = "crates/recording", version = "0.1.0" }
 fujimod-release-manifest = { path = "crates/release-manifest", version = "0.1.0" }
 fujimod-catalog = { path = "crates/catalog", version = "0.1.0" }

@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package fujimod.sync.v1;
+
+// One data-channel message contains a varint-length-prefixed Frame followed,
+// for ChunkHeader only, by exactly length raw file bytes.
+message Frame {
+  uint32 id = 1; // Request identifier; replies echo it. Zero means one-way.
+  oneof body {
+    Hello hello = 2;
+    Welcome welcome = 3;
+    ManifestBatch manifest = 4;
+    Wants wants = 5;
+    HashRequest hash_request = 6;
+    HashReply hash_reply = 7;
+    ChunkHeader chunk = 8;
+    FileEnd file_end = 9;
+    Committed committed = 10;
+    Progress progress = 11;
+    Error error = 12;
+  }
+}
+
+message Hello {
+  uint32 protocol_version = 1;
+  string camera_model = 2;
+  string firmware_version = 3;
+  uint32 sd_card_volume_serial = 4;
+  repeated string capabilities = 5;
+}
+message Welcome {
+  uint32 protocol_version = 1;
+  uint32 max_chunk_bytes = 2;
+  uint32 window_bytes = 3;
+  // Empty means the complete manifest is required.
+  string high_water_path = 4;
+}
+message ManifestEntry {
+  // SD card-relative path including directory and original extension.
+  string path = 1;
+  uint64 size_bytes = 2;
+  // Packed FAT date and time as read from the directory entry.
+  uint32 fat_timestamp = 3;
+}
+message ManifestBatch {
+  repeated ManifestEntry entries = 1;
+  bool last = 2;
+}
+message Wants {
+  message Entry {
+    string path = 1;
+    uint64 resume_offset = 2;
+  }
+  repeated Entry entries = 1;
+}
+message HashRequest {
+  repeated string paths = 1;
+}
+message HashReply {
+  message Entry {
+    string path = 1;
+    bytes partial_sha256 = 2;
+  }
+  repeated Entry entries = 1;
+}
+message ChunkHeader {
+  string path = 1;
+  uint64 offset = 2;
+  uint32 length = 3;
+}
+message FileEnd {
+  string path = 1;
+  uint64 total_bytes = 2;
+  fixed32 crc32 = 3;
+}
+message Committed {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_STORED = 1;
+    STATUS_REJECTED = 2;
+    STATUS_FAILED = 3;
+  }
+  string path = 1;
+  Status status = 2;
+  string asset_reference = 3;
+}
+message Progress {
+  string path = 1;
+  uint64 durable_offset = 2;
+  uint32 window_bytes = 3;
+}
+message Error {
+  uint32 code = 1;
+  string message = 2;
+}
+
+// Documents direction and message types. The data-channel implementation
+// exchanges frames directly; no RPC runtime is required.
+service PhotoSync {
+  rpc Exchange(stream Frame) returns (stream Frame);
+}
+
