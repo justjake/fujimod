@@ -71,3 +71,14 @@ def test_pre_push_hook_is_installed(repo: Path) -> None:
     source = Path(__file__).resolve().parent / "hooks" / "pre-push"
     assert hook.read_text(encoding="utf-8") == source.read_text(encoding="utf-8")
     assert hook.stat().st_mode & 0o111
+
+
+def test_custom_hooks_directory_is_installed(repo: Path, tmp_path: Path) -> None:
+    source = tmp_path / "hooks"
+    source.mkdir()
+    (source / "pre-commit").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    install(repo, source)
+    common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir", cwd=repo).strip())
+    hook = common / "hooks" / "pre-commit"
+    assert hook.read_text(encoding="utf-8") == "#!/bin/sh\nexit 0\n"
+    assert hook.stat().st_mode & 0o111
