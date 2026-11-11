@@ -34,12 +34,11 @@ fn bezier(points: &[i64], widths: &[usize], x: usize) -> i64 {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(try_from = "FilmWire", into = "FilmWire")]
 pub struct Film {
     words: Vec<u32>,
-    gain: [u16; 4096],
+    gain: Vec<u16>,
     /// One tone curve per output channel, in R, G, B order.
-    curves: [[u16; 4096]; 3],
+    curves: [Vec<u16>; 3],
     matrix: [[i32; 3]; 3],
     chroma: [i32; 4],
     bounds: [i32; 4],
@@ -48,65 +47,12 @@ pub struct Film {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hue: Option<HueStage>,
 }
-
-#[derive(Clone, Serialize, Deserialize)]
-struct FilmWire {
-    words: Vec<u32>,
-    gain: Vec<u16>,
-    curves: [Vec<u16>; 3],
-    matrix: [[i32; 3]; 3],
-    chroma: [i32; 4],
-    bounds: [i32; 4],
-    bands: [(i32, i32); 5],
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    hue: Option<HueStage>,
-}
-
-impl TryFrom<FilmWire> for Film {
-    type Error = String;
-
-    fn try_from(wire: FilmWire) -> Result<Self, String> {
-        if wire.gain.len() != 4096 || wire.curves.iter().any(|curve| curve.len() != 4096) {
-            return Err("film gain and curves require 4096 samples".into());
-        }
-        let [c0, c1, c2] = wire.curves;
-        Ok(Self {
-            words: wire.words,
-            gain: wire.gain.try_into().map_err(|_| "film gain length")?,
-            curves: [
-                c0.try_into().map_err(|_| "film curve length")?,
-                c1.try_into().map_err(|_| "film curve length")?,
-                c2.try_into().map_err(|_| "film curve length")?,
-            ],
-            matrix: wire.matrix,
-            chroma: wire.chroma,
-            bounds: wire.bounds,
-            bands: wire.bands,
-            hue: wire.hue,
-        })
-    }
-}
-
-impl From<Film> for FilmWire {
-    fn from(film: Film) -> Self {
-        Self {
-            words: film.words,
-            gain: film.gain.to_vec(),
-            curves: film.curves.map(|curve| curve.to_vec()),
-            matrix: film.matrix,
-            chroma: film.chroma,
-            bounds: film.bounds,
-            bands: film.bands,
-            hue: film.hue,
-        }
-    }
-}
 impl Default for Film {
     fn default() -> Self {
         Self {
             words: Vec::new(),
-            gain: [0; 4096],
-            curves: [[0; 4096]; 3],
+            gain: vec![0; 4096],
+            curves: std::array::from_fn(|_| vec![0; 4096]),
             matrix: [[0; 3]; 3],
             chroma: [0; 4],
             bounds: [0; 4],
@@ -172,7 +118,7 @@ impl Film {
         let widths: [usize; 9] = std::array::from_fn(|i| {
             16 << ((r(if i < 8 { 0x500 } else { 0x504 }) >> (if i < 8 { i * 4 } else { 0 })) & 7)
         });
-        for (x, gain) in self.gain.iter_mut().enumerate() {
+        for (x, gain) in self.gain.iter_mut().enumerate().take(4096) {
             *gain = bezier(&table, &[64, 64, 128, 256, 512, 1024, 2048], x) as u16;
         }
         for (channel, curve) in self.curves.iter_mut().enumerate() {
@@ -590,9 +536,9 @@ mod tests {
             chroma: [1024, 0, 1024, 0],
             bands: [(0, 256); 5],
             bounds: [255; 4],
-            curves: std::array::from_fn(|_| std::array::from_fn(|x| (x * 4) as u16)),
+            curves: std::array::from_fn(|_| (0..4096).map(|x| (x * 4) as u16).collect()),
             matrix: [[1024, 0, 0], [0, 1024, 0], [0, 0, 1024]],
-            gain: [2048; 4096],
+            gain: vec![2048; 4096],
             ..Default::default()
         };
         let plain = film.develop([9000, 5000, 3000]);
@@ -618,9 +564,9 @@ mod tests {
         let mut film = Film {
             bands: [(0, 256); 5],
             bounds: [255; 4],
-            curves: std::array::from_fn(|_| std::array::from_fn(|x| (x * 4) as u16)),
+            curves: std::array::from_fn(|_| (0..4096).map(|x| (x * 4) as u16).collect()),
             matrix: [[1024, 0, 0], [0, 1024, 0], [0, 0, 1024]],
-            gain: [2048; 4096],
+            gain: vec![2048; 4096],
             ..Default::default()
         };
         let gray = film.develop([6000, 6000, 6000]);
@@ -636,21 +582,6 @@ mod tests {
         assert_eq!(f.develop([16383; 3]), [0, 128, 128]);
         assert_eq!(signed(0x1000, 13), -4096);
         assert_eq!(signed(0x7ff, 11), -1);
-    }
-    #[test]
-    fn film_wire_rejects_short_pixel_tables() {
-        let mut wire = FilmWire::from(Film::default());
-        wire.curves[1].pop();
-        assert_eq!(
-            Film::try_from(wire).err().as_deref(),
-            Some("film gain and curves require 4096 samples")
-        );
-        let mut wire = FilmWire::from(Film::default());
-        wire.gain.pop();
-        assert_eq!(
-            Film::try_from(wire).err().as_deref(),
-            Some("film gain and curves require 4096 samples")
-        );
     }
 }
 
