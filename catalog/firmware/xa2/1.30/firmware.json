@@ -8,7 +8,80 @@
     "size": 38405156,
     "sha256": "1fcde48563d31bf387f65e326592ecff0eb3eebf14f6ba5a8b4145b9cfc722bf"
   },
-  "boot_rom": null,
-  "installation": null,
+  "boot_rom": {
+    "content": {
+      "size": 16384,
+      "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be"
+    },
+    "address": 2147483648
+  },
+  "installation": {
+    "flash_offset": 604,
+    "entry_labels": {
+      "0x1800": "primary loader",
+      "0x11800": "secondary loader",
+      "0x40020": "primary kernel",
+      "0xd0020": "secondary kernel",
+      "0x671280": "application entry"
+    },
+    "loader_validation": {
+      "entry": 6754944,
+      "sections": [
+        "stream-0016025c",
+        "stream-002a025c"
+      ]
+    },
+    "image_sections": [
+      {
+        "name": "kernel0",
+        "address": 262144,
+        "size": 56032,
+        "sha256": "21366ffff7cebc6176b8a8125bf3a9974835a51070a58ea325f7eed8aabd8882",
+        "native_flash_offset": 524288
+      },
+      {
+        "name": "kernel1",
+        "address": 851968,
+        "size": 55968,
+        "sha256": "8fb0c322a22443a3783cdab9071db17212a5629f6375646218ac1e043dc672ec",
+        "native_flash_offset": 655360
+      },
+      {
+        "name": "stream-0016025c",
+        "address": 6407168,
+        "size": 2452872,
+        "sha256": "de93659e222385b8a9d262ea27b796400ff7f6aef7e96990929c2a67bae18061",
+        "native_flash_offset": 1441792
+      },
+      {
+        "name": "stream-002a025c",
+        "address": 12358880,
+        "size": 5223968,
+        "sha256": "6df82f4459d258bec28f22b5483dd6af4b797d38b4298c4e26a195e97dae23bf",
+        "native_flash_offset": 2752512
+      },
+      {
+        "name": "overlay44",
+        "address": 17694720,
+        "size": 707968,
+        "sha256": "6c706fe83d81ba800dba3a4cf2b58633e6398d9e8c1bde3f1eaf4a43b6f3dd0e",
+        "native_flash_offset": 5767168
+      },
+      {
+        "name": "overlay46",
+        "address": 18481152,
+        "size": 117824,
+        "sha256": "8aa5074a59957402a82ba763fd473c28fa05969918baab4a1476cfbeadfdb02d",
+        "native_flash_offset": 6553600
+      },
+      {
+        "name": "overlay47",
+        "address": 18612224,
+        "size": 2532928,
+        "sha256": "d330957f52d2f92e04b7043920706518b38040b57277d32d0e66386ab70d0592",
+        "native_flash_offset": 6684672
+      }
+    ]
+  },
   "generated_facts": null
 }
