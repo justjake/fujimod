@@ -21,6 +21,20 @@ pub struct StillProcessor {
     raw_dma: Transfer,
     delay: u64,
     irq: Irq,
+    cache: Option<StillCache>,
+    pending_cache: Option<StillCacheKey>,
+    cache_hits: u64,
+}
+
+struct StillCacheKey {
+    control: u32,
+    registers: Vec<u32>,
+    source: Arc<[u8]>,
+}
+
+struct StillCache {
+    key: StillCacheKey,
+    output: Arc<[u8]>,
 }
 impl StillProcessor {
     pub fn new(options: Options, irq: Irq) -> Result<Self, String> {
@@ -38,6 +52,9 @@ impl StillProcessor {
             raw_dma: Transfer::default(),
             delay: options.completion_ticks,
             irq,
+            cache: None,
+            pending_cache: None,
+            cache_hits: 0,
         })
     }
     /// 0x100..0x10fc holds the X30 1.03 correction block that `0x937284`
@@ -152,6 +169,15 @@ impl StillProcessor {
         };
         self.source = vec![0; src.pitch * src.height].into();
         cx.ram_read(src.address, Arc::get_mut(&mut self.source).unwrap())?;
+        let mut registers = self.r.clone();
+        // The completion acknowledgement does not enter pixel arithmetic.
+        registers[0x10004 / 4] = control;
+        registers[0x10084 / 4] = 0;
+        let key = StillCacheKey {
+            control,
+            registers,
+            source: self.source.clone(),
+        };
         self.dma
             .prepare_deferred(cx.now(), self.delay, dst, dst.width * 2)?;
         if let Some(raster) = raw_output {
@@ -189,38 +215,57 @@ impl StillProcessor {
                 out
             });
         }
-        let source = self.source.clone();
-        let cfa = self.cfa.clone();
-        let film = self.film.clone();
-        self.dma
-            .pixels
-            .defer_rows(dst.width * 2, dst.height, move |rows, out| {
-                let raw = RawView {
-                    bytes: &source,
-                    width: src.width,
-                    height: src.height,
-                    pitch: src.pitch,
-                    packing,
-                };
-                cfa.render_rows(
-                    &raw,
-                    &film,
-                    black.unwrap() as u16,
-                    gains,
-                    exposure,
-                    |x, y| {
-                        shading_gains
-                            .as_ref()
-                            .map_or(2048, |gains| gains[y * src.width + x])
-                    },
-                    crop,
-                    dst.width,
-                    dst.height,
-                    rows,
-                    out,
-                );
-            });
+        let cached = self.cache.as_ref().filter(|cache| {
+            cache.key.control == key.control
+                && cache.key.registers == key.registers
+                && cache.key.source.as_ref() == key.source.as_ref()
+        });
+        if let Some(cache) = cached {
+            self.dma.pixels = fujimod_emulator_devices::work::Buffer::from(
+                cache.output.as_ref().to_vec(),
+            );
+            self.pending_cache = None;
+            self.cache_hits += 1;
+        } else {
+            let source = self.source.clone();
+            let cfa = self.cfa.clone();
+            let film = self.film.clone();
+            self.dma
+                .pixels
+                .defer_rows(dst.width * 2, dst.height, move |rows, out| {
+                    let raw = RawView {
+                        bytes: &source,
+                        width: src.width,
+                        height: src.height,
+                        pitch: src.pitch,
+                        packing,
+                    };
+                    cfa.render_rows(
+                        &raw,
+                        &film,
+                        black.unwrap() as u16,
+                        gains,
+                        exposure,
+                        |x, y| {
+                            shading_gains
+                                .as_ref()
+                                .map_or(2048, |gains| gains[y * src.width + x])
+                        },
+                        crop,
+                        dst.width,
+                        dst.height,
+                        rows,
+                        out,
+                    );
+                });
+            self.pending_cache = Some(key);
+        }
         Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn cache_hits(&self) -> u64 {
+        self.cache_hits
     }
 }
 impl Device for StillProcessor {
@@ -299,6 +344,16 @@ impl Device for StillProcessor {
             .min()
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
+        if self.dma.ready(cx.now())
+            && self.pending_cache.is_some()
+            && self.dma.check_result().is_ok()
+        {
+            let output: Arc<[u8]> = self.dma.pixels.as_slice().into();
+            self.cache = Some(StillCache {
+                key: self.pending_cache.take().unwrap(),
+                output,
+            });
+        }
         match self.dma.write(cx) {
             Ok(true) => {
                 if let Err(e) = self.raw_dma.write(cx) {

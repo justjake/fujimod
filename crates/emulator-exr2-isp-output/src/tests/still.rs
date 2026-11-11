@@ -31,6 +31,10 @@ fn still_isp_reconstructs_addressed_pixels_and_refuses_unequal_black() {
     advance_from_checkpoint(&mut d, &mut h, 4);
     assert_eq!(&h.ram[0x9000..0x9004], &[0, 0, 128, 128]);
     assert_eq!(h.irqs, [(0, 61)]);
+    assert_eq!(d.cache_hits(), 0);
+    write(&mut d, &mut h, 0xfff40004, 1);
+    assert_eq!(d.cache_hits(), 1);
+    advance_from_checkpoint(&mut d, &mut h, 8);
     let first = d.checkpoint().unwrap();
     assert_eq!(d.diagnostic_buffer("raw-input").unwrap(), &[0; 72]);
     assert!(d.diagnostic_buffer("dma-output").is_err());
