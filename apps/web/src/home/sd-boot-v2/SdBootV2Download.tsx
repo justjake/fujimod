@@ -174,10 +174,10 @@ function OptionalFolder(props: {
 }
 
 export function SdBootV2Download(props: { release?: LoadedRelease; catalog: readonly Firmware[] }) {
-  const cameras = createMemo(() =>
-    props.release ? releaseCameras(props.release.firmwares, props.catalog) : [],
-  );
   const card = () => props.release?.sd_card_files ?? [];
+  const cameras = createMemo(() =>
+    props.release ? releaseCameras(props.release.firmwares, props.catalog, card()) : [],
+  );
   const [chosenIds, setChosenIds] = createSignal<ReadonlySet<string>>(new Set());
   const [excluded, setExcludedPaths] = createSignal<ReadonlySet<string>>(new Set());
   const [git, setGit] = createSignal(false);
