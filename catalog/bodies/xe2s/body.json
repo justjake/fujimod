@@ -42,6 +42,14 @@
               "refs": {}
             },
             {
+              "name": "windowanalysis",
+              "kind": "WindowAnalysisControl",
+              "boot_entries": [
+                "loader"
+              ],
+              "refs": {}
+            },
+            {
               "name": "imagecombination",
               "kind": "ImageCombination",
               "refs": {}
@@ -217,6 +225,7 @@
             "nandcontroller",
             "fujidecompressor",
             "imagescaler",
+            "windowanalysis",
             "imagecombination",
             "loadermemorydma",
             "powerdevices",
@@ -255,6 +264,7 @@
             "nandcontroller",
             "fujidecompressor",
             "imagescaler",
+            "windowanalysis",
             "imagecombination",
             "loadermemorydma",
             "usbcontrol",
@@ -432,6 +442,11 @@
             "frame_period_ticks": 400000,
             "stop_delay_ticks": 2,
             "basis": "Declared catalog input."
+          },
+          "window_analysis": {
+            "profile": "declared-y16-window-gradients-and-local-tracking-unmeasured",
+            "ticks_per_window": 1000,
+            "basis": "Declared window-analysis numerical law and clock."
           }
         },
         "pin_interrupts": [
