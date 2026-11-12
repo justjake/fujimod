@@ -54,6 +54,7 @@ fn lock<T>(mutex: &Mutex<T>) -> PyResult<MutexGuard<'_, T>> {
 pub fn bytes(data: impl AsRef<[u8]>) -> Py<PyBytes> {
     Python::attach(|py| PyBytes::new(py, data.as_ref()).unbind())
 }
+use fujimod_camera_mount::harness::MountHarness;
 use fujimod_python_usb_base::{Operation, Running, Sessions};
 
 enum Slot {
@@ -84,6 +85,7 @@ pub struct AsyncSession {
     limits: FirmwareLimits,
     token: u16,
     packet_bytes: u32,
+    mount: Arc<Mutex<Option<MountHarness>>>,
 }
 impl AsyncSession {
     /// The firmware's configuration command limit in bytes.
@@ -96,6 +98,7 @@ impl AsyncSession {
             packet_bytes: native.info().advertised_packet_bytes.get(),
             inner: Arc::new(Mutex::new(Slot::Open(Box::new(native)))),
             limits,
+            mount: Arc::new(Mutex::new(None)),
         }
     }
     /// Run a native ff80 operation on the open session.

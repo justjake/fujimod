@@ -176,6 +176,40 @@ fn run(board: &mut Board, instructions: u64) {
 }
 
 #[test]
+fn instruction_points_observe_large_set_at_first_middle_and_last() {
+    let mut board = a7_board();
+    let addresses: Vec<u64> = (0..=observation::MAX_INSTRUCTION_POINTS / 2)
+        .map(|index| CODE + index as u64 * 4)
+        .collect();
+    assert!(addresses.len() > 4096);
+    let expected = [
+        addresses[0],
+        addresses[addresses.len() / 2],
+        *addresses.last().unwrap(),
+    ];
+    let mut points = board.instruction_points_begin(0, addresses).unwrap();
+
+    for pc in expected {
+        board.write_register(0, Register::Pc, pc).unwrap();
+        board.run_for_instructions(8, 1).unwrap();
+        assert_eq!(points.event(), Some(pc));
+        points.resume(pc, pc);
+    }
+
+    board.instruction_points_end(0, &mut points).unwrap();
+}
+
+#[test]
+fn instruction_points_reject_values_beyond_bound_and_odd_addresses() {
+    let board = a7_board();
+    let too_many = (0..=observation::MAX_INSTRUCTION_POINTS)
+        .map(|index| CODE + index as u64 * 4)
+        .collect();
+    assert!(board.instruction_points_begin(0, too_many).is_err());
+    assert!(board.instruction_points_begin(0, vec![CODE + 1]).is_err());
+}
+
+#[test]
 fn a7_watch_records_both_page_table_aliases_with_the_physical_address() {
     let mut board = a7_board();
     let _mmu = Mmu::new(&board, PAGE);
@@ -256,6 +290,27 @@ fn memory_watch_detects_the_loss_of_its_board() {
     assert!(watch.is_live());
     drop(board);
     assert!(!watch.is_live());
+}
+
+#[test]
+fn a7_watch_records_the_executing_stack_pointer() {
+    // A read made on a stack the caller installed carries that stack pointer,
+    // so an audit can tell code running on a private stack from other readers.
+    let mut board = a7_board();
+    let _mmu = Mmu::new(&board, PAGE);
+    let stack = 0x8000_0f00u32;
+    let mut code = vec![movw(13, stack as u16), movt(13, (stack >> 16) as u16)];
+    code.extend(store_at(0x8000_0000, 0x22, 0));
+    code.push(0xeaff_fffe); // b .
+    words(&board, CODE, &code);
+    let mut watch = board
+        .memory_watch_begin(vec![WATCH], 8, board.mappings().to_vec())
+        .unwrap();
+    run(&mut board, code.len() as u64 - 1);
+    let records = records(&watch);
+    assert_eq!(records.len(), 1, "{records:?}");
+    assert_eq!(records[0]["sp"], stack);
+    assert_eq!(board.memory_watch_end(&mut watch), Ok(()));
 }
 
 #[test]

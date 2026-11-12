@@ -316,10 +316,7 @@ async fn leave(hub: &Hub, room: &str, peer: &str, host: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        peer::{HostEvent, HostRoom, PeerSocket},
-        share::Ticket,
-    };
+    use crate::{HostEvent, HostRoom, PeerSocket, share::Ticket};
     use async_tungstenite::{
         WebSocketStream,
         smol::{ConnectStream, connect_async},
@@ -374,13 +371,23 @@ mod tests {
             URL_SAFE_NO_PAD.encode(serde_json::to_vec(&ticket).unwrap())
         );
         let owner_key = "native-owner-secret";
-        let host = HostRoom::join(&link, owner_key, crate::CandidatePolicy::Any)
-            .await
-            .unwrap();
+        let host = HostRoom::join(
+            &link,
+            owner_key,
+            crate::CandidatePolicy::Any,
+            crate::Pacing::Browser,
+        )
+        .await
+        .unwrap();
         let progress: crate::Progress = Arc::new(|_| {});
-        let mut controller = PeerSocket::connect(&link, &progress, crate::CandidatePolicy::Any)
-            .await
-            .unwrap();
+        let mut controller = PeerSocket::connect(
+            &link,
+            &progress,
+            crate::CandidatePolicy::Any,
+            crate::Pacing::Browser,
+        )
+        .await
+        .unwrap();
         let HostEvent::Controller(_, mut owner_peer) = host.next_event().await.unwrap() else {
             panic!("expected controller connection");
         };
@@ -413,12 +420,22 @@ mod tests {
             "owner room did not become offline after disconnect"
         );
 
-        let host = HostRoom::join(&link, owner_key, crate::CandidatePolicy::Any)
-            .await
-            .unwrap();
-        let mut controller = PeerSocket::connect(&link, &progress, crate::CandidatePolicy::Any)
-            .await
-            .unwrap();
+        let host = HostRoom::join(
+            &link,
+            owner_key,
+            crate::CandidatePolicy::Any,
+            crate::Pacing::Browser,
+        )
+        .await
+        .unwrap();
+        let mut controller = PeerSocket::connect(
+            &link,
+            &progress,
+            crate::CandidatePolicy::Any,
+            crate::Pacing::Browser,
+        )
+        .await
+        .unwrap();
         let HostEvent::Controller(_, mut owner_peer) = host.next_event().await.unwrap() else {
             panic!("expected controller after owner restart");
         };
@@ -428,9 +445,14 @@ mod tests {
         host.end().await.unwrap();
         assert!(controller.receive().await.is_err());
         assert!(
-            PeerSocket::connect(&link, &progress, crate::CandidatePolicy::Any)
-                .await
-                .is_err()
+            PeerSocket::connect(
+                &link,
+                &progress,
+                crate::CandidatePolicy::Any,
+                crate::Pacing::Browser
+            )
+            .await
+            .is_err()
         );
         server.abort();
     }

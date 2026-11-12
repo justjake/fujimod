@@ -83,32 +83,27 @@ typenum = { version = "1", default-features = false, features = ["const-generics
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 
 [target.aarch64-apple-darwin.dependencies]
-arrayvec = { version = "0.7" }
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
 byteorder = { version = "1" }
 bytes = { version = "1" }
 cipher = { version = "0.5", default-features = false, features = ["stream-wrapper"] }
-const-oid = { version = "0.9", default-features = false, features = ["db"] }
 crossbeam-utils = { version = "0.8" }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
 crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
-digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
+digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "std"] }
 errno = { version = "0.3" }
 form_urlencoded = { version = "1" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-io = { version = "0.3" }
 futures-sink = { version = "0.3", default-features = false, features = ["std"] }
 futures-util = { version = "0.3", default-features = false, features = ["channel", "io"] }
-generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
-getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 indexmap = { version = "2" }
-libc = { version = "0.2" }
+libc = { version = "0.2", features = ["extra_traits"] }
 naga = { version = "30", features = ["glsl-in", "msl-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
 prost-types = { version = "0.14" }
-rand_core = { version = "0.6", default-features = false, features = ["std"] }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
 serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
@@ -116,39 +111,31 @@ sha2 = { version = "0.10", features = ["asm-aarch64"] }
 smallvec = { version = "1", default-features = false, features = ["const_new", "union"] }
 subtle = { version = "2" }
 tempfile = { version = "3" }
-time = { version = "0.3", features = ["formatting", "parsing"] }
 tokio = { version = "1", features = ["full"] }
-tracing = { version = "0.1", features = ["log"] }
-zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [target.aarch64-apple-darwin.build-dependencies]
-arrayvec = { version = "0.7" }
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
 byteorder = { version = "1" }
 bytes = { version = "1" }
 cc = { version = "1", default-features = false, features = ["parallel"] }
 cipher = { version = "0.5", default-features = false, features = ["stream-wrapper"] }
-const-oid = { version = "0.9", default-features = false, features = ["db"] }
 crossbeam-utils = { version = "0.8" }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
 crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
-digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
+digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "std"] }
 errno = { version = "0.3" }
 form_urlencoded = { version = "1" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-io = { version = "0.3" }
 futures-sink = { version = "0.3", default-features = false, features = ["std"] }
 futures-util = { version = "0.3", default-features = false, features = ["channel", "io"] }
-generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
-getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 indexmap = { version = "2" }
-libc = { version = "0.2" }
+libc = { version = "0.2", features = ["extra_traits"] }
 naga = { version = "30", features = ["glsl-in", "msl-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
 prost-types = { version = "0.14" }
-rand_core = { version = "0.6", default-features = false, features = ["std"] }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
 serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
@@ -157,74 +144,61 @@ smallvec = { version = "1", default-features = false, features = ["const_new", "
 subtle = { version = "2" }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = ["visit", "visit-mut"] }
 tempfile = { version = "3" }
-time = { version = "0.3", features = ["formatting", "parsing"] }
 tokio = { version = "1", features = ["full"] }
-tracing = { version = "0.1", features = ["log"] }
-zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
-arrayvec = { version = "0.7" }
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
 byteorder = { version = "1" }
 bytes = { version = "1" }
 cipher = { version = "0.5", default-features = false, features = ["stream-wrapper"] }
-const-oid = { version = "0.9", default-features = false, features = ["db"] }
 crossbeam-utils = { version = "0.8" }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
 crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
-digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
+digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "std"] }
 form_urlencoded = { version = "1" }
+futures-channel = { version = "0.3", features = ["sink"] }
 futures-io = { version = "0.3" }
-futures-util = { version = "0.3", default-features = false, features = ["io"] }
-generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
+futures-sink = { version = "0.3", default-features = false, features = ["std"] }
+futures-util = { version = "0.3", default-features = false, features = ["channel", "io"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
-getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
+libc = { version = "0.2", features = ["extra_traits"] }
 linux-raw-sys = { version = "0.12", features = ["auxvec", "elf", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "xdp"] }
 naga = { version = "30", features = ["glsl-in", "hlsl-out", "spv-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
-rand_core = { version = "0.6", default-features = false, features = ["std"] }
 rustix = { version = "1", features = ["event", "fs", "mm", "net", "pipe", "process", "time"] }
 serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
 smallvec = { version = "1", default-features = false, features = ["const_new", "union"] }
 subtle = { version = "2" }
-tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
-tracing = { version = "0.1", features = ["log"] }
-zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
-arrayvec = { version = "0.7" }
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
 byteorder = { version = "1" }
 bytes = { version = "1" }
 cc = { version = "1", default-features = false, features = ["parallel"] }
 cipher = { version = "0.5", default-features = false, features = ["stream-wrapper"] }
-const-oid = { version = "0.9", default-features = false, features = ["db"] }
 crossbeam-utils = { version = "0.8" }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
 crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
-digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
+digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "std"] }
 form_urlencoded = { version = "1" }
+futures-channel = { version = "0.3", features = ["sink"] }
 futures-io = { version = "0.3" }
-futures-util = { version = "0.3", default-features = false, features = ["io"] }
-generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
+futures-sink = { version = "0.3", default-features = false, features = ["std"] }
+futures-util = { version = "0.3", default-features = false, features = ["channel", "io"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
-getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
+libc = { version = "0.2", features = ["extra_traits"] }
 linux-raw-sys = { version = "0.12", features = ["auxvec", "elf", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "xdp"] }
 naga = { version = "30", features = ["glsl-in", "hlsl-out", "spv-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
-rand_core = { version = "0.6", default-features = false, features = ["std"] }
 rustix = { version = "1", features = ["event", "fs", "mm", "net", "pipe", "process", "time"] }
 serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
 smallvec = { version = "1", default-features = false, features = ["const_new", "union"] }
 subtle = { version = "2" }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = ["visit", "visit-mut"] }
-tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
-tracing = { version = "0.1", features = ["log"] }
-zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [target.wasm32-unknown-unknown.dependencies]
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }

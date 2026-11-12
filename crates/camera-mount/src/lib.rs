@@ -5,6 +5,7 @@ pub mod bridge;
 pub mod display;
 mod display_tree;
 mod flash;
+pub mod harness;
 use display_tree::DISPLAY;
 #[cfg(target_os = "macos")]
 pub mod fskit;

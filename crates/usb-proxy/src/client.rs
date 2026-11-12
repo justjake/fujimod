@@ -1,4 +1,9 @@
+#[cfg(target_arch = "wasm32")]
+use crate::browser_peer::PeerSocket;
 use crate::{Error, Result, protocol::*};
+#[cfg(not(target_arch = "wasm32"))]
+use fujimod_webrtc::PeerSocket;
+use fujimod_webrtc::Progress;
 #[cfg(target_arch = "wasm32")]
 use futures_util::SinkExt;
 use futures_util::StreamExt;
@@ -17,12 +22,12 @@ fn err(e: impl std::fmt::Display) -> Error {
 }
 enum Socket {
     Web(Box<WebSocket>),
-    Peer(crate::peer::PeerSocket),
+    Peer(PeerSocket),
 }
 async fn send(socket: &mut Socket, message: &Message) -> Result<()> {
     let bytes = message.encode()?;
     match socket {
-        Socket::Peer(peer) => peer.send(bytes).await,
+        Socket::Peer(peer) => Ok(peer.send(bytes).await?),
         Socket::Web(socket) => {
             #[cfg(not(target_arch = "wasm32"))]
             let message = async_tungstenite::tungstenite::Message::Binary(bytes.into());
@@ -84,9 +89,6 @@ fn default_reason() -> Option<String> {
     }
 }
 
-/// Receives each connection step as it completes, before any USB request.
-pub type Progress = std::sync::Arc<dyn Fn(&str) + Send + Sync>;
-
 /// Time beyond an operation's own USB deadline allowed for the network and
 /// the exporter's turnaround before its completion is declared unknown.
 /// Generous for poor Wi-Fi: a lost connection is reported when the channel
@@ -141,7 +143,7 @@ impl Client {
     /// Connect, reporting each step. A failure names the last step reached, so
     /// signaling, WebRTC and the proxy handshake can be told apart.
     pub async fn connect_with_progress(url: &str, token: &str, progress: Progress) -> Result<Self> {
-        Self::connect_with_policy(url, token, progress, crate::CandidatePolicy::Any).await
+        Self::connect_with_policy(url, token, progress, fujimod_webrtc::CandidatePolicy::Any).await
     }
     /// Connect with the given candidate policy. `RelayOnly` requires a TURN relay and
     /// is native only; browsers reject it.
@@ -149,7 +151,7 @@ impl Client {
         url: &str,
         token: &str,
         progress: Progress,
-        policy: crate::CandidatePolicy,
+        policy: fujimod_webrtc::CandidatePolicy,
     ) -> Result<Self> {
         let reached = std::sync::Arc::new(std::sync::Mutex::new(String::from("started")));
         let report: Progress = {
@@ -173,15 +175,23 @@ impl Client {
         url: &str,
         token: &str,
         progress: Progress,
-        policy: crate::CandidatePolicy,
+        policy: fujimod_webrtc::CandidatePolicy,
     ) -> Result<Self> {
-        let ticket = crate::share::Ticket::from_url(url)?;
+        let ticket = fujimod_webrtc::share::Ticket::from_url(url)?;
         let token = ticket.as_ref().map(|t| t.key.as_str()).unwrap_or(token);
         deadline(
             Duration::from_secs(if ticket.is_some() { 30 } else { 10 }),
             async {
                 let mut socket = if ticket.is_some() {
-                    Socket::Peer(crate::peer::PeerSocket::connect(url, &progress, policy).await?)
+                    Socket::Peer(
+                        PeerSocket::connect(
+                            url,
+                            &progress,
+                            policy,
+                            fujimod_webrtc::Pacing::Browser,
+                        )
+                        .await?,
+                    )
                 } else {
                     #[cfg(not(target_arch = "wasm32"))]
                     let socket = async_tungstenite::smol::connect_async(url)

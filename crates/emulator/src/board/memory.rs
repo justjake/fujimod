@@ -536,7 +536,7 @@ impl Memory {
             for (physical, _, len) in self.chunks(address, bytes.len(), Access::Host)?.flatten() {
                 stops
                     .borrow_mut()
-                    .store(physical, &bytes[offset..offset + len]);
+                    .store(None, physical, &bytes[offset..offset + len]);
                 offset += len;
             }
         }

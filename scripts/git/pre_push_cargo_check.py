@@ -215,7 +215,8 @@ def cargo_check_command(
 ) -> list[str]:
     command = ["cargo", "check", "--locked"]
     if target:
-        command.extend(("--target", target))
+        # The browser module links only libraries; binaries stay native.
+        command.extend(("--target", target, "--lib"))
     for package in packages:
         command.extend(("--package", package["name"]))
     return command

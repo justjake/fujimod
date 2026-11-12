@@ -84,6 +84,70 @@ fn two_view_board() -> (super::super::Board, Vec<factory::MemoryMap>) {
     (board, maps)
 }
 
+/// Two synthetic processors share data and code RAM. Core 0 branches forever;
+/// core 1 performs the watched store.
+fn two_core_store_board() -> (super::super::Board, Vec<factory::MemoryMap>) {
+    use super::super::memory::BusMapping;
+    use factory::{Engine, Graph, MemoryMap, Options, Processor, Ram};
+    let maps = (0..2)
+        .flat_map(|core| {
+            [
+                MemoryMap {
+                    core,
+                    address: 0x10000,
+                    physical: 0x10000,
+                    size: 0x1000,
+                    permissions: 7,
+                },
+                MemoryMap {
+                    core,
+                    address: 0x20000,
+                    physical: 0x20000,
+                    size: 0x1000,
+                    permissions: 7,
+                },
+            ]
+        })
+        .collect::<Vec<_>>();
+    let graph = Graph {
+        processors: (0..2)
+            .map(|_| Processor {
+                model: Model::CortexR5F,
+                released: true,
+                mprofile: None,
+                rprofile: Some(Default::default()),
+                registers: vec![(Register::Pc, 0x20000), (Register::Pstate, 0xd3)],
+            })
+            .collect(),
+        ram: vec![
+            Ram {
+                base: 0x10000,
+                size: 0x1000,
+            },
+            Ram {
+                base: 0x20000,
+                size: 0x1000,
+            },
+        ],
+        mappings: maps.clone(),
+        dma_mappings: vec![
+            BusMapping::ram(0x10000, 0x1000),
+            BusMapping::ram(0x20000, 0x1000),
+        ],
+        decoders: vec![],
+        peripherals: vec![],
+        instructions_per_tick: Ratio::new(1, 1).unwrap(),
+    };
+    let board = graph
+        .build(
+            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+            bus::Bus::new(bus::Mode::Strict),
+            None,
+        )
+        .unwrap();
+    (board, maps)
+}
+
 #[test]
 fn cached_read_watch_wakes_for_every_uncached_publication_store() {
     let (mut board, maps) = two_view_board();
@@ -171,10 +235,10 @@ fn stores_that_keep_watched_bytes_leave_the_wait_running() {
         values: vec![vec![1, 2, 3, 4, 5, 6, 7, 8], vec![]],
         ..Default::default()
     };
-    stops.store(0x102, &[3, 4]);
-    stops.store(0xfe, &[9, 9, 1]);
+    stops.store(Some(0), 0x102, &[3, 4]);
+    stops.store(Some(0), 0xfe, &[9, 9, 1]);
     assert!(!stops.fired);
-    stops.store(0x107, &[0]);
+    stops.store(Some(0), 0x107, &[0]);
     assert!(stops.fired);
     assert_eq!(
         stops.first_stop,
@@ -182,16 +246,18 @@ fn stores_that_keep_watched_bytes_leave_the_wait_running() {
             range_index: 0,
             range: (0x100, 0x108),
             address: 0x107,
+            core: Some(0),
             change_confirmed: true,
         })
     );
-    stops.store(0x100, &[9]);
+    stops.store(Some(1), 0x100, &[9]);
     assert_eq!(
         stops.first_stop,
         Some(super::ContinuationStop::Store {
             range_index: 0,
             range: (0x100, 0x108),
             address: 0x107,
+            core: Some(0),
             change_confirmed: true,
         }),
         "later stores must not replace the first stop"
@@ -201,7 +267,7 @@ fn stores_that_keep_watched_bytes_leave_the_wait_running() {
         values: vec![vec![]],
         ..Default::default()
     };
-    large.store(0x200, &[0]);
+    large.store(Some(0), 0x200, &[0]);
     assert!(large.fired);
     assert_eq!(
         large.first_stop,
@@ -209,6 +275,7 @@ fn stores_that_keep_watched_bytes_leave_the_wait_running() {
             range_index: 0,
             range: (0x200, 0x30_0000),
             address: 0x200,
+            core: Some(0),
             change_confirmed: false,
         })
     );
@@ -217,10 +284,10 @@ fn stores_that_keep_watched_bytes_leave_the_wait_running() {
         values: vec![vec![0; 4]; 512],
         ..Default::default()
     };
-    many.store(0x38 * 300 + 4, &[1; 0x30]);
-    many.store(0x38 * 511, &[0; 4]);
+    many.store(Some(0), 0x38 * 300 + 4, &[1; 0x30]);
+    many.store(Some(0), 0x38 * 511, &[0; 4]);
     assert!(!many.fired);
-    many.store(0x38 * 300 - 1, &[0, 0, 1]);
+    many.store(Some(0), 0x38 * 300 - 1, &[0, 0, 1]);
     assert!(many.fired);
 }
 
@@ -240,7 +307,7 @@ fn continuation_stop_keeps_the_first_device_or_store_cause() {
         values: vec![vec![0; 4]],
         ..Default::default()
     };
-    store_then_device.store(0x102, &[1]);
+    store_then_device.store(Some(1), 0x102, &[1]);
     store_then_device.device(7);
     assert_eq!(
         store_then_device.first_stop,
@@ -248,6 +315,7 @@ fn continuation_stop_keeps_the_first_device_or_store_cause() {
             range_index: 0,
             range: (0x100, 0x104),
             address: 0x102,
+            core: Some(1),
             change_confirmed: true,
         })
     );
@@ -273,12 +341,77 @@ fn board_exposes_the_stop_until_continuation_end() {
             range_index: 0,
             range: (0x10000, 0x10004),
             address: 0x10000,
+            core: Some(0),
             change_confirmed: true,
         })
     );
     assert!(board.continuation_end().unwrap());
     assert_eq!(board.continuation_stop(), None);
     assert_eq!(board.instruction_counts(), vec![1]);
+}
+
+#[test]
+fn modeled_bus_store_has_no_cpu_owner() {
+    let (mut board, maps) = two_view_board();
+    board
+        .continuation_begin(vec![(0x10000, 0x10004)], Default::default(), maps)
+        .unwrap();
+    let state = board.state.borrow();
+    board
+        .physical_memory
+        .write_dma(&board.cpus, &state.exclusive, 0x10000, &[1])
+        .unwrap();
+    drop(state);
+
+    assert_eq!(
+        board.continuation_stop(),
+        Some(super::ContinuationStop::Store {
+            range_index: 0,
+            range: (0x10000, 0x10004),
+            address: 0x10000,
+            core: None,
+            change_confirmed: true,
+        })
+    );
+    assert!(board.continuation_end().unwrap());
+}
+
+#[test]
+fn actual_store_stop_names_the_writing_core() {
+    let (mut board, maps) = two_core_store_board();
+    let code = [
+        0xeafffffeu32, // core 0: branch forever
+        0xe5810000,    // core 1: str r0,[r1]
+        0xeafffffe,    // core 1: then branch forever
+    ];
+    board
+        .write_physical(
+            0x20000,
+            &code
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    board.write_register(1, Register::Pc, 0x20004).unwrap();
+    board.write_register(1, arm::CORE[0], 0x5a).unwrap();
+    board.write_register(1, arm::CORE[1], 0x10000).unwrap();
+    board
+        .continuation_begin(vec![(0x10000, 0x10004)], Default::default(), maps)
+        .unwrap();
+
+    board.run_for_instructions(20, 1).unwrap();
+    assert_eq!(
+        board.continuation_stop(),
+        Some(super::ContinuationStop::Store {
+            range_index: 0,
+            range: (0x10000, 0x10004),
+            address: 0x10000,
+            core: Some(1),
+            change_confirmed: true,
+        })
+    );
+    assert!(board.continuation_end().unwrap());
 }
 
 #[test]
