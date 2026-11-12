@@ -1716,6 +1716,57 @@ impl Board {
             })
             .map_err(error)
     }
+    /// Change a declared register supplied by an X-Processor Pro I2C part.
+    /// Firmware sees the new value only through its normal I2C transactions.
+    fn xpp_i2c_part_input(
+        &mut self,
+        node: &str,
+        address: u16,
+        register: u8,
+        value: u16,
+    ) -> PyResult<()> {
+        let id = self.xpp_node(node)?;
+        let model_kind = self
+            .session()?
+            .definition
+            .get("devices")
+            .and_then(|devices| devices.get("nodes"))
+            .and_then(serde_json::Value::as_array)
+            .and_then(|nodes| {
+                nodes.iter().find(|candidate| {
+                    candidate.get("name").and_then(serde_json::Value::as_str) == Some(node)
+                })
+            })
+            .and_then(|candidate| candidate.get("model"))
+            .and_then(|model| model.get("kind"))
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| error(format!("XPP I2C model for node {node} is not declared")))?
+            .to_owned();
+        let result = match model_kind.as_str() {
+            "i2c" => self
+                .board_mut()?
+                .with_device_inputs::<
+                    fujimod_emulator_ip::dw_i2c::Controller<
+                        fujimod_emulator_xpp::i2c::Parts,
+                    >,
+                    _,
+                >(id, |controller, _| {
+                    controller.set_register_input(address, register, value)
+                }),
+            "xt20-touch-i2c" => self
+                .board_mut()?
+                .with_device_inputs::<fujimod_emulator_xpp::touch_xt20::Xt20TouchI2c, _>(
+                    id,
+                    |controller, _| controller.set_register_input(address, register, value),
+                ),
+            _ => {
+                return Err(error(format!(
+                    "XPP I2C input is unsupported for node {node} model {model_kind}"
+                )));
+            }
+        };
+        result.map_err(error)
+    }
     /// Scale the scene light a device declares (1.0 = the declared scene) on
     /// the stopped board.
     fn xpp_scene_light(&mut self, node: &str, factor: f64) -> PyResult<()> {

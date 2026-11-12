@@ -6,7 +6,7 @@
 use crate::i2c::Parts;
 use fujimod_emulator_devices::capability::TouchPanel;
 use fujimod_emulator_devices::checkpoint::Checkpoint;
-use fujimod_emulator_devices::parts::i2c::Bus;
+use fujimod_emulator_devices::parts::i2c::{Bus, RegisterInput};
 use fujimod_emulator_devices::parts::touch_input::{ContactInput, Phase};
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_ip::dw_i2c::{self, Options as I2cOptions};
@@ -312,6 +312,12 @@ impl Bus for TouchBus {
     }
 }
 
+impl RegisterInput for TouchBus {
+    fn set_register_input(&mut self, address: u16, register: u8, value: u16) -> Result<(), String> {
+        self.parts.set_register_input(address, register, value)
+    }
+}
+
 pub struct Xt20TouchI2c {
     controller: dw_i2c::Controller<TouchBus>,
     options: Options,
@@ -328,6 +334,17 @@ impl Xt20TouchI2c {
         let bus = TouchBus::new(parts, options.clone(), panel.clone())?;
         let controller = dw_i2c::Controller::new(i2c_options, bus)?;
         Ok(Self { controller, options, panel })
+    }
+
+    /// Set a declared register value supplied by a non-touch part on this
+    /// bus. Touch reports and register accesses keep their modeled behavior.
+    pub fn set_register_input(
+        &mut self,
+        address: u16,
+        register: u8,
+        value: u16,
+    ) -> Result<(), String> {
+        self.controller.set_register_input(address, register, value)
     }
 
     fn panel_state(&self) -> Result<std::sync::MutexGuard<'_, PanelState>, String> {

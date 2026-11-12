@@ -143,6 +143,19 @@ impl<B: Bus> Controller<B> {
     pub fn bus(&self) -> &B {
         &self.bus
     }
+    /// Set one declared external register value when the attached bus
+    /// provides register-backed input.
+    pub fn set_register_input(
+        &mut self,
+        address: u16,
+        register: u8,
+        value: u16,
+    ) -> Result<(), String>
+    where
+        B: fujimod_emulator_devices::parts::i2c::RegisterInput,
+    {
+        self.bus.set_register_input(address, register, value)
+    }
     fn word(&self, offset: u64) -> u32 {
         self.state.words.get(&offset).copied().unwrap_or(0)
     }
