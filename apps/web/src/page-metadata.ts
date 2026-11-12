@@ -1,3 +1,5 @@
+import { focalComponents } from './docs/sdk.generated';
+
 const pages = {
   '/': {
     title: 'FujiMod',
@@ -47,6 +49,22 @@ export const siteOrigin = 'https://fujimod.com';
 
 export function pageMetadata(path: string) {
   const normalized = path.endsWith('/') ? path : path + '/';
+  const componentSlug = /^\/docs\/sdk\/focal\/components\/([^/]+)\/$/.exec(normalized)?.[1];
+  const component = componentSlug
+    ? focalComponents.find((entry) => entry.slug === componentSlug)
+    : undefined;
+  if (component)
+    return {
+      title: `${component.title} · FocalUI SDK · FujiMod`,
+      description: component.summary.split('\n')[0] || 'FocalUI component reference.',
+      canonical: siteOrigin + normalized,
+    };
+  if (normalized === '/docs/sdk/focal/')
+    return {
+      title: 'FocalUI SDK · FujiMod',
+      description: 'The FocalUI camera interface toolkit component reference.',
+      canonical: siteOrigin + normalized,
+    };
   const route = Object.hasOwn(pages, normalized) ? (normalized as keyof typeof pages) : '/';
   return { ...pages[route], canonical: siteOrigin + route };
 }
