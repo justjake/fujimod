@@ -112,7 +112,7 @@ function Index() {
               <a href={`/docs/sdk/focal/components/${component.slug}/`}>
                 <h2>{component.title}</h2>
                 <Show when={component.summary}>
-                  <p>{component.summary.split('\n')[0]}</p>
+                  <p>{component.summary.split('\n\n')[0]}</p>
                 </Show>
               </a>
             </li>

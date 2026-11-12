@@ -59,6 +59,11 @@
   margin: 32px 0;
 }
 
+.sdk-preview-title {
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+
 .sdk-preview-screen {
   max-width: 720px;
   overflow: hidden;
