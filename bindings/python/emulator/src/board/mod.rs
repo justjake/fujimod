@@ -342,7 +342,7 @@ impl Board {
         serde_json::to_string(&batch).map_err(|e| error(e.to_string()))
     }
 
-    #[pyo3(signature=(ranges,limit=1_000_000,sample_addresses=None,sample_offsets=None,sample_bounds=None))]
+    #[pyo3(signature=(ranges,limit=1_000_000,sample_addresses=None,sample_offsets=None,sample_bounds=None,exclude_pcs=None))]
     fn memory_watch_begin(
         &mut self,
         ranges: Vec<(u64, u64)>,
@@ -350,6 +350,7 @@ impl Board {
         sample_addresses: Option<Vec<u64>>,
         sample_offsets: Option<Vec<u64>>,
         sample_bounds: Option<(u64, u64)>,
+        exclude_pcs: Option<Vec<(u64, u64)>>,
     ) -> PyResult<()> {
         if self.memory_watch.is_some() {
             return Err(error("Another memory watch is active".into()));
@@ -369,6 +370,20 @@ impl Board {
                 )
                 .map_err(error)?,
         );
+        if let Some(spans) = exclude_pcs {
+            let excluded = self
+                .memory_watch
+                .as_ref()
+                .unwrap()
+                .records
+                .borrow_mut()
+                .exclude_pcs(spans);
+            if let Err(message) = excluded {
+                let mut watch = self.memory_watch.take().unwrap();
+                self.board()?.memory_watch_end(&mut watch).map_err(error)?;
+                return Err(error(message));
+            }
+        }
         Ok(())
     }
     fn memory_watch_enabled(&self) -> bool {
@@ -380,18 +395,14 @@ impl Board {
             .memory_watch
             .as_ref()
             .map(|w| {
-                let mut state = w.records.borrow().state();
-                if !w.is_live() && state["violation"].is_null() {
-                    state["violation"] =
-                        serde_json::json!("boot restarted while the memory watch was active");
-                }
-                state
+                w.records.borrow().state_json(
+                    (!w.is_live()).then_some("boot restarted while the memory watch was active"),
+                )
             })
-            .unwrap_or_else(
-                || serde_json::json!({"enabled":false,"ranges":[],"records":[],"violation":null}),
-            );
-        py.import("json")?
-            .call_method1("loads", (value.to_string(),))
+            .unwrap_or_else(|| {
+                r#"{"enabled":false,"ranges":[],"records":[],"violation":null}"#.to_owned()
+            });
+        py.import("json")?.call_method1("loads", (value,))
     }
     fn memory_watch_end(&mut self) -> PyResult<()> {
         if let Some(mut watch) = self.memory_watch.take()
