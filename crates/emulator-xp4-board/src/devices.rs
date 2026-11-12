@@ -645,6 +645,34 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
+    pub fn still_engine(&mut self, wiring: &crate::definition::StillEngine) -> Result<(), String> {
+        let model =
+            crate::still::Engine::new(wiring.engine, wiring.base, wiring.irq, wiring.run_ticks)?;
+        let (lo, hi) = model.window();
+        if self.windows.iter().any(|&(a, b, _)| lo < b && a < hi) {
+            return Err("Overlapping XP4 still engine window".into());
+        }
+        let id = self.models.len();
+        self.windows.push((lo, hi, id));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
+    pub fn dsp(&mut self, wiring: &crate::definition::Dsp) -> Result<(), String> {
+        let model = crate::dsp::Dsp::new(wiring.irq, wiring.run_ticks)?;
+        let windows = model.windows();
+        for &(lo, hi) in &windows {
+            if let Some(&(a, b, id)) = self.windows.iter().find(|&&(a, b, _)| lo < b && a < hi) {
+                let owner = self.models[id].as_ref().map_or("?", |m| m.name());
+                return Err(format!(
+                    "XP4 DSP window {lo:#x}..{hi:#x} overlaps {owner} {a:#x}..{b:#x}"
+                ));
+            }
+        }
+        let id = self.models.len();
+        self.windows.extend(windows.into_iter().map(|(lo, hi)| (lo, hi, id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
     pub fn usb_condition(&mut self, base: u64, present: bool) -> Result<(), String> {
         if self
             .windows

@@ -233,6 +233,12 @@ pub struct Definition {
     /// The JPEG encoder with the XP4 driver's register contract, when declared.
     #[serde(default)]
     pub jpeg_encoder: Option<JpegEncoder>,
+    /// Declared still-processing engines (see `crate::still`).
+    #[serde(default)]
+    pub still_engines: Vec<StillEngine>,
+    /// The still DSP's host interface (see `crate::dsp`), when declared.
+    #[serde(default)]
+    pub dsp: Option<Dsp>,
     #[serde(default = "instruction_rate")]
     pub instructions_per_tick: (u64, u64),
     #[serde(default)]
@@ -268,6 +274,26 @@ pub struct JpegEncoder {
     pub irq: u32,
     pub run_ticks: u64,
     pub memory_type: u64,
+}
+
+/// One declared XP4 still-processing engine: which contract, its register
+/// page base, completion interrupt line and the ticks a job takes.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StillEngine {
+    pub engine: crate::still::Kind,
+    pub base: u64,
+    pub irq: u32,
+    pub run_ticks: u64,
+}
+
+/// The XP4 still DSP host interface: completion interrupt line and the
+/// ticks a command takes.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Dsp {
+    pub irq: u32,
+    pub run_ticks: u64,
 }
 
 /// Register layout of the interval timer at `timer_base`.

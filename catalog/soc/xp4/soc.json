@@ -855,6 +855,24 @@
           },
           "register_blocks": [
             {
+              "base": 4294455296,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Parameter page of the X-T3 5.11 still RECC engine (control page 0xfff82000). The driver's setters write words +0x000..+0x6b0 and read only +0x000 and +0x6b0 back for read-modify-write; nothing polls it. Words read back their last write; what they parameterize is not modeled."
+            },
+            {
+              "base": 4294459392,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Second parameter page of the X-T3 5.11 still RECC engine: the driver's table setters of 0xfff83000 write rows of 0x20 bytes in loops that continue past 0xfff84000, and the still capture writes +0x000 during the RECC init. Words read back their last write; what they parameterize is not modeled."
+            },
+            {
+              "base": 4294463488,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "Parameter page of the X-T3 5.11 still RECC engine (control page 0xfff82000). The driver's setters write words +0x000..+0x0e4 and read only +0x000 back for read-modify-write; nothing polls it. Words read back their last write; what they parameterize is not modeled."
+            },
+            {
               "base": 4294213632,
               "size": 4096,
               "idle_bits": [],
