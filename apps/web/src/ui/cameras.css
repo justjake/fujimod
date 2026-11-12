@@ -163,8 +163,8 @@
   z-index: 50;
   bottom: calc(100% + 22px); /* clears this row's name and status */
   left: 50%;
-  width: 240px;
-  translate: -50% 0;
+  width: min(240px, calc(100vw - 16px));
+  translate: calc(-50% + var(--tip-shift-x, 0px)) var(--tip-shift-y, 0px);
   padding: 10px 12px 11px;
   border-radius: 12px;
   background: var(--key2);
@@ -182,7 +182,7 @@
     visibility 0s 140ms;
 }
 .progress-row .tip-scroll {
-  max-height: min(420px, calc(100dvh - 32px));
+  max-height: min(420px, calc(100dvh - 40px));
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -197,12 +197,12 @@
 }
 .progress-row .phase:first-child .tip {
   left: 0;
-  translate: 0 0;
+  translate: var(--tip-shift-x, 0px) var(--tip-shift-y, 0px);
 }
 .progress-row .phase:last-child .tip {
   left: auto;
   right: 0;
-  translate: 0 0;
+  translate: var(--tip-shift-x, 0px) var(--tip-shift-y, 0px);
 }
 .progress-row .phase.open .tip {
   opacity: 1;
