@@ -58,6 +58,9 @@ pub struct Definition {
     /// Immutable executable prefix of the connected XP4 NOR array.
     #[serde(default)]
     pub storage_immutable_prefix: Option<NorImmutablePrefix>,
+    /// Refuse every write-enable, erase and program request to the NOR.
+    #[serde(default)]
+    pub storage_write_protect: bool,
     /// DMA-only connection with explicitly declared reset and timing hypotheses.
     #[serde(default)]
     pub standalone_dma: Option<StandaloneDma>,

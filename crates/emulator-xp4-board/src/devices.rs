@@ -857,6 +857,7 @@ impl Devices {
         irq: u32,
         receiver_input: Option<super::definition::DiscoveryTxReceiver>,
         prefix: Option<storage::ImmutablePrefix>,
+        write_protect: bool,
     ) -> Result<(Self, Option<storage::ImmutableView>), String> {
         let routes: [u32; 16] = routes
             .try_into()
@@ -878,6 +879,7 @@ impl Devices {
             },
         )?;
         if let Some(prefix) = prefix { nor = nor.with_immutable_prefix(prefix)?; }
+        if write_protect { nor = nor.with_write_protect(); }
         let view = nor.immutable_view();
         let port = storage::port_from_nor(nor);
         let mut dma = DmaController::new(port.clone(), routes);

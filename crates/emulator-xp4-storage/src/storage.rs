@@ -32,6 +32,7 @@ enum Mutation {
 pub struct Nor {
     bytes: frozen::Source,
     prefix: Option<ImmutablePrefix>,
+    write_protect: bool,
     pub jedec: u32,
     pub write_enable: bool,
     geometry: Geometry,
@@ -55,6 +56,7 @@ impl Nor {
         Ok(Self {
             bytes: frozen::Source::new(bytes)?,
             prefix: None,
+            write_protect: false,
             jedec,
             write_enable: false,
             geometry,
@@ -72,7 +74,29 @@ impl Nor {
     pub fn immutable_view(&self) -> Option<ImmutableView> {
         self.prefix.map(|prefix| ImmutableView::new(self.bytes.clone(), prefix.bytes()))
     }
+    /// Declares a run in which the whole array is immutable: every
+    /// write-enable, erase and program request fails the run when issued.
+    pub fn with_write_protect(mut self) -> Self {
+        self.write_protect = true;
+        self
+    }
+    /// Commands that only read the array, identity or status. Every other
+    /// supported opcode can enable or perform a mutation.
+    fn read_only_command(command: u8) -> bool {
+        matches!(command, 0x9f | 0x05 | 0x04 | 0x03 | 0x13 | 0x0b | 0x0c)
+    }
+    fn check_protected_command(&self, command: u32) -> Result<(), String> {
+        let opcode = (command >> 24) as u8;
+        if self.write_protect && !Self::read_only_command(opcode) {
+            return Err(format!("Write-type NOR command {opcode:#x} on a write-protected array"));
+        }
+        Ok(())
+    }
     fn check_mutation(&self, address: u64, size: usize) -> Result<(), String> {
+        if self.write_protect && size != 0 && address < FLASH + FLASH_SIZE
+            && address.checked_add(size as u64).is_none_or(|end| end > FLASH) {
+            return Err("NOR mutation on a write-protected array".into());
+        }
         if self.prefix.is_some_and(|p| size != 0 && address < FLASH + p.bytes() as u64
             && address.checked_add(size as u64).is_none_or(|end| end > FLASH)) {
             return Err("Mutation intersects immutable NOR prefix".into());
@@ -207,7 +231,8 @@ impl Nor {
         json!({"jedec":self.jedec,"write_enable":self.write_enable,"pending":pending,
             "erase_bytes":self.geometry.erase_bytes,"page_bytes":self.geometry.page_bytes,
             "erase_ticks":self.geometry.erase_ticks,"page_ticks":self.geometry.page_ticks,
-            "overlay":self.overlay,"immutable_prefix":self.prefix.map(|p| p.bytes())})
+            "overlay":self.overlay,"immutable_prefix":self.prefix.map(|p| p.bytes()),
+            "write_protect":self.write_protect})
     }
 }
 
@@ -390,6 +415,7 @@ impl SerialFlashController {
                 ) {
                     return Err(format!("Unsupported XP4 flash command {command:#x}"));
                 }
+                self.port.lock().unwrap().nor.check_protected_command(value)?;
                 if command != 0x05 && self.port.lock().unwrap().nor.pending.is_some() {
                     return Err("NOR command while array is busy".into());
                 }
@@ -431,6 +457,9 @@ impl SerialFlashController {
             0x70 if value & 1 != 0 => {
                 if self.due.is_some() || self.regs[0x20 / 4] != 0x202 {
                     return Err("Unsupported or busy XP4 program request".into());
+                }
+                if self.port.lock().unwrap().nor.write_protect {
+                    return Err("NOR stream program on a write-protected array".into());
                 }
                 let address = u64::from(self.regs[0x78 / 4]);
                 let size = self.regs[0x7c / 4] as usize;
@@ -1978,4 +2007,91 @@ mod tests {
         assert_eq!(json!([host.events,host.irqs,host.records]),effects);
     }
 
+}
+
+#[cfg(test)]
+mod write_protect_tests {
+    use super::*;
+    use fujimod_emulator_devices::test_host::TestHost;
+
+    fn nor(write_protect: bool) -> Shared {
+        let mut bytes = vec![0xff; 0x2000];
+        bytes[0x1000..0x1004].copy_from_slice(&0x1234_5678u32.to_le_bytes());
+        let nor = Nor::new(bytes, 0x20, Geometry { erase_bytes: 4096, page_bytes: 256, erase_ticks: 20, page_ticks: 12 }).unwrap();
+        port_from_nor(if write_protect { nor.with_write_protect() } else { nor })
+    }
+    fn store(f: &mut SerialFlashController, h: &mut TestHost, address: u64, value: u32) {
+        let mut cx = h.cx();
+        f.write(&mut cx, address, 4, value as u64);
+        assert_eq!(cx.refusal(), None, "{address:#x}={value:#x}");
+    }
+    fn load(f: &mut SerialFlashController, h: &mut TestHost, address: u64) -> Result<u32, String> {
+        let mut cx = h.cx();
+        let value = f.read(&mut cx, address, 4) as u32;
+        cx.refusal().map_or(Ok(value), |e| Err(format!("{e:?}")))
+    }
+    fn protected() -> (SerialFlashController, TestHost) {
+        (SerialFlashController::new(nor(true), 37), TestHost::new())
+    }
+    fn command(f: &mut SerialFlashController, h: &mut TestHost, value: u32) -> Result<(), String> {
+        let mut cx = h.cx();
+        f.write(&mut cx, CONTROLLER + 0x90, 4, value as u64);
+        cx.refusal().map_or(Ok(()), |e| Err(format!("{e:?}")))
+    }
+
+    #[test]
+    fn write_protection_refuses_write_enable() {
+        let (mut f, mut h) = protected();
+        assert!(command(&mut f, &mut h, 0x0600_0001).is_err());
+        assert!(!f.port.lock().unwrap().nor.write_enable);
+    }
+
+    #[test]
+    fn write_protection_refuses_erase() {
+        for opcode in [0xdc, 0x21] {
+            let (mut f, mut h) = protected();
+            store(&mut f, &mut h, CONTROLLER + 0x94, FLASH as u32);
+            assert!(command(&mut f, &mut h, opcode << 24 | 0x000b_0001).is_err());
+        }
+    }
+
+    #[test]
+    fn write_protection_refuses_program() {
+        let (mut f, mut h) = protected();
+        // Even with write enable already latched, the stream never starts.
+        f.port.lock().unwrap().nor.write_enable = true;
+        store(&mut f, &mut h, CONTROLLER + 0x20, 0x202);
+        store(&mut f, &mut h, CONTROLLER + 0x78, FLASH as u32);
+        store(&mut f, &mut h, CONTROLLER + 0x7c, 256);
+        let mut cx = h.cx();
+        f.write(&mut cx, CONTROLLER + 0x70, 4, 1);
+        assert!(cx.refusal().is_some());
+        assert!(f.port.lock().unwrap().nor.begin(0, Mutation::Program { address: FLASH, bytes: vec![0] }).is_err());
+    }
+
+    #[test]
+    fn write_protection_leaves_transfers_outside_the_array_alone() {
+        let port = nor(true);
+        let nor = &port.lock().unwrap().nor;
+        assert!(nor.check_mutation(0x1000, 0x100).is_ok());
+        assert!(nor.check_mutation(FLASH - 4, 4).is_ok());
+        assert!(nor.check_mutation(FLASH - 4, 8).is_err());
+        assert!(nor.check_mutation(FLASH + FLASH_SIZE - 4, 4).is_err());
+    }
+
+    #[test]
+    fn write_protection_keeps_identity_status_and_mapped_reads() {
+        let (mut f, mut h) = protected();
+        for (value, result) in [(0x9fa0_0001u32, 0x20u32), (0x0500_0001, 0), (0x0400_0001, 0)] {
+            command(&mut f, &mut h, value).unwrap();
+            h.now += 8;
+            let mut cx = h.cx();
+            f.event(&mut cx, 1);
+            assert_eq!(cx.refusal(), None);
+            assert_eq!(f.regs[0xa0 / 4], result);
+        }
+        assert_eq!(load(&mut f, &mut h, FLASH + 0x1000), Ok(0x1234_5678));
+        let saved = f.save();
+        assert!(SerialFlashController::new(nor(false), 37).restore(&saved).is_err());
+    }
 }

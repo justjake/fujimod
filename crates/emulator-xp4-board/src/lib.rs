@@ -1084,6 +1084,7 @@ impl Session {
             discovery_tx_receiver,
             storage_jedec,
             storage_immutable_prefix,
+            storage_write_protect,
             standalone_dma,
             storage_dma_routes,
             spi_inputs,
@@ -1275,6 +1276,9 @@ impl Session {
         if storage_immutable_prefix.is_some() && storage_jedec.is_none() {
             return Err("Immutable NOR prefix requires an XP4 NOR owner".into());
         }
+        if storage_write_protect && storage_jedec.is_none() {
+            return Err("NOR write protection requires an XP4 NOR owner".into());
+        }
         if discovery_tx_receiver.is_some() && (!discovery || storage_jedec.is_none()) {
             return Err("Transmit receiver input requires discovery and XP4 storage DMA".into());
         }
@@ -1290,6 +1294,7 @@ impl Session {
                     .ok_or_else(|| "Serial flash requires an explicit IRQ route".to_owned())?,
                 discovery_tx_receiver,
                 storage_immutable_prefix.map(|p| fujimod_emulator_xp4_storage::storage::ImmutablePrefix::new(p.bytes)).transpose()?,
+                storage_write_protect,
             )?;
             frozen_nor = view;
             Some(devices)
