@@ -38,6 +38,11 @@
           "type": "string"
         },
         {
+          "const": "inapplicable",
+          "description": "The camera's hardware or stock settings cannot support this mod.",
+          "type": "string"
+        },
+        {
           "const": "stale",
           "description": "Recorded, but its inputs changed since.",
           "type": "string"
@@ -310,7 +315,7 @@
       "additionalProperties": {
         "$ref": "#/$defs/ModProgress"
       },
-      "description": "Walkthrough result of every shipped mod, by mod name.",
+      "description": "Walkthrough result of every shipped mod, by mod name; a mod the body cannot run is `inapplicable`.",
       "type": "object"
     },
     "schema": {

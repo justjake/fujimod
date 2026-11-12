@@ -48,7 +48,7 @@ pub struct FirmwareProgress {
     pub tracks: Vec<TrackProgress>,
     /// Stock camera features the emulator is graded on, by feature; only features the body has.
     pub stock: BTreeMap<String, StockProgress>,
-    /// Walkthrough result of every shipped mod, by mod name.
+    /// Walkthrough result of every shipped mod, by mod name; a mod the body cannot run is `inapplicable`.
     pub mods: BTreeMap<String, ModProgress>,
 }
 
@@ -181,6 +181,8 @@ pub enum ModProgress {
     Fail,
     /// The mod cannot be built for this firmware.
     Unavailable,
+    /// The camera's hardware or stock settings cannot support this mod.
+    Inapplicable,
     /// Recorded, but its inputs changed since.
     Stale,
     NotRun,

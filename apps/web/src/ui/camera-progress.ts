@@ -1,6 +1,9 @@
 /** Bring-up progress per camera model, from the catalog's generated progress documents. */
 export type StageProgress = 'pass' | 'partial' | 'fail' | 'stale' | 'not-run';
-export type ModProgress = Exclude<StageProgress, 'partial'> | 'unavailable';
+export type ModProgress =
+  | Exclude<StageProgress, 'partial'>
+  | 'unavailable'
+  | 'inapplicable';
 export type StockResult = 'pass' | 'partial' | 'fail' | 'stale' | 'not-run';
 /** Bring-up tracks, in the bring-up graph's order. */
 export type TrackId = 'static' | 'emulator' | 'camera' | 'fujimod' | 'sd';
