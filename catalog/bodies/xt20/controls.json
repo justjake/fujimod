@@ -807,11 +807,11 @@
           "kind": "steps",
           "decrease": {
             "kind": "debug_key",
-            "name": "C_DIAL-"
+            "name": "CMD_LEFT"
           },
           "increase": {
             "kind": "debug_key",
-            "name": "C_DIAL+"
+            "name": "CMD_RIGHT"
           }
         },
         "press": {
