@@ -3,6 +3,7 @@ import { getRequestEvent } from '@solidjs/web';
 import { SiteHeader } from '../ui/site-header';
 import { focalComponents, type FocalApiDeclaration, type FocalComponent } from './sdk.generated';
 import FocalUIPreview from './FocalUIPreview';
+import { Markdown, highlightC } from './Markdown';
 import '../home/site.css';
 import '../navigation.css';
 import './docs.css';
@@ -61,7 +62,7 @@ function Members(props: { declaration: FocalApiDeclaration }) {
                   <span class="sdk-member-type">{member.type}</span>
                 </Show>
               </dt>
-              <dd>{member.comment}</dd>
+              <dd><Markdown text={member.comment} inline /></dd>
             </div>
           )}
         </For>
@@ -78,7 +79,7 @@ function ComponentPage(props: { component: FocalComponent }) {
         <p class="sdk-header-name">{props.component.header}</p>
       </header>
       <Show when={props.component.summary}>
-        <p class="sdk-summary">{props.component.summary}</p>
+        <div class="sdk-summary"><Markdown text={props.component.summary} /></div>
       </Show>
       <For each={props.component.previews}>{(preview) => <FocalUIPreview preview={preview} />}</For>
       <For each={props.component.declarations}>
@@ -86,10 +87,10 @@ function ComponentPage(props: { component: FocalComponent }) {
           <section class="sdk-declaration" id={declaration.name}>
             <h2>{declaration.name}</h2>
             <pre>
-              <code>{declarationSignature(declaration)}</code>
+              <code>{highlightC(declarationSignature(declaration))}</code>
             </pre>
             <Show when={declaration.comment}>
-              <p>{declaration.comment}</p>
+              <Markdown text={declaration.comment} />
             </Show>
             <Members declaration={declaration} />
           </section>
@@ -110,7 +111,7 @@ function Index() {
               <a href={`/docs/sdk/focal/components/${component.slug}/`}>
                 <h2>{component.title}</h2>
                 <Show when={component.summary}>
-                  <p>{component.summary.split('\n\n')[0]}</p>
+                  <p><Markdown text={component.summary.split('\n\n')[0]} inline /></p>
                 </Show>
               </a>
             </li>
