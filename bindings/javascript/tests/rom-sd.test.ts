@@ -7,7 +7,7 @@ await initialize({
   module_or_path: await readFile(new URL('../pkg/fujimod_bg.wasm', import.meta.url)),
 });
 
-test('Agate recovery is available without a complete emulator board', () => {
+await test('Agate recovery is available without a complete emulator board', () => {
   const status = sdCardTools.availability('xpro2-511');
   try {
     assert.equal(status.generation, 'xpp');
@@ -20,7 +20,7 @@ test('Agate recovery is available without a complete emulator board', () => {
   assert.throws(() => sdCardTools.build('xpro2-511', new Uint8Array(4)), /size differs/);
 });
 
-test('EXR exposes its third file and the unresolved updater contract', () => {
+await test('EXR exposes its third file and the unresolved updater contract', () => {
   for (const [id, generation] of [['xf1-101', 'exr'], ['xpro1-382', 'exrpro']] as const) {
     const status = sdCardTools.availability(id);
     try {

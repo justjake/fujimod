@@ -241,8 +241,8 @@ impl PreparedBlock {
             });
         }
         let mut predecessors = vec![Vec::new(); blocks.len()];
-        for index in 0..blocks.len() {
-            let end = blocks[index].instructions.end;
+        for (index, block) in blocks.iter_mut().enumerate() {
+            let end = block.instructions.end;
             let last = &instructions[end - 1].operation;
             let mut successors = Vec::new();
             match *last {
@@ -269,7 +269,7 @@ impl PreparedBlock {
             for successor in &successors {
                 predecessors[*successor].push(index);
             }
-            blocks[index].successors = successors;
+            block.successors = successors;
         }
         // Backward liveness includes the existing goto publication contract:
         // every possibly modified bank register must have a valid value there,

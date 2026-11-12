@@ -116,11 +116,8 @@ fn reset_clears_protocol_and_invalidates_frames_from_an_earlier_power_epoch() {
     p.tick(300, pins()).unwrap();
     p.tick(540, pins()).unwrap();
     let before = p.save();
-    assert!(
-        p.finish(token, frame(0x3f), 550)
-            .unwrap_err()
-            .contains("power/reset")
-    );
+    // The cut-off frame receives the undriven line and leaves the new epoch's link untouched.
+    assert_eq!(p.finish(token, frame(0x3f), 550).unwrap(), 0xff);
     assert_eq!(p.save(), before);
     assert_eq!(p.save()["link"]["state"]["frames"], 0);
     assert_eq!(byte(&mut p, 0, 560), 0);

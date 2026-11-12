@@ -118,7 +118,7 @@ impl Request {
         let tone = cx.ram_bytes(dma::physical(self.tone.into(), 1024)?, 1024)?;
         let packed = cx.ram_bytes(dma::physical(self.mask.into(), 256)?, 256)?;
         let mut mask = BTreeMap::new();
-        for entry in packed.chunks_exact(4) {
+        for entry in packed.as_chunks::<4>().0 {
             let v = word(entry, 0);
             if v == u32::MAX {
                 break;
@@ -199,11 +199,9 @@ impl Request {
                 let i = row * columns + column;
                 let average = sums[i] / u64::from(counts[i].max(1));
                 let reference = references[column];
-                let gain = if reference == 0 {
-                    128
-                } else {
-                    (average * 128 + reference / 2) / reference
-                };
+                let gain = (average * 128 + reference / 2)
+                    .checked_div(reference)
+                    .unwrap_or(128);
                 let limit = (u64::from(self.ceiling) * 128).clamp(128, 4094);
                 let gain = gain.clamp(128, limit) as u16;
                 let phase = row % 4;

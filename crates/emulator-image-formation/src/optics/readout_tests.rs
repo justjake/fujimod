@@ -53,7 +53,9 @@ fn scalar(p: &Projection, frame: &ExposedFrame, shift: f64) -> Arc<[u8]> {
         libm::rint(v * 65535.) as u16
     });
     let source: Vec<[u16; 3]> = rgb
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .map(|v| std::array::from_fn(|c| lut[v[c] as usize]))
         .collect();
     let diameter = (shift - p.subject_shift).abs() * p.spec.focal_length_mm
@@ -151,10 +153,10 @@ fn sparse_readouts_and_unsampled_queries_match_scalar_psf() {
                     for y in 0..h {
                         for x in 0..w {
                             let v = f.sample_source(x, y);
-                            for c in 0..3 {
+                            for (c, value) in v.iter().enumerate().take(3) {
                                 let at = (y * w + x) * 6 + c * 2;
                                 assert_eq!(
-                                    v[c],
+                                    *value,
                                     u16::from_le_bytes([expected[at], expected[at + 1]])
                                 );
                             }

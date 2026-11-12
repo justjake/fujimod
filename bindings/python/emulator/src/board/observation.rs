@@ -11,7 +11,9 @@ impl Board {
             if let Some(mut watch) = self.function_watch.take() {
                 let _ = session.board.function_watch_end(&mut watch);
             }
-            if let Some(mut watch) = self.memory_watch.take() {
+            if let Some(mut watch) = self.memory_watch.take()
+                && watch.is_live()
+            {
                 let _ = session.board.memory_watch_end(&mut watch);
             }
             for (core, mut points) in std::mem::take(&mut self.instruction_points) {

@@ -722,7 +722,7 @@ fn board_registers_spi_selector_and_one_dma_controller_as_independent_nodes() {
     use fujimod_emulator_exr2_plan::{Plan, RefuseAdapters};
     use fujimod_emulator_exr2_resources::Resources;
     let plan = Plan::parse(
-        &serde_json::json!({
+        serde_json::json!({
             "schema": 1,
             "boot_entry": "rom",
             "wires": {},

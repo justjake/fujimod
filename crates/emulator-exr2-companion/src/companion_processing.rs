@@ -248,7 +248,13 @@ impl Processing {
             (b & 65535).saturating_sub(x as u32) as usize,
             (b >> 16).saturating_sub(y as u32) as usize,
         );
-        if v.0 == 0 || v.0 > 8192 || v.0 % 2 != 0 || v.1 == 0 || v.1 > 8192 || v.4 == 0 || v.5 == 0
+        if v.0 == 0
+            || v.0 > 8192
+            || !v.0.is_multiple_of(2)
+            || v.1 == 0
+            || v.1 > 8192
+            || v.4 == 0
+            || v.5 == 0
         {
             return Err("FE80 luma raster has unsupported geometry".into());
         }
@@ -271,23 +277,23 @@ impl Processing {
     }
     fn run(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
         self.upload.advance(cx);
-        if let Some(job) = self.job.as_mut() {
-            if job.due.is_some_and(|due| due <= cx.now()) {
-                self.wiring.routes.validate(job.route)?;
-                for output in &job.outputs {
-                    dma::write(cx, output.address.into(), &output.bytes)?;
-                }
-                self.registers.insert(0xfe80c100, 0x100);
-                self.registers.insert(0xfe80c440, 0x40000);
-                self.registers.insert(0xfe80d804, 0);
-                self.registers.insert(
-                    0xfe80c000,
-                    self.registers.get(&0xfe80c000).copied().unwrap_or(0) | 1,
-                );
-                job.route.raise(cx)?;
-                self.job = None;
-                self.completed += 1;
+        if let Some(job) = self.job.as_mut()
+            && job.due.is_some_and(|due| due <= cx.now())
+        {
+            self.wiring.routes.validate(job.route)?;
+            for output in &job.outputs {
+                dma::write(cx, output.address.into(), &output.bytes)?;
             }
+            self.registers.insert(0xfe80c100, 0x100);
+            self.registers.insert(0xfe80c440, 0x40000);
+            self.registers.insert(0xfe80d804, 0);
+            self.registers.insert(
+                0xfe80c000,
+                self.registers.get(&0xfe80c000).copied().unwrap_or(0) | 1,
+            );
+            job.route.raise(cx)?;
+            self.job = None;
+            self.completed += 1;
         }
         Ok(())
     }

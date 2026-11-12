@@ -252,9 +252,7 @@ async fn signal_loop(
             Wake::Incoming(Ok(_)) => (),
             Wake::Incoming(Err(_)) => alive = false,
             Wake::Outgoing(Ok(frame)) => {
-                if write(&mut socket, frame.clone()).await.is_err() {
-                    alive = false;
-                } else if frame["type"] == "end" {
+                if write(&mut socket, frame.clone()).await.is_err() || frame["type"] == "end" {
                     alive = false;
                 }
             }

@@ -92,20 +92,20 @@ impl RuntimeImage {
             || self.bytes.is_empty()
             || self.capacity < self.bytes.len() as u64
             || !self.alignment.is_power_of_two()
-            || self.link_base % self.alignment != 0
+            || !self.link_base.is_multiple_of(self.alignment)
             || self.link_base.checked_add(self.capacity).is_none()
         {
             return Err(bad("invalid image geometry"));
         }
         let c = &self.control;
         if c.control_offset as usize >= self.bytes.len()
-            || c.control_offset % 4 != 0
-            || c.state_offset % 4 != 0
+            || !c.control_offset.is_multiple_of(4)
+            || !c.state_offset.is_multiple_of(4)
             || c.code_size == 0
             || c.code_size as usize > self.bytes.len()
             || c.state_offset < c.code_size
             || c.nonce == 0
-            || c.mailbox.size % 4 != 0
+            || !c.mailbox.size.is_multiple_of(4)
         {
             return Err(bad("invalid control layout"));
         }
@@ -205,15 +205,14 @@ impl RuntimeImage {
                 return Err(bad("invalid or duplicate hook address"));
             }
         }
-        if let Some(table) = &self.hook_table {
-            if ![4, 8].contains(&table.address_bytes)
+        if let Some(table) = &self.hook_table
+            && (![4, 8].contains(&table.address_bytes)
                 || table.offset % table.address_bytes != 0
                 || u64::from(table.offset)
                     + self.hooks.len() as u64 * u64::from(table.address_bytes + 8)
-                    > self.bytes.len() as u64
-            {
-                return Err(bad("hook table outside image"));
-            }
+                    > self.bytes.len() as u64)
+        {
+            return Err(bad("hook table outside image"));
         }
         let mut destinations = BTreeSet::new();
         for r in &self.relocations {
@@ -241,7 +240,7 @@ impl RuntimeImage {
         match destination {
             Destination::Image(offset) => {
                 let offset = offset as usize;
-                if offset % 4 != 0 {
+                if !offset.is_multiple_of(4) {
                     return Err(Error::Invalid("unaligned relocation destination"));
                 }
                 let bytes = self
@@ -293,7 +292,7 @@ impl RuntimeImage {
     }
     pub fn relocate(&self, base: u64) -> Result<Self> {
         self.validate()?;
-        if base % self.alignment != 0 || base.checked_add(self.capacity).is_none() {
+        if !base.is_multiple_of(self.alignment) || base.checked_add(self.capacity).is_none() {
             return Err(Error::Invalid("invalid placement base"));
         }
         let delta = i128::from(base) - i128::from(self.link_base);

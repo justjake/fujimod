@@ -104,7 +104,7 @@ export function ShareAlert(props: {
   };
   return (
     <dialog
-      ref={dialog}
+      ref={(element) => (dialog = element)}
       class="wb-share-alert"
       aria-label="Shared camera disconnected"
       onCancel={(event) => {

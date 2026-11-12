@@ -10,34 +10,6 @@ pub struct Link {
     regs: [u32; 7],
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use fujimod_emulator_devices::test_host::recording::RecordingHost;
-
-    #[test]
-    fn absolute_window_checkpoint_and_refusal() {
-        let mut host = RecordingHost::default();
-        let mut link = Link::default();
-        let mut cx = Cx::new(&mut host, 0, 0, 3);
-        link.write(&mut cx, BASE + 8, 4, 0x12345678);
-        assert_eq!(cx.refusal(), None);
-        let state = link.save();
-        assert_eq!(state, link.save());
-        let mut restored = Link::default();
-        restored.restore(&state).unwrap();
-        assert_eq!(restored.read(&mut cx, BASE + 8, 4), 0x12345678);
-        assert_eq!(restored.read(&mut cx, BASE, 4), 1);
-        assert!(restored.pollable(BASE, 4));
-        assert!(!restored.pollable(BASE, 1));
-        assert!(restored.restore(&serde_json::json!([1])).is_err());
-        assert_eq!(restored.save(), state);
-        restored.read(&mut cx, BASE - 4, 4);
-        assert!(cx.is_unmodeled());
-        assert_eq!(cx.refusal(), Some("unmodeled register"));
-    }
-}
-
 impl Device for Link {
     fn name(&self) -> &'static str {
         "display-output-link"
@@ -76,5 +48,33 @@ impl Device for Link {
         self.regs = serde_json::from_value(state.clone())
             .map_err(|e| format!("invalid output link checkpoint: {e}"))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fujimod_emulator_devices::test_host::recording::RecordingHost;
+
+    #[test]
+    fn absolute_window_checkpoint_and_refusal() {
+        let mut host = RecordingHost::default();
+        let mut link = Link::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 3);
+        link.write(&mut cx, BASE + 8, 4, 0x12345678);
+        assert_eq!(cx.refusal(), None);
+        let state = link.save();
+        assert_eq!(state, link.save());
+        let mut restored = Link::default();
+        restored.restore(&state).unwrap();
+        assert_eq!(restored.read(&mut cx, BASE + 8, 4), 0x12345678);
+        assert_eq!(restored.read(&mut cx, BASE, 4), 1);
+        assert!(restored.pollable(BASE, 4));
+        assert!(!restored.pollable(BASE, 1));
+        assert!(restored.restore(&serde_json::json!([1])).is_err());
+        assert_eq!(restored.save(), state);
+        restored.read(&mut cx, BASE - 4, 4);
+        assert!(cx.is_unmodeled());
+        assert_eq!(cx.refusal(), Some("unmodeled register"));
     }
 }

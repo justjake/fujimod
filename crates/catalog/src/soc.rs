@@ -34,6 +34,10 @@ pub struct SocHardware {
     pub companion: Option<CompanionHardware>,
     /// Additional block parameters, keyed by the block's identity.
     pub blocks: BTreeMap<String, BlockHardware>,
+    /// The byte every RAM cell holds at power-on, as read on a camera. Absent
+    /// when unmeasured; the emulator then starts RAM zeroed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power_on_ram_fill: Option<u8>,
 }
 
 impl SocHardware {

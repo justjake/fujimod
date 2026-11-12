@@ -1,6 +1,7 @@
 //! XP5 GPIO, serial, ADC, timers, mailbox, clocks and gates.
 pub mod adc;
 pub mod boot_control;
+pub mod bringup_stub;
 pub mod clocks;
 pub mod connection_status;
 pub mod discarded_read;

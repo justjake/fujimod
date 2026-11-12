@@ -205,17 +205,17 @@ impl Session {
     }
     pub(super) fn mark_input(&mut self, input: &Input) -> Result<(), String> {
         let order = self.next_capture_order();
-        if let Some(history) = self.history.as_mut() {
-            if history.core.mark_automatic(&self.core, input)? {
-                history.marks.push_back(Presentation {
-                    order,
-                    boundary: Boundary::capture(&self.core),
-                    frames: self.frames.clone(),
-                    powered_on: self.powered_on,
-                });
-                while history.marks.len() > history.core.retained_marks() {
-                    history.marks.pop_front();
-                }
+        if let Some(history) = self.history.as_mut()
+            && history.core.mark_automatic(&self.core, input)?
+        {
+            history.marks.push_back(Presentation {
+                order,
+                boundary: Boundary::capture(&self.core),
+                frames: self.frames.clone(),
+                powered_on: self.powered_on,
+            });
+            while history.marks.len() > history.core.retained_marks() {
+                history.marks.pop_front();
             }
         }
         Ok(())
@@ -374,7 +374,7 @@ mod tests {
             .unwrap()
             .sensors
             .insert("sensor".into(), sensor.clone());
-        session.reset_image = Some(Arc::new(session.core.checkpoint(None).unwrap()));
+        session.reset_image = Some(std::rc::Rc::new(session.core.checkpoint(None).unwrap()));
         let frame: Arc<SensorFrame> = Arc::new(
             SensorFrame::new(
                 7,

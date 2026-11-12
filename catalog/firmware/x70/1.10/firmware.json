@@ -17,44 +17,8 @@
   },
   "installation": {
     "flash_offset": 604,
-    "entry_labels": {
-      "0x1800": "primary loader",
-      "0x11800": "secondary loader",
-      "0x40020": "primary kernel",
-      "0xd0020": "secondary kernel",
-      "0x93e578": "application entry",
-      "0x93eac4": "application INIT",
-      "0x96bac8": "LCD/EVF task",
-      "0x96aabc": "graphics task",
-      "0x9726c4": "HDMI task",
-      "0x973008": "VGLIB task",
-      "0x11e11e8": "system task",
-      "0x10fbb94": "recording task",
-      "0x9d9b30": "overlay loader task",
-      "0x8a073c": "overlay prefetch handler",
-      "0x8a08a4": "overlay fault task continuation",
-      "0x9d9f40": "overlay fault wait",
-      "0x9d9cb4": "overlay availability update",
-      "0x1d16508": "playcont task",
-      "0x9049dc": "UI initialization",
-      "0x904668": "UI mode installation",
-      "0x92c8cc": "statistics DMA ISR",
-      "0x11f8ef8": "statistics completion callback",
-      "0x11ff3f0": "statistics normalization",
-      "0x12f604c": "statistics IMGDC packet",
-      "0x12f8814": "statistics IMGDC consumer",
-      "0x1202870": "statistics acquisition stop",
-      "0x1226c1c": "REC statistics data handler",
-      "0x1226e10": "REC statistics finish handler"
-    },
-    "loader_validation": {
-      "entry": 262176,
-      "sections": [
-        "kernel0",
-        "kernel1",
-        "section4"
-      ]
-    },
+    "entry_labels": {},
+    "loader_validation": null,
     "image_sections": [
       {
         "name": "boot",

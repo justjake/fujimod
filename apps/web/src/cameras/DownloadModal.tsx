@@ -143,7 +143,7 @@ export function DownloadModal(props: {
           </Step>
           <Step title="Hide the FujiMod overlay">
             <p>
-              Optional: choose <strong>SET-UP → FUJIMOD DEVTOOLS → BUILD OVERLAY → OFF</strong>.
+              Optional: choose <strong>SET-UP → DEVTOOLS → BUILD OVERLAY → OFF</strong>.
             </p>
           </Step>
         </Show>

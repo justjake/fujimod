@@ -173,10 +173,12 @@ mod tests {
     }
     #[test]
     fn every_distance_length_and_match_split_uses_the_same_bounded_dictionary() {
-        let mut seed = Stream::default();
-        seed.produced = 2047;
-        for n in 0..2047 {
-            seed.history[n] = (n * 37 + 19) as u8;
+        let mut seed = Stream {
+            produced: 2047,
+            ..Default::default()
+        };
+        for (n, byte) in seed.history.iter_mut().enumerate().take(2047) {
+            *byte = (n * 37 + 19) as u8;
         }
         for distance in 1..2048 {
             for length in 1..16 {

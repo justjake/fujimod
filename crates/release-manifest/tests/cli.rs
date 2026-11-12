@@ -73,6 +73,47 @@ fn writes_the_manifest_and_store_files() {
 }
 
 #[test]
+fn writes_optional_release_metadata() {
+    let directory = test_dir("metadata");
+    let (abc, empty) = write_sources(&directory);
+    let mut command = release_command(&directory, &abc, &empty);
+    command
+        .arg("--date")
+        .arg("2026-11-10")
+        .arg("--commit")
+        .arg("abcdef0123456789")
+        .arg("--note")
+        .arg("First note")
+        .arg("--note")
+        .arg("Second note");
+    assert_success(run(&mut command));
+    let manifest: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(directory.join("out/latest.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(manifest["date"], "2026-11-10");
+    assert_eq!(manifest["commit"], "abcdef0123456789");
+    assert_eq!(manifest["notes"][0], "First note");
+    assert_eq!(manifest["notes"][1], "Second note");
+}
+
+#[test]
+fn rejects_out_of_bounds_release_metadata() {
+    let directory = test_dir("invalid-metadata");
+    let (abc, empty) = write_sources(&directory);
+    for (name, value) in [
+        ("--date", "2026-1-10"),
+        ("--date", "2026-02-30"),
+        ("--commit", "ABCDEF0"),
+        ("--note", &"x".repeat(65)),
+    ] {
+        let mut command = release_command(&directory, &abc, &empty);
+        command.arg(name).arg(value);
+        assert!(!run(&mut command).status.success(), "{name}={value}");
+    }
+}
+
+#[test]
 fn running_again_reuses_identical_store_files() {
     let directory = test_dir("idempotent");
     let (abc, empty) = write_sources(&directory);

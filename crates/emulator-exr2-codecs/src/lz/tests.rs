@@ -174,7 +174,7 @@ fn zero_count_counter_reset_cancellation_and_malformed_fixture() {
     assert_eq!(h.writes, 0);
     assert!(h.irqs.is_empty());
     reset(&mut d, &mut h);
-    for pair in h.bytes[0x4000..0x84000].chunks_exact_mut(2) {
+    for pair in h.bytes[0x4000..0x84000].as_chunks_mut::<2>().0 {
         pair.copy_from_slice(&[1, 42]);
     }
     let now = h.now;
@@ -270,7 +270,9 @@ fn box_pyramid_preserves_packed_color_at_every_transfer_group_size() {
     assert_eq!(pixels.len(), 40 * 30 * 2);
     assert!(
         pixels
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .all(|pair| pair[2] != 0 && pair[3] != 0)
     );
 }
@@ -305,7 +307,7 @@ fn every_declared_resize_descriptor_latches_pixels_preserves_padding_and_complet
         let sh = (stage[1] >> 16) as usize;
         let sp = stage[0] as usize;
         let scalar = kind != 0 && stage[5] >> 12 & 3 == 0;
-        for pair in h.bytes[0x10000..0x10000 + sh * sp].chunks_exact_mut(4) {
+        for pair in h.bytes[0x10000..0x10000 + sh * sp].as_chunks_mut::<4>().0 {
             pair.copy_from_slice(if scalar {
                 &[1, 2, 1, 2]
             } else {
@@ -329,7 +331,7 @@ fn every_declared_resize_descriptor_latches_pixels_preserves_padding_and_complet
         );
         for row in 0..height {
             let bytes = &h.bytes[0x100000 + row * pitch..0x100000 + (row + 1) * pitch];
-            for pair in bytes[..w * 2].chunks_exact(4) {
+            for pair in bytes[..w * 2].as_chunks::<4>().0 {
                 assert_eq!(
                     pair,
                     if scalar {
@@ -483,7 +485,10 @@ fn soft_focus_first_crop_uses_bounded_descriptor_and_empirical_luma_curve() {
         let (mut d, mut h, mut c) = setup();
         reset(&mut d, &mut h);
         enabled(&mut c, &mut h, 0, true);
-        for sample in h.bytes[0x10000..0x10000 + 1440 * 480].chunks_exact_mut(2) {
+        for sample in h.bytes[0x10000..0x10000 + 1440 * 480]
+            .as_chunks_mut::<2>()
+            .0
+        {
             sample.copy_from_slice(&input.to_le_bytes());
         }
         configure_soft_focus_first_crop(&mut d, &mut h);
@@ -580,8 +585,14 @@ fn soft_focus_x30_preview_crops_admit_transfer_blocks_with_the_same_pixels() {
     // The camera's measured samples hold at this geometry too.
     for (input, expected) in [(16u16, 19u16), (21, 24), (240, 255)] {
         let pixels = resize(0x1000_1000, input);
-        for row in pixels.chunks_exact(1280) {
-            assert!(row[..640].chunks_exact(2).all(|s| s == expected.to_le_bytes()));
+        for row in pixels.as_chunks::<1280>().0 {
+            assert!(
+                row[..640]
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .all(|s| *s == expected.to_le_bytes())
+            );
             assert!(row[640..].iter().all(|byte| *byte == 0xcc));
         }
     }
@@ -619,7 +630,9 @@ fn weighted_scalar_half_resizes_with_exact_kernel_inside_source_row_padding() {
     reset(&mut d, &mut h);
     enabled(&mut c, &mut h, 0, true);
     for row in 0..240 {
-        for sample in h.bytes[0x10000 + row * 1440..0x10000 + row * 1440 + 736].chunks_exact_mut(2)
+        for sample in h.bytes[0x10000 + row * 1440..0x10000 + row * 1440 + 736]
+            .as_chunks_mut::<2>()
+            .0
         {
             sample.copy_from_slice(&100u16.to_le_bytes());
         }
@@ -637,8 +650,10 @@ fn weighted_scalar_half_resizes_with_exact_kernel_inside_source_row_padding() {
         let destination = 0x102e0 + row * 1440;
         assert!(
             h.bytes[destination..destination + 384]
-                .chunks_exact(2)
-                .all(|sample| sample == 100u16.to_le_bytes())
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .all(|sample| *sample == 100u16.to_le_bytes())
         );
         let source = &h.bytes[0x10000 + row * 1440..0x10000 + row * 1440 + 736];
         assert_eq!(source, &before[row * 1440..row * 1440 + 736]);

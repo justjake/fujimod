@@ -678,10 +678,10 @@ pub fn checked_call_with(
         }
         Ok(())
     })();
-    if guard.observed.borrow().pending.is_some() {
-        if let Err(error) = guard.finish_system_read(&*cpu) {
-            guard.observed.borrow_mut().failure.get_or_insert(error);
-        }
+    if guard.observed.borrow().pending.is_some()
+        && let Err(error) = guard.finish_system_read(&*cpu)
+    {
+        guard.observed.borrow_mut().failure.get_or_insert(error);
     }
     let cleanup_code = cpu.remove_hook(code_hook);
     let cleanup_write = cpu.remove_hook(write_hook);

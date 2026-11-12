@@ -266,10 +266,10 @@ fn schema<T: JsonSchema>(id: &str) -> Value {
         .as_object_mut()
         .expect("schemars root schema is a JSON object");
     object.insert("$id".into(), Value::String(id.into()));
-    if let Some(Value::Object(properties)) = object.get_mut("properties") {
-        if properties.contains_key("$schema") {
-            properties.insert("$schema".into(), schema_uri_property(id));
-        }
+    if let Some(Value::Object(properties)) = object.get_mut("properties")
+        && properties.contains_key("$schema")
+    {
+        properties.insert("$schema".into(), schema_uri_property(id));
     }
     document
 }

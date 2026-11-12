@@ -31,13 +31,14 @@ fn stores(r: &Routine) -> BTreeMap<u64, u64> {
             }
             continue;
         }
-        if i.mnemonic == "str" && ops.len() == 2 {
-            if let (Some(value), Some(address)) = (
+        if i.mnemonic == "str"
+            && ops.len() == 2
+            && let (Some(value), Some(address)) = (
                 regs.get(ops[0]),
                 regs.get(ops[1].trim_start_matches('[').trim_end_matches(']')),
-            ) {
-                out.insert(*address, *value);
-            }
+            )
+        {
+            out.insert(*address, *value);
         }
         let value = match i.mnemonic.as_str() {
             "mov" | "movw" if ops.len() == 2 => number(ops[1].trim_start_matches('#')).ok(),
@@ -409,9 +410,8 @@ pub fn exr2_flash<L: Lookup>(
     let semaphore = one(
         lock.code
             .iter()
-            .filter_map(|i| {
-                (i.mnemonic == "mov" && i.operands.starts_with("r0, #")).then(|| i.operands.clone())
-            })
+            .filter(|&i| i.mnemonic == "mov" && i.operands.starts_with("r0, #"))
+            .map(|i| i.operands.clone())
             .collect(),
         "NAND lock semaphore",
     )?;

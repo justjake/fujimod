@@ -59,7 +59,7 @@ pub struct NandController {
 
 impl NandController {
     pub fn new(nand: NandShared, jedec: u32) -> Self {
-        let mut regs = vec![0; 64];
+        let regs = vec![0; 64];
         Self {
             state: State {
                 regs,
@@ -200,7 +200,7 @@ impl NandController {
             0x0f => {
                 let value = self.feature_value(self.feature_addr());
                 let count = (self.state.regs[0xa0 / 4] & 0x7ff) as usize + 1;
-                self.state.rx_fifo = std::iter::repeat(value).take(count).collect();
+                self.state.rx_fifo = std::iter::repeat_n(value, count).collect();
                 self.state.complete = true;
             }
             0xa5 => {

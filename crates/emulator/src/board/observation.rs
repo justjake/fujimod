@@ -6,6 +6,7 @@ use fujimod_emulator_cpu::{Access, Cpu, Hook, HookId, HookRange, Model, Register
 use serde_json::{Value, json};
 use std::{
     cell::{Cell, RefCell},
+    collections::BTreeMap,
     ffi::c_void,
     rc::{Rc, Weak},
 };
@@ -20,9 +21,9 @@ pub struct Records {
 }
 impl Records {
     fn overlaps(&self, address: u64, bytes: u64) -> bool {
-        self.ranges
-            .iter()
-            .any(|&(lo, hi)| address < hi && lo < address.saturating_add(bytes))
+        let end = address.saturating_add(bytes);
+        let index = self.ranges.partition_point(|&(_, hi)| hi <= address);
+        self.ranges.get(index).is_some_and(|&(lo, _)| lo < end)
     }
     fn push(&mut self, row: Value) {
         if self.violation.is_some() {
@@ -51,8 +52,17 @@ impl Records {
 }
 pub struct MemoryWatch {
     pub records: Rc<RefCell<Records>>,
+    // Native hooks hold raw pointers into each box; boxing keeps them stable as the Vec grows.
+    #[allow(clippy::vec_box)]
     contexts: Vec<Box<MemoryContext>>,
     hooks: Vec<(usize, HookId)>,
+}
+impl MemoryWatch {
+    pub fn is_live(&self) -> bool {
+        self.contexts
+            .iter()
+            .all(|context| context.cpu.upgrade().is_some())
+    }
 }
 struct MemoryContext {
     state: Weak<RefCell<State>>,
@@ -60,6 +70,9 @@ struct MemoryContext {
     records: Rc<RefCell<Records>>,
     maps: Vec<MemoryMap>,
     core: usize,
+    sample_address: Option<u64>,
+    sample_offsets: Vec<u64>,
+    sample_bounds: Option<Span>,
 }
 impl MemoryContext {
     fn record(
@@ -144,8 +157,42 @@ impl MemoryContext {
             .timeline
             .now()
             .saturating_add(elapsed.min(u64::MAX as u128) as u64);
+        // Optional debugger-supplied per-core RAM sample, taken at the access.
+        // A sample can be unavailable during early boot; observation continues.
+        let mut sample_path = Vec::new();
+        if (source == "cpu-read" || source == "cpu-fetch")
+            && let Some(root) = self.sample_address
+        {
+            let mut sample_address = root;
+            for index in 0..=self.sample_offsets.len() {
+                let mut bytes = [0u8; 4];
+                if cpu.read_memory(sample_address, &mut bytes).is_err() {
+                    break;
+                }
+                let value = if byte_order == "little" {
+                    u32::from_le_bytes(bytes)
+                } else {
+                    u32::from_be_bytes(bytes)
+                };
+                sample_path.push(value);
+                if index == self.sample_offsets.len() {
+                    break;
+                }
+                let Some(next) = u64::from(value).checked_add(self.sample_offsets[index]) else {
+                    break;
+                };
+                let Some((lo, hi)) = self.sample_bounds else {
+                    break;
+                };
+                if next < lo || next.checked_add(4).is_none_or(|end| end > hi) {
+                    break;
+                }
+                sample_address = next;
+            }
+        }
+        let sample = sample_path.first().copied();
         records.push(
-            json!({"source":source,"address":address,"physical":physical,"size":size,
+            json!({"sample":sample,"sample_path":sample_path,"source":source,"address":address,"physical":physical,"size":size,
             "value":value,"before":before,"byte_order":byte_order,
             "core":self.core,"pc":scalar(&*cpu,Register::Pc)?,
             "instructions":instructions,"tick":tick}),
@@ -225,6 +272,34 @@ pub(super) fn union(mut ranges: Vec<Span>) -> Vec<Span> {
     }
     out
 }
+
+// Limit backend hook count without widening the ranges recorded by Records.
+// Joining the smallest gaps minimizes callbacks on unwatched addresses.
+fn compact_hooks(ranges: Vec<Span>, maximum: usize) -> Vec<Span> {
+    let ranges = union(ranges);
+    if ranges.len() <= maximum {
+        return ranges;
+    }
+    let mut gaps: Vec<_> = ranges
+        .windows(2)
+        .enumerate()
+        .map(|(index, pair)| (pair[1].0 - pair[0].1, index))
+        .collect();
+    gaps.sort_unstable();
+    let mut join = vec![false; gaps.len()];
+    for &(_, index) in gaps.iter().take(ranges.len() - maximum) {
+        join[index] = true;
+    }
+    let mut result = vec![ranges[0]];
+    for (index, &(lo, hi)) in ranges.iter().enumerate().skip(1) {
+        if join[index - 1] {
+            result.last_mut().unwrap().1 = hi;
+        } else {
+            result.push((lo, hi));
+        }
+    }
+    result
+}
 impl Board {
     pub fn transaction_watch_begin(&self, ranges: Vec<Span>, limit: usize) -> Result<(), String> {
         self.state
@@ -257,6 +332,26 @@ impl Board {
         limit: usize,
         maps: Vec<MemoryMap>,
     ) -> Result<Box<MemoryWatch>, String> {
+        self.memory_watch_begin_with_samples(ranges, limit, maps, vec![], vec![], None)
+    }
+
+    pub fn memory_watch_begin_with_samples(
+        &self,
+        ranges: Vec<Span>,
+        limit: usize,
+        maps: Vec<MemoryMap>,
+        sample_addresses: Vec<u64>,
+        sample_offsets: Vec<u64>,
+        sample_bounds: Option<Span>,
+    ) -> Result<Box<MemoryWatch>, String> {
+        if (!sample_addresses.is_empty() && sample_addresses.len() != self.cpus.len())
+            || sample_offsets.len() > 4
+            || (!sample_offsets.is_empty()
+                && (sample_addresses.is_empty() || sample_bounds.is_none()))
+            || sample_bounds.is_some_and(|(lo, hi)| lo >= hi || hi > 1 << 32)
+        {
+            return Err("Invalid per-core memory watch sample specification".into());
+        }
         // A memory hook's bounds and the address it reports are physical: the
         // backend checks them after the processor's own MMU/MPU translation
         // (`cputlb.c` dispatches `UC_HOOK_MEM_*` with the translated page), so
@@ -265,7 +360,7 @@ impl Board {
         // which would send every access through the slow path, so they stay
         // refused.
         if ranges.is_empty()
-            || ranges.len() > 256
+            || ranges.len() > 16384
             || limit == 0
             || limit > 1 << 22
             || ranges.iter().any(|&(lo, hi)| lo >= hi || hi > 1 << 32)
@@ -330,11 +425,14 @@ impl Board {
                 records: records.clone(),
                 maps: maps.iter().filter(|m| m.core == core).cloned().collect(),
                 core,
+                sample_address: sample_addresses.get(core).copied(),
+                sample_offsets: sample_offsets.clone(),
+                sample_bounds,
             }));
             let data = (&**watch.contexts.last().unwrap() as *const MemoryContext)
                 .cast_mut()
                 .cast();
-            for (begin, end) in union(spans) {
+            for (begin, end) in compact_hooks(spans, 256) {
                 let mut hooks = vec![Hook::Memory {
                     callback: access,
                     data,
@@ -387,14 +485,14 @@ impl Board {
 /// Repeated entry observations stop before the selected instruction. Resume
 /// executes that instruction once, even when it is itself a loop target.
 pub(super) struct EntryPoints {
-    addresses: Vec<u64>,
+    addresses: RefCell<Vec<u64>>,
     pause: Rc<Cell<bool>>,
     event: RefCell<Option<u64>>,
     skip: Cell<Option<u64>>,
 }
 impl EntryPoints {
     fn hit(&self, pc: u64) -> bool {
-        if self.addresses.binary_search(&pc).is_err() {
+        if self.addresses.borrow().binary_search(&pc).is_err() {
             return false;
         }
         if self.skip.get() == Some(pc) {
@@ -410,7 +508,10 @@ impl EntryPoints {
 pub struct InstructionPoints {
     cpu: Weak<dyn Cpu>,
     entry: Rc<EntryPoints>,
-    hooks: Vec<HookId>,
+    /// Installed hooks by address. A hook stays installed after its address
+    /// leaves the active set, because removing and reinstalling it discards
+    /// the translated code of its page both times.
+    hooks: BTreeMap<u64, HookId>,
 }
 unsafe fn instruction(pc: u64, _: u32, data: *mut c_void) {
     let points = unsafe { &*data.cast::<InstructionPoints>() };
@@ -451,47 +552,86 @@ impl Board {
     pub fn instruction_points_begin(
         &self,
         core: usize,
-        mut addresses: Vec<u64>,
+        addresses: Vec<u64>,
     ) -> Result<Box<InstructionPoints>, String> {
+        self.cpu(core)?;
+        let mut points = Box::new(InstructionPoints {
+            cpu: Rc::downgrade(&self.cpus[core]),
+            entry: Rc::new(EntryPoints {
+                addresses: RefCell::new(vec![]),
+                pause: self.host_pause.clone(),
+                event: RefCell::new(None),
+                skip: Cell::new(None),
+            }),
+            hooks: BTreeMap::new(),
+        });
+        if !self.cpu(core)?.features().instruction_progress {
+            // These processors use the shared all-instruction callback. Check
+            // there before architectural emulation and instruction accounting.
+            self.state.borrow_mut().entry_points[core].push(Rc::downgrade(&points.entry));
+        }
+        if let Err(error) = self.instruction_points_update(core, &mut points, addresses) {
+            self.instruction_points_end(core, &mut points)?;
+            return Err(error);
+        }
+        Ok(points)
+    }
+    /// Replace the active addresses, installing hooks only for new ones.
+    pub fn instruction_points_update(
+        &self,
+        core: usize,
+        points: &mut InstructionPoints,
+        mut addresses: Vec<u64>,
+    ) -> Result<(), String> {
         let cpu = self.cpu(core)?;
         if addresses.len() > MAX_INSTRUCTION_POINTS || addresses.iter().any(|pc| pc & 1 != 0) {
             return Err("Instruction points require bounded aligned addresses".into());
         }
         addresses.sort_unstable();
         addresses.dedup();
-        let mut points = Box::new(InstructionPoints {
-            cpu: Rc::downgrade(&self.cpus[core]),
-            entry: Rc::new(EntryPoints {
-                addresses: addresses.clone(),
-                pause: self.host_pause.clone(),
-                event: RefCell::new(None),
-                skip: Cell::new(None),
-            }),
-            hooks: vec![],
-        });
+        // A skip belongs to the stop it resumes from. Once its address leaves
+        // the active set it would otherwise swallow that address's next hit.
+        if let Some(pc) = points.entry.skip.get()
+            && addresses.binary_search(&pc).is_err()
+        {
+            points.entry.skip.set(None);
+        }
+        *points.entry.addresses.borrow_mut() = addresses.clone();
         if !cpu.features().instruction_progress {
-            // These processors use the shared all-instruction callback. Check
-            // there before architectural emulation and instruction accounting.
-            self.state.borrow_mut().entry_points[core].push(Rc::downgrade(&points.entry));
-            return Ok(points);
+            return Ok(());
+        }
+        let added = addresses
+            .iter()
+            .filter(|pc| !points.hooks.contains_key(pc))
+            .count();
+        if points.hooks.len() + added > MAX_INSTRUCTION_POINTS {
+            let inactive = points
+                .hooks
+                .keys()
+                .filter(|pc| addresses.binary_search(pc).is_err())
+                .copied()
+                .collect::<Vec<_>>();
+            for pc in inactive {
+                if let Some(hook) = points.hooks.remove(&pc) {
+                    cpu.remove_hook(hook)?;
+                }
+            }
         }
         let data = (&*points as *const InstructionPoints).cast_mut().cast();
         for pc in addresses {
-            match unsafe {
+            if points.hooks.contains_key(&pc) {
+                continue;
+            }
+            let hook = unsafe {
                 cpu.install_hook(Hook::Instruction {
                     callback: instruction,
                     data,
                     range: HookRange::Inclusive { begin: pc, end: pc },
                 })
-            } {
-                Ok(id) => points.hooks.push(id),
-                Err(error) => {
-                    self.instruction_points_end(core, &mut points)?;
-                    return Err(error);
-                }
-            }
+            }?;
+            points.hooks.insert(pc, hook);
         }
-        Ok(points)
+        Ok(())
     }
     pub fn instruction_points_end(
         &self,
@@ -504,7 +644,7 @@ impl Board {
                 .upgrade()
                 .is_some_and(|entry| !Rc::ptr_eq(&entry, &points.entry))
         });
-        for hook in points.hooks.drain(..) {
+        for hook in std::mem::take(&mut points.hooks).into_values() {
             self.cpu(core)?.remove_hook(hook)?;
         }
         Ok(())
@@ -513,6 +653,8 @@ impl Board {
 
 pub struct FunctionWatch {
     pub recorder: Rc<RefCell<calls::Recorder>>,
+    // Native hooks hold raw pointers into each box; boxing keeps them stable as the Vec grows.
+    #[allow(clippy::vec_box)]
     contexts: Vec<Box<FunctionContext>>,
     pub range_counts: Option<Rc<RefCell<ranges::RangeCounts>>>,
     hooks: Vec<(usize, HookId)>,
@@ -618,6 +760,12 @@ unsafe fn function(pc: u64, _: u32, data: *mut c_void) {
     }
 }
 impl FunctionWatch {
+    pub fn is_live(&self) -> bool {
+        self.contexts
+            .iter()
+            .all(|context| context.cpu.upgrade().is_some())
+    }
+
     pub fn check(&self) -> Result<(), String> {
         for context in &self.contexts {
             if let Some(error) = &*context.error.borrow() {

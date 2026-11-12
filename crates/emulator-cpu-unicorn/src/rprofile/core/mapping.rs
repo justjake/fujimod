@@ -69,6 +69,13 @@ impl Execution {
             map.bytes,
             map.physical,
         );
+        if let (Some(cache), Some(physical)) = (self.data_cache.borrow().as_ref(), map.physical) {
+            for (begin, end) in cache.checked_parts(physical, physical + map.bytes as u64) {
+                self.cpu
+                    .watch_stores(map.address + (begin - physical), end - begin)?;
+            }
+            self.cache_spans_stale.set(true);
+        }
         self.memory.apply_watches()
     }
     pub(super) fn map_external(&self, map: Mapping) -> Result<(), String> {

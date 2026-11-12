@@ -36,6 +36,7 @@ fn unit() -> LensUnit {
             timer_channels: Vec::new(),
             one_shot_channels: Vec::new(),
             counter_readback_channels: vec![],
+            free_running_channels: vec![],
             mirrored_irqs: vec![],
             quadrature: false,
             initial_phase: 0,

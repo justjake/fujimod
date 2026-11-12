@@ -584,11 +584,10 @@ impl Device for VectorGpu {
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
         let before = self.publication_state();
-        let result = self.write_published(cx, address, size, value);
+        self.write_published(cx, address, size, value);
         if self.publication_state() != before {
             self.publication_generation = self.publication_generation.wrapping_add(1);
         }
-        result
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
         self.state.read(address, size.into()).is_ok()
@@ -604,11 +603,10 @@ impl Device for VectorGpu {
             return;
         }
         let before = self.publication_state();
-        let result = self.advance_published(cx);
+        self.advance_published(cx);
         if self.publication_state() != before {
             self.publication_generation = self.publication_generation.wrapping_add(1);
         }
-        result
     }
     fn take_host_request(&mut self) -> Option<HostRequest> {
         if self.host_request_published {

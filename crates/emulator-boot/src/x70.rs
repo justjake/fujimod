@@ -409,6 +409,7 @@ fn card_recipe(
     selection: &ResolvedSelection,
     browser: &RunBrowserCamera,
     dram_address_space_limit_bytes: u64,
+    high_speed: bool,
 ) -> Result<Value, String> {
     let slot = selection
         .body
@@ -431,6 +432,7 @@ fn card_recipe(
             "clock_ticks": 2,
             "rca": 4660,
             "ram_bytes": dram_address_space_limit_bytes,
+            "high_speed": high_speed,
         },
         "card": {
             "kind": "formatted",
@@ -891,16 +893,15 @@ fn set_spi_route(
     let route = routes
         .get_mut(usize::from(channel))
         .ok_or_else(|| format!("X70 SPI implementation has no channel {channel}"))?;
-    if route["endpoint"]["kind"] == "lens-unit" {
-        if endpoint_id
+    if route["endpoint"]["kind"] == "lens-unit"
+        && endpoint_id
             != selection
                 .body
                 .lens
                 .as_ref()
                 .map_or("", |lens| lens.part_id.as_str())
-        {
-            return Err("X70 lens SPI endpoint identity differs from its body attachment".into());
-        }
+    {
+        return Err("X70 lens SPI endpoint identity differs from its body attachment".into());
     }
     route["options"]["selection"] = json!(gpio_selection(selection, select_connection_id)?);
     if let Some(bits) = word_bits {
@@ -1256,7 +1257,7 @@ fn apply_body_facts(
                 .unwrap_or(Value::Null);
             recipe["routes"][usize::from(lens.route.channel)]["endpoint"]["optics"] = optics;
             recipe["routes"][usize::from(lens.route.channel)]["endpoint"]["focus"] =
-                serde_json::to_value(&lens.focus).map_err(|error| error.to_string())?;
+                serde_json::to_value(lens.focus).map_err(|error| error.to_string())?;
         }
         "power_peripherals" => {
             let power = selection
@@ -2068,7 +2069,10 @@ pub(super) fn assemble(
     for rule in rules {
         let mut recipe = match (rule.name, browser) {
             ("sd", Some(browser)) => {
-                card_recipe(selection, browser, dram_address_space_limit_bytes)?
+                card_recipe(selection, browser, dram_address_space_limit_bytes,
+                    configuration.preset.as_ref().is_some_and(|p|
+                        p.factory_options.sd_card_profile == Some(
+                            fujimod_catalog_run_inputs::RunSdCardProfile::DeclaredBlankSdhcHighSpeedUnmeasured)))?
             }
             _ => model_recipe(rule.name)?,
         };
@@ -2080,17 +2084,16 @@ pub(super) fn assemble(
                     "ticks_per_byte":64, "minimum_ticks":1000}, "sinks":[true,true]},
                 "routes":"imaging_routes"});
         }
-        if rule.name == "image_input" {
-            if let Some(ticks) = configuration
+        if rule.name == "image_input"
+            && let Some(ticks) = configuration
                 .preset
                 .as_ref()
                 .and_then(|p| p.factory_options.raw_readback_ticks)
-            {
-                if ticks == 0 {
-                    return Err("RAW readback requires positive virtual transfer ticks".into());
-                }
-                recipe["options"]["readback_ticks"] = json!(ticks);
+        {
+            if ticks == 0 {
+                return Err("RAW readback requires positive virtual transfer ticks".into());
             }
+            recipe["options"]["readback_ticks"] = json!(ticks);
         }
         if rule.name == "avc_codec" {
             use fujimod_catalog_construction::VideoEncoderBackend;
@@ -2129,23 +2132,21 @@ pub(super) fn assemble(
             scene_input,
             browser.is_some(),
         )?;
-        if rule.name == "statistics" {
-            if let Some(ticks) = configuration
+        if rule.name == "statistics"
+            && let Some(ticks) = configuration
                 .preset
                 .as_ref()
                 .and_then(|p| p.factory_options.producer_data_ticks)
-            {
-                recipe["options"]["clock"]["ticks"] = json!(ticks);
-            }
+        {
+            recipe["options"]["clock"]["ticks"] = json!(ticks);
         }
-        if matches!(rule.name, "image_output_0" | "image_output_1") {
-            if let Some(ticks) = configuration
+        if matches!(rule.name, "image_output_0" | "image_output_1")
+            && let Some(ticks) = configuration
                 .preset
                 .as_ref()
                 .and_then(|p| p.factory_options.image_work_data_ticks)
-            {
-                recipe["options"]["clock"]["ticks"] = json!(ticks);
-            }
+        {
+            recipe["options"]["clock"]["ticks"] = json!(ticks);
         }
         let model: Model = serde_json::from_value(recipe.clone())
             .map_err(|error| format!("X70 node {}: {error}", rule.name))?;

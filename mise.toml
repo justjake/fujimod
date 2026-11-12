@@ -3,13 +3,24 @@ node = "26.12.0"
 pnpm = "12.18.0"
 python = "3.14.8"
 uv = "0.13.1"
+# The pinned nightly supplies rust-src for the Wasm build and is the one
+# toolchain for native builds, formatting and Clippy.
 rust = [
-  { version = "1.99.1", profile = "minimal", components = ["rustfmt", "clippy"] },
-  { version = "nightly-2026-10-10", profile = "minimal", components = ["rust-src"] },
+  { version = "nightly-2026-10-10", profile = "minimal",
+    components = ["rust-src", "rustfmt", "clippy", "llvm-tools"],
+    targets = ["wasm32-unknown-unknown"] },
 ]
 emsdk = "6.0.13"
 cmake = "4.4.4"
 ninja = "1.13.2"
+"conda:clang" = "23.1.4"
+"conda:clang-tools" = "23.1.4"
+"conda:lld" = "23.1.4"
+"conda:ccache" = "4.14.3"
+"conda:ffmpeg" = "9.0.2"
+"conda:protobuf" = "7.36.2"
+"cargo:cargo-hakari" = "0.9.39"
+"cargo:cargo-llvm-cov" = "0.9.1"
 
 [tasks.commit]
 description = "Commit chosen paths or hunks to the checked-out branch and push"

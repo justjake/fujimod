@@ -91,3 +91,27 @@ def test_land_aborts_a_conflicting_rebase(
     assert run("git", "rev-parse", "main", cwd=remote) == before
     assert (worktree / "a.txt").read_text() == "worktree\n"
     assert run("git", "status", "--porcelain", cwd=worktree) == ""
+
+
+def test_land_pushes_a_branch_that_merged_origin_main_without_rebasing(
+    repos: tuple[Path, Path, Path], tmp_path: Path
+) -> None:
+    remote, checkout, worktree = repos
+    commit(worktree, "a.txt", "worktree\n")
+    other = tmp_path / "other"
+    run("git", "clone", "-q", str(remote), str(other), cwd=tmp_path)
+    configure(other)
+    commit(other, "a.txt", "other\n")
+    run("git", "push", "-q", "origin", "main", cwd=other)
+    # The conflict is resolved once, in a merge on the branch.
+    run("git", "fetch", "-q", "origin", "main", cwd=worktree)
+    subprocess.run(
+        ["git", "merge", "-q", "FETCH_HEAD"], cwd=worktree, capture_output=True
+    )
+    (worktree / "a.txt").write_text("worktree and other\n")
+    run("git", "commit", "-qam", "Merge main", cwd=worktree)
+    merge = run("git", "rev-parse", "HEAD", cwd=worktree).strip()
+    head = land(Repository(worktree))
+    assert head == merge
+    assert run("git", "rev-parse", "main", cwd=remote).strip() == merge
+    assert (checkout / "a.txt").read_text() == "worktree and other\n"

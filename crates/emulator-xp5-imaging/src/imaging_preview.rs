@@ -232,11 +232,22 @@ impl Device for Rifp {
         let address = u64::from(io.r(0x6c)) | (u64::from(io.r(0x70) & 7) << 32);
         let row = io.r(0x7c) & 0x1ffff;
         let rows = io.r(0x80) & 0xffff;
-        if address != 0 && io.r(0x70) & 0x80000000 != 0 && row >= 4 && row % 4 == 0 && rows != 0 {
-            if let Err(e) = fujimod_emulator_imaging::frame::paint(cx, address, row / 2, rows, row, self.source_luma) {
-                cx.fail(e);
-                return;
-            }
+        if address != 0
+            && io.r(0x70) & 0x80000000 != 0
+            && row >= 4
+            && row.is_multiple_of(4)
+            && rows != 0
+            && let Err(e) = fujimod_emulator_imaging::frame::paint(
+                cx,
+                address,
+                row / 2,
+                rows,
+                row,
+                self.source_luma,
+            )
+        {
+            cx.fail(e);
+            return;
         }
         self.state.regs.insert(4, 0);
         self.state.regs.insert(0x144, self.state.r(0x144) | 1);

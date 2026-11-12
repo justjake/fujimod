@@ -39,6 +39,8 @@ fn json<T: serde::de::DeserializeOwned>(value: &str) -> PyResult<T> {
     serde_json::from_str(value).map_err(|e| PyValueError::new_err(e.to_string()))
 }
 
+// One value per board, so the variant size difference costs nothing.
+#[allow(clippy::large_enum_variant)]
 enum Backend {
     Graph(fujimod_emulator_session::Session),
     Xp5(Box<xp5::Opened>),
@@ -211,10 +213,10 @@ impl Board {
 impl Drop for Board {
     fn drop(&mut self) {
         self.clear_observation();
-        if let Some(mut driver) = self.driver.take() {
-            if let Ok(session) = self.session() {
-                let _ = session.board.harness_end(&mut driver);
-            }
+        if let Some(mut driver) = self.driver.take()
+            && let Ok(session) = self.session()
+        {
+            let _ = session.board.harness_end(&mut driver);
         }
     }
 }
@@ -340,8 +342,15 @@ impl Board {
         serde_json::to_string(&batch).map_err(|e| error(e.to_string()))
     }
 
-    #[pyo3(signature=(ranges,limit=1_000_000))]
-    fn memory_watch_begin(&mut self, ranges: Vec<(u64, u64)>, limit: usize) -> PyResult<()> {
+    #[pyo3(signature=(ranges,limit=1_000_000,sample_addresses=None,sample_offsets=None,sample_bounds=None))]
+    fn memory_watch_begin(
+        &mut self,
+        ranges: Vec<(u64, u64)>,
+        limit: usize,
+        sample_addresses: Option<Vec<u64>>,
+        sample_offsets: Option<Vec<u64>>,
+        sample_bounds: Option<(u64, u64)>,
+    ) -> PyResult<()> {
         if self.memory_watch.is_some() {
             return Err(error("Another memory watch is active".into()));
         }
@@ -350,7 +359,14 @@ impl Board {
                 .map_err(|e| error(e.to_string()))?;
         self.memory_watch = Some(
             self.board()?
-                .memory_watch_begin(ranges, limit, maps)
+                .memory_watch_begin_with_samples(
+                    ranges,
+                    limit,
+                    maps,
+                    sample_addresses.unwrap_or_default(),
+                    sample_offsets.unwrap_or_default(),
+                    sample_bounds,
+                )
                 .map_err(error)?,
         );
         Ok(())
@@ -363,7 +379,14 @@ impl Board {
         let value = self
             .memory_watch
             .as_ref()
-            .map(|w| w.records.borrow().state())
+            .map(|w| {
+                let mut state = w.records.borrow().state();
+                if !w.is_live() && state["violation"].is_null() {
+                    state["violation"] =
+                        serde_json::json!("boot restarted while the memory watch was active");
+                }
+                state
+            })
             .unwrap_or_else(
                 || serde_json::json!({"enabled":false,"ranges":[],"records":[],"violation":null}),
             );
@@ -371,7 +394,9 @@ impl Board {
             .call_method1("loads", (value.to_string(),))
     }
     fn memory_watch_end(&mut self) -> PyResult<()> {
-        if let Some(mut watch) = self.memory_watch.take() {
+        if let Some(mut watch) = self.memory_watch.take()
+            && watch.is_live()
+        {
             self.board()?.memory_watch_end(&mut watch).map_err(error)?;
         }
         Ok(())
@@ -382,12 +407,22 @@ impl Board {
                 "Use DriverHarness.observe during an isolated call".into(),
             ));
         }
-        if let Some(mut points) = self.instruction_points.remove(&core) {
-            self.board()?
-                .instruction_points_end(core, &mut points)
-                .map_err(error)?;
-        }
-        if !addresses.is_empty() {
+        if addresses.is_empty() {
+            if let Some(mut points) = self.instruction_points.remove(&core) {
+                self.board()?
+                    .instruction_points_end(core, &mut points)
+                    .map_err(error)?;
+            }
+        } else if let Some(mut points) = self.instruction_points.remove(&core) {
+            let board = self.board()?;
+            if let Err(failure) = board.instruction_points_update(core, &mut points, addresses) {
+                board
+                    .instruction_points_end(core, &mut points)
+                    .map_err(error)?;
+                return Err(error(failure));
+            }
+            self.instruction_points.insert(core, points);
+        } else {
             let points = self
                 .board()?
                 .instruction_points_begin(core, addresses)
@@ -504,7 +539,7 @@ impl Board {
                 graph
                     .processors
                     .iter()
-                    .filter_map(|p| p.rprofile)
+                    .filter_map(|p| p.rprofile.clone())
                     .flat_map(|p| [p.tcm.atcm.bytes, p.tcm.btcm.bytes]),
             )
             .try_fold(0usize, |sum, bytes| {
@@ -696,10 +731,10 @@ impl Board {
     }
     fn __clear__(&mut self) {
         self.clear_observation();
-        if let Some(mut driver) = self.driver.take() {
-            if let Ok(session) = self.session() {
-                let _ = session.board.harness_end(&mut driver);
-            }
+        if let Some(mut driver) = self.driver.take()
+            && let Ok(session) = self.session()
+        {
+            let _ = session.board.harness_end(&mut driver);
         }
         if let Some(Backend::Xp4(session)) = &self.backend {
             session.__clear__();

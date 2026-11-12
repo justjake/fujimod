@@ -289,7 +289,7 @@ impl Control {
         let mut line = vec![0; stride as usize];
         for y in 0..lines {
             let sites = &XTRANS[((y + TILE_PHASE.0) % 6) as usize];
-            for (x, sample) in line.chunks_exact_mut(2).enumerate() {
+            for (x, sample) in line.as_chunks_mut::<2>().0.iter_mut().enumerate() {
                 let color = sites[(x + TILE_PHASE.1 as usize) % 6] as usize;
                 let rgb = match &self.sensor_image {
                     Some((w, h, image)) => bilinear(image, *w, *h, x as u64, y, width, lines),
@@ -413,7 +413,10 @@ impl Device for Control {
                 value &= !BUSY;
                 self.start(cx);
             }
-            o if CHANNELS.contains(&o) && (o - CHANNELS.start) % CHANNEL == 0 && value & 1 != 0 => {
+            o if CHANNELS.contains(&o)
+                && (o - CHANNELS.start).is_multiple_of(CHANNEL)
+                && value & 1 != 0 =>
+            {
                 let run = o + RUN;
                 match self.word(run) & !1 {
                     0 => self.words.remove(&run),

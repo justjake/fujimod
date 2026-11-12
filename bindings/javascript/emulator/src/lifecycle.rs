@@ -244,7 +244,7 @@ impl Session {
             for old in self.frames.values_mut() {
                 let mut frame = (**old).clone();
                 frame.rgba.fill(0);
-                for p in frame.rgba.chunks_exact_mut(4) {
+                for p in frame.rgba.as_chunks_mut::<4>().0 {
                     p[3] = 255;
                 }
                 frame.sequence = frame.sequence.saturating_add(1);

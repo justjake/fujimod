@@ -23,7 +23,9 @@ pub struct Projection {
     binned: Mutex<Vec<Arc<Scene>>>,
     readouts: Mutex<Vec<BinnedPrepared>>,
 }
-const CACHE_PIXELS: usize = 4 * 1024 * 1024;
+// A full-resolution metering grid exceeds four megapixels. Retain the binned
+// scene while that immutable frame drives statistics for several consumers.
+const CACHE_PIXELS: usize = 16 * 1024 * 1024;
 // One full-resolution readout retains both its linear RGB16 and encoded
 // RGB16 arrays. Keep this pixel-storage budget separate from preview caches.
 const FULL_READOUT_CACHE_BYTES: usize = 256 * 1024 * 1024;
@@ -505,7 +507,7 @@ fn encode_response(
     let mut pixels = vec![0; linear.len() * 6];
     let [width, height] = dimensions;
     let pitch = sensor_width_mm / width as f64;
-    for (i, (pixel, packed)) in linear.iter().zip(pixels.chunks_exact_mut(6)).enumerate() {
+    for (i, (pixel, packed)) in linear.iter().zip(pixels.as_chunks_mut::<6>().0).enumerate() {
         // Sample square pixels at their centers. Both RAW and metering consume
         // this same exposed frame; no statistics-specific brightness correction.
         let field = illumination.map_or(1., |f| {
@@ -537,7 +539,7 @@ fn encode_response_rect(
     noise: NoiseResponse,
 ) -> Arc<[u8]> {
     let mut pixels = vec![0; linear.len() * 6];
-    for (i, (pixel, out)) in linear.iter().zip(pixels.chunks_exact_mut(6)).enumerate() {
+    for (i, (pixel, out)) in linear.iter().zip(pixels.as_chunks_mut::<6>().0).enumerate() {
         let field = illumination.map_or(1., |f| {
             f.at_point(
                 ((i % dimensions[0]) as f64 + 0.5) * sensor[0] / dimensions[0] as f64
@@ -570,6 +572,11 @@ fn encode_response_coordinates(
     coordinates: &Coordinates,
     noise: NoiseResponse,
 ) -> Arc<[u8]> {
+    fujimod_perf::add_work(fujimod_perf::DeviceWorkCounter::PreparedEncodes, 1);
+    fujimod_perf::add_work(
+        fujimod_perf::DeviceWorkCounter::PreparedEncodePixels,
+        linear.len() as u64,
+    );
     let mut pixels: Arc<[u8]> = std::iter::repeat_n(0, linear.len() * 6).collect();
     let width = coordinates.xs.len();
     if width == 0 {
@@ -1112,10 +1119,8 @@ mod tests {
         let expected = flat.sample(0, 0, [64, 8]);
         p.prepare(&mut flat, p.subject_shift + 0.3).unwrap();
         for x in 0..64 {
-            for c in 0..3 {
-                assert!(
-                    (i32::from(flat.sample(x, 3, [64, 8])[c]) - i32::from(expected[c])).abs() <= 1
-                );
+            for (c, want) in expected.iter().enumerate().take(3) {
+                assert!((i32::from(flat.sample(x, 3, [64, 8])[c]) - i32::from(*want)).abs() <= 1);
             }
         }
     }

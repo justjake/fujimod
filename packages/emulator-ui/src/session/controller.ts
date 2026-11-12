@@ -353,7 +353,7 @@ export function startSession(
     progress,
     finishLoading,
     undo,
-    restart: options.restart,
+    restart: () => options.restart(),
     hasFault: () => !!latestFault,
     saveCamera: async () => {
       await engine?.saveCamera();

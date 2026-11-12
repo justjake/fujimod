@@ -95,7 +95,7 @@ pub(super) fn locate(data: &[u8]) -> Result<Located> {
         let destination = word(data, *at + 4)? as usize;
         let size = word(data, *at + 8)? as usize;
         require(
-            size >= 32 && size < 0x10000,
+            (32..0x10000).contains(&size),
             "Older EXR raw kernel extent differs",
         )?;
         regions.push(Region {

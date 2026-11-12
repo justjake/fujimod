@@ -28,6 +28,12 @@ pub enum Error {
     InvalidFirmware,
     #[error("version must not be empty and must not contain control characters")]
     InvalidVersion,
+    #[error("date must be YYYY-MM-DD")]
+    InvalidDate,
+    #[error("commit must contain 7 to 40 lowercase hexadecimal digits")]
+    InvalidCommit,
+    #[error("release notes must contain at most 8 strings of at most 64 bytes each")]
+    InvalidNotes,
     #[error("a release needs at least one path=file pair")]
     NoFiles,
     #[error(
@@ -105,6 +111,9 @@ impl ReleaseFile {
 pub struct Release {
     firmware: String,
     version: String,
+    date: Option<String>,
+    commit: Option<String>,
+    notes: Option<Vec<String>>,
     files: Vec<ReleaseFile>,
 }
 
@@ -150,6 +159,9 @@ impl Release {
         let release = Self {
             firmware,
             version,
+            date: None,
+            commit: None,
+            notes: None,
             files: entries,
         };
         release.check_store_names()?;
@@ -164,6 +176,30 @@ impl Release {
     /// The version written to the manifest.
     pub fn version(&self) -> &str {
         &self.version
+    }
+
+    /// Sets optional release provenance and short release notes.
+    pub fn with_metadata(
+        mut self,
+        date: Option<String>,
+        commit: Option<String>,
+        notes: Option<Vec<String>>,
+    ) -> Result<Self, Error> {
+        if date.as_deref().is_some_and(|value| !valid_date(value)) {
+            return Err(Error::InvalidDate);
+        }
+        if commit.as_deref().is_some_and(|value| !valid_commit(value)) {
+            return Err(Error::InvalidCommit);
+        }
+        if notes.as_ref().is_some_and(|values| {
+            values.len() > 8 || values.iter().any(|value| value.len() > 64)
+        }) {
+            return Err(Error::InvalidNotes);
+        }
+        self.date = date;
+        self.commit = commit;
+        self.notes = notes;
+        Ok(self)
     }
 
     /// The files in manifest order.
@@ -182,6 +218,12 @@ impl Release {
         struct Manifest<'a> {
             firmware: &'a str,
             version: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            date: &'a Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            commit: &'a Option<String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            notes: &'a Option<Vec<String>>,
             fs: BTreeMap<&'a str, ManifestFile>,
         }
 
@@ -201,6 +243,9 @@ impl Release {
         let mut text = serde_json::to_string_pretty(&Manifest {
             firmware: &self.firmware,
             version: &self.version,
+            date: &self.date,
+            commit: &self.commit,
+            notes: &self.notes,
             fs,
         })
         .expect("release manifests are serializable");
@@ -253,6 +298,44 @@ impl Release {
             }
         }
     }
+}
+
+fn valid_date(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() != 10
+        || !bytes[0..4].iter().all(u8::is_ascii_digit)
+        || bytes[4] != b'-'
+        || !bytes[5..7].iter().all(u8::is_ascii_digit)
+        || bytes[7] != b'-'
+        || !bytes[8..10].iter().all(u8::is_ascii_digit)
+    {
+        return false;
+    }
+    let year = u16::from(bytes[0] - b'0') * 1000
+        + u16::from(bytes[1] - b'0') * 100
+        + u16::from(bytes[2] - b'0') * 10
+        + u16::from(bytes[3] - b'0');
+    let month = (bytes[5] - b'0') * 10 + (bytes[6] - b'0');
+    let day = (bytes[8] - b'0') * 10 + (bytes[9] - b'0');
+    if year == 0 || !(1..=12).contains(&month) {
+        return false;
+    }
+    let leap_year = year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
+    let days_in_month = match month {
+        2 if leap_year => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    };
+    (1..=days_in_month).contains(&day)
+}
+
+fn valid_commit(value: &str) -> bool {
+    (7..=40).contains(&value.len())
+        && value
+            .as_bytes()
+            .iter()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
 }
 
 /// The first 11 uppercase hexadecimal digits of a SHA-256 as `XXXXXXXX.YYY`.
@@ -470,6 +553,9 @@ mod tests {
         Release {
             firmware: "example-cam".into(),
             version: "1.2.3".into(),
+            date: None,
+            commit: None,
+            notes: None,
             files,
         }
     }
@@ -509,10 +595,10 @@ mod tests {
                         return Err(format!("missing {name}"));
                     }
                 }
-                if let Some(limit) = schema.get("maxProperties").and_then(Value::as_u64) {
-                    if object.len() > limit as usize {
-                        return Err("too many properties".into());
-                    }
+                if let Some(limit) = schema.get("maxProperties").and_then(Value::as_u64)
+                    && object.len() > limit as usize
+                {
+                    return Err("too many properties".into());
                 }
                 let properties = schema.get("properties").and_then(Value::as_object);
                 if schema.get("additionalProperties") == Some(&Value::Bool(false)) {
@@ -530,28 +616,28 @@ mod tests {
                         }
                     }
                 }
-                if let Some(additional) = schema.get("additionalProperties") {
-                    if additional.is_object() {
-                        for (name, child) in object {
-                            if !properties.is_some_and(|items| items.contains_key(name)) {
-                                validate(child, additional, root)
-                                    .map_err(|error| format!("{name}: {error}"))?;
-                            }
+                if let Some(additional) = schema.get("additionalProperties")
+                    && additional.is_object()
+                {
+                    for (name, child) in object {
+                        if !properties.is_some_and(|items| items.contains_key(name)) {
+                            validate(child, additional, root)
+                                .map_err(|error| format!("{name}: {error}"))?;
                         }
                     }
                 }
             }
             Some("string") => {
                 let text = value.as_str().ok_or("expected string")?;
-                if let Some(minimum) = schema.get("minLength").and_then(Value::as_u64) {
-                    if text.len() < minimum as usize {
-                        return Err(format!("shorter than {minimum}"));
-                    }
+                if let Some(minimum) = schema.get("minLength").and_then(Value::as_u64)
+                    && text.len() < minimum as usize
+                {
+                    return Err(format!("shorter than {minimum}"));
                 }
-                if let Some(maximum) = schema.get("maxLength").and_then(Value::as_u64) {
-                    if text.len() > maximum as usize {
-                        return Err(format!("longer than {maximum}"));
-                    }
+                if let Some(maximum) = schema.get("maxLength").and_then(Value::as_u64)
+                    && text.len() > maximum as usize
+                {
+                    return Err(format!("longer than {maximum}"));
                 }
                 if schema.get("pattern").and_then(Value::as_str)
                     == Some("^[0-9a-fA-F]{64}$")
@@ -566,15 +652,15 @@ mod tests {
                     .as_u64()
                     .or_else(|| value.as_i64().and_then(|v| u64::try_from(v).ok()))
                     .ok_or("expected non-negative integer")?;
-                if let Some(minimum) = schema.get("minimum").and_then(Value::as_u64) {
-                    if number < minimum {
-                        return Err(format!("less than {minimum}"));
-                    }
+                if let Some(minimum) = schema.get("minimum").and_then(Value::as_u64)
+                    && number < minimum
+                {
+                    return Err(format!("less than {minimum}"));
                 }
-                if let Some(maximum) = schema.get("maximum").and_then(Value::as_u64) {
-                    if number > maximum {
-                        return Err(format!("greater than {maximum}"));
-                    }
+                if let Some(maximum) = schema.get("maximum").and_then(Value::as_u64)
+                    && number > maximum
+                {
+                    return Err(format!("greater than {maximum}"));
                 }
             }
             Some("boolean") => {
@@ -582,10 +668,10 @@ mod tests {
             }
             Some("array") => {
                 let array = value.as_array().ok_or("expected array")?;
-                if let Some(maximum) = schema.get("maxItems").and_then(Value::as_u64) {
-                    if array.len() > maximum as usize {
-                        return Err(format!("longer than {maximum}"));
-                    }
+                if let Some(maximum) = schema.get("maxItems").and_then(Value::as_u64)
+                    && array.len() > maximum as usize
+                {
+                    return Err(format!("longer than {maximum}"));
                 }
                 if let Some(items) = schema.get("items") {
                     for item in array {

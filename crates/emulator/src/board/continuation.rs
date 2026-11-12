@@ -105,6 +105,8 @@ pub(super) fn finish_instruction(cpu: &dyn Cpu) -> Result<(), String> {
 pub(super) struct StoreWatch {
     /// Each core's address views and hook spans the hooks were installed for.
     cores: Vec<(Vec<MemoryMap>, Vec<(u64, u64)>)>,
+    // Native hooks hold raw pointers into each box; boxing keeps them stable as the Vec grows.
+    #[allow(clippy::vec_box)]
     contexts: Vec<Box<Context>>,
     hooks: Vec<(usize, Vec<HookId>)>,
     pub(super) active: bool,

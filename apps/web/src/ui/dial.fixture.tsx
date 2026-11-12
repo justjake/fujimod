@@ -27,6 +27,7 @@ Object.defineProperty(navigator, 'vibrate', {
     return window.haptics;
   },
 });
+// oxlint-disable-next-line typescript/unbound-method -- apply below supplies the context.
 const createBufferSource = AudioContext.prototype.createBufferSource;
 const buffers = new Map<AudioBuffer | null, number>();
 AudioContext.prototype.createBufferSource = function (...args) {

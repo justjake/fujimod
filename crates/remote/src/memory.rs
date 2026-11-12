@@ -27,10 +27,10 @@ impl<B: Backend> Memory<'_, B> {
                 .depth
                 .checked_sub(1)
                 .ok_or("Unbalanced memory observation")?;
-            if self.depth == 0 {
-                if let Some(reads) = self.backend.read_set_end()? {
-                    self.reads = reads;
-                }
+            if self.depth == 0
+                && let Some(reads) = self.backend.read_set_end()?
+            {
+                self.reads = reads;
             }
         }
         Ok(())

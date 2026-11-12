@@ -29,28 +29,6 @@ impl Reset {
             .then(|| (offset / 4 - 1) as usize)
     }
 }
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use fujimod_emulator_devices::test_host::{TestHost, read, write};
-    #[test]
-    fn reset_words_retain_guest_configuration_and_do_not_claim_cpu_or_clock_effects() {
-        let mut host = TestHost::new();
-        let mut reset = Reset::new(Options {}, Wiring).unwrap();
-        write(&mut reset, &mut host, BASE + 0x14, 0x120);
-        assert_eq!(read(&mut reset, &mut host, BASE + 0x14), 0x120);
-        let saved = reset.save();
-        for (address, size) in [(BASE, 4), (BASE + 0x18, 4), (BASE + 4, 2), (0xfff5102c, 2)] {
-            let mut cx = host.cx();
-            reset.read(&mut cx, address, size);
-            assert!(cx.is_unmodeled());
-        }
-        reset.restore(&saved).unwrap();
-        assert_eq!(reset.save(), saved);
-        assert_eq!(reset.next_deadline(0), None);
-        assert!(host.effects.is_empty());
-    }
-}
 impl Device for Reset {
     fujimod_emulator_devices::checkpoint_fields!(state: State);
 
@@ -90,5 +68,27 @@ impl Device for Reset {
     fn restore(&mut self, value: &serde_json::Value) -> Result<(), String> {
         self.state = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         Ok(())
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fujimod_emulator_devices::test_host::{TestHost, read, write};
+    #[test]
+    fn reset_words_retain_guest_configuration_and_do_not_claim_cpu_or_clock_effects() {
+        let mut host = TestHost::new();
+        let mut reset = Reset::new(Options {}, Wiring).unwrap();
+        write(&mut reset, &mut host, BASE + 0x14, 0x120);
+        assert_eq!(read(&mut reset, &mut host, BASE + 0x14), 0x120);
+        let saved = reset.save();
+        for (address, size) in [(BASE, 4), (BASE + 0x18, 4), (BASE + 4, 2), (0xfff5102c, 2)] {
+            let mut cx = host.cx();
+            reset.read(&mut cx, address, size);
+            assert!(cx.is_unmodeled());
+        }
+        reset.restore(&saved).unwrap();
+        assert_eq!(reset.save(), saved);
+        assert_eq!(reset.next_deadline(0), None);
+        assert!(host.effects.is_empty());
     }
 }

@@ -119,6 +119,23 @@ impl RunFirmwareInputs {
     }
 }
 
+/// Caller-owned locations for optional factory inputs, kept outside run policy.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct RunFactoryInputs {
+    #[serde(rename = "$schema")]
+    pub schema_uri: String,
+    pub schema: u32,
+    pub id: String,
+    pub firmware_id: String,
+    pub source_sha256: String,
+    pub producer_data_fixture: String,
+}
+
+pub const RUN_FACTORY_INPUTS_SCHEMA_URI: &str =
+    "https://fujimod.com/schemas/emulator-factory-inputs.generated.schema.json";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,20 +156,3 @@ mod tests {
         assert!(inputs.validate().is_err());
     }
 }
-
-/// Caller-owned locations for optional factory inputs, kept outside run policy.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-pub struct RunFactoryInputs {
-    #[serde(rename = "$schema")]
-    pub schema_uri: String,
-    pub schema: u32,
-    pub id: String,
-    pub firmware_id: String,
-    pub source_sha256: String,
-    pub producer_data_fixture: String,
-}
-
-pub const RUN_FACTORY_INPUTS_SCHEMA_URI: &str =
-    "https://fujimod.com/schemas/emulator-factory-inputs.generated.schema.json";

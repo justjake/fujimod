@@ -3099,6 +3099,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-raw-conversion"
+version = "0.1.0"
+dependencies = [
+ "fujimod-usb",
+ "fujimod-workspace-hack",
+ "futures-lite",
+ "futures-timer",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "fujimod-recording"
 version = "0.1.0"
 dependencies = [
@@ -3175,6 +3188,7 @@ dependencies = [
 name = "fujimod-sync-protocol"
 version = "0.1.0"
 dependencies = [
+ "fujimod-workspace-hack",
  "prost",
  "prost-build",
 ]
@@ -3310,8 +3324,10 @@ dependencies = [
  "arrayvec",
  "bitflags 2.13.2",
  "bytemuck",
+ "byteorder",
  "bytes",
  "cc",
+ "cipher 0.5.2",
  "concurrent-queue",
  "const-oid 0.9.6",
  "crossbeam-utils",
@@ -7037,6 +7053,32 @@ dependencies = [
  "rusticata-macros",
  "thiserror",
  "time",
+]
+
+[[package]]
+name = "xt5-bringup"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-configuration",
+ "fujimod-catalog-resolution",
+ "fujimod-emulator",
+ "fujimod-emulator-boot",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-parts-controls",
+ "fujimod-emulator-session",
+ "fujimod-emulator-storage",
+ "fujimod-emulator-xp5-board",
+ "fujimod-emulator-xp5-display",
+ "fujimod-emulator-xp5-io",
+ "fujimod-emulator-xp5-storage",
+ "fujimod-firmware",
+ "fujimod-recording",
+ "fujimod-workspace-hack",
+ "serde_json",
+ "sha2 0.10.9",
+ "toml",
 ]
 
 [[package]]

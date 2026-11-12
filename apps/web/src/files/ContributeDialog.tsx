@@ -73,7 +73,7 @@ export function ContributeDialog(props: {
   }
   return (
     <dialog
-      ref={dialog}
+      ref={(element) => (dialog = element)}
       class="contribute"
       aria-label="Contribute"
       onCancel={(event) => {

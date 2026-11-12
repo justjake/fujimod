@@ -49,9 +49,7 @@ jobs:
         run: mise run rust-check
       - name: Check the generated workspace-hack crate
         if: ${{ !cancelled() }}
-        run: |
-          cargo install cargo-hakari --version 0.9.39 --locked
-          mise run rust-hack-check
+        run: mise run rust-hack-check
 
   javascript-quality:
     name: TypeScript lint, format and types
@@ -90,9 +88,7 @@ jobs:
       - name: Install coverage and media tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libjpeg-dev
-          rustup component add llvm-tools-preview
-          cargo install cargo-llvm-cov --version 0.9.1 --locked
+          sudo apt-get install -y libjpeg-dev
       - run: mise run rust-coverage
       - name: Rust documentation tests
         if: ${{ !cancelled() }}

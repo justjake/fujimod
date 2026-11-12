@@ -1,6 +1,6 @@
 import type { CardEntry } from 'fujimod/emulator';
 import type { JSX } from '@solidjs/web';
-import { Show, createSignal } from 'solid-js';
+import { createSignal } from 'solid-js';
 import type { SessionState } from './session/state';
 import type { SessionController } from './session/controller';
 import type { DevicePanel } from './ui/layout';

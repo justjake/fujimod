@@ -115,7 +115,7 @@ impl RegisterStub {
                 offset == rule.offset
             } else {
                 offset >= rule.offset
-                    && (offset - rule.offset) % rule.stride == 0
+                    && (offset - rule.offset).is_multiple_of(rule.stride)
                     && (offset - rule.offset) / rule.stride < rule.count
             };
             if hit {

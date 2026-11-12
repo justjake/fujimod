@@ -1,0 +1,104 @@
+/* Focal UI prototypes. Every size and color a camera implementation needs is a
+   token in @theme below; components use only these tokens. Sizes are camera
+   pixels on the 720x480 LCD. */
+@import 'tailwindcss' source(none);
+@source './';
+@import '@fontsource-variable/inter';
+
+@theme {
+  --font-focal: 'Inter Variable', system-ui, sans-serif;
+
+  /* Grays. A screen sets --page, --group, --hairline and --focus from them,
+     tinted by BACKGROUND COLOR (palette.ts). */
+  --color-page: #0f0f0f;
+  --color-group: #191919;
+  --color-hairline: #282828;
+  --color-focus: #3a3a3c;
+  --color-shadow: #000000;
+
+  --color-label: #ffffff;
+  --color-secondary: #909096;
+  --color-disabled: #949494;
+  --color-dim: #5c5c60;
+  --color-disclosure: #aaaaaf;
+  --color-warning: #ff453a;
+  --color-success: #30c459;
+  --color-progress: #0f7ff0;
+  --color-track: #3e3e42;
+  --color-present: #76767c;
+
+  --color-popup: #1e1e20;
+  --color-popup-border: #3e3e42;
+  --color-popup-separator: #323235;
+  --color-key: #ffffff;
+  --color-key-legend: #000000;
+
+  --color-rec: #b91000;
+  --color-setup: #0068d8;
+  --color-play: #008c32;
+
+  /* Type. */
+  --text-title: 28px;
+  --text-title--line-height: 1;
+  --text-title--letter-spacing: 0.04em;
+  --text-row: 30px;
+  --text-row--line-height: 1;
+  --text-row--letter-spacing: 0.01em;
+  --text-hero: 36px;
+  --text-hero--line-height: 1;
+  --text-card: 28px;
+  --text-card--line-height: 1;
+  --text-section: 24px;
+  --text-section--line-height: 1;
+  --text-detail: 23px;
+  --text-detail--line-height: 30px;
+  --text-key: 17px;
+  --text-key--line-height: 1;
+
+  /* Layout. */
+  --spacing-screen-w: 720px;
+  --spacing-screen-h: 480px;
+  --spacing-title: 48px;
+  --spacing-margin: 16px;
+  --spacing-pad: 20px;
+  --spacing-row: 58px;
+  --spacing-gap: 14px;
+  --spacing-stripe: 4px;
+  --spacing-disclosure: 44px;
+  --spacing-popup-row: 52px;
+  --spacing-button: 60px;
+  --spacing-bar: 12px;
+}
+
+@layer components {
+  /* An X100VI bevel: a 1 px light hairline on top, a 2 px black one below. */
+  .focal-bevel {
+    box-shadow:
+      inset 0 1px 0 var(--hairline),
+      inset 0 -2px 0 var(--color-shadow);
+  }
+  /* The focused row: the focus bar and the SET-UP COLOR stripe. The stripe
+     spans only the face between the hairlines, so it is exactly as tall as the
+     bar beside it. */
+  .focal-focused {
+    position: relative;
+    background: var(--focus);
+    box-shadow:
+      inset 0 1px 0 var(--hairline),
+      inset 0 -2px 0 var(--color-shadow);
+  }
+  .focal-focused::before {
+    content: '';
+    position: absolute;
+    top: 1px;
+    bottom: 2px;
+    left: 0;
+    width: var(--spacing-stripe);
+    background: var(--accent);
+  }
+}
+
+.focal-review {
+  font-family: var(--font-focal);
+  -webkit-font-smoothing: antialiased;
+}

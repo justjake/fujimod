@@ -25,7 +25,7 @@ impl Board {
         let mut loaded = BTreeMap::new();
         for (name, bytes) in assets.iter() {
             let bytes = bytes.cast::<PyBytes>()?;
-            if bytes.as_bytes().len() > fujimod_emulator_storage::fat::MAX_PRELOAD_BYTES as usize {
+            if bytes.as_bytes().len() > fujimod_emulator_storage::fat::MAX_PRELOAD_BYTES {
                 return Err(PyValueError::new_err("XP5 asset exceeds 512 MiB"));
             }
             loaded.insert(name.extract::<String>()?, bytes.as_bytes().to_vec());

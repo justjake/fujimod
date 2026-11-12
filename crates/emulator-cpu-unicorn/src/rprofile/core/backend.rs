@@ -149,6 +149,9 @@ impl Cpu for Core {
                 .pmu_access(r.crm, r.opc2, value)
                 .map(u64::from);
         }
+        if value.is_some() {
+            self.execution.cache_spans_stale.set(true);
+        }
         self.execution.cpu.coprocessor(r, value)
     }
     fn set_guest_clock(&self, clock: Clock) -> Result<(), String> {

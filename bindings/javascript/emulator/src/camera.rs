@@ -8,7 +8,7 @@ use fujimod_emulator::board::{
 use fujimod_emulator_exr2_plan::{MemoryChoices, Plan, RefuseAdapters};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, rc::Rc};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -568,7 +568,7 @@ impl Session {
                 preview: a.preview,
             }),
         };
-        session.reset_image = Some(Arc::new(session.core.checkpoint(None)?));
+        session.reset_image = Some(Rc::new(session.core.checkpoint(None)?));
         for (id, position) in a.initial_positions {
             session.core.set_position(&id, &position)?;
         }

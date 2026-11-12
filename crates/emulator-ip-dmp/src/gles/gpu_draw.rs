@@ -113,6 +113,12 @@ pub(super) struct RenderedList {
     pub draws: usize,
 }
 
+struct DrawSegment {
+    start: usize,
+    end: usize,
+    refresh_addresses: Vec<u64>,
+}
+
 struct PreparedDraw {
     state: DrawState,
     extent: SurfaceExtent,
@@ -130,6 +136,76 @@ pub(super) fn render(
     expected_snapshots: Option<&Snapshots>,
     read: &mut Reader<'_>,
 ) -> Result<RenderedList, String> {
+    let segments = draw_segments(draws)?;
+    if segments.len() > 3 {
+        return Err(format!(
+            "DMP host GPU command list requires {} submissions (limit 3)",
+            segments.len()
+        ));
+    }
+    if segments.is_empty() {
+        return Ok(RenderedList {
+            snapshots: Vec::new(),
+            written_ranges: Vec::new(),
+            queue_submissions: 0,
+            draws: 0,
+        });
+    }
+
+    let cache = context()?;
+    let _submission = cache.acquire()?;
+    let mut current_reads = recorded_reads.to_vec();
+    let mut snapshots = BTreeMap::new();
+    let mut written_ranges = Vec::new();
+    let mut queue_submissions = 0u8;
+    let mut draw_count = 0usize;
+    for segment in segments {
+        let mut requested = expected_snapshots.cloned().unwrap_or_default();
+        requested.extend(
+            segment
+                .refresh_addresses
+                .iter()
+                .map(|&address| (address, vec![])),
+        );
+        let requested_snapshots = (!requested.is_empty()).then_some(requested);
+        let rendered = render_segment(
+            &draws[segment.start..segment.end],
+            &current_reads,
+            requested_snapshots.as_ref(),
+            read,
+            cache,
+        )?;
+        queue_submissions = queue_submissions
+            .checked_add(rendered.queue_submissions)
+            .ok_or("DMP host GPU queue submission count overflow")?;
+        if queue_submissions > 3 {
+            return Err(format!(
+                "DMP host GPU submitted {queue_submissions} command buffers for one list (limit 3)"
+            ));
+        }
+        draw_count += rendered.draws;
+        written_ranges.extend(rendered.written_ranges);
+        for (address, bytes) in rendered.snapshots {
+            current_reads.push((address, bytes.clone()));
+            snapshots.insert(address, bytes);
+        }
+    }
+    Ok(RenderedList {
+        snapshots: snapshots.into_iter().collect(),
+        written_ranges: merge_written_ranges(written_ranges),
+        queue_submissions,
+        draws: draw_count,
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn render_segment(
+    draws: &[Draw],
+    recorded_reads: &[(u64, Vec<u8>)],
+    expected_snapshots: Option<&Snapshots>,
+    read: &mut Reader<'_>,
+    cache: &GpuContext,
+) -> Result<RenderedList, String> {
     let timing = std::env::var_os("FUJIMOD_DMP_DRAW_TIMING").map(|_| std::time::Instant::now());
     let mut prepared = Vec::new();
     let mut surfaces = BTreeMap::<u64, (SurfaceKey, Option<Vec<u8>>)>::new();
@@ -139,21 +215,7 @@ pub(super) fn render(
             continue;
         }
         let state = &draw.state;
-        let (width, height) = state.targets.extent.dimensions()?;
-        let extent = SurfaceExtent {
-            width: width as u32,
-            height: height as u32,
-        };
-        let color_key = SurfaceKey {
-            guest_address: state.targets.color_address,
-            format: color_surface_format(state.targets.color_format)?,
-            extent,
-            layout: SurfaceLayout::Morton8x8,
-        };
-        let depth_key = depth_surface_key(state, extent)?;
-        if color_key.guest_address == depth_key.guest_address {
-            return Err("DMP host GPU color and depth targets alias".into());
-        }
+        let (extent, color_key, depth_key) = draw_surface_keys(state)?;
         prepare_surface(&mut surfaces, color_key, true, recorded_reads, read)?;
 
         let load_depth_from_guest = state.depth_test.enabled || state.stencil_test.enabled;
@@ -188,8 +250,6 @@ pub(super) fn render(
     let draw_count = prepared.len();
 
     let prepared_at = timing.map(|_| std::time::Instant::now());
-    let cache = context()?;
-    let _submission = cache.acquire()?;
     let mut encoder = cache
         .device()
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -314,6 +374,212 @@ pub(super) fn render(
         queue_submissions: 1,
         draws: draw_count,
     })
+}
+
+fn draw_segments(draws: &[Draw]) -> Result<Vec<DrawSegment>, String> {
+    let mut segments = Vec::new();
+    let mut start = 0;
+    let mut dirty_surfaces = Vec::<SurfaceKey>::new();
+    let mut known_surfaces = BTreeMap::<u64, SurfaceKey>::new();
+    for (index, draw) in draws.iter().enumerate() {
+        if draw.vertex.indices.is_empty() {
+            continue;
+        }
+        let (_, color_key, depth_key) = draw_surface_keys(&draw.state)?;
+        remember_surface_key(&mut known_surfaces, color_key)?;
+        if draw.state.depth_test.enabled || draw.state.stencil_test.enabled {
+            remember_surface_key(&mut known_surfaces, depth_key)?;
+        }
+        let textures = texture_ranges(&draw.state)?;
+        let mut refresh = BTreeMap::<u64, SurfaceKey>::new();
+        for surface in &dirty_surfaces {
+            let surface_range = surface_range(*surface)?;
+            if textures
+                .iter()
+                .any(|texture_range| ranges_overlap(*texture_range, surface_range))
+            {
+                refresh.insert(surface.guest_address, *surface);
+            }
+        }
+        if !refresh.is_empty() {
+            segments.push(DrawSegment {
+                start,
+                end: index,
+                refresh_addresses: refresh.keys().copied().collect(),
+            });
+            start = index;
+            dirty_surfaces.clear();
+        }
+
+        if draw.state.color_mask.0.iter().any(|enabled| *enabled)
+            && !dirty_surfaces.contains(&color_key)
+        {
+            dirty_surfaces.push(color_key);
+        }
+        if ((draw.state.depth_test.enabled && draw.state.depth_test.write_enabled)
+            || (draw.state.stencil_test.enabled && draw.state.stencil_test.write_mask != 0))
+            && !dirty_surfaces.contains(&depth_key)
+        {
+            dirty_surfaces.push(depth_key);
+        }
+    }
+    if start < draws.len() {
+        segments.push(DrawSegment {
+            start,
+            end: draws.len(),
+            refresh_addresses: Vec::new(),
+        });
+    }
+    Ok(segments)
+}
+
+fn remember_surface_key(
+    surfaces: &mut BTreeMap<u64, SurfaceKey>,
+    key: SurfaceKey,
+) -> Result<(), String> {
+    if let Some(existing) = surfaces.get(&key.guest_address) {
+        if *existing != key {
+            return Err(format!(
+                "DMP host GPU target {:#x} changes format or extent within one list",
+                key.guest_address
+            ));
+        }
+    } else {
+        surfaces.insert(key.guest_address, key);
+    }
+    Ok(())
+}
+
+fn draw_surface_keys(state: &DrawState) -> Result<(SurfaceExtent, SurfaceKey, SurfaceKey), String> {
+    let (width, height) = state.targets.extent.dimensions()?;
+    let extent = SurfaceExtent {
+        width: width as u32,
+        height: height as u32,
+    };
+    let color_key = SurfaceKey {
+        guest_address: state.targets.color_address,
+        format: color_surface_format(state.targets.color_format)?,
+        extent,
+        layout: SurfaceLayout::Morton8x8,
+    };
+    let depth_key = depth_surface_key(state, extent)?;
+    if color_key.guest_address == depth_key.guest_address {
+        return Err("DMP host GPU color and depth targets alias".into());
+    }
+    Ok((extent, color_key, depth_key))
+}
+
+fn texture_ranges(state: &DrawState) -> Result<Vec<(u64, usize)>, String> {
+    let mut ranges = Vec::new();
+    for texture in state.textures.iter().filter(|texture| texture.enabled) {
+        let bytes_per_pixel = texture.format.bytes_per_pixel()?;
+        if texture.width == 0
+            || texture.height == 0
+            || !texture.width.is_multiple_of(8)
+            || !texture.height.is_multiple_of(8)
+        {
+            return Err("DMP draw texture extent is invalid".into());
+        }
+        let level_size = |width: usize, height: usize| {
+            width
+                .checked_mul(height)
+                .and_then(|pixels| pixels.checked_mul(bytes_per_pixel))
+                .ok_or_else(|| "DMP draw texture size overflow".to_string())
+        };
+        ranges.push((
+            texture.base_address,
+            level_size(texture.width, texture.height)?,
+        ));
+        let mut offset = 0usize;
+        for level in 1..=texture.max_level {
+            let width = texture.width >> level;
+            let height = texture.height >> level;
+            if width == 0 || height == 0 || !width.is_multiple_of(8) || !height.is_multiple_of(8) {
+                break;
+            }
+            let address = texture
+                .mip_address
+                .checked_add(offset as u64)
+                .ok_or("DMP draw mip address overflow")?;
+            let size = level_size(width, height)?;
+            ranges.push((address, size));
+            offset = offset
+                .checked_add(size)
+                .ok_or("DMP draw mip extent overflow")?;
+        }
+    }
+    Ok(ranges)
+}
+
+fn surface_range(key: SurfaceKey) -> Result<(u64, usize), String> {
+    let byte_len = (key.extent.width as usize)
+        .checked_mul(key.extent.height as usize)
+        .and_then(|pixels| pixels.checked_mul(key.format.bytes_per_pixel() as usize))
+        .ok_or("DMP host GPU surface byte length overflow")?;
+    Ok((key.guest_address, byte_len))
+}
+
+fn ranges_overlap(left: (u64, usize), right: (u64, usize)) -> bool {
+    let Some(left_end) = left.0.checked_add(left.1 as u64) else {
+        return true;
+    };
+    let Some(right_end) = right.0.checked_add(right.1 as u64) else {
+        return true;
+    };
+    left.0 < right_end && right.0 < left_end
+}
+
+fn merge_written_ranges(mut ranges: Vec<(u64, usize)>) -> Vec<(u64, usize)> {
+    ranges.sort_unstable_by_key(|(address, _)| *address);
+    let mut merged = Vec::<(u64, usize)>::new();
+    for (address, length) in ranges {
+        let end = address.saturating_add(length as u64);
+        if let Some((previous_address, previous_length)) = merged.last_mut() {
+            let previous_end = previous_address.saturating_add(*previous_length as u64);
+            if address <= previous_end {
+                *previous_length = previous_end.max(end).saturating_sub(*previous_address) as usize;
+                continue;
+            }
+        }
+        merged.push((address, length));
+    }
+    merged
+}
+
+pub(super) fn recorded_memory_range(
+    reads: &[(u64, Vec<u8>)],
+    address: u64,
+    length: usize,
+    read: &mut Reader<'_>,
+) -> Result<Vec<u8>, String> {
+    let end = address
+        .checked_add(length as u64)
+        .ok_or("DMP recorded memory range overflow")?;
+    let mut bytes = recorded_range(reads, address, length)
+        .map(Ok)
+        .unwrap_or_else(|| read(address, length))?;
+    if bytes.len() != length {
+        return Ok(bytes);
+    }
+    for (base, source) in reads {
+        let Some(source_end) = base.checked_add(source.len() as u64) else {
+            continue;
+        };
+        let start = address.max(*base);
+        let finish = end.min(source_end);
+        if start >= finish {
+            continue;
+        }
+        let destination_start = usize::try_from(start - address)
+            .map_err(|_| "DMP recorded memory destination offset overflow")?;
+        let source_start = usize::try_from(start - base)
+            .map_err(|_| "DMP recorded memory source offset overflow")?;
+        let count = usize::try_from(finish - start)
+            .map_err(|_| "DMP recorded memory overlay extent overflow")?;
+        bytes[destination_start..destination_start + count]
+            .copy_from_slice(&source[source_start..source_start + count]);
+    }
+    Ok(bytes)
 }
 
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
@@ -514,9 +780,7 @@ fn prepare_surface(
         .and_then(|pixels| pixels.checked_mul(key.format.bytes_per_pixel() as usize))
         .ok_or("DMP host GPU surface byte length overflow")?;
     let bytes = if load_guest_bytes {
-        let bytes = recorded_range(recorded_reads, key.guest_address, byte_len)
-            .map(Ok)
-            .unwrap_or_else(|| read(key.guest_address, byte_len))?;
+        let bytes = recorded_memory_range(recorded_reads, key.guest_address, byte_len, read)?;
         if bytes.len() != byte_len {
             return Err(format!(
                 "DMP host GPU target {:#x} supplied {} bytes, expected {byte_len}",

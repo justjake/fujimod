@@ -65,10 +65,9 @@ impl BoardState {
                 if let (Ok(left), Ok(right)) = (
                     serde_json::from_slice::<Value>(&left.architecture),
                     serde_json::from_slice::<Value>(&right.architecture),
-                ) {
-                    if let Some(message) = diff_value(&left, &right, "architecture") {
-                        return Some(format!("processors[{index}]: {message}"));
-                    }
+                ) && let Some(message) = diff_value(&left, &right, "architecture")
+                {
+                    return Some(format!("processors[{index}]: {message}"));
                 }
                 return Some(format!(
                     "processors[{index}]: architectural state differs at byte {offset}"

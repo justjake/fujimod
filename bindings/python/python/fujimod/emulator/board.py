@@ -238,7 +238,6 @@ class Board:
         camera: str | PathLike[str] | None = None,
         access_point: Mapping[str, object] | None = None,
         capability_reply: Sequence[int] | None = None,
-        ram_fill: int | None = None,
     ) -> Self:
         """Boot a catalog runtime from files selected by the caller.
 
@@ -268,10 +267,6 @@ class Board:
         channel, RCPI, gateway, DNS servers, DNS name, TCP destination, host
         loopback port and optional NTP server. Absence leaves the endpoint
         without an RF peer.
-
-        ``ram_fill`` initializes physical RAM to this byte before loading the
-        ROM and retains physical RAM across modeled restarts. None uses the
-        default zero-filled fresh memory.
 
         ``capability_reply`` is an explicit 20-byte MT5931 capability body,
         needed before stock Wi-Fi initialization accepts command 0x80. It is a
@@ -311,8 +306,6 @@ class Board:
                 raise TypeError("clock_seconds_2000 must be a non-bool integer or None")
             if not 0 <= clock_seconds_2000 <= 0xFFFFFFFF:
                 raise ValueError("clock_seconds_2000 must be in 0..=0xFFFFFFFF")
-        if ram_fill is not None and (type(ram_fill) is not int or not 0 <= ram_fill <= 255):
-            raise ValueError("ram_fill must be a byte or None")
         native = _native.Board.from_inputs(
             configuration_id=configuration_id,
             overlays=selected_overlays,
@@ -325,7 +318,6 @@ class Board:
             camera=camera,
             access_point=access_point_text,
             capability_reply=capability,
-            ram_fill=ram_fill,
         )
         quantum = native.boot_quantum
         if type(quantum) is not int or quantum < 1:

@@ -46,7 +46,7 @@ try {
     errors: string[] = [],
     graphicsRequests: string[] = [];
   page.on('request', (request) => {
-    if (/simulation[\/-]|\.glb(?:\?|$)|\/environments\//.test(request.url()))
+    if (/simulation[/-]|\.glb(?:\?|$)|\/environments\//.test(request.url()))
       graphicsRequests.push(request.url());
   });
   activePage = page;
@@ -214,7 +214,7 @@ try {
   await page.locator('#feedback-dialog button[value="cancel"]').click();
   const graphicsRequests: string[] = [];
   page.on('request', (request) => {
-    if (/simulation[\/-]|\.glb(?:\?|$)|\/environments\//.test(request.url()))
+    if (/simulation[/-]|\.glb(?:\?|$)|\/environments\//.test(request.url()))
       graphicsRequests.push(request.url());
   });
   await page.goto(new URL('?scenario=x70-lcd#workspace', base).href, {

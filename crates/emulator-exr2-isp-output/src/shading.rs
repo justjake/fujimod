@@ -7,6 +7,21 @@ pub(super) struct Shading {
     gains: Vec<u16>,
 }
 
+pub(super) struct GainTable {
+    width: usize,
+    gains: Box<[u16]>,
+}
+
+impl GainTable {
+    #[inline(always)]
+    /// # Safety
+    /// `x` and `y` must be inside the dimensions passed to [`Shading::table`].
+    pub unsafe fn at(&self, x: usize, y: usize) -> u16 {
+        // SAFETY: upheld by the caller.
+        unsafe { *self.gains.get_unchecked(y * self.width + x) }
+    }
+}
+
 impl Shading {
     pub fn from_registers(r: impl Fn(usize) -> u32) -> Result<Option<Self>, String> {
         if r(0) & 0x10 == 0 {
@@ -65,6 +80,22 @@ impl Shading {
         let s = ((radius * self.scale) << self.shift).saturating_sub(1 << 21);
         self.gains[((s >> 20) as usize).min(9 * 1024)]
     }
+
+    /// Materialize one gain per source sample. Still rendering reads three
+    /// neighboring positions for every output pixel, so computing this table
+    /// once avoids repeating the same radius and segment lookup.
+    pub fn table(&self, width: usize, height: usize) -> GainTable {
+        let mut gains = Vec::with_capacity(width * height);
+        for y in 0..height {
+            for x in 0..width {
+                gains.push(self.gain(x, y));
+            }
+        }
+        GainTable {
+            width,
+            gains: gains.into_boxed_slice(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -81,7 +112,7 @@ mod tests {
         for i in [6, 14, 22] {
             points[i] = 3072;
         }
-        for (i, p) in points.chunks_exact(2).enumerate() {
+        for (i, p) in points.as_chunks::<2>().0.iter().enumerate() {
             r[0x1c / 4 + i] = p[0] << 16 | p[1];
         }
         r
@@ -127,7 +158,7 @@ mod tests {
             let points: Vec<u32> = (0..28)
                 .map(|i| (i * i * 727 + i * 31 + 1000) % 16384)
                 .collect();
-            for (i, p) in points.chunks_exact(2).enumerate() {
+            for (i, p) in points.as_chunks::<2>().0.iter().enumerate() {
                 r[0x1c / 4 + i] = p[0] << 16 | p[1];
             }
             let s = Shading::from_registers(|o| r[o / 4]).unwrap().unwrap();
@@ -140,6 +171,17 @@ mod tests {
                 }
             }
             assert_eq!(hash, expected);
+        }
+    }
+    #[test]
+    fn materialized_table_preserves_each_source_sample_gain() {
+        let r = registers(2, 2, 486);
+        let s = Shading::from_registers(|o| r[o / 4]).unwrap().unwrap();
+        let table = s.table(37, 23);
+        for y in 0..23 {
+            for x in 0..37 {
+                assert_eq!(unsafe { table.at(x, y) }, s.gain(x, y));
+            }
         }
     }
     #[test]

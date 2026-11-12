@@ -212,6 +212,8 @@ pub struct Board {
     cpus: Rc<Vec<Rc<dyn Cpu>>>,
     state: Rc<RefCell<State>>,
     run_wakeup: fujimod_emulator_cpu::RunWakeup,
+    // Native hooks hold raw pointers into each box; boxing keeps them stable as the Vec grows.
+    #[allow(clippy::vec_box)]
     bindings: Vec<Box<Binding>>,
     hooks: Vec<(usize, HookId)>,
     mmio: Vec<(usize, u64, usize)>,
@@ -236,8 +238,12 @@ pub struct Board {
     /// Processor address views of RAM, from the checked graph.
     mappings: Vec<factory::MemoryMap>,
     read_set: RefCell<Option<continuation::ReadSet>>,
+    // Native hooks hold raw pointers into each box; boxing keeps them stable as the Vec grows.
+    #[allow(clippy::vec_box)]
     watches: Vec<Box<observe::Watch>>,
     entries: Rc<RefCell<observe::Entries>>,
+    // Native hooks hold raw pointers into each box; boxing keeps them stable as the Vec grows.
+    #[allow(clippy::vec_box)]
     discovery_stub_contexts: Vec<Box<discovery::CalleeStubContext>>,
     translation_cache_size_bytes: u32,
 }
@@ -1651,10 +1657,10 @@ impl State {
             memory_access: *memory_access,
         };
         let result = f(bus, &mut host);
-        if self::continuation::fired(&self.continuation) {
-            if let Some(core) = host.active_core {
-                continuation::finish_instruction(&*cpus[core])?;
-            }
+        if self::continuation::fired(&self.continuation)
+            && let Some(core) = host.active_core
+        {
+            continuation::finish_instruction(&*cpus[core])?;
         }
         if bus.needs_frontier_pcs() {
             let pcs = cpus
@@ -1725,10 +1731,11 @@ impl State {
             }
         }
         for (core, p) in self.mprofile.iter_mut().enumerate() {
-            if let Some(p) = p {
-                if self.released[core] && p.pending() {
-                    self.waiting[core] = false;
-                }
+            if let Some(p) = p
+                && self.released[core]
+                && p.pending()
+            {
+                self.waiting[core] = false;
             }
         }
         Ok(changed)
@@ -1764,14 +1771,14 @@ impl State {
         self.sync(&*cpus[core], core)?;
         self.due(cpus)?;
         let pc = scalar(&*cpus[core], Register::Pc)?;
-        if let Some(p) = &mut self.mprofile[core] {
-            if (0xe0000000..0xe0100000).contains(&address) {
-                let result = p.access(&*cpus[core], address, size, value, self.timeline.now())?;
-                self.refresh_processors()?;
-                self.push_pins(cpus)?;
-                self.tighten(&*cpus[core], core)?;
-                return Ok(result);
-            }
+        if let Some(p) = &mut self.mprofile[core]
+            && (0xe0000000..0xe0100000).contains(&address)
+        {
+            let result = p.access(&*cpus[core], address, size, value, self.timeline.now())?;
+            self.refresh_processors()?;
+            self.push_pins(cpus)?;
+            self.tighten(&*cpus[core], core)?;
+            return Ok(result);
         }
         if let Some(g) = &mut self.interrupts
             && let Some(result) = g.access(core, address, size, value) {
@@ -1889,10 +1896,10 @@ struct Services<'a> {
 }
 impl Services<'_> {
     fn remember(&mut self, result: Result<(), String>) {
-        if let Err(e) = result {
-            if self.error.is_none() {
-                *self.error = Some(e);
-            }
+        if let Err(e) = result
+            && self.error.is_none()
+        {
+            *self.error = Some(e);
         }
     }
 }

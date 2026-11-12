@@ -1,5 +1,12 @@
-//! Declared packed-422 signed Q8 four-source arithmetic. Rounding, clipping
-//! and neutral chroma bias are explicit approximations, not silicon results.
+//! Packed-422 signed Q8 four-source arithmetic: every byte, chroma included,
+//! is an uncentered Q8 sum of the source bytes, rounded and clamped once at
+//! the end. A camera run (three primaries and a constant Y 0, Cb Cr 255 with
+//! coefficients 256, 256, 256, -256) matched this on all 16,384 output bytes:
+//! neutral inputs give chroma 3 * 128 - 255 = 129. A second run weighted the
+//! constant by -264 (below the stock driver's -256 limit, which the 10-bit lane
+//! holds): luma read round(264 * 43 / 256) = 44 levels off, not 45, so the sum
+//! rounds to nearest. Weights down to the lane's -512 are accepted; above 256
+//! remains unmeasured.
 use super::Prepared;
 use fujimod_emulator_devices::Cx;
 use fujimod_emulator_imaging::exr2_isp::dma::{Raster, physical};
@@ -16,7 +23,7 @@ pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared
     if word(4) & !0x70 != 4
         || !(1..=4).contains(&count)
         || width == 0
-        || width % 2 != 0
+        || !width.is_multiple_of(2)
         || height == 0
         || word(0x38) & !0x1fff1fff != 0
         || word(0x3c) & !0x03ff03ff != 0
@@ -62,7 +69,7 @@ pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared
         } else {
             value as i32
         };
-        if !(-256..=256).contains(coefficient) {
+        if !(-512..=256).contains(coefficient) {
             return Err("combination signed-sum coefficient exceeds Q8 range".into());
         }
         if *coefficient == 0 {
@@ -96,19 +103,13 @@ pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared
                     physical(source.address + (y * source.pitch) as u64, row_bytes)?,
                     &mut row,
                 )?;
-                for (offset, (sum, &value)) in sums.iter_mut().zip(&row).enumerate() {
-                    let bias = if offset % 4 >= 2 { 128 } else { 0 };
-                    *sum += coefficient * (i32::from(value) - bias);
+                for (sum, &value) in sums.iter_mut().zip(&row) {
+                    *sum += coefficient * i32::from(value);
                 }
             }
         }
-        for (offset, (&sum, pixel)) in sums
-            .iter()
-            .zip(&mut pixels[y * row_bytes..(y + 1) * row_bytes])
-            .enumerate()
-        {
-            let bias = if offset % 4 >= 2 { 128 } else { 0 };
-            *pixel = (((sum + 128) >> 8) + bias).clamp(0, 255) as u8;
+        for (&sum, pixel) in sums.iter().zip(&mut pixels[y * row_bytes..(y + 1) * row_bytes]) {
+            *pixel = ((sum + 128) >> 8).clamp(0, 255) as u8;
         }
     }
     Ok(Prepared {
@@ -145,10 +146,10 @@ pub(super) mod tests {
         )
     }
     #[test]
-    fn signed_difference_and_average_use_actual_source_bytes_and_clip() {
+    fn uncentered_difference_and_average_use_actual_source_bytes_and_clip() {
         let (mut host, mut words) = fixture();
         let result = prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0)).unwrap();
-        assert_eq!(result.pixels, [0, 230, 0, 255, 170, 0, 128, 1]);
+        assert_eq!(result.pixels, [0, 230, 0, 240, 170, 0, 0, 0]);
         assert!(host.effects.is_empty());
         words.insert(0x60, 0x00800080);
         let result = prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0)).unwrap();
@@ -164,10 +165,38 @@ pub(super) mod tests {
         );
     }
     #[test]
+    fn four_input_bias_matches_the_camera_law() {
+        let (mut host, mut words) = fixture();
+        host.ram[0x10000..0x10008].copy_from_slice(&[60, 70, 128, 128, 90, 30, 140, 120]);
+        host.ram[0x20000..0x20008].copy_from_slice(&[0, 0, 255, 255, 0, 0, 255, 255]);
+        words.insert(4, 0x44);
+        for (offset, value) in [(0x18, 0x10000), (0x20, 0x10000), (0x24, 8), (0x28, 0x20000), (0x2c, 8)] {
+            words.insert(offset, value);
+        }
+        words.insert(0x60, 0x01000100);
+        words.insert(0x64, 0x03000100);
+        let result = prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0)).unwrap();
+        assert_eq!(result.pixels, [180, 210, 129, 129, 255, 90, 165, 105]);
+    }
+    #[test]
+    fn a_weight_below_minus_256_rounds_to_nearest() {
+        let (mut host, mut words) = fixture();
+        host.ram[0x10000..0x10008].copy_from_slice(&[20, 21, 128, 128, 60, 10, 128, 128]);
+        host.ram[0x20000..0x20008].copy_from_slice(&[43, 43, 255, 255, 43, 43, 255, 255]);
+        words.insert(4, 0x44);
+        for (offset, value) in [(0x18, 0x10000), (0x20, 0x10000), (0x24, 8), (0x28, 0x20000), (0x2c, 8)] {
+            words.insert(offset, value);
+        }
+        words.insert(0x60, 0x01000100);
+        words.insert(0x64, (((-264i32) as u32 & 1023) << 16) | 0x100);
+        let result = prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0)).unwrap();
+        assert_eq!(result.pixels, [16, 19, 121, 121, 136, 0, 121, 121]);
+    }
+    #[test]
     fn invalid_coefficients_sources_and_partial_aliases_refuse_without_effects() {
         for (offset, value) in [
             (0x60, 257),
-            (0x60, 0x200),
+            (0x60, 0x400),
             (0x18, 0),
             (0x30, 0x10004),
             (4, 0x124),
@@ -192,7 +221,7 @@ pub(super) mod tests {
         // The fourth lane is retained even when only three sources participate.
         words.insert(0x64, 0x01000100);
         let result = prepare(&host.cx(), |o| words.get(&o).copied().unwrap_or(0)).unwrap();
-        assert_eq!(result.pixels, [255, 255, 0, 255, 255, 0, 128, 128]);
+        assert_eq!(result.pixels, [255, 255, 30, 255, 255, 0, 255, 255]);
         assert_eq!(result.bytes, 32);
         words.insert(0x64, 0xffff0100);
         assert_eq!(
@@ -220,7 +249,8 @@ pub(super) mod tests {
         for (address, pattern) in [(first, [100, 240, 10, 250]), (second, [201, 11, 251, 11])] {
             for y in 0..height {
                 for pixel in host.ram[address + y * pitch..address + y * pitch + row_bytes]
-                    .chunks_exact_mut(4)
+                    .as_chunks_mut::<4>()
+                    .0
                 {
                     pixel.copy_from_slice(&pattern);
                 }
@@ -245,8 +275,10 @@ pub(super) mod tests {
         assert!(
             result
                 .pixels
-                .chunks_exact(4)
-                .all(|p| p == [151, 126, 131, 131])
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|p| *p == [151, 126, 131, 131])
         );
         assert!(host.ram[output..].iter().all(|&byte| byte == 0xee));
         assert!(host.effects.is_empty());

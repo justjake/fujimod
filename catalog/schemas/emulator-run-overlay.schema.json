@@ -3225,7 +3225,8 @@
     "RunSdCardProfile": {
       "description": "Closed selection for sd card profile.",
       "enum": [
-        "declared-blank-sdhc-default-speed-unmeasured"
+        "declared-blank-sdhc-default-speed-unmeasured",
+        "declared-blank-sdhc-high-speed-unmeasured"
       ],
       "type": "string"
     },

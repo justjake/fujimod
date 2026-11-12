@@ -108,10 +108,10 @@ impl Bridge {
             {
                 self.step(configuration, 1)?;
             }
-            self.due = if configuration.clock.is_some() {
+            self.due = if let Some(clock) = &configuration.clock {
                 Some(
                     cx.now()
-                        .checked_add(configuration.clock.unwrap().period)
+                        .checked_add(clock.period)
                         .ok_or("lens bridge deadline overflow")?,
                 )
             } else {

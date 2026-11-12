@@ -82,10 +82,13 @@ impl Device for XppTiming {
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         let now = cx.now() as i64;
-        if self.state.deadline_with_clock(now, true).is_some_and(|due| due <= now) {
-            if let Err(error) = self.state.tick(now, false, &mut Host(cx)) {
-                cx.fail(error.0);
-            }
+        if self
+            .state
+            .deadline_with_clock(now, true)
+            .is_some_and(|due| due <= now)
+            && let Err(error) = self.state.tick(now, false, &mut Host(cx))
+        {
+            cx.fail(error.0);
         }
     }
     fn next_deadline(&self, now: u64) -> Option<u64> {

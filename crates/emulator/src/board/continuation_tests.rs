@@ -179,8 +179,10 @@ fn cached_read_watch_wakes_for_every_uncached_publication_store() {
         let reads = board.read_set_end().unwrap();
         assert_eq!(reads.stores, vec![(0x10000, 0x1000c)]);
         let words: Vec<_> = bytes
-            .chunks_exact(4)
-            .map(|word| u32::from_le_bytes(word.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|word| u32::from_le_bytes(*word))
             .collect();
         observed.push(words.clone());
         if words[0] != 0 && words[0] == words[2] && words[0] & 1 == 0 {
@@ -433,7 +435,7 @@ fn a_new_watch_set_replaces_the_retained_hooks() {
     board.write_register(0, arm::CORE[1], 0x40010000).unwrap();
     // Runs from the first store with a new value; returns the instructions
     // entered and whether the watch fired.
-    let mut run = |board: &mut super::super::Board, value: u64, watched: Option<(u64, u64)>| {
+    let run = |board: &mut super::super::Board, value: u64, watched: Option<(u64, u64)>| {
         board.write_register(0, Register::Pc, 0x20000).unwrap();
         board.write_register(0, arm::CORE[0], value).unwrap();
         if let Some(range) = watched {

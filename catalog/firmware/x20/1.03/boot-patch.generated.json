@@ -1,0 +1,207 @@
+{
+  "$schema": "https://fujimod.com/schemas/boot-patch.generated.schema.json",
+  "schema": 1,
+  "id": "x20-103-boot-patch",
+  "firmware_id": "x20-103",
+  "update_sha256": "7e3dd41696b6ffbd02a8d4b6555eba766a4850b18cbc0f69939f6487d8e0914b",
+  "isa": "arm32",
+  "units": [
+    {
+      "name": "boot",
+      "address": 0,
+      "size": 98304,
+      "dat_offset": 33372,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "4c016cca6842e5b7a382598ecc4550f327e3c59152bedb7145eaf2f06f691502"
+    },
+    {
+      "name": "kernel0",
+      "address": 262144,
+      "size": 55200,
+      "dat_offset": 295516,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "cba3a8dc5ffa4f11f2b42b454234a46a2421df0a5c55558b38469deef17e6c2c"
+    },
+    {
+      "name": "kernel1",
+      "address": 851968,
+      "size": 55136,
+      "dat_offset": 361052,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "157e570148b2d682bf3d7b3c6292a856f04be7ed35e8a5695002a5bc6fe9ef9c"
+    },
+    {
+      "name": "resources2",
+      "address": 1245184,
+      "size": 2312540,
+      "dat_offset": 9880156,
+      "compression": "raw",
+      "executable": false,
+      "sha256": "7279a04cafc8f2500db38a4063a112acef8f7338547aad24a8fc5c8b2ae59fa3"
+    },
+    {
+      "name": "resources3",
+      "address": 3915776,
+      "size": 490968,
+      "dat_offset": 12419676,
+      "compression": "raw",
+      "executable": false,
+      "sha256": "16bfd6b080f699a3db17e7213d24a7f37fd600502dc5430d8feb5eb38eb70df8"
+    },
+    {
+      "name": "section_table",
+      "address": 6406144,
+      "size": 1024,
+      "dat_offset": 950876,
+      "compression": "raw",
+      "executable": false,
+      "sha256": "61b656424d5405075f31621c43964a2ae1a56afd75beab9f1821501fae3ff1b0"
+    },
+    {
+      "name": "section4",
+      "address": 6407168,
+      "size": 2729376,
+      "dat_offset": 967260,
+      "compression": "method4",
+      "executable": true,
+      "sha256": "113fbe8e40aa799ed4a87b2f4e62ae87c7919d4ffc6a64ba9256b7584b824b07"
+    },
+    {
+      "name": "section5",
+      "address": 15843872,
+      "size": 4913280,
+      "dat_offset": 2343516,
+      "compression": "method4",
+      "executable": true,
+      "sha256": "532ce953fc16424a94ea4d8b5ac652d6f2f34833abf8346faa1f6eebe0858887"
+    },
+    {
+      "name": "overlay42",
+      "address": 20840448,
+      "size": 704512,
+      "dat_offset": 5063260,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "0da0b86c2361bba19e1b920f449aee2fb1e9f80bf72553eb2790226bb0c2d2ed"
+    },
+    {
+      "name": "overlay44",
+      "address": 21626880,
+      "size": 180928,
+      "dat_offset": 5849692,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "1a5a0c9040ba78a5aa10ab92d164def9697bcd2cb8319e9af4a1067d00dc11ac"
+    },
+    {
+      "name": "overlay45",
+      "address": 21889024,
+      "size": 904000,
+      "dat_offset": 6111836,
+      "compression": "raw",
+      "executable": true,
+      "sha256": "802358e3bb9601e0e261fb17f9df6516b85f43643b8ab30142953a946726edf1"
+    }
+  ],
+  "triggers": [
+    {
+      "name": "section4-decoded",
+      "site": 17772,
+      "expected": 3942646076,
+      "kind": "once",
+      "units": [
+        "boot",
+        "kernel0",
+        "kernel1",
+        "section_table",
+        "section4"
+      ]
+    },
+    {
+      "name": "section5-loaded",
+      "site": 6956660,
+      "expected": 3808429460,
+      "kind": "once",
+      "units": [
+        "boot",
+        "kernel0",
+        "kernel1",
+        "section_table",
+        "section4",
+        "section5"
+      ]
+    },
+    {
+      "name": "overlay-block",
+      "site": 7211228,
+      "expected": 3766485001,
+      "kind": "range",
+      "base_register": "r0",
+      "length_register": "r9",
+      "address_mask": 3221225471,
+      "units": [
+        "boot",
+        "kernel0",
+        "kernel1",
+        "section_table",
+        "section4",
+        "section5",
+        "overlay42",
+        "overlay44",
+        "overlay45"
+      ]
+    }
+  ],
+  "clears": [
+    {
+      "address": 27488,
+      "size": 8480,
+      "done_after": "section4-decoded",
+      "name": "stage1-primary-entry"
+    },
+    {
+      "address": 93344,
+      "size": 32,
+      "done_after": "section4-decoded",
+      "name": "stage1-secondary-entry"
+    },
+    {
+      "name": "kernel0-bss",
+      "address": 317344,
+      "size": 79584,
+      "done_after": "section5-loaded"
+    },
+    {
+      "name": "kernel1-bss",
+      "address": 907104,
+      "size": 79584,
+      "done_after": "section5-loaded"
+    },
+    {
+      "name": "section4-bss",
+      "address": 9136544,
+      "size": 2496640,
+      "done_after": "section4-decoded"
+    },
+    {
+      "name": "section5-bss",
+      "address": 22806528,
+      "size": 2306528,
+      "done_after": "section5-loaded"
+    }
+  ],
+  "trampoline_space": {
+    "address": 589824,
+    "size": 4096
+  },
+  "resident_space": {
+    "address": 153821184,
+    "size": 4194304
+  },
+  "stage3_resident": [
+    "boot"
+  ]
+}

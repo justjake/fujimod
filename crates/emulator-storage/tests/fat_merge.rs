@@ -17,7 +17,9 @@ fn merge_preserves_valid_preallocation_and_releases_it_on_replacement() {
     let data = fat + boot[16] as u32 * fat_size;
     let root = card.sector(data).unwrap();
     let slot = root
-        .chunks_exact(32)
+        .as_chunks::<32>()
+        .0
+        .iter()
         .position(|row| &row[..11] == b"A       BIN")
         .unwrap();
     let first = u16::from_le_bytes(root[slot * 32 + 26..slot * 32 + 28].try_into().unwrap()) as u32;

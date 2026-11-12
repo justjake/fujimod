@@ -73,10 +73,11 @@ impl Transport {
         }
     }
     fn read(&self) -> Result<u8, String> {
-        if self.selected {
-            if let Peer::Register(p) = &self.peer {
-                if let Some(v) = self.pointer.and_then(|a| p.registers.get(&a)) { return Ok(*v); }
-            }
+        if self.selected
+            && let Peer::Register(p) = &self.peer
+            && let Some(v) = self.pointer.and_then(|a| p.registers.get(&a))
+        {
+            return Ok(*v);
         }
         Err("Undeclared synthetic register read".into())
     }
@@ -114,10 +115,12 @@ impl ByteI2c {
             || profile.reset.ccr & 0x80 != 0 || profile.reset.adr != 0 || profile.reset.csr > 0x3f {
             return Err("Invalid explicit byte I2C idle profile".into());
         }
-        if let Peer::Register(p) = &peer {
-            if !(8..=0x77).contains(&p.address) || p.registers.is_empty() || p.registers.len() > 128 {
-                return Err("Invalid synthetic I2C peer address or register count".into());
-            }
+        if let Peer::Register(p) = &peer
+            && (!(8..=0x77).contains(&p.address)
+                || p.registers.is_empty()
+                || p.registers.len() > 128)
+        {
+            return Err("Invalid synthetic I2C peer address or register count".into());
         }
         // The declared peer itself binds checkpoints to this factory.
         let factory = serde_json::to_value(&peer).unwrap();
@@ -225,9 +228,19 @@ impl ByteI2c {
         if s.ccr&0x80!=0 || s.adr!=0 || s.csr>0x3f || s.bcr&0xa4!=0 || s.bsr&!0x99!=0 || s.low_drives>3 {
             return Err("Invalid byte I2C checkpoint register bits".into());
         }
-        match (&self.initial_peer,&s.transport.peer) {
-            (Peer::Empty,Peer::Empty) if s.transport.pointer.is_none() && !s.transport.selected && !s.transport.expect_pointer => (),
-            (Peer::Register(a),Peer::Register(b)) if a.address==b.address && a.registers.keys().eq(b.registers.keys()) && s.transport.pointer.is_none_or(|pointer| a.registers.keys().any(|key| *key==pointer || key.wrapping_add(1)==pointer)) => (),
+        match (&self.initial_peer, &s.transport.peer) {
+            (Peer::Empty, Peer::Empty)
+                if s.transport.pointer.is_none()
+                    && !s.transport.selected
+                    && !s.transport.expect_pointer => {}
+            (Peer::Register(a), Peer::Register(b))
+                if a.address == b.address
+                    && a.registers.keys().eq(b.registers.keys())
+                    && s.transport.pointer.is_none_or(|pointer| {
+                        a.registers
+                            .keys()
+                            .any(|key| *key == pointer || key.wrapping_add(1) == pointer)
+                    }) => {}
             _ => return Err("Changed byte I2C peer factory".into()),
         }
         let addressing = s.pending.as_ref().is_some_and(|p| matches!(p.operation,Operation::Address(_)));
@@ -286,15 +299,30 @@ impl Device for ByteI2c {
         });
         if let Err(e)=result {cx.fail(e);}
     }
-    fn advance(&mut self,cx:&mut Cx<'_>) {
-        if self.irq_dirty {self.sync_irq(cx);}
-        let Some(p)=self.state.pending.clone().filter(|p|p.deadline<=cx.now()) else{return;};
-        let s=&mut self.state; s.pending=None;
-        let mut fields=vec![("base",Field::int(self.base)),("deadline",Field::int(p.deadline)),("tick",Field::int(p.deadline))];
-        if s.transport.selected {
-            if let Peer::Register(peer)=&s.transport.peer {
-                if !matches!(p.operation,Operation::Address(_)) { fields.push(("address7",Field::int(peer.address))); }
-            }
+    fn advance(&mut self, cx: &mut Cx<'_>) {
+        if self.irq_dirty {
+            self.sync_irq(cx);
+        }
+        let Some(p) = self
+            .state
+            .pending
+            .clone()
+            .filter(|p| p.deadline <= cx.now())
+        else {
+            return;
+        };
+        let s = &mut self.state;
+        s.pending = None;
+        let mut fields = vec![
+            ("base", Field::int(self.base)),
+            ("deadline", Field::int(p.deadline)),
+            ("tick", Field::int(p.deadline)),
+        ];
+        if s.transport.selected
+            && let Peer::Register(peer) = &s.transport.peer
+            && !matches!(p.operation, Operation::Address(_))
+        {
+            fields.push(("address7", Field::int(peer.address)));
         }
         match p.operation {
             Operation::Address(b)=>{

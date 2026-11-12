@@ -1,6 +1,6 @@
 import { VERSION, encodeMessage, decodeMessage } from './wire.ts';
 import { Pipeline } from './pipeline.ts';
-import type { Message, Descriptor, UsbExporter } from './types.ts';
+import type { Descriptor, UsbExporter } from './types.ts';
 
 interface ExporterSdk {
   initialize(): Promise<unknown>;

@@ -839,8 +839,10 @@ fn decode_uncorrectable(
         "NAND ECC bitmap exceeds request",
     )?;
     let words: Vec<u32> = bitmap
-        .chunks_exact(4)
-        .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| u32::from_le_bytes(*b))
         .collect();
     require(
         pages.is_multiple_of(32) || words.last().unwrap() >> (pages % 32) == 0,

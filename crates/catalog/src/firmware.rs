@@ -819,6 +819,8 @@ pub struct FirmwareLayouts {
     deny_unknown_fields
 )]
 #[cfg_attr(feature = "schema", schemars(rename = "FirmwareFirmwareView"))]
+// Catalog records are few and long-lived, so the variant size difference costs nothing.
+#[allow(clippy::large_enum_variant)]
 pub enum FirmwareView {
     /// Firmware configuration-default builder and its source identities.
     ConfigurationDefaults(ConfigurationDefaults),

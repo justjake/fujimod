@@ -135,7 +135,7 @@ pub async fn interfaces(info: &Device) -> Result<Vec<InterfaceSelection>> {
             .iter()
             .filter(|i| {
                 bulk_pair(
-                    &i.endpoints
+                    i.endpoints
                         .iter()
                         .filter(|e| e.kind == "bulk")
                         .map(|e| e.address)
@@ -160,7 +160,7 @@ pub async fn interfaces(info: &Device) -> Result<Vec<InterfaceSelection>> {
             .iter()
             .filter(|i| {
                 bulk_pair(
-                    &i.endpoints
+                    i.endpoints
                         .iter()
                         .filter(|e| e.kind == "bulk")
                         .map(|e| e.address)
@@ -245,7 +245,7 @@ impl Connection {
                 })
                 .ok_or(Error::InvalidInterface)?;
             let (input_address, output_address) = bulk_pair(
-                &descriptor
+                descriptor
                     .endpoints
                     .iter()
                     .filter(|e| e.kind == "bulk")
@@ -289,7 +289,7 @@ impl Connection {
                 .filter(|e| e.kind == "bulk")
                 .collect();
             let (input, output) =
-                bulk_pair(&endpoints.iter().map(|e| e.address).collect::<Vec<_>>())?;
+                bulk_pair(endpoints.iter().map(|e| e.address).collect::<Vec<_>>())?;
             let packet_size = usize::from(
                 endpoints
                     .iter()
@@ -297,7 +297,14 @@ impl Connection {
                     .ok_or(Error::InvalidInterface)?
                     .packet_size,
             );
-            if packet_size == 0 {
+            let output_packet_size = usize::from(
+                endpoints
+                    .iter()
+                    .find(|e| e.address == output)
+                    .ok_or(Error::InvalidInterface)?
+                    .packet_size,
+            );
+            if packet_size == 0 || output_packet_size == 0 {
                 return Err(Error::InvalidInterface);
             }
             let mut client = remote.connect().await?;
@@ -322,6 +329,7 @@ impl Connection {
                     input,
                     output,
                     packet_size,
+                    output_packet_size,
                     timeout: options.timeout,
                     unsynced: Vec::new(),
                     observation: None,
@@ -492,6 +500,42 @@ impl Connection {
             return Err(Error::CompletionUnknown);
         }
         Session::open(self.io, self.max_reply_bytes, trace).await
+    }
+
+    /// Hands the claimed bulk endpoints to a class protocol other than FF80,
+    /// such as PTP. No FF80 framing or control envelopes are sent.
+    pub fn into_bulk(self) -> Result<BulkPipe> {
+        if self.uncertain {
+            return Err(Error::CompletionUnknown);
+        }
+        Ok(BulkPipe { io: self.io })
+    }
+}
+
+/// Raw bulk transfers on an opened local, owned or proxied interface.
+pub struct BulkPipe {
+    io: Backend,
+}
+impl BulkPipe {
+    /// One OUT transfer; an empty slice sends a zero-length packet.
+    pub async fn write(&mut self, bytes: &[u8]) -> Result<()> {
+        self.io.write(bytes).await
+    }
+    /// One IN transfer of at most `maximum` bytes, rounded up to whole packets.
+    pub async fn read(&mut self, maximum: usize) -> Result<Vec<u8>> {
+        self.io.read(maximum).await
+    }
+    /// The OUT endpoint's wMaxPacketSize, which decides when a transfer needs
+    /// a terminating zero-length packet.
+    pub fn packet_size(&self) -> usize {
+        match &self.io {
+            Backend::Usb(io) => io.output.max_packet_size(),
+            Backend::Proxy(io) => io.output_packet_size,
+            _ => 512,
+        }
+    }
+    pub async fn close(mut self) -> Result<()> {
+        self.io.release().await
     }
 }
 
@@ -768,10 +812,10 @@ mod tests {
     use super::*;
     #[test]
     fn endpoint_selection_never_silently_chooses_first_pair() {
-        assert_eq!(bulk_pair(&[0x82, 0x03]).unwrap(), (0x82, 3));
-        assert!(bulk_pair(&[0x81, 0x82, 3]).is_err());
-        assert!(bulk_pair(&[0x81]).is_err());
-        assert!(bulk_pair(&[0x80, 0]).is_err());
+        assert_eq!(bulk_pair([0x82, 0x03]).unwrap(), (0x82, 3));
+        assert!(bulk_pair([0x81, 0x82, 3]).is_err());
+        assert!(bulk_pair([0x81]).is_err());
+        assert!(bulk_pair([0x80, 0]).is_err());
     }
     #[test]
     fn unfinished_transfer_has_a_deadline() {

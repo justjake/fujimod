@@ -3,7 +3,6 @@
 //! Ordinary physical RAM and shared monitor rollback belong to the board.
 use super::*;
 use fujimod_emulator_cpu::memory::pages::Image;
-use sha2::{Digest, Sha256};
 use std::any::Any;
 use std::sync::atomic::Ordering;
 mod portable;
@@ -33,6 +32,7 @@ struct Saved {
     hint: Option<Hint>,
     exception: Option<arm::Exception>,
     failure: Option<String>,
+    data_cache: Option<crate::rprofile::data_cache::Saved>,
 }
 impl Snapshot for Saved {
     fn owner(&self) -> Identity {
@@ -168,13 +168,12 @@ impl Core {
     ) -> Result<Box<dyn Snapshot>, String> {
         let e = &self.execution;
         e.checkpoint_boundary()?;
-        if let Some(previous) = previous {
-            if previous.owner() != self.identity()
+        if let Some(previous) = previous
+            && (previous.owner() != self.identity()
                 || !(previous.as_any().is::<Saved>()
-                    || previous.as_any().is::<portable::Imported>())
-            {
-                return Err("CPU snapshot belongs to a different processor/backend".into());
-            }
+                    || previous.as_any().is::<portable::Imported>()))
+        {
+            return Err("CPU snapshot belongs to a different processor/backend".into());
         }
         let context = e.cpu.snapshot(None)?;
         let tcm = std::array::from_fn(|bank| {
@@ -217,6 +216,7 @@ impl Core {
             hint: e.hint.get(),
             exception: e.exception.get(),
             failure: e.failure.borrow().clone(),
+            data_cache: e.data_cache.borrow().as_ref().map(|cache| cache.save()),
         }))
     }
     pub(super) fn direct_state(&self) -> Result<fujimod_emulator_cpu::CpuState, String> {
@@ -353,6 +353,12 @@ impl Core {
         e.hint.set(saved.hint);
         e.exception.set(saved.exception);
         *e.failure.borrow_mut() = saved.failure.clone();
+        match (e.data_cache.borrow_mut().as_mut(), &saved.data_cache) {
+            (Some(cache), Some(lines)) => cache.restore(lines)?,
+            (None, None) => {}
+            _ => return Err("CPU snapshot data-cache presence differs".into()),
+        }
+        e.cache_spans_stale.set(true);
         e.rearm_observers()?;
         Ok(())
     }

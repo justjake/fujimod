@@ -234,11 +234,11 @@ impl Device for Receiver {
             }
             if end && self.state.active {
                 self.state.active = false;
-                if let Some(input) = &self.input_buffer {
-                    if let Err(error) = input.frame(cx) {
-                        cx.fail(error);
-                        return;
-                    }
+                if let Some(input) = &self.input_buffer
+                    && let Err(error) = input.frame(cx)
+                {
+                    cx.fail(error);
+                    return;
                 }
                 if self.wiring.timing_output {
                     self.sensor.timing(cx, false);

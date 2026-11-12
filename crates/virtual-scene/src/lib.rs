@@ -129,8 +129,8 @@ pub fn pair(first: [u8; 3], second: [u8; 3]) -> [u8; 4] {
     [
         a[0],
         b[0],
-        ((u16::from(a[1]) + u16::from(b[1]) + 1) / 2) as u8,
-        ((u16::from(a[2]) + u16::from(b[2]) + 1) / 2) as u8,
+        (u16::from(a[1]) + u16::from(b[1])).div_ceil(2) as u8,
+        (u16::from(a[2]) + u16::from(b[2])).div_ceil(2) as u8,
     ]
 }
 
@@ -168,7 +168,7 @@ pub fn output_pairs(
     validate_crop(scene, crop)?;
     dimension(width)?;
     dimension(height)?;
-    if width % 2 != 0 {
+    if !width.is_multiple_of(2) {
         return Err(SceneError::Invalid("YYCbCr output width must be even"));
     }
     let row_bytes = width
@@ -208,7 +208,7 @@ pub fn output_pairs(
 
 pub fn histogram(scene: Scene, crop: Crop) -> Result<Vec<u8>, SceneError> {
     validate_crop(scene, crop)?;
-    if crop.width % 2 != 0 {
+    if !crop.width.is_multiple_of(2) {
         return Err(SceneError::Invalid(
             "half-horizontal histogram crop width must be even",
         ));
@@ -319,8 +319,10 @@ mod tests {
         .unwrap();
         assert_eq!(bytes.len(), 1024);
         let bins: Vec<u32> = bytes
-            .chunks_exact(4)
-            .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|b| u32::from_le_bytes(*b))
             .collect();
         assert_eq!(bins.iter().sum::<u32>(), 4);
         for bin in [235, 170, 106, 41] {
@@ -334,8 +336,10 @@ mod tests {
         };
         let bytes = histogram(scene(2496, 853, 1), roi).unwrap();
         let sum: u64 = bytes
-            .chunks_exact(4)
-            .map(|b| u64::from(u32::from_le_bytes(b.try_into().unwrap())))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|b| u64::from(u32::from_le_bytes(*b)))
             .sum();
         assert_eq!(sum, 960000);
         assert_eq!(bytes, histogram(scene(2496, 853, 1), roi).unwrap());
@@ -348,8 +352,10 @@ mod tests {
         };
         let bytes = histogram(scene(2496, 853, 1), current_roi).unwrap();
         let sum: u64 = bytes
-            .chunks_exact(4)
-            .map(|b| u64::from(u32::from_le_bytes(b.try_into().unwrap())))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|b| u64::from(u32::from_le_bytes(*b)))
             .sum();
         assert_eq!(sum, 990216);
     }

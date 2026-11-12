@@ -5,18 +5,26 @@ export interface FaultContext {
   firmware?: string;
   build: string;
 }
+/** A fault detail as display text; objects are shown as JSON rather than [object Object]. */
+function detail(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint')
+    return String(value);
+  if (value == null) return '';
+  return JSON.stringify(value) ?? '';
+}
 export function faultDiagnostics(fault: EngineFault, context: FaultContext) {
   const d = fault.details;
-  const kind = String(d.type ?? d.error_type ?? fault.kind);
+  const kind = detail(d.type ?? d.error_type ?? fault.kind);
   const access = [
     d.operation,
     d.address,
-    d.value == null ? '' : `← ${d.value}`,
-    d.device ? `(${d.device})` : '',
+    d.value == null ? '' : `← ${detail(d.value)}`,
+    d.device ? `(${detail(d.device)})` : '',
   ]
     .filter(Boolean)
     .join(' ');
-  const raw = String(d.error ?? d.message ?? '');
+  const raw = detail(d.error ?? d.message);
   const last = raw.trim().split('\n').at(-1) ?? '';
   const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent,
     browser =
@@ -28,7 +36,7 @@ export function faultDiagnostics(fault: EngineFault, context: FaultContext) {
     (typeof navigator === 'undefined' ? '' : navigator.platform);
   const lines = [
     `${kind}: ${access || last}`,
-    `pc ${d.pc ?? 'unknown'} · core ${d.cpu ?? 'unknown'} · tick ${context.tick ?? d.tick ?? 'unknown'} · firmware ${context.firmware ?? 'unknown'} · build ${context.build} · ${browser} / ${os}`,
+    `pc ${detail(d.pc ?? 'unknown')} · core ${detail(d.cpu ?? 'unknown')} · tick ${detail(context.tick ?? d.tick ?? 'unknown')} · firmware ${context.firmware ?? 'unknown'} · build ${context.build} · ${browser} / ${os}`,
   ];
   return lines.join('\n');
 }

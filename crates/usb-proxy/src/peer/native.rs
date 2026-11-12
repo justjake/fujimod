@@ -374,8 +374,20 @@ async fn allocate_relay(target: &turn::RelayTarget) -> Result<(TurnRelay, std::n
     }
 }
 
+/// The peer's SDP with its relayed candidates removed under
+/// `CandidatePolicy::DirectOnly`.
+fn remote_sdp(sdp: &str, policy: CandidatePolicy) -> String {
+    if policy != CandidatePolicy::DirectOnly {
+        return sdp.to_owned();
+    }
+    sdp.split_inclusive('\n')
+        .filter(|line| !(line.starts_with("a=candidate:") && line.contains(" typ relay")))
+        .collect()
+}
+
 /// Bind local sockets, allocate the TURN relay and gather candidates. Under
-/// `CandidatePolicy::RelayOnly`, no host or reflexive candidate is advertised.
+/// `CandidatePolicy::RelayOnly`, no host or reflexive candidate is advertised;
+/// under `CandidatePolicy::DirectOnly`, no relay is allocated.
 async fn gather_candidates(
     rtc: &mut Rtc,
     ticket: &Ticket,
@@ -383,7 +395,7 @@ async fn gather_candidates(
     progress: &crate::Progress,
 ) -> Result<Network> {
     let mut sockets = Vec::new();
-    if ice.policy == CandidatePolicy::Any {
+    if ice.policy != CandidatePolicy::RelayOnly {
         let mut local = Vec::new();
         for iface in if_addrs::get_if_addrs().map_err(error)? {
             if iface.ip().is_ipv4() {
@@ -402,7 +414,11 @@ async fn gather_candidates(
         progress(&format!("local candidates: {}", local.len()));
         add_reflexive_candidates(rtc, ticket, &sockets, progress)?;
     }
-    let relay = match turn::relay_target(&ice.servers) {
+    let target = match ice.policy {
+        CandidatePolicy::DirectOnly => None,
+        _ => turn::relay_target(&ice.servers),
+    };
+    let relay = match target {
         None => None,
         Some(target) => match allocate_relay(&target).await {
             Ok(allocation) => Some(allocation),
@@ -558,7 +574,10 @@ async fn run(
         return Err(error("invalid WebRTC answer"));
     }
     progress("WebRTC answer received");
-    let sdp = answer["sdp"].as_str().ok_or_else(|| error("missing SDP"))?;
+    let sdp = &remote_sdp(
+        answer["sdp"].as_str().ok_or_else(|| error("missing SDP"))?,
+        policy,
+    );
     rtc.sdp_api()
         .accept_answer(pending, SdpAnswer::from_sdp_string(sdp).map_err(error)?)
         .map_err(error)?;
@@ -595,7 +614,10 @@ async fn run_answer(
         if offer["type"] != "offer" {
             return Err(error("invalid WebRTC offer"));
         }
-        let sdp = offer["sdp"].as_str().ok_or_else(|| error("missing SDP"))?;
+        let sdp = &remote_sdp(
+            offer["sdp"].as_str().ok_or_else(|| error("missing SDP"))?,
+            ice.policy,
+        );
         let mut rtc = Rtc::builder()
             .set_sctp_max_buffered_amount(512 * 1024)
             .build(Instant::now());
@@ -756,23 +778,24 @@ async fn pump(
         // congestion/receive windows; letting them sit behind an entire bulk
         // frame produces bursts, loss and expensive retransmission scans.
         let received = futures_lite::future::poll_once(network.udp.receive()).await;
-        if received.is_none() && writable {
-            if let (Some(id), Some(packet)) = (channel, packets.front()) {
-                let accepted = rtc
-                    .channel(id)
-                    .ok_or_else(|| error("data channel closed"))?
-                    .write(true, packet)
-                    .map_err(error)?;
-                if accepted {
-                    packets.pop_front();
-                } else {
-                    writable = false;
-                }
-                continue; // Drain the complete RTC output after every mutation.
+        if received.is_none()
+            && writable
+            && let (Some(id), Some(packet)) = (channel, packets.front())
+        {
+            let accepted = rtc
+                .channel(id)
+                .ok_or_else(|| error("data channel closed"))?
+                .write(true, packet)
+                .map_err(error)?;
+            if accepted {
+                packets.pop_front();
+            } else {
+                writable = false;
             }
-            // With no queued packet, wait for outbound work below. Spinning
-            // here starves the controller's first Hello and all later sends.
+            continue; // Drain the complete RTC output after every mutation.
         }
+        // With no queued packet, wait for outbound work below. Spinning
+        // here starves the controller's first Hello and all later sends.
         enum Wake {
             Out(std::result::Result<Vec<u8>, async_channel::RecvError>),
             Udp(std::io::Result<Datagram>),
@@ -893,6 +916,21 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod direct_tests {
+    use super::*;
+
+    #[test]
+    fn direct_only_drops_relayed_remote_candidates() {
+        let sdp = "v=0\r\na=candidate:1 1 udp 1 10.0.0.2 5000 typ host\r\na=candidate:2 1 udp 1 203.0.113.9 6000 typ relay raddr 0.0.0.0 rport 0\r\na=end\r\n";
+        let direct = remote_sdp(sdp, CandidatePolicy::DirectOnly);
+        assert!(direct.contains("typ host"));
+        assert!(!direct.contains("typ relay"));
+        assert!(direct.ends_with("a=end\r\n"));
+        assert_eq!(remote_sdp(sdp, CandidatePolicy::Any), sdp);
+    }
+}
+
 #[cfg(all(test, feature = "relay"))]
 mod relay_tests {
     use super::*;
@@ -922,6 +960,32 @@ mod relay_tests {
             URL_SAFE_NO_PAD.encode(serde_json::to_vec(&ticket).unwrap())
         );
         (link, ticket)
+    }
+
+    #[tokio::test]
+    async fn direct_only_share_never_contacts_turn() {
+        let credentials = test_server::credentials();
+        let turn = test_server::spawn(credentials.clone());
+        let ice = serde_json::json!([{
+            "urls": [format!("turn:{}?transport=udp", turn.address)],
+            "username": credentials.username,
+            "credential": credentials.password,
+        }]);
+        let (link, _) = signaling_with(ice).await;
+        let host = HostRoom::join(&link, "native-owner-secret", CandidatePolicy::DirectOnly)
+            .await
+            .unwrap();
+        let progress: crate::Progress = std::sync::Arc::new(|_| {});
+        let mut controller = PeerSocket::connect(&link, &progress, CandidatePolicy::DirectOnly)
+            .await
+            .unwrap();
+        let HostEvent::Controller(_, mut owner_peer) = host.next_event().await.unwrap() else {
+            panic!("expected controller connection");
+        };
+        controller.send(vec![7; 4096]).await.unwrap();
+        assert_eq!(owner_peer.receive().await.unwrap(), vec![7; 4096]);
+        assert_eq!(turn.stats.allocations.load(std::sync::atomic::Ordering::SeqCst), 0);
+        host.end().await.unwrap();
     }
 
     #[tokio::test]

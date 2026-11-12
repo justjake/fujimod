@@ -300,19 +300,19 @@ impl Discovery {
                 continue;
             }
             let poll = self.polls.get_mut(&(core, pc, address, size)).unwrap();
-            if let Some((row, candidate, _)) = poll.trial {
-                if instructions.saturating_sub(poll.last) >= 4096 {
-                    poll.trial = None;
-                    poll.kept = Some(candidate);
-                    poll.count = 0;
-                    let entry = &mut self.interventions[row];
-                    entry.outcome = "kept".into();
-                    entry.evidence = format!(
-                        "Poll site not reread for {} CPU instructions; workflow progress is not implied",
-                        instructions - poll.last
-                    );
-                    poll.last = instructions;
-                }
+            if let Some((row, candidate, _)) = poll.trial
+                && instructions.saturating_sub(poll.last) >= 4096
+            {
+                poll.trial = None;
+                poll.kept = Some(candidate);
+                poll.count = 0;
+                let entry = &mut self.interventions[row];
+                entry.outcome = "kept".into();
+                entry.evidence = format!(
+                    "Poll site not reread for {} CPU instructions; workflow progress is not implied",
+                    instructions - poll.last
+                );
+                poll.last = instructions;
             }
         }
         self.active_trials
@@ -370,14 +370,13 @@ impl Discovery {
         self.settle_trials(cpu, instructions);
         let limit = self.trial_limit(address, size);
         let override_value = self.overridden(address, size, value);
-        if let Some(override_value) = override_value {
-            if !self
+        if let Some(override_value) = override_value
+            && !self
                 .polls
                 .get(&(cpu, pc, address, size))
                 .is_some_and(|p| p.trial.is_some() || p.kept.is_some())
-            {
-                return override_value;
-            }
+        {
+            return override_value;
         }
         let poll = self.polls.entry((cpu, pc, address, size)).or_default();
         if poll.kept.is_some() {

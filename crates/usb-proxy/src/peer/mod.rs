@@ -6,6 +6,10 @@ pub enum CandidatePolicy {
     /// Only a TURN relayed candidate. The connection never sends from a local
     /// address to the peer, so it works through any NAT that reaches TURN over UDP.
     RelayOnly,
+    /// Host and server-reflexive candidates only. No TURN relay is allocated
+    /// and the peer's relayed candidates are dropped, so no byte crosses a
+    /// relay.
+    DirectOnly,
 }
 
 #[cfg(not(target_arch = "wasm32"))]

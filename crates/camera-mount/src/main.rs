@@ -1,6 +1,9 @@
+#[cfg(any(target_os = "macos", test))]
 use fujimod_usb::ff80::commands::memory::DebugMemoryLimits;
+#[cfg(any(target_os = "macos", test))]
 use std::{num::NonZeroU32, path::PathBuf};
 
+#[cfg(any(target_os = "macos", test))]
 const USAGE: &str = "Usage: fujimod-mount --firmware ID [--device BUS-OR-SERIAL] [--read-limit BYTES] [--write-limit BYTES] [--flash-reader ARTIFACT] [--read-only] [--benchmark | --benchmark-usb] MOUNTPOINT\nRequires macOS 15.4+. Installs the signed filesystem extension on first use; macOS may require enabling it in System Settings.";
 #[cfg(target_os = "macos")]
 mod benchmark;
@@ -8,6 +11,8 @@ mod benchmark;
 #[cfg(target_os = "macos")]
 const NO_FILE_SERVICE: i32 = 3;
 
+#[cfg(any(target_os = "macos", test))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 struct Options {
     firmware: String,
     device: Option<String>,
@@ -18,6 +23,7 @@ struct Options {
     benchmark: bool,
     benchmark_usb: bool,
 }
+#[cfg(any(target_os = "macos", test))]
 fn options(args: impl Iterator<Item = String>) -> std::result::Result<Options, String> {
     let mut args = args.peekable();
     let mut firmware = None;

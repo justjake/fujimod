@@ -378,12 +378,11 @@ impl Block18000 {
         let mut destinations = [0; 10];
         destinations[..9].copy_from_slice(&self.registers[0x500 / 4..0x524 / 4]);
         destinations[9] = self.registers[0x700 / 4];
-        if histogram {
-            if (!(self.options.histogram || self.options.external_statistics))
-                || self.registers[0x704 / 4] != 0x200
-            {
-                return Err("unsupported histogram count mode; 0x200 selects 256 u32 bins".into());
-            }
+        if histogram
+            && ((!(self.options.histogram || self.options.external_statistics))
+                || self.registers[0x704 / 4] != 0x200)
+        {
+            return Err("unsupported histogram count mode; 0x200 selects 256 u32 bins".into());
         }
         if computed_histogram {
             if image.edge != Some(edge) {

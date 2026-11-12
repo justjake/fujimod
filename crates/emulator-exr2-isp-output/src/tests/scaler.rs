@@ -489,8 +489,10 @@ fn centered_scaler_ignores_tags_outside_its_sample_support() {
         if !refused {
             assert!(
                 host.ram[0x10000..0x18000]
-                    .chunks_exact(4)
-                    .all(|pair| pair == [80, 80, 96, 160])
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .all(|pair| *pair == [80, 80, 96, 160])
             );
             assert_eq!(host.irqs, [(0, 67)]);
         } else {

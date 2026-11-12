@@ -123,13 +123,13 @@ impl Device for Control {
         match WORDS.iter().position(|w| *w == offset) {
             Some(n) => {
                 self.state.words[n] = value as u32;
-                if offset == 0x0c {
-                    if let Some(ticks) = self.settle_ticks {
-                        self.state.settled = false;
-                        self.state.due = cx.now().checked_add(ticks);
-                        if self.state.due.is_none() {
-                            cx.fail("Power startup deadline overflow");
-                        }
+                if offset == 0x0c
+                    && let Some(ticks) = self.settle_ticks
+                {
+                    self.state.settled = false;
+                    self.state.due = cx.now().checked_add(ticks);
+                    if self.state.due.is_none() {
+                        cx.fail("Power startup deadline overflow");
                     }
                 }
             }

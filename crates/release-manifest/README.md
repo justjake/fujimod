@@ -25,6 +25,9 @@ its byte size and lowercase SHA-256:
 {
   "firmware": "example-cam",
   "version": "1.2.3",
+  "date": "2026-11-10",
+  "commit": "abcdef0123456789abcdef0123456789abcdef01",
+  "notes": ["First release note", "Second release note"],
   "fs": {
     "/etc/ssl/cert.pem": {
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -37,6 +40,9 @@ its byte size and lowercase SHA-256:
   }
 }
 ```
+
+The `date`, `commit` and `notes` fields are optional. Notes contain at most
+eight strings, each no longer than 64 UTF-8 bytes.
 
 Paths are absolute, use `/` separators and contain no empty, `.` or `..`
 segments and no trailing slash. Entries are sorted by path so the same inputs

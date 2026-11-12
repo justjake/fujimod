@@ -1,0 +1,4 @@
+# Emulator device models and catalog builders take many inputs and use rich
+# nested types by design; these two size heuristics are not enforced.
+too-many-arguments-threshold = 64
+type-complexity-threshold = 100000

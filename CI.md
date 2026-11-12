@@ -52,7 +52,6 @@ From the repository root:
 mise install
 uv sync --locked
 pnpm install --frozen-lockfile
-rustup target add wasm32-unknown-unknown
 pnpm --filter fujimod run setup:tooling
 
 mise run python-lint
@@ -128,8 +127,6 @@ offers `native-coverage` and `javascript-coverage` downloads; generated files st
 under ignored `target/coverage/`. To reproduce native coverage:
 
 ```sh
-rustup component add llvm-tools-preview
-cargo install cargo-llvm-cov --version 0.9.1 --locked
 export CARGO_TARGET_DIR="$PWD/target/llvm-cov-target"
 export CARGO_LLVM_COV_TARGET_DIR="$CARGO_TARGET_DIR"
 mise run rust-coverage
