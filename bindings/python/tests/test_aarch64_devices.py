@@ -18,7 +18,7 @@ from fujimod.emulator.driver_harness import DriverHarness
 BASE = 0x1_0000_0000
 CODE, DATA, SP, RETURN = BASE + 0x1000, BASE + 0x4000, BASE + 0x9000, BASE + 0xB000
 NOR, DMA, CLOCKS = 0xFF90A000, 0xFF939000, 0xFFA01000
-JEDEC = 0x20BB20
+QUAD, OCTAL = 0x20BB20, 0x2C5B1B
 FLASH = bytes(range(256)) * 16
 
 
@@ -26,7 +26,7 @@ def words(*values: int) -> bytes:
     return struct.pack("<" + "I" * len(values), *values)
 
 
-def devices(windows: tuple[tuple[int, int], ...]) -> Aarch64Devices:
+def devices(windows: tuple[tuple[int, int], ...], jedec: int = QUAD) -> Aarch64Devices:
     return Aarch64Devices(
         definition=dict(
             kind="xp5",
@@ -42,7 +42,7 @@ def devices(windows: tuple[tuple[int, int], ...]) -> Aarch64Devices:
                     kind="flash-storage-controller",
                     base=NOR,
                     size=0x1000,
-                    options=dict(jedec_id=JEDEC),
+                    options=dict(jedec_id=jedec),
                 ),
                 dict(kind="flash-storage-dma", base=DMA, size=0x1000, options={}),
                 dict(kind="clock-banks", base=0xFFA00000, size=0x20000, options={}),
@@ -58,14 +58,16 @@ def devices(windows: tuple[tuple[int, int], ...]) -> Aarch64Devices:
     )
 
 
-def harness(code: bytes, windows: tuple[tuple[int, int], ...]) -> Aarch64DriverHarness:
+def harness(
+    code: bytes, windows: tuple[tuple[int, int], ...], jedec: int = QUAD
+) -> Aarch64DriverHarness:
     inputs = Aarch64Inputs(
         images=(Aarch64Image("code", CODE, code),),
         stack=(SP - 0x1000, SP + 64),
         stack_pointer=SP,
         return_address=RETURN,
         scratch=(BASE + 0xC000, BASE + 0x10000),
-        devices=devices(windows),
+        devices=devices(windows, jedec),
     )
     result = DriverHarness(inputs, ram_fixture=[(DATA, bytes(32))])
     assert isinstance(result, Aarch64DriverHarness)
@@ -99,13 +101,14 @@ def jedec_routine() -> bytes:
     )
 
 
-def test_routine_reads_the_declared_nor_controller_jedec_id() -> None:
+@pytest.mark.parametrize("part", [QUAD, OCTAL])
+def test_routine_reads_the_declared_nor_controller_jedec_id(part: int) -> None:
     windows = ((NOR, NOR + 0x1000), (CLOCKS, CLOCKS + 0x1000))
-    with harness(jedec_routine(), windows) as h:
+    with harness(jedec_routine(), windows, part) as h:
         result = h.call(CODE, args=(NOR, DATA, CLOCKS), max_instructions=100)
         assert result["failure"] is None and result["returned"]
         status, jedec, divider = struct.unpack("<I3sxI", h.read(DATA, 12))
-        assert jedec == JEDEC.to_bytes(3, "big")
+        assert jedec == part.to_bytes(3, "big")
         assert status == 7  # bit 2 set, receive pending, complete
         assert divider == 0x12
         rows = result["device_transactions"]
@@ -113,11 +116,9 @@ def test_routine_reads_the_declared_nor_controller_jedec_id() -> None:
             (NOR, "write"),
             (NOR + 0x40, "write"),
         ]
-        assert [r["value"] for r in rows if r["address"] == NOR + 0x80] == [
-            0x20,
-            0xBB,
-            0x20,
-        ]
+        assert [r["value"] for r in rows if r["address"] == NOR + 0x80] == list(
+            part.to_bytes(3, "big")
+        )
         assert result["device_transactions_omitted"] == 0
         assert result["caller"]["devices"] == [list(w) for w in windows]
         assert result["devices"]["kind"] == "xp5"
@@ -144,6 +145,15 @@ def test_unmodeled_register_inside_a_declared_window_refuses() -> None:
         result = h.call(CODE, args=(NOR,), max_instructions=10)
         assert not result["returned"]
         assert "unmodeled MMIO read4 at 0xff90a00c" in result["failure"]
+
+
+def test_exclusive_access_to_a_device_window_refuses() -> None:
+    code = words(0x885F7C03, 0xD65F03C0)  # ldxr w3, [x0]; ret
+    with harness(code, ((NOR, NOR + 0x1000),)) as h:
+        result = h.call(CODE, args=(NOR + 0xF0,), max_instructions=10)
+        assert not result["returned"]
+        assert "exclusive read outside declared RAM" in result["failure"]
+        assert result["device_transactions"] == []
 
 
 def test_device_windows_must_not_overlap_caller_memory() -> None:

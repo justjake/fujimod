@@ -77,7 +77,7 @@ def test_arguments_and_returns_preserve_all_64_bits() -> None:
         (words(0xD503207F), "Unsupported instruction"),
         (words(0xD4000001), "Unsupported instruction"),
         (words(0xDAC10020), "Unsupported instruction"),
-        (words(0xC8007C22), "Unsupported memory instruction"),
+        (words(0xC8007C22), "exclusive store outside declared RAM"),
     ],
 )
 def test_strict_refusals(code: bytes, reason: str) -> None:
@@ -85,6 +85,24 @@ def test_strict_refusals(code: bytes, reason: str) -> None:
         result = h.call(CODE, max_instructions=8)
         assert not result["returned"]
         assert reason in result["failure"]
+
+
+def test_exclusive_increment_on_declared_ram() -> None:
+    # retry: ldxr w2,[x1]; add w2,w2,#1; stxr w3,w2,[x1]; cbnz w3,retry; ret
+    code = words(0x885F7C22, 0x11000442, 0x88037C22, 0x35FFFFA3, 0xD65F03C0)
+    with harness(code, fixture=[(DATA, struct.pack("<I", 41) + bytes(28))]) as h:
+        result = h.call(CODE, args=(0, DATA), max_instructions=20)
+        assert result["failure"] is None and result["returned"]
+        assert h.read(DATA, 4) == struct.pack("<I", 42)
+        assert [(s["address"], s["size"]) for s in result["stores"]] == [(DATA, 4)]
+
+
+def test_exclusive_access_outside_declared_ram_refuses() -> None:
+    code = words(0x885F7C22, 0xD65F03C0)  # ldxr w2,[x1]; ret
+    with harness(code) as h:
+        result = h.call(CODE, args=(0, BASE + 0xA000), max_instructions=4)
+        assert not result["returned"]
+        assert "exclusive read outside declared RAM" in result["failure"]
 
 
 def test_stack_alignment_rejected_before_execution() -> None:

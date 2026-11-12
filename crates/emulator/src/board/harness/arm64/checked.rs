@@ -277,6 +277,40 @@ impl Guard {
             });
             return Ok(());
         }
+        // Exclusive load/store on declared RAM: this single-core routine has no
+        // other observer, so the native monitor's outcome is the routine's.
+        // Exclusive access to device windows stays refused.
+        if let Some(exclusive) = arm64::decode_exclusive(word)
+            .map_err(|e| format!("Unsupported exclusive instruction at {pc:#x}: {e}"))?
+        {
+            let address = scalar(
+                &*cpu,
+                if exclusive.base == 31 {
+                    Register::Sp
+                } else {
+                    Register::X(exclusive.base)
+                },
+            )?;
+            let width = u64::from(exclusive.bytes) * if exclusive.pair { 2 } else { 1 };
+            let allowed = if exclusive.load {
+                &self.options.readable
+            } else {
+                &self.options.writable
+            };
+            if address % width != 0 || !contains(allowed, address, width) {
+                return Err(format!(
+                    "exclusive {} outside declared RAM at {address:#x} width {width} (pc {pc:#x})",
+                    if exclusive.load { "read" } else { "store" }
+                ));
+            }
+            if !exclusive.load
+                && self.observed.borrow().stores.len() + width.div_ceil(8) as usize
+                    > self.options.store_limit
+            {
+                return Err("Store limit reached before instruction".into());
+            }
+            return Ok(());
+        }
         if word & 0x0a00_0000 == 0x0800_0000 {
             let decoded = arm64::decode_load_store(word, pc, |r| {
                 scalar(
