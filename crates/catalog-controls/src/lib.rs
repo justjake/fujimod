@@ -232,7 +232,7 @@ pub enum ControlSurface {
     Right,
 }
 
-/// An explicit binding in one of two distinct firmware input vocabularies.
+/// A debug key, native input name, or exact located scanner-row identity.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -251,6 +251,11 @@ pub enum InputBinding {
     NativeInput {
         /// Exact name in the firmware's located native input vocabulary.
         name: String,
+    },
+    /// Stable identity of a located scanner row, even when it has no command name.
+    ScannerRow {
+        /// Generated scanner row identity, such as `row-69`.
+        row: String,
     },
 }
 
@@ -1776,6 +1781,29 @@ impl FirmwareControlIds {
                 }
                 event
             }
+            InputBinding::ScannerRow { row } => {
+                let mut matches = self.inputs.iter().filter(|input| input.id == *row);
+                let input = matches
+                    .next()
+                    .ok_or_else(|| format!("unknown firmware scanner row {row}"))?;
+                if matches.next().is_some() {
+                    return Err(format!("duplicate firmware scanner row {row}"));
+                }
+                let row_index = row
+                    .strip_prefix("row-")
+                    .and_then(|value| value.parse::<u32>().ok());
+                if row_index.is_none_or(|index| {
+                    input
+                        .scanner
+                        .as_ref()
+                        .is_none_or(|scanner| scanner.index != index)
+                }) {
+                    return Err(format!(
+                        "firmware input {row} is not the declared scanner row"
+                    ));
+                }
+                input.event
+            }
         };
         let mut matches = self.inputs.iter().filter(|input| input.event == event
             && matches!(&input.target, InputTarget::Control { control_id: owner } if owner == control_id));
@@ -1799,6 +1827,11 @@ impl FirmwareControlIds {
                 "native-only input {} unexpectedly declares a debug transport key",
                 input.id
             ));
+        }
+        if let InputBinding::ScannerRow { row } = binding
+            && (input.id != *row || input.scanner.is_none())
+        {
+            return Err(format!("firmware input {row} is not the declared scanner row"));
         }
         Ok(input)
     }
@@ -2270,7 +2303,8 @@ mod tests {
 
     #[test]
     fn native_only_action_remains_physical_and_refuses_debug_transport() {
-        let (physical, firmware) = fixture();
+        let (physical, mut firmware) = fixture();
+        firmware.inputs.last_mut().unwrap().id = "row-0".into();
         let action = physical
             .action(&firmware, "movie", ControlOperation::Press)
             .unwrap();
@@ -2295,6 +2329,49 @@ mod tests {
                     "movie",
                     &InputBinding::DebugKey {
                         name: "FUNCTION3".into()
+                    }
+                )
+                .is_err()
+        );
+        assert_eq!(
+            firmware
+                .input(
+                    "movie",
+                    &InputBinding::ScannerRow {
+                        row: "row-0".into()
+                    }
+                )
+                .unwrap()
+                .event,
+            61
+        );
+        assert!(
+            firmware
+                .input(
+                    "menu_ok",
+                    &InputBinding::ScannerRow {
+                        row: "row-0".into()
+                    }
+                )
+                .is_err()
+        );
+        assert!(
+            firmware
+                .input(
+                    "movie",
+                    &InputBinding::ScannerRow {
+                        row: "row-1".into()
+                    }
+                )
+                .is_err()
+        );
+        firmware.inputs.last_mut().unwrap().id = "row-1".into();
+        assert!(
+            firmware
+                .input(
+                    "movie",
+                    &InputBinding::ScannerRow {
+                        row: "row-1".into()
                     }
                 )
                 .is_err()

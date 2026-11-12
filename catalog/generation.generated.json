@@ -7238,6 +7238,15 @@
           "status": "available",
           "errors": []
         },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
+        },
         "controls": {
           "status": "available",
           "errors": []
@@ -7300,15 +7309,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: No stock card-call mechanism for this processor"
-            }
-          ]
         }
       }
     },
