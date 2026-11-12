@@ -12,9 +12,6 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use fujimod_emulator_imaging::exr2_isp::options::producer::Options;
 
-const BASE: u64 = 0xfff18000;
-const GLOBAL: u64 = 0xfff28000;
-const IRQ: u32 = 0x2e;
 pub struct Wiring {
     pub grid: Option<fujimod_emulator_imaging::analysis::GridHandle>,
     pub routes: IrqRoutes,
@@ -168,6 +165,11 @@ impl Block18000 {
         if let Some(arithmetic) = &options.contrast {
             arithmetic.validate()?;
         }
+        if options.mode_layout == fujimod_emulator_imaging::exr2_isp::options::producer::ModeLayout::ExrPro
+            && (options.contrast.is_some() || options.metering.is_some())
+        {
+            return Err("EXR Pro statistics do not interpret the parameter bank; contrast and metering are refused".into());
+        }
         let input_spans = wiring.frames.0.lock().unwrap().spans.clone();
         let mut spans = input_spans.clone();
         if !options.external_statistics && spans.iter().any(|s| s.destination == 9) {
@@ -221,14 +223,15 @@ impl Block18000 {
             pixel_cache: Default::default(),
         })
     }
-    fn offset(address: u64, size: u8) -> Result<(bool, usize), String> {
+    fn offset(&self, address: u64, size: u8) -> Result<(bool, usize), String> {
+        let (base, global) = (self.options.base, self.options.parameter_base);
         if size != 4 || address & 3 != 0 {
             return Err("statistics registers require aligned words".into());
         }
-        if (BASE..BASE + 0x1000).contains(&address) {
-            Ok((false, (address - BASE) as usize))
-        } else if (GLOBAL..GLOBAL + 0x3400).contains(&address) {
-            Ok((true, (address - GLOBAL) as usize))
+        if (base..base + 0x1000).contains(&address) {
+            Ok((false, (address - base) as usize))
+        } else if (global..global + 0x3400).contains(&address) {
+            Ok((true, (address - global) as usize))
         } else {
             Err("unknown statistics register".into())
         }
@@ -286,7 +289,22 @@ impl Block18000 {
             }
         })
     }
-    fn config_valid(global: bool, o: usize, v: u32) -> bool {
+    fn global_mode_mask(&self) -> u32 {
+        match self.options.mode_layout {
+            fujimod_emulator_imaging::exr2_isp::options::producer::ModeLayout::Exr2 => 0x1007333f,
+            fujimod_emulator_imaging::exr2_isp::options::producer::ModeLayout::ExrPro => 0x1107333f,
+        }
+    }
+    fn config_valid(&self, global: bool, o: usize, v: u32) -> bool {
+        use fujimod_emulator_imaging::exr2_isp::options::producer::ModeLayout;
+        if self.options.mode_layout == ModeLayout::ExrPro {
+            match (global, o) {
+                (false, 0x600) => return v & !0x31 == 0 && (v >> 4) & 3 <= 2,
+                // Other field layouts; stored, not interpreted (contrast and metering are refused for this layout).
+                (false, 0x310) | (true, 0x8 | 0x48 | 0x4c) => return true,
+                _ => {}
+            }
+        }
         Self::mask(global, o).is_some_and(|m| v & !m == 0)
             && match (global, o) {
                 (true, 0xc) => v & 7 <= 5 && (v >> 3) & 15 <= 11,
@@ -329,7 +347,7 @@ impl Block18000 {
         if !live && !histogram {
             return Ok(());
         }
-        let Ok(route) = self.wiring.routes.latch(IRQ) else {
+        let Ok(route) = self.wiring.routes.latch(self.options.irq) else {
             return Ok(());
         };
         reuse_spans(&mut self.input_spans, &frame.spans);
@@ -839,7 +857,7 @@ impl Device for Block18000 {
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         let result: Result<u64, String> = (|| {
-            let (g, o) = Self::offset(address, size)?;
+            let (g, o) = self.offset(address, size)?;
             if g {
                 let write_only = (0x1100..0x1a00).contains(&o) || (0x1c00..0x3400).contains(&o);
                 if o == 0
@@ -875,11 +893,14 @@ impl Device for Block18000 {
                         | 0x9f4
                         | 0x9f8
                 ) || Self::mask(g, o).is_some()
+                    || self.options.mode_layout
+                        == fujimod_emulator_imaging::exr2_isp::options::producer::ModeLayout::ExrPro
+                        && matches!(o, 0x10 | 0x314)
                 {
                     return Ok(self.registers[o / 4] as u64);
                 }
             }
-            Err("unknown statistics register read".into())
+            Err(format!("unknown statistics register read {address:#x}"))
         })();
         match result {
             Ok(v) => v,
@@ -891,26 +912,31 @@ impl Device for Block18000 {
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
         let result: Result<(), String> = (|| {
-            let (g, o) = Self::offset(address, size)?;
+            let (g, o) = self.offset(address, size)?;
             let v = u32::try_from(value).map_err(|_| "statistics word exceeds 32 bits")?;
             if g && o == 0 {
                 if v == 0 {
                     self.stop_due = Some(due(cx.now(), self.options.stop_ticks)?);
                     self.pending = None;
                     self.raster_completion = None;
-                } else if v & !0x1007333f != 0
+                } else if v & !self.global_mode_mask() != 0
                     || [0, 2, 4, 8].into_iter().any(|shift| (v >> shift) & 3 > 2)
                 {
                     return Err("unsupported statistics global mode".into());
                 }
             } else if Self::mask(g, o).is_some() {
-                if !Self::config_valid(g, o, v) {
+                if !self.config_valid(g, o, v) {
                     return Err("unsupported statistics configuration bits or domain".into());
                 }
             } else if g {
                 return Err("unknown statistics global register".into());
             } else if matches!(o, 0x88c | 0x8f4 | 0x98c | 0x9f4) {
                 self.ack_write(cx, o, v)?;
+            } else if self.options.mode_layout
+                == fujimod_emulator_imaging::exr2_isp::options::producer::ModeLayout::ExrPro
+                && matches!(o, 0x10 | 0x314)
+            {
+                // EXR Pro registers without an X70 counterpart; stored, not interpreted.
             } else {
                 let valid = match o {
                     0 | 0x880 | 0x980 => v == 0,
@@ -972,7 +998,7 @@ impl Device for Block18000 {
         self.advance(cx);
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
-        Self::offset(address, size)
+        self.offset(address, size)
             .is_ok_and(|(g, o)| g && o == 0 || !g && matches!(o, 0x890 | 0x990))
     }
 }
