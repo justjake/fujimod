@@ -11,6 +11,7 @@ use std::{
     rc::{Rc, Weak},
 };
 type Span = (u64, u64);
+pub const MAX_INSTRUCTION_POINTS: usize = 16_384;
 #[derive(Default)]
 pub struct Records {
     ranges: Vec<Span>,
@@ -520,7 +521,6 @@ pub struct InstructionPoints {
     /// the translated code of its page both times.
     hooks: BTreeMap<u64, HookId>,
 }
-const INSTRUCTION_POINTS: usize = 4096;
 unsafe fn instruction(pc: u64, _: u32, data: *mut c_void) {
     let points = unsafe { &*data.cast::<InstructionPoints>() };
     if points.entry.hit(pc)
@@ -592,7 +592,7 @@ impl Board {
         mut addresses: Vec<u64>,
     ) -> Result<(), String> {
         let cpu = self.cpu(core)?;
-        if addresses.len() > INSTRUCTION_POINTS || addresses.iter().any(|pc| pc & 1 != 0) {
+        if addresses.len() > MAX_INSTRUCTION_POINTS || addresses.iter().any(|pc| pc & 1 != 0) {
             return Err("Instruction points require bounded aligned addresses".into());
         }
         addresses.sort_unstable();
@@ -612,7 +612,7 @@ impl Board {
             .iter()
             .filter(|pc| !points.hooks.contains_key(pc))
             .count();
-        if points.hooks.len() + added > INSTRUCTION_POINTS {
+        if points.hooks.len() + added > MAX_INSTRUCTION_POINTS {
             let inactive = points
                 .hooks
                 .keys()
