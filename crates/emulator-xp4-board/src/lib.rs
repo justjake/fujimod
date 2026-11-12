@@ -498,10 +498,21 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
             return Ok(());
         }
     }
-    if size != 4 {
-        return Err(format!(
-            "Unimplemented ARMv7-A Thumb instrumentation at {address:#x}"
-        ));
+    // The XP4 boot ROM runs Thumb code. Count it and advance guest time, but skip the ARM-encoded decode below.
+    // Only the ROM window is checked for 32-bit Thumb-2 encodings; firmware outside the ROM is ARM.
+    let thumb = size != 4
+        || ((0xfff0_0000..0xfff0_8000).contains(&address) && c.reg(core, arm::CPSR)? & 0x20 != 0);
+    if thumb {
+        c.due();
+        c.healthy()?;
+        let state = unsafe { &mut *c.state.get() };
+        state.instructions += 1;
+        let (ticks, phase) = c.instruction_rate.advance_phase(state.tick_phase, 1)?;
+        state.ticks = state.ticks.checked_add(ticks as u64).ok_or("A7 guest time overflow")?;
+        state.tick_phase = phase;
+        state.per_core[core] += 1;
+        state.waiting[core] = 0;
+        return Ok(());
     }
     c.due();
     c.healthy()?;
