@@ -3604,31 +3604,31 @@
       "electrical": null
     },
     {
-      "id": "debug-21",
-      "event": 21,
-      "debug_key": "C_DIAL+",
-      "target": {
-        "kind": "control",
-        "control_id": "front_command_dial"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-22",
-      "event": 22,
-      "debug_key": "C_DIAL-",
-      "target": {
-        "kind": "control",
-        "control_id": "front_command_dial"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
       "id": "debug-35",
       "event": 35,
       "debug_key": "CMD_PUSH",
+      "target": {
+        "kind": "control",
+        "control_id": "front_command_dial"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-36",
+      "event": 36,
+      "debug_key": "CMD_LEFT",
+      "target": {
+        "kind": "control",
+        "control_id": "front_command_dial"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-37",
+      "event": 37,
+      "debug_key": "CMD_RIGHT",
       "target": {
         "kind": "control",
         "control_id": "front_command_dial"
