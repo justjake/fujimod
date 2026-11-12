@@ -74,6 +74,10 @@ class AddressMapping(TypedDict, total=False):
     size: Required[RegionSize]
 
 
+class AlarmInterval(TypedDict, total=False):
+    seconds: Required[list[int]]
+
+
 class AlarmRegisters(TypedDict, total=False):
     enable: Required[int]
     enable_value: Required[int]
@@ -1491,6 +1495,7 @@ type DeviceKind = Literal[
     "QuadratureCounters",
     "RawConversionRegisters",
     "RawStatisticsControl",
+    "SataHost",
     "StillProcessor",
     "SPI1SerialBus",
     "SPI2Serial",
@@ -3299,7 +3304,7 @@ class HomeSwitch(TypedDict, total=False):
 type HomeSwitchSide = Literal["above", "below"]
 
 
-type InputBinding = InputBindingVariant0 | InputBindingVariant1
+type InputBinding = InputBindingVariant0 | InputBindingVariant1 | InputBindingVariant2
 
 
 class InputBindingVariant0(TypedDict, total=False):
@@ -3310,6 +3315,11 @@ class InputBindingVariant0(TypedDict, total=False):
 class InputBindingVariant1(TypedDict, total=False):
     kind: Required[Literal["native_input"]]
     name: Required[str]
+
+
+class InputBindingVariant2(TypedDict, total=False):
+    kind: Required[Literal["scanner_row"]]
+    row: Required[str]
 
 
 class InputReaders(TypedDict, total=False):
@@ -4191,10 +4201,11 @@ class PowerOff(TypedDict, total=False):
     alarm: Required[AlarmRegisters]
     deadline_parameter: NotRequired[int | None]
     entry: Required[int]
+    fixed_interval: NotRequired[AlarmInterval | None]
     halt: Required[int]
     power_cut: Required[int]
-    request_deadline_offset: Required[int]
-    rollover_parameter: Required[int]
+    request_deadline_offset: NotRequired[int | None]
+    rollover_parameter: NotRequired[int | None]
 
 
 type ProcessorArchitecture = Literal["arm32", "aarch64"]
@@ -4417,15 +4428,15 @@ class Resources(TypedDict, total=False):
 
 
 class RestartMechanism(TypedDict, total=False):
-    deadline_offset: Required[int]
+    deadline_offset: NotRequired[int | None]
     deferred_timer: NotRequired[DeferredTimer | None]
     early_boot: NotRequired[EarlyBootMechanism | None]
-    parameter_bytes: Required[int]
+    parameter_bytes: NotRequired[int | None]
     power_off: Required[PowerOff]
-    request: Required[int]
-    request_offset: Required[int]
-    sender: Required[int]
-    transport: Required[RequestTransport]
+    request: NotRequired[int | None]
+    request_offset: NotRequired[int | None]
+    sender: NotRequired[int | None]
+    transport: NotRequired[RequestTransport | None]
     ui: Required[RecIdle]
 
 

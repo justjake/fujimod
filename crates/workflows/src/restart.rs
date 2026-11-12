@@ -12,7 +12,9 @@ use crate::{
     Limits,
     bulk::{Access, BulkError, Result, check_camera, hex},
 };
-use fujimod_catalog_restart::{DeferredTimer, FirmwareRestart, RecIdle, RequestTransport, WordValue};
+use fujimod_catalog_restart::{
+    DeferredTimer, FirmwareRestart, RecIdle, RequestTransport, WordValue,
+};
 use fujimod_usb::{
     ff80::{
         Session, SessionState,
@@ -72,17 +74,24 @@ fn address(value: u64) -> Result<Address> {
 }
 
 /// Request parameters: the power-off request and the wake deadline.
-pub fn parameters(restart: &FirmwareRestart) -> Vec<u8> {
+pub fn parameters(restart: &FirmwareRestart) -> Result<Vec<u8>> {
     let m = &restart.mechanism;
-    let mut parameters = vec![0; m.parameter_bytes as usize];
-    for (offset, value) in [
-        (m.request_offset, m.request),
-        (m.deadline_offset, WAKE_DEADLINE),
-    ] {
+    let (Some(request), Some(request_offset), Some(deadline_offset), Some(bytes)) = (
+        m.request,
+        m.request_offset,
+        m.deadline_offset,
+        m.parameter_bytes,
+    ) else {
+        return Err(BulkError::Check(
+            "This firmware's power-off arms a fixed alarm interval and takes no request".into(),
+        ));
+    };
+    let mut parameters = vec![0; bytes as usize];
+    for (offset, value) in [(request_offset, request), (deadline_offset, WAKE_DEADLINE)] {
         let at = offset as usize;
         parameters[at..at + 4].copy_from_slice(&value.to_le_bytes());
     }
-    parameters
+    Ok(parameters)
 }
 
 /// Bytes for `queue_auto_restart_contract` in the portable ARM32 guard.
@@ -99,10 +108,14 @@ pub fn deferred_guard_contract(restart: &FirmwareRestart, milliseconds: u32) -> 
         .ok_or_else(|| BulkError::Check("No deferred callback timer is published".into()))?;
     validate_deferred_timer(timer)?;
     require(milliseconds != 0, "Deferred restart delay must be nonzero")?;
-    let mut request = parameters(restart);
+    let sender = restart
+        .mechanism
+        .sender
+        .ok_or_else(|| BulkError::Check("This firmware publishes no restart sender".into()))?;
+    let mut request = parameters(restart)?;
     request.resize(12, 0);
     let mut contract = Vec::with_capacity(28);
-    for word in [timer.start.address, timer.cancel.address, restart.mechanism.sender] {
+    for word in [timer.start.address, timer.cancel.address, sender] {
         contract.extend_from_slice(&address(word)?.0.to_le_bytes());
     }
     contract.extend_from_slice(&request);
@@ -190,13 +203,16 @@ pub async fn request(
         )?;
     }
     match &m.transport {
-        RequestTransport::BorrowedQuery {
+        None => Err(BulkError::Check(
+            "This firmware's power-off arms a fixed alarm interval and takes no request".into(),
+        )),
+        Some(RequestTransport::BorrowedQuery {
             callback_table,
             callback_offset,
             stock_callback,
             output_fields,
             output_bytes,
-        } => {
+        }) => {
             // The table pointer may hold the cached or the uncached alias.
             let table = word(&access.raw(callback_table + alias, 4).await?);
             let physical = if table >= alias { table - alias } else { table };
@@ -209,7 +225,7 @@ pub async fn request(
                 require_idle(&mut access, &m.ui, alias).await?;
             }
             let original = access.raw(*output_fields, u64::from(*output_bytes)).await?;
-            let mut fields = parameters(restart);
+            let mut fields = parameters(restart)?;
             fields.resize(*output_bytes as usize, 0);
             let tag = u32::try_from(*output_fields).map_err(|_| {
                 BulkError::Check("Query output fields beyond 32-bit addressing".into())
@@ -220,8 +236,11 @@ pub async fn request(
                 address(*output_fields)?,
                 original,
             )?;
+            let sender = m
+                .sender
+                .ok_or_else(|| BulkError::Check("No restart sender is published".into()))?;
             borrowed.call(
-                address(m.sender)?,
+                address(sender)?,
                 DiagnosticTag::Research(tag),
                 vec![(0, 0)],
                 fields,
@@ -233,7 +252,7 @@ pub async fn request(
                 Err(_) => Ok(Requested::SessionEnded),
             }
         }
-        RequestTransport::ConsoleCallback {
+        Some(RequestTransport::ConsoleCallback {
             slot,
             stock_callback,
             stub_area,
@@ -242,7 +261,7 @@ pub async fn request(
             ready_words,
             data_cache_clean,
             instruction_cache_sync,
-        } => {
+        }) => {
             require_words(
                 &mut access,
                 translation,
@@ -263,7 +282,10 @@ pub async fn request(
             if !recover {
                 require_idle(&mut access, &m.ui, alias).await?;
             }
-            let stub = console_stub(*stub_area, m.sender, &parameters(restart))?;
+            let sender = m
+                .sender
+                .ok_or_else(|| BulkError::Check("No restart sender is published".into()))?;
+            let stub = console_stub(*stub_area, sender, &parameters(restart)?)?;
             require(
                 stub.len() <= *stub_bytes as usize,
                 "Stub exceeds the stub area",
@@ -356,6 +378,28 @@ mod tests {
     }
 
     #[test]
+    fn fixed_interval_document_validates_without_a_request() {
+        let restart: FirmwareRestart = serde_json::from_str(include_str!(
+            "../../../catalog/firmware/x100s/1.21/restart.generated.json"
+        ))
+        .unwrap();
+        restart.validate().unwrap();
+        assert!(restart.mechanism.transport.is_none());
+        assert_eq!(restart.mechanism.power_off.entry, 0x692944);
+        assert_eq!(
+            restart
+                .mechanism
+                .power_off
+                .fixed_interval
+                .as_ref()
+                .unwrap()
+                .seconds,
+            [60, 0]
+        );
+        assert!(parameters(&restart).is_err());
+    }
+
+    #[test]
     fn deferred_guard_contract_uses_the_published_timer_and_wake_abi() {
         let restart: FirmwareRestart = serde_json::from_str(include_str!(
             "../../../catalog/firmware/x70/1.10/restart.generated.json"
@@ -371,8 +415,8 @@ mod tests {
         assert_eq!(words.len(), 7);
         assert_eq!(words[0], 0x93d4bc);
         assert_eq!(words[1], 0x93d6b4);
-        assert_eq!(words[2], restart.mechanism.sender as u32);
-        assert_eq!(words[3], restart.mechanism.request);
+        assert_eq!(words[2], restart.mechanism.sender.unwrap() as u32);
+        assert_eq!(words[3], restart.mechanism.request.unwrap());
         assert_eq!(words[4], WAKE_DEADLINE);
         assert_eq!(words[5..], [0, 0]);
     }
