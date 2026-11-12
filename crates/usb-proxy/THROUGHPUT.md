@@ -30,23 +30,12 @@ For diagnosis, `USB_PROXY_MIN_MBPS=0` reports rates without a speed gate;
 `USB_PROXY_BENCH_RELAY_PORT` overrides the isolated signaling port (15202).
 The benchmark never automatically retries a failed transfer or speed check.
 
-## Transport changes
+## Transport
 
-Native WebRTC binds a socket to each advertised interface address and sends
-from the source chosen by ICE. A received packet's socket supplies its actual
-destination; no socket is created to guess a route for each incoming datagram.
-Receive buffers are reused across cancelable waits. Ready network input and
-due RTC timers run before additional application writes.
-Each host UDP socket requests a 4 MiB receive queue, covering SCTP's 1 MiB
-receive window plus DTLS overhead and scheduling bursts. The OS may clamp that
-request to its configured limit.
-
-The native SCTP queue is bounded to 512 KiB instead of str0m's 128 KiB default.
-Host output is paced in 8 KiB bursts at 50 MB/s. Enlarging the queue without
-pacing caused large-transfer stalls in Chromium; pacing leaves headroom above
-the target while avoiding receive-queue flooding. This is a transport ceiling,
-not a guarantee of USB-device bandwidth. USB operations remain ordered and
-serialized, with the existing ownership, completion-unknown and no-retry rules.
+The WebRTC transport, its socket queues and browser pacing are described in
+[crates/webrtc/README.md](../webrtc/README.md). USB operations remain ordered
+and serialized, with the existing ownership, completion-unknown and no-retry
+rules.
 
 The Python extension builds with the release profile
 (`scripts/python_extension.py`), so ordinary tools use optimized transport code.

@@ -72,6 +72,8 @@ message FileEnd {
   string path = 1;
   uint64 total_bytes = 2;
   fixed32 crc32 = 3;
+  // SHA-256 of the whole file. Empty when the sender does not compute it.
+  bytes sha256 = 4;
 }
 message Committed {
   enum Status {

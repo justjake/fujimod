@@ -11,6 +11,7 @@ use std::{
     rc::{Rc, Weak},
 };
 type Span = (u64, u64);
+pub const MAX_INSTRUCTION_POINTS: usize = 16_384;
 #[derive(Default)]
 pub struct Records {
     ranges: Vec<Span>,
@@ -41,7 +42,7 @@ impl Records {
         if self.overlaps(physical, bytes as u64) {
             self.push(
                 json!({"source":source,"physical":physical,"address":address,
-                "size":bytes,"core":null,"pc":null,"instructions":null,"tick":null}),
+                "size":bytes,"core":null,"pc":null,"sp":null,"instructions":null,"tick":null}),
             );
         }
     }
@@ -193,13 +194,21 @@ impl MemoryContext {
         records.push(
             json!({"sample":sample,"sample_path":sample_path,"source":source,"address":address,"physical":physical,"size":size,
             "value":value,"before":before,"byte_order":byte_order,
-            "core":self.core,"pc":scalar(&*cpu,Register::Pc)?,
+            "core":self.core,"pc":scalar(&*cpu,Register::Pc)?,"sp":stack_pointer(&*cpu)?,
             "instructions":instructions,"tick":tick}),
         );
         Ok(())
     }
     fn fail(&self, error: String) {
         self.records.borrow_mut().violation.get_or_insert(error);
+    }
+}
+/// The executing mode's stack pointer: an A/R-profile core reports its banked
+/// `r13`; other models report the architectural stack pointer.
+fn stack_pointer(cpu: &dyn Cpu) -> Result<u64, String> {
+    match cpu.model() {
+        Model::CortexR5F | Model::CortexA7 => scalar(cpu, Register::Arm32(arm::Register::R(13))),
+        _ => scalar(cpu, Register::Sp),
     }
 }
 unsafe fn access(access: Access, address: u64, size: i32, value: i64, data: *mut c_void) {
@@ -512,7 +521,6 @@ pub struct InstructionPoints {
     /// the translated code of its page both times.
     hooks: BTreeMap<u64, HookId>,
 }
-const INSTRUCTION_POINTS: usize = 4096;
 unsafe fn instruction(pc: u64, _: u32, data: *mut c_void) {
     let points = unsafe { &*data.cast::<InstructionPoints>() };
     if points.entry.hit(pc)
@@ -584,7 +592,7 @@ impl Board {
         mut addresses: Vec<u64>,
     ) -> Result<(), String> {
         let cpu = self.cpu(core)?;
-        if addresses.len() > INSTRUCTION_POINTS || addresses.iter().any(|pc| pc & 1 != 0) {
+        if addresses.len() > MAX_INSTRUCTION_POINTS || addresses.iter().any(|pc| pc & 1 != 0) {
             return Err("Instruction points require bounded aligned addresses".into());
         }
         addresses.sort_unstable();
@@ -604,7 +612,7 @@ impl Board {
             .iter()
             .filter(|pc| !points.hooks.contains_key(pc))
             .count();
-        if points.hooks.len() + added > INSTRUCTION_POINTS {
+        if points.hooks.len() + added > MAX_INSTRUCTION_POINTS {
             let inactive = points
                 .hooks
                 .keys()

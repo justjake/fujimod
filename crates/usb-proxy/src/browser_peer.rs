@@ -22,11 +22,12 @@ pub(crate) struct PeerSocket(Channel);
 impl PeerSocket {
     pub async fn connect(
         url: &str,
-        progress: &crate::Progress,
-        policy: crate::CandidatePolicy,
+        progress: &fujimod_webrtc::Progress,
+        policy: fujimod_webrtc::CandidatePolicy,
+        _pacing: fujimod_webrtc::Pacing,
     ) -> Result<Self> {
-        if policy == crate::CandidatePolicy::RelayOnly {
-            return Err(Error("relay-only connections are native only".into()));
+        if policy != fujimod_webrtc::CandidatePolicy::Any {
+            return Err(Error("candidate policies are native only".into()));
         }
         let channel = connect_peer(url).await.map_err(error)?.unchecked_into();
         progress("WebRTC data channel open");

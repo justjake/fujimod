@@ -24,8 +24,10 @@ pub enum Field {
     Grain = 8,
     ColorChrome = 9,
     WhiteBalanceAsShot = 10,
+    WhiteBalanceMode = 11,
     WhiteBalanceShiftRed = 12,
     WhiteBalanceShiftBlue = 13,
+    ColorTemperature = 14,
     Highlight = 15,
     Shadow = 16,
     Color = 17,
@@ -103,6 +105,24 @@ pub enum GrainSize {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum WhiteBalance {
+    AsShot,
+    Auto,
+    Daylight,
+    Shade,
+    #[serde(rename = "FLUORESCENT_1")]
+    Fluorescent1,
+    #[serde(rename = "FLUORESCENT_2")]
+    Fluorescent2,
+    #[serde(rename = "FLUORESCENT_3")]
+    Fluorescent3,
+    Incandescent,
+    Underwater,
+    /// Needs `color_temperature`.
+    Kelvin,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum OnOff {
     On,
     Off,
@@ -135,9 +155,11 @@ pub struct Settings {
     pub color_chrome: Option<Strength>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color_chrome_blue: Option<Strength>,
-    /// `ON` keeps the RAF's own white balance.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub white_balance_as_shot: Option<OnOff>,
+    pub white_balance: Option<WhiteBalance>,
+    /// Kelvin, 2500 to 10000, with `white_balance: KELVIN`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color_temperature: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub white_balance_shift_red: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -183,7 +205,11 @@ pub enum ImageQuality {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ColorSpace {
     Srgb,
+    /// libfuji's "AdobeRGB" code, 3. Unconfirmed, as is code 2 ("Adobe
+    /// sRGB"), which `AdobeRgbCode2` requests; Exif ColorSpace (0xA001) in
+    /// the manifest shows which one the camera honors.
     AdobeRgb,
+    AdobeRgbCode2,
 }
 
 impl Settings {
@@ -200,7 +226,8 @@ impl Settings {
             grain_size: other.grain_size.or(self.grain_size),
             color_chrome: other.color_chrome.or(self.color_chrome),
             color_chrome_blue: other.color_chrome_blue.or(self.color_chrome_blue),
-            white_balance_as_shot: other.white_balance_as_shot.or(self.white_balance_as_shot),
+            white_balance: other.white_balance.or(self.white_balance),
+            color_temperature: other.color_temperature.or(self.color_temperature),
             white_balance_shift_red: other
                 .white_balance_shift_red
                 .or(self.white_balance_shift_red),
@@ -251,6 +278,13 @@ impl Settings {
             ));
         }
         if let Some(v) = self.exposure_bias_mev {
+            // Thirds of an EV up to ±3, as libfuji fp.h FujiExposureBias spells them.
+            let thirds = [0, 333, 667, 1000, 1333, 1667, 2000, 2333, 2667, 3000];
+            if !thirds.contains(&v.abs()) {
+                return Err(format!(
+                    "exposure bias {v} is not a third of an EV in -3000..=3000"
+                ));
+            }
             out.push((Field::ExposureBias, v as u32));
         }
         if let Some(v) = self.dynamic_range {
@@ -280,8 +314,39 @@ impl Settings {
         if let Some(v) = self.color_chrome {
             out.push((Field::ColorChrome, strength(v)));
         }
-        if let Some(v) = self.white_balance_as_shot {
-            out.push((Field::WhiteBalanceAsShot, on_off(v)));
+        if let Some(v) = self.white_balance {
+            // libfuji fp.h FujiWhiteBalance; word 10 = 1 keeps the RAF's own.
+            let mode = match v {
+                WhiteBalance::AsShot => None,
+                WhiteBalance::Auto => Some(0x2),
+                WhiteBalance::Daylight => Some(0x4),
+                WhiteBalance::Shade => Some(0x8006),
+                WhiteBalance::Fluorescent1 => Some(0x8001),
+                WhiteBalance::Fluorescent2 => Some(0x8002),
+                WhiteBalance::Fluorescent3 => Some(0x8003),
+                WhiteBalance::Incandescent => Some(0x6),
+                WhiteBalance::Underwater => Some(0x8),
+                WhiteBalance::Kelvin => Some(0x8007),
+            };
+            out.push((
+                Field::WhiteBalanceAsShot,
+                if mode.is_some() { 2 } else { 1 },
+            ));
+            if let Some(mode) = mode {
+                out.push((Field::WhiteBalanceMode, mode));
+            }
+        }
+        match (self.white_balance, self.color_temperature) {
+            (Some(WhiteBalance::Kelvin), Some(k)) if (2500..=10000).contains(&k) => {
+                out.push((Field::ColorTemperature, k))
+            }
+            (Some(WhiteBalance::Kelvin), k) => {
+                return Err(format!(
+                    "KELVIN needs color_temperature 2500..=10000, not {k:?}"
+                ));
+            }
+            (_, Some(_)) => return Err("color_temperature needs white_balance KELVIN".into()),
+            _ => {}
         }
         if let Some(v) = self.white_balance_shift_red {
             out.push((
@@ -332,6 +397,7 @@ impl Settings {
                 match v {
                     ColorSpace::Srgb => 1,
                     ColorSpace::AdobeRgb => 3,
+                    ColorSpace::AdobeRgbCode2 => 2,
                 },
             ));
         }
@@ -440,7 +506,8 @@ mod tests {
         let s: Settings = serde_json::from_str(
             r#"{"film":"ACROS_R","grain":"STRONG","grain_size":"LARGE","noise_reduction":-4,
                 "monochrome_warm_cool":9,"monochrome_magenta_green":-9,"clarity":-5,
-                "color_chrome_blue":"WEAK","white_balance_as_shot":"ON","color_space":"SRGB"}"#,
+                "color_chrome_blue":"WEAK","white_balance":"AS_SHOT","color_space":"SRGB",
+                "highlight":-1.5}"#,
         )
         .unwrap();
         let w = s.words().unwrap();
@@ -453,6 +520,27 @@ mod tests {
         assert_eq!(get(Field::Clarity), (-50i32) as u32);
         assert_eq!(get(Field::ColorChromeBlue), 1);
         assert_eq!(get(Field::WhiteBalanceAsShot), 1);
+        assert_eq!(get(Field::Highlight), (-15i32) as u32);
+        assert!(!w.iter().any(|(f, _)| *f == Field::WhiteBalanceMode));
+        let kelvin: Settings =
+            serde_json::from_str(r#"{"white_balance":"KELVIN","color_temperature":5500}"#).unwrap();
+        let k = kelvin.words().unwrap();
+        assert!(k.contains(&(Field::WhiteBalanceAsShot, 2)));
+        assert!(k.contains(&(Field::WhiteBalanceMode, 0x8007)));
+        assert!(k.contains(&(Field::ColorTemperature, 5500)));
+        let bad = Settings {
+            color_temperature: Some(5500),
+            ..Default::default()
+        };
+        assert!(bad.words().is_err());
+        assert!(
+            Settings {
+                highlight: Some(1.25),
+                ..Default::default()
+            }
+            .words()
+            .is_err()
+        );
         assert_eq!(get(Field::ColorSpace), 1);
         assert_eq!(get(Field::FileType), 7);
     }

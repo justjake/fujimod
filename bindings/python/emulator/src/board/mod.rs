@@ -1172,12 +1172,14 @@ impl Board {
                 range_index,
                 range,
                 address,
+                core,
                 change_confirmed,
             } => {
                 result.set_item("kind", "store")?;
                 result.set_item("range_index", range_index)?;
                 result.set_item("range", vec![range.0, range.1])?;
                 result.set_item("address", address)?;
+                result.set_item("core", core)?;
                 result.set_item("change_confirmed", change_confirmed)?;
             }
             fujimod_emulator::board::continuation::ContinuationStop::Device { id } => {
