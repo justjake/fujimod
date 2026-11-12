@@ -1,20 +1,573 @@
 {
-  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
-  "schema": 1,
-  "id": "xt2-discovery",
-  "body_id": "xt2",
-  "reset": {
-    "kernel_unit": "kernel",
-    "loader_handoff": {
-      "address": 9437184,
-      "size": 1472,
-      "fill": 0,
-      "words": [],
-      "basis": "Declared discovery input: an all-zero loader handoff in a free RAM gap, not a capture. X-T2 4.41 section 0 0x58b74 stores r0 at 0x7f4f8 and, when r1 is non-zero, copies 0x5c0 bytes from r1 to 0x7f4fc. 0x900000-0x9005c0 lies between section 2 (ends 0x780330) and the section table at 0x950000. Kernel entry bypasses the boot ROM."
+ "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+ "schema": 1,
+ "id": "xt2-discovery",
+ "body_id": "xt2",
+ "reset": {
+  "adc_input": {
+   "samples": [
+    378,
+    509,
+    513,
+    1023,
+    1021,
+    1023,
+    779,
+    558,
+    418,
+    1022,
+    378,
+    509
+   ],
+   "basis": "Measured: the twelve key-row values X-T2 4.41 routine 0xc98e60 keeps at 0x1004e7c, read over the live ff80 service after a service-mode (JIG) power-on, minutes after all keys were released (2026-11-12), assigned to channels 0-11 in order as for the X-T20. Not yet compared with a REC power-on, and channel roles on the X-T2 are not confirmed against its key-row table."
+  },
+  "gpio_input": {
+   "levels": [
+    63300,
+    4660,
+    414,
+    527,
+    0,
+    0,
+    28,
+    103,
+    16,
+    0,
+    768,
+    4600,
+    1,
+    1257,
+    12,
+    2
+   ],
+   "basis": "Measured, one bit derived: the sixteen GPIO input words X-T2 4.41 snapshots into the boot information at 0x7f4fc (+0x00), read over the live ff80 service after a service-mode power-on with USB connected and d-pad UP + shutter held (2026-11-12). Bank 1 bit 14 (VBUS, as on the X-T20) read high and is cleared here for a cable-less REC boot; captured bank 1 was 0x5234. Any held-key bits in these words are not separated from a released baseline. Bank 10 bit 8 (second SD slot card-detect, active low) is set high here (0x200 -> 0x300) so the emulated second slot reads empty, as the sd_card input intends; the measured word had it low (a card was most likely in slot 2 during the measurement), which makes the media manager start the slot-2 host 0xa7c1e0 and its unmodeled 0xfff0a2xx / 0xffc00000 blocks."
+  },
+  "pll_input": {
+   "running": [
+    0,
+    3,
+    4
+   ],
+   "basis": "Firmware: the kernel entry bypasses stage 2, whose PLL table 0xe0e8 (X-T2 4.41, shared with the X-T20 2.11 stage 2) powers PLL 0 and 3 up (clear bits 27:26, set bit 26, wait for the lock at 0xfff0b06c) and leaves PLL 1 and 4 at reset. Section 5 later re-enables PLL 0 by setting only bit 26 from the section-5 PLL table 0xefe374 (0xc74b88, param < 5, read-modify-write |= 0x4000000 then wait for lock bit 1 at 0xfff0b06c), which assumes it is powered. The stage-2 PLL table 0xe0e8 and the PLL 4 reconfiguration path are the X-T20 2.11 stage-2 code verbatim (same X-Processor Pro boot ROM); the running set 0, 3, 4 and the reset value of PLL 1 are not re-measured on the X-T2."
+  },
+  "sd_card": {
+   "basis": "Declared, not measured: an empty 8 GiB SDHC card with high speed and without UHS-I or UHS-II modes, formatted as one FAT32 partition from sector 8192 with 32 KiB clusters, the layout of the other FujiMod REC configurations. The X-T2 has two SD slots; the boot uses slot 0, whose card-detect is GPIO bank 10 bit 4 (gpio_pin_read(0xa0004) in 0xc6f1b8, active low), the same pin as the X-T20's single slot; the second slot's card-detect is bank 10 bit 8 (gpio_pin_read(0xa0008)), left empty. A card was inserted in slot 0 during the measured power-ons (bank 10 bit 4 low); its identity, size and contents are not read.",
+   "format": {
+    "filesystem": "fat32",
+    "label": "CAMERA",
+    "partition_start": 8192,
+    "sectors_per_cluster": 64
+   },
+   "high_speed": true,
+   "rca": 1,
+   "sectors": 16777216
+  },
+  "i2c_parts": [
+   {
+    "address": 27,
+    "basis": "Part at 0x1b on bus 1 (device 12 of the X-T2 4.41 I2C descriptor table 0xefcf70). Start-up writes register 0 with configuration byte 0x3d7; nothing is read before REC. Its identity is not established; presence is declared, not measured, and no registers are declared.",
+    "bus": 1,
+    "little_endian": true,
+    "registers": [],
+    "select_mask": 255,
+    "width": 1
+   },
+   {
+    "address": 28,
+    "basis": "Three-axis accelerometer at 0x1c on bus 1 (device 8 of the X-T2 4.41 I2C descriptor table 0xefcf70). 0xc85bf4/0xc85c6c write the configuration table (register 0x2a = 0x65 last) and 0xc85cac reads six bytes from register 1 as 12-bit left-justified big-endian X, Y and Z into the rings at 0x1004bfe / 0x1004c12 / 0x1004c26 (task 0xc84710). The six declared register bytes encode the camera orientation and are the X-T20 median-of-five samples (X -1024, Y 26, Z -92 counts), so they are NOT valid for the X-T2; measure the X-T2 rings (see needs_camera). The values are the median of the five samples in the X-T2 rings at 0x1004bfe/0x1004c12/0x1004c26 from a live ff80 service read (2026-11-12, service-mode boot, camera resting roughly level): X -1043, Y 20, Z -11 counts.",
+    "bus": 1,
+    "little_endian": false,
+    "registers": [
+     [
+      1,
+      190
+     ],
+     [
+      2,
+      208
+     ],
+     [
+      3,
+      1
+     ],
+     [
+      4,
+      64
+     ],
+     [
+      5,
+      255
+     ],
+     [
+      6,
+      80
+     ]
+    ],
+    "select_mask": 255,
+    "width": 1
+   },
+   {
+    "address": 57,
+    "basis": "Eye-sensor proximity part at 0x39 on bus 1 (device 4 of the X-T2 4.41 I2C descriptor table 0xefcf70). Its command byte is 0xa0 | address (0xc81e40, device 4). Start-up writes the thresholds and ENABLE = 0x2f; 0xc81ebc reads STATUS 0x13 (bit 5: proximity interrupt) and the count at 0x18/0x19, low byte first, keeping eye state at 0x1004ba8. The declared count 0 is below the far-to-near threshold (_DAT_01004baa) and the status has no interrupt pending; neither value is measured.",
+    "bus": 1,
+    "little_endian": true,
+    "registers": [
+     [
+      19,
+      0
+     ],
+     [
+      24,
+      0
+     ],
+     [
+      25,
+      0
+     ]
+    ],
+    "select_mask": 31,
+    "width": 1
+   }
+  ],
+  "dram_refresh": {
+   "level": 2,
+   "basis": "Measured: X-T2 4.41 0xc9b288 caches the refresh-rate level from bits 8..10 of DRAM controller +0xec at 0x1006380 + 5; a live ff80 service read (2026-11-12, service-mode boot) holds level 2 there, with refresh word 0xc30 at 0x1006380, second-controller flag 1 and its level 2."
+  },
+  "execution_clock": {
+   "basis": "Same X-Processor Pro Cortex-A7 as the X-T20 2.11, so the instruction throughput model is body-agnostic and is kept as declared: about 4 instructions per 48 MHz tick on the primary core and 1 on the secondary, the estimate the X-T20 2.11 marker timing gave (198 and 189 million instructions per second, or 4 per 48 MHz tick). Steps with waits give lower rates; without a declared clock each core executes one instruction per tick. The rate was not re-measured on the X-T2.",
+   "instructions_per_tick": [
+    4,
+    1
+   ]
+  },
+  "lens": {
+   "basis": "The lens of the X-T20 s1/s2/s3 REC captures and the 2026-10-22 live-view dump: its information page with synthetic serial 00A0000, based on the layout the X-T20 body keeps at 0x11e3958 (\"LY043A\", \"FLSNW039AF 25/1.7 XF\") and the replies of the link history 0x11d542c (commands 0x20 -> 0x300 and 0x26 -> 0x1c). The synthetic lens registration is body-agnostic (see registration). Wiring from X-T2 4.41 section 5: link on serial channel 0 (0xfff28000); lswatch checks the contacts bank 14 bits 0/1 high and bank 11 bits 0/1/2 high/low/high, then switches bank 14 register 1 bit 0 high; the ready ISRs 0xc868ac / 0xc86878 sample bank 14 bit 1 (gpio_pin_read(0xe0001)) after interrupt 166 (rows 0x52/0x53 of the interrupt-row table 0xefd560, whose first word 0xa6 = 166 maps through 0xc66f04 (value - 0x97) to external line 15). The delays (20 ms ready, 200 ms init, 60 ms focus drive, 1 ms power sampling) are xpro-lab lens-model assumptions, not measurements. The body's stored records for the lens are in `registration`.",
+   "port": 4294082560,
+   "page": "4c59303433410000464c534e5730333941462032352f312e372058462020202020200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000030304130303030000000010501030270027102718a010100000000000000000000000000000000000000000000000000",
+   "replies": [
+    [
+     32,
+     768
+    ],
+    [
+     38,
+     28
+    ]
+   ],
+   "power": [
+    14,
+    1,
+    0
+   ],
+   "ready": [
+    14,
+    1
+   ],
+   "line": 15,
+   "contacts": [
+    [
+     14,
+     0,
+     true
+    ],
+    [
+     11,
+     0,
+     true
+    ],
+    [
+     11,
+     1,
+     false
+    ],
+    [
+     11,
+     2,
+     true
+    ]
+   ],
+   "ready_ticks": 960000,
+   "registration": {
+    "asset": "xt20-211-lens-registration",
+    "basis": "Synthetic registered-lens list, the X-T20 2.11 layout re-based for the X-T2: an eight-byte header with signature 0xabc123f9, head/tail index 0 and one 0x80-byte entry at index 0. The entry has short display name AF 25/1., lens name FLSNW039, serial 00A0000, lens version bytes 01 05 and body version bytes 01 46. The offsets are the same on X-T2 4.41: the list buffer 0x38200000 (0x159c058, X-T20 0x15436e0), the prefix base 0x3320000 (0xce410c, X-T20 0xcd8358; tables at +0x10000) and the signature 0xabc123f9 with the 0x80-byte entry (0xc8fc34, X-T20 0xc84238) are byte-identical instructions, so the X-T20 asset is used unchanged.",
+    "regions": [
+     [
+      58851328,
+      136
+     ],
+     [
+      53608448,
+      10049
+     ],
+     [
+      53673984,
+      17940
+     ]
+    ],
+    "sha256": "09f5cf6e6242b52e2a89840c5cb23d67b7af398e933bf84d4318fd22359669eb"
+   },
+   "release_ticks": 9600000,
+   "drive_ticks": 2880000,
+   "poll_ticks": 48000
+  },
+  "shutter": {
+   "basis": "Shutter of X-T2 4.41. imgdc arms one sensor's external interrupt source through 0xd16c44 (source table 0xf9097c, line 3 inverted; resources give GIC 154, configured edge triggered), drives the motor (0x1871910: bank 1 +0x0c <- 0x30001 then 0xc0000, pin 0 in mode 1, pin 1 in mode 0) and waits up to 100 ms for the interrupt, then brakes. The sensors are the sources' inputs in the source table 0xf9097c (0xf9097c+0x5c for source 31, +0x5e for source 32): 31 = bank 0 bit 3, 32 = bank 10 bit 2. At the end of a sequence the code wants both high (and the third source low); otherwise imgdc reports an error that re-initializes REC. The power-on GPIO words hold 31 low and 32 high, and the boot runs a wait on 32 then one on 31. The positions (31, 32) = (0, 1), (0, 0), (1, 1) and the 30 ms step are inferred from those checks (xpro-lab ShutterMotor), not measured; the 1 ms sampling of the motor modes is a model choice. Each step asserts line 3 for one sampling period: when sensor 31 is already high at the start of a drive, the shot's drive (0x18665d8) arms source 44 instead, whose handler then polls sensor 31; an instantaneous edge is never pending there and the drive's 100 ms timeout makes imgdc re-initialize REC.",
+   "line": 3,
+   "mode": [
+    1,
+    3
+   ],
+   "motor": [
+    0,
+    1
+   ],
+   "poll_ticks": 48000,
+   "positions": [
+    [
+     false,
+     true
+    ],
+    [
+     false,
+     false
+    ],
+    [
+     true,
+     true
+    ]
+   ],
+   "sensors": [
+    [
+     0,
+     3
+    ],
+    [
+     10,
+     2
+    ]
+   ],
+   "step_ticks": 1440000
+  },
+  "key_lines": {
+   "basis": "The shutter button of X-T2 4.41: key rows 0xfa4d38 (index 2, S1) and 0xfa4d54 (index 3, S2) are kind 4 on GPIO bank 0 bits 0 and 1, high when released (the power-on GPIO words). The key scan evaluates kind 4 rows only while their reported state is pressed, so it reports the release only; the press arrives through the rows' external interrupts: the handler 0xc990a4 toggles the row and calls key_event(index, 1) (0xc98ea8), whose UI side logs marker 0x2f000000 for index 2. The rows name interrupt rows 20 and 21 (+0x12), which the interrupt-row table 0xefd560 maps to GIC 151 and 152, external lines 0 and 1 (the same lookup gives line 15 for the lens's ready rows 0x52/0x53). The 1 ms sampling is a model choice.",
+   "lines": [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     1,
+     0,
+     1
+    ]
+   ],
+   "poll_ticks": 48000
+  },
+  "imaging_frames": {
+   "basis": "The imaging frame period of X-T2 4.41 in REC live view is 880000 ticks (18.333 ms), the X-T20 2.11 value kept as declared: both bodies use the same X-Trans III sensor and the statistics engine paces the live-view markers (one 0x02010400 per four statistics completions). The X-T20 count at 0x1c51068 advances once per frame-sync frame; its X-T2 equivalent is the frame counter of 0x1727d60 (the X-T20 0x16b76fc pair). The specific 18.333 ms period was measured on the X-T20 and is not re-measured on the X-T2; it follows the shared frame-sync period.",
+   "period_ticks": 880000
+  },
+  "kernel_unit": "kernel",
+  "loader_handoff": {
+   "address": 9437184,
+   "size": 1472,
+   "fill": 0,
+   "words": [
+    {
+     "name": "gpio_bank0",
+     "offset": 0,
+     "value": 63300
     },
-    "flash_aperture": {
-      "contents": "registered-update",
-      "basis": "Declared discovery input: the update image from its flash offset; bytes past it read erased. No flash capture exists."
+    {
+     "name": "gpio_bank1",
+     "offset": 4,
+     "value": 4660
+    },
+    {
+     "name": "gpio_bank2",
+     "offset": 8,
+     "value": 414
+    },
+    {
+     "name": "gpio_bank3",
+     "offset": 12,
+     "value": 527
+    },
+    {
+     "name": "gpio_bank4",
+     "offset": 16,
+     "value": 0
+    },
+    {
+     "name": "gpio_bank5",
+     "offset": 20,
+     "value": 0
+    },
+    {
+     "name": "gpio_bank6",
+     "offset": 24,
+     "value": 28
+    },
+    {
+     "name": "gpio_bank7",
+     "offset": 28,
+     "value": 103
+    },
+    {
+     "name": "gpio_bank8",
+     "offset": 32,
+     "value": 16
+    },
+    {
+     "name": "gpio_bank9",
+     "offset": 36,
+     "value": 0
+    },
+    {
+     "name": "gpio_bank10",
+     "offset": 40,
+     "value": 768
+    },
+    {
+     "name": "gpio_bank11",
+     "offset": 44,
+     "value": 4600
+    },
+    {
+     "name": "gpio_bank12",
+     "offset": 48,
+     "value": 1
+    },
+    {
+     "name": "gpio_bank13",
+     "offset": 52,
+     "value": 1257
+    },
+    {
+     "name": "gpio_bank14",
+     "offset": 56,
+     "value": 12
+    },
+    {
+     "name": "gpio_bank15",
+     "offset": 60,
+     "value": 2
+    },
+    {
+     "name": "power_on_cause",
+     "offset": 320,
+     "value": 16
     }
+   ],
+   "basis": "The 16 GPIO bank words (+0x00..+0x3c) are the measured X-T2 reset.gpio_input.levels (the same words the boot information carries at 0x7f4fc). power_on_cause at +0x140 (0x7f63c) = 0x10, the X-T2's own measured normal-start cause (sub_cpu register 0x60); poweron_cause_decode 0xc7a198 through table 0xeff80c (mask 0xf3) decodes it to cause 2, so boot_start_decide 0xcf7ea8 classifies it and root_thread does not take the power-off path. Other X-T20 handoff words are not copied (X-T2 values unmeasured, not needed to pass this stop). GPIO words were captured in service mode (d-pad UP + shutter held), so bits beyond the boot-cause path may reflect held keys."
+  },
+  "flash_aperture": {
+   "contents": "registered-update",
+   "basis": "Declared discovery input: the update image from its flash offset; bytes past it read erased. No flash capture exists.",
+   "nor": {
+    "chip_select": 0,
+    "enhanced_volatile_reset": 255,
+    "identification": [
+     32
+    ],
+    "register_write_ticks": 16,
+    "page_bytes": 256,
+    "erase_ticks": 4096,
+    "page_ticks": 512,
+    "basis": "Ported from X-T20 2.11 (same X-Processor Pro, byte-compatible flash driver: flash_read/flash_read_wait code-range sizes match flash.generated.json). chip_select 0 below aperture 0xf4000000; identification Micron 0x20 (the XPP driver's 0x9f read + Micron-0x20/Macronix-0xc2 config branch). Latencies are synthetic/unmeasured, as on X-T20; no X-T2 flash capture exists. Empirically accepted: the strict boot advances past the chip-select-0 stop."
+   }
+  },
+  "battery_gauge": {
+   "port": 4294098944,
+   "registers": [
+    {
+     "name": "status",
+     "register": 0,
+     "value": 64848
+    },
+    {
+     "name": "reading_08",
+     "register": 8,
+     "value": 16396
+    },
+    {
+     "name": "reading_0c",
+     "register": 12,
+     "value": 478
+    },
+    {
+     "name": "reading_10",
+     "register": 16,
+     "value": 651
+    },
+    {
+     "name": "reading_14",
+     "register": 20,
+     "value": 13
+    },
+    {
+     "name": "reading_18",
+     "register": 24,
+     "value": 9
+    },
+    {
+     "name": "usb_detect",
+     "register": 84,
+     "value": 1
+    }
+   ],
+   "basis": "The battery task of X-T2 4.41 keeps the gauge's replies in its block at 0x1004420 (register 8 at +0, 0x0c at +2, 0x10 at +4, 0x14 at +6, 0x18 at +8, 0x1c at +0xa; 0xc7c130, read through the serial read helper 0xc7b72c). Wiring from section 5: the gauge sits on serial port 4 (0xfff2c000, resource of the serial descriptor table 0xefc6dc, chip select bank 13 bit 8, 8-bit transfers); 0xc7ae68 sends register << 16 | value as three bytes inside one enabled transfer (+0x08 written 1 by 0xc550e8 and 0 by 0xc5512c), and the bytes read back from +0x60 carry the value, high byte first. Start-up polls register 0 until bit 15 is set and then writes 0x405 to register 0x60. Measured: a live ff80 service read of that block (2026-11-12, service-mode boot) gave register 8 = 0x400c, 0x0c = 0x1de, 0x10 = 0x28b, 0x14 = 0xd, 0x18 = 0x9. The X-T2 block does not cache register 0, so status 0xfd50 is assumed from the X-T20 2.11 measurement of the same gauge on the same serial wiring (start-up only needs bit 15 set); it is not measured on the X-T2. Register 0x54 is the data-line detection: after a cable raises VBUS, the USB manager (0x16fe8e4) writes 0xb00 to register 0x50 and reads 0x54; (value & 0xd) == 1 means a PC. It is declared 1, so a cable always reaches a PC."
+  },
+  "idle_serial_ports": [
+   {
+    "port": 4294094848,
+    "basis": "Nothing answers on serial channel 3 (0xfff2b000, logical device of the serial descriptor table 0xefc6dc). X-T2 4.41 section 5 0xca0d00 sends a command byte, then 0xaa fill bytes, reading each received byte from +0x60 (0xc551d0) into the frame buffer. In the X-T20 s1 REC capture that buffer held 23 ff: the command byte the body heard while sending it, then the idle-high line. The link's state byte is 0xff (0xc9ee3c), and the record that command 0x20 fills (dispatcher) is zero, so UI_SETP_FLASH_KIND (0x3e1) stays 0. On a port that read back its send word, the 0xaa fill decoded as flash kind 2, model 5 (0xc2982c, 0xcf9144), and the AE statistics gate stayed closed. The 23-ff idle capture is an X-T20 measurement and is not re-measured on the X-T2; the channel is declared idle."
+   }
+  ],
+  "zone_statistics": {
+   "zone_sums": [
+    144736,
+    383321,
+    33695
+   ],
+   "exposure": {
+    "select": 4,
+    "low": 29,
+    "high": 30,
+    "reference": 1566,
+    "basis": "Section 6 0x186c1dc builds the register-bus block 0x1aabe80 that 0xc3ebd0 sends with frame count 8 (0x1727d60): in REC eight writes to select 4, registers 0x1d..0x24, the u16 value repeated four times as low/high byte pairs. The value grows as the scene darkens (X-T20 emulator wall/half/quarter/black 1566/2951/3843/3890): an integration time. Declared approximation, not measured: the zone sums scale linearly with it, and 1566, the value the AE reaches on the X-T20 emulated wall picture, is the reference at which the declared sums hold."
+   },
+   "buffers": [
+    {
+     "output": 464,
+     "asset": "xt20-211-statistics-window",
+     "sha256": "63ffb961adf0066f4c80ec5ea5e35c521cea2780edf88e5fa3e016d91bc3f7c0",
+     "light_words": [
+      0,
+      2,
+      4,
+      8,
+      10,
+      12,
+      16,
+      18,
+      20,
+      24,
+      26,
+      28,
+      32,
+      34,
+      36,
+      40,
+      42,
+      44,
+      48,
+      50,
+      52,
+      56,
+      58,
+      60,
+      64,
+      66,
+      68
+     ],
+     "basis": "Declared scene, not captured on the X-T2: the X-T20 2.11 evenly lit wall (2026-10-29) is reused as a synthetic uniform scene, since the X-T2 has the same X-Trans CMOS III sensor and the same statistics engine at 0xfff54000. X-T20 measurement: the second statistics window buffer (+0x1d0, 0x3f481360 in the first half, 80 u32) of the same s2 REC capture, first half, copied unchanged. Words 0/2/4 are red/green/blue sums of a window of about 4.4 zones (641739 / 1700693 / 150556); nine smaller windows follow at stride 8 (red, green, blue at +0/+2/+4), and word 74 reads 365..368 in every scene. On the XP4 board (previous lens inputs) this buffer alone moves AE record field +0x10e (setter 0xd289dc, struct 0x1d09168) from -595 to 196 at the 170M write (camera s2: 53, offset as the zone-sum fields); the coarse 8x8 planes (+0x2670), the 256-bin histogram (+0x3290) and the other buffers left the record unchanged. The declared light sums are the red/green/blue words +0/+2/+4 of records 0..8 (word indices 0, 2, 4 .. 64, 66, 68), which follow the scene light like the zone sums; record 9's word 74 reads 365..368 in every scene and is not a light sum, and every other word is 0."
+    }
+   ],
+   "basis": "Declared scene, not captured on the X-T2: the X-T20 2.11 evenly lit wall (2026-10-29) is reused as a synthetic uniform scene, since the X-T2 has the same X-Trans CMOS III sensor and the same statistics engine at 0xfff54000. Declared uniform zone sums, not re-measured. X-T2 4.41 REC live view of an evenly lit wall is assumed: the statistics engine 0xfff54000 writes twelve buffers per frame into one of two halves 0x3690 apart (+0x10); the zone sums buffer (+0x1cc) holds four 16x16 planes of u32 (red, green about 2.6 times red, blue, zero). The X-T20 mean sums 144736 / 383321 / 33695 are X-T20 measurements and are NOT valid for the X-T2; re-capture on the X-T2 or declare new uniform values (see needs_camera). Section 6 0x186c1dc takes each completion as the half just written and alternates its pointer without reprogramming the engine's buffer words."
+  },
+  "live_view_image": {
+   "unit": 4294270976,
+   "lines": 480,
+   "ycbcr": [
+    73,
+    114,
+    138
+   ],
+   "basis": "Declared scene, not captured on the X-T2: the X-T20 2.11 evenly lit wall (2026-10-29) is reused as a synthetic uniform scene, since the X-T2 has the same X-Trans CMOS III sensor and the same statistics engine at 0xfff54000. X-T2 4.41 REC live view: live-view output unit 1 (0xfff56000) holds the buffer address at +0xc0 and the line width at +0xc4 (0x2d0 = 720 pixels); the display output scans out the buffer finished last. The buffers hold 720x480 packed 4:2:2 (Y0 Y1 Cb Cr, stride 1440). Mean Y 73, Cb 114, Cr 138 (full range) are the X-T20 wall values.",
+   "film": {
+    "basis": "Declared, X-T20-derived: the X-T20 2.11 inversion of the wall scene through its default PROVIA film words is reused unchanged with the declared scene above; the X-T2 color unit 0xfff47000 programming was not measured. X-T20 basis: Declared, inverted from the measurement above. X-T20 2.11's MAIN pipeline reprograms the color unit 0xfff47000 from its parameter structure (0x1a52198) before every live-view frame (caller 0x156ade0, every 880000 ticks; the copies at 0xfffac000 and 0xfffa9000 receive no writes in REC), so the live-view image is developed with the words the unit holds. The scene is the 14-bit linear light (R, G, B) that the PROVIA film words the firmware programs by default turn into the measured Y 73, Cb 114, Cr 138 at the live AUTO white balance the firmware converges to for the declared zone statistics (gains 1138, 604, 1096). Another film simulation or white balance changes the image from there; the camera's film, white balance and live gains at the measurement were not recorded, so this inversion is declared, not measured.",
+    "linear_rgb": [
+     1015,
+     764,
+     577
+    ],
+    "white_balance_reference": [
+     1138,
+     604,
+     1096
+    ],
+    "camera_raw_radiance": {
+     "basis": "Declared approximation, not measured: the per-site light in camera space of the wall measured for the scene statistics above (2026-10-29), from its zone means 144736/383321/33695 divided by the X-Trans site counts 1:2.5:1 (0.944:1:0.220), scaled to the wall's green 764. Assumes the zone sums are plain sums of raw sites. That the wall was lit by a warm lamp is an inference: neutral targets shot on the camera under a warm LED (2026-11-05) gave per-site ratios 0.81:1:0.245 and under daylight 0.405:1:0.73, and the wall's ratios lie near the lamp. The camera's own per-site light on the wall was not read. A camera-raw picture is relative to this light; its white balance is computed by the firmware's own AUTO white balance, not injected.",
+     "radiance": [
+      721,
+      764,
+      168
+     ]
+    }
+   }
+  },
+  "sensor_frame": {
+   "profile": "xpp-declared-virtual-scene-linear-srgb-xtrans-u16-v1",
+   "basis": "Declared approximation, not measured: the still read-out writes the declared virtual scene through the profile's linear response as X-Trans u16 samples, in the buffer and geometry the firmware programs. Body-agnostic; the same profile as the X-T20 2.11."
+  },
+  "still_development": {
+   "profile": "xpp-declared-xtrans-nearest-fff47-film-relative-wb-422-v1",
+   "developer": 4294541312,
+   "resizer": 4294717440,
+   "source_phase": [
+    2,
+    2
+   ],
+   "color": 4294209536,
+   "tone": 4294623232,
+   "white_balance_reference": [
+    734,
+    604,
+    2284
+   ],
+   "basis": "Declared approximation, not measured. X-T2 4.41 develops the read-out on 0xfff98000 and scales the picture on 0xfffc3000; the first resizer job writes the packed 4:2:2 picture that the JPEG encoder reads at 0x80000000. The development source starts 16 lines into the read-out buffer, at X-Trans site (2, 2). The color is that of the color unit 0xfff47000; a second, still-only tone stage is programmed at 0xfffac000 (description set 0xf73884 / 0xf79168 in the X-T20; same SoC registers). All developer/resizer/color/tone unit addresses are the shared X-Processor Pro MMIO and are unchanged from the X-T20 2.11; the white_balance_reference is the X-T20 AUTO white balance and is kept as the declared neutral."
+  },
+  "flash_calibration": {
+   "basis": "Synthetic, not camera values. Segment 5 copies the factory calibration blocks at flash 0x3320000 and 0x3340000 to RAM; the store reader 0xce323c (X-T20 0xcd7488 pair) reaches them as offsets 0x1a0000 and 0x1c0000 from the store base 0x2c68000 (pointer 0x1025344, X-T20 0xffb164). cfgstore_load 0xce3978 (X-T20 0xcd7bc4) builds the same base and offsets with byte-identical instructions, so the X-T20 flash offsets hold on the X-T2.",
+   "records": [
+    {
+     "flash": 53623372,
+     "data": "00000000",
+     "basis": "Lens correction enables, all clear. 0x1679b28 (X-T20 0x160c730 pair) enables the resizer's correction table from bit n of store offset 0x1a3a4c (0x1679be4, identical to X-T20); with erased bits the first resizer job takes erased coefficients, its set-up 0xc76d90 (X-T20 0xc6cccc pair) refuses them, and the main picture at 0x80000000 is never written."
+    },
+    {
+     "flash": 53788672,
+     "data": "000849089208dc0825096f09b809020a4b0a950ade0a280b710bbb0b040c4e0c970ce10c2a0d740dbd0d070e500e9a0ee30e2d0f760fc00f",
+     "basis": "Development tone curve: 28 u16 values rising evenly from 0x800 to 0xfc0. 0x15bf380 (X-T20 0x1563e4c pair) copies them from store offset 0x1cc000 into the parameters programmed at 0xfffa9048..0xfffa9088 (shared SoC MMIO). Erased values make it fail and recfReccProcess skips development."
+    }
+   ]
+  },
+  "usb_cable": {
+   "vbus_bank": 1,
+   "vbus_pin": 14,
+   "speed": "high",
+   "basis": "Declared input. VBUS of the USB port is GPIO bank 1 pin 14 (usb_vbus_present 0x157eacc calls gpio_pin_read(0x1000e); gpio_pin_read is 0xc57934), 1 = cable: the USB driver task polls it every 25 ms and after 16 equal polls posts connected/removed through 0x16fe8e4. The X-T2's USB port is USB 2.0, so a host negotiates high speed; the driver also programs DCFG for high speed. Same bank/pin as the X-T20 2.11."
+  },
+  "sub_cpu": {
+   "port": 4294090752,
+   "registers": [
+    {
+     "name": "power_on_cause",
+     "register": 96,
+     "value": 16
+    }
+   ],
+   "profile_header": 80,
+   "clock": {
+    "first": 65,
+    "hold": 69,
+    "seconds": 846555480,
+    "ticks_per_second": 48000000,
+    "basis": "Declared input. The sub-CPU keeps the calendar as seconds since 2000-01-01 00:00 in registers 0x41..0x44 (register-table rows 9..12 of the X-T2 sub-CPU register table 0xeff842), least significant byte first: 0xc7a2dc reads the four bytes until the low byte reads the same twice, and 0xc811bc converts the count (0xcf3e74). 0xc7a344 sets the clock: it writes 0 to register 0x45 (row 13), the four bytes, 1 to 0x45 and 0 to 0x46. The count is not measured on the camera; 846555480 is 2026-10-29 02:18, the local time of the X-T20 s1 reference capture. Device time runs at 48 MHz."
+   },
+   "basis": "Declared discovery input. Segment 5 reaches the sub-CPU through 16-bit words on serial port 2 (0xfff2a000; 0xc79d94, 0xc79e38; register table 0xeff842): bits 14..8 name the register, bit 15 writes the low byte, and the word read back from +0x60 carries the register value. Register 0x60 is the power-on cause; 0x10 is the normal start (loader handoff word power_on_cause). Registers 0x50-0x5f hold the 16-byte settings header that 0xce9424 validates; a selected user profile places its header there (profile_header); otherwise they read zero. Unlisted registers read zero; the register file is not measured beyond these reads."
   }
+ }
 }

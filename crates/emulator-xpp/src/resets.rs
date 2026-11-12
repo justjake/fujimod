@@ -29,9 +29,28 @@ use std::sync::{Arc, Mutex};
 
 /// Register window size in bytes.
 pub const WINDOW: u64 = 0x1000;
-const WORDS: [u64; 12] = [
-    0x08, 0x14, 0x1c, 0x20, 0x6c, 0x70, 0x88, 0x9c, 0x100, 0x10c, 0x110, 0x118,
+const WORDS: [u64; 13] = [
+    0x08, 0x14, 0x1c, 0x20, 0x6c, 0x70, 0x88, 0x9c, 0x100, 0x10c, 0x110, 0x118, 0x11c,
 ];
+/// X-T2 4.41 (USB 3.0) start-up 0x157d41c also sets +0x11c bit 10 and drives a
+/// request/acknowledge PHY register port: +0x110 bits 25:10 carry a 16-bit
+/// payload, a rising bit 8 latches it as the PHY register address, a rising
+/// bit 9 latches it as write data, a rising bit 27 stores the data and bit 26
+/// requests a read. +0x120 (read-only) holds the acknowledge in bit 16, set
+/// while any of those four strobes is held, and the addressed register in
+/// bits 15:0. The driver polls the acknowledge 50 times without a timeout and
+/// never branches on a PHY value; registers start at zero and the acknowledge
+/// follows at once (a model choice). The X-T20 2.11 start-up never sets these
+/// strobes or reads +0x120.
+const PHY_PORT: u64 = 0x110;
+const PHY_STATUS: u64 = 0x120;
+const PHY_ADDRESS_STROBE: u32 = 1 << 8;
+const PHY_DATA_STROBE: u32 = 1 << 9;
+const PHY_READ: u32 = 1 << 26;
+const PHY_WRITE: u32 = 1 << 27;
+const PHY_STROBES: u32 = PHY_ADDRESS_STROBE | PHY_DATA_STROBE | PHY_READ | PHY_WRITE;
+const PHY_ACK: u32 = 1 << 16;
+const PHY_PAYLOAD_SHIFT: u32 = 10;
 const SD_RESETS: u64 = 0x1c;
 const SD_CHANNELS: usize = 3;
 const SD_FIRST_BIT: u32 = 18;
@@ -129,12 +148,46 @@ struct State {
     pulses: [u64; SD_CHANNELS],
     #[serde(default, skip_serializing_if = "is_zero")]
     lines: u32,
+    #[serde(default, skip_serializing_if = "Phy::is_reset")]
+    phy: Phy,
 }
 fn is_zero(levels: &u32) -> bool {
     *levels == 0
 }
+/// The USB 3.0 PHY register port behind +0x110/+0x120.
+#[derive(Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Phy {
+    registers: BTreeMap<u16, u16>,
+    address: u16,
+    data: u16,
+}
+impl Phy {
+    fn is_reset(&self) -> bool {
+        *self == Self::default()
+    }
+    /// Apply the edges of a write to +0x110.
+    fn port(&mut self, old: u32, new: u32) {
+        let rising = new & !old;
+        let payload = (new >> PHY_PAYLOAD_SHIFT) as u16;
+        if rising & PHY_ADDRESS_STROBE != 0 {
+            self.address = payload;
+        }
+        if rising & PHY_DATA_STROBE != 0 {
+            self.data = payload;
+        }
+        if rising & PHY_WRITE != 0 {
+            self.registers.insert(self.address, self.data);
+        }
+    }
+    fn status(&self, port: u32) -> u32 {
+        let ack = if port & PHY_STROBES != 0 { PHY_ACK } else { 0 };
+        ack | u32::from(self.registers.get(&self.address).copied().unwrap_or(0))
+    }
+}
 pub struct Gates {
     base: u64,
+    phy: Phy,
     words: BTreeMap<u64, u32>,
     sd: [ResetPulses; SD_CHANNELS],
     lines: ExternalLines,
@@ -147,6 +200,7 @@ impl Gates {
         }
         Ok(Self {
             base,
+            phy: Phy::default(),
             words: BTreeMap::new(),
             sd: Default::default(),
             lines: ExternalLines::default(),
@@ -197,6 +251,10 @@ impl Device for Gates {
                 *normal
             });
         }
+        if address == self.base + PHY_STATUS && size == 4 {
+            let port = self.words.get(&PHY_PORT).copied().unwrap_or(0);
+            return self.phy.status(port).into();
+        }
         match self.offset(address, size) {
             Some(offset) => self.words.get(&offset).copied().unwrap_or(0).into(),
             None => {
@@ -215,6 +273,10 @@ impl Device for Gates {
             return;
         }
         let value = value as u32;
+        if offset == PHY_PORT {
+            let old = self.words.get(&offset).copied().unwrap_or(0);
+            self.phy.port(old, value);
+        }
         if offset == SD_RESETS {
             let old = self.words.get(&offset).copied().unwrap_or(0);
             for (channel, line) in self.sd.iter().enumerate() {
@@ -270,6 +332,7 @@ impl Gates {
             words: self.words.clone(),
             pulses: std::array::from_fn(|channel| self.sd[channel].count()),
             lines: self.lines.levels(),
+            phy: self.phy.clone(),
         }
     }
     fn check(&self, state: &State) -> Result<(), String> {
@@ -284,6 +347,7 @@ impl Gates {
         let polarity = state.words.get(&POLARITY).copied().unwrap_or(0);
         self.lines.restore(polarity, state.lines);
         self.words = state.words;
+        self.phy = state.phy;
         for (line, count) in self.sd.iter().zip(state.pulses) {
             line.set(count);
         }
@@ -321,6 +385,44 @@ mod tests {
         assert_eq!(line.count(), 1);
         assert_eq!(read(&mut gates, &mut h, BASE + 0x14), 0x400000);
         assert!(gates.sd_reset(3).is_err());
+    }
+
+    #[test]
+    fn usb3_phy_port_acknowledges_strobes_and_stores_registers() {
+        let mut gates = Gates::new(BASE).unwrap();
+        let mut h = TestHost::new();
+        let ack = |g: &mut Gates, h: &mut TestHost| read(g, h, BASE + 0x120) >> 16 & 1;
+        // 0x157d5e4: +0x11c is a plain word.
+        write(&mut gates, &mut h, BASE + 0x11c, 0x400);
+        assert_eq!(read(&mut gates, &mut h, BASE + 0x11c), 0x400);
+        assert_eq!(ack(&mut gates, &mut h), 0);
+        // Address phase (0x157d660/0x157d66c): payload 0x1006, then bit 8.
+        let payload = 0x400000 | 0x1800;
+        write(&mut gates, &mut h, BASE + 0x110, payload);
+        write(&mut gates, &mut h, BASE + 0x110, payload | 0x100);
+        assert_eq!(ack(&mut gates, &mut h), 1);
+        write(&mut gates, &mut h, BASE + 0x110, 0);
+        assert_eq!(ack(&mut gates, &mut h), 0);
+        // Data phase: payload 0x00bf, bit 9; then write execute (bit 27).
+        write(&mut gates, &mut h, BASE + 0x110, 0xbf << 10 | 0x200);
+        write(&mut gates, &mut h, BASE + 0x110, 0);
+        write(&mut gates, &mut h, BASE + 0x110, 1 << 27);
+        assert_eq!(ack(&mut gates, &mut h), 1);
+        write(&mut gates, &mut h, BASE + 0x110, 0);
+        // Read execute (bit 26) returns the stored register in bits 15:0.
+        write(&mut gates, &mut h, BASE + 0x110, 1 << 26);
+        assert_eq!(read(&mut gates, &mut h, BASE + 0x120), 0x1_00bf);
+        // The port survives save/restore; an unwritten register reads zero.
+        let saved = gates.save();
+        let mut other = Gates::new(BASE).unwrap();
+        other.restore(&saved).unwrap();
+        assert_eq!(read(&mut other, &mut h, BASE + 0x120), 0x1_00bf);
+        write(&mut other, &mut h, BASE + 0x110, (0x30 << 10) | 0x100);
+        assert_eq!(read(&mut other, &mut h, BASE + 0x120), 0x1_0000);
+        // +0x120 is read-only.
+        let mut cx = h.cx();
+        gates.write(&mut cx, BASE + 0x120, 4, 1);
+        assert!(cx.is_unmodeled());
     }
 
     #[test]
