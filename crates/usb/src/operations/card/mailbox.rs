@@ -163,14 +163,10 @@ impl Mailbox<'_> {
         // Append-open on a zero-length FAT file can accept a missing tail and
         // link the first allocated cluster through reserved FAT entry zero.
         // Create mode gives the first write a fresh writable stream instead.
+        // The listing is of this exact path, so any single empty entry is this
+        // file; never fall through to append mode for it.
         let entries = self.list(path).await?;
-        if entries.len() == 1
-            && entries[0].bytes == 0
-            && path
-                .rsplit('\\')
-                .next()
-                .is_some_and(|name| entries[0].name.eq_ignore_ascii_case(name))
-        {
+        if entries.len() == 1 && entries[0].bytes == 0 {
             self.path(path).await?;
             self.command(9, 0).await?;
             return Ok(true);
