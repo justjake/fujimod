@@ -264,6 +264,9 @@ impl Device for Receiver {
                 if self.wiring.timing_output {
                     self.sensor.timing(cx, true);
                 }
+                for &channel in &self.wiring.output_channels {
+                    self.sensor.frame_start(channel);
+                }
                 for link in 0..self.links() {
                     if self.enabled(link) {
                         let cause = 0x108 + link as u64 * 0x100;

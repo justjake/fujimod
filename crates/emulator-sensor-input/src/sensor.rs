@@ -18,6 +18,9 @@ pub struct SensorState {
     pub frames: [u64; 2],
     #[serde(default)]
     pub last_dma: [(u64, u32, u32); 2],
+    /// RAW DMA channels that were enabled at the start of the current frame.
+    #[serde(default)]
+    pub armed: [bool; 2],
 }
 impl Default for SensorState {
     fn default() -> Self {
@@ -31,6 +34,7 @@ impl Default for SensorState {
             image: BTreeMap::new(),
             frames: [0; 2],
             last_dma: [(0, 0, 0); 2],
+            armed: [false; 2],
         }
     }
 }
@@ -93,13 +97,32 @@ impl Sensor {
         cx.set_irq(routes.timing[0], pending & enabled & 3 != 0);
         cx.set_irq(routes.timing[1], pending & enabled & 12 != 0);
     }
+    /// Frame start: a RAW DMA channel samples its enable bit as a frame
+    /// begins and transfers exactly the frames that began enabled. A channel
+    /// enabled mid-frame waits for the next frame start, and one disabled
+    /// mid-frame still completes the frame in progress.
+    /// X-T3 5.11 basis: the still handler (imgdc state 4, on the message
+    /// from the frame-start interrupt GIC 102) enables channel 0 during a
+    /// frame. State 5 then expects the next frame-start message (MOVDC stop
+    /// request, RAW stop request, which clears the enable) before the
+    /// channel's completion message ends the still. The sampling point is
+    /// inferred from that sequence, not measured.
+    pub fn frame_start(&self, channel: usize) {
+        if self.1.and_then(|r| r.dma).is_none() {
+            return;
+        }
+        let mut s = self.0.lock().unwrap();
+        let base = [0x40, 0xc0][channel];
+        s.armed[channel] = s.image.get(&base).copied().unwrap_or(0) & 1 != 0;
+    }
     pub fn frame(&self, cx: &mut Cx<'_>, channel: usize) -> Result<(), String> {
         let Some(routes) = self.1 else { return Ok(()) };
         let Some(dma) = routes.dma else { return Ok(()) };
         let mut s = self.0.lock().unwrap();
         let base = [0x40, 0xc0][channel];
+        let armed = std::mem::take(&mut s.armed[channel]);
         let reg = |o| s.image.get(&o).copied().unwrap_or(0);
-        if reg(base) & 1 == 0 {
+        if !armed {
             return Ok(());
         }
         let address = u64::from(reg(base + 0x10)) | (u64::from(reg(base + 0xc) & 7) << 32);
@@ -489,6 +512,45 @@ mod tests {
         assert!(host.ram.is_empty());
     }
     #[test]
+    fn raw_dma_transfers_exactly_the_frames_that_start_enabled() {
+        let sensor = Sensor::new(
+            Some(ImageRoutes {
+                dma: Some([97, 98]),
+                timing: [102, 100],
+                line_stride: false,
+            }),
+            (0x59, 4),
+        );
+        let mut host = RecordingHost {
+            ram: vec![0x55; 0x10],
+            ram_base: 0x1000,
+            ..Default::default()
+        };
+        // A frame is under way when the channel is programmed and enabled.
+        sensor.frame_start(0);
+        for (offset, value) in [(0x40, 1), (0x44, 2), (0x48, 2), (0x50, 0x1000), (0x60, 1)] {
+            sensor.image_write(&mut Cx::new(&mut host, 0, 0, 0), offset, value);
+        }
+        sensor.frame(&mut Cx::new(&mut host, 0, 0, 0), 0).unwrap();
+        assert_eq!(host.ram, vec![0x55; 0x10]);
+        assert_eq!(sensor.image_reg(0x64), 0);
+        assert!(!host.irqs.iter().any(|(i, on)| *i == 97 && *on));
+        // The next frame starts with the channel enabled; disabling it during
+        // that frame stops the transfers after it, not the frame itself.
+        sensor.frame_start(0);
+        sensor.image_write(&mut Cx::new(&mut host, 0, 0, 0), 0x40, 0);
+        sensor.frame(&mut Cx::new(&mut host, 0, 0, 0), 0).unwrap();
+        assert_eq!(&host.ram[..4], &[0, 0, 31, 0]);
+        assert_eq!(sensor.image_reg(0x64), 1);
+        assert!(host.irqs.iter().rev().find(|(i, _)| *i == 97).unwrap().1);
+        sensor.image_write(&mut Cx::new(&mut host, 0, 0, 0), 0x64, 1);
+        host.ram.fill(0x55);
+        sensor.frame_start(0);
+        sensor.frame(&mut Cx::new(&mut host, 0, 0, 0), 0).unwrap();
+        assert_eq!(host.ram, vec![0x55; 0x10]);
+        assert_eq!(sensor.image_reg(0x64), 0);
+    }
+    #[test]
     fn raw_dma_line_stride_places_each_line_and_refuses_short_strides() {
         let sensor = Sensor::new(
             Some(ImageRoutes {
@@ -506,6 +568,7 @@ mod tests {
         for (offset, value) in [(0x40, 1), (0x44, 4), (0x48, 2), (0x50, 0x1000), (0x58, 12), (0x60, 1)] {
             sensor.image_write(&mut Cx::new(&mut host, 0, 0, 0), offset, value);
         }
+        sensor.frame_start(0);
         sensor.frame(&mut Cx::new(&mut host, 0, 0, 0), 0).unwrap();
         assert_eq!(&host.ram[..8], &[0, 0, 31, 0, 62, 0, 93, 0]);
         assert_eq!(&host.ram[8..12], &[0x55; 4]);
@@ -513,6 +576,7 @@ mod tests {
         assert_eq!(&host.ram[20..22], &[0x55; 2]);
         assert!(host.irqs.iter().rev().find(|(i, _)| *i == 97).unwrap().1);
         sensor.image_write(&mut Cx::new(&mut host, 0, 0, 0), 0x58, 6);
+        sensor.frame_start(0);
         assert!(sensor.frame(&mut Cx::new(&mut host, 0, 0, 0), 0).is_err());
     }
     #[test]
