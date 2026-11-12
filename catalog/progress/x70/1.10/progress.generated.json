@@ -52,12 +52,12 @@
         {
           "id": "restart-facts",
           "title": "USB restart request located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "card-files",
           "title": "Optional card file access located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "controls",
@@ -67,7 +67,7 @@
         {
           "id": "settings-layout",
           "title": "Settings layout located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "sd-facts",
@@ -98,12 +98,12 @@
         {
           "id": "sd-boot-v2-autostart-starts-in-emulator",
           "title": "SD boot v2: autostart starts in the emulator",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v2-patch-triggers-fire-in-emulator",
           "title": "SD boot v2: patch triggers fire in the emulator",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "menu",
@@ -128,7 +128,7 @@
         {
           "id": "sd-boot-v2-fujimod-boots-in-emulator",
           "title": "SD boot v2: FujiMod boots from an SD card in the emulator",
-          "result": "not-run"
+          "result": "stale"
         }
       ]
     },
@@ -169,7 +169,7 @@
         {
           "id": "camera-fast-memory",
           "title": "Memory capture measured at 8 MiB/s or more",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "camera-fast-flash",
@@ -318,9 +318,9 @@
       "total": 11
     },
     "playback-picture": {
-      "result": "stale",
-      "passed": 3,
-      "total": 3
+      "result": "partial",
+      "passed": 2,
+      "total": 4
     },
     "playback-movie": {
       "result": "stale",
@@ -344,7 +344,6 @@
     }
   },
   "mods": {
-    "af": "stale",
     "fujimod": "stale",
     "aspect-ratio": "stale",
     "raw-teleconverter": "not-run",
@@ -356,8 +355,17 @@
     "framing-guideline": "stale",
     "film-sims": "not-run",
     "card-films": "stale",
+    "multipass-curves": "not-run",
     "film-editor": "not-run",
     "film-grain": "not-run",
+    "color-chrome": "not-run",
+    "halation": "not-run",
+    "light-leaks": "not-run",
+    "film-borders": "not-run",
+    "clarity": "not-run",
+    "tone-curve": "not-run",
+    "tone-steps": "not-run",
+    "d-range-priority": "not-run",
     "highlight-meter": "not-run",
     "raw-view": "stale",
     "f-log": "stale",
@@ -366,16 +374,31 @@
     "controls": "not-run",
     "menu-theme": "not-run",
     "overlay-opacity": "stale",
+    "menu-animations": "not-run",
     "menu-tap": "stale",
-    "glgui": "not-run",
+    "focalized-ui": "not-run",
     "recipes": "not-run",
     "snap-focus": "stale",
+    "recipe-exif": "not-run",
+    "hide-films": "not-run",
+    "disposable": "not-run",
+    "date-stamp": "not-run",
+    "zone-focus": "not-run",
+    "digital-focal-length": "not-run",
+    "hud-layout": "not-run",
+    "menu-order": "not-run",
+    "pixel-map": "not-run",
     "usb-debug": "stale",
-    "af-scene-capture": "stale",
     "bug-report": "stale",
     "sd-volume-name": "stale",
     "date-folders": "stale",
     "software-nd": "not-run",
-    "ota-runtime": "not-run"
+    "sd-boot-v2-runtime": "not-run",
+    "sd-boot-v2-stage1-internal-flash-install": "not-run",
+    "ota-update": "not-run",
+    "internal-data-backup": "not-run",
+    "startup-shutdown-screen": "not-run",
+    "hardware-divide": "not-run",
+    "live-view-speedups": "not-run"
   }
 }
