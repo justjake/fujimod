@@ -36,7 +36,13 @@ impl Decoder<'_> {
         }
         Ok((word & mask, word >> 16))
     }
-    fn plane(&self, video: bool, width: u32, height: u32) -> Result<Plane, String> {
+    /// `None`: the layer's window lies outside the active area. The X-T3 5.11
+    /// returns from the 1280x960 viewfinder to the 720x480 rear screen by
+    /// re-timing the output and enabling the picture layer while that layer
+    /// still holds the viewfinder's 1280x960 window; its next present writes
+    /// the 720x480 window. What the panel shows for such a frame is not
+    /// modeled, so no frame is published for it.
+    fn plane(&self, video: bool, width: u32, height: u32) -> Result<Option<Plane>, String> {
         let (address, stride, geometry, order) = if video {
             if self.video.is_none() || self.r(0x164) > 3 || self.r(0x16c) & !0xfff != 0 {
                 return Err("Unsupported XP4 LCDC video transport/address/packing".into());
@@ -76,14 +82,15 @@ impl Decoder<'_> {
             || dy == 0
             || address == 0
             || address & 3 != 0
-            || x + w > width
-            || y + h > height
             || (((w - 1) * dx) >> 12) >= sw
             || (((h - 1) * dy) >> 12) >= sh
         {
             return Err("Invalid XP4 LCDC picture geometry/address".into());
         }
-        Ok(Plane {
+        if x + w > width || y + h > height {
+            return Ok(None);
+        }
+        Ok(Some(Plane {
             address,
             stride,
             source_x: 0,
@@ -96,7 +103,7 @@ impl Decoder<'_> {
             work_width: w,
             work_height: h,
             order,
-        })
+        }))
     }
 }
 pub fn decode(
@@ -125,9 +132,12 @@ pub fn decode(
     let mut layers = vec![];
     for (bit, video) in [(4, true), (12, false)] {
         if enable & (1 << bit) != 0 {
+            let Some(plane) = d.plane(video, width, height)? else {
+                return Ok(None);
+            };
             layers.push(Layer {
                 id: bit.to_string(),
-                plane: d.plane(video, width, height)?,
+                plane,
             });
         }
     }
@@ -171,6 +181,38 @@ mod tests {
         assert_eq!(&rgba[..8], &[10, 20, 30, 255, 10, 20, 30, 255]);
         regs[8 / 4] |= 2;
         assert!(decode(&regs, Some(Picture::Abgr8888Straight), None).is_err());
+    }
+    /// Strict X-T3 5.11 board, VIEW MODE from EVF ONLY back to the rear screen
+    /// (2026-11-12, stock firmware without mods): the output is
+    /// re-timed to 720x480 and the picture layer enabled while the layer still
+    /// holds the viewfinder's 1280x960 window. No frame is published for it;
+    /// the 720x480 window the next present writes is scanned again.
+    #[test]
+    fn a_layer_window_left_from_the_viewfinder_publishes_no_frame() {
+        let mut regs = vec![0; REGISTER_BYTES / 4];
+        for (o, v) in [
+            (4, 1),
+            (8, 0x11000),
+            (0x14, 0x302d0),
+            (0x20, 0x201e0),
+            (0x44, 0x4bfd000),
+            (0x4c, 0x4bfd000),
+            (0x50, 0x10500),
+            (0x54, 0x3c00500),
+            (0x5c, 0x3c00500),
+            (0x60, 0x10001000),
+        ] {
+            regs[o / 4] = v;
+        }
+        let picture = Some(Picture::Abgr8888Straight);
+        assert!(decode(&regs, picture, None).unwrap().is_none());
+        regs[0x50 / 4] = 0x102d0;
+        regs[0x54 / 4] = 0x1e002d0;
+        regs[0x5c / 4] = 0x1e002d0;
+        let out = decode(&regs, picture, None).unwrap().unwrap();
+        assert_eq!((out.width, out.height, out.layers.len()), (720, 480, 1));
+        regs[0x60 / 4] = 0;
+        assert!(decode(&regs, picture, None).is_err());
     }
     /// Camera runs on an X-T3 5.11: CPU words stored in the LCD picture
     /// plane over the REC live view. A test rectangle (2026-11-11) showed ARGB
