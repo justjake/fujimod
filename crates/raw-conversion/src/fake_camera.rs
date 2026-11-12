@@ -238,6 +238,8 @@ impl FakeCamera {
                 self.respond(code, id, None);
             }
             0x1016 if params[0] == START_RAW_CONVERSION => {
+                // 0 starts a draft: an X100VI wrote 3888 x 2592 for L 3:2.
+                assert_eq!(data, 1u16.to_le_bytes(), "draft conversion");
                 self.attempts += 1;
                 if self.refuse_conversion == Some(self.attempts) {
                     return self.fail(0x2019, id);
