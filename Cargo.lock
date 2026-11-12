@@ -2948,6 +2948,8 @@ dependencies = [
 name = "fujimod-python-usb"
 version = "0.1.0"
 dependencies = [
+ "fujimod-camera-mount",
+ "fujimod-catalog",
  "fujimod-catalog-firmware-identity",
  "fujimod-catalog-restart",
  "fujimod-catalog-workflows",
