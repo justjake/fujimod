@@ -642,6 +642,7 @@ impl Devices {
         timing: (u64, u64, u64, u64),
         read_gate: (u16, u8),
         ibuf: Option<(u64, u32, u64, u64, u64, String)>,
+        statistics_in_memory: bool,
     ) -> Result<(), String> {
         use fujimod_emulator_sensor_input::{sensor, slvs};
         let (command_base, receiver_base, normal_irqs, error_irqs, timing_irqs) = map;
@@ -700,7 +701,11 @@ impl Devices {
             {
                 return Err("Invalid XP4 input-buffer wiring".into());
             }
-            let mut statistics = Statistics::new(sram, bank_size as usize)?;
+            let mut statistics = if statistics_in_memory {
+                Statistics::in_memory(sram, bank_size as usize)?
+            } else {
+                Statistics::new(sram, bank_size as usize)?
+            };
             statistics.set_scene(
                 &serde_json::from_str(&scene).map_err(|e| format!("statistics scene: {e}"))?,
             )?;
@@ -732,7 +737,9 @@ impl Devices {
             )?;
             receiver = receiver.with_input_buffer(input.clone());
             extra.push((base, 0x2ec, Box::new(input)));
-            extra.push((sram, bank_size * 2, Box::new(statistics)));
+            if !statistics_in_memory {
+                extra.push((sram, bank_size * 2, Box::new(statistics)));
+            }
         }
         for (base, size, model) in [
             (command_base, 0x244, Box::new(command) as Box<dyn Device>),

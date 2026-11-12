@@ -1578,9 +1578,17 @@ impl Session {
                 .adc(inputs, sample_ticks)?;
         }
         if let Some((map, timing, read_gate, ibuf)) = imaging {
+            // The statistics banks are guest memory when a declared memory
+            // region holds them (the boot ROM start keeps its SRAM there).
+            let statistics_in_memory = ibuf.as_ref().is_some_and(|(_, _, _, sram, bank, _)| {
+                memory.iter().any(|window| {
+                    window.base <= *sram
+                        && sram + bank * 2 <= window.base + window.data.len() as u64
+                })
+            });
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .imaging(map, timing, read_gate, ibuf)?;
+                .imaging(map, timing, read_gate, ibuf, statistics_in_memory)?;
         }
         if !movdc.is_empty() {
             devices
