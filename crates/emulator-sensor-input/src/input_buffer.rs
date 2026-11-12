@@ -60,6 +60,11 @@ impl InputBuffer {
     pub fn set_statistics(&mut self, statistics: Statistics) {
         self.statistics = Some(statistics);
     }
+    /// The statistics source this buffer completes frames into, for devices
+    /// that also carry the scene input.
+    pub fn statistics(&self) -> Option<Statistics> {
+        self.statistics.clone()
+    }
     pub fn new(wiring: Wiring, statistics: Option<Statistics>) -> Result<Self, String> {
         if wiring.base & 0xfff != 0
             || wiring.period_ticks == Some(0)
