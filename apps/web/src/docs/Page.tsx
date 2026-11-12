@@ -21,9 +21,7 @@ function componentAt(path: string): FocalComponent | undefined {
 }
 
 function declarationSignature(declaration: FocalApiDeclaration): string {
-  return declaration.kind === 'macro'
-    ? `#define ${declaration.signature}`
-    : declaration.signature;
+  return declaration.signature;
 }
 
 function Sidebar(props: { current?: string }) {
