@@ -56,7 +56,8 @@ export function pageMetadata(path: string) {
   if (component)
     return {
       title: `${component.title} · FocalUI SDK · FujiMod`,
-      description: component.summary.split('\n')[0] || 'FocalUI component reference.',
+      description: component.summary.replace(/\s+/g, ' ').slice(0, 160) ||
+        'FocalUI component reference.',
       canonical: siteOrigin + normalized,
     };
   if (normalized === '/docs/sdk/focal/')
