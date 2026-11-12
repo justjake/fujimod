@@ -57,6 +57,33 @@ flags for the conversion run. Neither command deletes or changes anything on
 the SD card. Then set CONNECTION MODE back to USB RAW CONV./BACKUP RESTORE
 to convert. Both mode changes are made on the camera.
 
+## A custom-setting slot for a test chart
+
+`chart-slot` sets up one of an X100VI's custom-setting slots (C1–C7) for
+shooting a test chart, over the same USB RAW CONV./BACKUP RESTORE connection:
+
+```sh
+fujimod-raw-convert chart-slot write --slot 7 --dry-run      # what it would write; no USB
+fujimod-raw-convert chart-slot save --slot 7 --saved c7.json # never overwrites c7.json
+fujimod-raw-convert chart-slot write --saved c7.json
+fujimod-raw-convert chart-slot restore --saved c7.json
+```
+
+`write` sets PROVIA, D RANGE PRIORITY OFF, white balance 6700 K, L 3:2,
+FINE+RAW, grain, COLOR CHROME, FX BLUE and smooth skin OFF, every tone, color,
+sharpness, noise reduction, clarity and white-balance-shift setting 0, lens
+modulation optimizer OFF, sRGB and DR100, and names the slot CHART. Every
+write is read back at the width the camera reports and stops on a mismatch.
+`restore` puts back the bytes `save` read, in an order the camera accepts.
+ISO, shutter speed, aperture, focus mode and the self-timer are not part of a
+slot and stay on the camera's dials.
+
+It runs only on an X100VI with firmware 1.31 and refuses any other body or
+firmware. The slot properties (`0xD18C` selects the slot, `0xD18D` its name,
+`0xD18E`–`0xD1A4` its settings) follow other X-Trans V bodies and are
+unverified on the X100VI; the tests run against a fake camera that applies
+the slot's film, white balance and D range priority rules.
+
 ## Job file
 
 ```json
