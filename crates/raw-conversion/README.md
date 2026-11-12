@@ -129,16 +129,27 @@ libfuji is MIT-licensed, by Daniel Cook (petabyt), commit
 `7a421a7690e271326c0c1cae0755dcba0f8b94a5`. Its results come from black-box
 reversing.
 
+Confirmed on an X100VI (firmware 1.31), from the output MakerNotes:
+
+- Film codes 18 ETERNA BLEACH BYPASS, 19 NOSTALGIC Neg. and 20 REALA ACE
+  (libfuji's guesses) give FilmMode `0x900`, `0xa00` and `0xb00`.
+- COLOR CHROME FX BLUE (word 24) is 1 OFF, 2 WEAK, 3 STRONG, like COLOR
+  CHROME EFFECT (word 9): the camera's own as-shot profiles carry 1, 2 and 3
+  for RAFs whose MakerNote `0x104e` reads 0, 32 and 64, and 1 and 2 sent
+  converted as OFF and WEAK.
+- Adobe RGB code 3 is ignored: the output is sRGB (Exif ColorSpace 1), and
+  its pixels differ from the sRGB job's no more than two identical jobs do.
+- MONOCHROMATIC COLOR at step × 10 tints in proportion up to ±9. The
+  MakerNote does not record it.
+
 Not yet confirmed on a camera:
 
-- libfuji marks film codes 18 ETERNA BLEACH BYPASS, 19 NOSTALGIC Neg. and
-  20 REALA ACE as guesses. Check the output's MakerNote film mode, `0x1401`.
-- Adobe RGB: libfuji lists 3 ("AdobeRGB", `ADOBE_RGB`) and 2 ("Adobe sRGB",
-  `ADOBE_RGB_CODE2`), both marked unsure. The manifest's Exif ColorSpace
-  (`0xa001`) shows which one the camera honored. A code it refuses is
-  recorded as `unsupported` without converting.
-- MONOCHROMATIC COLOR uses step × 10, like the other ±steps. libfuji's tables
-  allow ±18 steps; menus show ±9.
+- Adobe RGB code 2 ("Adobe sRGB", `ADOBE_RGB_CODE2`), marked unsure in
+  libfuji. The manifest's Exif ColorSpace (`0xa001`) shows whether the camera
+  honored it. A code it refuses is recorded as `unsupported` without
+  converting.
+- Which sign of MONOCHROMATIC COLOR magenta/green word 25 is the menu's
+  magenta: +90 tints green.
 - libfuji comments that `0xD183` = 1 gives full-resolution JPEGs, but it
   sends 0. The manifest's frame size shows which this is.
 - That USB CARD READER is PTP, not USB mass storage, on each body.
