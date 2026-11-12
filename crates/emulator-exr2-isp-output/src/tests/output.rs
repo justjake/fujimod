@@ -1104,6 +1104,10 @@ fn producer_with_metering(
             histogram: hist,
             external_statistics: false,
             diagnostic_reads: true,
+            base: 0xfff18000,
+            parameter_base: 0xfff28000,
+            irq: 0x2e,
+            mode_layout: Default::default(),
         },
         producer::Wiring {
             grid: None,
