@@ -245,3 +245,31 @@ fn worker_still_retains_sample_latching_joint_dma_and_restore() {
     raw_writeback_supports_eight_rows_plus_64_byte_displacement();
     fujimod_emulator_devices::work::configure(0).unwrap();
 }
+
+#[test]
+fn spatial_filter_configuration_is_retained_and_its_gap_still_refuses() {
+    let mut h = TestHost::new();
+    let mut d = StillProcessor::new(
+        fujimod_emulator_imaging::exr2_isp::options::still::Options {
+            completion_ticks: 4,
+            cfa: cfa(),
+        },
+        Irq { core: 0, line: 61 },
+    )
+    .unwrap();
+    for offset in (0x04..=0x34).step_by(4) {
+        let value = 0x3fff_0000 | offset as u64;
+        let mut cx = h.cx();
+        d.write(&mut cx, 0xfff30000 + offset, 4, value);
+        assert!(cx.refusal().is_none(), "{offset:#x}");
+        let mut cx = h.cx();
+        assert_eq!(d.read(&mut cx, 0xfff30000 + offset, 4), value);
+        assert!(cx.refusal().is_none(), "{offset:#x}");
+    }
+    for offset in [0x38, 0xb0] {
+        let mut cx = h.cx();
+        d.write(&mut cx, 0xfff30000 + offset, 4, 0);
+        assert!(cx.refusal().is_some(), "{offset:#x}");
+    }
+    assert!(h.effects.is_empty());
+}
