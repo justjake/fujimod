@@ -1,13 +1,17 @@
 //! `fujimod-raw-convert`: develop RAFs on a camera in USB RAW CONV. mode
 //! (crates/raw-conversion/README.md).
-use fujimod_raw_conversion::{card, ptp::Session, run};
+use fujimod_raw_conversion::{card, chart_slot, ptp::Session, run};
 use fujimod_usb::connection::{self, BulkPipe, Connection, DeviceFilter, TransferOptions};
 use std::{collections::BTreeMap, num::NonZeroU32, path::PathBuf, time::Duration};
 
 const USAGE: &str = "usage:
   fujimod-raw-convert --jobs JOBS.json --out DIR [--raf NAME=PATH]... [--dry-run | --checklist] [--upload-each] [--conversion-timeout SECONDS]
   fujimod-raw-convert card list
-  fujimod-raw-convert card fetch --dir DIR NAME=FILE...";
+  fujimod-raw-convert card fetch --dir DIR NAME=FILE...
+  fujimod-raw-convert chart-slot save --slot N --saved FILE.json
+  fujimod-raw-convert chart-slot write --saved FILE.json
+  fujimod-raw-convert chart-slot write --slot N --dry-run
+  fujimod-raw-convert chart-slot restore --saved FILE.json";
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -18,8 +22,14 @@ fn main() {
 }
 
 async fn main_async(args: Vec<String>) -> Result<(), String> {
-    if args.first().map(String::as_str) == Some("card") {
-        return card(&args[1..]).await;
+    match args.first().map(String::as_str) {
+        Some("card") => return card(&args[1..]).await,
+        Some("chart-slot") => return chart(&args[1..]).await,
+        Some("--help" | "-h") => {
+            println!("{USAGE}\n\nchart-slot: {}", chart_slot::UNVERIFIED);
+            return Ok(());
+        }
+        _ => {}
     }
     let (mut jobs, mut out, mut dry_run, mut upload_each) = (None, None, false, false);
     let mut checklist = false;
@@ -172,6 +182,77 @@ async fn card(args: &[String]) -> Result<(), String> {
         }
         _ => return Err(USAGE.into()),
     }
+    let pipe = session.close().await.map_err(|e| e.to_string())?;
+    pipe.close().await.map_err(|e| e.to_string())
+}
+
+/// An X100VI 1.31 custom-setting slot for shooting a test chart
+/// (crates/raw-conversion/README.md).
+async fn chart(args: &[String]) -> Result<(), String> {
+    let (command, rest) = args.split_first().ok_or(USAGE)?;
+    let (mut slot, mut saved, mut dry_run) = (None, None, false);
+    let mut items = rest.iter();
+    while let Some(item) = items.next() {
+        match item.as_str() {
+            "--slot" => {
+                slot = Some(
+                    items
+                        .next()
+                        .ok_or(USAGE)?
+                        .parse::<u8>()
+                        .map_err(|_| USAGE)?,
+                )
+            }
+            "--saved" => saved = Some(PathBuf::from(items.next().ok_or(USAGE)?)),
+            "--dry-run" => dry_run = true,
+            _ => return Err(USAGE.into()),
+        }
+    }
+    let load = |path: &PathBuf| -> Result<chart_slot::Saved, String> {
+        let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
+    };
+    let log = |line: &str| eprintln!("{line}");
+    match (command.as_str(), slot, saved, dry_run) {
+        ("write", Some(slot), None, true) => {
+            for line in chart_slot::plan(slot) {
+                println!("{line}");
+            }
+            return Ok(());
+        }
+        ("save", Some(slot), Some(path), false) => {
+            if path.exists() {
+                return Err(format!(
+                    "{} exists; a saved slot is never overwritten",
+                    path.display()
+                ));
+            }
+            let mut session = open().await?;
+            let saved = chart_slot::save(&mut session, slot).await?;
+            let text = serde_json::to_string_pretty(&saved).map_err(|e| e.to_string())?;
+            std::fs::write(&path, text + "\n").map_err(|e| e.to_string())?;
+            eprintln!("saved C{slot} ({:?}) to {}", saved.name, path.display());
+            close(session).await?;
+        }
+        ("write", None, Some(path), false) => {
+            let saved = load(&path)?;
+            eprintln!("{}", chart_slot::UNVERIFIED);
+            let mut session = open().await?;
+            chart_slot::write(&mut session, &saved, log).await?;
+            close(session).await?;
+        }
+        ("restore", None, Some(path), false) => {
+            let saved = load(&path)?;
+            let mut session = open().await?;
+            chart_slot::restore(&mut session, &saved, log).await?;
+            close(session).await?;
+        }
+        _ => return Err(USAGE.into()),
+    }
+    Ok(())
+}
+
+async fn close(session: Session<BulkPipe>) -> Result<(), String> {
     let pipe = session.close().await.map_err(|e| e.to_string())?;
     pipe.close().await.map_err(|e| e.to_string())
 }

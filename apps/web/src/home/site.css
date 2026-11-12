@@ -108,6 +108,9 @@ footer {
 .build-info a {
   white-space: nowrap;
 }
+.build-info .build-date {
+  display: block;
+}
 footer a {
   text-decoration: none;
 }

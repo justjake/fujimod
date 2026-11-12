@@ -12,6 +12,15 @@
           "status": "available",
           "errors": []
         },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: card open: 0 checked routines in a mapped section"
+            }
+          ]
+        },
         "controls": {
           "status": "unavailable",
           "errors": [
@@ -136,15 +145,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: card open: 0 checked routines in a mapped section"
-            }
-          ]
         }
       }
     },
@@ -181,6 +181,15 @@
             }
           ]
         },
+        "service": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "service",
+              "reason": "ValueError: No service-workflow locator for X-Processor 4"
+            }
+          ]
+        },
         "settings": {
           "status": "unavailable",
           "errors": [
@@ -201,6 +210,15 @@
         "bulk": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
         },
         "controls": {
           "status": "unavailable",
@@ -365,15 +383,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: No stock card-call mechanism for this processor"
-            }
-          ]
         }
       }
     },
@@ -389,6 +398,15 @@
             {
               "locator": "bulk",
               "reason": "BulkCatalogError: No bulk transport locator for X-Processor Pro"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
             }
           ]
         },
@@ -563,15 +581,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: No stock card-call mechanism for this processor"
-            }
-          ]
         }
       }
     },
@@ -587,6 +596,15 @@
             {
               "locator": "bulk",
               "reason": "BulkCatalogError: No bulk transport locator for Milbeaut (exact SoC unconfirmed)"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
             }
           ]
         },
@@ -751,15 +769,6 @@
               "reason": "Release identity was not generated"
             }
           ]
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
-            }
-          ]
         }
       }
     },
@@ -775,6 +784,15 @@
             {
               "locator": "bulk",
               "reason": "BulkCatalogError: No bulk transport locator for BIONZ X / CXD90045 (upstream extractor identification)"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
             }
           ]
         },
@@ -937,15 +955,6 @@
             {
               "locator": "identity",
               "reason": "Release identity was not generated"
-            }
-          ]
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
             }
           ]
         }
@@ -966,6 +975,15 @@
             }
           ]
         },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
+            }
+          ]
+        },
         "controls": {
           "status": "unavailable",
           "errors": [
@@ -1127,15 +1145,6 @@
               "reason": "Release identity was not generated"
             }
           ]
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
-            }
-          ]
         }
       }
     },
@@ -1151,6 +1160,15 @@
             {
               "locator": "bulk",
               "reason": "BulkCatalogError: No bulk transport locator for EXR Processor"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
             }
           ]
         },
@@ -1298,15 +1316,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
-            }
-          ]
         }
       }
     },
@@ -1322,6 +1331,15 @@
             {
               "locator": "bulk",
               "reason": "BulkCatalogError: No bulk transport locator for EXR Processor"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
             }
           ]
         },
@@ -1481,15 +1499,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
-            }
-          ]
         }
       }
     },
@@ -1502,6 +1511,15 @@
         "bulk": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
         },
         "controls": {
           "status": "unavailable",
@@ -1626,15 +1644,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: No stock card-call mechanism for this processor"
-            }
-          ]
         }
       }
     },
@@ -1654,6 +1663,10 @@
           ]
         },
         "bulk": {
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
           "status": "available",
           "errors": []
         },
@@ -1699,18 +1712,21 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
         },
         "restart": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "restart",
-              "reason": "ValueError: power-off with wake alarm: 0 candidates"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "sd-boot-v2-patch": {
+          "status": "available",
+          "errors": []
         },
         "service": {
           "status": "unavailable",
@@ -1777,19 +1793,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "nand-boot": {
-          "status": "available",
-          "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "TypeError: 'NoneType' object is not subscriptable"
-            }
-          ]
         }
       }
     },
@@ -1809,6 +1812,10 @@
           ]
         },
         "bulk": {
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
           "status": "available",
           "errors": []
         },
@@ -1837,11 +1844,19 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
         },
         "restart": {
+          "status": "available",
+          "errors": []
+        },
+        "sd-boot-v2-patch": {
           "status": "available",
           "errors": []
         },
@@ -1878,14 +1893,6 @@
           "errors": []
         },
         "versions": {
-          "status": "available",
-          "errors": []
-        },
-        "nand-boot": {
-          "status": "available",
-          "errors": []
-        },
-        "card-files": {
           "status": "available",
           "errors": []
         }
@@ -2136,6 +2143,10 @@
           "status": "available",
           "errors": []
         },
+        "card-files": {
+          "status": "available",
+          "errors": []
+        },
         "controls": {
           "status": "available",
           "errors": []
@@ -2178,18 +2189,21 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
         },
         "restart": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "restart",
-              "reason": "ValueError: power-off with wake alarm: 0 candidates"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "sd-boot-v2-patch": {
+          "status": "available",
+          "errors": []
         },
         "service": {
           "status": "unavailable",
@@ -2256,19 +2270,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "nand-boot": {
-          "status": "available",
-          "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "TypeError: 'NoneType' object is not subscriptable"
-            }
-          ]
         }
       }
     },
@@ -2288,6 +2289,10 @@
           ]
         },
         "bulk": {
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
           "status": "available",
           "errors": []
         },
@@ -2316,11 +2321,19 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
         },
         "restart": {
+          "status": "available",
+          "errors": []
+        },
+        "sd-boot-v2-patch": {
           "status": "available",
           "errors": []
         },
@@ -2357,14 +2370,6 @@
           "errors": []
         },
         "versions": {
-          "status": "available",
-          "errors": []
-        },
-        "nand-boot": {
-          "status": "available",
-          "errors": []
-        },
-        "card-files": {
           "status": "available",
           "errors": []
         }
@@ -2408,11 +2413,19 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
         },
         "restart": {
+          "status": "available",
+          "errors": []
+        },
+        "sd-boot-v2-patch": {
           "status": "available",
           "errors": []
         },
@@ -2449,10 +2462,6 @@
           "errors": []
         },
         "versions": {
-          "status": "available",
-          "errors": []
-        },
-        "nand-boot": {
           "status": "available",
           "errors": []
         }
@@ -2477,6 +2486,10 @@
           "status": "available",
           "errors": []
         },
+        "card-files": {
+          "status": "available",
+          "errors": []
+        },
         "controls": {
           "status": "available",
           "errors": []
@@ -2515,18 +2528,21 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
         },
         "restart": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "restart",
-              "reason": "ValueError: power-off with wake alarm: 0 candidates"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "sd-boot-v2-patch": {
+          "status": "available",
+          "errors": []
         },
         "service": {
           "status": "unavailable",
@@ -2593,14 +2609,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "nand-boot": {
-          "status": "available",
-          "errors": []
-        },
-        "card-files": {
-          "status": "available",
-          "errors": []
         }
       }
     },
@@ -2616,6 +2624,15 @@
             {
               "locator": "bulk",
               "reason": "BulkCatalogError: No bulk transport locator for unassessed"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -2711,15 +2728,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "firmware image not available"
-            }
-          ]
         }
       }
     },
@@ -2742,6 +2750,10 @@
           "status": "available",
           "errors": []
         },
+        "card-files": {
+          "status": "available",
+          "errors": []
+        },
         "controls": {
           "status": "available",
           "errors": []
@@ -2780,18 +2792,21 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
         },
         "restart": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "restart",
-              "reason": "ValueError: power-off with wake alarm: 0 candidates"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "sd-boot-v2-patch": {
+          "status": "available",
+          "errors": []
         },
         "service": {
           "status": "unavailable",
@@ -2858,14 +2873,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "nand-boot": {
-          "status": "available",
-          "errors": []
-        },
-        "card-files": {
-          "status": "available",
-          "errors": []
         }
       }
     },
@@ -2884,6 +2891,15 @@
             }
           ]
         },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
+            }
+          ]
+        },
         "controls": {
           "status": "unavailable",
           "errors": [
@@ -2976,15 +2992,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "firmware image not available"
-            }
-          ]
         }
       }
     },
@@ -3003,6 +3010,15 @@
             }
           ]
         },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
+            }
+          ]
+        },
         "controls": {
           "status": "unavailable",
           "errors": [
@@ -3095,15 +3111,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "firmware image not available"
-            }
-          ]
         }
       }
     },
@@ -3122,6 +3129,15 @@
             }
           ]
         },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
+            }
+          ]
+        },
         "controls": {
           "status": "unavailable",
           "errors": [
@@ -3214,15 +3230,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "firmware image not available"
-            }
-          ]
         }
       }
     },
@@ -3241,6 +3248,15 @@
             }
           ]
         },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
+            }
+          ]
+        },
         "controls": {
           "status": "unavailable",
           "errors": [
@@ -3333,15 +3349,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "firmware image not available"
-            }
-          ]
         }
       }
     },
@@ -3357,6 +3364,15 @@
             {
               "locator": "bulk",
               "reason": "BulkCatalogError: No bulk transport locator for EXR Processor Pro"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
             }
           ]
         },
@@ -3504,15 +3520,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: No stock card-call mechanism for this processor"
-            }
-          ]
         }
       }
     },
@@ -3527,6 +3534,10 @@
           "errors": []
         },
         "bulk": {
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
           "status": "available",
           "errors": []
         },
@@ -3555,11 +3566,19 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
         },
         "restart": {
+          "status": "available",
+          "errors": []
+        },
+        "sd-boot-v2-patch": {
           "status": "available",
           "errors": []
         },
@@ -3601,14 +3620,6 @@
           "errors": []
         },
         "versions": {
-          "status": "available",
-          "errors": []
-        },
-        "nand-boot": {
-          "status": "available",
-          "errors": []
-        },
-        "card-files": {
           "status": "available",
           "errors": []
         }
@@ -3669,6 +3680,10 @@
           "status": "available",
           "errors": []
         },
+        "sd-boot-v2-patch": {
+          "status": "available",
+          "errors": []
+        },
         "service": {
           "status": "available",
           "errors": []
@@ -3719,6 +3734,15 @@
             {
               "locator": "bulk",
               "reason": "BulkCatalogError: No bulk transport locator for X-Processor Pro"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -3814,15 +3838,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "firmware image not available"
-            }
-          ]
         }
       }
     },
@@ -3835,6 +3850,15 @@
         "bulk": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: module_open: 0 checked card bindings"
+            }
+          ]
         },
         "controls": {
           "status": "unavailable",
@@ -3955,15 +3979,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: module_open: 0 checked card bindings"
-            }
-          ]
         }
       }
     },
@@ -3976,6 +3991,15 @@
         "bulk": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: card open: 0 checked routines in a mapped section"
+            }
+          ]
         },
         "controls": {
           "status": "available",
@@ -4132,15 +4156,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: card open: 0 checked routines in a mapped section"
-            }
-          ]
         }
       }
     },
@@ -4156,6 +4171,15 @@
             {
               "locator": "bulk",
               "reason": "BulkCatalogError: No bulk transport locator for EXR Processor"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
             }
           ]
         },
@@ -4299,15 +4323,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: No stock card-call mechanism for this processor"
-            }
-          ]
         }
       }
     },
@@ -4323,6 +4338,15 @@
             {
               "locator": "bulk",
               "reason": "BulkCatalogError: No bulk transport locator for unassessed"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -4418,15 +4442,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "firmware image not available"
-            }
-          ]
         }
       }
     },
@@ -4439,6 +4454,15 @@
         "bulk": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
         },
         "controls": {
           "status": "unavailable",
@@ -4563,15 +4587,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: No stock card-call mechanism for this processor"
-            }
-          ]
         }
       }
     },
@@ -4584,6 +4599,15 @@
         "bulk": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "MissingMechanism: Stock card routines located (path_open, open, read, write, close, seek, unlink, opendir), but X-Processor 5 has no card mechanism: stock_sdk is the X-Processor 4 asynchronous SDK, and mailbox needs a reserved RAM region and an AArch64 file-service build"
+            }
+          ]
         },
         "controls": {
           "status": "unavailable",
@@ -4681,15 +4705,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "MissingMechanism: Stock card routines located (path_open, open, read, write, close, seek, unlink, opendir), but X-Processor 5 has no card mechanism: stock_sdk is the X-Processor 4 asynchronous SDK, and mailbox needs a reserved RAM region and an AArch64 file-service build"
-            }
-          ]
         }
       }
     },
@@ -4702,6 +4717,15 @@
         "bulk": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: card open: 0 checked routines in a mapped section"
+            }
+          ]
         },
         "controls": {
           "status": "unavailable",
@@ -4799,15 +4823,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: card open: 0 checked routines in a mapped section"
-            }
-          ]
         }
       }
     },
@@ -4823,6 +4838,15 @@
             {
               "locator": "bulk",
               "reason": "BulkCatalogError: No bulk transport locator for unassessed"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -4918,15 +4942,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "firmware image not available"
-            }
-          ]
         }
       }
     },
@@ -4936,21 +4951,21 @@
       "version": "1.01",
       "internal_version": "1.61",
       "tables": {
-        "boot-patch": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "boot-patch",
-              "reason": "ValueError: xm1-101: the stage-2 range at 0x1d000000 is not the base of the stock network heap (not located); no stock owner bounds a resident space after the range"
-            }
-          ]
-        },
         "bulk": {
           "status": "unavailable",
           "errors": [
             {
               "locator": "bulk",
               "reason": "ValueError: EXR II bulk graph needs a declared uncached address alias"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No located runtime file-service reservation"
             }
           ]
         },
@@ -5018,6 +5033,10 @@
             }
           ]
         },
+        "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "unavailable",
           "errors": [
@@ -5032,7 +5051,16 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "ValueError: power-off with wake alarm: 0 candidates"
+              "reason": "RestartCatalogError: Research facts do not resolve remote_menu"
+            }
+          ]
+        },
+        "sd-boot-v2-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "sd-boot-v2-patch",
+              "reason": "ValueError: xm1-101: no checked mod target"
             }
           ]
         },
@@ -5111,19 +5139,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "nand-boot": {
-          "status": "available",
-          "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "KeyError: 'mod_memory'"
-            }
-          ]
         }
       }
     },
@@ -5133,21 +5148,21 @@
       "version": "1.20",
       "internal_version": "1.73",
       "tables": {
-        "boot-patch": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "boot-patch",
-              "reason": "ValueError: xm1-120: the stage-2 range at 0x1d000000 is not the base of the stock network heap (not located); no stock owner bounds a resident space after the range"
-            }
-          ]
-        },
         "bulk": {
           "status": "unavailable",
           "errors": [
             {
               "locator": "bulk",
               "reason": "ValueError: EXR II bulk graph needs a declared uncached address alias"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No located runtime file-service reservation"
             }
           ]
         },
@@ -5215,6 +5230,10 @@
             }
           ]
         },
+        "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "unavailable",
           "errors": [
@@ -5229,7 +5248,16 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "ValueError: power-off with wake alarm: 0 candidates"
+              "reason": "RestartCatalogError: Research facts do not resolve remote_menu"
+            }
+          ]
+        },
+        "sd-boot-v2-patch": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "sd-boot-v2-patch",
+              "reason": "ValueError: xm1-120: no checked mod target"
             }
           ]
         },
@@ -5308,19 +5336,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "nand-boot": {
-          "status": "available",
-          "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "KeyError: 'mod_memory'"
-            }
-          ]
         }
       }
     },
@@ -5340,6 +5355,10 @@
           ]
         },
         "bulk": {
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
           "status": "available",
           "errors": []
         },
@@ -5381,18 +5400,21 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
         },
         "restart": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "restart",
-              "reason": "ValueError: power-off with wake alarm: 0 candidates"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "sd-boot-v2-patch": {
+          "status": "available",
+          "errors": []
         },
         "service": {
           "status": "unavailable",
@@ -5459,14 +5481,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "nand-boot": {
-          "status": "available",
-          "errors": []
-        },
-        "card-files": {
-          "status": "available",
-          "errors": []
         }
       }
     },
@@ -5479,6 +5493,15 @@
         "bulk": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "MissingMechanism: Stock card routines located (path_open, open, read, write, close, seek, unlink, opendir), but X-Processor 5 has no card mechanism: stock_sdk is the X-Processor 4 asynchronous SDK, and mailbox needs a reserved RAM region and an AArch64 file-service build"
+            }
+          ]
         },
         "controls": {
           "status": "available",
@@ -5585,15 +5608,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "MissingMechanism: Stock card routines located (path_open, open, read, write, close, seek, unlink, opendir), but X-Processor 5 has no card mechanism: stock_sdk is the X-Processor 4 asynchronous SDK, and mailbox needs a reserved RAM region and an AArch64 file-service build"
-            }
-          ]
         }
       }
     },
@@ -5609,6 +5623,15 @@
             {
               "locator": "bulk",
               "reason": "BulkCatalogError: No bulk transport locator for EXR Processor Pro"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
             }
           ]
         },
@@ -5756,15 +5779,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: No stock card-call mechanism for this processor"
-            }
-          ]
         }
       }
     },
@@ -5777,6 +5791,15 @@
         "bulk": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
         },
         "controls": {
           "status": "unavailable",
@@ -5905,15 +5928,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: No stock card-call mechanism for this processor"
-            }
-          ]
         }
       }
     },
@@ -6067,6 +6081,10 @@
           "status": "available",
           "errors": []
         },
+        "card-files": {
+          "status": "available",
+          "errors": []
+        },
         "controls": {
           "status": "available",
           "errors": []
@@ -6109,18 +6127,21 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
         },
         "restart": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "restart",
-              "reason": "ValueError: power-off with wake alarm: 0 candidates"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "sd-boot-v2-patch": {
+          "status": "available",
+          "errors": []
         },
         "service": {
           "status": "available",
@@ -6182,19 +6203,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "nand-boot": {
-          "status": "available",
-          "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "TypeError: 'NoneType' object is not subscriptable"
-            }
-          ]
         }
       }
     },
@@ -6217,6 +6225,10 @@
           "status": "available",
           "errors": []
         },
+        "card-files": {
+          "status": "available",
+          "errors": []
+        },
         "controls": {
           "status": "available",
           "errors": []
@@ -6259,18 +6271,21 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
         },
         "restart": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "restart",
-              "reason": "ValueError: power-off with wake alarm: 0 candidates"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "sd-boot-v2-patch": {
+          "status": "available",
+          "errors": []
         },
         "service": {
           "status": "available",
@@ -6332,19 +6347,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "nand-boot": {
-          "status": "available",
-          "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "TypeError: 'NoneType' object is not subscriptable"
-            }
-          ]
         }
       }
     },
@@ -6360,6 +6362,15 @@
             {
               "locator": "bulk",
               "reason": "BulkCatalogError: No bulk transport locator for EXR Processor"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
             }
           ]
         },
@@ -6507,15 +6518,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: Expected one rooted section table, found 0 (DAT candidates: none); required grammar: nine 32-bit words per row, rooted 0x400-byte table, 0x1234 marker and bounded overlay group"
-            }
-          ]
         }
       }
     },
@@ -6528,6 +6530,15 @@
         "bulk": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: module_open: 0 checked card bindings"
+            }
+          ]
         },
         "controls": {
           "status": "available",
@@ -6626,15 +6637,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: module_open: 0 checked card bindings"
-            }
-          ]
         }
       }
     },
@@ -6647,6 +6649,15 @@
         "bulk": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: card open: 0 checked routines in a mapped section"
+            }
+          ]
         },
         "controls": {
           "status": "unavailable",
@@ -6744,15 +6755,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: card open: 0 checked routines in a mapped section"
-            }
-          ]
         }
       }
     },
@@ -6772,6 +6774,10 @@
           ]
         },
         "bulk": {
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
           "status": "available",
           "errors": []
         },
@@ -6817,18 +6823,21 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
         },
         "restart": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "restart",
-              "reason": "ValueError: power-off sender: 0 candidates"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "sd-boot-v2-patch": {
+          "status": "available",
+          "errors": []
         },
         "service": {
           "status": "available",
@@ -6865,14 +6874,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "nand-boot": {
-          "status": "available",
-          "errors": []
-        },
-        "card-files": {
-          "status": "available",
-          "errors": []
         }
       }
     },
@@ -6887,6 +6888,10 @@
           "errors": []
         },
         "bulk": {
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
           "status": "available",
           "errors": []
         },
@@ -6915,11 +6920,19 @@
           "status": "available",
           "errors": []
         },
+        "nand-boot": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
         },
         "restart": {
+          "status": "available",
+          "errors": []
+        },
+        "sd-boot-v2-patch": {
           "status": "available",
           "errors": []
         },
@@ -6958,14 +6971,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "nand-boot": {
-          "status": "available",
-          "errors": []
-        },
-        "card-files": {
-          "status": "available",
-          "errors": []
         }
       }
     },
@@ -6981,6 +6986,15 @@
             {
               "locator": "bulk",
               "reason": "BulkCatalogError: No bulk transport locator for unassessed"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -7076,15 +7090,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "firmware image not available"
-            }
-          ]
         }
       }
     },
@@ -7097,6 +7102,15 @@
         "bulk": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
         },
         "controls": {
           "status": "available",
@@ -7216,15 +7230,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: No stock card-call mechanism for this processor"
-            }
-          ]
         }
       }
     },
@@ -7237,6 +7242,15 @@
         "bulk": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
         },
         "controls": {
           "status": "available",
@@ -7300,15 +7314,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: No stock card-call mechanism for this processor"
-            }
-          ]
         }
       }
     },
@@ -7324,6 +7329,15 @@
             {
               "locator": "bulk",
               "reason": "BulkCatalogError: No bulk transport locator for unassessed"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -7419,15 +7433,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "firmware image not available"
-            }
-          ]
         }
       }
     },
@@ -7438,6 +7443,10 @@
       "internal_version": "2.58",
       "tables": {
         "bulk": {
+          "status": "available",
+          "errors": []
+        },
+        "card-files": {
           "status": "available",
           "errors": []
         },
@@ -7536,10 +7545,6 @@
           "errors": []
         },
         "versions": {
-          "status": "available",
-          "errors": []
-        },
-        "card-files": {
           "status": "available",
           "errors": []
         }
@@ -7689,6 +7694,15 @@
           "status": "available",
           "errors": []
         },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: module_open: 0 checked card bindings"
+            }
+          ]
+        },
         "controls": {
           "status": "unavailable",
           "errors": [
@@ -7808,15 +7822,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: module_open: 0 checked card bindings"
-            }
-          ]
         }
       }
     },
@@ -7832,6 +7837,15 @@
             {
               "locator": "bulk",
               "reason": "ValueError: xp5_system_mode_getter: 0 candidates, 0 verified results"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: card open: 0 checked routines in a mapped section"
             }
           ]
         },
@@ -7995,15 +8009,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: card open: 0 checked routines in a mapped section"
-            }
-          ]
         }
       }
     },
@@ -8019,6 +8024,15 @@
             {
               "locator": "bulk",
               "reason": "ValueError: Missing service facts: read_gate"
+            }
+          ]
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: module_open: 0 checked card bindings"
             }
           ]
         },
@@ -8127,15 +8141,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: module_open: 0 checked card bindings"
-            }
-          ]
         }
       }
     },

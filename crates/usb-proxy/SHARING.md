@@ -33,8 +33,8 @@ the rendezvous service or WebRTC layer.
 ## Connection path
 
 WebRTC carries USB requests and completions on a reliable ordered data channel.
-The native implementation uses [str0m](https://docs.rs/str0m/); Wasm uses the
-browser's RTCPeerConnection through the same crate's bundled JavaScript module.
+Native peers use [fujimod-webrtc](../webrtc/README.md) (webrtc-rs); Wasm uses
+the browser's RTCPeerConnection through this crate's bundled JavaScript module.
 Messages are postcard values with inline payload bytes, pipelined as described in
 [PIPELINE.md](PIPELINE.md). A bounded framing layer splits them into 16,000-byte chunks. Transfer capacities and timeout fencing remain the USB proxy's existing
 8 MiB and 120-second limits.
@@ -109,8 +109,9 @@ a global camera slot. See the [binding API](../../bindings/javascript/README.md#
 
 ## Checks
 
-Run Rust protocol, encrypted signaling and relay tests with
-`cargo test -p fujimod-usb-proxy --features relay` and exporter tests with
+Run Rust protocol and relay tests with
+`cargo test -p fujimod-usb-proxy --features relay`, encrypted signaling and
+peer tests with `cargo test -p fujimod-webrtc --features signaling`, and exporter tests with
 `node --test bindings/javascript/tests/ownership.test.ts` after building the production binding.
 
 `FUJIMOD_WEB_URL=<named HTTPS app URL> node crates/usb-proxy/web/peer.browser.ts`
@@ -286,20 +287,20 @@ when the join reply carries TURN credentials, a UDP relay.
   `persistent` in Durable Object storage. `remove()` revokes only ordinary
   rooms; a persistent owner's removal sends `host_offline` to clients and
   schedules the idle alarm. An `end` frame from the owner revokes. The Rust
-  development service (`src/signaling.rs`) implements the same rules, keeping
+  development service (`crates/webrtc/src/signaling.rs`) implements the same rules, keeping
   persistent rooms in memory.
-- `crates/usb-proxy/src/share.rs`: `OwnerTicket { link, owner_key }` with
+- `crates/webrtc/src/share.rs`: `OwnerTicket { link, owner_key }` with
   `create(signal, site)`, `read(path)` and `write(path)` (mode 0600), and
   `ticket()` giving the link's `Ticket`.
 - `crates/usb-proxy/src/pipeline.rs`: `Pipeline`, the Rust form of
   `web/pipeline.ts` over `protocol::Message`, with the same tests.
-- `crates/usb-proxy/src/peer/native.rs`: candidate gathering and the
-  str0m/data-channel pump are shared functions used by both the controller
+- `crates/webrtc/src/native.rs`: candidate gathering and the webrtc-rs
+  data-channel pump are shared functions used by both the controller
   (`PeerSocket::connect`, offerer) and the owner (answerer).
-- `crates/usb-proxy/src/peer/host.rs` (native only): `HostRoom::join(&OwnerTicket)`
+- `crates/webrtc/src/host.rs` (native only): `HostRoom::join(&OwnerTicket)`
   holds the signaling socket and yields `HostEvent::Controller(id, PeerSocket)`
-  and `HostEvent::Left(id)`; each controller has its own `Rtc`, sockets and I/O
-  thread. `HostRoom::end()` sends `end`.
+  and `HostEvent::Left(id)`; each controller has its own peer connection,
+  sockets and I/O thread. `HostRoom::end()` sends `end`.
 - `crates/usb/src/share_owner.rs` (native only): `serve(ticket, selector,
   hooks)` runs `DeviceOwners` hotplug, one `Exporter`, and per controller the
   protocol loop of `web/peer.ts`'s `ShareHost` (hello with the link key,

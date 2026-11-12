@@ -1,4 +1,4 @@
-//! Generated bring-up progress for one firmware.
+//! Recorded bring-up progress and separate publishing overrides for one firmware.
 //!
 //! Each stage holds the latest recorded result of that stage for the firmware.
 //! A result whose inputs changed since it was recorded is `stale` and does not
@@ -10,13 +10,15 @@ pub const PROGRESS_SCHEMA_URI: &str = "https://fujimod.com/schemas/progress.gene
 pub const PROGRESS_OVERRIDE_SCHEMA_URI: &str =
     "https://fujimod.com/schemas/progress-override.generated.schema.json";
 
-/// A maintainer's decision to publish a firmware's progress differently from
-/// its recorded result.
+/// A maintainer's publishing decision, separate from recorded progress.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ProgressOverride {
-    /// Firmware identity the override applies to.
+    /// Schema identifying the hand-authored document.
+    #[serde(rename = "$schema")]
+    pub schema_uri: String,
+    /// Firmware whose published progress changes.
     pub firmware_id: String,
     /// Show every phase and step as complete.
     pub complete: bool,
@@ -46,7 +48,7 @@ pub struct FirmwareProgress {
     pub tracks: Vec<TrackProgress>,
     /// Stock camera features the emulator is graded on, by feature; only features the body has.
     pub stock: BTreeMap<String, StockProgress>,
-    /// Walkthrough result of every shipped mod, by mod name.
+    /// Walkthrough result of every shipped mod, by mod name; a mod the body cannot run is `inapplicable`.
     pub mods: BTreeMap<String, ModProgress>,
 }
 
@@ -59,8 +61,16 @@ pub struct TrackProgress {
     pub id: String,
     /// Track title as the bring-up runner prints it.
     pub title: String,
+    /// CSS phase identifier used by the website's progress bars.
+    pub phase: String,
+    /// Share of the progress bar assigned to this track.
+    pub weight: u32,
+    /// Draw each step as its own cell instead of a single fill.
+    pub cells: bool,
     /// The track's stages, in order.
     pub stages: Vec<StageEntry>,
+    /// The ordered steps the website draws, resolved from the graph.
+    pub steps: Vec<StepProgress>,
 }
 
 /// One bring-up stage and its latest result.
@@ -73,6 +83,27 @@ pub struct StageEntry {
     /// Stage title as the bring-up runner prints it.
     pub title: String,
     pub result: StageProgress,
+}
+
+/// One rendered step of a track.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct StepProgress {
+    /// Stable step identifier, including a stock feature or mod suffix.
+    pub id: String,
+    /// Step label shown in the progress bar.
+    pub label: String,
+    /// Graph stage that owns this step.
+    pub stage: String,
+    pub result: StepResult,
+    /// Graded parts that pass.
+    pub passed: u32,
+    /// Graded parts in total.
+    pub total: u32,
+    /// Human-readable detail for a partial step.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 /// How many of a firmware's facts were located.
@@ -126,6 +157,21 @@ pub enum StageProgress {
     NotRun,
 }
 
+/// Latest result of one rendered step.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "kebab-case")]
+pub enum StepResult {
+    Pass,
+    /// Some graded parts pass.
+    Partial,
+    Fail,
+    Stale,
+    NotRun,
+    /// The mod cannot be built for this firmware.
+    Unavailable,
+}
+
 /// Latest walkthrough result of one mod.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -135,6 +181,8 @@ pub enum ModProgress {
     Fail,
     /// The mod cannot be built for this firmware.
     Unavailable,
+    /// The camera's hardware or stock settings cannot support this mod.
+    Inapplicable,
     /// Recorded, but its inputs changed since.
     Stale,
     NotRun,

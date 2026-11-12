@@ -8,7 +8,7 @@
 //! is unsupported. Addresses without a part are NACKed. Written values read
 //! back; no part behavior beyond the register file is modeled. The last
 //! transfers are kept for inspection.
-use fujimod_emulator_devices::parts::i2c::Bus;
+use fujimod_emulator_devices::parts::i2c::{Bus, RegisterInput};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, VecDeque};
@@ -93,6 +93,29 @@ impl Parts {
             s.byte = 0;
             s.selected = s.selected.map(|r| r.wrapping_add(1) & part.select_mask);
         }
+    }
+}
+
+impl RegisterInput for Parts {
+    fn set_register_input(&mut self, address: u16, register: u8, value: u16) -> Result<(), String> {
+        let index = self
+            .parts
+            .iter()
+            .position(|part| part.address == address)
+            .ok_or_else(|| format!("I2C part {address:#x} is not declared"))?;
+        let part = &self.parts[index];
+        if part.width == 1 && value > u16::from(u8::MAX) {
+            return Err(format!(
+                "I2C part {address:#x} register input exceeds its 1-byte width"
+            ));
+        }
+        let Some(current) = self.state.registers[index].get_mut(&register) else {
+            return Err(format!(
+                "I2C part {address:#x} register {register:#x} is not declared"
+            ));
+        };
+        *current = value;
+        Ok(())
     }
 }
 
@@ -260,5 +283,42 @@ mod tests {
         assert!(parts.start(0x39, true));
         assert_eq!(parts.read(), Ok(0x34));
         assert_eq!(parts.read(), Ok(0x02));
+    }
+
+    #[test]
+    fn external_register_input_changes_only_declared_part_values() {
+        let mut parts = Parts::new(vec![Part {
+            address: 0x39,
+            select_mask: 0x1f,
+            width: 1,
+            little_endian: true,
+            registers: [(0x13, 0), (0x18, 0), (0x19, 0)].into(),
+        }])
+        .unwrap();
+        parts.set_register_input(0x39, 0x18, 0xbc).unwrap();
+        parts.set_register_input(0x39, 0x19, 2).unwrap();
+        assert!(parts.start(0x39, false));
+        parts.write(0xb8).unwrap();
+        assert!(parts.start(0x39, true));
+        assert_eq!(parts.read(), Ok(0xbc));
+        assert_eq!(parts.read(), Ok(2));
+        assert!(
+            parts
+                .set_register_input(0x39, 0x20, 1)
+                .unwrap_err()
+                .contains("not declared")
+        );
+        assert!(
+            parts
+                .set_register_input(0x38, 0x18, 1)
+                .unwrap_err()
+                .contains("not declared")
+        );
+        assert!(
+            parts
+                .set_register_input(0x39, 0x18, 0x100)
+                .unwrap_err()
+                .contains("1-byte width")
+        );
     }
 }

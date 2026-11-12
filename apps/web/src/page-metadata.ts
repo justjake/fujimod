@@ -37,6 +37,11 @@ const pages = {
     description:
       'Tried making your own mod but bricked your camera? Build a recovery SD card from official Fujifilm firmware to restore your device. This usually works and it’s cheaper than buying a new one.',
   },
+  '/device/': {
+    title: 'Camera sign-in · FujiMod',
+    description:
+      'Approve a FujiMod camera connection with the code shown on the camera.',
+  },
 };
 
 export const siteOrigin = 'https://fujimod.com';

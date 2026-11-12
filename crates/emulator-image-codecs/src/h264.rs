@@ -14,6 +14,8 @@ pub struct Config {
     pub bitrate: u32,
     pub max_qp: u8,
     pub gop: usize,
+    /// H.264 `level_idc` written to the sequence parameter set.
+    pub level_idc: u8,
 }
 impl Config {
     pub fn validate(self) -> Result<(), String> {
@@ -25,6 +27,8 @@ impl Config {
             || !(10_000..=100_000_000).contains(&self.bitrate)
             || !(1..=51).contains(&self.max_qp)
             || !(1..=120).contains(&self.gop)
+            || ![9, 10, 11, 12, 13, 20, 21, 22, 30, 31, 32, 40, 41, 42, 50, 51, 52]
+                .contains(&self.level_idc)
         {
             return Err(
                 "H.264 requires bounded progressive macroblock-aligned 8-bit 4:2:0 configuration"
@@ -63,7 +67,7 @@ impl Codec {
             Backend::Software => {
                 let mut settings =
                     rusty_h264_encoder::EncoderConfig::baseline(config.width, config.height);
-                settings.level_idc = 42;
+                settings.level_idc = config.level_idc;
                 settings.qp = config.max_qp;
                 settings.gop_size = config.gop as u32;
                 settings.min_keyint = 0;

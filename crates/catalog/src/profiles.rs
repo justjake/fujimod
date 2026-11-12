@@ -2367,6 +2367,8 @@ pub enum DeviceKind {
     RawConversionRegisters,
     /// Raw Statistics Control.
     RawStatisticsControl,
+    /// SATA host controller register block.
+    SataHost,
     /// Shared still processor with body-declared CFA.
     StillProcessor,
     /// S P I1 Serial Bus.

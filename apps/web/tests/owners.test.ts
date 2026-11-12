@@ -1,6 +1,6 @@
 /** Camera owners: each contributor once, owning bodies the generation list names. */
 import { expect, test } from 'vite-plus/test';
-import generations from '../devices/generations.json';
+import generations from '../devices/generations.generated.json';
 import owners from '../devices/owners.json';
 
 interface Owner {

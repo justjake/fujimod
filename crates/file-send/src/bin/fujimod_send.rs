@@ -1,7 +1,7 @@
 //! `fujimod-send`: send files to another computer over a direct WebRTC
 //! connection, using a share-link room for rendezvous (crates/file-send/README.md).
 use fujimod_file_send::{Destination, receive, send, sources};
-use fujimod_usb_proxy::{
+use fujimod_webrtc::{
     CandidatePolicy, HostEvent, HostRoom, Pacing, PeerSocket, share::OwnerTicket,
 };
 use std::{io::Write, path::PathBuf, time::Instant};
@@ -75,7 +75,7 @@ async fn run(args: Vec<String>) -> Result<(), String> {
             _ => positional.push(item.clone()),
         }
     }
-    let progress: fujimod_usb_proxy::Progress = std::sync::Arc::new(|step: &str| {
+    let progress: fujimod_webrtc::Progress = std::sync::Arc::new(|step: &str| {
         eprintln!("{step}");
     });
     match command.as_str() {

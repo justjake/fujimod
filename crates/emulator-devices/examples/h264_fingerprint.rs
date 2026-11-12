@@ -11,6 +11,7 @@ fn clip() -> Vec<u8> {
         bitrate: 1_000_000,
         max_qp: 30,
         gop: 4,
+        level_idc: 42,
     };
     let mut encoder = Codec::new(Backend::Software, config, &[]).unwrap();
     let mut stream = Vec::new();

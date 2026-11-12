@@ -53,19 +53,21 @@ pub struct FirmwareRestart {
     tsify(missing_as_null)
 )]
 pub struct RestartMechanism {
-    /// How the host reaches the sender.
-    pub transport: RequestTransport,
+    /// How the host reaches the sender, where the firmware takes a request.
+    /// A firmware whose power-off arms a fixed-interval alarm instead carries
+    /// none of the request fields, and `power_off.fixed_interval` says so.
+    pub transport: Option<RequestTransport>,
     /// Stock routine that sends the power-off request; its first argument is
     /// the address of the request parameters.
-    pub sender: u64,
+    pub sender: Option<u64>,
     /// Request word that selects power-off with a wake.
-    pub request: u32,
+    pub request: Option<u32>,
     /// Byte offset of the request word in the sender's parameters.
-    pub request_offset: u32,
+    pub request_offset: Option<u32>,
     /// Byte offset of the wake deadline in the sender's parameters.
-    pub deadline_offset: u32,
+    pub deadline_offset: Option<u32>,
     /// Bytes of sender parameters.
-    pub parameter_bytes: u32,
+    pub parameter_bytes: Option<u32>,
     /// Where REC idle is observed.
     pub ui: RecIdle,
     /// What the stock power-off does with the request.
@@ -333,14 +335,30 @@ pub struct PowerOff {
     /// Stock routine that cuts power.
     pub power_cut: u64,
     /// Byte offset of the deadline in the request the power-off receives.
-    pub request_deadline_offset: u32,
+    pub request_deadline_offset: Option<u32>,
     /// Power-controller registers for the alarm.
     pub alarm: AlarmRegisters,
     /// Persistent power-controller parameter offset of the saved deadline
     /// word, where the power-off saves it.
     pub deadline_parameter: Option<u32>,
     /// Persistent parameter offset of the alarm's rollover byte.
-    pub rollover_parameter: u32,
+    pub rollover_parameter: Option<u32>,
+    /// The interval the power-off arms instead of a request deadline.
+    pub fixed_interval: Option<AlarmInterval>,
+}
+
+/// Constant alarm values a power-off writes instead of taking a deadline.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(missing_as_null)
+)]
+pub struct AlarmInterval {
+    /// Values written to the alarm's seconds registers, least significant first.
+    pub seconds: Vec<u32>,
 }
 
 /// Power-controller registers the power-off writes for the wake alarm.
@@ -381,49 +399,51 @@ impl FirmwareRestart {
             return fail("stock code checks are required");
         }
         let m = &self.mechanism;
-        let fits = |offset: u32| offset.is_multiple_of(4) && offset + 4 <= m.parameter_bytes;
-        if !fits(m.request_offset)
-            || !fits(m.deadline_offset)
-            || m.request_offset == m.deadline_offset
-        {
-            return fail("request and deadline must be distinct parameter words");
-        }
-        match &m.transport {
-            RequestTransport::BorrowedQuery {
-                callback_offset,
-                stock_callback,
-                output_bytes,
-                ..
-            } => {
-                if !callback_offset.is_multiple_of(4) || *stock_callback == 0 {
-                    return fail("invalid query callback slot");
+        let request = (
+            m.sender,
+            m.request,
+            m.request_offset,
+            m.deadline_offset,
+            m.parameter_bytes,
+        );
+        match (&m.transport, m.power_off.fixed_interval.as_ref()) {
+            (Some(_), Some(_)) => {
+                return fail("a fixed-interval wake takes no request");
+            }
+            (None, None) => {
+                return fail(
+                    "a restart needs either a request transport or a fixed-interval wake",
+                );
+            }
+            (None, Some(interval)) => {
+                if request != (None, None, None, None, None)
+                    || m.power_off.request_deadline_offset.is_some()
+                    || m.power_off.deadline_parameter.is_some()
+                    || m.power_off.rollover_parameter.is_some()
+                {
+                    return fail("a fixed-interval wake carries no request fields");
                 }
-                if m.parameter_bytes > *output_bytes {
-                    return fail("parameters exceed the query output fields");
+                if interval.seconds.len() != m.power_off.alarm.seconds.len()
+                    || interval.seconds.iter().all(|seconds| *seconds == 0)
+                {
+                    return fail("a fixed-interval wake needs a nonzero alarm interval");
                 }
             }
-            RequestTransport::ConsoleCallback {
-                slot,
-                stock_callback,
-                stub_area,
-                stub_bytes,
-                translation,
-                ready_words,
-                ..
-            } => {
-                if !slot.is_multiple_of(8) || *stock_callback == 0 {
-                    return fail("invalid console callback slot");
-                }
-                if !stub_area.is_multiple_of(16) || *stub_bytes < 16 + m.parameter_bytes {
-                    return fail("stub area cannot hold the stub and its parameters");
-                }
-                if translation.is_empty()
-                    || translation
-                        .iter()
-                        .chain(ready_words)
-                        .any(|w| !matches!(w.size, 4 | 8))
+            (Some(transport), None) => {
+                let (Some(_), Some(_), Some(request_offset), Some(deadline_offset), Some(bytes)) =
+                    request
+                else {
+                    return fail("a request restart needs every request field");
+                };
+                if m.power_off.request_deadline_offset.is_none()
+                    || m.power_off.rollover_parameter.is_none()
                 {
-                    return fail("translation and ready words must be 4 or 8 bytes");
+                    return fail("a request restart saves the deadline and its rollover byte");
+                }
+                if let Err(reason) =
+                    validate_transport(transport, bytes, request_offset, deadline_offset)
+                {
+                    return fail(reason);
                 }
             }
         }
@@ -479,4 +499,57 @@ impl FirmwareRestart {
         }
         Ok(())
     }
+}
+
+/// The request transport's own consistency, once the request fields are present.
+fn validate_transport(
+    transport: &RequestTransport,
+    parameter_bytes: u32,
+    request_offset: u32,
+    deadline_offset: u32,
+) -> Result<(), &'static str> {
+    let fits = |offset: u32| offset.is_multiple_of(4) && offset + 4 <= parameter_bytes;
+    if !fits(request_offset) || !fits(deadline_offset) || request_offset == deadline_offset {
+        return Err("request and deadline must be distinct parameter words");
+    }
+    match transport {
+        RequestTransport::BorrowedQuery {
+            callback_offset,
+            stock_callback,
+            output_bytes,
+            ..
+        } => {
+            if !callback_offset.is_multiple_of(4) || *stock_callback == 0 {
+                return Err("invalid query callback slot");
+            }
+            if parameter_bytes > *output_bytes {
+                return Err("parameters exceed the query output fields");
+            }
+        }
+        RequestTransport::ConsoleCallback {
+            slot,
+            stock_callback,
+            stub_area,
+            stub_bytes,
+            translation,
+            ready_words,
+            ..
+        } => {
+            if !slot.is_multiple_of(8) || *stock_callback == 0 {
+                return Err("invalid console callback slot");
+            }
+            if !stub_area.is_multiple_of(16) || *stub_bytes < 16 + parameter_bytes {
+                return Err("stub area cannot hold the stub and its parameters");
+            }
+            if translation.is_empty()
+                || translation
+                    .iter()
+                    .chain(ready_words)
+                    .any(|word| !matches!(word.size, 4 | 8))
+            {
+                return Err("translation and ready words must be 4 or 8 bytes");
+            }
+        }
+    }
+    Ok(())
 }

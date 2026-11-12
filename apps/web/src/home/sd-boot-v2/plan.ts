@@ -30,15 +30,18 @@ export function sdBootV2For(processor: string): SdBootV2Processor | undefined {
   return sdBootV2Processors[processor];
 }
 
-/** Every release camera with a known processor, most mods first. */
+/** Every release camera whose processor has complete SD boot files, most mods first. */
 export function releaseCameras(
   firmwares: readonly PatchFirmware[],
   catalog: readonly Firmware[],
+  card: readonly SdCardFile[],
 ): CardCamera[] {
   return firmwares
     .flatMap((entry) => {
       const processor = catalog.find((known) => known.sha256 === entry.sha256)?.processor;
-      return processor
+      return processor &&
+        sdBootV2For(processor) &&
+        !sdBootV2Files(card, processor).missing.length
         ? [
             {
               id: sdBootV2Firmware(entry.id),

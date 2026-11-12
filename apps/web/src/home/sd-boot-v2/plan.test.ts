@@ -28,11 +28,16 @@ const file = (path: string, sha: string, processor?: string): SdCardFile => ({
   ...(processor ? { processor } : {}),
 });
 
-test('the checklist lists cameras with a known processor, most mods first', () => {
+test('the checklist lists cameras whose processor has complete SD boot files, most mods first', () => {
   const catalog = [
     { sha256: digest('a'), processor: 'EXR Processor II' },
     { sha256: digest('b'), processor: 'EXR Processor II' },
   ] as Firmware[];
+  const card = [
+    file('FFBOOT.BIN', digest('1'), 'EXR Processor II'),
+    file('FFSYS.BIN', digest('2'), 'EXR Processor II'),
+    file('FM_EXR2.BIN', digest('3'), 'EXR Processor II'),
+  ];
   const cameras = releaseCameras(
     [
       release('x70-110', 3, digest('a')),
@@ -40,11 +45,15 @@ test('the checklist lists cameras with a known processor, most mods first', () =
       release('x-c', 20, digest('c')),
     ],
     catalog,
+    card,
   );
   expect(cameras.map((entry) => [entry.id, entry.mods])).toEqual([
     ['XE2-411', 9],
     ['X70-110', 3],
   ]);
+  const partial = card.slice(0, 2);
+  expect(releaseCameras([release('x70-110', 3, digest('a'))], catalog, partial)).toEqual([]);
+  expect(releaseCameras([release('x70-110', 3, digest('a'))], catalog, [])).toEqual([]);
 });
 
 test('store names and release manifests follow the camera update layer', () => {

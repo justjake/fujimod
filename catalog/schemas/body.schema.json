@@ -3344,6 +3344,11 @@
           "type": "string"
         },
         {
+          "const": "SataHost",
+          "description": "SATA host controller register block.",
+          "type": "string"
+        },
+        {
           "const": "StillProcessor",
           "description": "Shared still processor with body-declared CFA.",
           "type": "string"
