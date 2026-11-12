@@ -445,6 +445,7 @@ impl Devices {
         &mut self,
         host: crate::definition::SdHost,
         files: &[(String, Vec<u8>)],
+        medium: Option<fujimod_emulator_devices::parts::sd_card::Card>,
     ) -> Result<(), String> {
         let base = host.options.base;
         if self
@@ -454,7 +455,20 @@ impl Devices {
         {
             return Err("Overlapping XP4 SD host".into());
         }
-        let card = fujimod_emulator_storage::fat::format(&host.card, files)?;
+        let card = match medium {
+            Some(mut card) => {
+                if !files.is_empty() {
+                    return Err("An SD host takes SD card files or an SD card medium, not both".into());
+                }
+                card.validate()?;
+                if card.sectors() != host.card.sectors {
+                    return Err("SD card medium capacity differs from the declared SD card".into());
+                }
+                card.set_allocation_limit(host.card.max_dirty_sectors)?;
+                card
+            }
+            None => fujimod_emulator_storage::fat::format(&host.card, files)?,
+        };
         let contacts = fujimod_emulator_devices::parts::card_contacts::Contacts::new(true, false);
         let model = fujimod_emulator_xp4_io::sd::Controller::new(
             host.options,
@@ -467,6 +481,23 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + 0x1000, id));
         Ok(())
+    }
+    /// The medium in the `host`th SD card slot (declaration order), once the host is idle.
+    pub fn card_medium(
+        &self,
+        host: usize,
+    ) -> Result<fujimod_emulator_devices::parts::sd_card::Card, String> {
+        let slot = self
+            .models
+            .iter()
+            .flatten()
+            .filter_map(|model| model.card_slot())
+            .nth(host)
+            .ok_or("No SD card slot with that index")?;
+        if slot.busy() {
+            return Err("SD host is busy; the medium is not at rest".into());
+        }
+        Ok(slot.card().clone())
     }
     pub fn sd_clocks(&mut self, words: &[(u64, u64)]) -> Result<(), String> {
         if words.iter().any(|&(address, _)| {

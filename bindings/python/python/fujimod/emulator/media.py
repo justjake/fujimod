@@ -60,3 +60,24 @@ def load_card_image(
         sectors=size // 512,
         nonzero_sectors=count,
     )
+
+
+def write_card_image(medium: _native.CardMedium, path: str | Path) -> dict[str, int | str]:
+    """Write a medium as a raw image of its full capacity, leaving unwritten sectors as holes.
+
+    The file is created exclusively, so an existing image is never replaced.
+    """
+    path = Path(path)
+    sectors = medium.sectors
+    written = medium.sparse_sectors()
+    with path.open("xb") as target:
+        target.truncate(sectors * 512)
+        for lba in sorted(written):
+            target.seek(lba * 512)
+            target.write(written[lba])
+    return dict(
+        path=str(path),
+        bytes=sectors * 512,
+        sectors=sectors,
+        nonzero_sectors=sum(any(sector) for sector in written.values()),
+    )

@@ -1034,6 +1034,29 @@ impl Session {
         storage_image: Option<Vec<u8>>,
         card_files: Vec<(String, Vec<u8>)>,
     ) -> Result<Self, String> {
+        Self::new_with_media(definition, storage_image, card_files, Vec::new())
+    }
+    /// The medium (by SD host declaration order) in the `host`th SD card slot.
+    pub fn card_medium(
+        &self,
+        host: usize,
+    ) -> Result<fujimod_emulator_devices::parts::sd_card::Card, String> {
+        unsafe {
+            (*self.inner.state.get())
+                .devices
+                .as_ref()
+                .ok_or("Board has no devices")?
+                .card_medium(host)
+        }
+    }
+    /// Like `new`, with an existing medium in place of the formatted SD card of the
+    /// listed SD hosts (index in declaration order).
+    pub fn new_with_media(
+        definition: Definition,
+        storage_image: Option<Vec<u8>>,
+        card_files: Vec<(String, Vec<u8>)>,
+        card_media: Vec<(usize, fujimod_emulator_devices::parts::sd_card::Card)>,
+    ) -> Result<Self, String> {
         let Definition {
             byte_i2c,
             ram_size,
@@ -1409,11 +1432,22 @@ impl Session {
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_sd(sd, reset, &card_files)?;
         }
-        for host in sd_hosts {
+        let mut card_media = card_media;
+        if card_media.iter().any(|(index, _)| *index >= sd_hosts.len()) {
+            return Err("SD card medium names an undeclared SD host".into());
+        }
+        for (index, host) in sd_hosts.into_iter().enumerate() {
             let files = card_files.take().unwrap_or_default();
+            let medium = card_media
+                .iter()
+                .position(|(slot, _)| *slot == index)
+                .map(|position| card_media.swap_remove(position).1);
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .sd_host(host, &files)?;
+                .sd_host(host, &files, medium)?;
+        }
+        if !card_media.is_empty() {
+            return Err("Two SD card media name the same SD host".into());
         }
         if card_files.is_some_and(|files| !files.is_empty()) {
             return Err("SD card files require an SD host".to_owned());

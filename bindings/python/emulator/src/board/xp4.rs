@@ -19,6 +19,10 @@ impl Xp4 {
 
 #[pymethods]
 impl Xp4 {
+    /// A copy of the medium in the `host`th SD card slot (SD host declaration order).
+    fn card_medium(&self, py: Python<'_>, host: usize) -> PyResult<CardMedium> {
+        self.with(py, |s| s.card_medium(host).map(CardMedium))
+    }
     fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
         visit.call(&self.owner)
     }

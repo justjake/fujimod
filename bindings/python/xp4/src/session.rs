@@ -30,10 +30,11 @@ impl Xp4Session {
         definition: &str,
         storage_image: Option<Vec<u8>>,
         card_files: Vec<(String, Vec<u8>)>,
+        card_media: Vec<(usize, fujimod_emulator_devices::parts::sd_card::Card)>,
     ) -> PyResult<Self> {
         let definition: Definition = serde_json::from_str(definition)
             .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
-        let inner = Session::new(definition, storage_image, card_files)
+        let inner = Session::new_with_media(definition, storage_image, card_files, card_media)
             .map_err(fujimod_python_base::error)?;
         let handler = Rc::new(RefCell::new(None::<Py<PyAny>>));
         let observer = handler.clone();
@@ -430,6 +431,9 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
     }
     fn interventions(&self) -> Vec<fujimod_python_base::discovery::Intervention> {
         Xp4Session::interventions(self)
+    }
+    fn card_medium(&self, host: usize) -> PyResult<fujimod_emulator_devices::parts::sd_card::Card> {
+        self.inner.card_medium(host).map_err(fujimod_python_base::error)
     }
 }
 
