@@ -63,5 +63,10 @@ path = "src/bin/relay.rs"
 required-features = ["relay"]
 
 [[bin]]
+name = "fujimod-webrtc-bench"
+path = "src/bin/webrtc_bench.rs"
+required-features = ["relay"]
+
+[[bin]]
 name = "fujimod-share-probe"
 path = "src/bin/share_probe.rs"

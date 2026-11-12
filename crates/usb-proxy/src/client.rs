@@ -181,7 +181,15 @@ impl Client {
             Duration::from_secs(if ticket.is_some() { 30 } else { 10 }),
             async {
                 let mut socket = if ticket.is_some() {
-                    Socket::Peer(crate::peer::PeerSocket::connect(url, &progress, policy).await?)
+                    Socket::Peer(
+                        crate::peer::PeerSocket::connect(
+                            url,
+                            &progress,
+                            policy,
+                            crate::Pacing::Browser,
+                        )
+                        .await?,
+                    )
                 } else {
                     #[cfg(not(target_arch = "wasm32"))]
                     let socket = async_tungstenite::smol::connect_async(url)

@@ -1,7 +1,9 @@
 //! `fujimod-send`: send files to another computer over a direct WebRTC
 //! connection, using a share-link room for rendezvous (crates/file-send/README.md).
 use fujimod_file_send::{Destination, receive, send, sources};
-use fujimod_usb_proxy::{CandidatePolicy, HostEvent, HostRoom, PeerSocket, share::OwnerTicket};
+use fujimod_usb_proxy::{
+    CandidatePolicy, HostEvent, HostRoom, Pacing, PeerSocket, share::OwnerTicket,
+};
 use std::{io::Write, path::PathBuf, time::Instant};
 
 const USAGE: &str = "usage:
@@ -84,7 +86,7 @@ async fn run(args: Vec<String>) -> Result<(), String> {
             let paths: Vec<PathBuf> = positional.iter().map(PathBuf::from).collect();
             let files = sources(&paths)?;
             let ticket = OwnerTicket::create(signal, SITE).map_err(|e| e.to_string())?;
-            let room = HostRoom::join(&ticket.link, &ticket.owner_key, policy)
+            let room = HostRoom::join(&ticket.link, &ticket.owner_key, policy, Pacing::Unpaced)
                 .await
                 .map_err(|e| e.to_string())?;
             eprintln!("On the receiving computer, run:");
@@ -119,7 +121,7 @@ async fn run(args: Vec<String>) -> Result<(), String> {
                     Destination::Directory(directory.into())
                 }
             };
-            let mut peer = PeerSocket::connect(link, &progress, policy)
+            let mut peer = PeerSocket::connect(link, &progress, policy, Pacing::Unpaced)
                 .await
                 .map_err(|e| direct_hint(e, policy))?;
             let stored = receive(&mut peer, &destination, &mut reporter()).await?;

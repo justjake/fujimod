@@ -1,5 +1,6 @@
 //! Bound interface sockets preserve the actual ICE source/destination tuple.
 //! Receive buffers stay with their socket across cancelable waits.
+use super::Pacing;
 use futures_util::{FutureExt, StreamExt, future::BoxFuture, stream::FuturesUnordered};
 use std::{
     collections::HashMap,
@@ -35,14 +36,16 @@ pub(super) struct Datagram {
 pub(super) struct DatagramIo {
     sockets: HashMap<SocketAddr, Socket>,
     pending: FuturesUnordered<Pending>,
+    pacing: Pacing,
     burst_started: Instant,
     burst_bytes: usize,
 }
 impl DatagramIo {
-    pub fn new(sockets: Vec<std::net::UdpSocket>) -> io::Result<Self> {
+    pub fn new(sockets: Vec<std::net::UdpSocket>, pacing: Pacing) -> io::Result<Self> {
         let mut result = Self {
             sockets: HashMap::new(),
             pending: FuturesUnordered::new(),
+            pacing,
             burst_started: Instant::now(),
             burst_bytes: 0,
         };
@@ -74,20 +77,19 @@ impl DatagramIo {
         destination: SocketAddr,
         bytes: &[u8],
     ) -> io::Result<()> {
-        // Bound host bursts as well as SCTP's congestion window. A fast sender
-        // can otherwise overflow a browser's UDP socket before its network
-        // thread runs. 8 KiB bursts at 50 MB/s leave headroom above the
-        // 20 MB/s USB transport target without flooding the receive queue.
-        if self.burst_bytes >= 8 * 1024 {
-            let deadline = self.burst_started
-                + Duration::from_secs_f64(self.burst_bytes as f64 / 50_000_000.0);
-            if deadline > Instant::now() {
-                async_io::Timer::at(deadline).await;
+        // Pacing::Browser bounds host bursts as well as SCTP's congestion window.
+        if self.pacing == Pacing::Browser {
+            if self.burst_bytes >= 8 * 1024 {
+                let deadline = self.burst_started
+                    + Duration::from_secs_f64(self.burst_bytes as f64 / 50_000_000.0);
+                if deadline > Instant::now() {
+                    async_io::Timer::at(deadline).await;
+                }
+                self.burst_started = Instant::now();
+                self.burst_bytes = 0;
             }
-            self.burst_started = Instant::now();
-            self.burst_bytes = 0;
+            self.burst_bytes += bytes.len();
         }
-        self.burst_bytes += bytes.len();
         let socket = self.sockets.get(&source).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::AddrNotAvailable,
@@ -132,7 +134,7 @@ mod tests {
             let first = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
             let second = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
             let addresses = [first.local_addr().unwrap(), second.local_addr().unwrap()];
-            let mut io = DatagramIo::new(vec![first, second]).unwrap();
+            let mut io = DatagramIo::new(vec![first, second], Pacing::Browser).unwrap();
             let peer = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
             peer.set_read_timeout(Some(std::time::Duration::from_secs(2)))
                 .unwrap();

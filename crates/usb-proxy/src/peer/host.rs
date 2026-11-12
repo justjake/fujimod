@@ -1,5 +1,6 @@
 //! Native owner side of the encrypted WebRTC share protocol.
 use super::CandidatePolicy;
+use super::Pacing;
 use super::native::{IceConfig, PeerSocket};
 use super::turn;
 use crate::{Error, Result};
@@ -71,7 +72,12 @@ pub enum HostEvent {
 
 impl HostRoom {
     /// Join a share URL as its persistent owner using the ticket-file key.
-    pub async fn join(ticket_link: &str, owner_key: &str, policy: CandidatePolicy) -> Result<Self> {
+    pub async fn join(
+        ticket_link: &str,
+        owner_key: &str,
+        policy: CandidatePolicy,
+        pacing: Pacing,
+    ) -> Result<Self> {
         if owner_key.is_empty() || owner_key.len() > 1024 {
             return Err(error("invalid owner key"));
         }
@@ -105,6 +111,7 @@ impl HostRoom {
         }
         let ice = IceConfig {
             policy,
+            pacing,
             servers: turn::ice_servers(&welcome["ice_servers"]),
         };
 

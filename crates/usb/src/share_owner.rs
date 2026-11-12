@@ -2,7 +2,7 @@
 //! link's controllers with the browser owner's protocol (SHARING.md).
 use crate::owner::{DeviceOwner, DeviceOwners, Exporter};
 use fujimod_usb_proxy::{
-    CandidatePolicy, Completion, HostEvent, HostRoom, Message, Operation, PeerSocket,
+    CandidatePolicy, Completion, HostEvent, HostRoom, Message, Operation, Pacing, PeerSocket,
     pipeline::Pipeline,
     protocol::{DeviceStatus, VERSION},
     share::{OwnerTicket, Ticket},
@@ -160,7 +160,13 @@ pub async fn serve(
 
 async fn serve_room(ticket: OwnerTicket, shared: Arc<Shared>) -> crate::Result<()> {
     loop {
-        let room = match HostRoom::join(&ticket.link, &ticket.owner_key, CandidatePolicy::Any).await
+        let room = match HostRoom::join(
+            &ticket.link,
+            &ticket.owner_key,
+            CandidatePolicy::Any,
+            Pacing::Browser,
+        )
+        .await
         {
             Ok(room) => room,
             Err(failure) => {

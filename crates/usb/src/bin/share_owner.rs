@@ -1,7 +1,7 @@
 //! `fujimod-share-owner`: create, serve and end persistent share links for a
 //! camera on this computer's USB (crates/usb-proxy/SHARING.md).
 use fujimod_usb::share_owner::{OwnerHooks, serve};
-use fujimod_usb_proxy::{CandidatePolicy, HostRoom, share::OwnerTicket};
+use fujimod_usb_proxy::{CandidatePolicy, HostRoom, Pacing, share::OwnerTicket};
 
 const USAGE: &str = "usage:
   fujimod-share-owner create --signal URL [--site URL] TICKET.json
@@ -36,9 +36,14 @@ async fn run(args: Vec<String>) -> Result<(), String> {
             let ticket = OwnerTicket::create(signal, site).map_err(|e| e.to_string())?;
             // Join once so the room exists, offline, before anything is shared.
             drop(
-                HostRoom::join(&ticket.link, &ticket.owner_key, CandidatePolicy::Any)
-                    .await
-                    .map_err(|e| e.to_string())?,
+                HostRoom::join(
+                    &ticket.link,
+                    &ticket.owner_key,
+                    CandidatePolicy::Any,
+                    Pacing::Browser,
+                )
+                .await
+                .map_err(|e| e.to_string())?,
             );
             ticket.write(&path).map_err(|e| e.to_string())?;
             println!("{}", ticket.link);
@@ -70,9 +75,14 @@ async fn run(args: Vec<String>) -> Result<(), String> {
         "end" => {
             let path = rest.first().ok_or(USAGE)?;
             let ticket = OwnerTicket::read(path).map_err(|e| e.to_string())?;
-            let room = HostRoom::join(&ticket.link, &ticket.owner_key, CandidatePolicy::Any)
-                .await
-                .map_err(|e| e.to_string())?;
+            let room = HostRoom::join(
+                &ticket.link,
+                &ticket.owner_key,
+                CandidatePolicy::Any,
+                Pacing::Browser,
+            )
+            .await
+            .map_err(|e| e.to_string())?;
             room.end().await.map_err(|e| e.to_string())
         }
         _ => Err(USAGE.into()),

@@ -42,7 +42,8 @@ receive window plus DTLS overhead and scheduling bursts. The OS may clamp that
 request to its configured limit.
 
 The native SCTP queue is bounded to 512 KiB instead of str0m's 128 KiB default.
-Host output is paced in 8 KiB bursts at 50 MB/s. Enlarging the queue without
+Connections that may reach a browser (`Pacing::Browser`) pace host output in
+8 KiB bursts at 50 MB/s. Enlarging the queue without
 pacing caused large-transfer stalls in Chromium; pacing leaves headroom above
 the target while avoiding receive-queue flooding. This is a transport ceiling,
 not a guarantee of USB-device bandwidth. USB operations remain ordered and
@@ -50,6 +51,18 @@ serialized, with the existing ownership, completion-unknown and no-retry rules.
 
 The Python extension builds with the release profile
 (`scripts/python_extension.py`), so ordinary tools use optimized transport code.
+
+Native-to-native connections, such as `fujimod-send`, use `Pacing::Unpaced`.
+
+## Native-to-native benchmark
+
+```sh
+cargo run --release -p fujimod-usb-proxy --features relay --bin fujimod-webrtc-bench -- 1024 1024 1
+```
+
+The arguments are MiB to send, message KiB and connection count. It starts an
+in-process signaling service, connects unpaced direct-only peers over loopback
+and prints decimal MB/s and process CPU time. It touches no USB device.
 
 ## Measurement limits
 

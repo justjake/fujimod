@@ -24,6 +24,7 @@ impl PeerSocket {
         url: &str,
         progress: &crate::Progress,
         policy: crate::CandidatePolicy,
+        _pacing: crate::Pacing,
     ) -> Result<Self> {
         if policy != crate::CandidatePolicy::Any {
             return Err(Error("candidate policies are native only".into()));

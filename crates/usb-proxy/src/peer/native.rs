@@ -1,8 +1,8 @@
 //! str0m is driven by one owned I/O task. It works under native Python, Tokio,
 //! smol or a plain block_on; no caller runtime or callbacks are required.
-use super::CandidatePolicy;
 use super::datagram::{Datagram, DatagramIo};
 use super::turn::{self, Action, TurnClient};
+use super::{CandidatePolicy, Pacing};
 use crate::{Error, Result, protocol::MAX_MESSAGE, share::Ticket};
 use aes_gcm::{
     Aes256Gcm, KeyInit, Nonce,
@@ -143,12 +143,13 @@ impl PeerSocket {
         url: &str,
         progress: &crate::Progress,
         policy: CandidatePolicy,
+        pacing: Pacing,
     ) -> Result<Self> {
         let ticket = Ticket::from_url(url)?.ok_or_else(|| error("invalid share URL"))?;
         progress("share link parsed");
         let progress = progress.clone();
         Self::start("fujimod-webrtc", move |channels| async move {
-            run(ticket, channels, progress, policy).await
+            run(ticket, channels, progress, policy, pacing).await
         })
         .await
     }
@@ -224,6 +225,7 @@ fn drain_setup(rtc: &mut Rtc) -> Result<()> {
 #[derive(Clone, Debug)]
 pub(crate) struct IceConfig {
     pub policy: CandidatePolicy,
+    pub pacing: Pacing,
     pub servers: Vec<turn::IceServer>,
 }
 
@@ -446,7 +448,7 @@ async fn gather_candidates(
         progress("TURN relay candidate ready");
     }
     Ok(Network {
-        udp: DatagramIo::new(sockets).map_err(error)?,
+        udp: DatagramIo::new(sockets, ice.pacing).map_err(error)?,
         relay,
         policy: ice.policy,
     })
@@ -502,6 +504,7 @@ async fn run(
     channels: PeerChannels,
     progress: crate::Progress,
     policy: CandidatePolicy,
+    pacing: Pacing,
 ) -> Result<()> {
     let PeerChannels {
         outbound,
@@ -542,6 +545,7 @@ async fn run(
     // The join reply carries the TURN servers for this room, so gather after it.
     let ice = IceConfig {
         policy,
+        pacing,
         servers: turn::ice_servers(&welcome["ice_servers"]),
     };
     let mut network = gather_candidates(&mut rtc, &ticket, &ice, &progress).await?;
@@ -972,19 +976,34 @@ mod relay_tests {
             "credential": credentials.password,
         }]);
         let (link, _) = signaling_with(ice).await;
-        let host = HostRoom::join(&link, "native-owner-secret", CandidatePolicy::DirectOnly)
-            .await
-            .unwrap();
+        let host = HostRoom::join(
+            &link,
+            "native-owner-secret",
+            CandidatePolicy::DirectOnly,
+            crate::Pacing::Browser,
+        )
+        .await
+        .unwrap();
         let progress: crate::Progress = std::sync::Arc::new(|_| {});
-        let mut controller = PeerSocket::connect(&link, &progress, CandidatePolicy::DirectOnly)
-            .await
-            .unwrap();
+        let mut controller = PeerSocket::connect(
+            &link,
+            &progress,
+            CandidatePolicy::DirectOnly,
+            crate::Pacing::Browser,
+        )
+        .await
+        .unwrap();
         let HostEvent::Controller(_, mut owner_peer) = host.next_event().await.unwrap() else {
             panic!("expected controller connection");
         };
         controller.send(vec![7; 4096]).await.unwrap();
         assert_eq!(owner_peer.receive().await.unwrap(), vec![7; 4096]);
-        assert_eq!(turn.stats.allocations.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert_eq!(
+            turn.stats
+                .allocations
+                .load(std::sync::atomic::Ordering::SeqCst),
+            0
+        );
         host.end().await.unwrap();
     }
 
@@ -998,16 +1017,26 @@ mod relay_tests {
             "credential": credentials.password,
         }]);
         let (link, _) = signaling_with(ice).await;
-        let host = HostRoom::join(&link, "native-owner-secret", CandidatePolicy::RelayOnly)
-            .await
-            .unwrap();
+        let host = HostRoom::join(
+            &link,
+            "native-owner-secret",
+            CandidatePolicy::RelayOnly,
+            crate::Pacing::Browser,
+        )
+        .await
+        .unwrap();
         let steps = std::sync::Arc::new(Mutex::new(Vec::<String>::new()));
         let log = steps.clone();
         let progress: crate::Progress =
             std::sync::Arc::new(move |step: &str| log.lock().unwrap().push(step.to_owned()));
-        let mut controller = PeerSocket::connect(&link, &progress, CandidatePolicy::RelayOnly)
-            .await
-            .unwrap();
+        let mut controller = PeerSocket::connect(
+            &link,
+            &progress,
+            CandidatePolicy::RelayOnly,
+            crate::Pacing::Browser,
+        )
+        .await
+        .unwrap();
         let HostEvent::Controller(_, mut owner_peer) = host.next_event().await.unwrap() else {
             panic!("expected controller connection");
         };
@@ -1041,14 +1070,24 @@ mod relay_tests {
     #[tokio::test]
     async fn relay_only_connection_is_refused_without_a_turn_server() {
         let (link, _) = signaling_with(serde_json::Value::Null).await;
-        let host = HostRoom::join(&link, "native-owner-secret", CandidatePolicy::Any)
-            .await
-            .unwrap();
+        let host = HostRoom::join(
+            &link,
+            "native-owner-secret",
+            CandidatePolicy::Any,
+            crate::Pacing::Browser,
+        )
+        .await
+        .unwrap();
         let progress: crate::Progress = std::sync::Arc::new(|_| {});
-        let failure = PeerSocket::connect(&link, &progress, CandidatePolicy::RelayOnly)
-            .await
-            .err()
-            .expect("relay-only connection needs TURN");
+        let failure = PeerSocket::connect(
+            &link,
+            &progress,
+            CandidatePolicy::RelayOnly,
+            crate::Pacing::Browser,
+        )
+        .await
+        .err()
+        .expect("relay-only connection needs TURN");
         assert!(failure.to_string().contains("relay"), "{failure}");
         host.end().await.unwrap();
     }
@@ -1066,18 +1105,28 @@ mod relay_tests {
             "credential": std::env::var("FUJIMOD_TURN_LIVE_CREDENTIAL").expect("FUJIMOD_TURN_LIVE_CREDENTIAL"),
         }]);
         let (link, _) = signaling_with(ice).await;
-        let host = HostRoom::join(&link, "native-owner-secret", CandidatePolicy::RelayOnly)
-            .await
-            .unwrap();
+        let host = HostRoom::join(
+            &link,
+            "native-owner-secret",
+            CandidatePolicy::RelayOnly,
+            crate::Pacing::Browser,
+        )
+        .await
+        .unwrap();
         let steps = std::sync::Arc::new(Mutex::new(Vec::<String>::new()));
         let log = steps.clone();
         let progress: crate::Progress = std::sync::Arc::new(move |step: &str| {
             println!("{step}");
             log.lock().unwrap().push(step.to_owned());
         });
-        let mut controller = PeerSocket::connect(&link, &progress, CandidatePolicy::RelayOnly)
-            .await
-            .unwrap();
+        let mut controller = PeerSocket::connect(
+            &link,
+            &progress,
+            CandidatePolicy::RelayOnly,
+            crate::Pacing::Browser,
+        )
+        .await
+        .unwrap();
         let HostEvent::Controller(_, mut owner_peer) = host.next_event().await.unwrap() else {
             panic!("expected controller connection");
         };

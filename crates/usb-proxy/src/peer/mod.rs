@@ -12,6 +12,17 @@ pub enum CandidatePolicy {
     DirectOnly,
 }
 
+/// Whether outgoing datagrams are paced for a peer that may be a browser.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pacing {
+    /// 8 KiB bursts at 50 MB/s. A fast sender can otherwise overflow a
+    /// browser's UDP socket before its network thread runs; this leaves
+    /// headroom above the 20 MB/s USB transport target.
+    Browser,
+    /// No pacing beyond SCTP's congestion control, for native peers.
+    Unpaced,
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 mod datagram;
 #[cfg(not(target_arch = "wasm32"))]
