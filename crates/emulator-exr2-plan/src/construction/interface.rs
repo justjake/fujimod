@@ -1,8 +1,8 @@
 //! Constructors of the EXR II devices the interface crates still hold.
 use super::{Builder, Built, Constructors, decode, line};
 use crate::Model;
-use fujimod_emulator_exr2_resources::CoreInterrupts;
 use fujimod_emulator_devices::exr2::{clock, gpio, irq, pulse};
+use fujimod_emulator_exr2_resources::CoreInterrupts;
 
 /// Add the constructors of the devices the interface crates hold.
 pub fn register_interface_models(constructors: &mut Constructors) {
@@ -12,6 +12,7 @@ pub fn register_interface_models(constructors: &mut Constructors) {
     constructors.add("exr2-pulse", pulse_unit);
     constructors.add("block86000", block86000);
     constructors.add("register-stub", register_stub);
+    constructors.add("sata-host", sata_host);
     constructors.add("exr-adc", exr_adc);
     constructors.add("exr-command-gpu", exr_command_gpu);
     constructors.add("exr-display-pipe", exr_display_pipe);
@@ -87,8 +88,9 @@ fn interrupt_controller(builder: Builder<'_>, model: Model) -> Result<Built, Str
         let enables = routes
             .map(|name| {
                 let routes = fujimod_emulator_exr2_resources::wire!(resources, id, name, IrqRoutes);
-                Ok(Box::new(fujimod_emulator_devices::exr2::irq_routes::RouteOutput::new(routes, core)?)
-                    as Box<dyn irq::EnableOutput>)
+                Ok(Box::new(
+                    fujimod_emulator_devices::exr2::irq_routes::RouteOutput::new(routes, core)?,
+                ) as Box<dyn irq::EnableOutput>)
             })
             .transpose()?;
         let inputs = irq::Inputs::default();
@@ -107,7 +109,12 @@ fn interrupt_controller(builder: Builder<'_>, model: Model) -> Result<Built, Str
                         }
                         Ok(irq::SoftwareOutput {
                             line: output.line,
-                            pulse: fujimod_emulator_exr2_resources::wire!(resources, id, output.pulse, SoftwarePulse),
+                            pulse: fujimod_emulator_exr2_resources::wire!(
+                                resources,
+                                id,
+                                output.pulse,
+                                SoftwarePulse
+                            ),
                         })
                     })
                     .collect::<Result<_, String>>()?,
@@ -173,6 +180,15 @@ fn register_stub(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
     };
     Ok(Built::Device(Box::new(
         fujimod_emulator_devices::exr::register_stub::RegisterStub::new(options)?,
+    )))
+}
+
+fn sata_host(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
+    let Model::SataHost { options } = model else {
+        return Err("constructor called for another model kind".into());
+    };
+    Ok(Built::Device(Box::new(
+        fujimod_emulator_devices::exr2::sata_host::SataHost::new(options)?,
     )))
 }
 
