@@ -118,6 +118,8 @@
       "fujimod-usb-app80",
       "fujimod-usb-app80-types",
       "fujimod-usb-proxy",
+      "fujimod-webrtc",
+      "fujimod-file-send",
       "fujimod-virtual-scene",
       "fujimod-workflows",
       "fujimod-workspace-hack",

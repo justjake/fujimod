@@ -316,10 +316,7 @@ async fn leave(hub: &Hub, room: &str, peer: &str, host: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        peer::{HostEvent, HostRoom, PeerSocket},
-        share::Ticket,
-    };
+    use crate::{HostEvent, HostRoom, PeerSocket, share::Ticket};
     use async_tungstenite::{
         WebSocketStream,
         smol::{ConnectStream, connect_async},

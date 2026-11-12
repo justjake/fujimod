@@ -5,7 +5,7 @@
 //! handshake. It sends no USB request, not even a device listing.
 //! `--relay-only` connects through a TURN relay alone, which shows whether this
 //! network can reach the share when no direct path works.
-use fujimod_usb_proxy::CandidatePolicy;
+use fujimod_webrtc::CandidatePolicy;
 use std::time::Instant;
 
 fn main() {
@@ -21,7 +21,7 @@ fn main() {
         .or_else(|| std::env::var("FUJIMOD_USB_PROXY_URL").ok())
         .expect("give the share link as an argument or FUJIMOD_USB_PROXY_URL");
     let started = Instant::now();
-    let progress: fujimod_usb_proxy::Progress = std::sync::Arc::new(move |step: &str| {
+    let progress: fujimod_webrtc::Progress = std::sync::Arc::new(move |step: &str| {
         println!("{:6.2}s  {step}", started.elapsed().as_secs_f64());
     });
     match futures_lite::future::block_on(fujimod_usb_proxy::Client::connect_with_policy(

@@ -32,33 +32,13 @@ The benchmark never automatically retries a failed transfer or speed check.
 
 ## Transport
 
-Native peers run webrtc-rs (`src/peer/native.rs`) on the smol runtime, with
-one UDP socket per local IPv4 interface. Relay-only peers bind only the
-address that routes to the TURN server. Each socket requests 4 MiB send and
-receive queues, covering SCTP's 1 MiB receive window plus DTLS overhead and
-scheduling bursts; the OS may clamp that request. A data channel holds at most
-4 MiB handed to SCTP but not yet acknowledged; `send` waits above that.
-
-Connections that may reach a browser (`Pacing::Browser`) send in 8 KiB bursts
-at 50 MB/s (`src/peer/runtime.rs`). Without pacing, native-to-Chromium uploads
-stalled on retransmission timeouts; pacing leaves headroom above the target
-while avoiding receive-queue flooding. Native-to-native connections, such as
-`fujimod-send`, use `Pacing::Unpaced`. This is a transport ceiling, not a
-guarantee of USB-device bandwidth. USB operations remain ordered and
-serialized, with the existing ownership, completion-unknown and no-retry rules.
+The WebRTC transport, its socket queues and browser pacing are described in
+[crates/webrtc/README.md](../webrtc/README.md). USB operations remain ordered
+and serialized, with the existing ownership, completion-unknown and no-retry
+rules.
 
 The Python extension builds with the release profile
 (`scripts/python_extension.py`), so ordinary tools use optimized transport code.
-
-## Native-to-native benchmark
-
-```sh
-cargo run --release -p fujimod-usb-proxy --features relay --bin fujimod-webrtc-bench -- 1024 1024 1
-```
-
-The arguments are MiB to send, message KiB and connection count. It starts an
-in-process signaling service, connects unpaced direct-only peers on this host
-and prints decimal MB/s and process CPU time. It touches no USB device.
 
 ## Measurement limits
 

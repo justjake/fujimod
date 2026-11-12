@@ -1,3 +1,4 @@
+//! How a connection may reach its peer.
 /// Which local candidates ICE may advertise for a connection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CandidatePolicy {
@@ -17,27 +18,8 @@ pub enum CandidatePolicy {
 pub enum Pacing {
     /// 8 KiB bursts at 50 MB/s. A fast sender can otherwise overflow a
     /// browser's UDP socket before its network thread runs; this leaves
-    /// headroom above the 20 MB/s USB transport target.
+    /// headroom above a 20 MB/s transfer target.
     Browser,
     /// No pacing beyond SCTP's congestion control, for native peers.
     Unpaced,
 }
-
-#[cfg(not(target_arch = "wasm32"))]
-mod native;
-#[cfg(not(target_arch = "wasm32"))]
-mod runtime;
-#[cfg(not(target_arch = "wasm32"))]
-pub use native::PeerSocket;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod host;
-#[cfg(not(target_arch = "wasm32"))]
-pub use host::{HostEvent, HostRoom};
-#[cfg(target_arch = "wasm32")]
-mod browser;
-#[cfg(not(target_arch = "wasm32"))]
-mod ice;
-#[cfg(all(test, not(target_arch = "wasm32")))]
-mod turn;
-#[cfg(target_arch = "wasm32")]
-pub(crate) use browser::PeerSocket;

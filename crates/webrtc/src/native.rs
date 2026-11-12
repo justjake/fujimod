@@ -3,7 +3,7 @@
 use super::ice;
 use super::runtime::PeerRuntime;
 use super::{CandidatePolicy, Pacing};
-use crate::{Error, Result, protocol::MAX_MESSAGE, share::Ticket};
+use crate::{Error, MAX_MESSAGE, Result, share::Ticket};
 use aes_gcm::{
     Aes256Gcm, KeyInit, Nonce,
     aead::{Aead, Payload},
@@ -713,7 +713,7 @@ async fn pump<P: PeerConnection>(
     let sending = async {
         while let Ok(bytes) = outbound.recv().await {
             if bytes.len() > MAX_MESSAGE {
-                return Err(error("USB message exceeds limit"));
+                return Err(error("message exceeds limit"));
             }
             let count = bytes.len().div_ceil(FRAGMENT).max(1);
             for index in 0..count {
@@ -801,10 +801,10 @@ mod direct_tests {
     }
 }
 
-#[cfg(all(test, feature = "relay"))]
+#[cfg(all(test, feature = "signaling"))]
 mod relay_tests {
     use super::*;
-    use crate::{CandidatePolicy, HostEvent, HostRoom, peer::turn::test_server};
+    use crate::{CandidatePolicy, HostEvent, HostRoom, turn::test_server};
     use std::sync::Mutex;
 
     async fn signaling_with(ice: Value) -> (String, Ticket) {

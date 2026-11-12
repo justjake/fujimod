@@ -43,6 +43,7 @@ pub fn convert_error(py: Python<'_>, error: usb::Error) -> PyErr {
         usb::Error::DeviceStatus { .. } => DeviceCommandError::new_err(message),
         usb::Error::Protocol(_) => ProtocolError::new_err(message),
         usb::Error::Proxy(_)
+        | usb::Error::WebRtc(_)
         | usb::Error::Transfer { .. }
         | usb::Error::Timeout(_)
         | usb::Error::ShortTransfer { .. }
@@ -61,6 +62,7 @@ pub fn convert_error(py: Python<'_>, error: usb::Error) -> PyErr {
     if matches!(
         &error,
         usb::Error::Proxy(_)
+            | usb::Error::WebRtc(_)
             | usb::Error::Transfer { .. }
             | usb::Error::Timeout(_)
             | usb::Error::ShortTransfer { .. }

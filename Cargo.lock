@@ -2646,7 +2646,7 @@ dependencies = [
  "async-channel",
  "crc32fast",
  "fujimod-sync-protocol",
- "fujimod-usb-proxy",
+ "fujimod-webrtc",
  "fujimod-workspace-hack",
  "futures-lite",
  "sha2 0.10.9",
@@ -3102,6 +3102,7 @@ dependencies = [
  "async-tungstenite",
  "fujimod-catalog-card",
  "fujimod-usb-proxy",
+ "fujimod-webrtc",
  "fujimod-workspace-hack",
  "futures-lite",
  "futures-timer",
@@ -3145,6 +3146,39 @@ dependencies = [
 name = "fujimod-usb-proxy"
 version = "0.1.0"
 dependencies = [
+ "async-tungstenite",
+ "axum",
+ "base64 0.23.1",
+ "fujimod-webrtc",
+ "fujimod-workspace-hack",
+ "futures-lite",
+ "futures-timer",
+ "futures-util",
+ "gloo-net",
+ "js-sys",
+ "postcard",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "url",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
+name = "fujimod-virtual-scene"
+version = "0.1.0"
+dependencies = [
+ "fujimod-workspace-hack",
+ "serde",
+]
+
+[[package]]
+name = "fujimod-webrtc"
+version = "0.1.0"
+dependencies = [
  "aes-gcm",
  "async-channel",
  "async-io",
@@ -3157,15 +3191,11 @@ dependencies = [
  "futures-lite",
  "futures-timer",
  "futures-util",
- "gloo-net",
  "hmac 0.13.0",
  "if-addrs",
- "js-sys",
  "md5",
- "postcard",
  "rand 0.10.3",
  "serde",
- "serde_bytes",
  "serde_json",
  "sha1 0.11.0",
  "sha2 0.10.9",
@@ -3173,17 +3203,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "url",
- "wasm-bindgen",
- "wasm-bindgen-futures",
  "webrtc",
-]
-
-[[package]]
-name = "fujimod-virtual-scene"
-version = "0.1.0"
-dependencies = [
- "fujimod-workspace-hack",
- "serde",
 ]
 
 [[package]]

@@ -3,8 +3,8 @@
 //! `fujimod-webrtc-bench [MIB] [MESSAGE_KIB] [CONNECTIONS]` starts an in-process signaling
 //! service, joins a direct-only room as owner and CONNECTIONS controllers, sends MIB
 //! mebibytes split across the controllers to the owner in MESSAGE_KIB messages and
-//! prints MB/s (decimal) and the process CPU time. See THROUGHPUT.md.
-use fujimod_usb_proxy::{
+//! prints MB/s (decimal) and the process CPU time. See README.md.
+use fujimod_webrtc::{
     CandidatePolicy, HostEvent, HostRoom, Pacing, PeerSocket, share::OwnerTicket,
 };
 use std::time::Instant;
@@ -34,12 +34,9 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     tokio::spawn(async move {
-        axum::serve(
-            listener,
-            fujimod_usb_proxy::relay::router("b".repeat(32), Vec::new()).unwrap(),
-        )
-        .await
-        .unwrap();
+        axum::serve(listener, fujimod_webrtc::signaling::router())
+            .await
+            .unwrap();
     });
     let owner = OwnerTicket::create(
         format!("ws://{address}/usb-proxy/signal"),
@@ -84,7 +81,7 @@ async fn main() {
     owner_present.recv().await.unwrap();
     let mut peers = Vec::new();
     for _ in 0..connections {
-        let progress: fujimod_usb_proxy::Progress = std::sync::Arc::new(|_: &str| {});
+        let progress: fujimod_webrtc::Progress = std::sync::Arc::new(|_: &str| {});
         peers.push(
             PeerSocket::connect(
                 &link,
