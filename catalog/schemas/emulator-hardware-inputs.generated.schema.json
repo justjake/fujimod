@@ -1107,6 +1107,17 @@
           "minimum": 0,
           "type": "integer"
         },
+        "touch_panel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Xt20TouchPanelInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit X-T20 input touch-panel protocol on this endpoint."
+        },
         "width": {
           "description": "Bytes per register: 1 or 2.",
           "format": "uint64",
@@ -3050,6 +3061,29 @@
       "required": [
         "basis",
         "zone_sums"
+      ],
+      "type": "object"
+    },
+    "Xt20TouchPanelInput": {
+      "additionalProperties": false,
+      "description": "Input-ready and report-register wiring for the X-T20 touch controller.",
+      "properties": {
+        "input_ready_irq": {
+          "description": "Shared interrupt line raised when the report is ready.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "report_register": {
+          "description": "First byte register of the 10-byte touch report.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "report_register",
+        "input_ready_irq"
       ],
       "type": "object"
     },

@@ -28,3 +28,4 @@ pub mod shutter;
 pub mod statistics;
 pub mod sync;
 pub mod timer;
+pub mod touch_xt20;
