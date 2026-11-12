@@ -380,18 +380,14 @@ impl Board {
             .memory_watch
             .as_ref()
             .map(|w| {
-                let mut state = w.records.borrow().state();
-                if !w.is_live() && state["violation"].is_null() {
-                    state["violation"] =
-                        serde_json::json!("boot restarted while the memory watch was active");
-                }
-                state
+                w.records.borrow().state_json(
+                    (!w.is_live()).then_some("boot restarted while the memory watch was active"),
+                )
             })
-            .unwrap_or_else(
-                || serde_json::json!({"enabled":false,"ranges":[],"records":[],"violation":null}),
-            );
-        py.import("json")?
-            .call_method1("loads", (value.to_string(),))
+            .unwrap_or_else(|| {
+                r#"{"enabled":false,"ranges":[],"records":[],"violation":null}"#.to_owned()
+            });
+        py.import("json")?.call_method1("loads", (value,))
     }
     fn memory_watch_end(&mut self) -> PyResult<()> {
         if let Some(mut watch) = self.memory_watch.take()
