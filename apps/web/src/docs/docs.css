@@ -52,7 +52,89 @@
 
 .sdk-summary {
   max-width: 66ch;
-  white-space: pre-line;
+}
+
+.sdk-markdown {
+  max-width: 72ch;
+  color: #c7c7cc;
+}
+
+.sdk-markdown p {
+  margin: 0 0 1em;
+  line-height: 1.6;
+}
+
+.sdk-markdown h3 {
+  margin: 1.4em 0 0.5em;
+  color: #f5f5f7;
+  font-size: 16px;
+}
+
+.sdk-markdown ul,
+.sdk-markdown ol {
+  margin: 0 0 1em;
+  padding-left: 1.4em;
+}
+
+.sdk-inline-code {
+  padding: 0.08em 0.28em;
+  border-radius: 4px;
+  background: #242426;
+  color: #f0f0f2;
+}
+
+.sdk-code {
+  margin: 0 0 1em;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border: 1px solid #2c2c2e;
+  border-radius: 10px;
+  background: #171719;
+}
+
+.sdk-code code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre;
+}
+
+.tok-comment { color: #7f8c98; }
+.tok-string { color: #c3e88d; }
+.tok-preprocessor { color: #f78c6c; }
+.tok-number { color: #f78c6c; }
+.tok-keyword { color: #c792ea; }
+.tok-type { color: #82aaff; }
+.tok-macro { color: #ffcb6b; }
+
+.sdk-preview-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.sdk-preview-tabs button {
+  appearance: none;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: #1c1c1e;
+  color: #8e8e93;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sdk-preview-tabs button[aria-selected='true'] {
+  background: #2c2c2e;
+  color: #f5f5f7;
+}
+
+.sdk-preview-source {
+  max-width: 720px;
+  max-height: 480px;
+  margin: 0;
+  overflow: auto;
 }
 
 .sdk-preview {

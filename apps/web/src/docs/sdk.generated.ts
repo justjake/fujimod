@@ -11,6 +11,8 @@ export type FocalPreview = {
   title: string;
   slug: string;
   description: string;
+  source: string;
+  line: number;
   width: number;
   height: number;
   page: string;
@@ -76,7 +78,7 @@ export const focalComponents: readonly FocalComponent[] = [
     "title": "Caret",
     "slug": "caret",
     "header": "Caret.h",
-    "summary": "A text caret: an I-beam that blinks as iOS's does, on for about half a\nsecond, then fading out and back once a second. It holds steady while the\ntext changes or the caret moves: change `rest` whenever either happens.\nThe caller places it (in flow or floating).",
+    "summary": "A text caret: an I-beam that blinks as iOS's does, on for about half a second, then fading out and back once a second. It holds steady while the text changes or the caret moves: change `rest` whenever either happens. The caller places it (in flow or floating).",
     "declarations": [
       {
         "kind": "struct",
@@ -167,6 +169,8 @@ export const focalComponents: readonly FocalComponent[] = [
         "title": "Check boxes",
         "slug": "check-boxes",
         "description": "Checked and empty boxes in the default palette.",
+        "source": "FOCAL_PREVIEW(\"Check boxes\",\n               .description = \"Checked and empty boxes in the default palette.\") {\n    (void)props;\n    const struct Focal_Theme *theme = &Focal_Theme_x100vi;\n    FOCAL_THEME(theme) {\n        CLAY(CLAY_ID(\"page\"), {\n            .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},\n                       .layoutDirection = CLAY_TOP_TO_BOTTOM, .childGap = 28,\n                       .padding = {72, 72, 72, 72}, .childAlignment = {.y = CLAY_ALIGN_Y_CENTER}},\n            .backgroundColor = theme->background,\n        }) {\n            FOCAL_KEYED(\"checked blue\") FOCAL_CHECKBOX(.checked = 1, .accent = FOCAL_ACCENT_BLUE);\n            FOCAL_KEYED(\"empty blue\") FOCAL_CHECKBOX(.checked = 0, .accent = FOCAL_ACCENT_BLUE);\n            FOCAL_KEYED(\"checked red\") FOCAL_CHECKBOX(.checked = 1, .accent = FOCAL_ACCENT_RED);\n            FOCAL_KEYED(\"checked green\") FOCAL_CHECKBOX(.checked = 1, .accent = FOCAL_ACCENT_GREEN);\n        }\n    }\n}",
+        "line": 28,
         "width": 720,
         "height": 480,
         "page": "/docs/sdk/focal/checkbox/check-boxes/preview.html"
@@ -441,7 +445,7 @@ export const focalComponents: readonly FocalComponent[] = [
     "title": "Drop Shadow",
     "slug": "drop-shadow",
     "header": "DropShadow.h",
-    "summary": "A soft shadow under its content, like SwiftUI's shadow modifier. The\ncontent's box casts it; the props say how it looks:\nFOCAL_DROP_SHADOW(\"balloon\", .color = {0, 0, 0, 96}, .radius = 12,\n.offset_y = 2) {\nCLAY(FOCAL_ID(\"face\"), {...}) { ... }\n}\nThe shadow wraps the content as Clay lays it out, so content sized to\ngrow takes only its minimum size; give it a fixed or fit size. Place the\nshadow where the content belongs (floating or in flow) by its parent. The\nshadow is a blurred box: round corners need a radius at least as large as\ntheirs.",
+    "summary": "A soft shadow under its content, like SwiftUI's shadow modifier. The content's box casts it; the props say how it looks:\n\n```c\nFOCAL_DROP_SHADOW(\"balloon\", .color = {0, 0, 0, 96}, .radius = 12,\n                  .offset_y = 2) {\n    CLAY(FOCAL_ID(\"face\"), {...}) { ... }\n}\n```\n\nThe shadow wraps the content as Clay lays it out, so content sized to grow takes only its minimum size; give it a fixed or fit size. Place the shadow where the content belongs (floating or in flow) by its parent. The shadow is a blurred box: round corners need a radius at least as large as theirs.",
     "declarations": [
       {
         "kind": "function",
@@ -1022,7 +1026,7 @@ export const focalComponents: readonly FocalComponent[] = [
     "title": "Group",
     "slug": "group",
     "header": "Group.h",
-    "summary": "Grouped rows (struct Focal_GroupStyle): a group is a card of rows; a\nsection heading names the groups after it. Each macro takes the instance's\nname, then its props as designated initializers:\nFOCAL_SECTION(\"appearance\", .title = \"Appearance\");\nFOCAL_GROUP(\"colors\") {\nFOCAL_GROUP_ROW(\"rec\", .label = \"REC COLOR\", .swatch = &red);\n}\nNames identify a group among its siblings and a row within its group.",
+    "summary": "Grouped rows (struct Focal_GroupStyle): a group is a card of rows; a section heading names the groups after it. Each macro takes the instance's name, then its props as designated initializers:\n\n```c\nFOCAL_SECTION(\"appearance\", .title = \"Appearance\");\nFOCAL_GROUP(\"colors\") {\n    FOCAL_GROUP_ROW(\"rec\", .label = \"REC COLOR\", .swatch = &red);\n}\n```\n\nNames identify a group among its siblings and a row within its group.",
     "declarations": [
       {
         "kind": "struct",
@@ -1122,7 +1126,7 @@ export const focalComponents: readonly FocalComponent[] = [
           {
             "name": "accent",
             "type": "unsigned char",
-            "comment": "enum Focal_AccentKind of the focus stripe"
+            "comment": "```c\nenum Focal_AccentKind of the focus stripe\n```"
           }
         ]
       },
@@ -1180,6 +1184,8 @@ export const focalComponents: readonly FocalComponent[] = [
         "title": "Grouped rows",
         "slug": "grouped-rows",
         "description": "A section heading over a card of rows, with a value, a swatch, and a row that opens another screen.",
+        "source": "FOCAL_PREVIEW(\"Grouped rows\",\n               .description = \"A section heading over a card of rows, with a value, a swatch, and a row that opens another screen.\") {\n    (void)props;\n    static const Clay_Color red = {232, 74, 62, 255};\n    const struct Focal_Theme *theme = &Focal_Theme_x100vi;\n    FOCAL_THEME(theme) {\n        CLAY(CLAY_ID(\"page\"), {\n            .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},\n                       .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = {0, 0, 20, 0}},\n            .backgroundColor = theme->background,\n        }) {\n            FOCAL_SECTION(\"appearance\", .title = \"Appearance\");\n            FOCAL_GROUP(\"colors\") {\n                FOCAL_GROUP_ROW(\"rec\", .label = \"REC COLOR\", .swatch = &red);\n                FOCAL_GROUP_ROW(\"quality\", .label = \"IMAGE QUALITY\", .value = \"FINE\");\n                FOCAL_GROUP_ROW(\"size\", .label = \"IMAGE SIZE\", .value = \"L 3:2\", .opens = 1);\n            }\n        }\n    }\n}",
+        "line": 212,
         "width": 720,
         "height": 480,
         "page": "/docs/sdk/focal/group/grouped-rows/preview.html"
@@ -1707,7 +1713,7 @@ export const focalComponents: readonly FocalComponent[] = [
     "title": "List Screen",
     "slug": "list-screen",
     "header": "ListScreen.h",
-    "summary": "The same frame with the window's rows laid out in this screen: the value\neditor's list.",
+    "summary": "The same frame with the window's rows laid out in this screen: the value editor's list.",
     "declarations": [
       {
         "kind": "struct",
@@ -2001,7 +2007,7 @@ export const focalComponents: readonly FocalComponent[] = [
     "title": "Live Slider",
     "slug": "live-slider",
     "header": "LiveSlider.h",
-    "summary": "The slider as a component: its panel in a control (focal_control.h)\nthat takes keys through focus (UP and DOWN step, the dial adds its\ndetents, ACTIVATE accepts, BACK cancels) and taps and vertical drags on\nthe track. Each is a request to its owning feature through `request`; the\ncontent holds the level sampled for this frame.",
+    "summary": "The slider as a component: its panel in a control (focal_control.h) that takes keys through focus (UP and DOWN step, the dial adds its detents, ACTIVATE accepts, BACK cancels) and taps and vertical drags on the track. Each is a request to its owning feature through `request`; the content holds the level sampled for this frame.",
     "declarations": [
       {
         "kind": "enum",
@@ -2093,7 +2099,7 @@ export const focalComponents: readonly FocalComponent[] = [
           {
             "name": "request",
             "type": "void (*)(void *, unsigned int, int)",
-            "comment": "enum Focal_SliderOperation at `target` (not yet within the range)."
+            "comment": "```c\nenum Focal_SliderOperation at `target` (not yet within the range).\n```"
           },
           {
             "name": "context",
@@ -2330,7 +2336,7 @@ export const focalComponents: readonly FocalComponent[] = [
     "title": "Pointer",
     "slug": "pointer",
     "header": "Pointer.h",
-    "summary": "The floating ‹ at the theme's pointer size, its strokes floating at `z`\n(at least its declaring element's). Focal_Pointer_plan hands its icons to\n`plan` (Focal_rendererPlanVector) for preparation ahead of first use.",
+    "summary": "The floating ‹ at the theme's pointer size, its strokes floating at `z` (at least its declaring element's). Focal_Pointer_plan hands its icons to `plan` (Focal_rendererPlanVector) for preparation ahead of first use.",
     "declarations": [
       {
         "kind": "struct",
@@ -2733,7 +2739,7 @@ export const focalComponents: readonly FocalComponent[] = [
     "title": "Text Keyboard",
     "slug": "text-keyboard",
     "header": "TextKeyboard.h",
-    "summary": "A hosted page's text keyboard (lib/text-entry on the camera), presented\nover the page as a phone keyboard: the title with its back button, the text\nas a document with its blinking caret, and a tray of keys filling\nthe screen's width under a bar of caret keys. Taps type, a long press\nshows a key's choices, and the buttons move a focus ring over the keys; a\ntouch in the text places the caret, and a long press on space turns the\nkeyboard into a trackpad that moves it. The keyboard's own model decides\nwhat every key does; this draws it and reports touches and buttons.",
+    "summary": "A hosted page's text keyboard (lib/text-entry on the camera), presented over the page as a phone keyboard: the title with its back button, the text as a document with its blinking caret, and a tray of keys filling the screen's width under a bar of caret keys. Taps type, a long press shows a key's choices, and the buttons move a focus ring over the keys; a touch in the text places the caret, and a long press on space turns the keyboard into a trackpad that moves it. The keyboard's own model decides what every key does; this draws it and reports touches and buttons.",
     "declarations": [
       {
         "kind": "macro",
@@ -2864,7 +2870,7 @@ export const focalComponents: readonly FocalComponent[] = [
           {
             "name": "kind",
             "type": "uint8_t",
-            "comment": "enum Focal_KeyboardKeyKind"
+            "comment": "```c\nenum Focal_KeyboardKeyKind\n```"
           },
           {
             "name": "row",
@@ -2917,7 +2923,7 @@ export const focalComponents: readonly FocalComponent[] = [
           {
             "name": "shift",
             "type": "uint8_t",
-            "comment": "enum Focal_KeyboardShift"
+            "comment": "```c\nenum Focal_KeyboardShift\n```"
           },
           {
             "name": "focus",
@@ -3058,7 +3064,7 @@ export const focalComponents: readonly FocalComponent[] = [
           {
             "name": "button",
             "type": "void (*)(void *, unsigned int)",
-            "comment": "enum Focal_KeyboardButton"
+            "comment": "```c\nenum Focal_KeyboardButton\n```"
           },
           {
             "name": "place",
@@ -3276,6 +3282,8 @@ export const focalComponents: readonly FocalComponent[] = [
         "title": "Page title",
         "slug": "page-title",
         "description": "A page title with its position in a set of pages.",
+        "source": "FOCAL_PREVIEW(\"Page title\",\n               .description = \"A page title with its position in a set of pages.\") {\n    (void)props;\n    const struct Focal_Theme *theme = &Focal_Theme_x100vi;\n    FOCAL_THEME(theme) {\n        CLAY(CLAY_ID(\"page\"), {\n            .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},\n                       .layoutDirection = CLAY_TOP_TO_BOTTOM},\n            .backgroundColor = theme->background,\n        }) {\n            FOCAL_TITLE_BAR(.title = {.utf8 = \"IMAGE QUALITY\"}, .page = 2, .pages = 5,\n                            .appearance = FOCAL_TITLE_APPEARANCE_DEFAULT);\n        }\n    }\n}",
+        "line": 200,
         "width": 720,
         "height": 480,
         "page": "/docs/sdk/focal/title-bar/page-title/preview.html"
@@ -4152,7 +4160,7 @@ export const focalComponents: readonly FocalComponent[] = [
         "kind": "struct",
         "name": "Focal_ValueEditorStyle",
         "signature": "struct Focal_ValueEditorStyle",
-        "comment": "Field pages (editor.h). Sections start section_left in and end section_right from the edge, headings heading_top below the title band; a page without headings starts its field row line_left in and line_top below the title. Field rows sit field_top below their headings; a left-aligned section insets them by field_inset. section_gap separates the divider from each section; the divider starts divider_top below the headings' top. A field's unit follows it by unit_gap. The detail line sits detail_top below the field row, detail_gap between its caption and value. The wheel shows neighboring values wheel_near and wheel_far from the focused field's center.",
+        "comment": "Field pages (editor.h). Sections start section_left in and end\n\n```c\nsection_right from the edge, headings heading_top below the title band;\n```\n\na page without headings starts its field row line_left in and line_top below the title. Field rows sit field_top below their headings; a left-aligned section insets them by field_inset. section_gap separates the divider from each section; the divider starts divider_top below the headings' top. A field's unit follows it by unit_gap. The detail line sits detail_top below the field row, detail_gap between its caption and value. The wheel shows neighboring values wheel_near and wheel_far from the focused field's center.",
         "members": [
           {
             "name": "heading_top",
@@ -5156,7 +5164,7 @@ export const focalComponents: readonly FocalComponent[] = [
           {
             "name": "popup_motion_duration_ms",
             "type": "unsigned short",
-            "comment": "The option popup (research/menu-ux/focalized-ui-plan.md, \"Option popup\"): a panel from its content's width (at least popup_min_width) to the screen's right edge. Options use the same viewport-derived row height as menu lists. The check of the current option sits popup_check_left in; labels start popup_label_left in, artwork first with popup_icon_gap after it, and popup_label_right of space follows the widest label. The pointer, a ‹ level with the row the popup opened from, ends popup_pointer_gap left of the panel."
+            "comment": "The option popup (research/menu-ux/focalized-ui-plan.md, \"Option popup\"): a panel from its content's width (at least popup_min_width) to the screen's right edge. Options use the same viewport-derived row height\n\n```c\nas menu lists. The check of the current option sits popup_check_left in;\n```\n\nlabels start popup_label_left in, artwork first with popup_icon_gap after it, and popup_label_right of space follows the widest label. The pointer, a ‹ level with the row the popup opened from, ends popup_pointer_gap left of the panel."
           },
           {
             "name": "popup_border_width",
@@ -5365,7 +5373,7 @@ export const focalComponents: readonly FocalComponent[] = [
     "title": "Editor",
     "slug": "editor",
     "header": "focal_editor.h",
-    "summary": "A value editor: a fixed row of fields edited together and applied at\nonce (DATE/TIME, TIME DIFFERENCE). The editor reads and writes stock's\nstate; the UI plugin owns focus, stepping and drawing. One editor per\nstock screen, defined in its own file next to the body's other maps.",
+    "summary": "A value editor: a fixed row of fields edited together and applied at once (DATE/TIME, TIME DIFFERENCE). The editor reads and writes stock's state; the UI plugin owns focus, stepping and drawing. One editor per stock screen, defined in its own file next to the body's other maps.",
     "declarations": [
       {
         "kind": "macro",
@@ -6623,7 +6631,7 @@ export const focalComponents: readonly FocalComponent[] = [
           {
             "name": "action_kind",
             "type": "unsigned char",
-            "comment": "enum Focal_ItemKind"
+            "comment": "```c\nenum Focal_ItemKind\n```"
           },
           {
             "name": "label_width",
@@ -7146,7 +7154,7 @@ export const focalComponents: readonly FocalComponent[] = [
     "title": "Theme Assets",
     "slug": "theme-assets",
     "header": "focal_theme_assets.h",
-    "summary": "The app's artwork for the toolkit components: semantic asset roles\nresolved to glyphs, vectors and icons, and the stock captions a theme's\ncontrols show. The app supplies it with its theme (struct Focal_Theme's\n`assets`); a theme without one draws no artwork.",
+    "summary": "The app's artwork for the toolkit components: semantic asset roles resolved to glyphs, vectors and icons, and the stock captions a theme's controls show. The app supplies it with its theme (struct Focal_Theme's `assets`); a theme without one draws no artwork.",
     "declarations": [
       {
         "kind": "enum",
