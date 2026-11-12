@@ -720,10 +720,11 @@
               4285571200,
               4285575296,
               4285579392,
-              4285591680
+              4285591680,
+              4294631552
             ],
             "ack_ticks": 8,
-            "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block."
+            "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
           },
           "io_groups": {
             "base": 4294189056,
@@ -1238,6 +1239,17 @@
                 }
               ],
               "basis": "X-T3 5.11 resets the unit by writing 0 to +0x000 and waits for bit 0 to read 1. Other words read back their last write; nothing else in this block is modeled."
+            },
+            {
+              "base": 4294619136,
+              "size": 4096,
+              "idle_bits": [
+                {
+                  "offset": 0,
+                  "mask": 1
+                }
+              ],
+              "basis": "X-T3 5.11 viewfinder output setup, run when VIEW MODE selects the viewfinder: it read-modify-writes +0x004, writes table words to +0x008..+0x014, then writes 0 to +0x000 and waits for bit 0 to read 1; its release sets +0x004 bits 0x1f0fff again. Other words read back their last write; what the words select is not modeled. The viewfinder picture itself is scanned by the rear screen controller at 0xfffa9000, retimed to 1280 columns."
             }
           ],
           "usb_phy": {
