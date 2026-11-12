@@ -2800,6 +2800,7 @@ class HardwareImagingRegisters(TypedDict, total=False):
     error_irqs: Required[list[int]]
     input_buffer: Required[HardwareInputBuffer]
     normal_irqs: Required[list[int]]
+    raw_dma_irqs: NotRequired[list[int] | None]
     receiver_base: Required[int]
     reset_ticks: Required[int]
     timing_irqs: Required[list[int]]
@@ -4204,7 +4205,7 @@ class PhysicalControlsVariant0(TypedDict, total=False):
     service: NotRequired[BootCombination]
 
 
-type PictureLayout = Literal["bgra8888-straight"]
+type PictureLayout = Literal["abgr8888-straight"]
 
 
 type PixelFormat = Literal["bgra8888"]

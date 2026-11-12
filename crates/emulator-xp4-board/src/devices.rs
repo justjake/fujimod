@@ -414,7 +414,13 @@ impl Devices {
         {
             return Err("Invalid or overlapping XP4 DMP wiring".into());
         }
-        let model = fujimod_emulator_ip_dmp::smaph::Renderer::new(base, irq)?;
+        // The X-T3 LCD pixmap holds the renderer's RGBA8 words unchanged
+        // (memory bytes A,B,G,R): see PixmapReadback::PreservesWords.
+        let model = fujimod_emulator_ip_dmp::smaph::Renderer::new(
+            base,
+            irq,
+            fujimod_emulator_ip_dmp::smaph::PixmapReadback::PreservesWords,
+        )?;
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + 0x3000, id));
@@ -437,8 +443,8 @@ impl Devices {
         }
         let picture = match layout {
             None => None,
-            Some("bgra8888-straight") => {
-                Some(fujimod_framebuffer_xp4::Picture::Bgra8888Straight)
+            Some("abgr8888-straight") => {
+                Some(fujimod_framebuffer_xp4::Picture::Abgr8888Straight)
             }
             _ => return Err("Unsupported XP4 LCDC picture layout".into()),
         };

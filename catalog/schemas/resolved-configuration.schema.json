@@ -20557,8 +20557,8 @@
       "description": "Picture-plane pixel packing declared by a display controller.",
       "oneOf": [
         {
-          "const": "bgra8888-straight",
-          "description": "Blue, green, red and straight-alpha bytes.",
+          "const": "abgr8888-straight",
+          "description": "Straight-alpha, blue, green and red bytes, in memory order.",
           "type": "string"
         }
       ]

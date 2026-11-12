@@ -575,7 +575,7 @@
       },
       "lcdc1": {
         "kind": "display",
-        "picture_layout": "bgra8888-straight",
+        "picture_layout": "abgr8888-straight",
         "video_layout": "yycbcr422"
       },
       "input-buffer": {
@@ -661,7 +661,7 @@
                 117,
                 118
               ],
-              "picture_layout": "bgra8888-straight",
+              "picture_layout": "abgr8888-straight",
               "video_layout": "yycbcr422",
               "basis": "Declared catalog input."
             }

@@ -1304,7 +1304,11 @@ pub fn build(
             Model::Renderer { base, irq } => devices.register(
                 base,
                 0x3000,
-                Box::new(fujimod_emulator_ip_dmp::smaph::Renderer::new(base, irq)?),
+                Box::new(fujimod_emulator_ip_dmp::smaph::Renderer::new(
+                    base,
+                    irq,
+                    fujimod_emulator_ip_dmp::smaph::PixmapReadback::RotatesChannels,
+                )?),
             )?,
             Model::Shutter {
                 mode,

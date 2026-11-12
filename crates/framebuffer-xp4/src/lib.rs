@@ -6,7 +6,12 @@ use fujimod_framebuffer::{
 /// Selected by the processor graph; no implicit pixel-format fallback.
 #[derive(Clone, Copy)]
 pub enum Picture {
-    Bgra8888Straight,
+    /// Memory bytes alpha, blue, green, red; straight alpha over the video.
+    /// An X-T3 5.11 shows the ARGB word 0xff2080e0 stored by the CPU as pink
+    /// (2026-11-11), and 0xff000000 and 0x80000000 not at all
+    /// while 0xff101010 only tints the live view (aspect ratio bands,
+    /// 2026-11-12): the lowest byte is alpha and the highest red.
+    Abgr8888Straight,
 }
 /// Explicit linear video transport; hardware packing is not inferred from RAM.
 #[derive(Clone, Copy)]
@@ -54,7 +59,7 @@ impl Decoder<'_> {
             if self.r(0x50) & !0xfff != 0x10000 {
                 return Err("Unsupported XP4 LCDC raw picture mode".into());
             }
-            (source, (self.r(0x50) & 0xfff) * 4, 0x54, PixelOrder::Bgra)
+            (source, (self.r(0x50) & 0xfff) * 4, 0x54, PixelOrder::Abgr)
         };
         if self.r(geometry + 0x10) != 0 || self.r(geometry + 0x14) != 0 {
             return Err("Unsupported XP4 LCDC picture crop or fractional phase".into());
@@ -153,18 +158,72 @@ mod tests {
         ] {
             regs[o / 4] = v;
         }
-        let out = decode(&regs, Some(Picture::Bgra8888Straight), None)
+        let out = decode(&regs, Some(Picture::Abgr8888Straight), None)
             .unwrap()
             .unwrap();
         assert_eq!(out.layers[0].id, "12");
         let rgba = out
             .render(|a, n| {
                 assert_eq!((a, n), (16, 8));
-                Ok(vec![30, 20, 10, 255, 50, 40, 30, 255])
+                Ok(vec![255, 30, 20, 10, 255, 50, 40, 30])
             })
             .unwrap();
         assert_eq!(&rgba[..8], &[10, 20, 30, 255, 10, 20, 30, 255]);
         regs[8 / 4] |= 2;
-        assert!(decode(&regs, Some(Picture::Bgra8888Straight), None).is_err());
+        assert!(decode(&regs, Some(Picture::Abgr8888Straight), None).is_err());
+    }
+    /// Camera runs on an X-T3 5.11: CPU words stored in the LCD picture
+    /// plane over the REC live view. A test rectangle (2026-11-11) showed ARGB
+    /// 0xff2080e0 as solid pink; aspect ratio bands drawn by a mod
+    /// (2026-11-12) left 0xff000000 and 0x80000000 bands invisible
+    /// and drew 0xff101010 bands as a faint tint, not black.
+    #[test]
+    fn cpu_argb_words_show_as_the_camera_showed_them_over_the_live_view() {
+        let mut regs = vec![0; REGISTER_BYTES / 4];
+        for (o, v) in [
+            (4, 1),
+            (8, 0x1010),
+            (0x14, 4),
+            (0x20, 1),
+            (0x44, 16),
+            (0x4c, 16),
+            (0x50, 0x10004),
+            (0x54, 0x10004),
+            (0x5c, 0x10004),
+            (0x60, 0x10001000),
+            (0x168, 0x100),
+            (0x16c, 1),
+            (0x170, 0x10004),
+            (0x178, 0x10004),
+            (0x17c, 0x10001000),
+        ] {
+            regs[o / 4] = v;
+        }
+        let out = decode(
+            &regs,
+            Some(Picture::Abgr8888Straight),
+            Some(Video::YyCbCr422),
+        )
+        .unwrap()
+        .unwrap();
+        let words: [u32; 4] = [0xff2080e0, 0xff000000, 0x80000000, 0xff101010];
+        let rgba = out
+            .render(|a, n| {
+                Ok(if a == 16 {
+                    words.iter().flat_map(|w| w.to_le_bytes()).collect()
+                } else {
+                    // Gray live view: luma 128 with neutral chroma.
+                    [128, 128, 128, 128].repeat(n / 4)
+                })
+            })
+            .unwrap();
+        let pixel = |i: usize| [rgba[4 * i], rgba[4 * i + 1], rgba[4 * i + 2]];
+        let gray = pixel(1);
+        assert!(gray[0] > 100 && gray[0] == gray[1] && gray[1] == gray[2]);
+        let pink = pixel(0);
+        assert!(pink[0] > 220 && pink[2] > 100 && pink[1] < 60, "{pink:?}");
+        assert_eq!(pixel(2), gray);
+        let tint = pixel(3);
+        assert!(tint[0] > gray[0] && tint[1] < gray[1] && tint[1] > gray[1] - 20, "{tint:?}");
     }
 }
