@@ -2078,7 +2078,8 @@ impl Session {
         }
         Ok(())
     }
-    pub fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize) -> Result<(), String> {
+    /// `writes_only` records stores alone, so reads and fetches of hot ranges do not consume the record bound.
+    pub fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize, writes_only: bool) -> Result<(), String> {
         self.inner.host_mutation()?;
         if ranges.is_empty()
             || ranges.len() > 256
@@ -2115,13 +2116,14 @@ impl Session {
             records: Vec::new(),
             violation: None,
             hooks: Vec::new(),
+            writes_only,
         };
         for (core, cpu) in self.inner.cpus.iter().enumerate() {
             let data = (&*self.inner.hooks[core] as *const Hook).cast_mut().cast();
             let hook = CpuHook::Memory {
                 callback: memory_access,
                 data,
-                read: true,
+                read: !writes_only,
                 write: true,
                 range: HookRange::Inclusive {
                     begin: 0,

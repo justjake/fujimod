@@ -41,7 +41,7 @@ pub trait Xp4Backend {
         return_sites: Option<Vec<u64>>,
         quota_per_edge: bool,
     ) -> PyResult<()>;
-    fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize) -> PyResult<()>;
+    fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize, writes_only: bool) -> PyResult<()>;
     fn memory_watch_end(&self) -> PyResult<()>;
     fn cpr_read(&self, core: usize, crn: u32, crm: u32, opc1: u32, opc2: u32) -> PyResult<u64>;
     fn write(&self, address: usize, data: &[u8]) -> PyResult<()>;

@@ -128,7 +128,7 @@ impl Xp4Session {
             .map(|saved| fujimod_python_base::observation::snapshot(py, &saved))
             .transpose()
     }
-    forward!(memory_watch_begin(ranges: Vec<(u64, u64)>, limit: usize) -> ());
+    forward!(memory_watch_begin(ranges: Vec<(u64, u64)>, limit: usize, writes_only: bool) -> ());
     forward!(memory_watch_end() -> ());
     pub fn memory_watch_enabled(&self) -> bool {
         self.inner.memory_watch_enabled()
@@ -299,8 +299,8 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
             quota_per_edge,
         )
     }
-    fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize) -> PyResult<()> {
-        Xp4Session::memory_watch_begin(self, ranges, limit)
+    fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize, writes_only: bool) -> PyResult<()> {
+        Xp4Session::memory_watch_begin(self, ranges, limit, writes_only)
     }
     fn memory_watch_end(&self) -> PyResult<()> {
         Xp4Session::memory_watch_end(self)

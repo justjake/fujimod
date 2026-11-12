@@ -91,14 +91,15 @@ impl Xp4 {
     fn function_watch_state<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
         self.with(py, |s| s.function_watch_state(py))
     }
-    #[pyo3(signature=(ranges, limit=1_000_000))]
+    #[pyo3(signature=(ranges, limit=1_000_000, writes_only=false))]
     fn memory_watch_begin(
         &self,
         py: Python<'_>,
         ranges: Vec<(u64, u64)>,
         limit: usize,
+        writes_only: bool,
     ) -> PyResult<()> {
-        self.with(py, |s| s.memory_watch_begin(ranges, limit))
+        self.with(py, |s| s.memory_watch_begin(ranges, limit, writes_only))
     }
     fn memory_watch_end(&self, py: Python<'_>) -> PyResult<()> {
         self.with(py, |s| s.memory_watch_end())
