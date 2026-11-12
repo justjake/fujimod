@@ -38,6 +38,9 @@ impl Default for SensorState {
 pub struct ImageRoutes {
     pub dma: Option<[u32; 2]>,
     pub timing: [u32; 2],
+    /// Each DMA channel's +0x18 word is its line stride in bytes; otherwise
+    /// lines are packed (width x 2 bytes).
+    pub line_stride: bool,
 }
 #[derive(Clone)]
 pub struct Sensor(pub Arc<Mutex<SensorState>>, Option<ImageRoutes>, (u16, u8));
@@ -106,21 +109,33 @@ impl Sensor {
         if address == 0 || width == 0 || height == 0 {
             return Ok(());
         }
-        let size = u64::from(width) * u64::from(height) * 2;
+        let line = u64::from(width) * 2;
+        let stride = if routes.line_stride {
+            u64::from(reg(base + 0x18))
+        } else {
+            line
+        };
+        if stride < line || stride % 2 != 0 {
+            return Err(format!(
+                "RAW DMA line stride {stride:#x} does not hold {width} 16-bit samples"
+            ));
+        }
+        let size = stride * u64::from(height - 1) + line;
         if size > 128 * 1024 * 1024 {
             return Err("receiver frame exceeds functional DMA limit".into());
         }
         let frame = s.frames[channel];
-        let mut bytes = Vec::with_capacity(size as usize);
+        let mut bytes = Vec::with_capacity(line as usize);
         for y in 0..height {
+            bytes.clear();
             for x in 0..width {
                 // Explicit RAW14-in-LE16 moving ramp for the normal REC14 profile.
                 let sample =
                     ((u64::from(x) * 31 + u64::from(y) * 17 + frame * 131) & 0x3fff) as u16;
                 bytes.extend_from_slice(&sample.to_le_bytes());
             }
+            cx.ram_write(address + stride * u64::from(y), &bytes)?;
         }
-        cx.ram_write(address, &bytes)?;
         s.frames[channel] += 1;
         s.last_dma[channel] = (address, width, height);
         let pending = base + 0x24;
@@ -443,6 +458,7 @@ mod tests {
             Some(ImageRoutes {
                 dma: None,
                 timing: [100, 102],
+                line_stride: false,
             }),
             (0x51, 8),
         );
@@ -471,6 +487,33 @@ mod tests {
         }
         assert_eq!(command.save(), saved);
         assert!(host.ram.is_empty());
+    }
+    #[test]
+    fn raw_dma_line_stride_places_each_line_and_refuses_short_strides() {
+        let sensor = Sensor::new(
+            Some(ImageRoutes {
+                dma: Some([97, 98]),
+                timing: [102, 100],
+                line_stride: true,
+            }),
+            (0x59, 4),
+        );
+        let mut host = RecordingHost {
+            ram: vec![0x55; 0x40],
+            ram_base: 0x1000,
+            ..Default::default()
+        };
+        for (offset, value) in [(0x40, 1), (0x44, 4), (0x48, 2), (0x50, 0x1000), (0x58, 12), (0x60, 1)] {
+            sensor.image_write(&mut Cx::new(&mut host, 0, 0, 0), offset, value);
+        }
+        sensor.frame(&mut Cx::new(&mut host, 0, 0, 0), 0).unwrap();
+        assert_eq!(&host.ram[..8], &[0, 0, 31, 0, 62, 0, 93, 0]);
+        assert_eq!(&host.ram[8..12], &[0x55; 4]);
+        assert_eq!(&host.ram[12..14], &17u16.to_le_bytes());
+        assert_eq!(&host.ram[20..22], &[0x55; 2]);
+        assert!(host.irqs.iter().rev().find(|(i, _)| *i == 97).unwrap().1);
+        sensor.image_write(&mut Cx::new(&mut host, 0, 0, 0), 0x58, 6);
+        assert!(sensor.frame(&mut Cx::new(&mut host, 0, 0, 0), 0).is_err());
     }
     #[test]
     fn packet_lists_read_gate_cancel_and_exact_deadline_are_program_independent() {

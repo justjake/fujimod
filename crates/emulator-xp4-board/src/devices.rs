@@ -713,6 +713,9 @@ impl Devices {
             Some(sensor::ImageRoutes {
                 dma,
                 timing: timing_irqs.try_into().unwrap(),
+                // The X-T3 5.11 sensor driver writes the stride with the
+                // buffer address: +0x58 = 0x31e0 for 6276 samples.
+                line_stride: true,
             }),
             read_gate,
         );
