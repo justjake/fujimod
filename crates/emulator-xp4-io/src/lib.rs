@@ -1,6 +1,7 @@
 //! XP4 power serial links, SPI, ADC, RTC, timers, requests, temperature, SD host and USB PHY.
 pub mod adc;
 pub mod checksum_power_serial;
+pub mod countdown_timers;
 pub mod interval_timers;
 pub mod power_serial;
 pub mod requests;

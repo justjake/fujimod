@@ -561,6 +561,20 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
+    pub fn countdown_timers(&mut self, base: u64, routes: &[(usize, u32)]) -> Result<(), String> {
+        let model = fujimod_emulator_xp4_io::countdown_timers::CountdownTimers::new(base, routes)?;
+        let windows = model.windows();
+        if windows
+            .iter()
+            .any(|&(lo, hi)| self.windows.iter().any(|&(a, b, _)| lo < b && a < hi))
+        {
+            return Err("Overlapping XP4 countdown timer window".into());
+        }
+        let id = self.models.len();
+        self.windows.extend(windows.map(|(lo, hi)| (lo, hi, id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
     pub fn usb_condition(&mut self, base: u64, present: bool) -> Result<(), String> {
         if self
             .windows

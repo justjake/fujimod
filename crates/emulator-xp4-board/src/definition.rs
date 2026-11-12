@@ -217,6 +217,9 @@ pub struct Definition {
     /// The USB condition register `(base, cable present)`, when declared.
     #[serde(default)]
     pub usb_condition: Option<(u64, bool)>,
+    /// The countdown timer bank `(base, [(channel, interrupt line)])`, when declared.
+    #[serde(default)]
+    pub countdown_timers: Option<(u64, Vec<(usize, u32)>)>,
     #[serde(default = "instruction_rate")]
     pub instructions_per_tick: (u64, u64),
     #[serde(default)]

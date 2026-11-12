@@ -1126,6 +1126,7 @@ impl Session {
             sd_clocks,
             sd_hosts,
             register_banks,
+            countdown_timers,
             usb_condition,
             instructions_per_tick,
             usb,
@@ -1681,6 +1682,11 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .register_banks(register_banks)?;
+        }
+        if let Some((base, routes)) = countdown_timers {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .countdown_timers(base, &routes)?;
         }
         if let Some((base, present)) = usb_condition {
             devices
