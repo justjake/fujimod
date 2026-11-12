@@ -239,6 +239,12 @@ pub struct Definition {
     /// The still DSP's host interface (see `crate::dsp`), when declared.
     #[serde(default)]
     pub dsp: Option<Dsp>,
+    /// The face detection engine with the XP4 driver's register contract, when declared.
+    #[serde(default)]
+    pub face_detector: Option<FaceDetector>,
+    /// The filter engine with the XP4 driver's register contract, when declared.
+    #[serde(default)]
+    pub filter_engine: Option<FilterEngine>,
     #[serde(default = "instruction_rate")]
     pub instructions_per_tick: (u64, u64),
     #[serde(default)]
@@ -292,6 +298,27 @@ pub struct StillEngine {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Dsp {
+    pub irq: u32,
+    pub run_ticks: u64,
+}
+
+/// The XP4 face detection engine: register page base, finished-run
+/// interrupt line and run time in ticks.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FaceDetector {
+    pub base: u64,
+    pub irq: u32,
+    pub run_ticks: u64,
+}
+
+/// The XP4 filter engine: register page base, address of its two memory
+/// type words, finished-run interrupt line and run time in ticks.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FilterEngine {
+    pub base: u64,
+    pub memory_types: u64,
     pub irq: u32,
     pub run_ticks: u64,
 }

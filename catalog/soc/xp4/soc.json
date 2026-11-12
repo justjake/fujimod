@@ -1355,6 +1355,13 @@
             "irq_route": 135,
             "run_ticks": 108000,
             "basis": "JPEG encoder of X-T3 5.11, the X-T20 2.11 encoder's register layout. The driver has one accessor per word: +0x44 size, +0x12c origin, +0x130 pitch, +0x100/+0x10c/+0x110 source, destination and limit, +0x84 table loading and +0x8c table words, +0x28 interrupt mask. The driver's start registers its handler on interrupt line 135 (level) before setting +0x00 bit 0. The handler reads the status +0x24, writes it back and takes bit 4 as a finished run, then reads the stream size +0x94. run_ticks (2 ms at 54 MHz) is not measured."
+          },
+          "face_detection": {
+            "base": 4294426624,
+            "size": 4096,
+            "irq_route": 123,
+            "run_ticks": 108000,
+            "basis": "Face detection engine of X-T3 5.11. The driver has one accessor per word or word group: +0x00 stop (bit 0 written clear, then the word is polled until nonzero), +0x04 start, +0x08 mode (bits 2..0 below 5, flags 4, 8, 12, 16), configuration words +0x0c..+0x5fc, +0x6e0/+0x6e4 and +0x710..+0x71c (read back by the driver), results +0x600..+0x608, channel flags +0x700 bits 0, 4, 8, 16, 20, 24 with fields +0x704 cleared by writing +0x708, finished bit 0 at +0x730 and +0x734 (cleared by writing 1), and channel arming +0x738 bit 0. The driver's open programs the configuration and registers its handler on interrupt line 123. Each live view frame's run writes the mode, arms the channels, polls +0x700 until all six flags are set, clears them and sets +0x04 bit 0; the handler reads +0x730, writes it back to +0x734 and posts the finished run to the face task. No image is read and no face is detected: the result words read zero. Arming completes at once; run_ticks (2 ms at 54 MHz) is not measured. Runs in other modes (mode 4) are refused."
           }
         },
         "limits": [],

@@ -1147,6 +1147,8 @@ impl Session {
             jpeg_encoder,
             still_engines,
             dsp,
+            face_detector,
+            filter_engine,
             usb_condition,
             instructions_per_tick,
             usb,
@@ -1741,6 +1743,16 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .dsp(&wiring)?;
+        }
+        if let Some(detector) = face_detector {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .face_detector(&detector)?;
+        }
+        if let Some(engine) = filter_engine {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .filter_engine(&engine)?;
         }
         if let Some((base, present)) = usb_condition {
             devices

@@ -673,6 +673,45 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
+    pub fn face_detector(&mut self, wiring: &crate::definition::FaceDetector) -> Result<(), String> {
+        let model = fujimod_emulator_xp4_io::face_detector::FaceDetector::new(
+            wiring.base,
+            wiring.irq,
+            wiring.run_ticks,
+        )?;
+        let windows = model.windows();
+        if windows
+            .iter()
+            .any(|&(lo, hi)| self.windows.iter().any(|&(a, b, _)| lo < b && a < hi))
+        {
+            return Err("Overlapping XP4 face detector window".into());
+        }
+        let id = self.models.len();
+        self.windows
+            .extend(windows.into_iter().map(|(lo, hi)| (lo, hi, id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
+    pub fn filter_engine(&mut self, wiring: &crate::definition::FilterEngine) -> Result<(), String> {
+        let model = fujimod_emulator_xp4_io::filter_engine::FilterEngine::new(
+            wiring.base,
+            wiring.memory_types,
+            wiring.irq,
+            wiring.run_ticks,
+        )?;
+        let windows = model.windows();
+        if windows
+            .iter()
+            .any(|&(lo, hi)| self.windows.iter().any(|&(a, b, _)| lo < b && a < hi))
+        {
+            return Err("Overlapping XP4 filter engine window".into());
+        }
+        let id = self.models.len();
+        self.windows
+            .extend(windows.into_iter().map(|(lo, hi)| (lo, hi, id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
     pub fn usb_condition(&mut self, base: u64, present: bool) -> Result<(), String> {
         if self
             .windows
