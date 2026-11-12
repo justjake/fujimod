@@ -325,7 +325,12 @@ impl Device for Command {
                 }
                 self.sensor.image_write(cx, o, value)
             }
-            0x180..=0x1b0 | 0x208 | 0x20c | 0x210 | 0x214 | 0x218 | 0x21c => {
+            // The words at 0x180..0x1b0 are stored but never read by a submit,
+            // so a write while a command is pending cannot change it.
+            0x180..=0x1b0 => {
+                self.state.registers.insert(o, value);
+            }
+            0x208 | 0x20c | 0x210 | 0x214 | 0x218 | 0x21c => {
                 if self.state.pending.is_some() {
                     cx.fail("reconfiguring active sensor command");
                 } else {
@@ -525,6 +530,27 @@ mod tests {
         }
         let expected = experiment(0, 0, false);
         assert_eq!(experiment(3, 0xabad, true), expected);
+    }
+    #[test]
+    fn command_window_words_the_submit_never_reads_accept_writes_while_busy() {
+        // X-T3 5.11: one core sets the one-bit field at +0x188 while another
+        // polls the busy bit at +0x204, as an emulated SD card boot did.
+        let sensor = Sensor::new(None, (0x59, 4));
+        let mut command = Command::new(0xfff6c000, sensor, 100_000).unwrap();
+        let mut host = RecordingHost {
+            ram_base: 0x1000,
+            ram: vec![0x81, 0, 0x59, 4, 0, 0, 0, 0],
+            ..Default::default()
+        };
+        let mut cx = Cx::new(&mut host, 2, 0, 0);
+        for (o, v) in [(0x208, 0x10401), (0x210, 0x1000), (0x218, 8), (0x204, 1)] {
+            command.write(&mut cx, 0xfff6c000 + o, 4, v);
+        }
+        command.write(&mut cx, 0xfff6c188, 4, 1);
+        assert!(cx.refusal().is_none());
+        assert_eq!(command.read(&mut cx, 0xfff6c204, 4), 1);
+        command.write(&mut cx, 0xfff6c210, 4, 0x2000);
+        assert!(cx.refusal().is_some());
     }
     #[test]
     fn dma_command_waits_for_guest_time_and_restores_pending_transport() {
