@@ -1166,7 +1166,7 @@ impl Session {
             || pmu_cycles_per_tick == Some(0)
             || ram_size < 0x10000
             || ram_size & 4095 != 0
-            || ram_size > 0x80000000
+            || ram_size > 0xf000_0000
         {
             return Err("ARMv7-A needs 1..4 cores and page aligned physical RAM".to_owned());
         }
