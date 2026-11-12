@@ -47,5 +47,5 @@ existing file.
 
 `cargo test -p fujimod-file-send` runs the exchange over an in-memory pipe:
 several files, resume, a corrupt partial file and refused names.
-`cargo test -p fujimod-usb-proxy --features relay direct_only` checks that a
+`cargo test -p fujimod-webrtc --features signaling direct_only` checks that a
 direct-only connection never contacts TURN.

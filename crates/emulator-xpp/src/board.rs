@@ -2,7 +2,7 @@
 //! The caller supplies checked wiring, assets, and physical contact inputs.
 use crate::{
     adc, blocks, boot, clocks, display, dram, encoder, face, flash, h264, i2c, imaging, jpeg, keys,
-    lens, power, resets, sd, serial, shutter, statistics, sync, timer,
+    lens, power, resets, sd, serial, shutter, statistics, sync, timer, touch_xt20,
 };
 use fujimod_emulator::board::{
     self, Board, InterruptMap, InterruptRegisters,
@@ -310,6 +310,11 @@ pub enum Model {
     I2c {
         options: fujimod_emulator_ip::dw_i2c::Options,
         parts: Value,
+    },
+    Xt20TouchI2c {
+        options: fujimod_emulator_ip::dw_i2c::Options,
+        parts: Value,
+        touch: touch_xt20::Options,
     },
     DisplayOutput {
         #[serde(default)]
@@ -1123,6 +1128,18 @@ pub fn build(
                     Box::new(fujimod_emulator_ip::dw_i2c::Controller::new(
                         options,
                         i2c::Parts::new(serde_json::from_value(parts).map_err(|e| e.to_string())?)?,
+                    )?),
+                )?
+            }
+            Model::Xt20TouchI2c { options, parts, touch } => {
+                let base = options.base;
+                devices.register(
+                    base,
+                    fujimod_emulator_ip::dw_i2c::WINDOW,
+                    Box::new(touch_xt20::Xt20TouchI2c::new(
+                        options,
+                        serde_json::from_value(parts).map_err(|e| e.to_string())?,
+                        touch,
                     )?),
                 )?
             }

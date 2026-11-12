@@ -30,14 +30,14 @@ pub trait Pipe {
     fn receive(&mut self) -> impl Future<Output = Result<Vec<u8>>>;
 }
 
-impl Pipe for fujimod_usb_proxy::PeerSocket {
+impl Pipe for fujimod_webrtc::PeerSocket {
     async fn send(&mut self, message: Vec<u8>) -> Result<()> {
-        fujimod_usb_proxy::PeerSocket::send(self, message)
+        fujimod_webrtc::PeerSocket::send(self, message)
             .await
             .map_err(|e| e.to_string())
     }
     async fn receive(&mut self) -> Result<Vec<u8>> {
-        fujimod_usb_proxy::PeerSocket::receive(self)
+        fujimod_webrtc::PeerSocket::receive(self)
             .await
             .map_err(|e| e.to_string())
     }

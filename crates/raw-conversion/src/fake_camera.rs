@@ -36,6 +36,17 @@ pub struct FakeCamera {
     pub session_open: bool,
     /// Converted images the JPEG reader cannot parse.
     pub unreadable_output: bool,
+    pub model: String,
+    pub firmware: String,
+    /// CONNECTION MODE as property 0xD16E reports it (6: USB RAW CONV.).
+    pub usb_mode: u16,
+    /// Custom-setting slots C1–C7 by number (index 0 unused): property bytes.
+    pub slots: Vec<BTreeMap<u16, Vec<u8>>>,
+    pub slot: usize,
+    /// Refuse SetDevicePropValue for this property.
+    pub refuse_property: Option<u16>,
+    /// Accept this property's writes but keep its old value.
+    pub ignore_property: Option<u16>,
     pending: Option<(u16, u32, Vec<u32>)>,
     incoming: Vec<u8>,
     expect_zlp: bool,
@@ -66,6 +77,13 @@ impl FakeCamera {
             attempts: 0,
             session_open: false,
             unreadable_output: false,
+            model: "X-T5".into(),
+            firmware: "1.10".into(),
+            usb_mode: 6,
+            slots: (0..8).map(slot_defaults).collect(),
+            slot: 1,
+            refuse_property: None,
+            ignore_property: None,
             pending: None,
             incoming: Vec::new(),
             expect_zlp: false,
@@ -145,7 +163,7 @@ impl FakeCamera {
                 }
                 info.extend_from_slice(&0u32.to_le_bytes());
                 info.extend_from_slice(&0u32.to_le_bytes());
-                for s in ["FUJIFILM", "X-T5", "1.10"] {
+                for s in ["FUJIFILM", &self.model, &self.firmware] {
                     crate::ptp::write_string(&mut info, s);
                 }
                 self.respond(code, id, Some(info));
@@ -210,7 +228,10 @@ impl FakeCamera {
                 let p = self.profile.0.clone();
                 self.respond(code, id, Some(p));
             }
-            0x1015 => self.fail(0x2019, id),
+            0x1015 => match self.property(params[0] as u16) {
+                Some(bytes) => self.respond(code, id, Some(bytes)),
+                None => self.fail(0x2019, id),
+            },
             0x1016 | SEND_OBJECT_INFO | SEND_OBJECT => self.pending = Some((code, id, params)),
             _ => self.fail(0x2005, id),
         }
@@ -261,9 +282,94 @@ impl FakeCamera {
                 self.next_handle += 1;
                 self.respond(code, id, None);
             }
+            0x1016 => match self.set_property(params[0] as u16, data) {
+                Ok(()) => self.respond(code, id, None),
+                Err(response) => self.fail(response, id),
+            },
             _ => self.fail(0x2005, id),
         }
     }
+
+    fn property(&self, code: u16) -> Option<Vec<u8>> {
+        match code {
+            0xd16e => Some(self.usb_mode.to_le_bytes().to_vec()),
+            0xd18c => Some((self.slot as u16).to_le_bytes().to_vec()),
+            _ => self.slots[self.slot].get(&code).cloned(),
+        }
+    }
+
+    /// Custom-setting writes, refused where the slot's film, white balance or
+    /// D range priority makes the setting inapplicable.
+    fn set_property(&mut self, code: u16, data: Vec<u8>) -> Result<(), u16> {
+        const INVALID: u16 = 0x201c;
+        if self.refuse_property == Some(code) {
+            return Err(INVALID);
+        }
+        if code == 0xd18c {
+            let slot = u16::from_le_bytes(data.try_into().map_err(|_| INVALID)?) as usize;
+            return if (1..=7).contains(&slot) {
+                self.slot = slot;
+                Ok(())
+            } else {
+                Err(INVALID)
+            };
+        }
+        let current = self.slots[self.slot].get(&code).ok_or(0x2005u16)?;
+        if code != 0xd18d && current.len() != data.len() {
+            return Err(INVALID);
+        }
+        let word = |c: u16| {
+            self.slots[self.slot][&c]
+                .iter()
+                .rev()
+                .fold(0u32, |v, b| (v << 8) | u32::from(*b))
+        };
+        let mono = matches!(word(0xd192), 0x06..=0x09 | 0x0c..=0x0f);
+        let allowed = match code {
+            0xd193 | 0xd194 => mono,
+            0xd19f => !mono,
+            0xd19c => word(0xd199) == 0x8007,
+            0xd190 | 0xd19d | 0xd19e => word(0xd191) == 0,
+            _ => true,
+        };
+        if !allowed {
+            return Err(INVALID);
+        }
+        if self.ignore_property != Some(code) {
+            self.slots[self.slot].insert(code, data);
+        }
+        Ok(())
+    }
+}
+
+/// A slot as a camera might hold it; property widths differ on purpose.
+fn slot_defaults(slot: usize) -> BTreeMap<u16, Vec<u8>> {
+    let mut values: BTreeMap<u16, Vec<u8>> = (0xd18e..=0xd1a4u16)
+        .map(|code| (code, vec![0, 0]))
+        .collect();
+    for (code, value) in [
+        (0xd18e, 0x04u16),
+        (0xd18f, 0x02),
+        (0xd190, 0xffff),
+        (0xd192, 0x02),
+        (0xd195, 0x03),
+        (0xd196, 0x02),
+        (0xd197, 0x01),
+        (0xd198, 0x01),
+        (0xd199, 0x0002),
+        (0xd19d, (-10i16) as u16),
+        (0xd19f, 20),
+        (0xd1a1, 0x3000),
+        (0xd1a3, 0x01),
+        (0xd1a4, 0x01),
+    ] {
+        values.insert(code, value.to_le_bytes().to_vec());
+    }
+    values.insert(0xd19c, 5500u32.to_le_bytes().to_vec());
+    let mut name = Vec::new();
+    crate::ptp::write_string(&mut name, if slot == 4 { "MY ACROS" } else { "" });
+    values.insert(0xd18d, name);
+    values
 }
 
 fn container(kind: u16, code: u16, id: u32, payload: &[u8]) -> Vec<u8> {

@@ -1,8 +1,8 @@
 //! Native owner side of the encrypted WebRTC share protocol.
 use super::CandidatePolicy;
 use super::Pacing;
+use super::ice;
 use super::native::{IceConfig, PeerSocket};
-use super::turn;
 use crate::{Error, Result};
 use async_channel::{Receiver, Sender};
 use async_tungstenite::{
@@ -112,7 +112,7 @@ impl HostRoom {
         let ice = IceConfig {
             policy,
             pacing,
-            servers: turn::ice_servers(&welcome["ice_servers"]),
+            servers: ice::ice_servers(&welcome["ice_servers"]),
         };
 
         let (signal, outgoing) = async_channel::unbounded();

@@ -6,8 +6,9 @@ use std::{
 
 /// Browser entry points. Each is bundled with everything it imports into one
 /// self-contained module in web/build/: wasm-bindgen copies only the file a
-/// `#[wasm_bindgen(module)]` names, and the relay serves one script.
-const ENTRIES: [&str; 2] = ["peer", "exporter"];
+/// `#[wasm_bindgen(module)]` names, the relay serves one script, and the
+/// browser test runners import the wire codec.
+const ENTRIES: [&str; 3] = ["peer", "exporter", "wire"];
 
 fn main() {
     let manifest = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());

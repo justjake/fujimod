@@ -2291,6 +2291,10 @@
           "status": "available",
           "errors": []
         },
+        "card-files": {
+          "status": "available",
+          "errors": []
+        },
         "controls": {
           "status": "available",
           "errors": []
@@ -2313,6 +2317,10 @@
           "errors": []
         },
         "memory-reservations": {
+          "status": "available",
+          "errors": []
+        },
+        "nand-boot": {
           "status": "available",
           "errors": []
         },
@@ -2357,14 +2365,6 @@
           "errors": []
         },
         "versions": {
-          "status": "available",
-          "errors": []
-        },
-        "nand-boot": {
-          "status": "available",
-          "errors": []
-        },
-        "card-files": {
           "status": "available",
           "errors": []
         }
@@ -7238,6 +7238,15 @@
           "status": "available",
           "errors": []
         },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
+        },
         "controls": {
           "status": "available",
           "errors": []
@@ -7300,15 +7309,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: No stock card-call mechanism for this processor"
-            }
-          ]
         }
       }
     },

@@ -15,6 +15,7 @@ fn packets() -> Vec<Vec<u8>> {
         bitrate: 1_000_000,
         max_qp: 20,
         gop: 2,
+        level_idc: 42,
     };
     let mut codec = Codec::new(VideoEncoderBackend::Software, config, &[]).unwrap();
     (0..4)

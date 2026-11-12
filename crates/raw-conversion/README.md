@@ -57,6 +57,33 @@ flags for the conversion run. Neither command deletes or changes anything on
 the SD card. Then set CONNECTION MODE back to USB RAW CONV./BACKUP RESTORE
 to convert. Both mode changes are made on the camera.
 
+## A custom-setting slot for a test chart
+
+`chart-slot` sets up one of an X100VI's custom-setting slots (C1–C7) for
+shooting a test chart, over the same USB RAW CONV./BACKUP RESTORE connection:
+
+```sh
+fujimod-raw-convert chart-slot write --slot 7 --dry-run      # what it would write; no USB
+fujimod-raw-convert chart-slot save --slot 7 --saved c7.json # never overwrites c7.json
+fujimod-raw-convert chart-slot write --saved c7.json
+fujimod-raw-convert chart-slot restore --saved c7.json
+```
+
+`write` sets PROVIA, D RANGE PRIORITY OFF, white balance 6700 K, L 3:2,
+FINE+RAW, grain, COLOR CHROME, FX BLUE and smooth skin OFF, every tone, color,
+sharpness, noise reduction, clarity and white-balance-shift setting 0, lens
+modulation optimizer OFF, sRGB and DR100, and names the slot CHART. Every
+write is read back at the width the camera reports and stops on a mismatch.
+`restore` puts back the bytes `save` read, in an order the camera accepts.
+ISO, shutter speed, aperture, focus mode and the self-timer are not part of a
+slot and stay on the camera's dials.
+
+It runs only on an X100VI with firmware 1.31 and refuses any other body or
+firmware. The slot properties (`0xD18C` selects the slot, `0xD18D` its name,
+`0xD18E`–`0xD1A4` its settings) follow other X-Trans V bodies and are
+unverified on the X100VI; the tests run against a fake camera that applies
+the slot's film, white balance and D range priority rules.
+
 ## Job file
 
 ```json
@@ -129,16 +156,27 @@ libfuji is MIT-licensed, by Daniel Cook (petabyt), commit
 `7a421a7690e271326c0c1cae0755dcba0f8b94a5`. Its results come from black-box
 reversing.
 
+Confirmed on an X100VI (firmware 1.31), from the output MakerNotes:
+
+- Film codes 18 ETERNA BLEACH BYPASS, 19 NOSTALGIC Neg. and 20 REALA ACE
+  (libfuji's guesses) give FilmMode `0x900`, `0xa00` and `0xb00`.
+- COLOR CHROME FX BLUE (word 24) is 1 OFF, 2 WEAK, 3 STRONG, like COLOR
+  CHROME EFFECT (word 9): the camera's own as-shot profiles carry 1, 2 and 3
+  for RAFs whose MakerNote `0x104e` reads 0, 32 and 64, and 1 and 2 sent
+  converted as OFF and WEAK.
+- Adobe RGB code 3 is ignored: the output is sRGB (Exif ColorSpace 1), and
+  its pixels differ from the sRGB job's no more than two identical jobs do.
+- MONOCHROMATIC COLOR at step × 10 tints in proportion up to ±9, and the
+  MakerNote records the step as BWAdjustment `0x1049` and BWMagentaGreen
+  `0x104b` (int8). Positive magenta/green is green: +90 records `0x104b` = 9
+  and tints green.
+
 Not yet confirmed on a camera:
 
-- libfuji marks film codes 18 ETERNA BLEACH BYPASS, 19 NOSTALGIC Neg. and
-  20 REALA ACE as guesses. Check the output's MakerNote film mode, `0x1401`.
-- Adobe RGB: libfuji lists 3 ("AdobeRGB", `ADOBE_RGB`) and 2 ("Adobe sRGB",
-  `ADOBE_RGB_CODE2`), both marked unsure. The manifest's Exif ColorSpace
-  (`0xa001`) shows which one the camera honored. A code it refuses is
-  recorded as `unsupported` without converting.
-- MONOCHROMATIC COLOR uses step × 10, like the other ±steps. libfuji's tables
-  allow ±18 steps; menus show ±9.
+- Adobe RGB code 2 ("Adobe sRGB", `ADOBE_RGB_CODE2`), marked unsure in
+  libfuji. The manifest's Exif ColorSpace (`0xa001`) shows whether the camera
+  honored it. A code it refuses is recorded as `unsupported` without
+  converting.
 - That `0xD183` = 1 gives the profile's image size. The manifest's frame
   size shows it.
 - That USB CARD READER is PTP, not USB mass storage, on each body.

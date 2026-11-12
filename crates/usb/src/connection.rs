@@ -95,7 +95,7 @@ fn matches_filter(d: &Device, filter: DeviceFilter) -> bool {
 pub async fn discover(filter: DeviceFilter) -> Result<Vec<Device>> {
     #[cfg(not(target_arch = "wasm32"))]
     if let Ok(url) = std::env::var("FUJIMOD_USB_PROXY_URL") {
-        let token = if fujimod_usb_proxy::share::Ticket::from_url(&url)?.is_some() {
+        let token = if fujimod_webrtc::share::Ticket::from_url(&url)?.is_some() {
             String::new()
         } else {
             std::env::var("FUJIMOD_USB_PROXY_TOKEN").map_err(|_| {

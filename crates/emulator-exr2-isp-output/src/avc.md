@@ -41,10 +41,16 @@ skipped frames refuse.
 | `E00/E04` | Luma width and padded height; progressive packed input only |
 | `E08` | Software target rate in 1024 bits/s units |
 | `E0C` | Frame rate (`23/29/59` select `24/30/60`) |
-| `E10` | Maximum software quantizer |
-| `E34` | Maximum GOP length |
+| `E10` | GOP length: an IDR starts every `E10` frames |
+| `E34` | H.264 `level_idc` written to the sequence parameter set |
 
-The target-rate, quantizer and GOP mappings define the software compression
+The per-mode values firmware writes match these meanings: `E10` takes the
+per-mode keyframe interval (30 at 60 frames/s) and `E34` the per-mode level
+(42 for 1080p60). No quantizer register is identified, so the software
+approximation starts at a fixed quantizer of 30. A camera clip's IDR spacing
+and SPS `level_idc` at each movie mode confirm both meanings.
+
+The target-rate and GOP mappings define the software compression
 approximation; they do not reproduce silicon rate control or identical
 compressed bytes. The supported register mode is checked before input is
 read. Crop/field encoding modes, overlapping/unmapped DMA,

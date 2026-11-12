@@ -1,7 +1,7 @@
 //! `fujimod-share-owner`: create, serve and end persistent share links for a
 //! camera on this computer's USB (crates/usb-proxy/SHARING.md).
 use fujimod_usb::share_owner::{OwnerHooks, serve};
-use fujimod_usb_proxy::{CandidatePolicy, HostRoom, Pacing, share::OwnerTicket};
+use fujimod_webrtc::{CandidatePolicy, HostRoom, Pacing, share::OwnerTicket};
 
 const USAGE: &str = "usage:
   fujimod-share-owner create --signal URL [--site URL] TICKET.json
