@@ -53,6 +53,8 @@ enum SessionState {
     Closed,
     Abandoned,
     ReadingRange,
+    /// A memory handle owns the session's bulk loan.
+    MemoryOwned,
 }
 #[pyclass(module = "fujimod.usb", eq, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq)]

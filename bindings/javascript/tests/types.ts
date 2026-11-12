@@ -1,4 +1,4 @@
-import { usb, type UsbError, type Session, type Memory, type Device, type InfoReply } from '../src/index.js';
+import { usb, type UsbError, type Session, type Memory, type BulkProfile, type MemoryLoan, type MemoryReport, type Device, type InfoReply } from '../src/index.js';
 import type { LensClockMode, PartAttachment, StabilizerCommand, BodyProfile } from '../pkg/fujimod.js';
 declare const lensClock: LensClockMode;
 if (lensClock.kind === 'divided') {
@@ -253,3 +253,45 @@ usb.app80.LensTarget.index(new usb.app80.TransferPayloadByte(1));
 
 // @ts-expect-error Opaque option bytes have a distinct checked handle type.
 usb.app80.Command.queryAdjustmentOption(new usb.app80.TransferPayloadByte(1));
+
+async function memoryLoan(): Promise<void> {
+  const profile: BulkProfile = usb.BulkProfile.fromJson('{}');
+  const id: string = profile.id;
+  const firmwareId: string = profile.firmwareId;
+  const json: string = profile.json;
+  const memory: Memory = await session.memory(profile);
+  const byId: Memory = await session.memory('x70-110');
+  const report: MemoryReport = memory.state;
+  const attached: MemoryReport | undefined = session.memoryState;
+  const phase: string = report.phase;
+  const inFlight: boolean = report.inFlight;
+  const closed: boolean = report.closed;
+  const abandoned: boolean = report.abandoned;
+  const available: boolean = report.loanAvailable;
+  const loan: MemoryLoan | undefined = report.loan;
+  const address: bigint | undefined = loan?.address;
+  const original: Uint8Array | undefined = loan?.original;
+  const selected: Uint8Array | undefined = loan?.selected;
+  // @ts-expect-error A loan report is immutable.
+  report.phase = 'Ready';
+  if (loan !== undefined) {
+    // @ts-expect-error Loan bytes are copies owned by the report.
+    loan.original = new Uint8Array(0);
+  }
+  // @ts-expect-error A profile is a bundled ID string or a checked descriptor.
+  await session.memory(42);
+  void id;
+  void firmwareId;
+  void json;
+  void byId;
+  void attached;
+  void phase;
+  void inFlight;
+  void closed;
+  void abandoned;
+  void available;
+  void address;
+  void original;
+  void selected;
+}
+void memoryLoan;

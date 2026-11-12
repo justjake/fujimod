@@ -3,7 +3,13 @@
 //! through which a binding crate leases or runs an operation on a Python
 //! `fujimod.usb.Session` without depending on the USB bindings, which install
 //! the hooks when they register.
-use fujimod_usb::{self as usb, ff80::Session};
+use fujimod_usb::{
+    self as usb,
+    ff80::{
+        Session,
+        commands::{debug::DebugEvent, memory::DebugMemoryLimits},
+    },
+};
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
@@ -124,6 +130,30 @@ pub type Job = Box<dyn for<'a> FnOnce(&'a mut Session) -> Operation<'a, Output> 
 /// A job the USB bindings are running on a session.
 pub type Running = Pin<Box<dyn Future<Output = PyResult<Output>> + Send>>;
 
+/// A native memory-read and debug-event provider backed by one owned USB memory
+/// loan. The USB bindings install the implementation; other binding crates
+/// adapt it to their own transport without depending on the USB bindings.
+///
+/// The provider holds the loan's owner and state, so the source stays retained
+/// for as long as it exists. Dropping it performs no USB traffic and releases
+/// no source: only the memory handle's explicit close restores the loan.
+pub trait MemorySource: Send {
+    /// The exact transfer limits of the loan's owner.
+    fn limits(&self) -> DebugMemoryLimits;
+    /// Read exactly `length` bytes at `address`.
+    fn read<'a>(
+        &'a self,
+        address: u32,
+        length: u32,
+    ) -> Pin<Box<dyn Future<Output = PyResult<Vec<u8>>> + Send + 'a>>;
+    /// Send one debug event command with at most `limit` payload bytes.
+    fn event<'a>(
+        &'a self,
+        event: DebugEvent,
+        limit: NonZeroU32,
+    ) -> Pin<Box<dyn Future<Output = PyResult<()>> + Send + 'a>>;
+}
+
 /// An ff80 session leased from a Python USB session; dropping it ends the lease.
 pub struct Lease(Box<dyn BorrowMut<Session>>);
 impl Lease {
@@ -150,6 +180,9 @@ pub struct Sessions {
     pub run: fn(&Bound<'_, PyAny>, Job) -> PyResult<Running>,
     /// The firmware's configuration command limit of a Python USB session object, in bytes.
     pub configuration_limit: fn(&Bound<'_, PyAny>) -> PyResult<u32>,
+    /// Open a provider on a Python memory handle whose staged bulk profile must
+    /// carry the given firmware ID. The remote facts supply the alias mask.
+    pub memory: fn(&Bound<'_, PyAny>, &str, u32) -> PyResult<Box<dyn MemorySource>>,
 }
 static SESSIONS: OnceLock<Sessions> = OnceLock::new();
 
@@ -172,6 +205,16 @@ pub fn lease(session: &Bound<'_, PyAny>) -> PyResult<Lease> {
 /// The firmware's configuration command limit of a Python USB session object, in bytes.
 pub fn configuration_limit(session: &Bound<'_, PyAny>) -> PyResult<u32> {
     (sessions()?.configuration_limit)(session)
+}
+
+/// Open a memory provider on a Python USB memory handle. The handle's staged
+/// bulk profile must name `firmware_id`; nothing else is substituted.
+pub fn memory_source(
+    memory: &Bound<'_, PyAny>,
+    firmware_id: &str,
+    uncached_alias: u32,
+) -> PyResult<Box<dyn MemorySource>> {
+    (sessions()?.memory)(memory, firmware_id, uncached_alias)
 }
 
 /// Run a native ff80 operation on a Python USB session object.

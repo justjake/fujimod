@@ -68,6 +68,30 @@ fn remote_and_emulator_rgb_share_the_same_capture_and_png() {
     assert!(Frame::rgb(0, 2, vec![]).is_err());
     assert!(Frame::from_png(b"bad").is_err());
 }
+
+#[test]
+fn premultiplied_rgba_preserves_rgb_and_omits_last_row_padding() {
+    let frame = Frame::rgba_premultiplied(
+        2,
+        2,
+        12,
+        &[
+            11, 22, 33, 128, 44, 55, 66, 0, 90, 91, 92, 93, // first row and padding
+            77, 88, 99, 200, 101, 102, 103, 255, // last row without padding
+        ],
+    )
+    .unwrap();
+    assert_eq!(
+        frame.pixels(),
+        &[11, 22, 33, 44, 55, 66, 77, 88, 99, 101, 102, 103]
+    );
+    assert!(Frame::rgba_premultiplied(2, 2, 8, &[0; 15]).is_err());
+    assert!(Frame::rgba_premultiplied(2, 1, 7, &[0; 8]).is_err());
+    // A caller-provided stride must fail without overflowing the extent calculation.
+    let oversized_stride = usize::MAX & !3;
+    assert!(Frame::rgba_premultiplied(1, 3, oversized_stride, &[]).is_err());
+    assert!(Frame::bgra(1, 3, oversized_stride, &[]).is_err());
+}
 #[test]
 fn captured_bytes_and_device_key_invalidate_without_any_guest_execution() {
     let mut cache = CaptureCache::<Vec<u8>>::default();

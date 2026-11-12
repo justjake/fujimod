@@ -42,7 +42,7 @@
     "test:jit": "node jit/test_host.mts",
     "test:emulator:guest": "node tests/emulator/test_guest.mts",
     "test:emulator:devices": "node tests/emulator/test_loader.mts",
-    "test": "node scripts/build.ts --testing && tsc && tsc -p tsconfig.emulator.json && tsc -p tsconfig.types.json && tsc -p tsconfig.testing.json && tsc -p tsconfig.scripts.json && node --test tests/usb.test.ts tests/emulator/*.test.ts && node jit/test_host.mts && node scripts/build.ts && tsc && tsc -p tsconfig.emulator.json && tsc -p tsconfig.types.json && tsc -p tsconfig.scripts.json && node --test tests/production.ts tests/ownership.test.ts tests/recovery.test.ts",
+    "test": "node scripts/build.ts --testing && tsc && tsc -p tsconfig.emulator.json && tsc -p tsconfig.types.json && tsc -p tsconfig.testing.json && tsc -p tsconfig.scripts.json && node --test tests/usb.test.ts tests/memory.test.ts tests/emulator/*.test.ts && node jit/test_host.mts && node scripts/build.ts && tsc && tsc -p tsconfig.emulator.json && tsc -p tsconfig.types.json && tsc -p tsconfig.scripts.json && node --test tests/production.ts tests/ownership.test.ts tests/recovery.test.ts",
     "check": "tsc --noEmit && tsc -p tsconfig.emulator.json --noEmit && tsc -p tsconfig.types.json && tsc -p tsconfig.scripts.json && tsc -p jit/tsconfig.json",
     "test:browser": "pnpm run build && node tests/browser.ts",
     "test:pyodide": "node ../python/tests/pyodide.ts",

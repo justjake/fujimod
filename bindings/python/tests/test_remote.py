@@ -95,6 +95,51 @@ async def test_ff80_camera_leases_and_returns_existing_session():
     assert script.remaining == 0
 
 
+async def test_ff80_accepts_and_decodes_premultiplied_rgba_scanout():
+    from fujimod.emulator import catalog
+    from fujimod.remote import facts_from_selection
+    from test_async import opened
+    from test_stream import E, control as envelope, memory_read
+
+    # Use a complete public selection for required layouts and identities; the
+    # scanout descriptor and bytes below are synthetic test data.
+    facts = facts_from_selection(catalog.resolve_firmware("x70-110"))
+    firmware = facts["firmware"]
+    firmware["uncached_alias"] = 0
+    pointer_address = 0x2000
+    framebuffer_address = 0x3000
+    pixel = bytes((17, 29, 43, 128))
+    pointer = framebuffer_address.to_bytes(4, "little")
+    firmware["scanout"] = {
+        "address": framebuffer_address,
+        "width": 1,
+        "height": 1,
+        "pixel_format": "rgba8888_premultiplied",
+        "stride_bytes": 4,
+        "instance": 0,
+        "layer": 0,
+        "channel": 0,
+        "pointer_address": pointer_address,
+        "address_mask": 0xFFFFFFFF,
+    }
+
+    session, script = await opened([
+        *memory_read(pointer_address, pointer),
+        *memory_read(framebuffer_address, pixel),
+        *memory_read(pointer_address, pointer),
+        E.control(envelope(0xC4, 2)),
+        E.read(2, (0x1234).to_bytes(2, "little")),
+    ])
+    remote = Camera.from_ff80(
+        session, facts, read_bytes=8, write_bytes=8, event_bytes=64
+    )
+    capture = await remote.frame()
+    assert capture.frame.pixels() == bytes((17, 29, 43))
+    remote.close()
+    await session.close()
+    assert script.remaining == 0
+
+
 async def test_abandoned_usb_owner_fences_remote_without_more_io():
     from test_async import opened
 

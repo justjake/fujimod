@@ -212,17 +212,21 @@ pub struct DebugKey {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct MenuTables {
-    /// Address of the root pointer table.
+    /// Address of the root table.
     pub roots_address: u64,
-    /// Number of root pointers.
+    /// Number of entries in the root table.
     pub root_count: u32,
-    /// Named root indices.
+    /// How root entries are represented. Omission retains the 32-bit pointer
+    /// array, with the entry index serving as its root key.
+    #[serde(default)]
+    pub root_layout: RootLayout,
+    /// Named root keys (array indices for a pointer array).
     pub roles: BTreeMap<String, u32>,
-    /// Root indices mapped to caption resource IDs.
+    /// Root keys mapped to caption resource IDs.
     pub root_titles: BTreeMap<u32, u32>,
     /// Declared root entry strategies.
     pub root_routes: BTreeMap<u32, RootRoute>,
-    /// Root indices mapped to first tab keys.
+    /// Root keys mapped to first tab keys.
     pub page_tabs: BTreeMap<u32, u32>,
     /// Tab navigation bounds.
     pub navigation: MenuNavigation,
@@ -232,8 +236,89 @@ pub struct MenuTables {
     pub cursor_address: u64,
     /// Cursor and row status layout.
     pub cursor: CursorLayout,
-    /// Quick menu geometry and menu ID.
-    pub q_grid: QuickGrid,
+    /// Quick menu geometry and menu ID, or null when this metadata is unknown.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_quick_grid_schema"))]
+    pub q_grid: Option<QuickGrid>,
+}
+
+/// Representation of the live root table.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum RootLayout {
+    /// A 32-bit pointer array; the array index is the root key.
+    #[default]
+    PointerArray,
+    /// Entries contain a sized integer key and a 32-bit pointer.
+    KeyedEntries {
+        /// Entry stride in bytes.
+        stride: u32,
+        /// Byte offset of the key within each entry.
+        key_offset: u32,
+        /// Key width in bytes.
+        key_width: u8,
+        /// Byte offset of the 32-bit pointer within each entry.
+        pointer_offset: u32,
+    },
+}
+
+impl MenuTables {
+    /// Validate the root-table layout and return its entry stride and byte extent.
+    pub fn checked_root_table_extent(&self) -> Result<(u32, usize), String> {
+        if self.roots_address == 0 || self.root_count == 0 || self.root_count > 4096 {
+            return Err("invalid remote root table address or count".into());
+        }
+        let stride = match &self.root_layout {
+            RootLayout::PointerArray => 4,
+            RootLayout::KeyedEntries {
+                stride,
+                key_offset,
+                key_width,
+                pointer_offset,
+            } => {
+                if *stride == 0
+                    || *stride > 256
+                    || !matches!(*key_width, 1 | 2 | 4)
+                    || *stride % u32::from(*key_width) != 0
+                    || *stride % 4 != 0
+                    || *key_offset % u32::from(*key_width) != 0
+                    || *pointer_offset % 4 != 0
+                    || self.roots_address % u64::from(*key_width) != 0
+                    || self.roots_address % 4 != 0
+                {
+                    return Err("invalid keyed root table width, stride, or alignment".into());
+                }
+                let key_end = key_offset
+                    .checked_add(u32::from(*key_width))
+                    .ok_or("keyed root key extent overflow")?;
+                let pointer_end = pointer_offset
+                    .checked_add(4)
+                    .ok_or("keyed root pointer extent overflow")?;
+                if key_end > *stride
+                    || pointer_end > *stride
+                    || (*key_offset < pointer_end && *pointer_offset < key_end)
+                {
+                    return Err("keyed root fields overlap or exceed their stride".into());
+                }
+                *stride
+            }
+        };
+        let table_bytes = u64::from(self.root_count)
+            .checked_mul(u64::from(stride))
+            .ok_or("remote root table extent overflow")?;
+        self.roots_address
+            .checked_add(table_bytes)
+            .ok_or("remote root table address overflow")?;
+        let table_size = usize::try_from(table_bytes)
+            .map_err(|_| "remote root table exceeds host address space")?;
+        Ok((stride, table_size))
+    }
 }
 
 /// A root menu entry strategy.
@@ -283,25 +368,179 @@ pub struct MenuNavigation {
 pub struct MenuLayout {
     /// Node byte size.
     pub size: u32,
-    /// Node word offsets.
+    /// Node field offsets.
     pub fields: MenuFields,
+    /// Width of each node field in bytes. Omission retains four-byte fields.
+    #[serde(default)]
+    pub field_widths: MenuFieldWidths,
     /// Row size.
     pub row_size: u32,
     /// Row key.
     pub row_key: u32,
+    /// Width of the row key in bytes.
+    #[serde(default = "default_menu_field_width")]
+    pub row_key_width: u8,
     /// Row child.
     pub row_child: u32,
+    /// Width of the row child pointer in bytes.
+    #[serde(default = "default_menu_field_width")]
+    pub row_child_width: u8,
     /// Caption words.
     pub caption_words: u32,
+    /// Caption word indices to try in priority order. Omission keeps the legacy
+    /// order: word 1 then word 0 when at least two words are present, otherwise
+    /// word 0.
+    #[serde(default)]
+    pub caption_word_order: Option<Vec<u32>>,
     /// Sentinel.
     pub sentinel: u32,
-    /// Max kind.
+    /// Maximum declared type code; ignored when no type-code field is declared.
     pub max_kind: u32,
     /// Nowrap flags.
     pub nowrap_flags: u32,
 }
 
-/// Native menu descriptor word offsets.
+fn default_menu_field_width() -> u8 {
+    4
+}
+
+/// Width of each native menu descriptor field, in bytes.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(default, deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct MenuFieldWidths {
+    /// Width of the root key decoded from the descriptor.
+    pub menu_id: u8,
+    /// Width of the descriptor type code.
+    pub type_code: u8,
+    /// Width of the setting identifier.
+    pub setting_id: u8,
+    /// Width of the rows-per-page count.
+    pub rows_per_page: u8,
+    /// Width of the flags field.
+    pub flags_word: u8,
+    /// Width of the parent pointer.
+    pub parent_pointer: u8,
+    /// Width of the item-array pointer.
+    pub item_array: u8,
+    /// Width of the handlers pointer.
+    pub handlers_pointer: u8,
+}
+
+impl Default for MenuFieldWidths {
+    fn default() -> Self {
+        Self {
+            menu_id: 4,
+            type_code: 4,
+            setting_id: 4,
+            rows_per_page: 4,
+            flags_word: 4,
+            parent_pointer: 4,
+            item_array: 4,
+            handlers_pointer: 4,
+        }
+    }
+}
+
+impl MenuLayout {
+    /// Validate complete field extents, alignment, overlap, and record bounds.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.size == 0 || self.size > 256 || self.row_size == 0 || self.row_size > 256 {
+            return Err("invalid remote menu record extent".into());
+        }
+        if let Some(order) = &self.caption_word_order {
+            if !(1..=64).contains(&self.caption_words)
+                || order.is_empty()
+                || order.len() > 64
+            {
+                return Err("invalid remote caption word order extent".into());
+            }
+            let caption_bytes = self
+                .caption_words
+                .checked_mul(4)
+                .ok_or("remote caption extent overflow")?;
+            let mut seen = BTreeSet::new();
+            for index in order {
+                let offset = index
+                    .checked_mul(4)
+                    .ok_or("remote caption word offset overflow")?;
+                let end = offset
+                    .checked_add(4)
+                    .ok_or("remote caption word extent overflow")?;
+                if *index >= self.caption_words || end > caption_bytes || !seen.insert(*index) {
+                    return Err("invalid remote caption word order".into());
+                }
+            }
+        }
+        let f = &self.fields;
+        let w = &self.field_widths;
+        let mut node_fields = vec![
+            ("menu_id", f.menu_id, w.menu_id),
+            ("setting_id", f.setting_id, w.setting_id),
+            ("rows_per_page", f.rows_per_page, w.rows_per_page),
+            ("flags_word", f.flags_word, w.flags_word),
+            ("parent_pointer", f.parent_pointer, w.parent_pointer),
+            ("item_array", f.item_array, w.item_array),
+            ("handlers_pointer", f.handlers_pointer, w.handlers_pointer),
+        ];
+        if let Some(offset) = f.type_code {
+            node_fields.push(("type_code", offset, w.type_code));
+        } else if !matches!(w.type_code, 1 | 2 | 4 | 8) {
+            return Err("invalid remote menu field width: type_code".into());
+        }
+        validate_menu_fields(self.size, &node_fields)?;
+        validate_menu_fields(
+            self.row_size,
+            &[
+                ("row_key", self.row_key, self.row_key_width),
+                ("row_child", self.row_child, self.row_child_width),
+            ],
+        )?;
+        if self.row_size % u32::from(self.row_key_width) != 0
+            || self.row_size % u32::from(self.row_child_width) != 0
+        {
+            return Err("remote menu row stride misaligns a field".into());
+        }
+        let sentinel_fits = match self.row_key_width {
+            1 => self.sentinel <= u8::MAX.into(),
+            2 => self.sentinel <= u16::MAX.into(),
+            4 | 8 => true,
+            _ => false,
+        };
+        if !sentinel_fits {
+            return Err("remote menu row sentinel exceeds its key width".into());
+        }
+        Ok(())
+    }
+}
+
+fn validate_menu_fields(size: u32, fields: &[(&str, u32, u8)]) -> Result<(), String> {
+    let mut extents = Vec::with_capacity(fields.len());
+    for (name, offset, width) in fields {
+        if !matches!(*width, 1 | 2 | 4 | 8) || *offset % u32::from(*width) != 0 {
+            return Err(format!("invalid remote menu field width or alignment: {name}"));
+        }
+        let end = (*offset)
+            .checked_add(u32::from(*width))
+            .ok_or_else(|| format!("remote menu field extent overflow: {name}"))?;
+        if end > size {
+            return Err(format!("remote menu field exceeds its record: {name}"));
+        }
+        extents.push((*offset, end, *name));
+    }
+    extents.sort_unstable_by_key(|(start, _, _)| *start);
+    if extents.windows(2).any(|pair| pair[0].1 > pair[1].0) {
+        return Err("remote menu fields overlap".into());
+    }
+    Ok(())
+}
+
+/// Native menu descriptor field offsets.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -311,10 +550,12 @@ pub struct MenuLayout {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct MenuFields {
-    /// Menu id.
+    /// Root key decoded from the descriptor.
     pub menu_id: u32,
-    /// Type code.
-    pub type_code: u32,
+    /// Declared type-code offset, or `null` when descriptors have no type field.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub type_code: Option<u32>,
     /// Setting id.
     pub setting_id: u32,
     /// Rows per page.
@@ -329,6 +570,30 @@ pub struct MenuFields {
     pub handlers_pointer: u32,
 }
 
+fn deserialize_required_nullable<'de, D, T>(
+    deserializer: D,
+) -> std::result::Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer)
+}
+
+#[cfg(feature = "schema")]
+fn nullable_u32_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "anyOf": [generator.subschema_for::<u32>(), {"type": "null"}]
+    })
+}
+
+#[cfg(feature = "schema")]
+fn nullable_u64_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "anyOf": [generator.subschema_for::<u64>(), {"type": "null"}]
+    })
+}
+
 /// Live menu cursor and status-array offsets.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -341,17 +606,17 @@ pub struct MenuFields {
 pub struct CursorLayout {
     /// Cursor byte size.
     pub size: u32,
-    /// Cursor word offsets.
+    /// Offsets for declared cursor fields.
     pub fields: CursorFields,
-    /// Status offset.
+    /// Status byte offset from the cursor base; begins after `size`.
     pub status_offset: u32,
-    /// Status stride.
+    /// Byte stride between row statuses.
     pub status_stride: u32,
-    /// Status width.
+    /// Status scalar width in bytes (1, 2, 4 or 8).
     pub status_width: u32,
 }
 
-/// Live cursor word offsets.
+/// Offsets for declared cursor fields; unknown unused offsets remain null.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -361,20 +626,32 @@ pub struct CursorLayout {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct CursorFields {
-    /// Pointer.
-    pub pointer: u32,
-    /// Cursor.
+    /// Pointer field offset, or null when this offset is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub pointer: Option<u32>,
+    /// Current cursor field offset.
     pub cursor: u32,
-    /// Subcursor.
-    pub subcursor: u32,
-    /// Visible count.
-    pub visible_count: u32,
-    /// Value cursor.
-    pub value_cursor: u32,
-    /// Raw count.
-    pub raw_count: u32,
-    /// Filtered count.
-    pub filtered_count: u32,
+    /// Subcursor field offset, or null when this offset is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub subcursor: Option<u32>,
+    /// Visible-count field offset, or null when this offset is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub visible_count: Option<u32>,
+    /// Value-cursor field offset, or null when this offset is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub value_cursor: Option<u32>,
+    /// Raw-count field offset, or null when this offset is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub raw_count: Option<u32>,
+    /// Filtered-count field offset, or null when this offset is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub filtered_count: Option<u32>,
 }
 
 /// Quick menu dimensions.
@@ -395,6 +672,13 @@ pub struct QuickGrid {
     pub menu_code: u32,
 }
 
+#[cfg(feature = "schema")]
+fn nullable_quick_grid_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "anyOf": [generator.subschema_for::<QuickGrid>(), {"type": "null"}]
+    })
+}
+
 /// A located framebuffer and its live selection pointer.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -405,8 +689,10 @@ pub struct QuickGrid {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct Scanout {
-    /// Address.
-    pub address: u64,
+    /// Observed framebuffer address, or null when this metadata is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u64_schema"))]
+    pub address: Option<u64>,
     /// Width.
     pub width: u32,
     /// Height.
@@ -415,12 +701,18 @@ pub struct Scanout {
     pub pixel_format: PixelFormat,
     /// Stride bytes.
     pub stride_bytes: u32,
-    /// Instance.
-    pub instance: u32,
-    /// Layer.
-    pub layer: u32,
-    /// Channel.
-    pub channel: u32,
+    /// Display instance required by board-backed frame capture, or null when unavailable.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub instance: Option<u32>,
+    /// Observed display layer, or null when this metadata is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub layer: Option<u32>,
+    /// Observed display channel, or null when this metadata is not established.
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    #[cfg_attr(feature = "schema", schemars(required, schema_with = "nullable_u32_schema"))]
+    pub channel: Option<u32>,
     /// Pointer address.
     pub pointer_address: u64,
     /// Address mask.
@@ -438,6 +730,7 @@ pub struct Scanout {
 )]
 pub enum PixelFormat {
     Bgra8888,
+    Rgba8888Premultiplied,
 }
 
 /// Native text and bitmap resource table layouts.
@@ -1058,6 +1351,21 @@ impl FirmwareFacts {
         fujimod_catalog_identity::validate_id(&self.firmware_id)?;
         fujimod_catalog_identity::validate_id(&self.body_id)?;
         fujimod_catalog_identity::validate_content_sha256(&self.firmware_sha256.clone())?;
+        let widths = &self.state.widths;
+        if [
+            widths.ui_mode,
+            widths.system_mode,
+            widths.menu_active,
+            widths.pending_mode,
+            widths.menu_node,
+            self.state.readiness.input_pending_width,
+            self.state.readiness.override_width,
+        ]
+        .into_iter()
+        .any(|width| !matches!(width, 1 | 2 | 4 | 8))
+        {
+            return Err("invalid remote observation width".into());
+        }
         if self.identity_checks.is_empty() {
             return Err("remote facts require firmware identity checks".into());
         }
@@ -1065,64 +1373,70 @@ impl FirmwareFacts {
             identity.validate()?;
         }
         let m = &self.menus;
-        if m.roots_address == 0
-            || m.root_count == 0
-            || m.layout.size < 32
-            || m.layout.row_size < 8
-            || m.cursor.size < 32
+        if m.cursor.size < 32
             || m.cursor_address == 0
-            || m.q_grid.rows == 0
-            || m.q_grid.columns == 0
-            || m.roles.values().any(|index| *index >= m.root_count)
+            || m.q_grid
+                .as_ref()
+                .is_some_and(|grid| grid.rows == 0 || grid.columns == 0)
         {
             return Err("invalid remote menu layout or roots".into());
         }
-        let node = &m.layout.fields;
-        let cursor = &m.cursor.fields;
-        for (width, offsets) in [
-            (
-                m.layout.size,
-                vec![
-                    node.menu_id,
-                    node.type_code,
-                    node.setting_id,
-                    node.rows_per_page,
-                    node.flags_word,
-                    node.parent_pointer,
-                    node.item_array,
-                    node.handlers_pointer,
-                ],
-            ),
-            (
-                m.cursor.size,
-                vec![
-                    cursor.pointer,
-                    cursor.cursor,
-                    cursor.subcursor,
-                    cursor.visible_count,
-                    cursor.value_cursor,
-                    cursor.raw_count,
-                    cursor.filtered_count,
-                ],
-            ),
-            (
-                m.layout.row_size,
-                vec![m.layout.row_key, m.layout.row_child],
-            ),
-        ] {
-            let unique: BTreeSet<_> = offsets.iter().copied().collect();
-            if width < 4
-                || unique.len() != offsets.len()
-                || offsets
-                    .iter()
-                    .any(|offset| offset % 4 != 0 || *offset > width - 4)
-            {
-                return Err("remote menu field offset exceeds its record or overlaps".into());
+        m.layout.validate()?;
+        m.checked_root_table_extent()?;
+        match &m.root_layout {
+            RootLayout::PointerArray if m.roles.values().any(|index| *index >= m.root_count) => {
+                return Err("invalid remote menu layout or roots".into());
             }
+            RootLayout::KeyedEntries { key_width, .. } => {
+                let maximum_key = if *key_width == 4 {
+                    u32::MAX
+                } else {
+                    (1u32 << (u32::from(*key_width) * 8)) - 1
+                };
+                let keys_fit = m
+                    .roles
+                    .values()
+                    .chain(m.root_titles.keys())
+                    .chain(m.root_routes.keys())
+                    .chain(m.page_tabs.keys())
+                    .all(|key| *key <= maximum_key);
+                if !keys_fit {
+                    return Err("declared root key exceeds its field width".into());
+                }
+            }
+            _ => {}
         }
-        if m.cursor.status_width != 4
+        let cursor = &m.cursor.fields;
+        let mut offsets = vec![cursor.cursor];
+        offsets.extend(
+            [
+                cursor.pointer,
+                cursor.subcursor,
+                cursor.visible_count,
+                cursor.value_cursor,
+                cursor.raw_count,
+                cursor.filtered_count,
+            ]
+            .into_iter()
+            .flatten(),
+        );
+        let unique: BTreeSet<_> = offsets.iter().copied().collect();
+        if unique.len() != offsets.len()
+            || offsets
+                .iter()
+                .any(|offset| offset % 4 != 0 || *offset > m.cursor.size - 4)
+        {
+            return Err("remote menu field offset exceeds its record or overlaps".into());
+        }
+        if !matches!(m.cursor.status_width, 1 | 2 | 4 | 8)
             || m.cursor.status_stride < m.cursor.status_width
             || m.cursor.status_offset < m.cursor.size
+            || m.cursor.status_offset % m.cursor.status_width != 0
+            || m.cursor.status_stride % m.cursor.status_width != 0
+            || m.cursor
+                .status_offset
+                .checked_add(m.cursor.status_width)
+                .is_none()
         {
             return Err("invalid remote cursor status layout".into());
         }
@@ -1264,6 +1578,44 @@ pub struct FirmwareObservation {
     pub setup_mode: u32,
     /// Readiness observer addresses.
     pub readiness: ReadinessAddresses,
+    /// Width, in bytes, for each state value read by the remote observer.
+    #[serde(default)]
+    pub widths: ObservationWidths,
+}
+
+/// Byte widths for firmware state values used by remote observations.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct ObservationWidths {
+    /// UI mode field width.
+    pub ui_mode: usize,
+    /// System mode field width.
+    pub system_mode: usize,
+    /// Menu-active field width.
+    pub menu_active: usize,
+    /// Pending mode field width.
+    pub pending_mode: usize,
+    /// Menu-node pointer field width.
+    pub menu_node: usize,
+}
+
+impl Default for ObservationWidths {
+    fn default() -> Self {
+        Self {
+            ui_mode: 4,
+            system_mode: 4,
+            menu_active: 4,
+            pending_mode: 4,
+            menu_node: 4,
+        }
+    }
 }
 
 /// Addresses used to check REC readiness.
@@ -1283,10 +1635,20 @@ pub struct ReadinessAddresses {
     pub category_two: u64,
     /// Firmware address for pending input state.
     pub input_pending: u64,
+    /// Width, in bytes, of the pending input state field.
+    #[serde(default = "default_observation_width")]
+    pub input_pending_width: usize,
     /// Mask of readiness bits excluded from the check.
     pub excluded_mask: u32,
     /// Firmware address for the operation-alert timer.
     pub operation_alert_timer: u64,
     /// Firmware address used to override readiness.
     pub override_address: u64,
+    /// Width, in bytes, of the readiness override field.
+    #[serde(default = "default_observation_width")]
+    pub override_width: usize,
+}
+
+fn default_observation_width() -> usize {
+    4
 }

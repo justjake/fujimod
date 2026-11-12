@@ -42,22 +42,69 @@ pub(crate) enum Slot {
     Closed,
     CompletionUnknown,
     Abandoned,
+    /// A memory loan owns the staged session and bulk mapping. The state stays
+    /// in this slot until an explicit close returns the native session.
+    MemoryOwned(Rc<RefCell<crate::memory::State>>),
+}
+/// Why a slot cannot be used, as a pure Rust value. Converting it to a
+/// JavaScript error happens only after every caller-held cell guard is dropped.
+pub(crate) enum Unavailable {
+    Busy(&'static str),
+    CompletionUnknown(&'static str),
+    Closed(&'static str),
+    Abandoned(&'static str),
+}
+impl Unavailable {
+    pub(crate) fn into_error(self) -> JsValue {
+        match self {
+            Self::Busy(message) => fail(ErrorKind::Busy, message),
+            Self::CompletionUnknown(message) => fail(ErrorKind::CompletionUnknown, message),
+            Self::Closed(message) => fail(ErrorKind::Closed, message),
+            Self::Abandoned(message) => fail(ErrorKind::Abandoned, message),
+        }
+    }
 }
 impl Slot {
-    fn unavailable(&self) -> JsValue {
+    /// Classify this slot without constructing any JavaScript value; the
+    /// caller releases its slot borrow before converting the reason.
+    fn unavailable(&self) -> Unavailable {
         match self {
             Self::InFlight(_) | Self::Canceling | Self::Range(_) => {
-                fail(ErrorKind::Busy, "session is owned by an active operation")
+                Unavailable::Busy("session is owned by an active operation")
+            }
+            Self::MemoryOwned(state) => {
+                let state = state.borrow();
+                if state.abandoned() {
+                    Unavailable::Abandoned("session was abandoned")
+                } else if state.fenced() {
+                    Unavailable::CompletionUnknown("camera completion is unknown")
+                } else {
+                    Unavailable::Busy("session is owned by an open memory loan; close it first")
+                }
             }
             Self::Open(_) | Self::CompletionUnknown => {
-                fail(ErrorKind::CompletionUnknown, "camera completion is unknown")
+                Unavailable::CompletionUnknown("camera completion is unknown")
             }
-            Self::Closed => fail(ErrorKind::Closed, "session is closed"),
-            Self::Abandoned => fail(ErrorKind::Abandoned, "session was abandoned"),
+            Self::Closed => Unavailable::Closed("session is closed"),
+            Self::Abandoned => Unavailable::Abandoned("session was abandoned"),
         }
     }
 }
 pub(crate) fn abandon(owner: &Rc<RefCell<Slot>>) {
+    let owned = {
+        let slot = owner.borrow();
+        match &*slot {
+            Slot::Closed | Slot::Abandoned => return,
+            Slot::MemoryOwned(state) => Some(state.clone()),
+            _ => None,
+        }
+    };
+    if let Some(state) = owned {
+        // The slot keeps owning the state strongly, so the loan's originals
+        // stay reportable; nothing is restored or freed.
+        crate::memory::abandon(&state);
+        return;
+    }
     let mut slot = owner.borrow_mut();
     if matches!(*slot, Slot::Closed | Slot::Abandoned) {
         return;
@@ -82,9 +129,14 @@ pub(crate) fn take_native(
     allow_unknown: bool,
 ) -> Result<ff80::Session, JsValue> {
     let mut slot = owner.borrow_mut();
-    match &*slot {
-        Slot::Open(native) if allow_unknown || native.state() == ff80::SessionState::Ready => (),
-        _ => return Err(slot.unavailable()),
+    let unavailable = match &*slot {
+        Slot::Open(native) if allow_unknown || native.state() == ff80::SessionState::Ready => None,
+        _ => Some(slot.unavailable()),
+    };
+    if let Some(reason) = unavailable {
+        // Convert only after this caller's slot guard is released.
+        drop(slot);
+        return Err(reason.into_error());
     }
     let Slot::Open(native) = std::mem::replace(&mut *slot, replacement) else {
         unreachable!("checked under a single borrow")
@@ -255,6 +307,14 @@ impl Session {
             Slot::Closed => SessionState::Closed,
             Slot::CompletionUnknown => SessionState::CompletionUnknown,
             Slot::Abandoned => SessionState::Abandoned,
+            Slot::MemoryOwned(state) => {
+                let state = state.borrow();
+                if state.abandoned() {
+                    SessionState::Abandoned
+                } else {
+                    state.session_state()
+                }
+            }
         }
     }
     #[wasm_bindgen(getter,js_name=packetBytes)]
@@ -280,11 +340,22 @@ impl Session {
     #[wasm_bindgen(js_name=cancelPending)]
     pub fn cancel_pending(&self) {
         let mut slot = self.owner.borrow_mut();
-        if matches!(*slot, Slot::InFlight(_)) {
-            let Slot::InFlight(cancel) = std::mem::replace(&mut *slot, Slot::Canceling) else {
-                unreachable!()
-            };
-            let _ = cancel.send(Cancellation::Interrupted);
+        match &mut *slot {
+            Slot::InFlight(_) => {
+                let Slot::InFlight(cancel) = std::mem::replace(&mut *slot, Slot::Canceling) else {
+                    unreachable!()
+                };
+                let _ = cancel.send(Cancellation::Interrupted);
+            }
+            Slot::MemoryOwned(state) => {
+                // Route to the loan's current lease; the slot stays owned and
+                // its report stays readable.
+                let cancel = state.borrow_mut().take_cancel();
+                if let Some(cancel) = cancel {
+                    let _ = cancel.send(Cancellation::Interrupted);
+                }
+            }
+            _ => (),
         }
     }
     #[wasm_bindgen(unchecked_return_type = "Promise<Uint8Array>")]
@@ -582,7 +653,6 @@ pub(crate) enum Operation {
         fujimod_usb_app80_types::Request,
     ),
     Service(fujimod_usb_app80::operations::Invocation),
-    Memory(Box<crate::memory::MemoryOperation>),
 }
 impl Operation {
     async fn run(self, lease: &mut Lease) -> Result<JsValue, JsValue> {
@@ -603,7 +673,6 @@ impl Operation {
         };
         match self {
             Self::Workflow(workflow) => return workflow.run(s).await,
-            Self::Memory(operation) => return operation.run(s).await,
             Self::StateDump(dump) => return dump.run(s).await,
             Self::Restart(restart) => return restart.run(s).await,
             Self::FlashBackup(backup) => return backup.run(s).await,

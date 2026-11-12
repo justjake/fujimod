@@ -2,6 +2,9 @@ use super::*;
 use crate::backend::Backend;
 #[cfg(test)]
 use crate::connection::Connection;
+#[cfg(test)]
+use fujimod_catalog_remote::{MenuFieldWidths, MenuFields};
+use fujimod_catalog_remote::{RootLayout, RootRoute};
 use serde_json::json;
 
 pub fn facts() -> Facts {
@@ -63,6 +66,245 @@ pub fn facts() -> Facts {
         },"menu_manifest":null
     })).unwrap()
 }
+
+fn keyed_facts(
+    root_key: u32,
+    stride: u32,
+    key_offset: u32,
+    key_width: u8,
+    pointer_offset: u32,
+) -> Facts {
+    let mut facts = facts();
+    let menus = &mut facts.firmware.menus;
+    menus.root_count = 2;
+    menus.root_layout = RootLayout::KeyedEntries {
+        stride,
+        key_offset,
+        key_width,
+        pointer_offset,
+    };
+    menus.roles.clear();
+    menus.roles.insert("shooting".into(), root_key);
+    menus.root_routes.clear();
+    menus.root_routes.insert(
+        root_key,
+        RootRoute {
+            entry: "shooting_menu".into(),
+            tab: None,
+        },
+    );
+    facts
+}
+
+fn write_keyed_roots(
+    backend: &mut Synthetic,
+    entries: &[(u32, u32)],
+    stride: u32,
+    key_offset: u32,
+    key_width: u8,
+    pointer_offset: u32,
+) {
+    for (index, (key, pointer)) in entries.iter().enumerate() {
+        let entry = 256 + index * stride as usize;
+        backend.bytes[entry..entry + stride as usize].fill(0xa5);
+        for byte in 0..usize::from(key_width) {
+            backend.bytes[entry + key_offset as usize + byte] = (*key >> (byte * 8)) as u8;
+        }
+        backend.word(entry + pointer_offset as usize, *pointer);
+    }
+}
+
+fn keyed_backend(
+    root_key: u32,
+    child_key: u32,
+    entries: &[(u32, u32)],
+    stride: u32,
+    key_offset: u32,
+    key_width: u8,
+    pointer_offset: u32,
+) -> Synthetic {
+    let mut backend = Synthetic::new();
+    backend.node(4096, root_key, 0, 8192, 12288);
+    backend.node(4352, child_key, 4096, 8448, 12544);
+    write_keyed_roots(
+        &mut backend,
+        entries,
+        stride,
+        key_offset,
+        key_width,
+        pointer_offset,
+    );
+    backend
+}
+
+#[cfg(test)]
+fn packed_menu_facts() -> Facts {
+    let mut facts = keyed_facts(0x20, 8, 0, 1, 4);
+    let menus = &mut facts.firmware.menus;
+    menus.roles.insert("secondary".into(), 0x80);
+    menus.root_routes.insert(
+        0x80,
+        RootRoute {
+            entry: "secondary_menu".into(),
+            tab: None,
+        },
+    );
+    let layout = &mut menus.layout;
+    layout.size = 28;
+    layout.fields = MenuFields {
+        menu_id: 0,
+        type_code: Some(1),
+        setting_id: 2,
+        rows_per_page: 4,
+        flags_word: 8,
+        parent_pointer: 12,
+        item_array: 16,
+        handlers_pointer: 20,
+    };
+    layout.field_widths = MenuFieldWidths {
+        menu_id: 1,
+        type_code: 1,
+        setting_id: 2,
+        rows_per_page: 4,
+        flags_word: 4,
+        parent_pointer: 4,
+        item_array: 4,
+        handlers_pointer: 4,
+    };
+    layout.row_size = 8;
+    layout.row_key = 0;
+    layout.row_key_width = 1;
+    layout.row_child = 4;
+    layout.row_child_width = 4;
+    layout.sentinel = 0xff;
+    facts
+}
+
+#[cfg(test)]
+fn write_packed_node(
+    backend: &mut Synthetic,
+    address: usize,
+    code: u8,
+    parent: u32,
+    rows: u32,
+    captions: u32,
+) {
+    backend.bytes[address..address + 28].fill(0xa5);
+    backend.bytes[address] = code;
+    backend.bytes[address + 1] = 1;
+    backend.bytes[address + 2..address + 4].copy_from_slice(&0x5aa5u16.to_le_bytes());
+    backend.word(address + 4, 7);
+    backend.word(address + 8, 0xa55a_1234);
+    backend.word(address + 12, parent);
+    backend.word(address + 16, rows);
+    backend.word(address + 20, captions);
+}
+
+#[cfg(test)]
+fn write_packed_row(backend: &mut Synthetic, address: usize, key: u8, child: u32) {
+    backend.bytes[address..address + 8].fill(0xa5);
+    backend.bytes[address] = key;
+    backend.word(address + 4, child);
+}
+
+#[cfg(test)]
+fn packed_menu_backend() -> Synthetic {
+    let mut backend = Synthetic::new();
+    write_packed_node(&mut backend, 4096, 0x20, 0, 8192, 12288);
+    write_packed_node(&mut backend, 4352, 0x80, 4096, 8448, 12544);
+    write_packed_row(&mut backend, 8192, 10, 4352);
+    write_packed_row(&mut backend, 8200, 0xff, 0);
+    write_packed_row(&mut backend, 8448, 7, 0);
+    write_packed_row(&mut backend, 8456, 0xff, 0);
+    for (address, pointer) in [(12288, 28672), (12292, 28688), (12544, 28704), (12548, 28720)] {
+        backend.word(address, pointer);
+    }
+    for (address, label) in [(28672, "FIRST"), (28688, "SETTING"), (28704, "OFF"), (28720, "ON")] {
+        backend.bytes[address..address + label.len()].copy_from_slice(label.as_bytes());
+    }
+    write_keyed_roots(&mut backend, &[(0x20, 4096), (0x80, 4352)], 8, 0, 1, 4);
+    backend
+}
+
+#[cfg(test)]
+fn wide_pointer_menu_facts() -> Facts {
+    let mut facts = packed_menu_facts();
+    let layout = &mut facts.firmware.menus.layout;
+    layout.size = 40;
+    layout.fields = MenuFields {
+        menu_id: 0,
+        type_code: Some(1),
+        setting_id: 2,
+        rows_per_page: 4,
+        flags_word: 8,
+        parent_pointer: 16,
+        item_array: 24,
+        handlers_pointer: 32,
+    };
+    layout.field_widths = MenuFieldWidths {
+        menu_id: 1,
+        type_code: 1,
+        setting_id: 2,
+        rows_per_page: 4,
+        flags_word: 4,
+        parent_pointer: 8,
+        item_array: 8,
+        handlers_pointer: 8,
+    };
+    layout.row_size = 16;
+    layout.row_key = 0;
+    layout.row_key_width = 1;
+    layout.row_child = 8;
+    layout.row_child_width = 8;
+    facts
+}
+
+#[cfg(test)]
+fn write_wide_node(
+    backend: &mut Synthetic,
+    address: usize,
+    code: u8,
+    parent: u64,
+    rows: u64,
+    captions: u64,
+) {
+    backend.bytes[address..address + 40].fill(0xa5);
+    backend.bytes[address] = code;
+    backend.bytes[address + 1] = 1;
+    backend.bytes[address + 2..address + 4].copy_from_slice(&0x5aa5u16.to_le_bytes());
+    backend.word(address + 4, 7);
+    backend.word(address + 8, 0xa55a_1234);
+    for (offset, pointer) in [(16, parent), (24, rows), (32, captions)] {
+        backend.bytes[address + offset..address + offset + 8]
+            .copy_from_slice(&pointer.to_le_bytes());
+    }
+}
+
+#[cfg(test)]
+fn write_wide_row(backend: &mut Synthetic, address: usize, key: u8, child: u64) {
+    backend.bytes[address..address + 16].fill(0xa5);
+    backend.bytes[address] = key;
+    backend.bytes[address + 8..address + 16].copy_from_slice(&child.to_le_bytes());
+}
+
+#[cfg(test)]
+fn wide_pointer_menu_backend() -> Synthetic {
+    let mut backend = Synthetic::new();
+    write_wide_node(&mut backend, 4096, 0x20, 0, 8192, 12288);
+    write_wide_node(&mut backend, 4352, 0x80, 4096, 8448, 12544);
+    write_wide_row(&mut backend, 8192, 10, 4352);
+    write_wide_row(&mut backend, 8208, 0xff, 0);
+    write_wide_row(&mut backend, 8448, 7, 0);
+    write_wide_row(&mut backend, 8464, 0xff, 0);
+    for (address, pointer) in [(12288, 28672), (12292, 28688), (12544, 28704), (12548, 28720)] {
+        backend.word(address, pointer);
+    }
+    for (address, label) in [(28672, "FIRST"), (28688, "SETTING"), (28704, "OFF"), (28720, "ON")] {
+        backend.bytes[address..address + label.len()].copy_from_slice(label.as_bytes());
+    }
+    write_keyed_roots(&mut backend, &[(0x20, 4096), (0x80, 4352)], 8, 0, 1, 4);
+    backend
+}
 /// Synthetic facts with a touch surface whose decoded report sits at 1536.
 pub fn touch_facts() -> Facts {
     let mut facts = facts();
@@ -85,6 +327,8 @@ pub fn touch_facts() -> Facts {
 }
 pub struct Synthetic {
     bytes: Vec<u8>,
+    #[cfg(test)]
+    memory_requests: Vec<(u64, usize)>,
     now: u64,
     sequence: u64,
     edges: Vec<Input>,
@@ -103,6 +347,8 @@ impl Synthetic {
     pub fn new() -> Self {
         let mut s = Self {
             bytes: vec![0; 65536],
+            #[cfg(test)]
+            memory_requests: vec![],
             now: 0,
             sequence: 0,
             edges: vec![],
@@ -179,6 +425,8 @@ impl Backend for Synthetic {
         reads: &'a mut ReadSet,
     ) -> LocalFuture<'a, Vec<u8>> {
         Box::pin(async move {
+            #[cfg(test)]
+            self.memory_requests.push((a, n));
             reads.stores.push((a, a + n as u64));
             self.bytes
                 .get(a as usize..a as usize + n)
@@ -352,6 +600,974 @@ fn navigate_select_reopen_and_capture() {
         assert_eq!(r.backend.waits.last().unwrap().devices, [7].into());
     });
 }
+
+#[test]
+fn legacy_root_layout_defaults_to_pointer_array() {
+    futures_lite::future::block_on(async {
+        let facts = facts();
+        assert_eq!(facts.firmware.menus.root_layout, RootLayout::PointerArray);
+        let mut remote = Connection::connect(Synthetic::new(), facts).unwrap();
+        let result = remote
+            .navigate(&menu("shooting").with_key(20), 100)
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().node, 4096);
+        assert!(result.menu().unwrap().selected);
+    });
+}
+
+#[test]
+fn sparse_keyed_roots_resolve_independently_of_entry_order() {
+    futures_lite::future::block_on(async {
+        for entries in [
+            [(0x123, 4096), (0xabc, 4352)],
+            [(0xabc, 4352), (0x123, 4096)],
+        ] {
+            let facts = keyed_facts(0x123, 12, 2, 2, 8);
+            let backend = keyed_backend(0x123, 0xabc, &entries, 12, 2, 2, 8);
+            let mut remote = Connection::connect(backend, facts).unwrap();
+            let result = remote
+                .navigate(&menu("shooting").with_key(20), 100)
+                .await
+                .unwrap();
+            assert_eq!(result.menu().unwrap().node, 4096);
+            assert!(result.menu().unwrap().selected);
+        }
+    });
+}
+
+#[test]
+fn packed_descriptor_and_byte_rows_traverse_sparse_keyed_roots() {
+    futures_lite::future::block_on(async {
+        let facts = packed_menu_facts();
+        facts.firmware.validate().unwrap();
+        let mut backend = packed_menu_backend();
+        backend.active(4096, 0);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let root = remote.read(&menu("shooting").into()).await.unwrap();
+        assert_eq!(root.state.current_key, Some(10));
+        assert_eq!(root.menu().unwrap().node, 4096);
+
+        let nested = menu("secondary")
+            .with_key(7)
+            .via(menu("shooting").with_key(10));
+        let result = remote.read(&nested.into()).await.unwrap();
+        let snapshot = result.menu().unwrap();
+        assert_eq!(snapshot.node, 4352);
+        assert_eq!(snapshot.key, Some(7));
+        assert_eq!(snapshot.index, Some(0));
+        assert_eq!(snapshot.root, "shooting");
+    });
+}
+
+#[test]
+fn observation_works_without_unestablished_cursor_and_scanout_metadata() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        let cursor = &mut facts.firmware.menus.cursor.fields;
+        cursor.pointer = None;
+        cursor.subcursor = None;
+        cursor.visible_count = None;
+        cursor.value_cursor = None;
+        cursor.raw_count = None;
+        cursor.filtered_count = None;
+        facts.firmware.scanout.address = None;
+        facts.firmware.scanout.instance = None;
+        facts.firmware.scanout.layer = None;
+        facts.firmware.scanout.channel = None;
+        facts.firmware.menus.q_grid = None;
+        facts.validate().unwrap();
+
+        let mut backend = Synthetic::new();
+        backend.active(4096, 0);
+        backend.word(544, 3);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let result = remote
+            .read(&menu("shooting").with_key(10).into())
+            .await
+            .unwrap();
+        assert_eq!(result.state.current_key, Some(10));
+        let snapshot = result.menu().unwrap();
+        assert!(!snapshot.visible);
+        assert!(!snapshot.enabled);
+    });
+}
+
+#[cfg(test)]
+fn set_root_caption_words(backend: &mut Synthetic, word_count: u32, words: &[u32]) {
+    assert_eq!(usize::try_from(word_count).unwrap(), words.len());
+    let row = 12288 + usize::try_from(word_count).unwrap() * 4;
+    for (index, value) in words.iter().enumerate() {
+        backend.word(row + index * 4, *value);
+    }
+}
+
+#[cfg(test)]
+fn set_supplementary_caption(backend: &mut Synthetic, facts: &Facts, resource: u32, units: &[u16]) {
+    let layout = &facts.firmware.resources;
+    assert!(resource >= layout.supplementary_first);
+    let address = layout.supplementary_address
+        + u64::from(resource - layout.supplementary_first) * u64::from(layout.supplementary_stride);
+    let address = usize::try_from(address).unwrap();
+    for (index, unit) in units.iter().enumerate() {
+        let offset = address + index * 2;
+        backend.bytes[offset..offset + 2].copy_from_slice(&unit.to_le_bytes());
+    }
+}
+
+#[test]
+fn type_code_json_requires_explicit_null_to_disable_and_preserves_numeric_offsets() {
+    let numeric = serde_json::to_value(facts()).unwrap();
+    assert_eq!(numeric["firmware"]["menus"]["layout"]["fields"]["type_code"], 4);
+    let parsed: Facts = serde_json::from_value(numeric.clone()).unwrap();
+    assert_eq!(parsed.firmware.menus.layout.fields.type_code, Some(4));
+
+    let mut explicit_null = numeric.clone();
+    explicit_null["firmware"]["menus"]["layout"]["fields"]["type_code"] =
+        serde_json::Value::Null;
+    let parsed: Facts = serde_json::from_value(explicit_null).unwrap();
+    assert_eq!(parsed.firmware.menus.layout.fields.type_code, None);
+
+    let mut missing = numeric;
+    missing["firmware"]["menus"]["layout"]["fields"]
+        .as_object_mut()
+        .unwrap()
+        .remove("type_code");
+    let error = serde_json::from_value::<Facts>(missing).unwrap_err();
+    assert!(error.to_string().contains("type_code"), "{error}");
+}
+
+#[test]
+fn untyped_28_byte_descriptors_ignore_opaque_neighbor_and_keep_menu_state_and_labels() {
+    futures_lite::future::block_on(async {
+        let mut facts = packed_menu_facts();
+        let layout = &mut facts.firmware.menus.layout;
+        layout.fields.type_code = None;
+        layout.caption_words = 3;
+        layout.caption_word_order = Some(vec![2, 1, 0]);
+        facts.firmware.validate().unwrap();
+
+        let mut backend = packed_menu_backend();
+        backend.bytes[4096 + 1] = 0xa7;
+        backend.bytes[4352 + 1] = 0xfe;
+        for (address, value) in [
+            (12288, 28672),
+            (12292, 28688),
+            (12296, 28704),
+            (12544, 28704),
+            (12548, 28720),
+            (12552, 28688),
+        ] {
+            backend.word(address, value);
+        }
+        backend.active(4096, 0);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let root = remote
+            .read(&menu("shooting").with_key(10).into())
+            .await
+            .unwrap();
+        assert_eq!(root.state.current_key, Some(10));
+        assert_eq!(root.menu().unwrap().node, 4096);
+        assert_eq!(root.menu().unwrap().label, "OFF");
+
+        let nested = menu("secondary")
+            .with_key(7)
+            .via(menu("shooting").with_key(10));
+        let result = remote.read(&nested.into()).await.unwrap();
+        assert_eq!(result.menu().unwrap().node, 4352);
+        assert_eq!(result.menu().unwrap().label, "SETTING");
+    });
+}
+
+#[test]
+fn explicit_type_code_still_rejects_invalid_kind_before_row_pointer_read() {
+    futures_lite::future::block_on(async {
+        let facts = facts();
+        assert_eq!(facts.firmware.menus.layout.fields.type_code, Some(4));
+        let invalid_kind = facts.firmware.menus.layout.max_kind + 1;
+        let mut backend = Synthetic::new();
+        backend.word(4096 + 4, invalid_kind);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let error = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap_err();
+        assert!(error.contains("Invalid menu descriptor"), "{error}");
+        assert!(remote
+            .backend
+            .memory_requests
+            .iter()
+            .all(|(address, _)| *address != 8192));
+    });
+}
+
+#[test]
+fn missing_type_code_offset_does_not_weaken_other_layout_validation() {
+    let mut overlap = packed_menu_facts();
+    overlap.firmware.menus.layout.fields.type_code = None;
+    overlap.firmware.menus.layout.fields.setting_id = 0;
+    assert!(overlap.firmware.validate().is_err());
+
+    let mut bad_type_width = packed_menu_facts();
+    bad_type_width.firmware.menus.layout.fields.type_code = None;
+    bad_type_width.firmware.menus.layout.field_widths.type_code = 3;
+    assert!(bad_type_width.firmware.validate().is_err());
+
+    let mut bad_other_width = packed_menu_facts();
+    bad_other_width.firmware.menus.layout.fields.type_code = None;
+    bad_other_width.firmware.menus.layout.field_widths.setting_id = 3;
+    assert!(bad_other_width.firmware.validate().is_err());
+}
+
+#[test]
+fn explicit_caption_word_order_can_prefer_a_later_word() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.layout.caption_words = 3;
+        facts.firmware.menus.layout.caption_word_order = Some(vec![2, 1, 0]);
+        let mut backend = Synthetic::new();
+        set_root_caption_words(&mut backend, 3, &[28672, 28688, 28704]);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, "OFF");
+    });
+}
+
+#[test]
+fn caption_word_order_skips_invalid_resources_and_empty_text() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.layout.caption_words = 5;
+        facts.firmware.menus.layout.caption_word_order = Some(vec![0, 1, 2, 3, 4]);
+        let mut backend = Synthetic::new();
+        set_root_caption_words(
+            &mut backend,
+            5,
+            &[0xff00_0001, 0, 0x7fff_fffe, 30000, 28688],
+        );
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, "SETTING");
+    });
+}
+
+#[test]
+fn glyph_only_caption_is_preserved_as_an_opaque_identity_and_wins_priority() {
+    futures_lite::future::block_on(async {
+        let mut facts = packed_menu_facts();
+        facts.firmware.menus.layout.caption_word_order = Some(vec![0, 1]);
+        let mut backend = packed_menu_backend();
+        backend.word(12544, 16);
+        backend.word(12548, 28704);
+        let glyphs = [0xf056, b' ' as u16, 0xf062, 0xf060, 0xf1f3, 0];
+        set_supplementary_caption(&mut backend, &facts, 16, &glyphs);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let nested = menu("secondary")
+            .with_key(7)
+            .via(menu("shooting").with_key(10));
+        let snapshot = remote.read(&nested.into()).await.unwrap();
+        let exact = "\u{f056} \u{f062}\u{f060}\u{f1f3}";
+        assert_eq!(snapshot.menu().unwrap().label, exact);
+
+        let item = menu("shooting").with_key(10);
+        let result = remote
+            .read(&option(item.clone(), exact).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, exact);
+
+        let error = remote
+            .read(&option(item, "OFF").into())
+            .await
+            .unwrap_err();
+        assert!(error.contains("0 matches"), "{error}");
+    });
+}
+
+#[test]
+fn mixed_caption_preserves_normal_private_and_glyph_units_for_exact_option_matching() {
+    futures_lite::future::block_on(async {
+        let mut facts = packed_menu_facts();
+        facts.firmware.menus.layout.caption_word_order = Some(vec![0, 1]);
+        let mut backend = packed_menu_backend();
+        backend.word(12544, 16);
+        backend.word(12548, 28704);
+        let units = [
+            b'N' as u16,
+            0xe150,
+            0xf056,
+            b' ' as u16,
+            b'F' as u16,
+            b' ' as u16,
+            b' ' as u16,
+            0,
+            0xf060,
+            b'X' as u16,
+        ];
+        set_supplementary_caption(&mut backend, &facts, 16, &units);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let item = menu("shooting").with_key(10);
+        let exact = "NP\u{f056} F  ";
+
+        let result = remote
+            .read(&option(item.clone(), exact).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, exact);
+
+        let error = remote
+            .read(&option(item, "NP F").into())
+            .await
+            .unwrap_err();
+        assert!(error.contains("0 matches"), "{error}");
+    });
+}
+
+#[test]
+fn omitted_caption_word_order_keeps_legacy_priorities() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        assert_eq!(facts.firmware.menus.layout.caption_word_order, None);
+        let mut backend = Synthetic::new();
+        set_root_caption_words(&mut backend, 2, &[28672, 28688]);
+        let mut remote = Connection::connect(backend, facts.clone()).unwrap();
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, "SETTING");
+
+        facts.firmware.menus.layout.caption_words = 1;
+        let mut backend = Synthetic::new();
+        set_root_caption_words(&mut backend, 1, &[28672]);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, "FIRST");
+    });
+}
+
+#[test]
+fn caption_order_does_not_follow_unselected_invalid_resource_pointers() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.layout.caption_words = 3;
+        facts.firmware.menus.layout.caption_word_order = Some(vec![1]);
+        let mut backend = Synthetic::new();
+        set_root_caption_words(&mut backend, 3, &[0x400000, 28688, 0x400010]);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, "SETTING");
+        assert!(remote
+            .backend
+            .memory_requests
+            .iter()
+            .all(|(address, _)| *address < 0x400000));
+    });
+}
+
+#[test]
+fn zero_caption_pointer_still_returns_an_empty_label() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.layout.caption_words = 3;
+        facts.firmware.menus.layout.caption_word_order = Some(vec![2, 1]);
+        let mut backend = Synthetic::new();
+        backend.word(4096 + 28, 0);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, "");
+        assert!(remote
+            .backend
+            .memory_requests
+            .iter()
+            .all(|(address, _)| *address != 12288));
+    });
+}
+
+#[test]
+fn legacy_zero_caption_extent_remains_accepted_when_pointer_is_null() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.layout.caption_words = 0;
+        assert_eq!(facts.firmware.menus.layout.caption_word_order, None);
+        facts.firmware.validate().unwrap();
+
+        let mut backend = Synthetic::new();
+        backend.word(4096 + 28, 0);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().label, "");
+    });
+}
+
+#[test]
+fn legacy_caption_extent_is_checked_when_a_nonnull_pointer_is_read() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.layout.caption_words = 0;
+        assert_eq!(facts.firmware.menus.layout.caption_word_order, None);
+        facts.firmware.validate().unwrap();
+        let mut remote = Connection::connect(Synthetic::new(), facts).unwrap();
+        let error = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap_err();
+        assert!(error.contains("Invalid caption extent"), "{error}");
+    });
+}
+
+#[test]
+fn invalid_caption_orders_refuse_before_memory_reads() {
+    futures_lite::future::block_on(async {
+        let mut invalid = vec![];
+
+        let mut empty = facts();
+        empty.firmware.menus.layout.caption_word_order = Some(vec![]);
+        invalid.push(empty);
+
+        let mut duplicate = facts();
+        duplicate.firmware.menus.layout.caption_word_order = Some(vec![1, 1]);
+        invalid.push(duplicate);
+
+        let mut out_of_range = facts();
+        out_of_range.firmware.menus.layout.caption_word_order = Some(vec![2]);
+        invalid.push(out_of_range);
+
+        let mut maximum_index = facts();
+        maximum_index.firmware.menus.layout.caption_word_order = Some(vec![u32::MAX]);
+        invalid.push(maximum_index);
+
+        let mut zero_extent = facts();
+        zero_extent.firmware.menus.layout.caption_words = 0;
+        zero_extent.firmware.menus.layout.caption_word_order = Some(vec![0]);
+        invalid.push(zero_extent);
+
+        let mut oversized_extent = facts();
+        oversized_extent.firmware.menus.layout.caption_words = 65;
+        oversized_extent.firmware.menus.layout.caption_word_order = Some(vec![0]);
+        invalid.push(oversized_extent);
+
+        let mut max_extent = facts();
+        max_extent.firmware.menus.layout.caption_words = u32::MAX;
+        max_extent.firmware.menus.layout.caption_word_order = Some(vec![0]);
+        invalid.push(max_extent);
+
+        let mut oversized_order = facts();
+        oversized_order.firmware.menus.layout.caption_words = 64;
+        oversized_order.firmware.menus.layout.caption_word_order =
+            Some((0..65).collect());
+        invalid.push(oversized_order);
+
+        for facts in invalid {
+            assert!(facts.firmware.validate().is_err());
+            let mut backend = Synthetic::new();
+            let mut memory = crate::memory::Memory {
+                backend: &mut backend,
+                facts: &facts,
+                reads: ReadSet::default(),
+                scope: false,
+                depth: 0,
+            };
+            assert!(memory.validate_graph().await.is_err());
+            assert!(memory.reads.stores.is_empty());
+        }
+    });
+}
+
+#[test]
+fn eight_byte_descriptor_and_row_pointers_keep_their_declared_width() {
+    futures_lite::future::block_on(async {
+        let facts = wide_pointer_menu_facts();
+        facts.firmware.validate().unwrap();
+        let mut backend = wide_pointer_menu_backend();
+        backend.active(4096, 0);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let root = remote.read(&menu("shooting").into()).await.unwrap();
+        assert_eq!(root.state.current_key, Some(10));
+        let nested = menu("secondary")
+            .with_key(7)
+            .via(menu("shooting").with_key(10));
+        let result = remote.read(&nested.into()).await.unwrap();
+        let snapshot = result.menu().unwrap();
+        assert_eq!(snapshot.node, 4352);
+        assert_eq!(snapshot.key, Some(7));
+        assert_eq!(snapshot.index, Some(0));
+    });
+}
+
+#[test]
+fn wide_item_array_and_handlers_pointers_do_not_alias_low_addresses() {
+    futures_lite::future::block_on(async {
+        let high_rows = 0x1_0000_2000u64;
+        let mut backend = wide_pointer_menu_backend();
+        backend.bytes[4096 + 24..4096 + 32].copy_from_slice(&high_rows.to_le_bytes());
+        let mut remote = Connection::connect(backend, wide_pointer_menu_facts()).unwrap();
+        assert!(remote.read(&menu("shooting").into()).await.is_err());
+        assert!(remote.backend.memory_requests.iter().any(|(address, _)| *address == high_rows));
+        assert!(!remote.backend.memory_requests.iter().any(|(address, _)| *address == 8192));
+
+        let high_captions = 0x1_0000_3000u64;
+        let mut backend = wide_pointer_menu_backend();
+        backend.bytes[4096 + 32..4096 + 40].copy_from_slice(&high_captions.to_le_bytes());
+        let mut remote = Connection::connect(backend, wide_pointer_menu_facts()).unwrap();
+        assert!(remote
+            .read(&menu("shooting").with_key(10).into())
+            .await
+            .is_err());
+        assert!(remote.backend.memory_requests.iter().any(|(address, _)| *address == high_captions));
+        assert!(!remote.backend.memory_requests.iter().any(|(address, _)| *address == 12288));
+    });
+}
+
+#[test]
+fn wide_parent_pointer_is_not_truncated_when_resolving_ambiguous_ancestry() {
+    futures_lite::future::block_on(async {
+        let high_parent = 0x1_0000_1000u64;
+        let mut facts = wide_pointer_menu_facts();
+        facts.firmware.menus.root_count = 3;
+        facts.firmware.menus.roles.insert("third".into(), 0x90);
+        facts.firmware.menus.root_routes.remove(&0x80);
+        facts.firmware.menus.root_routes.insert(
+            0x90,
+            RootRoute {
+                entry: "third_menu".into(),
+                tab: None,
+            },
+        );
+        let mut backend = wide_pointer_menu_backend();
+        write_wide_node(&mut backend, 4352, 0x80, high_parent, 8448, 12544);
+        write_wide_node(&mut backend, 4608, 0x90, 0, 8704, 12544);
+        write_wide_row(&mut backend, 8704, 11, 4352);
+        write_wide_row(&mut backend, 8720, 0xff, 0);
+        write_keyed_roots(
+            &mut backend,
+            &[(0x20, 4096), (0x80, 4352), (0x90, 4608)],
+            8,
+            0,
+            1,
+            4,
+        );
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let error = remote.read(&menu("secondary").with_key(7).into()).await.unwrap_err();
+        assert!(error.contains("found 2 opening rows"), "{error}");
+    });
+}
+
+#[test]
+fn wide_row_child_pointer_is_not_truncated_to_a_low_address() {
+    futures_lite::future::block_on(async {
+        let high_child = 0x1_0000_6000u64;
+        let mut backend = wide_pointer_menu_backend();
+        backend.bytes[8192 + 8..8192 + 16].copy_from_slice(&high_child.to_le_bytes());
+        let mut remote = Connection::connect(backend, wide_pointer_menu_facts()).unwrap();
+        remote.read(&menu("shooting").with_key(10).into()).await.unwrap();
+        assert!(remote.backend.memory_requests.iter().any(|(address, _)| *address == high_child));
+        assert!(!remote.backend.memory_requests.iter().any(|(address, _)| *address == 24576));
+    });
+}
+
+#[test]
+fn eight_byte_menu_scalars_above_u32_are_rejected() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        let layout = &mut facts.firmware.menus.layout;
+        layout.size = 40;
+        layout.fields = MenuFields {
+            menu_id: 0,
+            type_code: Some(8),
+            setting_id: 12,
+            rows_per_page: 16,
+            flags_word: 20,
+            parent_pointer: 24,
+            item_array: 32,
+            handlers_pointer: 36,
+        };
+        layout.field_widths = MenuFieldWidths {
+            menu_id: 8,
+            type_code: 1,
+            setting_id: 4,
+            rows_per_page: 4,
+            flags_word: 4,
+            parent_pointer: 8,
+            item_array: 4,
+            handlers_pointer: 4,
+        };
+        let mut backend = Synthetic::new();
+        backend.bytes[4096..4104].copy_from_slice(&(u64::from(u32::MAX) + 1).to_le_bytes());
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let error = remote.read(&menu("shooting").into()).await.unwrap_err();
+        assert!(error.contains("Menu scalar exceeds 32 bits"), "{error}");
+    });
+}
+
+#[test]
+fn menu_field_width_validation_rejects_bad_widths_overlaps_ends_and_overflow() {
+    let mut invalid_width = packed_menu_facts();
+    invalid_width.firmware.menus.layout.field_widths.type_code = 3;
+    assert!(invalid_width.firmware.validate().is_err());
+
+    let mut overlapping_fields = packed_menu_facts();
+    overlapping_fields.firmware.menus.layout.fields.item_array = 12;
+    assert!(overlapping_fields.firmware.validate().is_err());
+
+    let mut field_past_end = packed_menu_facts();
+    field_past_end.firmware.menus.layout.size = 23;
+    assert!(field_past_end.firmware.validate().is_err());
+
+    let mut row_past_end = packed_menu_facts();
+    row_past_end.firmware.menus.layout.row_size = 7;
+    assert!(row_past_end.firmware.validate().is_err());
+
+    let mut misaligned_stride = packed_menu_facts();
+    misaligned_stride.firmware.menus.layout.row_key = 8;
+    misaligned_stride.firmware.menus.layout.row_child = 0;
+    misaligned_stride.firmware.menus.layout.row_child_width = 8;
+    misaligned_stride.firmware.menus.layout.row_size = 12;
+    assert!(misaligned_stride.firmware.validate().is_err());
+
+    let mut impossible_sentinel = packed_menu_facts();
+    impossible_sentinel.firmware.menus.layout.sentinel = u32::MAX;
+    assert!(impossible_sentinel.firmware.validate().is_err());
+
+    let mut overflowing_field = packed_menu_facts();
+    overflowing_field.firmware.menus.layout.fields.handlers_pointer = u32::MAX - 3;
+    assert!(overflowing_field.firmware.validate().is_err());
+}
+
+#[test]
+fn menu_layout_rejects_before_memory_reads_when_facts_validation_is_bypassed() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.layout.field_widths.menu_id = 3;
+        let mut backend = Synthetic::new();
+        let mut memory = crate::memory::Memory {
+            backend: &mut backend,
+            facts: &facts,
+            reads: ReadSet::default(),
+            scope: false,
+            depth: 0,
+        };
+        assert!(memory.validate_graph().await.is_err());
+        assert!(memory.reads.stores.is_empty());
+    });
+}
+
+#[test]
+fn byte_cursor_status_uses_one_byte_and_ignores_nonzero_neighbors() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.cursor.status_width = 1;
+        facts.firmware.menus.cursor.status_stride = 1;
+        let mut backend = Synthetic::new();
+        backend.active(4096, 0);
+        backend.bytes[544] = 0xa5;
+        backend.bytes[545] = 2;
+        backend.bytes[546] = 0x5a;
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        let snapshot = result.menu().unwrap();
+        assert!(snapshot.visible);
+        assert!(!snapshot.enabled);
+        assert!(remote
+            .backend
+            .memory_requests
+            .iter()
+            .any(|request| *request == (545, 1)));
+    });
+}
+
+#[test]
+fn cursor_status_keeps_existing_four_byte_behavior() {
+    futures_lite::future::block_on(async {
+        let facts = facts();
+        assert_eq!(facts.firmware.menus.cursor.status_width, 4);
+        assert_eq!(facts.firmware.menus.cursor.status_stride, 4);
+        let mut backend = Synthetic::new();
+        backend.active(4096, 0);
+        backend.word(548, 2);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert!(!result.menu().unwrap().enabled);
+        assert!(remote
+            .backend
+            .memory_requests
+            .iter()
+            .any(|request| *request == (548, 4)));
+    });
+}
+
+#[test]
+fn two_and_eight_byte_cursor_statuses_preserve_visible_and_enabled_values() {
+    futures_lite::future::block_on(async {
+        for (width, status) in [(2u32, 1u64), (8u32, 3u64)] {
+            let mut facts = facts();
+            facts.firmware.menus.cursor.status_width = width;
+            facts.firmware.menus.cursor.status_stride = width;
+            let mut backend = Synthetic::new();
+            backend.active(4096, 0);
+            let address = 512 + 32 + u64::from(width);
+            let start = usize::try_from(address).unwrap();
+            backend.bytes[start..start + usize::try_from(width).unwrap()]
+                .copy_from_slice(&status.to_le_bytes()[..usize::try_from(width).unwrap()]);
+            let mut remote = Connection::connect(backend, facts).unwrap();
+
+            let result = remote
+                .read(&menu("shooting").with_key(20).into())
+                .await
+                .unwrap();
+            let snapshot = result.menu().unwrap();
+            assert_eq!(snapshot.visible, status != 3);
+            assert_eq!(snapshot.enabled, status < 2);
+            assert!(remote.backend.memory_requests.iter().any(|request| {
+                *request == (address, usize::try_from(width).unwrap())
+            }));
+        }
+    });
+}
+
+#[test]
+fn cursor_status_supports_padded_stride() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.cursor.status_width = 1;
+        facts.firmware.menus.cursor.status_stride = 3;
+        let mut backend = Synthetic::new();
+        backend.active(4096, 0);
+        backend.bytes[546] = 0xa5;
+        backend.bytes[547] = 2;
+        backend.bytes[548] = 0x5a;
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let result = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap();
+        assert!(!result.menu().unwrap().enabled);
+        assert!(remote
+            .backend
+            .memory_requests
+            .iter()
+            .any(|request| *request == (547, 1)));
+    });
+}
+
+#[test]
+fn wide_cursor_status_above_u32_is_rejected() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.cursor.status_width = 8;
+        facts.firmware.menus.cursor.status_stride = 8;
+        let mut backend = Synthetic::new();
+        backend.active(4096, 0);
+        backend.bytes[552..560].copy_from_slice(&0x1_0000_0002u64.to_le_bytes());
+        let mut remote = Connection::connect(backend, facts).unwrap();
+
+        let error = remote
+            .read(&menu("shooting").with_key(20).into())
+            .await
+            .unwrap_err();
+        assert!(error.contains("Cursor status exceeds 32 bits"), "{error}");
+        assert!(remote
+            .backend
+            .memory_requests
+            .iter()
+            .any(|request| *request == (552, 8)));
+    });
+}
+
+#[test]
+fn cursor_status_layout_rejects_bad_width_alignment_overlap_and_overflow() {
+    let mut bad_width = facts();
+    bad_width.firmware.menus.cursor.status_width = 3;
+    assert!(bad_width.firmware.validate().is_err());
+
+    let mut zero_width = facts();
+    zero_width.firmware.menus.cursor.status_width = 0;
+    assert!(zero_width.firmware.validate().is_err());
+
+    let mut narrow_stride = facts();
+    narrow_stride.firmware.menus.cursor.status_width = 4;
+    narrow_stride.firmware.menus.cursor.status_stride = 2;
+    assert!(narrow_stride.firmware.validate().is_err());
+
+    let mut unaligned_offset = facts();
+    unaligned_offset.firmware.menus.cursor.status_width = 2;
+    unaligned_offset.firmware.menus.cursor.status_offset = 33;
+    assert!(unaligned_offset.firmware.validate().is_err());
+
+    let mut unaligned_stride = facts();
+    unaligned_stride.firmware.menus.cursor.status_width = 2;
+    unaligned_stride.firmware.menus.cursor.status_stride = 3;
+    assert!(unaligned_stride.firmware.validate().is_err());
+
+    let mut overlap = facts();
+    overlap.firmware.menus.cursor.status_width = 1;
+    overlap.firmware.menus.cursor.status_offset = 31;
+    assert!(overlap.firmware.validate().is_err());
+
+    let mut overflow = facts();
+    overflow.firmware.menus.cursor.status_width = 8;
+    overflow.firmware.menus.cursor.status_stride = 8;
+    overflow.firmware.menus.cursor.status_offset = u32::MAX - 3;
+    assert!(overflow.firmware.validate().is_err());
+}
+
+#[test]
+fn memory_state_rejects_wrapping_node_fields_before_followup_read() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.state.widths.menu_node = 8;
+        let mut backend = Synthetic::new();
+        backend.word(776, 1);
+        backend.bytes[784..792].copy_from_slice(&u64::MAX.to_le_bytes());
+        let mut memory = crate::memory::Memory {
+            backend: &mut backend,
+            facts: &facts,
+            reads: ReadSet::default(),
+            scope: false,
+            depth: 0,
+        };
+        let error = memory.state().await.unwrap_err();
+        assert!(error.contains("overflow"), "{error}");
+        assert!(memory.reads.stores.iter().all(|(start, _)| *start >= 512));
+    });
+}
+
+#[test]
+fn byte_keyed_roots_ignore_padding_before_the_key_and_pointer() {
+    futures_lite::future::block_on(async {
+        let entries = [(0x20, 4096), (0x21, 4352)];
+        let facts = keyed_facts(0x20, 8, 1, 1, 4);
+        let backend = keyed_backend(0x20, 0x21, &entries, 8, 1, 1, 4);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let result = remote
+            .navigate(&menu("shooting").with_key(20), 100)
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().node, 4096);
+        assert!(result.menu().unwrap().selected);
+    });
+}
+
+#[test]
+fn keyed_root_tables_reject_duplicate_keys_but_allow_duplicate_pointers() {
+    futures_lite::future::block_on(async {
+        let duplicate_keys = [(0x20, 4096), (0x20, 4352)];
+        let facts = keyed_facts(0x20, 8, 1, 1, 4);
+        let backend = keyed_backend(0x20, 0x21, &duplicate_keys, 8, 1, 1, 4);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let error = remote
+            .read(&menu("shooting").into())
+            .await
+            .unwrap_err();
+        assert!(error.contains("Duplicate root key"));
+
+        let duplicate_pointers = [(0x20, 4096), (0x21, 4096)];
+        let facts = keyed_facts(0x20, 8, 1, 1, 4);
+        let backend = keyed_backend(0x20, 0x21, &duplicate_pointers, 8, 1, 1, 4);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let result = remote
+            .navigate(&menu("shooting").with_key(20), 100)
+            .await
+            .unwrap();
+        assert_eq!(result.menu().unwrap().node, 4096);
+    });
+}
+
+#[test]
+fn keyed_root_lookup_does_not_fall_back_to_an_entry_index() {
+    futures_lite::future::block_on(async {
+        let entries = [(0x20, 4096), (0x21, 4352)];
+        let facts = keyed_facts(1, 8, 1, 1, 4);
+        let backend = keyed_backend(0x20, 0x21, &entries, 8, 1, 1, 4);
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let error = remote
+            .read(&menu("shooting").into())
+            .await
+            .unwrap_err();
+        assert!(error.contains("root key 0x1 is absent"));
+    });
+}
+
+#[test]
+fn invalid_descriptor_key_refuses_before_following_its_row_pointer() {
+    futures_lite::future::block_on(async {
+        let mut backend = Synthetic::new();
+        backend.word(4096, 99);
+        backend.word(4096 + 24, u32::MAX - 7);
+        let mut remote = Connection::connect(backend, facts()).unwrap();
+        let error = remote.read(&menu("shooting").into()).await.unwrap_err();
+        assert!(error.contains("Invalid menu descriptor"), "{error}");
+    });
+}
+
+#[test]
+fn keyed_root_layout_validation_rejects_width_stride_overlap_and_overflow() {
+    let mut invalid_width = keyed_facts(0x20, 8, 1, 1, 4);
+    invalid_width.firmware.menus.root_layout = RootLayout::KeyedEntries {
+        stride: 8,
+        key_offset: 0,
+        key_width: 3,
+        pointer_offset: 4,
+    };
+    assert!(invalid_width.firmware.validate().is_err());
+
+    let mut invalid_stride = keyed_facts(0x20, 7, 1, 1, 4);
+    invalid_stride.firmware.menus.root_layout = RootLayout::KeyedEntries {
+        stride: 7,
+        key_offset: 1,
+        key_width: 1,
+        pointer_offset: 4,
+    };
+    assert!(invalid_stride.firmware.validate().is_err());
+
+    let mut overlapping_fields = keyed_facts(0x20, 8, 0, 4, 0);
+    overlapping_fields.firmware.menus.root_layout = RootLayout::KeyedEntries {
+        stride: 8,
+        key_offset: 0,
+        key_width: 4,
+        pointer_offset: 0,
+    };
+    assert!(overlapping_fields.firmware.validate().is_err());
+
+    let mut overflowing_table = keyed_facts(0x20, 8, 1, 1, 4);
+    overflowing_table.firmware.menus.roots_address = u64::MAX - 3;
+    assert!(overflowing_table.firmware.validate().is_err());
+}
+
 #[test]
 fn root_navigation_backs_out_of_a_remembered_submenu() {
     futures_lite::future::block_on(async {
@@ -504,6 +1720,120 @@ fn rec_readiness_gates_parameter_changes_without_blocking_other_category_one_wor
             .unwrap();
     });
 }
+
+#[test]
+fn byte_sized_state_and_readiness_fields_ignore_adjacent_bytes() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.state.widths.ui_mode = 1;
+        facts.firmware.state.widths.menu_active = 1;
+        facts.firmware.state.widths.pending_mode = 1;
+        facts.firmware.state.readiness.input_pending_width = 1;
+        facts.firmware.state.readiness.override_width = 1;
+        facts.firmware.state.readiness.excluded_mask = 8;
+        let mut remote = Connection::connect(Synthetic::new(), facts).unwrap();
+
+        remote.backend.bytes[768..772].copy_from_slice(&[3, 0xa1, 0xb2, 0xc3]);
+        remote.backend.bytes[776..780].copy_from_slice(&[0, 0xa1, 0xb2, 0xc3]);
+        remote.backend.bytes[780..784].copy_from_slice(&[0, 0xa1, 0xb2, 0xc3]);
+        remote.backend.bytes[816..820].copy_from_slice(&[0, 0xa1, 0xb2, 0xc3]);
+        remote.backend.bytes[808..816].copy_from_slice(&8u64.to_le_bytes());
+        remote.backend.bytes[824..828].copy_from_slice(&[1, 0xa1, 0xb2, 0xc3]);
+
+        let observed = remote.read(&control("selector.down").into()).await.unwrap();
+        assert_eq!(observed.state.mode, 3);
+        assert!(!observed.state.menu_active);
+
+        let readiness = remote.readiness(None).await.unwrap();
+        assert!(
+            readiness.ready,
+            "unexpected pending checks: {:?}",
+            readiness.pending
+        );
+        assert!(readiness.pending.is_empty());
+        remote.backend.bytes[824] = 0;
+        assert!(!remote.readiness(None).await.unwrap().ready);
+    });
+}
+
+#[test]
+fn eight_byte_menu_node_is_preserved_by_state_observation() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.state.widths.menu_node = 8;
+        let mut remote = Connection::connect(Synthetic::new(), facts).unwrap();
+        let node = 0x1_2345_6789u64;
+        remote.backend.bytes[784..792].copy_from_slice(&node.to_le_bytes());
+
+        let observed = remote.read(&control("selector.down").into()).await.unwrap();
+        assert_eq!(observed.state.node, node);
+        assert!(!observed.state.menu_active);
+    });
+}
+
+#[test]
+fn ui_mode_observation_rejects_values_above_32_bits() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.state.widths.ui_mode = 8;
+        let mut remote = Connection::connect(Synthetic::new(), facts).unwrap();
+        remote.backend.bytes[768..776].copy_from_slice(&0x1_0000_0003u64.to_le_bytes());
+
+        let error = remote
+            .read(&control("selector.down").into())
+            .await
+            .unwrap_err();
+        assert!(error.contains("UI mode exceeds 32 bits"));
+    });
+}
+
+#[test]
+fn invalid_observation_widths_are_rejected_before_connecting() {
+    let mut facts_with_invalid_mode_width = facts();
+    facts_with_invalid_mode_width.firmware.state.widths.ui_mode = 3;
+    let error = match Connection::connect(Synthetic::new(), facts_with_invalid_mode_width) {
+        Ok(_) => panic!("invalid UI mode width was accepted"),
+        Err(error) => error,
+    };
+    assert!(error.contains("invalid remote observation width"));
+
+    let mut facts_with_invalid_input_width = facts();
+    facts_with_invalid_input_width
+        .firmware
+        .state
+        .readiness
+        .input_pending_width = 16;
+    let error = match Connection::connect(Synthetic::new(), facts_with_invalid_input_width) {
+        Ok(_) => panic!("invalid input-pending width was accepted"),
+        Err(error) => error,
+    };
+    assert!(error.contains("invalid remote observation width"));
+
+    let mut facts_with_invalid_override_width = facts();
+    facts_with_invalid_override_width
+        .firmware
+        .state
+        .readiness
+        .override_width = 0;
+    let error = match Connection::connect(Synthetic::new(), facts_with_invalid_override_width) {
+        Ok(_) => panic!("invalid override width was accepted"),
+        Err(error) => error,
+    };
+    assert!(error.contains("invalid remote observation width"));
+}
+
+#[test]
+fn omitted_observation_widths_keep_the_existing_four_byte_defaults() {
+    let facts = facts();
+    assert_eq!(facts.firmware.state.widths.ui_mode, 4);
+    assert_eq!(facts.firmware.state.widths.system_mode, 4);
+    assert_eq!(facts.firmware.state.widths.menu_active, 4);
+    assert_eq!(facts.firmware.state.widths.pending_mode, 4);
+    assert_eq!(facts.firmware.state.widths.menu_node, 4);
+    assert_eq!(facts.firmware.state.readiness.input_pending_width, 4);
+    assert_eq!(facts.firmware.state.readiness.override_width, 4);
+}
+
 #[test]
 fn predicate_tracks_only_its_reads() {
     futures_lite::future::block_on(async {
@@ -949,5 +2279,155 @@ fn parameter_independent_control_requires_every_declared_state_and_keeps_other_g
                 .unwrap()
                 .contains("conditions")
         );
+    });
+}
+
+#[test]
+fn reading_a_menu_does_not_fetch_unrelated_descriptors() {
+    futures_lite::future::block_on(async {
+        let mut backend = Synthetic::new();
+        // The second root is not a valid descriptor. It must still be refused
+        // when explicitly requested, without blocking an independent root.
+        backend.word(4352, 0xffff);
+        let mut remote = Connection::connect(backend, facts()).unwrap();
+        let value = remote
+            .read(&menu("shooting").with_key(10).into())
+            .await
+            .unwrap();
+        assert!(value.menu().unwrap().exists);
+        assert!(
+            !remote
+                .backend
+                .memory_requests
+                .iter()
+                .any(|(address, _)| *address == 4352)
+        );
+        let error = remote.read(&menu("1").into()).await.unwrap_err();
+        assert!(error.contains("Invalid menu descriptor"), "{error}");
+        assert!(
+            remote
+                .backend
+                .memory_requests
+                .iter()
+                .any(|(address, _)| *address == 4352)
+        );
+    });
+}
+
+#[test]
+fn reading_a_root_does_not_follow_its_unrequested_child_values() {
+    futures_lite::future::block_on(async {
+        let backend = wide_pointer_menu_backend();
+        let mut remote = Connection::connect(backend, wide_pointer_menu_facts()).unwrap();
+        let value = remote.read(&menu("shooting").into()).await.unwrap();
+        assert!(value.menu().unwrap().exists);
+        assert!(
+            !remote
+                .backend
+                .memory_requests
+                .iter()
+                .any(|(address, _)| *address == 4352)
+        );
+        assert!(
+            !remote
+                .backend
+                .memory_requests
+                .iter()
+                .any(|(address, _)| *address == 8448)
+        );
+    });
+}
+
+#[test]
+fn ancestry_search_preserves_previously_read_descriptors() {
+    futures_lite::future::block_on(async {
+        let mut backend = Synthetic::new();
+        backend.node(4352, 1, 0, 8448, 12544);
+        let mut remote = Connection::connect(backend, facts()).unwrap();
+        let value = remote.read(&menu("1").into()).await.unwrap();
+        assert_eq!(value.menu().unwrap().ancestors.len(), 1);
+        for address in [4096, 4352] {
+            assert_eq!(
+                remote
+                    .backend
+                    .memory_requests
+                    .iter()
+                    .filter(|request| **request == (address, 32))
+                    .count(),
+                1
+            );
+        }
+    });
+}
+
+#[test]
+fn declared_parent_candidates_must_all_be_read_before_selecting_a_unique_parent() {
+    fn item(name: &str, address: u64) -> serde_json::Value {
+        let mut value = json!({"name":name,"mod":"test","identity":format!("test/{name}"),
+            "label_text":name,"surfaces":["menu"],"options":[]});
+        for field in [
+            "binding",
+            "parent",
+            "parent_item",
+            "label",
+            "page",
+            "open_page",
+            "event",
+            "input",
+            "activate",
+            "fn_action",
+            "key",
+            "q_assignable",
+            "choice_capacity",
+            "choice_count",
+        ] {
+            value[field] = json!(0);
+        }
+        value["address"] = json!(address);
+        value
+    }
+    futures_lite::future::block_on(async {
+        for unreadable_alternative in [false, true] {
+            let mut facts = facts();
+            let mut setting = item("setting", 200);
+            setting["key"] = json!(20);
+            setting["parent_item"] = json!(100);
+            let mut parent = item("parent", 100);
+            parent["page"] = json!(4096);
+            parent["open_page"] = json!(if unreadable_alternative { 0x100000 } else { 0 });
+            facts.menu_manifest = Some(serde_json::from_value(json!({
+                "$schema":fujimod_catalog_remote::MENU_MANIFEST_SCHEMA_URI,
+                "schema":1,"firmware_id":facts.firmware.firmware_id,
+                "firmware_sha256":facts.firmware.firmware_sha256,"elf_sha256":"00".repeat(32),
+                "artifacts":[],"items":[parent,setting],"symbols":{},"memory":[],"owner_constants":{},
+                "walkthrough":{"menu":null,"qfn":null,"binding":null,"canvas":null,
+                    "choice_sets":{},"binding_choices":{},"canvas_hosts":{},
+                    "requirements":[],"option_requirements":[],"screen_requirements":[]}
+            })).unwrap());
+            let mut remote = Connection::connect(Synthetic::new(), facts).unwrap();
+            let result = remote.read(&menu("setting").into()).await;
+            if unreadable_alternative {
+                assert!(result.unwrap_err().contains("Unmapped synthetic memory"));
+            } else {
+                assert_eq!(result.unwrap().menu().unwrap().label, "SETTING");
+            }
+        }
+    });
+}
+
+#[test]
+fn caption_priority_skips_whitespace_without_trimming_a_meaningful_label() {
+    futures_lite::future::block_on(async {
+        let mut facts = facts();
+        facts.firmware.menus.layout.caption_words = 3;
+        facts.firmware.menus.layout.caption_word_order = Some(vec![1, 2]);
+        let mut backend = Synthetic::new();
+        backend.word(12288 + 4, 28720);
+        backend.word(12288 + 8, 28800);
+        backend.bytes[28720..28723].copy_from_slice(b" \t\0");
+        backend.bytes[28800..28811].copy_from_slice(b"  LABEL  \0\0");
+        let mut remote = Connection::connect(backend, facts).unwrap();
+        let value = remote.read(&menu("shooting").with_key(10).into()).await.unwrap();
+        assert_eq!(value.menu().unwrap().label, "  LABEL  ");
     });
 }

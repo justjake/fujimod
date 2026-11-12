@@ -2,10 +2,89 @@
 use crate::{
     ControlSnapshot, Menu, MenuSnapshot, Reference, RemoteReadResult, Result, Value,
     backend::Backend,
-    memory::{Memory, word},
+    memory::{Memory, checked_indexed_address, word},
 };
 use fujimod_catalog_controls::InputTarget;
+use fujimod_catalog_remote::{CursorLayout, MenuLayout, RootLayout};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
+
+fn field_u64(bytes: &[u8], offset: u32, width: u8) -> Result<u64> {
+    if !matches!(width, 1 | 2 | 4 | 8) {
+        return Err("Unsupported menu field width".into());
+    }
+    let start =
+        usize::try_from(offset).map_err(|_| "Menu field offset exceeds host address space")?;
+    let end = start
+        .checked_add(usize::from(width))
+        .ok_or("Menu field extent overflow")?;
+    let field = bytes
+        .get(start..end)
+        .ok_or("Menu field exceeds its descriptor")?;
+    Ok(field.iter().enumerate().fold(0u64, |value, (index, byte)| {
+        value | (u64::from(*byte) << (index * 8))
+    }))
+}
+
+fn field_u32(bytes: &[u8], offset: u32, width: u8) -> Result<u32> {
+    u32::try_from(field_u64(bytes, offset, width)?)
+        .map_err(|_| "Menu scalar exceeds 32 bits".into())
+}
+
+fn root_key(bytes: &[u8], offset: usize, width: u8) -> Result<u32> {
+    if !matches!(width, 1 | 2 | 4) {
+        return Err("Unsupported root key width".into());
+    }
+    let end = offset
+        .checked_add(usize::from(width))
+        .ok_or("root key extent overflow")?;
+    let field = bytes.get(offset..end).ok_or("root key exceeds its entry")?;
+    let mut value = 0u32;
+    for (shift, byte) in field.iter().enumerate() {
+        value |= u32::from(*byte) << (shift * 8);
+    }
+    Ok(value)
+}
+
+fn root_pointer(bytes: &[u8], offset: usize) -> Result<u32> {
+    let offset = u32::try_from(offset).map_err(|_| "root pointer offset exceeds 32 bits")?;
+    word(bytes, offset)
+}
+
+fn checked_caption_order(layout: &MenuLayout) -> Result<Vec<u32>> {
+    let words = layout.caption_words;
+    if !(1..=64).contains(&words) {
+        return Err("Invalid caption extent".into());
+    }
+    let order = match &layout.caption_word_order {
+        Some(order) => order.clone(),
+        None if words >= 2 => vec![1, 0],
+        None => vec![0],
+    };
+    if order.is_empty() || order.len() > 64 {
+        return Err("Invalid caption word order extent".into());
+    }
+    let extent = words.checked_mul(4).ok_or("Caption extent overflow")?;
+    let mut seen = BTreeSet::new();
+    for index in &order {
+        let offset = index.checked_mul(4).ok_or("Caption word offset overflow")?;
+        let end = offset
+            .checked_add(4)
+            .ok_or("Caption word extent overflow")?;
+        if *index >= words || end > extent || !seen.insert(*index) {
+            return Err("Invalid caption word order".into());
+        }
+    }
+    Ok(order)
+}
+
+fn cursor_status_address(cursor_address: u64, index: u32, layout: &CursorLayout) -> Result<u64> {
+    checked_indexed_address(
+        cursor_address,
+        u64::from(index),
+        u64::from(layout.status_stride),
+        u64::from(layout.status_offset),
+    )
+}
 
 #[derive(Clone, Debug)]
 struct Row {
@@ -22,28 +101,34 @@ struct Node {
     rows: Vec<Row>,
 }
 impl<B: Backend> Memory<'_, B> {
-    async fn node(&mut self, pointer: u64) -> Result<Node> {
+    async fn node(&mut self, pointer: u64, roots: &BTreeMap<u32, u64>) -> Result<Node> {
         let l = &self.facts.firmware.menus.layout;
-        if !(32..=256).contains(&l.size) || !(8..=256).contains(&l.row_size) {
-            return Err("Unsupported menu descriptor extent".into());
-        }
+        l.validate()?;
         let raw = self.bytes(pointer, l.size as usize).await?;
-        let code = word(&raw, l.fields.menu_id)?;
-        if code >= self.facts.firmware.menus.root_count
-            || word(&raw, l.fields.type_code)? > l.max_kind
-            || word(&raw, l.fields.rows_per_page)? > 1024
+        let code = field_u32(&raw, l.fields.menu_id, l.field_widths.menu_id)?;
+        let type_code = l
+            .fields
+            .type_code
+            .map(|offset| field_u32(&raw, offset, l.field_widths.type_code))
+            .transpose()?;
+        let _setting_id = field_u32(&raw, l.fields.setting_id, l.field_widths.setting_id)?;
+        let rows_per_page = field_u32(&raw, l.fields.rows_per_page, l.field_widths.rows_per_page)?;
+        let _flags_word = field_u32(&raw, l.fields.flags_word, l.field_widths.flags_word)?;
+        if !roots.contains_key(&code)
+            || type_code.is_some_and(|kind| kind > l.max_kind)
+            || rows_per_page > 1024
         {
             return Err(format!("Invalid menu descriptor at {pointer:#x}"));
         }
-        let array = u64::from(word(&raw, l.fields.item_array)?);
+        let array = field_u64(&raw, l.fields.item_array, l.field_widths.item_array)?;
         let mut rows = vec![];
         if array != 0 {
             for index in 0..=1024 {
-                let raw = self
-                    .bytes(array + u64::from(index * l.row_size), l.row_size as usize)
-                    .await?;
-                let key = word(&raw, l.row_key)?;
-                let child = u64::from(word(&raw, l.row_child)?);
+                let row_address =
+                    checked_indexed_address(array, u64::from(index), u64::from(l.row_size), 0)?;
+                let raw = self.bytes(row_address, l.row_size as usize).await?;
+                let key = field_u32(&raw, l.row_key, l.row_key_width)?;
+                let child = field_u64(&raw, l.row_child, l.row_child_width)?;
                 if key == l.sentinel && child == 0 {
                     break;
                 }
@@ -56,24 +141,97 @@ impl<B: Backend> Memory<'_, B> {
         Ok(Node {
             pointer,
             code,
-            parent: u64::from(word(&raw, l.fields.parent_pointer)?),
-            captions: u64::from(word(&raw, l.fields.handlers_pointer)?),
+            parent: field_u64(&raw, l.fields.parent_pointer, l.field_widths.parent_pointer)?,
+            captions: field_u64(
+                &raw,
+                l.fields.handlers_pointer,
+                l.field_widths.handlers_pointer,
+            )?,
             rows,
         })
     }
-    async fn graph(&mut self) -> Result<(Vec<u64>, BTreeMap<u64, Node>)> {
+    async fn roots(&mut self) -> Result<BTreeMap<u32, u64>> {
         let m = &self.facts.firmware.menus;
+        m.layout.validate()?;
         if m.root_count > 4096 {
             return Err("Menu root bound exceeded".into());
         }
-        let raw = self
-            .bytes(m.roots_address, m.root_count as usize * 4)
-            .await?;
-        let roots = (0..m.root_count)
-            .map(|i| word(&raw, i * 4).map(u64::from))
-            .collect::<Result<Vec<_>>>()?;
-        let mut pending: VecDeque<_> = roots.iter().copied().filter(|p| *p != 0).collect();
-        let mut nodes = BTreeMap::new();
+        let (_, table_size) = m.checked_root_table_extent()?;
+        let raw = self.bytes(m.roots_address, table_size).await?;
+        let mut roots = BTreeMap::new();
+        match &m.root_layout {
+            RootLayout::PointerArray => {
+                for index in 0..m.root_count {
+                    let offset = usize::try_from(index)
+                        .map_err(|_| "root index exceeds host address space")?
+                        .checked_mul(4)
+                        .ok_or("root pointer offset overflow")?;
+                    roots.insert(index, u64::from(root_pointer(&raw, offset)?));
+                }
+            }
+            RootLayout::KeyedEntries {
+                stride,
+                key_offset,
+                key_width,
+                pointer_offset,
+            } => {
+                let stride = usize::try_from(*stride)
+                    .map_err(|_| "root stride exceeds host address space")?;
+                let key_offset = usize::try_from(*key_offset)
+                    .map_err(|_| "root key offset exceeds host address space")?;
+                let pointer_offset = usize::try_from(*pointer_offset)
+                    .map_err(|_| "root pointer offset exceeds host address space")?;
+                for index in 0..m.root_count {
+                    let entry = usize::try_from(index)
+                        .map_err(|_| "root index exceeds host address space")?
+                        .checked_mul(stride)
+                        .ok_or("root entry offset overflow")?;
+                    let key_at = entry
+                        .checked_add(key_offset)
+                        .ok_or("root key offset overflow")?;
+                    let pointer_at = entry
+                        .checked_add(pointer_offset)
+                        .ok_or("root pointer offset overflow")?;
+                    let key = root_key(&raw, key_at, *key_width)?;
+                    let pointer = u64::from(root_pointer(&raw, pointer_at)?);
+                    if roots.insert(key, pointer).is_some() {
+                        return Err(format!("Duplicate root key {key:#x}"));
+                    }
+                }
+            }
+        }
+        Ok(roots)
+    }
+    async fn live_node(
+        &mut self,
+        pointer: u64,
+        roots: &BTreeMap<u32, u64>,
+        nodes: &mut BTreeMap<u64, Node>,
+    ) -> Result<Node> {
+        if let Some(node) = nodes.get(&pointer) {
+            return Ok(node.clone());
+        }
+        if nodes.len() >= 8192 {
+            return Err("Live menu graph exceeds descriptor bound".into());
+        }
+        let node = self.node(pointer, roots).await?;
+        nodes.insert(pointer, node.clone());
+        Ok(node)
+    }
+    // A complete search is needed only when a descriptor has no usable parent
+    // and the caller supplied no explicit via path. Reuse this observation's
+    // cached descriptors rather than reading them again during that search.
+    async fn expand_graph(
+        &mut self,
+        roots: &BTreeMap<u32, u64>,
+        nodes: &mut BTreeMap<u64, Node>,
+    ) -> Result<()> {
+        let root_pointers: BTreeSet<_> = roots
+            .values()
+            .copied()
+            .filter(|pointer| *pointer != 0)
+            .collect();
+        let mut pending: VecDeque<_> = root_pointers.iter().copied().collect();
         let mut visited = BTreeSet::new();
         while let Some(pointer) = pending.pop_front() {
             if !visited.insert(pointer) {
@@ -82,17 +240,35 @@ impl<B: Backend> Memory<'_, B> {
             if visited.len() > 8192 {
                 return Err("Live menu graph exceeds descriptor bound".into());
             }
+            // Exhausting the observation cache is a global failure, not a
+            // function-row value that may be skipped during classification.
+            if !nodes.contains_key(&pointer) && nodes.len() >= 8192 {
+                return Err("Live menu graph exceeds descriptor bound".into());
+            }
             // Function rows may contain operation values rather than descriptors.
             // A root, or a descriptor explicitly requested later, must validate.
-            let node = match self.node(pointer).await {
+            let node = match self.live_node(pointer, roots, nodes).await {
                 Ok(node) => node,
-                Err(error) if roots.contains(&pointer) => return Err(error),
+                Err(error) if root_pointers.contains(&pointer) => return Err(error),
                 Err(_) => continue,
             };
             pending.extend(node.rows.iter().filter(|r| r.child != 0).map(|r| r.child));
             nodes.insert(pointer, node);
         }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    async fn graph(&mut self) -> Result<(BTreeMap<u32, u64>, BTreeMap<u64, Node>)> {
+        let roots = self.roots().await?;
+        let mut nodes = BTreeMap::new();
+        self.expand_graph(&roots, &mut nodes).await?;
         Ok((roots, nodes))
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn validate_graph(&mut self) -> Result<()> {
+        self.graph().await.map(|_| ())
     }
     fn root_id(&self, code: u32) -> String {
         self.facts
@@ -119,11 +295,11 @@ impl<B: Backend> Memory<'_, B> {
                 )
             })
     }
-    fn target(
-        &self,
+    async fn target(
+        &mut self,
         reference: &Menu,
-        roots: &[u64],
-        nodes: &BTreeMap<u64, Node>,
+        roots: &BTreeMap<u32, u64>,
+        nodes: &mut BTreeMap<u64, Node>,
     ) -> Result<(u64, Option<u32>)> {
         let mut chain = vec![];
         let mut current = reference;
@@ -140,15 +316,19 @@ impl<B: Backend> Memory<'_, B> {
             .iter()
             .flat_map(|m| &m.items)
             .filter(|i| i.name == current.id() || i.identity == current.id())
+            .cloned()
             .collect();
         let (mut pointer, mut key) = if declarations.is_empty() {
             let code = self.code(current.id())?;
-            let pointer = *roots
-                .get(code as usize)
-                .ok_or_else(|| format!("Menu {} is outside the root table", current.id()))?;
+            let pointer = *roots.get(&code).ok_or_else(|| {
+                format!(
+                    "Menu {} root key {code:#x} is absent from the root table",
+                    current.id()
+                )
+            })?;
             (pointer, current.key())
         } else if declarations.len() == 1 {
-            let item = declarations[0];
+            let item = &declarations[0];
             if current.key().is_some() {
                 return Err(format!(
                     "Mod menu {} already declares its row key",
@@ -158,20 +338,25 @@ impl<B: Backend> Memory<'_, B> {
             if let Some(stock) = item.stock_node {
                 (stock, None)
             } else {
-                let candidates: Vec<_> = nodes
-                    .values()
-                    .filter(|n| {
-                        item.parent == n.pointer
-                            || item.parent_item != 0
-                                && self.facts.menu_manifest.as_ref().is_some_and(|m| {
-                                    m.items.iter().any(|p| {
-                                        p.address == item.parent_item
-                                            && (p.page == n.pointer || p.open_page == n.pointer)
-                                    })
-                                })
-                    })
-                    .filter(|n| n.rows.iter().any(|r| r.key == item.key))
-                    .collect();
+                let mut addresses = BTreeSet::from([item.parent]);
+                if item.parent_item != 0 {
+                    for parent in self
+                        .facts
+                        .menu_manifest
+                        .iter()
+                        .flat_map(|m| &m.items)
+                        .filter(|p| p.address == item.parent_item)
+                    {
+                        addresses.extend([parent.page, parent.open_page]);
+                    }
+                }
+                let mut candidates = vec![];
+                for address in addresses.into_iter().filter(|address| *address != 0) {
+                    let node = self.live_node(address, roots, nodes).await?;
+                    if node.rows.iter().any(|row| row.key == item.key) {
+                        candidates.push(node);
+                    }
+                }
                 if candidates.len() != 1 {
                     return Err(format!(
                         "Menu {}: expected one live parent, found {:?}",
@@ -189,24 +374,14 @@ impl<B: Backend> Memory<'_, B> {
             ));
         };
         for next in chain.into_iter().rev() {
-            let node = nodes.get(&pointer).ok_or_else(|| {
-                format!(
-                    "Menu {} has no live descriptor at {pointer:#x}",
-                    reference.id()
-                )
-            })?;
+            let node = self.live_node(pointer, roots, nodes).await?;
             let row = unique_row(
-                node,
+                &node,
                 key.ok_or("via must identify an opening row with key")?,
                 reference.id(),
             )?;
             pointer = row.child;
-            let child = nodes.get(&pointer).ok_or_else(|| {
-                format!(
-                    "Menu {} via points to absent descriptor {pointer:#x}",
-                    reference.id()
-                )
-            })?;
+            let child = self.live_node(pointer, roots, nodes).await?;
             if child.code != self.code(next.id())? {
                 return Err(format!(
                     "Menu {} via opens menu {}, not {}",
@@ -217,89 +392,205 @@ impl<B: Backend> Memory<'_, B> {
             }
             key = next.key();
         }
-        if !nodes.contains_key(&pointer) {
-            return Err(format!(
-                "Menu {} has no live descriptor at {pointer:#x}",
-                reference.id()
-            ));
-        }
+        self.live_node(pointer, roots, nodes).await?;
         Ok((pointer, key))
     }
-    fn ancestry(
-        &self,
+    fn ancestry<'b>(
+        &'b mut self,
         pointer: u64,
-        roots: &[u64],
-        nodes: &BTreeMap<u64, Node>,
-        reference: &Menu,
-    ) -> Result<(String, Vec<Menu>)> {
-        if let Some(via) = reference.parent() {
-            let (parent, _) = self.target(via, roots, nodes)?;
-            let (root, mut ancestors) = self.ancestry(parent, roots, nodes, via)?;
-            ancestors.push(via.clone());
-            return Ok((root, ancestors));
-        }
-        let mut current = pointer;
-        let mut reverse = vec![];
-        let mut seen = BTreeSet::new();
-        loop {
-            if !seen.insert(current) {
-                return Err(format!("Menu {} has a parent cycle", reference.id()));
+        roots: &'b BTreeMap<u32, u64>,
+        nodes: &'b mut BTreeMap<u64, Node>,
+        reference: &'b Menu,
+    ) -> crate::LocalFuture<'b, (String, Vec<Menu>)> {
+        Box::pin(async move {
+            if let Some(via) = reference.parent() {
+                let (parent, _) = self.target(via, roots, nodes).await?;
+                let (root, mut ancestors) = self.ancestry(parent, roots, nodes, via).await?;
+                ancestors.push(via.clone());
+                return Ok((root, ancestors));
             }
-            let node = nodes
-                .get(&current)
-                .ok_or("Menu ancestry has no live descriptor")?;
-            if roots.get(node.code as usize) == Some(&current)
-                && self
-                    .facts
-                    .firmware
-                    .menus
-                    .root_routes
-                    .contains_key(&node.code)
-            {
-                reverse.reverse();
-                let mut ancestors = vec![];
-                let mut via = None;
-                for (code, key) in reverse {
-                    let mut item = Menu::new(self.root_id(code)).with_key(key);
-                    if let Some(parent) = via {
-                        item = item.via(parent);
-                    }
-                    via = Some(item.clone());
-                    ancestors.push(item);
+            let mut current = pointer;
+            let mut reverse = vec![];
+            let mut seen = BTreeSet::new();
+            loop {
+                if !seen.insert(current) {
+                    return Err(format!("Menu {} has a parent cycle", reference.id()));
                 }
-                return Ok((self.root_id(node.code), ancestors));
-            }
-            let incoming: Vec<_> = nodes
-                .values()
-                .flat_map(|n| {
-                    n.rows
+                let node = self.live_node(current, roots, nodes).await?;
+                if roots.get(&node.code) == Some(&current)
+                    && self
+                        .facts
+                        .firmware
+                        .menus
+                        .root_routes
+                        .contains_key(&node.code)
+                {
+                    reverse.reverse();
+                    let mut ancestors = vec![];
+                    let mut via = None;
+                    for (code, key) in reverse {
+                        let mut item = Menu::new(self.root_id(code)).with_key(key);
+                        if let Some(parent) = via {
+                            item = item.via(parent);
+                        }
+                        via = Some(item.clone());
+                        ancestors.push(item);
+                    }
+                    return Ok((self.root_id(node.code), ancestors));
+                }
+                // A declared parent is authoritative only when it actually contains
+                // an opening row. Otherwise retain the complete ambiguity search.
+                if node.parent != 0 {
+                    let _ = self.live_node(node.parent, roots, nodes).await;
+                }
+                let preferred_count = nodes.get(&node.parent).map_or(0, |parent| {
+                    parent
+                        .rows
                         .iter()
-                        .filter(move |r| r.child == current)
-                        .map(move |r| (n, r))
-                })
-                .collect();
-            let preferred: Vec<_> = incoming
-                .iter()
-                .copied()
-                .filter(|(n, _)| n.pointer == node.parent)
-                .collect();
-            let choices = if preferred.is_empty() {
-                incoming
-            } else {
-                preferred
-            };
-            if choices.len() != 1 {
-                return Err(format!(
-                    "Menu {} at {current:#x}: found {} opening rows; supply via",
-                    reference.id(),
-                    choices.len()
-                ));
+                        .filter(|row| row.child == current)
+                        .count()
+                });
+                if preferred_count == 0 {
+                    self.expand_graph(roots, nodes).await?;
+                }
+                let incoming: Vec<_> = nodes
+                    .values()
+                    .flat_map(|n| {
+                        n.rows
+                            .iter()
+                            .filter(move |r| r.child == current)
+                            .map(move |r| (n, r))
+                    })
+                    .collect();
+                let preferred: Vec<_> = incoming
+                    .iter()
+                    .copied()
+                    .filter(|(n, _)| n.pointer == node.parent)
+                    .collect();
+                let choices = if preferred.is_empty() {
+                    incoming
+                } else {
+                    preferred
+                };
+                if choices.len() != 1 {
+                    return Err(format!(
+                        "Menu {} at {current:#x}: found {} opening rows; supply via",
+                        reference.id(),
+                        choices.len()
+                    ));
+                }
+                let (parent, row) = choices[0];
+                // The full via path is rebuilt below, avoiding address-based references.
+                reverse.push((parent.code, row.key));
+                current = parent.pointer;
             }
-            let (parent, row) = choices[0];
-            // The full via path is rebuilt below, avoiding address-based references.
-            reverse.push((parent.code, row.key));
-            current = parent.pointer;
-        }
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ancestry_expansion_cannot_skip_global_cache_exhaustion() {
+        futures_lite::future::block_on(async {
+            let facts = crate::testing::facts();
+            let mut backend = crate::testing::Synthetic::new();
+            let mut memory = Memory {
+                backend: &mut backend,
+                facts: &facts,
+                reads: crate::ReadSet::default(),
+                scope: false,
+                depth: 0,
+            };
+            let roots = BTreeMap::from([(0, 0x1000)]);
+            let root = Node {
+                pointer: 0x1000,
+                code: 0,
+                parent: 0,
+                captions: 0,
+                rows: vec![Row {
+                    key: 1,
+                    child: 0x2000,
+                    index: 0,
+                }],
+            };
+            let mut nodes = BTreeMap::from([(root.pointer, root.clone())]);
+            for index in 0..8191 {
+                let pointer = 0x10000 + index * 0x100;
+                nodes.insert(
+                    pointer,
+                    Node {
+                        pointer,
+                        rows: vec![],
+                        ..root.clone()
+                    },
+                );
+            }
+            let error = memory.expand_graph(&roots, &mut nodes).await.unwrap_err();
+            assert!(error.contains("exceeds descriptor bound"), "{error}");
+            assert_eq!(nodes.len(), 8192);
+            assert!(!nodes.contains_key(&0x2000));
+            assert!(memory.reads.stores.is_empty());
+        });
+    }
+
+    #[test]
+    fn wide_pointer_values_are_preserved_and_scalars_are_checked() {
+        let pointer = 0x0102_0304_0506_0708u64.to_le_bytes();
+        assert_eq!(field_u64(&pointer, 0, 8).unwrap(), 0x0102_0304_0506_0708);
+        assert!(field_u32(&pointer, 0, 8).is_err());
+    }
+
+    #[test]
+    fn cursor_status_address_rejects_u64_wraparound() {
+        let mut layout = crate::testing::facts().firmware.menus.cursor;
+        layout.status_offset = 32;
+        layout.status_stride = 1;
+        assert!(cursor_status_address(u64::MAX - 16, 0, &layout).is_err());
+        assert!(cursor_status_address(u64::MAX - 30, 2, &layout).is_err());
+    }
+
+    #[test]
+    fn malformed_root_layouts_refuse_before_reading_memory() {
+        futures_lite::future::block_on(async {
+            let mut bad_width = crate::testing::facts();
+            bad_width.firmware.menus.root_layout = RootLayout::KeyedEntries {
+                stride: 8,
+                key_offset: 0,
+                key_width: 0,
+                pointer_offset: 4,
+            };
+            let mut bad_stride = crate::testing::facts();
+            bad_stride.firmware.menus.root_layout = RootLayout::KeyedEntries {
+                stride: 0,
+                key_offset: 0,
+                key_width: 4,
+                pointer_offset: 4,
+            };
+            let mut wrapped_extent = crate::testing::facts();
+            wrapped_extent.firmware.menus.root_layout = RootLayout::KeyedEntries {
+                stride: 8,
+                key_offset: 0,
+                key_width: 4,
+                pointer_offset: 4,
+            };
+            wrapped_extent.firmware.menus.roots_address = u64::MAX - 3;
+
+            for facts in [bad_width, bad_stride, wrapped_extent] {
+                let mut backend = crate::testing::Synthetic::new();
+                let mut memory = Memory {
+                    backend: &mut backend,
+                    facts: &facts,
+                    reads: crate::ReadSet::default(),
+                    scope: false,
+                    depth: 0,
+                };
+                assert!(memory.graph().await.is_err());
+                assert!(memory.reads.stores.is_empty());
+            }
+        });
     }
 }
 fn unique_row<'a>(node: &'a Node, key: u32, id: &str) -> Result<&'a Row> {
@@ -316,30 +607,30 @@ fn unique_row<'a>(node: &'a Node, key: u32, id: &str) -> Result<&'a Row> {
 }
 impl<B: Backend> Memory<'_, B> {
     async fn caption(&mut self, node: &Node, row: &Row) -> Result<String> {
-        let width = self.facts.firmware.menus.layout.caption_words;
         if node.captions == 0 {
             return Ok(String::new());
         }
-        if width == 0 || width > 64 {
-            return Err("Invalid caption extent".into());
-        }
+        let layout = &self.facts.firmware.menus.layout;
+        let order = checked_caption_order(layout)?;
+        let width = layout.caption_words;
+        let stride = width.checked_mul(4).ok_or("Caption stride overflow")?;
         let raw = self
             .bytes(
-                node.captions + u64::from(row.index * width) * 4,
-                width as usize * 4,
+                checked_indexed_address(node.captions, u64::from(row.index), u64::from(stride), 0)?,
+                usize::try_from(stride).map_err(|_| "Caption extent exceeds host address space")?,
             )
             .await?;
         let label = String::new();
-        // Caption records store the compact summary first and the full menu
-        // label second. Prefer the full label; summaries can be only an icon
-        // or an abbreviation (for example N versus NORMAL).
-        for offset in (0..width.min(2)).rev().map(|n| n * 4) {
+        // The default prefers the full label over the compact summary.
+        // Other record layouts declare their own field priority explicitly.
+        for index in order {
+            let offset = index.checked_mul(4).ok_or("Caption word offset overflow")?;
             let resource = word(&raw, offset)?;
             if resource == 0 || resource == 0x7ffffffe || resource >= 0xff000000 {
                 continue;
             }
             let text = self.text(resource).await?;
-            if !text.is_empty() {
+            if !text.trim().is_empty() {
                 return Ok(text);
             }
         }
@@ -382,18 +673,17 @@ impl<B: Backend> Memory<'_, B> {
             Reference::Option(option) => option.item(),
             _ => unreachable!(),
         };
-        let (roots, nodes) = self.graph().await?;
-        let (mut pointer, mut key) = self.target(item, &roots, &nodes)?;
-        let (root, mut ancestors) = self.ancestry(pointer, &roots, &nodes, item)?;
+        let roots = self.roots().await?;
+        let mut nodes = BTreeMap::new();
+        let (mut pointer, mut key) = self.target(item, &roots, &mut nodes).await?;
+        let (root, mut ancestors) = self.ancestry(pointer, &roots, &mut nodes, item).await?;
         if let Reference::Option(option) = reference {
             let parent = &nodes[&pointer];
             if let Some(parent_key) = key {
                 pointer = unique_row(parent, parent_key, item.id())?.child;
                 ancestors.push(item.clone());
             }
-            let node = nodes
-                .get(&pointer)
-                .ok_or_else(|| format!("Menu {} has no live option page", item.id()))?;
+            let node = self.live_node(pointer, &roots, &mut nodes).await?;
             let declared: Vec<_> = self
                 .facts
                 .menu_manifest
@@ -417,7 +707,7 @@ impl<B: Backend> Memory<'_, B> {
                 let mut matches = vec![];
                 let mut found = vec![];
                 for row in &node.rows {
-                    let label = self.caption(node, row).await?;
+                    let label = self.caption(&node, row).await?;
                     if label == option.name() {
                         matches.push(row.key);
                     }
@@ -435,18 +725,20 @@ impl<B: Backend> Memory<'_, B> {
                 matches.first().copied()
             };
         }
-        let node = &nodes[&pointer];
-        let row = key.map(|k| unique_row(node, k, item.id())).transpose()?;
+        let node = nodes[&pointer].clone();
+        let row = key.map(|k| unique_row(&node, k, item.id())).transpose()?;
         let active = state.menu_active && state.node == pointer;
         let status = if let Some(row) = row.filter(|_| active) {
             let c = &self.facts.firmware.menus;
-            self.uint(
-                c.cursor_address
-                    + u64::from(c.cursor.status_offset)
-                    + u64::from(row.index * c.cursor.status_stride),
-                c.cursor.status_width as usize,
-            )
-            .await? as u32
+            let address = cursor_status_address(c.cursor_address, row.index, &c.cursor)?;
+            let value = self
+                .uint(
+                    address,
+                    usize::try_from(c.cursor.status_width)
+                        .map_err(|_| "Cursor status width exceeds host address space")?,
+                )
+                .await?;
+            u32::try_from(value).map_err(|_| "Cursor status exceeds 32 bits")?
         } else {
             0
         };
@@ -456,16 +748,28 @@ impl<B: Backend> Memory<'_, B> {
             None
         };
         let value = if let Some(value_row) = value_index.and_then(|n| node.rows.get(n as usize)) {
-            Some(self.caption(node, value_row).await?)
+            Some(self.caption(&node, value_row).await?)
         } else {
             None
         };
         let label = if let Some(row) = row {
-            self.caption(node, row).await?
+            self.caption(&node, row).await?
         } else if let Some(resource) = self.facts.firmware.menus.root_titles.get(&node.code) {
             self.text(*resource).await?
         } else {
             String::new()
+        };
+        let child = if let Some(row) = row.filter(|row| row.child != 0) {
+            let address = row.child;
+            match self.live_node(address, &roots, &mut nodes).await {
+                Ok(_) => Some(address),
+                Err(error) if roots.values().any(|pointer| *pointer == address) => {
+                    return Err(error);
+                }
+                Err(_) => None,
+            }
+        } else {
+            None
         };
         Ok(RemoteReadResult {
             state: state.clone(),
@@ -473,7 +777,7 @@ impl<B: Backend> Memory<'_, B> {
                 node: pointer,
                 key,
                 index: row.map(|r| r.index),
-                child: row.and_then(|r| nodes.contains_key(&r.child).then_some(r.child)),
+                child,
                 label,
                 exists: true,
                 visible: active && status != 3,

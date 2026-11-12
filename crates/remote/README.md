@@ -19,11 +19,87 @@ and its own read set, so a wait on menu state never wakes for readiness reads.
 `operations::wait_ready` waits for it; Python exposes `Camera.readiness()` and
 `Camera.wait_until_ready(deadline=...)`.
 
+Menu navigation uses the body's declared direction buttons when present
+(`selector_left_button`, for example), or the corresponding member of its
+selector pad (`selector.left`). An undeclared direction is refused.
+
+Firmware state facts declare the byte widths of UI mode, system mode,
+menu-active, pending-mode and menu-node fields in `state.widths`. Pending input
+and readiness override have `state.readiness.input_pending_width` and
+`state.readiness.override_width`. Omitted widths retain the
+existing four-byte layout; declared widths must be 1, 2, 4 or 8. Observations
+read exactly that extent, and a UI mode larger than 32 bits is refused.
+
+Menu roots default to a 32-bit pointer array, whose entry indices are root keys.
+An explicit `menus.root_layout` can describe keyed entries instead:
+
+```json
+{"kind":"keyed_entries","stride":8,"key_offset":0,"key_width":1,"pointer_offset":4}
+```
+
+`root_count` counts entries. Keys may be sparse and need not be less than that
+count. Key widths are 1, 2 or 4 bytes; pointers remain 32-bit. Fields must be
+aligned, nonoverlapping and contained in their stride. Duplicate live keys and
+overflowing table extents refuse observation. Padding beside a key is not part
+of its value. Descriptor `menu_id` must decode a declared root key; a separate
+packed identifier must not be substituted merely because it occupies the same
+record.
+
+Menu descriptor field widths default to four bytes. `layout.field_widths` can
+declare each descriptor field as 1, 2, 4 or 8 bytes; `row_key_width` and
+`row_child_width` do the same for row keys and child pointers. IDs, kinds,
+counts and keys must fit in 32 bits; pointers retain their full declared value.
+Every field must fit its record, align to its width and avoid overlap. The row
+stride must preserve each row field's alignment, and a narrow row key's sentinel
+must fit its width. Smaller descriptor and row records are accepted when their
+declared fields form a complete valid layout. Cursor decoding retains its
+existing layout.
+
+Cursor row-status facts declare a byte `status_offset`, `status_stride` and
+`status_width`. Status widths may be 1, 2, 4 or 8 bytes; offsets and strides
+must align to that width, the stride must contain the status, and the status
+array must begin after the cursor record. Status values are interpreted as
+32-bit values, so a wider read that exceeds 32 bits is rejected.
+
+`layout.fields.type_code` is required in the catalog and accepts either a
+numeric field offset or explicit `null`. A numeric offset keeps the type-code
+read and `max_kind` check. `null` declares that the descriptor has no type-code
+field; its configured width is still validated, while the type-code bytes and
+`max_kind` are not read or applied. Other descriptor fields retain their
+ordinary extent and overlap checks.
+
+Caption records contain `caption_words` 32-bit resource IDs. Omitted
+`caption_word_order` keeps the legacy priority (word 1 then word 0 for two or
+more words, otherwise word 0). An explicit order lists only the word indices
+the resolver tries, in priority order; it must be nonempty, contain unique
+indices below `caption_words`, and use a valid 1–64 word extent.
+Empty or whitespace-only decoded captions are skipped. A caption containing
+text retains its original spacing. UTF-16 units within the declared glyph range
+are preserved in the decoded string as their literal private-use Unicode
+characters, in their original order with surrounding spaces. They are opaque
+glyph identities, not inferred names; exact option matching includes them, so
+the visible text alone does not match a caption that also contains glyphs.
+
 Build `Facts` with `Facts::from_selection(&selection, manifest)`. A reference is
 resolved on every use; duplicate or missing rows and option names produce an
 error with the candidates found. Stock menu IDs are root indices or catalog
 roles. Use `via` to identify a shared submenu occurrence. Mod rows and stable
 option identities come from the installed build's menu manifest.
+
+The bundled X-T20 2.11 profile supplies packed state/menu/status layouts, live
+text and icon-font registry bindings, and a premultiplied RGBA scanout. Q-grid
+geometry and unused observation metadata remain explicit null. Glyph-only
+captions can be selected by their exact literal PUA sequence. The sequence is
+an opaque identity, not a semantic translation or a promise that this API can
+render the native icon font.
+
+Each observation reads the root map, then loads only the requested descriptors,
+explicit `via` path, declared parent candidates and applicable parent chain.
+Descriptors are cached for that observation. If a descriptor has no usable
+parent, a bounded graph search resolves or reports ambiguous opening rows using
+the same cache. An unrelated descriptor is not fetched merely to read a root.
+Every declared parent candidate must be readable before a unique parent can be
+selected; a failed candidate read cannot resolve an ambiguity.
 
 `BoardRemote::new(session, facts, options)` borrows or owns an in-process
 `Session`. Its checked physical panel and contact acknowledgment driver must
@@ -44,6 +120,29 @@ without replay. Its screenshot completion witness is a newly published
 framebuffer pointer, so an unchanged pointer can reach the deadline; passive
 `frame()` can still capture the current buffer. Physical identity, permission
 and session entry/exit belong to the caller.
+
+`Ff80Remote::with_transport(transport, facts, options)` accepts any owned
+`ff80::Transport`: one memory-range read and one debug event command, each with
+the caller's limits and no retry. `RangeTransport` over a session is what
+`Ff80Remote::new` uses. The backend keeps aliasing, range validation, polling
+and frame decisions, so a transport only changes how those exchanges leave the
+process. `options.memory_limits` belong to the transport's owner; the
+constructor invents no bounds.
+
+The declared scanout format selects straight BGRA8888 or premultiplied
+RGBA8888 decoding. Both produce RGB captures composited on black. The latter
+preserves the already-premultiplied RGB channels without multiplying alpha a
+second time. This captures the selected memory layer; it does not establish
+that sensor video is present or that the buffer remained unchanged between
+the two pointer observations.
+
+Firmware facts keep the live cursor offset and FF80 pointer, mask, geometry,
+stride and pixel format explicit. Other cursor offsets and scanout address,
+instance, layer and channel metadata are required keys that may be explicitly
+`null` when they are not established. `BoardRemote` requires a declared
+scanout instance before it borrows a session; FF80 frame decoding does not use
+the optional scanout metadata. Quick-menu geometry is also a required key that
+may be `null` when unknown. A missing key is still an invalid facts record.
 
 Python exposes the same futures through `fujimod.remote.Camera` and
 `camera.blocking`. `menu(id, key=..., via=...)`, `option(item, name)` and
@@ -126,6 +225,19 @@ each remote operation and returns it before the next application observation.
 Its absolute clock is Python's `time.monotonic_ns()`. This permits existing
 session commands between operations while preserving refusal of overlapping
 USB exchanges. The default connection retains its session lease until close.
+
+`Camera.from_memory(memory, facts, event_bytes=..., poll_seconds=..., output=...)`
+connects over an already open `usb.Memory` loan. Ordinary ranges use bounded
+range reads; only declared, DMA-admitted ranges larger than the owner's
+slow-read limit use the staged bulk mapping, and an E1 failure is never retried
+as a slow read. The adapter retains the loan's owner and state but never
+restores them: `camera.close()` only drops it, `memory.aclose()` is the single
+close, and a canceled read or event leaves the mapping unresolved without
+cleanup traffic.
+The provider resolves the declared uncached alias only into its admitted bulk
+window, without changing that window. Ordinary reads retain their aliased
+addresses. An aliased range that cannot be represented continuously is not
+normalized into a bulk read.
 
 Optional `Facts.input_tasks` supplies a checked task-table layout, required
 entry identities and receive state, plus mode-qualified busy registers. Input
