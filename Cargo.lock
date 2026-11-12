@@ -2763,6 +2763,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-file-send"
+version = "0.1.0"
+dependencies = [
+ "async-channel",
+ "crc32fast",
+ "fujimod-sync-protocol",
+ "fujimod-usb-proxy",
+ "fujimod-workspace-hack",
+ "futures-lite",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "fujimod-firmware"
 version = "0.1.0"
 dependencies = [

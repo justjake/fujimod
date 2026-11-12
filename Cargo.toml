@@ -16,6 +16,7 @@ members = [
   "crates/usb-proxy",
   "crates/raw-conversion",
   "crates/sync-protocol",
+  "crates/file-send",
   "crates/catalog",
   "crates/catalog-bulk",
   "crates/catalog-card",
