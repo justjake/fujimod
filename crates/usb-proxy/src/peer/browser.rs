@@ -25,8 +25,8 @@ impl PeerSocket {
         progress: &crate::Progress,
         policy: crate::CandidatePolicy,
     ) -> Result<Self> {
-        if policy == crate::CandidatePolicy::RelayOnly {
-            return Err(Error("relay-only connections are native only".into()));
+        if policy != crate::CandidatePolicy::Any {
+            return Err(Error("candidate policies are native only".into()));
         }
         let channel = connect_peer(url).await.map_err(error)?.unchecked_into();
         progress("WebRTC data channel open");
