@@ -61,6 +61,8 @@ pub struct Devices {
     usb_presence: Option<Arc<std::sync::atomic::AtomicBool>>,
     pub frames: BTreeMap<usize, Frame>,
     pub outputs: BTreeMap<usize, serde_json::Value>,
+    /// Single words owned by a declared model inside another block's range.
+    carved: Vec<(u64, u64)>,
 }
 struct PhysicalHost<'a> {
     cluster: &'a Cluster,
@@ -209,11 +211,18 @@ impl Devices {
         inputs: [u16; 16],
         interrupts: Vec<fujimod_emulator_devices::parts::gpio::InputIrq>,
     ) -> Result<(), String> {
+        let end = base + 0x400;
+        let carved: Vec<(u64, u64)> = self
+            .carved
+            .iter()
+            .copied()
+            .filter(|&(lo, hi)| base <= lo && hi <= end)
+            .collect();
         if self.pins.is_some()
             || self
                 .windows
                 .iter()
-                .any(|&(lo, hi, _)| base < hi && lo < base + 0x400)
+                .any(|&(lo, hi, _)| base < hi && lo < end && !carved.contains(&(lo, hi)))
         {
             return Err("Overlapping GPIO wiring".into());
         }
@@ -223,7 +232,16 @@ impl Devices {
             fujimod_emulator_ip::socionext::gpio::Gpio::new(base, pins.clone())?
                 .with_interrupts(interrupts)?,
         )));
-        self.windows.push((base, base + 0x400, id));
+        let mut lo = base;
+        for &(a, b) in carved.iter().collect::<std::collections::BTreeSet<_>>() {
+            if lo < a {
+                self.windows.push((lo, a, id));
+            }
+            lo = b;
+        }
+        if lo < end {
+            self.windows.push((lo, end, id));
+        }
         self.pins = Some(pins);
         Ok(())
     }
@@ -776,6 +794,7 @@ impl Devices {
             usb_presence: None,
             frames: BTreeMap::new(),
             outputs: BTreeMap::new(),
+            carved: Vec::new(),
         }
     }
     pub fn io_groups(&mut self, base: u64) -> Result<(), String> {
@@ -857,6 +876,7 @@ impl Devices {
         irq: u32,
         receiver_input: Option<super::definition::DiscoveryTxReceiver>,
         prefix: Option<storage::ImmutablePrefix>,
+        mapped_read: Option<storage::MappedReadGate>,
         write_protect: bool,
     ) -> Result<(Self, Option<storage::ImmutableView>), String> {
         let routes: [u32; 16] = routes
@@ -892,9 +912,14 @@ impl Devices {
             dma = dma.with_receiver(std::sync::Arc::new(std::sync::Mutex::new(receiver)));
         }
 
-        Ok((Self {
+        let mut controller = SerialFlashController::new(port.clone(), irq);
+        if let Some(gate) = mapped_read {
+            controller = controller.with_mapped_read_gate(gate)?;
+        }
+        let pad = controller.pad_register();
+        let mut devices = Self {
             models: vec![
-                Some(Box::new(SerialFlashController::new(port.clone(), irq))),
+                Some(Box::new(controller)),
                 Some(Box::new(dma)),
             ],
             events: Default::default(),
@@ -915,7 +940,18 @@ impl Devices {
                 (0xfff4a500, 0xfff4a520, 1),
                 (0xfff4a800, 0xfff4a880, 1),
             ],
-        }, view))
+            carved: Vec::new(),
+        };
+        if let Some(pad) = pad {
+            if devices.windows.iter().any(|&(lo, hi, _)| pad < hi && lo < pad + 4) {
+                return Err("Flash pad register overlaps the flash controller windows".into());
+            }
+            // One word the controller owns inside another block's register
+            // range; that block is wired around it.
+            devices.windows.push((pad, pad + 4, 0));
+            devices.carved.push((pad, pad + 4));
+        }
+        Ok((devices, view))
     }
     /// X-Processor Pro flash controller, its read aperture and the PL330 that
     /// copies from it. The flash contents are an explicit board input.

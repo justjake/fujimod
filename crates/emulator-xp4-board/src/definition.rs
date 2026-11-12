@@ -58,6 +58,10 @@ pub struct Definition {
     /// Immutable executable prefix of the connected XP4 NOR array.
     #[serde(default)]
     pub storage_immutable_prefix: Option<NorImmutablePrefix>,
+    /// Declared controller and pad states under which CPU reads of the mapped
+    /// NOR return array data; absent serves every mapped read.
+    #[serde(default)]
+    pub storage_mapped_read: Option<fujimod_emulator_xp4_storage::storage::MappedReadGate>,
     /// Refuse every write-enable, erase and program request to the NOR.
     #[serde(default)]
     pub storage_write_protect: bool,

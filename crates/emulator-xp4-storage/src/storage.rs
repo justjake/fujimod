@@ -27,6 +27,57 @@ enum Mutation {
     Program { address: u64, bytes: Vec<u8> },
 }
 
+/// A declared controller state in which CPU reads of the mapped aperture
+/// reach the array.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MappedReadState {
+    /// Control register (+0x00) bits this state requires: (mask, value).
+    pub control: (u32, u32),
+    /// Clock register (+0x04) value.
+    pub clock: u32,
+    /// Mode register (+0x14) value.
+    pub mode: u32,
+    /// Sample-point register (+0x10) values that capture array data; any
+    /// other sample point reads the gate's miss pattern.
+    pub samples: Vec<u32>,
+    /// Whether the state needs the pad function register set.
+    pub pad: bool,
+}
+
+/// Declared controller and pad states under which CPU reads of the mapped
+/// aperture return array bytes. Every field is a board input: the valid
+/// states and sample windows of a real part are hypotheses supplied by the
+/// caller, not facts of this model. A read in no declared state fails the
+/// run.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MappedReadGate {
+    pub states: Vec<MappedReadState>,
+    /// Byte every aperture byte reads as at a sample point outside the
+    /// state's samples.
+    pub miss_byte: u8,
+    /// One-word pad function register this controller owns, and the
+    /// (mask, value) its 16 masked bits must hold. Writes carry their mask in
+    /// the upper 16 bits.
+    pub pad: (u64, u32, u32),
+}
+impl MappedReadGate {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.states.is_empty()
+            || self.states.iter().any(|s| s.control.1 & !s.control.0 != 0)
+            || self.pad.0 & 3 != 0
+            || (CONTROLLER..CONTROLLER + 0x100).contains(&self.pad.0)
+            || (FLASH..FLASH + FLASH_SIZE).contains(&self.pad.0)
+            || self.pad.1 > 0xffff
+            || self.pad.2 & !self.pad.1 != 0
+        {
+            return Err("Invalid XP4 mapped-read gate".into());
+        }
+        Ok(())
+    }
+}
+
 /// External NOR contents and identity, supplied by the board. Uninitialized
 /// bytes are erased. No firmware structures or executable signatures enter it.
 pub struct Nor {
@@ -270,6 +321,9 @@ pub struct SerialFlashController {
     operations: u64,
     irq: u32,
     irq_level: bool,
+    gate: Option<MappedReadGate>,
+    pad: u32,
+    mapped_misses: u64,
 }
 impl SerialFlashController {
     pub fn new(port: Shared, irq: u32) -> Self {
@@ -280,7 +334,39 @@ impl SerialFlashController {
             operations: 0,
             irq,
             irq_level: false,
+            gate: None,
+            pad: 0,
+            mapped_misses: 0,
         }
+    }
+    /// Gates mapped aperture reads on the declared controller and pad state;
+    /// the controller then also owns the gate's pad register word.
+    pub fn with_mapped_read_gate(mut self, gate: MappedReadGate) -> Result<Self, String> {
+        gate.validate()?;
+        self.gate = Some(gate);
+        Ok(self)
+    }
+    /// Pad register word owned by the mapped-read gate, if any.
+    pub fn pad_register(&self) -> Option<u64> {
+        self.gate.as_ref().map(|g| g.pad.0)
+    }
+    /// Whether a mapped read in the current state returns array data
+    /// (`Ok(true)`), the declared miss pattern (`Ok(false)`) or is refused.
+    fn mapped_read_state(&self) -> Result<bool, String> {
+        let Some(gate) = &self.gate else { return Ok(true) };
+        let (control, clock, sample, mode) = (self.regs[0], self.regs[1], self.regs[4], self.regs[5]);
+        let pad = self.pad & gate.pad.1 == gate.pad.2;
+        let mut states = gate.states.iter().filter(|s| {
+            control & s.control.0 == s.control.1 && s.clock == clock && s.mode == mode && (pad || !s.pad)
+        }).peekable();
+        if states.peek().is_none() {
+            return Err(format!(
+                "Mapped NOR read in no declared controller state: control {control:#x}, clock {clock:#x}, \
+                 mode {mode:#x}, sample {sample:#x}, pad register {:#x} = {:#x}",
+                gate.pad.0, self.pad
+            ));
+        }
+        Ok(states.any(|s| s.samples.contains(&sample)))
     }
     fn drive_irq(&mut self, cx: &mut Cx<'_>, level: bool) {
         if level != self.irq_level {
@@ -337,11 +423,26 @@ impl SerialFlashController {
             if write {
                 return Err("CPU store to NOR aperture without a program command".into());
             }
+            if !self.mapped_read_state()? {
+                self.mapped_misses += 1;
+                let miss = self.gate.as_ref().unwrap().miss_byte;
+                return Ok((0..size).fold(0, |v, n| v | u64::from(miss) << (8 * n)));
+            }
             let bytes = self.port.lock().unwrap().nor.read(address, size as usize)?;
             return Ok(bytes
                 .iter()
                 .enumerate()
                 .fold(0, |v, (n, b)| v | u64::from(*b) << (8 * n)));
+        }
+        if self.pad_register() == Some(address) {
+            if size != 4 {
+                return Err("Pad register access is not a word".into());
+            }
+            if write {
+                let mask = value >> 16;
+                self.pad = (self.pad & !mask) | (value & mask);
+            }
+            return Ok(u64::from(self.pad));
         }
         let o = address.wrapping_sub(CONTROLLER) as usize;
         if size != 4 || o & 3 != 0 || !Self::known(o) {
@@ -634,7 +735,8 @@ impl Device for SerialFlashController {
         let port = self.port.lock().unwrap();
         json!({"registers":self.regs.to_vec(),"next":self.due,"operations":self.operations,
             "jedec":port.nor.jedec,"nor":port.nor.snapshot(),"stream":port.request,
-            "program_fifo":port.program_data,"irq":self.irq,"irq_level":self.irq_level})
+            "program_fifo":port.program_data,"irq":self.irq,"irq_level":self.irq_level,
+            "mapped_read_gate":self.gate,"pad":self.pad,"mapped_misses":self.mapped_misses})
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         self.restore_state(value)
@@ -2007,6 +2109,203 @@ mod tests {
         assert_eq!(json!([host.events,host.irqs,host.records]),effects);
     }
 
+}
+
+#[cfg(test)]
+mod mapped_read_tests {
+    use super::*;
+    use fujimod_emulator_devices::test_host::TestHost;
+
+    const PAD: u64 = 0xfff4108c;
+    const PREFIX: [u32; 4] = [0xffffffff, 0, 0xaaaaaaaa, 0x55555555];
+    const SCAN: (u32, u32) = (0x0800000b, 0x00101002);
+    const RUN: (u32, u32) = (0x13, 0x00101003);
+    const GOOD: std::ops::RangeInclusive<u32> = 4..=11;
+
+    fn state((clock, mode): (u32, u32), good: &[u32]) -> MappedReadState {
+        MappedReadState {
+            control: (0x0078_0071, 0x0008_0041),
+            clock,
+            mode,
+            samples: good.iter().map(|s| 1 | s << 1).collect(),
+            pad: true,
+        }
+    }
+    fn gate(good: impl IntoIterator<Item = u32>) -> MappedReadGate {
+        let good: Vec<u32> = good.into_iter().collect();
+        MappedReadGate {
+            states: vec![state(SCAN, &good), state(RUN, &good)],
+            miss_byte: 0xa5,
+            pad: (PAD, 0xffff, 0x5545),
+        }
+    }
+    fn nor() -> Shared {
+        let mut bytes = vec![0xff; 0x2000];
+        for (n, word) in PREFIX.iter().enumerate() {
+            bytes[n * 4..n * 4 + 4].copy_from_slice(&word.to_le_bytes());
+        }
+        bytes[0x1000..0x1004].copy_from_slice(&0x1234_5678u32.to_le_bytes());
+        port_from_nor(Nor::new(bytes, 0x20, Geometry { erase_bytes: 4096, page_bytes: 256, erase_ticks: 20, page_ticks: 12 }).unwrap())
+    }
+    fn gated(good: impl IntoIterator<Item = u32>) -> SerialFlashController {
+        SerialFlashController::new(nor(), 37).with_mapped_read_gate(gate(good)).unwrap()
+    }
+    fn store(f: &mut SerialFlashController, h: &mut TestHost, address: u64, value: u32) {
+        let mut cx = h.cx();
+        f.write(&mut cx, address, 4, value as u64);
+        assert_eq!(cx.refusal(), None, "{address:#x}={value:#x}");
+    }
+    /// A mapped word, or the refusal it ends the run with.
+    fn load(f: &mut SerialFlashController, h: &mut TestHost, address: u64) -> Result<u32, String> {
+        let mut cx = h.cx();
+        let value = f.read(&mut cx, address, 4) as u32;
+        cx.refusal().map_or(Ok(value), |e| Err(format!("{e:?}")))
+    }
+    fn enable(f: &mut SerialFlashController, h: &mut TestHost) {
+        let mut control = load(f, h, CONTROLLER).unwrap();
+        control = (control & !0x0078_0000) + 0x0008_0000;
+        control = ((control | 0x40) & !0x30) | 1;
+        store(f, h, CONTROLLER, control);
+    }
+    /// The boot ROM's mode-1 sample scan: the second sample that reads the
+    /// prefix ends it. Returns that sample register value.
+    fn scan(f: &mut SerialFlashController, h: &mut TestHost) -> Result<Option<u32>, String> {
+        store(f, h, CONTROLLER + 4, SCAN.0);
+        store(f, h, CONTROLLER + 0x14, SCAN.1);
+        let mut found = false;
+        for sample in 0..16 {
+            store(f, h, CONTROLLER + 0x10, 1 | sample << 1);
+            let words = (0..4).map(|n| load(f, h, FLASH + n * 4)).collect::<Result<Vec<_>, _>>()?;
+            if words == PREFIX {
+                if found {
+                    return Ok(Some(1 | sample << 1));
+                }
+                found = true;
+            }
+        }
+        Ok(None)
+    }
+    fn initialized(good: impl IntoIterator<Item = u32>) -> (SerialFlashController, TestHost) {
+        let (mut f, mut h) = (gated(good), TestHost::new());
+        enable(&mut f, &mut h);
+        store(&mut f, &mut h, PAD, 0xffff_5545);
+        (f, h)
+    }
+
+    #[test]
+    fn rom_initialization_scans_to_the_second_good_sample_then_reads_array_data() {
+        let (mut f, mut h) = initialized(GOOD);
+        assert_eq!(scan(&mut f, &mut h), Ok(Some(1 | 5 << 1)));
+        assert_eq!(f.mapped_misses, 4 * 4);
+        store(&mut f, &mut h, CONTROLLER + 4, RUN.0);
+        store(&mut f, &mut h, CONTROLLER + 0x14, RUN.1);
+        assert_eq!(load(&mut f, &mut h, FLASH + 0x1000), Ok(0x1234_5678));
+        assert_eq!(load(&mut f, &mut h, FLASH + 8), Ok(0xaaaa_aaaa));
+        assert_eq!(load(&mut f, &mut h, PAD), Ok(0x5545));
+        let saved = f.save();
+        let mut resumed = gated(GOOD);
+        resumed.restore(&saved).unwrap();
+        assert_eq!(resumed.save(), saved);
+        assert!(SerialFlashController::new(nor(), 37).restore(&saved).is_err());
+        assert!(gated(5..=12).restore(&saved).is_err());
+    }
+
+    #[test]
+    fn a_read_before_initialization_is_refused() {
+        let (mut f, mut h) = (gated(GOOD), TestHost::new());
+        assert!(load(&mut f, &mut h, FLASH).is_err());
+    }
+
+    #[test]
+    fn a_read_without_the_enable_bits_is_refused() {
+        let (mut f, mut h) = (gated(GOOD), TestHost::new());
+        store(&mut f, &mut h, PAD, 0xffff_5545);
+        assert!(scan(&mut f, &mut h).is_err());
+        // A bank field other than the declared one is also outside the read state.
+        enable(&mut f, &mut h);
+        store(&mut f, &mut h, CONTROLLER, 0x0010_0041);
+        assert!(load(&mut f, &mut h, FLASH).is_err());
+    }
+
+    #[test]
+    fn a_read_without_the_pad_function_is_refused() {
+        let (mut f, mut h) = (gated(GOOD), TestHost::new());
+        enable(&mut f, &mut h);
+        assert!(scan(&mut f, &mut h).is_err());
+        // The pad word is masked: a write that leaves a field unset is not enough.
+        store(&mut f, &mut h, PAD, 0x00ff_0045);
+        assert!(scan(&mut f, &mut h).is_err());
+        store(&mut f, &mut h, PAD, 0xff00_5500);
+        assert_eq!(scan(&mut f, &mut h), Ok(Some(1 | 5 << 1)));
+    }
+
+    #[test]
+    fn a_sample_outside_the_declared_window_reads_the_miss_pattern() {
+        let (mut f, mut h) = initialized(GOOD);
+        store(&mut f, &mut h, CONTROLLER + 4, RUN.0);
+        store(&mut f, &mut h, CONTROLLER + 0x14, RUN.1);
+        store(&mut f, &mut h, CONTROLLER + 0x10, 1 | 3 << 1);
+        assert_eq!(load(&mut f, &mut h, FLASH + 0x1000), Ok(0xa5a5_a5a5));
+        let mut cx = h.cx();
+        assert_eq!(f.read(&mut cx, FLASH + 1, 1), 0xa5);
+        // No sample in the window: the scan finds none.
+        let (mut f, mut h) = initialized([]);
+        assert_eq!(scan(&mut f, &mut h), Ok(None));
+        // One good sample is not enough for the ROM's scan either.
+        let (mut f, mut h) = initialized([7]);
+        assert_eq!(scan(&mut f, &mut h), Ok(None));
+    }
+
+    #[test]
+    fn undeclared_clock_or_mode_is_refused() {
+        let (mut f, mut h) = initialized(GOOD);
+        assert!(scan(&mut f, &mut h).unwrap().is_some());
+        store(&mut f, &mut h, CONTROLLER + 4, 0x0900000b);
+        assert!(load(&mut f, &mut h, FLASH).is_err());
+        store(&mut f, &mut h, CONTROLLER + 4, RUN.0);
+        store(&mut f, &mut h, CONTROLLER + 0x14, SCAN.1);
+        assert!(load(&mut f, &mut h, FLASH).is_err());
+    }
+
+    #[test]
+    fn a_state_without_the_pad_requirement_reads_before_the_pad_is_set() {
+        // A state may be declared without the pad function (for example the
+        // controller's reset state); only its own registers then select it.
+        let mut g = gate(GOOD);
+        g.states.push(MappedReadState { control: (u32::MAX >> 1, 0), clock: RUN.0, mode: RUN.1, samples: vec![0], pad: false });
+        let (mut f, mut h) = (SerialFlashController::new(nor(), 37).with_mapped_read_gate(g).unwrap(), TestHost::new());
+        store(&mut f, &mut h, CONTROLLER + 4, RUN.0);
+        store(&mut f, &mut h, CONTROLLER + 0x14, RUN.1);
+        assert_eq!(load(&mut f, &mut h, FLASH + 0x1000), Ok(0x1234_5678));
+        store(&mut f, &mut h, CONTROLLER + 0x10, 1 | 4 << 1);
+        assert_eq!(load(&mut f, &mut h, FLASH + 0x1000), Ok(0xa5a5_a5a5));
+        // Once the control register leaves that state, the pad is required.
+        enable(&mut f, &mut h);
+        assert!(load(&mut f, &mut h, FLASH + 0x1000).is_err());
+        store(&mut f, &mut h, PAD, 0xffff_5545);
+        assert_eq!(load(&mut f, &mut h, FLASH + 0x1000), Ok(0x1234_5678));
+    }
+
+    #[test]
+    fn an_aperture_store_is_refused() {
+        let (mut f, mut h) = initialized(GOOD);
+        let mut cx = h.cx();
+        f.write(&mut cx, FLASH + 0x1000, 4, 0);
+        assert!(cx.refusal().is_some());
+    }
+
+    #[test]
+    fn the_gate_declaration_is_checked() {
+        let mut bad = gate(GOOD);
+        bad.pad.0 = CONTROLLER + 0x10;
+        assert!(SerialFlashController::new(nor(), 37).with_mapped_read_gate(bad).is_err());
+        let mut bad = gate(GOOD);
+        bad.states.clear();
+        assert!(SerialFlashController::new(nor(), 37).with_mapped_read_gate(bad).is_err());
+        let mut bad = gate(GOOD);
+        bad.states[1].control = (1, 3);
+        assert!(SerialFlashController::new(nor(), 37).with_mapped_read_gate(bad).is_err());
+    }
 }
 
 #[cfg(test)]
