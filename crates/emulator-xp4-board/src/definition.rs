@@ -230,6 +230,9 @@ pub struct Definition {
     /// Command dials wired to countdown timer channels' count inputs.
     #[serde(default)]
     pub countdown_dials: Vec<CountdownDial>,
+    /// The JPEG encoder with the XP4 driver's register contract, when declared.
+    #[serde(default)]
+    pub jpeg_encoder: Option<JpegEncoder>,
     #[serde(default = "instruction_rate")]
     pub instructions_per_tick: (u64, u64),
     #[serde(default)]
@@ -254,6 +257,17 @@ pub struct CountdownDial {
     pub channel: usize,
     pub phase_ticks: u64,
     pub rest_phase: u8,
+}
+
+/// The XP4 JPEG encoder: register page base, completion interrupt line,
+/// run time in ticks and the address of its memory type word.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JpegEncoder {
+    pub base: u64,
+    pub irq: u32,
+    pub run_ticks: u64,
+    pub memory_type: u64,
 }
 
 /// Register layout of the interval timer at `timer_base`.

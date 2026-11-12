@@ -2232,6 +2232,7 @@ name = "fujimod-emulator-ip"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-image-codecs",
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-parts-io",
  "fujimod-workspace-hack",
@@ -2481,6 +2482,7 @@ dependencies = [
  "fujimod-emulator-cpu",
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
+ "fujimod-emulator-image-codecs",
  "fujimod-emulator-ip",
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-ip-dmp",

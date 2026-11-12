@@ -336,6 +336,13 @@
       "size": 80,
       "kind": "timer",
       "clock_id": null
+    },
+    {
+      "id": "jpeg-encoder",
+      "base": 4294574080,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null
     }
   ],
   "interrupts": [],
@@ -439,6 +446,11 @@
         "source_block_id": "decompressor",
         "output_id": "interrupt",
         "line": 128
+      },
+      {
+        "source_block_id": "jpeg-encoder",
+        "output_id": "interrupt",
+        "line": 135
       },
       {
         "source_block_id": "serial-flash",
@@ -1314,7 +1326,14 @@
               ],
               "irq_route": 237
             }
-          ]
+          ],
+          "jpeg_encoder": {
+            "base": 4294574080,
+            "size": 4096,
+            "irq_route": 135,
+            "run_ticks": 108000,
+            "basis": "JPEG encoder of X-T3 5.11, the X-T20 2.11 encoder's register layout. The driver has one accessor per word: +0x44 size, +0x12c origin, +0x130 pitch, +0x100/+0x10c/+0x110 source, destination and limit, +0x84 table loading and +0x8c table words, +0x28 interrupt mask. The driver's start registers its handler on interrupt line 135 (level) before setting +0x00 bit 0. The handler reads the status +0x24, writes it back and takes bit 4 as a finished run, then reads the stream size +0x94. run_ticks (2 ms at 54 MHz) is not measured."
+          }
         },
         "limits": [],
         "cache_basis": "Declared catalog input."

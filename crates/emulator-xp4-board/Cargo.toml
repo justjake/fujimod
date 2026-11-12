@@ -30,5 +30,8 @@ serde_json = "1"
 serde = { version = "1", features = ["derive", "rc"] }
 fujimod-workspace-hack.workspace = true
 
+[dev-dependencies]
+fujimod-emulator-image-codecs.workspace = true
+
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

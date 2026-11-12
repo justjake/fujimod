@@ -9,6 +9,7 @@ pub use definition::{Definition, GicCpuInitial, GicInitial, NorImmutablePrefix};
 pub mod observation;
 use observation::Call;
 mod devices;
+mod jpeg;
 mod timer;
 use fujimod_emulator::board::discovery::Discovery;
 use fujimod_emulator::board::harness::arm32 as driver_guard;
@@ -1141,6 +1142,7 @@ impl Session {
             register_banks,
             countdown_timers,
             countdown_dials,
+            jpeg_encoder,
             usb_condition,
             instructions_per_tick,
             usb,
@@ -1720,6 +1722,11 @@ impl Session {
                 .countdown_timers(base, &routes, &countdown_dials)?;
         } else if !countdown_dials.is_empty() {
             return Err("XP4 countdown dials require the countdown timer bank".into());
+        }
+        if let Some(encoder) = jpeg_encoder {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .jpeg_encoder(&encoder)?;
         }
         if let Some((base, present)) = usb_condition {
             devices

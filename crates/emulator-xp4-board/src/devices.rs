@@ -622,6 +622,29 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
+    pub fn jpeg_encoder(&mut self, wiring: &crate::definition::JpegEncoder) -> Result<(), String> {
+        let model = fujimod_emulator_ip::jpeg::Encoder::new(
+            "xp4-jpeg-encoder",
+            wiring.base,
+            wiring.irq,
+            wiring.run_ticks,
+            fujimod_emulator_ip::jpeg::Registers::Declared(crate::jpeg::contract(
+                wiring.memory_type,
+            )),
+        )?;
+        let windows = model.windows();
+        if windows
+            .iter()
+            .any(|&(lo, hi)| self.windows.iter().any(|&(a, b, _)| lo < b && a < hi))
+        {
+            return Err("Overlapping XP4 JPEG encoder window".into());
+        }
+        let id = self.models.len();
+        self.windows
+            .extend(windows.into_iter().map(|(lo, hi)| (lo, hi, id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
     pub fn usb_condition(&mut self, base: u64, present: bool) -> Result<(), String> {
         if self
             .windows
