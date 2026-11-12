@@ -20,8 +20,25 @@ pub struct Records {
     // records stays near 300 bytes each instead of a multi-kilobyte `Value` map.
     rows: Vec<Box<str>>,
     violation: Option<String>,
+    // CPU accesses whose program counter lies in one of these spans are not
+    // recorded (a caller that discards its own code's accesses anyway).
+    excluded_pcs: Vec<Span>,
 }
 impl Records {
+    /// Stop recording CPU accesses made by instructions inside `spans`.
+    pub fn exclude_pcs(&mut self, spans: Vec<Span>) -> Result<(), String> {
+        if spans.iter().any(|&(lo, hi)| lo >= hi) {
+            return Err("Memory watch PC exclusion needs non-empty spans".into());
+        }
+        self.excluded_pcs = union(spans);
+        Ok(())
+    }
+    fn pc_excluded(&self, pc: u64) -> bool {
+        let index = self.excluded_pcs.partition_point(|&(_, hi)| hi <= pc);
+        self.excluded_pcs
+            .get(index)
+            .is_some_and(|&(lo, _)| lo <= pc)
+    }
     fn overlaps(&self, address: u64, bytes: u64) -> bool {
         let end = address.saturating_add(bytes);
         let index = self.ranges.partition_point(|&(_, hi)| hi <= address);
@@ -132,6 +149,10 @@ impl MemoryContext {
         if !records.overlaps(physical, size) {
             return Ok(());
         }
+        let pc = scalar(&*cpu, Register::Pc)?;
+        if records.pc_excluded(pc) {
+            return Ok(());
+        }
         // Only an R-profile core can hide physical RAM behind a private TCM
         // overlay; an A-profile core's MMU is already reflected in `address`.
         if cpu.model() == Model::CortexR5F && tcm_overlap(&*cpu, address, size)? {
@@ -216,7 +237,7 @@ impl MemoryContext {
         records.push(
             json!({"sample":sample,"sample_path":sample_path,"source":source,"address":address,"physical":physical,"size":size,
             "value":value,"before":before,"byte_order":byte_order,
-            "core":self.core,"pc":scalar(&*cpu,Register::Pc)?,"sp":stack_pointer(&*cpu)?,
+            "core":self.core,"pc":pc,"sp":stack_pointer(&*cpu)?,
             "instructions":instructions,"tick":tick}),
         );
         Ok(())

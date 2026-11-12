@@ -284,6 +284,36 @@ fn memory_watch_captures_bounded_pointer_chain_at_read() {
 }
 
 #[test]
+fn a7_watch_skips_accesses_from_excluded_program_counters() {
+    let mut board = a7_board();
+    let mut code = store_at(PAGE as u32, 0x33, 0).to_vec(); // CODE..CODE + 0x10, excluded
+    code.extend(store_at(PAGE as u32, 0x11, 0)); // recorded
+    code.push(0xeaff_fffe);
+    words(&board, CODE, &code);
+    let mut watch = board
+        .memory_watch_begin(vec![WATCH], 8, board.mappings().to_vec())
+        .unwrap();
+    watch
+        .records
+        .borrow_mut()
+        .exclude_pcs(vec![(CODE, CODE + 0x10)])
+        .unwrap();
+    run(&mut board, code.len() as u64 - 1);
+    let records = records(&watch);
+    assert_eq!(records.len(), 1, "{records:?}");
+    assert_eq!(records[0]["pc"], CODE + 0x1c);
+    assert_eq!(records[0]["value"], 0x11);
+    assert!(
+        watch
+            .records
+            .borrow_mut()
+            .exclude_pcs(vec![(CODE, CODE)])
+            .is_err()
+    );
+    board.memory_watch_end(&mut watch).unwrap();
+}
+
+#[test]
 fn memory_watch_detects_the_loss_of_its_board() {
     let board = a7_board();
     let watch = board.memory_watch_begin(vec![WATCH], 8, board.mappings().to_vec()).unwrap();
