@@ -13,7 +13,25 @@ export interface StageEntry {
 export interface TrackProgress {
   id: TrackId;
   title: string;
+  /** CSS phase identifier; the graph chooses it so the site keeps no alias table. */
+  phase: Phase['id'];
+  /** Share of the bar assigned to this track. */
+  weight: number;
+  /** Draw each step as its own cell instead of one continuous fill. */
+  cells: boolean;
   stages: StageEntry[];
+  /** The ordered steps the website draws. */
+  steps: StepProgress[];
+}
+
+export interface StepProgress {
+  id: string;
+  label: string;
+  stage: string;
+  result: StageProgress | 'unavailable';
+  passed: number;
+  total: number;
+  detail?: string;
 }
 export interface StockProgress {
   result: StockResult;
@@ -63,34 +81,6 @@ export interface Phase {
   cells: boolean;
 }
 
-/** Emulator features in table order; boot and menus are the REC and menu stages. */
-const EMULATOR: [string, string][] = [
-  ['boot', 'Boot'],
-  ['record-picture', 'Record picture'],
-  ['record-movie', 'Record movie'],
-  ['control-input', 'Control input'],
-  ['control-layout', 'Control layout'],
-  ['menus', 'Menus'],
-  ['focus', 'Focus'],
-  ['lens', 'Lens'],
-  ['film-simulations', 'Film simulations'],
-  ['playback-picture', 'Playback picture'],
-  ['playback-movie', 'Playback movie'],
-  ['develop-raw', 'Develop RAW'],
-  ['ibis', 'IBIS'],
-  ['sd', 'SD'],
-  ['card-slots', 'Card slots'],
-];
-const pass = (result: string) => Number(result === 'pass');
-function stockStep(label: string, stock: StockProgress): Step {
-  if (stock.result === 'partial' && stock.passed !== undefined && stock.total)
-    return {
-      label,
-      fraction: stock.passed / stock.total,
-      detail: `${stock.passed} of ${stock.total}`,
-    };
-  return { label, fraction: pass(stock.result) };
-}
 function phase(
   id: Phase['id'],
   weight: number,
@@ -111,13 +101,28 @@ function phase(
 }
 
 export function phases(progress: FirmwareProgress): Phase[] {
-  const recorded = recordedPhases(progress);
+  const recorded = progress.tracks.map((track) =>
+    phase(
+      track.phase,
+      track.weight,
+      track.title,
+      track.steps.map((step) => ({
+        label: step.label,
+        fraction: step.total ? step.passed / step.total : 0,
+        detail: step.detail,
+      })),
+      track.cells,
+    ),
+  );
   if (!progress.override?.complete) return recorded;
   return recorded.map((phase) => {
     const steps = phase.steps.map((step) =>
       step.fraction === 1 ? step : { label: step.label, fraction: 1 },
     );
-    const mods = Object.keys(progress.mods).length;
+    const mods =
+      progress.tracks
+        .find((track) => track.phase === 'mods')
+        ?.steps.filter((step) => step.stage === 'walkthroughs').length ?? 0;
     return {
       ...phase,
       fraction: 1,
@@ -127,87 +132,13 @@ export function phases(progress: FirmwareProgress): Phase[] {
   });
 }
 
-/** The website's phase for each bring-up track. */
-const PHASES: Record<TrackId, [Phase['id'], number]> = {
-  static: ['research', 10],
-  emulator: ['emulator', 35],
-  camera: ['camera', 20],
-  fujimod: ['mods', 25],
-  sd: ['sd-card', 10],
-};
-/** Stages the emulator phase draws as its boot and menu feature cells. */
-const EMULATOR_FEATURES: Record<string, string> = { rec: 'boot', menu: 'menus' };
-function track(progress: FirmwareProgress, id: TrackId): StageEntry[] {
-  return progress.tracks.find((entry) => entry.id === id)?.stages ?? [];
-}
-function stageStep(stage: StageEntry): Step {
-  return { label: stage.title, fraction: pass(stage.result) };
-}
-
-function recordedPhases(progress: FirmwareProgress): Phase[] {
-  const { facts } = progress,
-    mods = Object.entries(progress.mods),
-    working = mods.filter(([, result]) => result === 'pass').length,
-    title = (id: TrackId) => progress.tracks.find((entry) => entry.id === id)?.title ?? id;
-  const research = track(progress, 'static').map((stage): Step =>
-    stage.id === 'analysis' && facts && stage.result !== 'pass'
-      ? {
-          label: stage.title,
-          fraction: facts.located / facts.total,
-          detail: `${facts.located} of ${facts.total} facts`,
-        }
-      : stageStep(stage),
-  );
-  research.push(
-    progress.boot_rom
-      ? { label: 'Boot ROM', fraction: 1, detail: `${progress.boot_rom} dump` }
-      : { label: 'Boot ROM', fraction: 0 },
-  );
-  const emulatorStages = track(progress, 'emulator');
-  const byFeature = new Map(
-    emulatorStages
-      .filter((stage) => EMULATOR_FEATURES[stage.id])
-      .map((stage) => [EMULATOR_FEATURES[stage.id]!, stage]),
-  );
-  const emulator = EMULATOR.flatMap(([feature, label]): Step[] => {
-    const stage = byFeature.get(feature);
-    if (stage) return [{ label, fraction: pass(stage.result) }];
-    const stock = progress.stock[feature];
-    return stock ? [stockStep(label, stock)] : [];
-  });
-  emulator.push(
-    ...emulatorStages
-      .filter((stage) => !EMULATOR_FEATURES[stage.id] && stage.id !== 'stock')
-      .map(stageStep),
-  );
-  const fujimod = track(progress, 'fujimod');
-  const builds = fujimod.filter((stage) => stage.id !== 'walkthroughs');
-  const [id, weight] = PHASES.fujimod;
-  return [
-    phase(...PHASES.static, title('static'), research),
-    phase(...PHASES.emulator, title('emulator'), emulator, true),
-    phase(...PHASES.camera, title('camera'), track(progress, 'camera').map(stageStep)),
-    {
-      ...phase(id, weight, title('fujimod'), [
-        ...builds.map(stageStep),
-        ...mods.map(([mod, result]) => ({ label: mod, fraction: pass(result) })),
-      ]),
-      fraction: mods.length ? working / mods.length : 0,
-      value: working ? `${working} of ${mods.length}` : 'Not yet',
-    },
-    phase(...PHASES.sd, title('sd'), track(progress, 'sd').map(stageStep)),
-  ];
-}
-
 /** Whether any stage, stock feature or mod passes; otherwise the model is listed as not started. */
 export function started(progress: FirmwareProgress): boolean {
   return (
     !!progress.override?.complete ||
-    progress.tracks.some((entry) => entry.stages.some((stage) => stage.result === 'pass')) ||
-    Object.values(progress.stock).some(
-      (stock) => stock.result !== 'not-run' && stock.result !== 'fail' && stock.result !== 'stale',
-    ) ||
-    Object.values(progress.mods).includes('pass')
+    progress.tracks.some((track) =>
+      track.steps.some((step) => step.result === 'pass' || step.result === 'partial'),
+    )
   );
 }
 

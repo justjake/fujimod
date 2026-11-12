@@ -15,34 +15,96 @@ afterEach(() => {
   dispose?.();
   document.body.replaceChildren();
 });
-/** A small bring-up graph in the generated documents' shape. */
-const TRACKS: [TrackId, string, [string, string][]][] = [
-  ['static', 'Static analysis', [
-    ['research', 'Update file registered'],
-    ['analysis', 'Facts located'],
-  ]],
-  ['emulator', 'Emulator', [
-    ['rec', 'Boots'],
-    ['menu', 'Menus respond'],
-    ['stock', 'Stock features'],
-    ['firmware-update-stock-installs-in-emulator', 'Updater'],
-  ]],
-  ['camera', 'Camera', [
-    ['camera-identity', 'Identified'],
-    ['camera-snapshot', 'State dumped'],
-    ['camera-menu', 'Menus driven'],
-    ['camera-restart', 'Restarts itself'],
-  ]],
-  ['fujimod', 'FujiMod', [
-    ['mod-target', 'Mod target'],
-    ['mod-build', 'Built'],
-    ['walkthroughs', 'Walkthroughs'],
-  ]],
-  ['sd', 'SD card and install', [
-    ['boot-rom-loads-sd-card-on-camera', 'Boot ROM loads an SD card'],
-    ['sd-boot-v1-fujimod-boots-on-camera', 'FujiMod boots from an SD card'],
-  ]],
+/** A small graph-resolved step list in the generated documents' shape. */
+const TRACKS: {
+  id: TrackId;
+  phase: 'research' | 'emulator' | 'camera' | 'mods' | 'sd-card';
+  title: string;
+  weight: number;
+  cells?: boolean;
+  steps: [string, string, string][];
+}[] = [
+  {
+    id: 'static',
+    phase: 'research',
+    title: 'Static analysis',
+    weight: 10,
+    steps: [
+      ['research', 'Update file registered', 'research'],
+      ['analysis', 'Facts located', 'analysis'],
+      ['boot-rom', 'Boot ROM', 'research'],
+    ],
+  },
+  {
+    id: 'emulator',
+    phase: 'emulator',
+    title: 'Emulator',
+    weight: 35,
+    cells: true,
+    steps: [
+      ['rec', 'Boot', 'rec'],
+      ['menu', 'Menus', 'menu'],
+      ['stock/film-simulations', 'Film simulations', 'stock'],
+      ['stock/ibis', 'IBIS', 'stock'],
+      ['stock/sd', 'SD', 'stock'],
+      [
+        'firmware-update-stock-installs-in-emulator',
+        'Updater',
+        'firmware-update-stock-installs-in-emulator',
+      ],
+    ],
+  },
+  {
+    id: 'camera',
+    phase: 'camera',
+    title: 'Camera',
+    weight: 20,
+    steps: [
+      ['camera-identity', 'Identified', 'camera-identity'],
+      ['camera-snapshot', 'State dumped', 'camera-snapshot'],
+      ['camera-menu', 'Menus driven', 'camera-menu'],
+      ['camera-restart', 'Restarts itself', 'camera-restart'],
+    ],
+  },
+  {
+    id: 'fujimod',
+    phase: 'mods',
+    title: 'FujiMod',
+    weight: 25,
+    steps: [
+      ['mod-target', 'Mod target', 'mod-target'],
+      ['mod-build', 'Built', 'mod-build'],
+    ],
+  },
+  {
+    id: 'sd',
+    phase: 'sd-card',
+    title: 'SD card and install',
+    weight: 10,
+    steps: [
+      [
+        'boot-rom-loads-sd-card-on-camera',
+        'Boot ROM loads an SD card',
+        'boot-rom-loads-sd-card-on-camera',
+      ],
+      [
+        'sd-boot-v1-fujimod-boots-on-camera',
+        'FujiMod boots from an SD card',
+        'sd-boot-v1-fujimod-boots-on-camera',
+      ],
+    ],
+  },
 ];
+function step(id: string, label: string, stage: string, result: 'pass' | 'fail' | 'not-run') {
+  return {
+    id,
+    label,
+    stage,
+    result,
+    passed: result === 'pass' ? 1 : 0,
+    total: 1,
+  };
+}
 function progress(
   model: string,
   passed: string[],
@@ -55,14 +117,23 @@ function progress(
     version,
     facts: null,
     boot_rom: null,
-    tracks: TRACKS.map(([id, title, stages]) => ({
-      id,
-      title,
-      stages: stages.map(([stage, label]) => ({
-        id: stage,
-        title: label,
-        result: passed.includes(stage) ? 'pass' : 'not-run',
-      })),
+    tracks: TRACKS.map((track) => ({
+      id: track.id,
+      title: track.title,
+      phase: track.phase,
+      weight: track.weight,
+      cells: track.cells ?? false,
+      stages: [],
+      steps: [
+        ...track.steps.map(([id, label, stage]) =>
+          step(id, label, stage, passed.includes(id) ? 'pass' : 'not-run'),
+        ),
+        ...(track.id === 'fujimod'
+          ? Object.entries(mods).map(([mod, result]) =>
+              step('walkthroughs/' + mod, mod, 'walkthroughs', result),
+            )
+          : []),
+      ],
     })),
     stock: {},
     mods,
@@ -70,7 +141,12 @@ function progress(
 }
 function result(document: FirmwareProgress, id: string, value: 'stale' | 'fail') {
   for (const entry of document.tracks)
-    for (const stage of entry.stages) if (stage.id === id) stage.result = value;
+    for (const step of entry.steps)
+      if (step.id === id) {
+        step.result = value;
+        step.passed = 0;
+        step.total = 1;
+      }
 }
 function table(
   columns: Parameters<typeof CameraTable>[0]['columns'],
@@ -98,14 +174,22 @@ test('each phase fills by its steps and names its value', () => {
       d: 'fail',
     },
   );
-  document.facts = { located: 1, total: 2 };
-  document.boot_rom = 'X70';
+  const analysis = document.tracks[0]!.steps.find((step) => step.id === 'analysis')!;
+  analysis.result = 'not-run';
+  analysis.passed = 1;
+  analysis.total = 2;
+  analysis.detail = '1 of 2 facts';
+  const boot = document.tracks[0]!.steps.find((step) => step.id === 'boot-rom')!;
+  boot.result = 'pass';
+  boot.passed = 1;
+  boot.total = 1;
+  boot.detail = 'X70 dump';
   const list = phases(document);
   expect(list.map((phase) => [phase.id, phase.fraction, phase.value])).toEqual([
     ['research', (1 + 0.5 + 1) / 3, '2 of 3'],
-    ['emulator', 1 / 3, '1 of 3'],
+    ['emulator', 1 / 6, '1 of 6'],
     ['camera', 1 / 4, '1 of 4'],
-    ['mods', 1 / 4, '1 of 4'],
+    ['mods', 3 / 6, '3 of 6'],
     ['sd-card', 0, 'Not yet'],
   ]);
   expect(list[0]?.steps.map((step) => [step.label, step.fraction, step.detail])).toEqual([
@@ -117,14 +201,19 @@ test('each phase fills by its steps and names its value', () => {
 
 test('the emulator draws one cell per feature the body has, partial ones by their share', () => {
   const document = progress('X-T4', ['rec']);
-  document.stock = {
-    'film-simulations': { result: 'partial', passed: 9, total: 11 },
-    ibis: { result: 'pass' },
-    sd: { result: 'stale' },
-  };
-  const emulator = phases(document)[1]!;
-  expect(emulator.cells).toBe(true);
-  expect(emulator.steps.map((step) => [step.label, step.fraction, step.detail])).toEqual([
+  const emulator = document.tracks[1]!.steps;
+  const feature = (id: string) => emulator.find((step) => step.id === 'stock/' + id)!;
+  Object.assign(feature('film-simulations'), {
+    result: 'partial',
+    passed: 9,
+    total: 11,
+    detail: '9 of 11',
+  });
+  Object.assign(feature('ibis'), { result: 'pass', passed: 1, total: 1 });
+  Object.assign(feature('sd'), { result: 'stale', passed: 0, total: 1 });
+  const cellsPhase = phases(document)[1]!;
+  expect(cellsPhase.cells).toBe(true);
+  expect(cellsPhase.steps.map((step) => [step.label, step.fraction, step.detail])).toEqual([
     ['Boot', 1, undefined],
     ['Menus', 0, undefined],
     ['Film simulations', 9 / 11, '9 of 11'],
@@ -153,14 +242,15 @@ test('stale and failing stages do not count', () => {
   result(document, 'menu', 'stale');
   result(document, 'research', 'fail');
   const [research, emulator] = phases(document);
-  expect([research?.fraction, emulator?.fraction]).toEqual([0, 1 / 3]);
+  expect([research?.fraction, emulator?.fraction]).toEqual([0, 1 / 6]);
 });
 
 test('a model is started once any stage, stock feature or mod passes', () => {
   const partial = progress('X30', []);
-  partial.stock = { lens: { result: 'partial', passed: 1, total: 2 } };
+  const film = partial.tracks[1]!.steps.find((step) => step.id === 'stock/film-simulations')!;
+  Object.assign(film, { result: 'partial', passed: 1, total: 2, detail: '1 of 2' });
   expect(started(partial)).toBe(true);
-  partial.stock = { lens: { result: 'fail' } };
+  Object.assign(film, { result: 'fail', passed: 0, total: 1, detail: undefined });
   expect(started(partial)).toBe(false);
   expect(started(progress('X30', []))).toBe(false);
   expect(started(progress('X30', [], { a: 'fail' }))).toBe(false);
