@@ -99,6 +99,17 @@
           ],
           "description": "Declared gpio input."
         },
+        "gpio_interrupts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetGpioInterrupts"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared GPIO pads wired to level-sensitive interrupt inputs."
+        },
         "i2c_parts": {
           "description": "Declared register-file parts on the I2C buses.",
           "items": {
@@ -1035,6 +1046,63 @@
       "required": [
         "basis",
         "levels"
+      ],
+      "type": "object"
+    },
+    "ResetGpioInterruptRoute": {
+      "additionalProperties": false,
+      "description": "One GPIO pad held onto a processor interrupt input while at its active level.",
+      "properties": {
+        "active_high": {
+          "description": "Whether the input is asserted while the pad is high.",
+          "type": "boolean"
+        },
+        "line": {
+          "description": "Processor interrupt input.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pin": {
+          "description": "Pin within the bank.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "description": "GPIO bank.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin",
+        "line",
+        "active_high"
+      ],
+      "type": "object"
+    },
+    "ResetGpioInterrupts": {
+      "additionalProperties": false,
+      "description": "GPIO pads wired to level-sensitive processor interrupt inputs.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "routes": {
+          "description": "Pad of each interrupt input and its active level.",
+          "items": {
+            "$ref": "#/$defs/ResetGpioInterruptRoute"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "routes"
       ],
       "type": "object"
     },

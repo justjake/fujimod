@@ -175,6 +175,9 @@ pub struct Definition {
     /// GPIO bank base; the XP4 0xfff41000 when absent.
     #[serde(default)]
     pub gpio_base: Option<u64>,
+    /// GPIO pads wired to level-sensitive interrupt inputs.
+    #[serde(default)]
+    pub gpio_interrupts: Vec<fujimod_emulator_devices::parts::gpio::InputIrq>,
     #[serde(default)]
     pub temperature: Option<(i32, u64)>,
     #[serde(default)]

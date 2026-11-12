@@ -1116,6 +1116,7 @@ impl Session {
             adc,
             gpio,
             gpio_base,
+            gpio_interrupts,
             temperature,
             power_spi,
             power_spi_command_output,
@@ -1588,9 +1589,13 @@ impl Session {
             )?;
         }
         if let Some(inputs) = gpio {
-            devices
-                .get_or_insert_with(devices::Devices::empty)
-                .gpio(gpio_base.unwrap_or(0xfff41000), inputs)?;
+            devices.get_or_insert_with(devices::Devices::empty).gpio(
+                gpio_base.unwrap_or(0xfff41000),
+                inputs,
+                gpio_interrupts,
+            )?;
+        } else if !gpio_interrupts.is_empty() {
+            return Err("GPIO interrupts require GPIO wiring".into());
         }
         if let Some(keys) = xpp_key_lines {
             let lines = external_lines

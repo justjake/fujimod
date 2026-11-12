@@ -439,6 +439,34 @@ pub struct KeyLinesInput {
     pub poll_ticks: u64,
 }
 
+/// GPIO pads wired to level-sensitive processor interrupt inputs.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetGpioInterrupts"))]
+pub struct GpioInterruptsInput {
+    /// Declared basis.
+    pub basis: String,
+    /// Pad of each interrupt input and its active level.
+    pub routes: Vec<GpioInterruptRoute>,
+}
+
+/// One GPIO pad held onto a processor interrupt input while at its active level.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetGpioInterruptRoute"))]
+pub struct GpioInterruptRoute {
+    /// GPIO bank.
+    pub port: u64,
+    /// Pin within the bank.
+    pub pin: u64,
+    /// Processor interrupt input.
+    pub line: u64,
+    /// Whether the input is asserted while the pad is high.
+    pub active_high: bool,
+}
+
 /// Frame period of the imaging pipeline: the frame sync, the statistics
 /// engine and the frame laws of the imaging register blocks.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1269,6 +1297,9 @@ pub struct HardwareReset {
     /// Declared keys on external interrupt lines.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key_lines: Option<KeyLinesInput>,
+    /// Declared GPIO pads wired to level-sensitive interrupt inputs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpio_interrupts: Option<GpioInterruptsInput>,
     /// Declared frame period of the imaging pipeline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imaging_frames: Option<ImagingFramesInput>,

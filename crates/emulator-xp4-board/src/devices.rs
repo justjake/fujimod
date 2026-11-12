@@ -196,7 +196,12 @@ impl Devices {
         let pins = self.pins.as_ref()?.lock().unwrap();
         Some((0..16).map(|port| pins.registers(port)).collect())
     }
-    pub fn gpio(&mut self, base: u64, inputs: [u16; 16]) -> Result<(), String> {
+    pub fn gpio(
+        &mut self,
+        base: u64,
+        inputs: [u16; 16],
+        interrupts: Vec<fujimod_emulator_devices::parts::gpio::InputIrq>,
+    ) -> Result<(), String> {
         if self.pins.is_some()
             || self
                 .windows
@@ -208,7 +213,8 @@ impl Devices {
         let pins = fujimod_emulator_ip::socionext::gpio::Pins::new(inputs);
         let id = self.models.len();
         self.models.push(Some(Box::new(
-            fujimod_emulator_ip::socionext::gpio::Gpio::new(base, pins.clone())?,
+            fujimod_emulator_ip::socionext::gpio::Gpio::new(base, pins.clone())?
+                .with_interrupts(interrupts)?,
         )));
         self.windows.push((base, base + 0x400, id));
         self.pins = Some(pins);

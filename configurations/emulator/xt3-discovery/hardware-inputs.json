@@ -114,6 +114,23 @@
       ],
       "basis": "Declared catalog input."
     },
+    "gpio_interrupts": {
+      "basis": "Shutter button. The firmware's key scanner reads GPIO 0.0 (S1) and 0.1 (S2) through the bank's data register (0xfff41014) and reports a key pressed when its level is 0, so both are active low. The firmware registers the two pads' interrupts as GIC 167 and 168, level-sensitive and routed to CPU0, through the GICv2 distributor. Its arm, dispatch and disarm paths write only the distributor, and it arms 167 while S1 is released, so each line is asserted while its pad is low.",
+      "routes": [
+        {
+          "port": 0,
+          "pin": 0,
+          "line": 167,
+          "active_high": false
+        },
+        {
+          "port": 0,
+          "pin": 1,
+          "line": 168,
+          "active_high": false
+        }
+      ]
+    },
     "temperature_input": {
       "millicelsius": 25000,
       "basis": "Declared catalog input."
