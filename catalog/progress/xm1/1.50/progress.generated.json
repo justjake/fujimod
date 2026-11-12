@@ -5,7 +5,7 @@
   "model": "X-M1",
   "version": "1.50",
   "facts": {
-    "located": 30,
+    "located": 32,
     "total": 34
   },
   "boot_rom": "X70",
@@ -40,32 +40,32 @@
         {
           "id": "bulk-source",
           "title": "Bulk read source located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "flash-reader",
           "title": "Flash reader located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "state-regions",
           "title": "State-dump regions located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "restart-facts",
           "title": "USB restart request located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "card-files",
           "title": "Optional card file access located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "controls",
           "title": "Physical controls mapped to firmware inputs",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "settings-layout",
@@ -80,12 +80,12 @@
         {
           "id": "nand-boot-facts",
           "title": "EXR II NAND bootloader facts located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "boot-patch-facts",
           "title": "Boot-patch triggers, clears and free spaces located",
-          "result": "pass"
+          "result": "stale"
         }
       ],
       "steps": [
@@ -102,9 +102,9 @@
           "label": "Function index built and facts located",
           "stage": "analysis",
           "result": "not-run",
-          "passed": 30,
+          "passed": 32,
           "total": 34,
-          "detail": "30 of 34 facts"
+          "detail": "32 of 34 facts"
         },
         {
           "id": "catalog",
@@ -126,49 +126,49 @@
           "id": "bulk-source",
           "label": "Bulk read source located",
           "stage": "bulk-source",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "flash-reader",
           "label": "Flash reader located",
           "stage": "flash-reader",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "state-regions",
           "label": "State-dump regions located",
           "stage": "state-regions",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "restart-facts",
           "label": "USB restart request located",
           "stage": "restart-facts",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "card-files",
           "label": "Optional card file access located",
           "stage": "card-files",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "controls",
           "label": "Physical controls mapped to firmware inputs",
           "stage": "controls",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "settings-layout",
@@ -190,17 +190,17 @@
           "id": "nand-boot-facts",
           "label": "EXR II NAND bootloader facts located",
           "stage": "nand-boot-facts",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "boot-patch-facts",
           "label": "Boot-patch triggers, clears and free spaces located",
           "stage": "boot-patch-facts",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "boot-rom",
@@ -238,7 +238,7 @@
         {
           "id": "menu",
           "title": "Menus respond to remote control",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "stock",
@@ -274,7 +274,7 @@
           "id": "stock/record-picture",
           "label": "Record picture",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -282,7 +282,7 @@
           "id": "stock/record-movie",
           "label": "Record movie",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -290,7 +290,7 @@
           "id": "stock/control-input",
           "label": "Control input",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -306,15 +306,15 @@
           "id": "menu",
           "label": "Menus",
           "stage": "menu",
-          "result": "not-run",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
           "id": "stock/focus",
           "label": "Focus",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -322,7 +322,7 @@
           "id": "stock/lens",
           "label": "Lens",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -330,7 +330,7 @@
           "id": "stock/film-simulations",
           "label": "Film simulations",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -338,7 +338,7 @@
           "id": "stock/playback-picture",
           "label": "Playback picture",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -346,7 +346,7 @@
           "id": "stock/playback-movie",
           "label": "Playback movie",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -354,7 +354,7 @@
           "id": "stock/develop-raw",
           "label": "Develop RAW",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -362,7 +362,7 @@
           "id": "stock/sd",
           "label": "SD",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -598,7 +598,7 @@
         {
           "id": "language-font-bank",
           "title": "Language font bank located and kept out of mod memory",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "mod-target",
@@ -636,9 +636,9 @@
           "id": "language-font-bank",
           "label": "Language font bank located and kept out of mod memory",
           "stage": "language-font-bank",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "mod-target",
@@ -1211,34 +1211,54 @@
   ],
   "stock": {
     "record-picture": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 1
     },
     "record-movie": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 1
     },
     "control-input": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 1
     },
     "focus": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 1
     },
     "lens": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 1
     },
     "film-simulations": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 1
     },
     "playback-picture": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 1
     },
     "playback-movie": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 1
     },
     "develop-raw": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 1
     },
     "sd": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 1
     },
     "control-layout": {
       "result": "not-run"

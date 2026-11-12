@@ -237,7 +237,7 @@
         {
           "id": "menu",
           "title": "Menus respond to remote control",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "stock",
@@ -281,7 +281,7 @@
           "id": "stock/record-movie",
           "label": "Record movie",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -289,7 +289,7 @@
           "id": "stock/control-input",
           "label": "Control input",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -305,15 +305,15 @@
           "id": "menu",
           "label": "Menus",
           "stage": "menu",
-          "result": "not-run",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
           "id": "stock/focus",
           "label": "Focus",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -321,7 +321,7 @@
           "id": "stock/lens",
           "label": "Lens",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -329,7 +329,7 @@
           "id": "stock/film-simulations",
           "label": "Film simulations",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -345,7 +345,7 @@
           "id": "stock/playback-movie",
           "label": "Playback movie",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -353,7 +353,7 @@
           "id": "stock/develop-raw",
           "label": "Develop RAW",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -361,7 +361,7 @@
           "id": "stock/sd",
           "label": "SD",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -696,14 +696,6 @@
           "total": 1
         },
         {
-          "id": "walkthroughs/raw-teleconverter",
-          "label": "raw-teleconverter",
-          "stage": "walkthroughs",
-          "result": "not-run",
-          "passed": 0,
-          "total": 1
-        },
-        {
           "id": "walkthroughs/surround-view",
           "label": "surround-view",
           "stage": "walkthroughs",
@@ -928,14 +920,6 @@
           "total": 1
         },
         {
-          "id": "walkthroughs/menu-tap",
-          "label": "menu-tap",
-          "stage": "walkthroughs",
-          "result": "not-run",
-          "passed": 0,
-          "total": 1
-        },
-        {
           "id": "walkthroughs/focalized-ui",
           "label": "focalized-ui",
           "stage": "walkthroughs",
@@ -994,14 +978,6 @@
         {
           "id": "walkthroughs/zone-focus",
           "label": "zone-focus",
-          "stage": "walkthroughs",
-          "result": "not-run",
-          "passed": 0,
-          "total": 1
-        },
-        {
-          "id": "walkthroughs/digital-focal-length",
-          "label": "digital-focal-length",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1239,19 +1215,29 @@
       "total": 1
     },
     "record-movie": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 2
     },
     "control-input": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 1
     },
     "focus": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 1
     },
     "lens": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 3
     },
     "film-simulations": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 11
     },
     "playback-picture": {
       "result": "stale",
@@ -1259,13 +1245,19 @@
       "total": 4
     },
     "playback-movie": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 4
     },
     "develop-raw": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 3
     },
     "sd": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 0,
+      "total": 2
     },
     "control-layout": {
       "result": "not-run"
@@ -1274,7 +1266,7 @@
   "mods": {
     "fujimod": "not-run",
     "aspect-ratio": "not-run",
-    "raw-teleconverter": "not-run",
+    "raw-teleconverter": "inapplicable",
     "surround-view": "stale",
     "desqueeze": "not-run",
     "desqueeze-jpeg": "stale",
@@ -1303,7 +1295,7 @@
     "menu-theme": "not-run",
     "overlay-opacity": "stale",
     "menu-animations": "not-run",
-    "menu-tap": "not-run",
+    "menu-tap": "inapplicable",
     "focalized-ui": "not-run",
     "recipes": "stale",
     "snap-focus": "not-run",
@@ -1312,7 +1304,7 @@
     "disposable": "not-run",
     "date-stamp": "not-run",
     "zone-focus": "not-run",
-    "digital-focal-length": "not-run",
+    "digital-focal-length": "inapplicable",
     "hud-layout": "not-run",
     "menu-order": "not-run",
     "pixel-map": "not-run",

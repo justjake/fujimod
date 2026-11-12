@@ -40,27 +40,27 @@
         {
           "id": "bulk-source",
           "title": "Bulk read source located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "flash-reader",
           "title": "Flash reader located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "state-regions",
           "title": "State-dump regions located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "restart-facts",
           "title": "USB restart request located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "card-files",
           "title": "Optional card file access located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "controls",
@@ -70,7 +70,7 @@
         {
           "id": "settings-layout",
           "title": "Settings layout located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "sd-facts",
@@ -80,12 +80,12 @@
         {
           "id": "nand-boot-facts",
           "title": "EXR II NAND bootloader facts located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "boot-patch-facts",
           "title": "Boot-patch triggers, clears and free spaces located",
-          "result": "stale"
+          "result": "pass"
         }
       ],
       "steps": [
@@ -125,41 +125,41 @@
           "id": "bulk-source",
           "label": "Bulk read source located",
           "stage": "bulk-source",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "flash-reader",
           "label": "Flash reader located",
           "stage": "flash-reader",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "state-regions",
           "label": "State-dump regions located",
           "stage": "state-regions",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "restart-facts",
           "label": "USB restart request located",
           "stage": "restart-facts",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "card-files",
           "label": "Optional card file access located",
           "stage": "card-files",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "controls",
@@ -173,9 +173,9 @@
           "id": "settings-layout",
           "label": "Settings layout located",
           "stage": "settings-layout",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "sd-facts",
@@ -189,17 +189,17 @@
           "id": "nand-boot-facts",
           "label": "EXR II NAND bootloader facts located",
           "stage": "nand-boot-facts",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "boot-patch-facts",
           "label": "Boot-patch triggers, clears and free spaces located",
           "stage": "boot-patch-facts",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "boot-rom",
@@ -273,7 +273,7 @@
           "id": "stock/record-picture",
           "label": "Record picture",
           "stage": "stock",
-          "result": "not-run",
+          "result": "fail",
           "passed": 0,
           "total": 1
         },
@@ -281,7 +281,7 @@
           "id": "stock/record-movie",
           "label": "Record movie",
           "stage": "stock",
-          "result": "not-run",
+          "result": "fail",
           "passed": 0,
           "total": 1
         },
@@ -289,7 +289,7 @@
           "id": "stock/control-input",
           "label": "Control input",
           "stage": "stock",
-          "result": "not-run",
+          "result": "fail",
           "passed": 0,
           "total": 1
         },
@@ -313,7 +313,7 @@
           "id": "stock/focus",
           "label": "Focus",
           "stage": "stock",
-          "result": "not-run",
+          "result": "fail",
           "passed": 0,
           "total": 1
         },
@@ -321,7 +321,7 @@
           "id": "stock/lens",
           "label": "Lens",
           "stage": "stock",
-          "result": "not-run",
+          "result": "fail",
           "passed": 0,
           "total": 1
         },
@@ -329,7 +329,7 @@
           "id": "stock/film-simulations",
           "label": "Film simulations",
           "stage": "stock",
-          "result": "not-run",
+          "result": "fail",
           "passed": 0,
           "total": 1
         },
@@ -337,7 +337,7 @@
           "id": "stock/playback-picture",
           "label": "Playback picture",
           "stage": "stock",
-          "result": "not-run",
+          "result": "fail",
           "passed": 0,
           "total": 1
         },
@@ -345,7 +345,7 @@
           "id": "stock/playback-movie",
           "label": "Playback movie",
           "stage": "stock",
-          "result": "not-run",
+          "result": "fail",
           "passed": 0,
           "total": 1
         },
@@ -353,7 +353,7 @@
           "id": "stock/develop-raw",
           "label": "Develop RAW",
           "stage": "stock",
-          "result": "not-run",
+          "result": "fail",
           "passed": 0,
           "total": 1
         },
@@ -361,7 +361,7 @@
           "id": "stock/sd",
           "label": "SD",
           "stage": "stock",
-          "result": "not-run",
+          "result": "fail",
           "passed": 0,
           "total": 1
         },
@@ -1210,34 +1210,54 @@
   ],
   "stock": {
     "record-picture": {
-      "result": "not-run"
+      "result": "fail",
+      "passed": 0,
+      "total": 1
     },
     "record-movie": {
-      "result": "not-run"
+      "result": "fail",
+      "passed": 0,
+      "total": 1
     },
     "control-input": {
-      "result": "not-run"
+      "result": "fail",
+      "passed": 0,
+      "total": 1
     },
     "focus": {
-      "result": "not-run"
+      "result": "fail",
+      "passed": 0,
+      "total": 1
     },
     "lens": {
-      "result": "not-run"
+      "result": "fail",
+      "passed": 0,
+      "total": 1
     },
     "film-simulations": {
-      "result": "not-run"
+      "result": "fail",
+      "passed": 0,
+      "total": 1
     },
     "playback-picture": {
-      "result": "not-run"
+      "result": "fail",
+      "passed": 0,
+      "total": 1
     },
     "playback-movie": {
-      "result": "not-run"
+      "result": "fail",
+      "passed": 0,
+      "total": 1
     },
     "develop-raw": {
-      "result": "not-run"
+      "result": "fail",
+      "passed": 0,
+      "total": 1
     },
     "sd": {
-      "result": "not-run"
+      "result": "fail",
+      "passed": 0,
+      "total": 1
     },
     "control-layout": {
       "result": "not-run"
