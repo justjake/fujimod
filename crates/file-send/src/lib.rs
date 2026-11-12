@@ -78,7 +78,10 @@ pub fn sources(paths: &[PathBuf]) -> Result<Vec<Source>> {
     paths
         .iter()
         .map(|path| {
-            if !std::fs::metadata(path).map_err(|e| format!("{}: {e}", path.display()))?.is_file() {
+            if !std::fs::metadata(path)
+                .map_err(|e| format!("{}: {e}", path.display()))?
+                .is_file()
+            {
                 return Err(format!("{}: not a regular file", path.display()));
             }
             let name = path
@@ -132,7 +135,10 @@ async fn send_files(pipe: &mut impl Pipe, files: &[Source], report: Report<'_>) 
         return Err("expected Welcome".into());
     };
     if welcome.protocol_version != PROTOCOL_VERSION {
-        return Err(format!("receiver speaks version {}", welcome.protocol_version));
+        return Err(format!(
+            "receiver speaks version {}",
+            welcome.protocol_version
+        ));
     }
     let chunk = welcome.max_chunk_bytes.clamp(1, CHUNK_BYTES) as usize;
     let mut entries = Vec::new();

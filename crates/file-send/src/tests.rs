@@ -33,7 +33,9 @@ fn scratch(label: &str) -> PathBuf {
 }
 
 fn bytes(length: usize, seed: u8) -> Vec<u8> {
-    (0..length).map(|i| (i as u8).wrapping_mul(31) ^ seed).collect()
+    (0..length)
+        .map(|i| (i as u8).wrapping_mul(31) ^ seed)
+        .collect()
 }
 
 fn run(files: &[Source], out: &Path) -> (Result<()>, Result<Vec<String>>) {
