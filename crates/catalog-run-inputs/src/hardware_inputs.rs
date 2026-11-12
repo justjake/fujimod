@@ -320,6 +320,20 @@ pub struct I2cPartInput {
     pub select_mask: u64,
     /// Bytes per register: 1 or 2.
     pub width: u64,
+    /// Explicit X-T20 input touch-panel protocol on this endpoint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub touch_panel: Option<Xt20TouchPanelInput>,
+}
+
+/// Input-ready and report-register wiring for the X-T20 touch controller.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct Xt20TouchPanelInput {
+    /// First byte register of the 10-byte touch report.
+    pub report_register: u64,
+    /// Shared interrupt line raised when the report is ready.
+    pub input_ready_irq: u64,
 }
 
 /// An X-mount lens attached at power-on, answering on its serial link.
