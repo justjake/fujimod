@@ -4965,7 +4965,7 @@
           "errors": [
             {
               "locator": "card_files.locate",
-              "reason": "KeyError: 'mod_memory'"
+              "reason": "ValueError: No located runtime file-service reservation"
             }
           ]
         },
@@ -5162,7 +5162,7 @@
           "errors": [
             {
               "locator": "card_files.locate",
-              "reason": "KeyError: 'mod_memory'"
+              "reason": "ValueError: No located runtime file-service reservation"
             }
           ]
         },
@@ -6832,13 +6832,8 @@
           "errors": []
         },
         "restart": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "restart",
-              "reason": "ValueError: power-off sender: 0 candidates"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "sd-boot-v2-patch": {
           "status": "available",
