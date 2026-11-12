@@ -697,14 +697,6 @@
           "total": 1
         },
         {
-          "id": "walkthroughs/raw-teleconverter",
-          "label": "raw-teleconverter",
-          "stage": "walkthroughs",
-          "result": "not-run",
-          "passed": 0,
-          "total": 1
-        },
-        {
           "id": "walkthroughs/surround-view",
           "label": "surround-view",
           "stage": "walkthroughs",
@@ -929,14 +921,6 @@
           "total": 1
         },
         {
-          "id": "walkthroughs/menu-tap",
-          "label": "menu-tap",
-          "stage": "walkthroughs",
-          "result": "not-run",
-          "passed": 0,
-          "total": 1
-        },
-        {
           "id": "walkthroughs/focalized-ui",
           "label": "focalized-ui",
           "stage": "walkthroughs",
@@ -995,14 +979,6 @@
         {
           "id": "walkthroughs/zone-focus",
           "label": "zone-focus",
-          "stage": "walkthroughs",
-          "result": "not-run",
-          "passed": 0,
-          "total": 1
-        },
-        {
-          "id": "walkthroughs/digital-focal-length",
-          "label": "digital-focal-length",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1271,7 +1247,7 @@
   "mods": {
     "fujimod": "not-run",
     "aspect-ratio": "not-run",
-    "raw-teleconverter": "not-run",
+    "raw-teleconverter": "inapplicable",
     "surround-view": "not-run",
     "desqueeze": "not-run",
     "desqueeze-jpeg": "not-run",
@@ -1300,7 +1276,7 @@
     "menu-theme": "not-run",
     "overlay-opacity": "not-run",
     "menu-animations": "not-run",
-    "menu-tap": "not-run",
+    "menu-tap": "inapplicable",
     "focalized-ui": "not-run",
     "recipes": "not-run",
     "snap-focus": "not-run",
@@ -1309,7 +1285,7 @@
     "disposable": "not-run",
     "date-stamp": "not-run",
     "zone-focus": "not-run",
-    "digital-focal-length": "not-run",
+    "digital-focal-length": "inapplicable",
     "hud-layout": "not-run",
     "menu-order": "not-run",
     "pixel-map": "not-run",
