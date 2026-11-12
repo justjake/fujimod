@@ -83,8 +83,11 @@ impl StillProcessor {
         {
             return Err("still processor RAW/output geometry overlaps or has an odd width".into());
         }
-        // RAW writeback uses the third window and its own address/pitch. The
-        // declared spatial approximation preserves these latched U16 samples;
+        // RAW writeback uses the third window and its own address/pitch, in
+        // the source's sample packing (0x08 bit 8): its pitch register 0x4c
+        // counts samples like 0x44, and the window trails the source by eight
+        // rows plus 32 samples (64 bytes U16, 48 bytes packed 12-bit). The
+        // declared spatial approximation preserves these latched samples;
         // RAW denoising and defect correction are not modeled. Backward,
         // sample-aligned overlap supports the register-programmed sliding window.
         let raw_output = if control == 3 {
@@ -92,18 +95,17 @@ impl StillProcessor {
                 address: r(0x60) as u64,
                 width: (r(0x40) >> 16) as usize,
                 height: (r(0x40) & 65535) as usize,
-                pitch: 2 * r(0x4c) as usize,
+                pitch: packing.row_bytes(r(0x4c) as usize),
             };
-            raster.validate(raster.width * 2)?;
-            if !matches!(packing, Packing::U16)
-                || raster.width != src.width
+            raster.validate(packing.row_bytes(raster.width))?;
+            if raster.width != src.width
                 || raster.height != src.height
                 || raster.pitch > 32768
                 || !raster.address.is_multiple_of(2)
                 || !src.address.is_multiple_of(2)
                 || dst.overlaps(raster)?
             {
-                return Err("still RAW writeback requires matching U16 dimensions and separate color output".into());
+                return Err("still RAW writeback requires the source's dimensions and separate color output".into());
             }
             if src.overlaps(raster)? {
                 let source = physical(src.address, src.pitch * src.height)?;
@@ -156,7 +158,7 @@ impl StillProcessor {
             .prepare_deferred(cx.now(), self.delay, dst, dst.width * 2)?;
         if let Some(raster) = raw_output {
             self.raw_dma
-                .prepare_deferred(cx.now(), self.delay, raster, raster.width * 2)?;
+                .prepare_deferred(cx.now(), self.delay, raster, packing.row_bytes(raster.width))?;
         }
         let raw = RawView {
             bytes: &self.source,
@@ -180,11 +182,12 @@ impl StillProcessor {
         }
         if let Some(raster) = raw_output {
             let source = self.source.clone();
+            let row = packing.row_bytes(raster.width);
             self.raw_dma.pixels.defer(move |mut out| {
-                out.resize(raster.width * raster.height * 2, 0);
+                out.resize(row * raster.height, 0);
                 for y in 0..raster.height {
-                    out[y * raster.width * 2..(y + 1) * raster.width * 2]
-                        .copy_from_slice(&source[y * src.pitch..y * src.pitch + raster.width * 2]);
+                    out[y * row..(y + 1) * row]
+                        .copy_from_slice(&source[y * src.pitch..y * src.pitch + row]);
                 }
                 out
             });
