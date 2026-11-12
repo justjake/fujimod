@@ -12848,6 +12848,18 @@
           },
           "type": "array"
         },
+        "raw_dma_irqs": {
+          "description": "Completion interrupt lines of the two RAW read-out DMA channels\n(command window +0x40 and +0xc0). Left out, the channels refuse.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "receiver_base": {
           "description": "Declared receiver base.",
           "format": "uint64",

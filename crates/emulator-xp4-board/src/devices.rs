@@ -679,31 +679,39 @@ impl Devices {
     }
     pub fn imaging(
         &mut self,
-        map: (u64, u64, Vec<u32>, Vec<u32>, Vec<u32>),
+        map: (u64, u64, Vec<u32>, Vec<u32>, Vec<u32>, Option<Vec<u32>>),
         timing: (u64, u64, u64, u64),
         read_gate: (u16, u8),
         ibuf: Option<(u64, u32, u64, u64, u64, String)>,
         statistics_in_memory: bool,
     ) -> Result<(), String> {
         use fujimod_emulator_sensor_input::{sensor, slvs};
-        let (command_base, receiver_base, normal_irqs, error_irqs, timing_irqs) = map;
+        let (command_base, receiver_base, normal_irqs, error_irqs, timing_irqs, raw_dma_irqs) =
+            map;
         let (period, active, command_ticks, reset_ticks) = timing;
+        let raw_dma = raw_dma_irqs.as_deref().unwrap_or(&[]);
         if command_base != 0xfff6c000
             || receiver_base != 0xfff69000
             || normal_irqs.len() != 2
             || error_irqs.len() != 2
             || timing_irqs.len() != 2
+            || raw_dma_irqs.as_ref().is_some_and(|irqs| irqs.len() != 2)
             || normal_irqs
                 .iter()
                 .chain(&error_irqs)
                 .chain(&timing_irqs)
+                .chain(raw_dma)
                 .any(|i| !(32..512).contains(i))
         {
             return Err("Invalid XP4 imaging map".into());
         }
+        // Declared RAW read-out DMA lines let the receiver write each frame
+        // into the buffer an enabled channel names; without them the
+        // channel windows refuse.
+        let dma: Option<[u32; 2]> = raw_dma_irqs.map(|irqs| irqs.try_into().unwrap());
         let sensor = sensor::Sensor::new(
             Some(sensor::ImageRoutes {
-                dma: None,
+                dma,
                 timing: timing_irqs.try_into().unwrap(),
             }),
             read_gate,
@@ -716,7 +724,7 @@ impl Devices {
                 base: receiver_base,
                 normal_irqs,
                 error_irqs,
-                output_channels: vec![],
+                output_channels: if dma.is_some() { vec![0, 1] } else { vec![] },
                 timing_output: true,
                 control: slvs::Control {
                     run_mask: 0x11,
@@ -1829,6 +1837,27 @@ mod decompressor_admission_tests {
         for base in [0xfff79000,0xfff78fff,0xfff7906b] {
             assert!(devices.decompressor(base,128).is_err());
             assert_eq!((devices.models.len(),devices.windows.clone(),devices.snapshots()),before);
+        }
+    }
+}
+
+#[cfg(test)]
+mod imaging_admission_tests {
+    use super::*;
+    fn map(raw_dma: Option<Vec<u32>>) -> (u64, u64, Vec<u32>, Vec<u32>, Vec<u32>, Option<Vec<u32>>) {
+        (0xfff6c000, 0xfff69000, vec![296, 298], vec![297, 297], vec![102, 100], raw_dma)
+    }
+    #[test]
+    fn raw_dma_lines_are_two_valid_interrupts_or_absent() {
+        for raw_dma in [Some(vec![97]), Some(vec![97, 98, 99]), Some(vec![97, 600])] {
+            let mut devices = Devices::empty();
+            assert!(devices.imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, false).is_err());
+            assert!(devices.models.is_empty() && devices.windows.is_empty());
+        }
+        for raw_dma in [None, Some(vec![97, 98])] {
+            let mut devices = Devices::empty();
+            devices.imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, false).unwrap();
+            assert_eq!(devices.windows.len(), 2);
         }
     }
 }

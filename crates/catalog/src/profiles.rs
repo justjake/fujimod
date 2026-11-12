@@ -1710,6 +1710,10 @@ pub struct ImagingRegisters {
     pub input_buffer: InputBuffer,
     /// Declared normal irqs.
     pub normal_irqs: Vec<u64>,
+    /// Completion interrupt lines of the two RAW read-out DMA channels
+    /// (command window +0x40 and +0xc0). Left out, the channels refuse.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_dma_irqs: Option<Vec<u64>>,
     /// Declared receiver base.
     pub receiver_base: u64,
     /// Declared reset ticks.

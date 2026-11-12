@@ -693,6 +693,10 @@
               102,
               100
             ],
+            "raw_dma_irqs": [
+              97,
+              98
+            ],
             "input_buffer": {
               "base": 4294377472,
               "irq": 106,
@@ -703,7 +707,7 @@
             },
             "command_ticks": 5400,
             "reset_ticks": 8,
-            "basis": "Declared catalog input."
+            "basis": "Declared catalog input. RAW read-out DMA lines: the X-T3 5.11 sensor driver registers RAW DMA channels 2 and 3 on GIC 97 and 98; their handlers acknowledge +0x64 and +0xe4."
           },
           "control_requests": {
             "registers": [
