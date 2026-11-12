@@ -1,0 +1,15 @@
+{
+  "$schema": "https://fujimod.com/schemas/card-files.generated.schema.json",
+  "schema": 1,
+  "firmware_id": "xq2-101",
+  "product": "XQ2",
+  "internal_version": "1.09",
+  "code_checks": [],
+  "mechanism": {
+    "kind": "mailbox",
+    "search_address": 5898240,
+    "search_bytes": 524288,
+    "address_alias": 1073741824,
+    "build": null
+  }
+}
