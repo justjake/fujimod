@@ -100,46 +100,51 @@ function Segment(props: { model: string; phase: Phase; owners: Owner[]; tips: Ti
         </div>
       </Show>
       <div class="tip">
-        <div class="tip-label">{props.phase.label}</div>
-        <div class="tip-value">
-          {props.phase.id === 'camera' && !props.phase.fraction && !props.owners.length
-            ? 'Needs an owner'
-            : props.phase.value}
-        </div>
-        <ul>
-          <For each={props.phase.steps}>
-            {(step) => (
-              <li
-                class={{ todo: step.fraction < 1, partial: step.fraction > 0 && step.fraction < 1 }}
-              >
-                {step.label}
-                <Show when={step.detail}>
-                  {(detail) => <span class="step-detail">{detail()}</span>}
-                </Show>
-              </li>
-            )}
-          </For>
-        </ul>
-        <Show when={props.phase.id === 'camera' && props.owners.length}>
-          <div class="owners">
-            Owned by{' '}
-            <For each={props.owners}>
-              {(owner, index) => (
-                <>
-                  {index() ? ', ' : ''}
-                  <a href={`https://github.com/${owner.github}`}>@{owner.github}</a>
-                </>
+        <div class="tip-scroll">
+          <div class="tip-label">{props.phase.label}</div>
+          <div class="tip-value">
+            {props.phase.id === 'camera' && !props.phase.fraction && !props.owners.length
+              ? 'Needs an owner'
+              : props.phase.value}
+          </div>
+          <ul>
+            <For each={props.phase.steps}>
+              {(step) => (
+                <li
+                  class={{
+                    todo: step.fraction < 1,
+                    partial: step.fraction > 0 && step.fraction < 1,
+                  }}
+                >
+                  {step.label}
+                  <Show when={step.detail}>
+                    {(detail) => <span class="step-detail">{detail()}</span>}
+                  </Show>
+                </li>
               )}
             </For>
-          </div>
-        </Show>
-        <Show when={help(props.model, props.phase)}>
-          {(text) => (
-            <a class="help" href={CONTRIBUTE}>
-              {text()}
-            </a>
-          )}
-        </Show>
+          </ul>
+          <Show when={props.phase.id === 'camera' && props.owners.length}>
+            <div class="owners">
+              Owned by{' '}
+              <For each={props.owners}>
+                {(owner, index) => (
+                  <>
+                    {index() ? ', ' : ''}
+                    <a href={`https://github.com/${owner.github}`}>@{owner.github}</a>
+                  </>
+                )}
+              </For>
+            </div>
+          </Show>
+          <Show when={help(props.model, props.phase)}>
+            {(text) => (
+              <a class="help" href={CONTRIBUTE}>
+                {text()}
+              </a>
+            )}
+          </Show>
+        </div>
       </div>
     </li>
   );
