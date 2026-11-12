@@ -560,13 +560,19 @@
             },
             {
               "id": "BKT1",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-BKT"
+              },
+              "asserted": true
             },
             {
               "id": "BKT2",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "scanner_row",
+                "row": "row-69"
+              },
+              "asserted": true
             },
             {
               "id": "CH",
@@ -594,13 +600,19 @@
             },
             {
               "id": "Adv.1",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-ADV"
+              },
+              "asserted": true
             },
             {
               "id": "Adv.2",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "scanner_row",
+                "row": "row-63"
+              },
+              "asserted": true
             },
             {
               "id": "multiple_exposure",

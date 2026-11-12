@@ -3275,7 +3275,8 @@
       "event": 8226,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "drive_dial"
       },
       "scanner": {
         "index": 63,
@@ -3294,7 +3295,8 @@
       "event": 20527,
       "debug_key": "DRV-ADV",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "drive_dial"
       },
       "scanner": {
         "index": 64,
@@ -3373,7 +3375,8 @@
       "event": 20532,
       "debug_key": "DRV-BKT",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "drive_dial"
       },
       "scanner": {
         "index": 68,
@@ -3392,7 +3395,8 @@
       "event": 20533,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "drive_dial"
       },
       "scanner": {
         "index": 69,
