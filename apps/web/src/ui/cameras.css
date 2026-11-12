@@ -165,7 +165,6 @@
   left: 50%;
   width: min(240px, calc(100vw - 16px));
   translate: calc(-50% + var(--tip-shift-x, 0px)) var(--tip-shift-y, 0px);
-  padding: 10px 12px 11px;
   border-radius: 12px;
   background: var(--key2);
   box-shadow:
@@ -183,6 +182,9 @@
 }
 .progress-row .tip-scroll {
   max-height: min(420px, calc(100dvh - 40px));
+  padding: 10px 12px 11px;
+  border-radius: inherit;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
