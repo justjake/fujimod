@@ -2,8 +2,11 @@ import { access, mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Wizard, toolPath } from '../src/dev-tools/routes.ts';
+import { focalComponents } from '../src/docs/sdk.generated.ts';
 const tools = Object.values(Wizard).map(toolPath);
-export const routes = ['/', '/dev-tools/', ...tools, '/bug/', '/recovery/', '/device/'];
+const docs = ['/docs/sdk/focal/', ...focalComponents.map(
+  (component) => `/docs/sdk/focal/components/${component.slug}/`)];
+export const routes = ['/', '/dev-tools/', ...tools, '/bug/', '/recovery/', '/device/', ...docs];
 /** Render through start mode's production handler, using the same entries as dev and hydration. */
 export async function prerender(output = 'dist') {
   const { handleRequest } = await import(pathToFileURL(resolve(output, 'server/server.js')).href);
@@ -14,7 +17,9 @@ export async function prerender(output = 'dist') {
     );
     if (!response.ok) throw Error(`Prerender ${route}: HTTP ${response.status}`);
     const html = await response.text();
-    const expected = tools.includes(route)
+    const expected = route.startsWith('/docs/sdk/focal/')
+      ? 'class="shell sdk-docs"'
+      : tools.includes(route)
       ? 'Dev Tools'
       : {
           '/': 'id="workspace"',
