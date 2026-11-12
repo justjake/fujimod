@@ -378,6 +378,14 @@ impl Guard {
                 "Driver guard unsupported unconditional instruction {word:#010x} at {pc:#x}"
             ));
         }
+        // MRC p15,0,Rt,c0,c0,5 reads MPIDR into a general register. It has
+        // no memory effect; the CPU supplies affinity for caller ownership.
+        // Other coprocessor operations, writes and the flags destination are
+        // still outside this integer routine guard.
+        if word & 0x0fff0fff == 0x0e100fb0 && (word >> 12) & 15 != 15 {
+            self.accepted += 1;
+            return Ok(());
+        }
         let r = |index: usize| {
             if index == 15 {
                 Ok((pc as u32).wrapping_add(8))
@@ -642,6 +650,35 @@ mod tests {
             vec![(0, 0x5000)],
         )
         .unwrap()
+    }
+
+    #[test]
+    fn mpidr_read_accepts_general_registers_without_memory_access() {
+        for destination in 0..15 {
+            let mut isolated = guard();
+            isolated
+                .preflight(0x1000, 0xee100fb0 | destination << 12, 0xd3, |_| {
+                    panic!("MPIDR read must not derive a memory address")
+                })
+                .unwrap();
+            let snapshot = isolated.snapshot();
+            assert_eq!(snapshot.accepted_instructions, 1);
+            assert!(snapshot.stores.is_empty());
+            assert!(snapshot.mmio_accesses.is_empty());
+        }
+    }
+
+    #[test]
+    fn neighboring_coprocessor_accesses_remain_refused() {
+        for word in [
+            0xee10ffb0, // MPIDR to flags rather than a general register
+            0xee000fb0, // MCR write
+            0xee100f10, // MIDR rather than MPIDR
+            0xee110fb0, // another CRn
+            0xee100eb0, // another coprocessor
+        ] {
+            assert!(guard().preflight(0x1000, word, 0xd3, |_| Ok(0)).is_err());
+        }
     }
 
     #[test]
