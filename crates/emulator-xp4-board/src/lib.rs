@@ -2279,7 +2279,8 @@ impl Session {
         }
         let result = (|| {
             c.flush_dma()?;
-            let start = c.reg(core, arm::PC)?;
+            // The PC register reads without the Thumb bit; a run resumes in Thumb state only when it is set.
+            let start = c.reg(core, arm::PC)? | (c.reg(core, arm::CPSR)? >> 5 & 1);
             unsafe {
                 (*c.state.get()).redirected = None;
             }
