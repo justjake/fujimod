@@ -11,7 +11,8 @@
 //!   bits 0, 2 and 1; it drives the reset bits 5, 4, 3, 6 and 1..0 of
 //!   0xff70f01c, a gate word of the control request block 0xff70f000 that is
 //!   modeled there, and clears and sets bit 5 of the clock words
-//!   0xff482000/0xff482004. It writes the program address to 0xfff4aa1c and
+//!   0xff482000/0xff482004 (bits 15..0 are accepted; the boot setup script
+//!   writes 0xffff and 0xff). It writes the program address to 0xfff4aa1c and
 //!   0xfa000010, the memory type 0xfff4a760, 0xfa000000 = 0, the data
 //!   addresses 0xfa000014/0xfa000018 and 0xfa000008, waits for 0xfa400518
 //!   bit 1 to read clear, then clears 0xfff4aa10 bit 1.
@@ -47,7 +48,9 @@ const MAILBOX: std::ops::Range<u64> = 0x40..0x58;
 /// Words outside the control page and the bits the driver may set.
 fn outside(address: u64) -> Option<u32> {
     match address {
-        a if CLOCK.contains(&a) => Some(1 << 5),
+        // Bit 5 gates the DSP; the boot setup script writes 0xffff and 0xff to the words, so the other
+        // gate bits are accepted and stored (their targets are not modeled).
+        a if CLOCK.contains(&a) => Some(0xffff),
         SYSTEM => Some(0xf),
         PROGRAM => Some(u32::MAX),
         GATES => Some(u32::MAX),
@@ -315,7 +318,7 @@ mod tests {
             (CONTROL + 0x04, 0),
             (CONTROL + 0x60, 0),
             (CONTROL, 2),
-            (CLOCK[0], 1),
+            (CLOCK[0], 0x10000),
             (SYSTEM, 0x10),
         ] {
             let mut cx = Cx::new(&mut h, 0, 0, 0);
