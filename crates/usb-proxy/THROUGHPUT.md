@@ -30,29 +30,25 @@ For diagnosis, `USB_PROXY_MIN_MBPS=0` reports rates without a speed gate;
 `USB_PROXY_BENCH_RELAY_PORT` overrides the isolated signaling port (15202).
 The benchmark never automatically retries a failed transfer or speed check.
 
-## Transport changes
+## Transport
 
-Native WebRTC binds a socket to each advertised interface address and sends
-from the source chosen by ICE. A received packet's socket supplies its actual
-destination; no socket is created to guess a route for each incoming datagram.
-Receive buffers are reused across cancelable waits. Ready network input and
-due RTC timers run before additional application writes.
-Each host UDP socket requests a 4 MiB receive queue, covering SCTP's 1 MiB
-receive window plus DTLS overhead and scheduling bursts. The OS may clamp that
-request to its configured limit.
+Native peers run webrtc-rs (`src/peer/native.rs`) on the smol runtime, with
+one UDP socket per local IPv4 interface. Relay-only peers bind only the
+address that routes to the TURN server. Each socket requests 4 MiB send and
+receive queues, covering SCTP's 1 MiB receive window plus DTLS overhead and
+scheduling bursts; the OS may clamp that request. A data channel holds at most
+4 MiB handed to SCTP but not yet acknowledged; `send` waits above that.
 
-The native SCTP queue is bounded to 512 KiB instead of str0m's 128 KiB default.
-Connections that may reach a browser (`Pacing::Browser`) pace host output in
-8 KiB bursts at 50 MB/s. Enlarging the queue without
-pacing caused large-transfer stalls in Chromium; pacing leaves headroom above
-the target while avoiding receive-queue flooding. This is a transport ceiling,
-not a guarantee of USB-device bandwidth. USB operations remain ordered and
+Connections that may reach a browser (`Pacing::Browser`) send in 8 KiB bursts
+at 50 MB/s (`src/peer/runtime.rs`). Without pacing, native-to-Chromium uploads
+stalled on retransmission timeouts; pacing leaves headroom above the target
+while avoiding receive-queue flooding. Native-to-native connections, such as
+`fujimod-send`, use `Pacing::Unpaced`. This is a transport ceiling, not a
+guarantee of USB-device bandwidth. USB operations remain ordered and
 serialized, with the existing ownership, completion-unknown and no-retry rules.
 
 The Python extension builds with the release profile
 (`scripts/python_extension.py`), so ordinary tools use optimized transport code.
-
-Native-to-native connections, such as `fujimod-send`, use `Pacing::Unpaced`.
 
 ## Native-to-native benchmark
 
@@ -61,7 +57,7 @@ cargo run --release -p fujimod-usb-proxy --features relay --bin fujimod-webrtc-b
 ```
 
 The arguments are MiB to send, message KiB and connection count. It starts an
-in-process signaling service, connects unpaced direct-only peers over loopback
+in-process signaling service, connects unpaced direct-only peers on this host
 and prints decimal MB/s and process CPU time. It touches no USB device.
 
 ## Measurement limits

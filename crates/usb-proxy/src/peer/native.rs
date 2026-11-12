@@ -1,7 +1,7 @@
-//! str0m is driven by one owned I/O task. It works under native Python, Tokio,
-//! smol or a plain block_on; no caller runtime or callbacks are required.
-use super::datagram::{Datagram, DatagramIo};
-use super::turn::{self, Action, TurnClient};
+//! Native WebRTC peers on webrtc-rs. Each peer runs on its own I/O thread, so
+//! it works under native Python, Tokio, smol or a plain block_on.
+use super::ice;
+use super::runtime::PeerRuntime;
 use super::{CandidatePolicy, Pacing};
 use crate::{Error, Result, protocol::MAX_MESSAGE, share::Ticket};
 use aes_gcm::{
@@ -9,28 +9,30 @@ use aes_gcm::{
     aead::{Aead, Payload},
 };
 use async_channel::{Receiver, Sender};
-use async_io::Async;
 use async_tungstenite::{
     WebSocketStream,
     smol::{ConnectStream, connect_async},
     tungstenite::Message,
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use bytes::BytesMut;
 use futures_util::StreamExt;
 use rand::RngExt;
 use serde_json::{Value, json};
 use std::{
-    collections::VecDeque,
     future::Future,
     net::{SocketAddr, ToSocketAddrs},
+    sync::Arc,
     thread,
     time::{Duration, Instant},
 };
-use str0m::{
-    Candidate, Event, Input, Output, Rtc,
-    change::{SdpAnswer, SdpOffer},
-    channel::ChannelId,
-    net::{Protocol, Receive},
+use webrtc::{
+    data_channel::{DataChannel, DataChannelEvent, RTCDataChannelInit, RTCDataChannelState},
+    peer_connection::{
+        PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCConfigurationBuilder,
+        RTCIceGatheringState, RTCIceServer, RTCIceTransportPolicy, RTCPeerConnectionState,
+        RTCSessionDescription,
+    },
 };
 fn error(e: impl std::fmt::Display) -> Error {
     Error(e.to_string())
@@ -212,168 +214,101 @@ impl Drop for PeerSocket {
     }
 }
 
-fn drain_setup(rtc: &mut Rtc) -> Result<()> {
-    loop {
-        if let Output::Timeout(_) = rtc.poll_output().map_err(error)? {
-            return Ok(());
-        }
-    }
-}
-
 /// The ICE settings a room gives its peers: the candidate policy and the
 /// TURN servers from the join reply.
 #[derive(Clone, Debug)]
 pub(crate) struct IceConfig {
     pub policy: CandidatePolicy,
     pub pacing: Pacing,
-    pub servers: Vec<turn::IceServer>,
+    pub servers: Vec<ice::IceServer>,
 }
 
-/// How long a TURN allocation may take before the connection goes without a relay.
-const ALLOCATION_TIMEOUT: Duration = Duration::from_secs(5);
+const LABEL: &str = "fujimod-usb";
+/// Data channel messages carry one continuation byte and at most this many
+/// payload bytes, the portable size for browsers and the camera's libpeer.
+const FRAGMENT: usize = 16000;
+/// Bytes handed to SCTP but not yet acknowledged. `send` waits above this.
+const SEND_BUFFER: usize = 4 * 1024 * 1024;
+/// How long candidate gathering waits for slow STUN and TURN servers.
+const GATHER_TIMEOUT: Duration = Duration::from_secs(5);
+/// How long the data channel may take to open.
+const OPEN_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// A UDP allocation whose relayed address is a candidate of this connection.
-/// Its socket is dedicated, so every datagram it sends is a relay datagram.
-struct TurnRelay {
-    client: TurnClient,
-    /// Local address of the socket that talks to the TURN server.
-    socket: SocketAddr,
-    server: SocketAddr,
-    relayed: SocketAddr,
+enum PeerEvent {
+    Gathered,
+    Failed,
+    Channel(Arc<dyn DataChannel>),
 }
 
-/// The UDP sockets and optional TURN relay that carry one peer connection.
-struct Network {
-    udp: DatagramIo,
-    relay: Option<TurnRelay>,
-    policy: CandidatePolicy,
-}
+struct Events(Sender<PeerEvent>);
 
-impl Network {
-    /// Carry out TURN actions: transmit to the server, and hand relayed data to ICE.
-    async fn apply(&mut self, rtc: &mut Rtc, actions: Vec<Action>) -> Result<()> {
-        let Some(relay) = self.relay.as_ref() else {
-            return Ok(());
-        };
-        let (socket, server, relayed) = (relay.socket, relay.server, relay.relayed);
-        for action in actions {
-            match action {
-                Action::Transmit(bytes) => {
-                    // A failed datagram is lost like any other; ICE retransmits.
-                    // Relay-only connections have no other path, so they fail.
-                    let sent = self.udp.send(socket, server, &bytes).await;
-                    if sent.is_err() && self.policy == CandidatePolicy::RelayOnly {
-                        return Err(error("TURN server unreachable"));
-                    }
-                }
-                Action::Received { peer, data } => {
-                    if let Ok(receive) = Receive::new(Protocol::Udp, peer, relayed, &data) {
-                        rtc.handle_input(Input::Receive(Instant::now(), receive))
-                            .map_err(error)?;
-                    }
-                }
-                Action::Failed(reason) => {
-                    if self.policy == CandidatePolicy::RelayOnly {
-                        return Err(error(format!("TURN relay lost: {reason}")));
-                    }
-                }
-                Action::Allocated(_) => {}
-            }
+#[async_trait::async_trait]
+impl PeerConnectionEventHandler for Events {
+    async fn on_ice_gathering_state_change(&self, state: RTCIceGatheringState) {
+        if state == RTCIceGatheringState::Complete {
+            let _ = self.0.try_send(PeerEvent::Gathered);
         }
-        Ok(())
     }
-
-    /// Route an outgoing ICE packet through the relay when it leaves the relay
-    /// address or its socket. Returns the TURN actions, or `None` for a direct packet.
-    fn relay_send(
-        &mut self,
-        source: SocketAddr,
-        destination: SocketAddr,
-        contents: &[u8],
-    ) -> Option<Vec<Action>> {
-        let relay = self
-            .relay
-            .as_mut()
-            .filter(|relay| source == relay.relayed || source == relay.socket)?;
-        Some(relay.client.send(Instant::now(), destination, contents))
+    async fn on_connection_state_change(&self, state: RTCPeerConnectionState) {
+        if matches!(
+            state,
+            RTCPeerConnectionState::Failed | RTCPeerConnectionState::Closed
+        ) {
+            let _ = self.0.try_send(PeerEvent::Failed);
+        }
     }
-
-    /// Permit the candidate addresses in the peer's SDP to reach the relay.
-    async fn permit_candidates(&mut self, rtc: &mut Rtc, sdp: &str) -> Result<()> {
-        let Some(relay) = self.relay.as_mut() else {
-            return Ok(());
-        };
-        let now = Instant::now();
-        let actions: Vec<Action> = turn::sdp_candidate_addresses(sdp)
-            .into_iter()
-            .flat_map(|peer| relay.client.permit(now, peer))
-            .collect();
-        self.apply(rtc, actions).await
+    async fn on_data_channel(&self, channel: Arc<dyn DataChannel>) {
+        let _ = self.0.try_send(PeerEvent::Channel(channel));
     }
 }
 
-/// Allocate a UDP relay on the TURN server, reached through the interface route.
-async fn allocate_relay(target: &turn::RelayTarget) -> Result<(TurnRelay, std::net::UdpSocket)> {
-    let server = (target.host.as_str(), target.port)
-        .to_socket_addrs()
-        .map_err(error)?
-        .find(SocketAddr::is_ipv4)
-        .ok_or_else(|| error("TURN server has no IPv4 address"))?;
-    let route = std::net::UdpSocket::bind("0.0.0.0:0").map_err(error)?;
-    route.connect(server).map_err(error)?;
-    let ip = route.local_addr().map_err(error)?.ip();
-    let socket = Async::new(std::net::UdpSocket::bind(SocketAddr::new(ip, 0)).map_err(error)?)
-        .map_err(error)?;
-    let local = socket.get_ref().local_addr().map_err(error)?;
-    let mut client = TurnClient::new(target.credentials.clone());
-    let deadline = Instant::now() + ALLOCATION_TIMEOUT;
-    let mut actions = client.start(Instant::now());
-    let mut buffer = vec![0u8; 2048];
-    loop {
-        let mut relayed = None;
-        for action in actions.drain(..) {
-            match action {
-                Action::Transmit(bytes) => {
-                    socket.send_to(&bytes, server).await.map_err(error)?;
-                }
-                Action::Allocated(address) => relayed = Some(address),
-                Action::Failed(reason) => return Err(error(reason)),
-                Action::Received { .. } => {}
-            }
-        }
-        if let Some(relayed) = relayed {
-            let socket = socket.into_inner().map_err(error)?;
-            let relay = TurnRelay {
-                client,
-                socket: local,
-                server,
-                relayed,
-            };
-            return Ok((relay, socket));
-        }
-        let now = Instant::now();
-        if now >= deadline {
-            return Err(error("the TURN server did not allocate a relay in time"));
-        }
-        let wait = client
-            .next_timeout()
-            .map_or(deadline, |at| at.min(deadline))
-            .saturating_duration_since(now);
-        let event =
-            futures_lite::future::or(async { Some(socket.recv_from(&mut buffer).await) }, async {
-                futures_timer::Delay::new(wait).await;
-                None
+/// STUN and TURN servers for the policy. Direct-only connections get no TURN
+/// server, so no relay is ever allocated; relay-only ones get no STUN server.
+fn ice_servers(ticket: &Ticket, ice: &IceConfig) -> Vec<RTCIceServer> {
+    let turn_url = |url: &str| url.starts_with("turn:") || url.starts_with("turns:");
+    let mut servers = Vec::new();
+    if ice.policy != CandidatePolicy::RelayOnly && !ticket.stun.is_empty() {
+        servers.push(RTCIceServer {
+            urls: ticket
+                .stun
+                .iter()
+                .map(|url| {
+                    if url.starts_with("stun:") {
+                        url.clone()
+                    } else {
+                        format!("stun:{url}")
+                    }
+                })
+                .collect(),
+            ..Default::default()
+        });
+    }
+    for server in &ice.servers {
+        let urls: Vec<String> = server
+            .urls
+            .iter()
+            .filter(|url| match ice.policy {
+                CandidatePolicy::DirectOnly => !turn_url(url),
+                CandidatePolicy::RelayOnly => turn_url(url),
+                CandidatePolicy::Any => true,
             })
-            .await;
-        actions = match event {
-            Some(Ok((size, from))) if from == server => {
-                client.handle(Instant::now(), &buffer[..size])
-            }
-            Some(Ok(_)) => Vec::new(),
-            Some(Err(failure)) => return Err(error(failure)),
-            None => client.tick(Instant::now()),
-        };
+            .cloned()
+            .collect();
+        if urls.is_empty() {
+            continue;
+        }
+        let (username, credential) = server
+            .credentials
+            .as_ref()
+            .map(|c| (c.username.clone(), c.password.clone()))
+            .unwrap_or_default();
+        servers.push(RTCIceServer {
+            urls,
+            username,
+            credential,
+        });
     }
+    servers
 }
 
 /// The peer's SDP with its relayed candidates removed under
@@ -387,116 +322,143 @@ fn remote_sdp(sdp: &str, policy: CandidatePolicy) -> String {
         .collect()
 }
 
-/// Bind local sockets, allocate the TURN relay and gather candidates. Under
-/// `CandidatePolicy::RelayOnly`, no host or reflexive candidate is advertised;
-/// under `CandidatePolicy::DirectOnly`, no relay is allocated.
-async fn gather_candidates(
-    rtc: &mut Rtc,
-    ticket: &Ticket,
-    ice: &IceConfig,
-    progress: &crate::Progress,
-) -> Result<Network> {
-    let mut sockets = Vec::new();
-    if ice.policy != CandidatePolicy::RelayOnly {
-        let mut local = Vec::new();
-        for iface in if_addrs::get_if_addrs().map_err(error)? {
-            if iface.ip().is_ipv4() {
-                local.push(iface.ip());
-            }
-        }
-        local.sort();
-        local.dedup();
-        for ip in &local {
-            let socket = std::net::UdpSocket::bind(SocketAddr::new(*ip, 0)).map_err(error)?;
-            let addr = socket.local_addr().map_err(error)?;
-            rtc.add_local_candidate(Candidate::host(addr, "udp").map_err(error)?);
-            drain_setup(rtc)?;
-            sockets.push(socket);
-        }
-        progress(&format!("local candidates: {}", local.len()));
-        add_reflexive_candidates(rtc, ticket, &sockets, progress)?;
+/// Report the gathered candidates, and refuse a relay-only connection that has no relay.
+fn check_candidates(sdp: &str, policy: CandidatePolicy, progress: &crate::Progress) -> Result<()> {
+    let count = |kind: &str| {
+        sdp.lines()
+            .filter(|line| line.starts_with("a=candidate:") && line.contains(kind))
+            .count()
+    };
+    let (host, reflexive, relay) = (count(" typ host"), count(" typ srflx"), count(" typ relay"));
+    if host > 0 {
+        progress(&format!("local candidates: {host}"));
     }
-    let target = match ice.policy {
-        CandidatePolicy::DirectOnly => None,
-        _ => turn::relay_target(&ice.servers),
-    };
-    let relay = match target {
-        None => None,
-        Some(target) => match allocate_relay(&target).await {
-            Ok(allocation) => Some(allocation),
-            Err(failure) if ice.policy == CandidatePolicy::RelayOnly => return Err(failure),
-            Err(failure) => {
-                progress(&format!("TURN relay unavailable: {failure}"));
-                None
-            }
-        },
-    };
-    if ice.policy == CandidatePolicy::RelayOnly && relay.is_none() {
+    if reflexive > 0 {
+        progress(&format!("server-reflexive candidates: {reflexive}"));
+    }
+    if relay > 0 {
+        progress("TURN relay candidate ready");
+    } else if policy == CandidatePolicy::RelayOnly {
         return Err(error(
             "no TURN relay is available for a relay-only connection",
         ));
     }
-    let relay = relay.map(|(relay, socket)| {
-        sockets.push(socket);
-        relay
-    });
-    if let Some(relay) = &relay {
-        rtc.add_local_candidate(
-            Candidate::relayed(relay.relayed, relay.socket, "udp").map_err(error)?,
-        );
-        drain_setup(rtc)?;
-        progress("TURN relay candidate ready");
-    }
-    Ok(Network {
-        udp: DatagramIo::new(sockets, ice.pacing).map_err(error)?,
-        relay,
-        policy: ice.policy,
-    })
+    Ok(())
 }
 
-fn add_reflexive_candidates(
-    rtc: &mut Rtc,
-    ticket: &Ticket,
-    sockets: &[std::net::UdpSocket],
-    progress: &crate::Progress,
-) -> Result<()> {
-    // An optional STUN lookup uses the same socket as ICE, without a TURN path.
-    for server in &ticket.stun {
-        let name = server.trim_start_matches("stun:");
-        let name = if name.contains(':') {
-            name.to_owned()
-        } else {
-            format!("{name}:3478")
+/// The local IPv4 address that routes to each UDP TURN server.
+fn turn_routes(servers: &[RTCIceServer]) -> Vec<std::net::IpAddr> {
+    let mut routes = Vec::new();
+    for url in servers.iter().flat_map(|server| &server.urls) {
+        let Some(rest) = url.strip_prefix("turn:") else {
+            continue;
         };
-        if let Ok(addresses) = name.to_socket_addrs()
-            && let Some(server) = addresses.into_iter().find(SocketAddr::is_ipv4)
+        let (address, query) = rest.split_once('?').unwrap_or((rest, ""));
+        if query.contains("transport=") && !query.contains("transport=udp") {
+            continue;
+        }
+        let address = if address.contains(':') {
+            address.to_owned()
+        } else {
+            format!("{address}:3478")
+        };
+        let Some(server) = address
+            .to_socket_addrs()
+            .ok()
+            .and_then(|mut found| found.find(SocketAddr::is_ipv4))
+        else {
+            continue;
+        };
+        if let Ok(socket) = std::net::UdpSocket::bind("0.0.0.0:0")
+            && socket.connect(server).is_ok()
+            && let Ok(local) = socket.local_addr()
         {
-            let mut client = stunclient::StunClient::new(server);
-            client.set_timeout(Duration::from_secs(2));
-            let route = std::net::UdpSocket::bind("0.0.0.0:0").map_err(error)?;
-            route.connect(server).map_err(error)?;
-            let ip = route.local_addr().map_err(error)?.ip();
-            let Some(socket) = sockets
-                .iter()
-                .find(|socket| socket.local_addr().is_ok_and(|addr| addr.ip() == ip))
-            else {
-                continue;
-            };
-            let found = client.query_external_address(socket);
-            progress(&match &found {
-                Ok(external) => format!("STUN {server}: external address {external}"),
-                Err(e) => format!("STUN {server}: no reply ({e})"),
-            });
-            if let Ok(external) = found {
-                let base = socket.local_addr().map_err(error)?;
-                rtc.add_local_candidate(
-                    Candidate::server_reflexive(external, base, "udp").map_err(error)?,
-                );
-                drain_setup(rtc)?;
-            }
+            routes.push(local.ip());
         }
     }
-    Ok(())
+    routes
+}
+
+/// A peer connection with one UDP socket on each local IPv4 interface.
+async fn connection(
+    ticket: &Ticket,
+    ice: &IceConfig,
+    events: Sender<PeerEvent>,
+) -> Result<impl PeerConnection> {
+    let servers = ice_servers(ticket, ice);
+    let mut local: Vec<std::net::IpAddr> = if ice.policy == CandidatePolicy::RelayOnly {
+        // Relayed traffic only leaves through the interface that reaches TURN.
+        let routes = turn_routes(&servers);
+        if routes.is_empty() {
+            return Err(error(
+                "no TURN relay is available for a relay-only connection",
+            ));
+        }
+        routes
+    } else {
+        if_addrs::get_if_addrs()
+            .map_err(error)?
+            .into_iter()
+            .map(|iface| iface.ip())
+            .filter(std::net::IpAddr::is_ipv4)
+            .collect()
+    };
+    local.sort();
+    local.dedup();
+    let configuration = RTCConfigurationBuilder::new()
+        .with_ice_servers(servers)
+        .with_ice_transport_policy(if ice.policy == CandidatePolicy::RelayOnly {
+            RTCIceTransportPolicy::Relay
+        } else {
+            RTCIceTransportPolicy::All
+        })
+        .build();
+    PeerConnectionBuilder::new()
+        .with_configuration(configuration)
+        .with_handler(Arc::new(Events(events)))
+        .with_runtime(PeerRuntime::shared(ice.pacing))
+        .with_udp_addrs(local.into_iter().map(|ip| SocketAddr::new(ip, 0)).collect())
+        .with_data_channel_send_buffer_limit(SEND_BUFFER)
+        .build()
+        .await
+        .map_err(error)
+}
+
+/// Set the local description and wait for ICE gathering to finish, so the
+/// SDP carries every candidate (signaling does not trickle).
+async fn gathered<P: PeerConnection>(
+    peer: &P,
+    description: RTCSessionDescription,
+    events: &Receiver<PeerEvent>,
+    policy: CandidatePolicy,
+    progress: &crate::Progress,
+) -> Result<String> {
+    peer.set_local_description(description)
+        .await
+        .map_err(error)?;
+    let wait = async {
+        loop {
+            match events.recv().await.map_err(error)? {
+                PeerEvent::Gathered => return Ok(()),
+                PeerEvent::Failed => return Err(error("WebRTC connection failed")),
+                PeerEvent::Channel(_) => (),
+            }
+        }
+    };
+    // An interface that cannot reach a STUN or TURN server must not hold up
+    // the others: after the deadline, offer the candidates gathered so far.
+    futures_lite::future::or(wait, async {
+        futures_timer::Delay::new(GATHER_TIMEOUT).await;
+        Ok(())
+    })
+    .await?;
+    let sdp = peer
+        .local_description()
+        .await
+        .ok_or_else(|| error("missing local WebRTC description"))?
+        .sdp;
+    check_candidates(&sdp, policy, progress)?;
+    Ok(sdp)
 }
 
 async fn run(
@@ -506,17 +468,6 @@ async fn run(
     policy: CandidatePolicy,
     pacing: Pacing,
 ) -> Result<()> {
-    let PeerChannels {
-        outbound,
-        incoming,
-        ready,
-    } = channels;
-    // str0m counts unacknowledged bytes against this bound. Its 128 KiB
-    // default limits a bulk sender to 128 KiB per RTT (6.6 MB/s at 20 ms).
-    // Reserve a bounded bulk window rather than the interactive default.
-    let mut rtc = Rtc::builder()
-        .set_sctp_max_buffered_amount(512 * 1024)
-        .build(Instant::now());
     let mut signal_url = url::Url::parse(&ticket.signal).map_err(error)?;
     signal_url
         .query_pairs_mut()
@@ -546,16 +497,27 @@ async fn run(
     let ice = IceConfig {
         policy,
         pacing,
-        servers: turn::ice_servers(&welcome["ice_servers"]),
+        servers: ice::ice_servers(&welcome["ice_servers"]),
     };
-    let mut network = gather_candidates(&mut rtc, &ticket, &ice, &progress).await?;
-    let mut change = rtc.sdp_api();
-    change.add_channel("fujimod-usb".into());
-    let (offer, pending) = change
-        .apply()
-        .ok_or_else(|| error("missing WebRTC offer"))?;
-    drain_setup(&mut rtc)?;
-    write(&mut signal, json!({"type":"signal","data":seal(&ticket,&peer,json!({"type":"offer","sdp":offer.to_sdp_string()}))?})).await?;
+    let (events_tx, events) = async_channel::unbounded();
+    let connection = connection(&ticket, &ice, events_tx).await?;
+    let channel = connection
+        .create_data_channel(
+            LABEL,
+            Some(RTCDataChannelInit {
+                ordered: true,
+                ..Default::default()
+            }),
+        )
+        .await
+        .map_err(error)?;
+    let offer = connection.create_offer(None).await.map_err(error)?;
+    let offer = gathered(&connection, offer, &events, policy, &progress).await?;
+    write(
+        &mut signal,
+        json!({"type":"signal","data":seal(&ticket,&peer,json!({"type":"offer","sdp":offer}))?}),
+    )
+    .await?;
     progress("WebRTC offer sent; waiting for owner's answer");
     let answer = read(&mut signal).await?;
     if answer["type"] != "signal" || answer["from"] != "host" {
@@ -578,22 +540,20 @@ async fn run(
         return Err(error("invalid WebRTC answer"));
     }
     progress("WebRTC answer received");
-    let sdp = &remote_sdp(
+    let sdp = remote_sdp(
         answer["sdp"].as_str().ok_or_else(|| error("missing SDP"))?,
         policy,
     );
-    rtc.sdp_api()
-        .accept_answer(pending, SdpAnswer::from_sdp_string(sdp).map_err(error)?)
+    connection
+        .set_remote_description(RTCSessionDescription::answer(sdp).map_err(error)?)
+        .await
         .map_err(error)?;
-    network.permit_candidates(&mut rtc, sdp).await?;
     progress("WebRTC answer accepted; connecting ICE");
     pump(
-        rtc,
-        network,
-        None,
-        outbound,
-        incoming,
-        ready,
+        connection,
+        Some(channel),
+        events,
+        channels,
         progress,
         Some(&mut signal),
     )
@@ -608,33 +568,28 @@ async fn run_answer(
     ice: IceConfig,
     channels: PeerChannels,
 ) -> Result<()> {
-    let PeerChannels {
-        outbound,
-        incoming,
-        ready,
-    } = channels;
+    let progress: crate::Progress = Arc::new(|_| {});
+    let (events_tx, events) = async_channel::unbounded();
     let prepared = async {
         let offer = unseal(&ticket, &peer, &sealed_offer)?;
         if offer["type"] != "offer" {
             return Err(error("invalid WebRTC offer"));
         }
-        let sdp = &remote_sdp(
+        let sdp = remote_sdp(
             offer["sdp"].as_str().ok_or_else(|| error("missing SDP"))?,
             ice.policy,
         );
-        let mut rtc = Rtc::builder()
-            .set_sctp_max_buffered_amount(512 * 1024)
-            .build(Instant::now());
-        let progress: crate::Progress = std::sync::Arc::new(|_| {});
-        let mut network = gather_candidates(&mut rtc, &ticket, &ice, &progress).await?;
-        let offer = SdpOffer::from_sdp_string(sdp).map_err(error)?;
-        let answer = rtc.sdp_api().accept_offer(offer).map_err(error)?;
-        drain_setup(&mut rtc)?;
-        network.permit_candidates(&mut rtc, sdp).await?;
-        Ok::<_, Error>((rtc, network, answer.to_sdp_string()))
+        let connection = connection(&ticket, &ice, events_tx).await?;
+        connection
+            .set_remote_description(RTCSessionDescription::offer(sdp).map_err(error)?)
+            .await
+            .map_err(error)?;
+        let answer = connection.create_answer(None).await.map_err(error)?;
+        let answer = gathered(&connection, answer, &events, ice.policy, &progress).await?;
+        Ok::<_, Error>((connection, answer))
     }
     .await;
-    let (rtc, network, sdp) = match prepared {
+    let (connection, sdp) = match prepared {
         Ok(prepared) => prepared,
         Err(failure) => {
             let frame = json!({
@@ -657,244 +612,155 @@ async fn run_answer(
         }))
         .await
         .map_err(error)?;
-    pump(
-        rtc,
-        network,
-        None,
+    pump(connection, None, events, channels, progress, None).await
+}
+
+/// Wait for the data channel (the answerer receives it from the peer) to open.
+async fn open(
+    channel: Option<Arc<dyn DataChannel>>,
+    events: &Receiver<PeerEvent>,
+) -> Result<Arc<dyn DataChannel>> {
+    let channel = match channel {
+        Some(channel) => channel,
+        None => loop {
+            match events.recv().await.map_err(error)? {
+                PeerEvent::Channel(channel) if channel.label().await.map_err(error)? == LABEL => {
+                    break channel;
+                }
+                PeerEvent::Failed => return Err(error("direct WebRTC connection unavailable")),
+                _ => (),
+            }
+        },
+    };
+    if channel.ready_state().await.map_err(error)? == RTCDataChannelState::Open {
+        return Ok(channel);
+    }
+    let opened = async {
+        loop {
+            match channel.poll().await {
+                Some(DataChannelEvent::OnOpen) => return Ok(()),
+                Some(DataChannelEvent::OnClose) | None => {
+                    return Err(error("direct WebRTC connection unavailable"));
+                }
+                Some(_) => (),
+            }
+        }
+    };
+    let failed = async {
+        loop {
+            if let Ok(PeerEvent::Failed) | Err(_) = events.recv().await {
+                return Err(error("direct WebRTC connection unavailable"));
+            }
+        }
+    };
+    futures_lite::future::or(opened, failed).await?;
+    Ok(channel)
+}
+
+/// Move messages between the controller channels and the data channel until
+/// either side closes. A closed outbound queue flushes, then ends cleanly.
+async fn pump<P: PeerConnection>(
+    connection: P,
+    channel: Option<Arc<dyn DataChannel>>,
+    events: Receiver<PeerEvent>,
+    channels: PeerChannels,
+    progress: crate::Progress,
+    signal: Option<&mut Socket>,
+) -> Result<()> {
+    let PeerChannels {
         outbound,
         incoming,
         ready,
-        std::sync::Arc::new(|_| {}),
-        None,
-    )
-    .await
-}
-
-async fn pump(
-    mut rtc: Rtc,
-    mut network: Network,
-    mut channel: Option<ChannelId>,
-    outbound: Receiver<Vec<u8>>,
-    incoming: Sender<Result<Vec<u8>>>,
-    ready: Sender<std::result::Result<(), String>>,
-    progress: crate::Progress,
-    mut signal: Option<&mut Socket>,
-) -> Result<()> {
-    let mut assembled = Vec::new();
-    let mut packets: VecDeque<Vec<u8>> = VecDeque::new();
-    let mut writable = true;
-    let mut signal_alive = signal.is_some();
-    let started = Instant::now();
-    // Set when the controller closes: flush queued messages, then exit.
-    let mut closing: Option<Instant> = None;
-    loop {
-        if let Some(relay) = network.relay.as_mut() {
-            let actions = relay.client.tick(Instant::now());
-            network.apply(&mut rtc, actions).await?;
-        }
-        let output_timeout = loop {
-            match rtc.poll_output().map_err(error)? {
-                Output::Timeout(at) => break at,
-                Output::Transmit(packet) => {
-                    if let Some(actions) =
-                        network.relay_send(packet.source, packet.destination, &packet.contents)
-                    {
-                        network.apply(&mut rtc, actions).await?;
-                        continue;
-                    }
-                    // A candidate pair this host cannot route to (an IPv6 or
-                    // foreign LAN address) is a failed ICE check, not a failed
-                    // connection: ICE carries on with the other pairs.
-                    if let Err(failure) = network
-                        .udp
-                        .send(packet.source, packet.destination, &packet.contents)
-                        .await
-                    {
-                        let unreachable =
-                            matches!(
-                                failure.kind(),
-                                std::io::ErrorKind::HostUnreachable
-                                    | std::io::ErrorKind::NetworkUnreachable
-                                    | std::io::ErrorKind::AddrNotAvailable
-                            ) || matches!(failure.raw_os_error(), Some(49 | 50 | 51 | 65));
-                        if !unreachable {
-                            return Err(error(failure));
-                        }
-                    }
-                }
-                Output::Event(event) => match event {
-                    Event::IceConnectionStateChange(state) => {
-                        progress(&format!("ICE {state:?}"));
-                    }
-                    Event::Connected => progress("DTLS connected"),
-                    Event::ChannelOpen(id, label) if label == "fujimod-usb" => {
-                        channel = Some(id);
-                        progress("WebRTC data channel open");
-                        if ready.send(Ok(())).await.is_err() {
-                            return Ok(());
-                        }
-                    }
-                    Event::ChannelData(data) => {
-                        if Some(data.id) != channel
-                            || !data.binary
-                            || data.data.is_empty()
-                            || data.data[0] > 1
-                            || assembled.len() + data.data.len() - 1 > MAX_MESSAGE
-                        {
-                            return Err(error("invalid peer frame"));
-                        }
-                        assembled.extend_from_slice(&data.data[1..]);
-                        if data.data[0] == 1 {
-                            incoming
-                                .send(Ok(std::mem::take(&mut assembled)))
-                                .await
-                                .map_err(error)?;
-                        }
-                    }
-                    Event::ChannelClose(_) => {
-                        return Err(error("peer disconnected; completion unknown"));
-                    }
-                    _ => (),
-                },
-            }
-        };
-        // The TURN client's retransmissions and refreshes also wake the loop.
-        let timeout = match network.relay.as_ref().and_then(|r| r.client.next_timeout()) {
-            Some(at) if at < output_timeout => at,
-            _ => output_timeout,
-        };
-        if let Some(since) = closing
-            && ((packets.is_empty() && since.elapsed() > Duration::from_millis(200))
-                || since.elapsed() > Duration::from_secs(1))
-        {
-            return Ok(());
-        }
-        if !rtc.is_alive() || (channel.is_none() && started.elapsed() > Duration::from_secs(20)) {
-            return Err(error("direct WebRTC connection unavailable"));
-        }
-        if timeout <= Instant::now() {
-            rtc.handle_input(Input::Timeout(Instant::now()))
-                .map_err(error)?;
-            writable = true;
-            continue;
-        }
-        // Consume ready packets before filling SCTP again. ACKs free its
-        // congestion/receive windows; letting them sit behind an entire bulk
-        // frame produces bursts, loss and expensive retransmission scans.
-        let received = futures_lite::future::poll_once(network.udp.receive()).await;
-        if received.is_none()
-            && writable
-            && let (Some(id), Some(packet)) = (channel, packets.front())
-        {
-            let accepted = rtc
-                .channel(id)
-                .ok_or_else(|| error("data channel closed"))?
-                .write(true, packet)
-                .map_err(error)?;
-            if accepted {
-                packets.pop_front();
-            } else {
-                writable = false;
-            }
-            continue; // Drain the complete RTC output after every mutation.
-        }
-        // With no queued packet, wait for outbound work below. Spinning
-        // here starves the controller's first Hello and all later sends.
-        enum Wake {
-            Out(std::result::Result<Vec<u8>, async_channel::RecvError>),
-            Udp(std::io::Result<Datagram>),
-            Tick,
-            Signal(Result<Value>),
-        }
-        let wake = if let Some(received) = received {
-            Wake::Udp(received)
-        } else {
-            futures_lite::future::or(
-                async {
-                    if closing.is_some() {
-                        std::future::pending::<()>().await;
-                    }
-                    Wake::Out(outbound.recv().await)
-                },
-                futures_lite::future::or(
-                    async { Wake::Udp(network.udp.receive().await) },
-                    futures_lite::future::or(
-                        async {
-                            let wait = timeout.saturating_duration_since(Instant::now());
-                            let wait = if closing.is_some() {
-                                wait.min(Duration::from_millis(20))
-                            } else {
-                                wait
-                            };
-                            futures_timer::Delay::new(wait).await;
-                            Wake::Tick
-                        },
-                        async {
-                            if !signal_alive {
-                                std::future::pending::<()>().await;
-                            }
-                            match signal.as_mut() {
-                                Some(socket) => Wake::Signal(read(socket).await),
-                                None => std::future::pending::<Wake>().await,
-                            }
-                        },
-                    ),
-                ),
-            )
-            .await
-        };
-        match wake {
-            Wake::Out(Ok(bytes)) => {
-                if bytes.len() > MAX_MESSAGE {
-                    return Err(error("USB message exceeds limit"));
-                }
-                for (index, chunk) in bytes.chunks(16000).enumerate() {
-                    let mut packet = vec![u8::from((index + 1) * 16000 >= bytes.len())];
-                    packet.extend_from_slice(chunk);
-                    packets.push_back(packet);
-                }
-            }
-            Wake::Out(Err(_)) => closing = Some(Instant::now()),
-            Wake::Udp(result) => {
-                let packet = result.map_err(error)?;
-                writable = true;
-                let from_turn = network
-                    .relay
-                    .as_mut()
-                    .filter(|relay| packet.local == relay.socket);
-                if let Some(relay) = from_turn {
-                    // Only the TURN server speaks on the relay socket.
-                    if packet.remote == relay.server {
-                        let actions = relay
-                            .client
-                            .handle(Instant::now(), &packet.bytes[..packet.size]);
-                        network.apply(&mut rtc, actions).await?;
-                    }
-                } else if let Ok(receive) = Receive::new(
-                    Protocol::Udp,
-                    packet.remote,
-                    packet.local,
-                    &packet.bytes[..packet.size],
-                ) {
-                    rtc.handle_input(Input::Receive(Instant::now(), receive))
-                        .map_err(error)?;
-                }
-                network.udp.rearm(packet);
-            }
-            Wake::Tick => {
-                rtc.handle_input(Input::Timeout(Instant::now()))
-                    .map_err(error)?;
-                writable = true;
-            }
-            Wake::Signal(Ok(frame)) if frame["type"] == "ended" => {
-                return Err(error("camera sharing ended"));
-            }
-            Wake::Signal(Err(_)) => signal_alive = false,
-            Wake::Signal(Ok(_)) => (),
-        }
+    } = channels;
+    let channel = futures_lite::future::or(open(channel, &events), async {
+        futures_timer::Delay::new(OPEN_TIMEOUT).await;
+        Err(error("direct WebRTC connection unavailable"))
+    })
+    .await?;
+    progress("WebRTC data channel open");
+    if ready.send(Ok(())).await.is_err() {
+        let _ = connection.close().await;
+        return Ok(());
     }
+    let receiving = async {
+        let mut assembled = Vec::new();
+        loop {
+            match channel.poll().await {
+                Some(DataChannelEvent::OnMessage(message)) => {
+                    let data = message.data;
+                    if message.is_string
+                        || data.is_empty()
+                        || data[0] > 1
+                        || assembled.len() + data.len() - 1 > MAX_MESSAGE
+                    {
+                        return Err(error("invalid peer frame"));
+                    }
+                    assembled.extend_from_slice(&data[1..]);
+                    if data[0] == 1 {
+                        incoming
+                            .send(Ok(std::mem::take(&mut assembled)))
+                            .await
+                            .map_err(error)?;
+                    }
+                }
+                Some(DataChannelEvent::OnClose) | None => {
+                    return Err(error("peer disconnected; completion unknown"));
+                }
+                Some(_) => (),
+            }
+        }
+    };
+    let sending = async {
+        while let Ok(bytes) = outbound.recv().await {
+            if bytes.len() > MAX_MESSAGE {
+                return Err(error("USB message exceeds limit"));
+            }
+            let count = bytes.len().div_ceil(FRAGMENT).max(1);
+            for index in 0..count {
+                let chunk = &bytes[(index * FRAGMENT).min(bytes.len())
+                    ..((index + 1) * FRAGMENT).min(bytes.len())];
+                let mut packet = BytesMut::with_capacity(chunk.len() + 1);
+                packet.extend_from_slice(&[u8::from(index + 1 == count)]);
+                packet.extend_from_slice(chunk);
+                channel.send(packet).await.map_err(error)?;
+            }
+        }
+        // The controller closed: give queued messages up to a second to be acknowledged.
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while Instant::now() < deadline && channel.outstanding_bytes().await.unwrap_or(0) > 0 {
+            futures_timer::Delay::new(Duration::from_millis(10)).await;
+        }
+        Ok(())
+    };
+    let failed = async {
+        loop {
+            if let Ok(PeerEvent::Failed) | Err(_) = events.recv().await {
+                return Err(error("WebRTC connection closed"));
+            }
+        }
+    };
+    let ended = async {
+        let Some(socket) = signal else {
+            return std::future::pending().await;
+        };
+        loop {
+            match read(socket).await {
+                Ok(frame) if frame["type"] == "ended" => {
+                    return Err(error("camera sharing ended"));
+                }
+                Ok(_) => (),
+                Err(_) => return std::future::pending().await,
+            }
+        }
+    };
+    let result = futures_lite::future::or(
+        sending,
+        futures_lite::future::or(receiving, futures_lite::future::or(failed, ended)),
+    )
+    .await;
+    let _ = connection.close().await;
+    result
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

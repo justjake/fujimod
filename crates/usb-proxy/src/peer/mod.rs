@@ -24,9 +24,9 @@ pub enum Pacing {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-mod datagram;
-#[cfg(not(target_arch = "wasm32"))]
 mod native;
+#[cfg(not(target_arch = "wasm32"))]
+mod runtime;
 #[cfg(not(target_arch = "wasm32"))]
 pub use native::PeerSocket;
 #[cfg(not(target_arch = "wasm32"))]
@@ -36,6 +36,8 @@ pub use host::{HostEvent, HostRoom};
 #[cfg(target_arch = "wasm32")]
 mod browser;
 #[cfg(not(target_arch = "wasm32"))]
+mod ice;
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod turn;
 #[cfg(target_arch = "wasm32")]
 pub(crate) use browser::PeerSocket;

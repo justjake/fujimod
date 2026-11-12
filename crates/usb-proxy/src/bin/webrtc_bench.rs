@@ -49,6 +49,7 @@ async fn main() {
     let link = owner.link.clone();
     let total = mib * 1024 * 1024;
     let share = total / connections;
+    let (joined, owner_present) = async_channel::bounded(1);
     let receiver = tokio::task::spawn_blocking(move || {
         futures_lite::future::block_on(async move {
             let room = HostRoom::join(
@@ -59,6 +60,7 @@ async fn main() {
             )
             .await
             .unwrap();
+            joined.send(()).await.unwrap();
             let mut threads = Vec::new();
             while threads.len() < connections {
                 let HostEvent::Controller(_, mut peer) = room.next_event().await.unwrap() else {
@@ -79,6 +81,7 @@ async fn main() {
             (room, peers)
         })
     });
+    owner_present.recv().await.unwrap();
     let mut peers = Vec::new();
     for _ in 0..connections {
         let progress: fujimod_usb_proxy::Progress = std::sync::Arc::new(|_: &str| {});
