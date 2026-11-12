@@ -131,6 +131,23 @@
         }
       ]
     },
+    "countdown_dials": {
+      "basis": "Command dials. The firmware's dial table holds the rear dial (keys translated to CMD_RIGHT/CMD_LEFT) and the front dial (CMD2_R/CMD2_L), both read from a counter source. The dial setup allocates countdown channels 2/3 to the rear dial and 4/5 to the front dial and programs the first of each pair through the kernel's timer setup in mode 1 with edge field 3 (control 0x100d) and count 0x80000000. The dial poller reads the count (0xfff3c100 + 0x10n) and posts the first key per positive count change, the second per negative change, at most five per poll. Edges per detent, the counting direction and the edge pacing are not measured: one firmware step is one edge here, the increasing direction counts up, and edges are 1 ms apart.",
+      "dials": [
+        {
+          "control": "rear_command_dial",
+          "channel": 2,
+          "phase_ticks": 54000,
+          "rest_phase": 0
+        },
+        {
+          "control": "front_command_dial",
+          "channel": 4,
+          "phase_ticks": 54000,
+          "rest_phase": 0
+        }
+      ]
+    },
     "temperature_input": {
       "millicelsius": 25000,
       "basis": "Declared catalog input."

@@ -1127,6 +1127,7 @@ impl Session {
             sd_hosts,
             register_banks,
             countdown_timers,
+            countdown_dials,
             usb_condition,
             instructions_per_tick,
             usb,
@@ -1686,7 +1687,9 @@ impl Session {
         if let Some((base, routes)) = countdown_timers {
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .countdown_timers(base, &routes)?;
+                .countdown_timers(base, &routes, &countdown_dials)?;
+        } else if !countdown_dials.is_empty() {
+            return Err("XP4 countdown dials require the countdown timer bank".into());
         }
         if let Some((base, present)) = usb_condition {
             devices
@@ -2362,6 +2365,23 @@ impl Session {
             .as_mut()
             .ok_or_else(|| "XP4 GPIO is not wired".to_owned())?
             .set_gpio_input(port, pin, high)
+    }
+    /// Turn a declared command dial by `edges` quadrature edges (negative turns
+    /// the other way); the edges follow each other at the dial's edge period.
+    pub fn turn_dial(&self, name: &str, edges: i32) -> Result<(), String> {
+        self.inner.host_mutation()?;
+        let state = unsafe { &mut *self.inner.state.get() };
+        if state.driver_guard.is_some() {
+            return Err("Guarded routine cannot turn command dials".to_owned());
+        }
+        let now = state.ticks;
+        state.device_scan_at = 0;
+        state
+            .devices
+            .as_ref()
+            .ok_or_else(|| "XP4 command dials are not wired".to_owned())?
+            .dial(name)?
+            .queue_edges(now, edges)
     }
     pub fn set_usb_connected(&self, connected: bool) -> Result<(), String> {
         self.inner

@@ -161,6 +161,9 @@ impl Xp4 {
     fn set_gpio_input(&self, py: Python<'_>, port: usize, pin: usize, high: bool) -> PyResult<()> {
         self.with(py, |s| s.set_gpio_input(port, pin, high))
     }
+    fn turn_dial(&self, py: Python<'_>, name: &str, edges: i32) -> PyResult<()> {
+        self.with(py, |s| s.turn_dial(name, edges))
+    }
     fn set_usb_connected(&self, py: Python<'_>, connected: bool) -> PyResult<()> {
         self.with(py, |s| s.set_usb_connected(connected))
     }

@@ -467,6 +467,34 @@ pub struct GpioInterruptRoute {
     pub active_high: bool,
 }
 
+/// Command dials whose quadrature phases drive countdown timer channels' count inputs.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetCountdownDials"))]
+pub struct CountdownDialsInput {
+    /// Declared basis.
+    pub basis: String,
+    /// Each dial and the channel that counts it.
+    pub dials: Vec<CountdownDial>,
+}
+
+/// One command dial wired to a countdown timer channel's count inputs.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetCountdownDial"))]
+pub struct CountdownDial {
+    /// Physical control id the host turns.
+    pub control: String,
+    /// Countdown timer channel that counts its edges.
+    pub channel: u64,
+    /// Ticks between successive edges of one turn.
+    pub phase_ticks: u64,
+    /// Gray-code phase at rest (A in bit 1, B in bit 0).
+    pub rest_phase: u8,
+}
+
 /// Frame period of the imaging pipeline: the frame sync, the statistics
 /// engine and the frame laws of the imaging register blocks.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1300,6 +1328,9 @@ pub struct HardwareReset {
     /// Declared GPIO pads wired to level-sensitive interrupt inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpio_interrupts: Option<GpioInterruptsInput>,
+    /// Declared command dials on countdown timer channels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub countdown_dials: Option<CountdownDialsInput>,
     /// Declared frame period of the imaging pipeline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imaging_frames: Option<ImagingFramesInput>,

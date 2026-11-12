@@ -2519,6 +2519,7 @@ dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-ip",
  "fujimod-workspace-hack",
+ "parking_lot",
  "serde",
  "serde_json",
 ]

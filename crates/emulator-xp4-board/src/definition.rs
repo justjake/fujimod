@@ -220,6 +220,9 @@ pub struct Definition {
     /// The countdown timer bank `(base, [(channel, interrupt line)])`, when declared.
     #[serde(default)]
     pub countdown_timers: Option<(u64, Vec<(usize, u32)>)>,
+    /// Command dials wired to countdown timer channels' count inputs.
+    #[serde(default)]
+    pub countdown_dials: Vec<CountdownDial>,
     #[serde(default = "instruction_rate")]
     pub instructions_per_tick: (u64, u64),
     #[serde(default)]
@@ -233,6 +236,17 @@ pub struct Definition {
     /// Declared (port base, send word, receive word) replies.
     #[serde(default)]
     pub xpp_serial_replies: Vec<(u64, u32, u32)>,
+}
+
+/// A command dial whose quadrature phases drive a countdown timer channel's
+/// count inputs, the host's name for it, and the time between its edges.
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CountdownDial {
+    pub name: String,
+    pub channel: usize,
+    pub phase_ticks: u64,
+    pub rest_phase: u8,
 }
 
 /// Register layout of the interval timer at `timer_base`.

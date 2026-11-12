@@ -17,6 +17,16 @@
 //! - `+0x100 + 0x10n` count, `+0x104 + 0x10n` reload, `+0x108`/`+0x10c` two
 //!   words the kernel writes as zero (its channel reset writes all four).
 //!
+//! - External count configuration: the dial reader's setup (through the
+//!   kernel's timer setup in mode 1) writes control
+//!   `0x100d`: mode field 0..1 = 1 and edge field 2..3 = 3, bit 16 clear. It
+//!   loads count and reload `0x8000_0000`, starts the channel, and the dial
+//!   poller reads the count as a signed position. A channel declared as a
+//!   command dial's counter counts that dial's quadrature edges in this
+//!   configuration while running: one count per Gray-code edge, up for the
+//!   increasing direction. The edge count per physical detent and the counting
+//!   direction are not measured. Any other edge field on a dial channel refuses.
+//!
 //! A running channel counts board ticks: it expires `count + 1` ticks after it
 //! is started or loaded and then every `reload + 1` ticks. The kernel converts
 //! microseconds at 54 MHz (`us * 54_000_000 / 1_000_000 - 1`), the
@@ -27,7 +37,11 @@
 //! the missing acknowledge (the kernel's interrupt rows for these lines use
 //! mode 3), not measured.
 use crate::interval_timers::Counter;
+use fujimod_emulator_devices::parts::encoder_input::{EncoderInput, EncoderQueue};
 use fujimod_emulator_devices::{Cx, Device};
+use parking_lot::Mutex;
+use std::collections::VecDeque;
+use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -35,8 +49,29 @@ pub const CHANNELS: usize = 16;
 const CONTROL: u64 = 0x10;
 const COUNTERS: u64 = 0x100;
 const INTERRUPT_ENABLE: u32 = 1 << 16;
+const MODE: u32 = 0x3;
+const EXTERNAL_COUNT: u32 = 0x1;
+const EDGES: u32 = 0xc;
 fn decoded(control: u32) -> bool {
     control & INTERRUPT_ENABLE != 0
+}
+fn external_count(control: u32) -> bool {
+    control & (INTERRUPT_ENABLE | MODE) == EXTERNAL_COUNT
+}
+/// Gray-code phases in increasing order.
+const GRAY: [u8; 4] = [0, 1, 3, 2];
+
+/// A command dial whose two quadrature phases drive one channel's count inputs.
+pub struct DialWiring {
+    pub channel: usize,
+    pub phase_ticks: u64,
+    pub rest_phase: u8,
+}
+
+struct Dial {
+    channel: usize,
+    input: EncoderInput,
+    phase: u8,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -51,11 +86,12 @@ pub struct CountdownTimers {
     base: u64,
     lines: [Option<u32>; CHANNELS],
     channels: [Channel; CHANNELS],
+    dials: Vec<Dial>,
 }
 
 impl CountdownTimers {
     /// `routes` pairs a channel with its interrupt line.
-    pub fn new(base: u64, routes: &[(usize, u32)]) -> Result<Self, String> {
+    pub fn new(base: u64, routes: &[(usize, u32)], dials: &[DialWiring]) -> Result<Self, String> {
         if base & 0xfff != 0 || base > u32::MAX as u64 - 0x200 {
             return Err("Invalid XP4 countdown timer base".into());
         }
@@ -66,11 +102,61 @@ impl CountdownTimers {
             }
             lines[channel] = Some(line);
         }
+        let mut wired = [false; CHANNELS];
+        let dials = dials
+            .iter()
+            .map(|d| {
+                if d.channel >= CHANNELS || wired[d.channel] || d.phase_ticks == 0 || d.rest_phase > 3 {
+                    return Err("Invalid XP4 countdown timer dial".to_string());
+                }
+                wired[d.channel] = true;
+                Ok(Dial {
+                    channel: d.channel,
+                    input: EncoderInput {
+                        events: Arc::new(Mutex::new(EncoderQueue {
+                            events: VecDeque::with_capacity(64),
+                            final_phase: d.rest_phase,
+                        })),
+                        phase_ticks: d.phase_ticks,
+                        rest_phase: d.rest_phase,
+                    },
+                    phase: d.rest_phase,
+                })
+            })
+            .collect::<Result<_, _>>()?;
         Ok(Self {
             base,
             lines,
             channels: Default::default(),
+            dials,
         })
+    }
+    /// The edge queue of the dial wired to `channel`, filled by the session.
+    pub fn dial_input(&self, channel: usize) -> Option<EncoderInput> {
+        self.dials.iter().find(|d| d.channel == channel).map(|d| d.input.clone())
+    }
+    /// Apply the dial edges due by now to their channels' counts.
+    fn turn(&mut self, now: u64) {
+        for dial in &mut self.dials {
+            let mut queue = dial.input.events.lock();
+            while let Some(&(at, phase)) = queue.events.front() {
+                if at > now {
+                    break;
+                }
+                let position = |p: u8| GRAY.iter().position(|&g| g == p).unwrap_or(0);
+                let step: u32 = match (position(phase) + 4 - position(dial.phase)) % 4 {
+                    1 => 1,
+                    3 => u32::MAX,
+                    _ => 0,
+                };
+                let c = &mut self.channels[dial.channel];
+                if c.counter.enabled && external_count(c.control) {
+                    c.counter.value = c.counter.value.wrapping_add(step);
+                }
+                dial.phase = phase;
+                queue.events.pop_front();
+            }
+        }
     }
     /// The register windows this bank owns, as `[start, end)` pairs.
     pub fn windows(&self) -> [(u64, u64); 2] {
@@ -85,6 +171,7 @@ impl CountdownTimers {
     /// Expire the channels due by now and pulse the lines of those that interrupt.
     fn expire(&mut self, cx: &mut Cx<'_>) {
         let now = cx.now();
+        self.turn(now);
         for n in 0..CHANNELS {
             if self.channels[n].counter.expire(now)
                 && self.interrupting(n)
@@ -155,7 +242,16 @@ impl Device for CountdownTimers {
                 }
             }
             CONTROL..0x50 => {
-                let c = &mut self.channels[((o - CONTROL) / 4) as usize];
+                let n = ((o - CONTROL) / 4) as usize;
+                if external_count(value)
+                    && value & EDGES != EDGES
+                    && self.dials.iter().any(|d| d.channel == n)
+                {
+                    // Only the edge field the dial reader writes is modeled.
+                    cx.unmodeled();
+                    return;
+                }
+                let c = &mut self.channels[n];
                 if c.counter.enabled && decoded(c.control) != decoded(value) {
                     // Switching a running channel between the counting and the
                     // undecoded configuration has no modeled meaning.
@@ -187,10 +283,16 @@ impl Device for CountdownTimers {
         (0..CHANNELS)
             .filter(|&n| self.interrupting(n))
             .filter_map(|n| self.channels[n].counter.next)
+            .chain(self.dials.iter().filter_map(|d| d.input.events.lock().events.front().map(|e| e.0)))
             .min()
     }
     fn save(&self) -> Value {
-        serde_json::json!({ "base": self.base, "lines": self.lines, "channels": self.channels })
+        let dials: Vec<_> = self
+            .dials
+            .iter()
+            .map(|d| (d.channel, d.phase, d.input.events.lock().events.clone()))
+            .collect();
+        serde_json::json!({ "base": self.base, "lines": self.lines, "channels": self.channels, "dials": dials })
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let invalid = || "Invalid XP4 countdown timer checkpoint".to_string();
@@ -207,6 +309,20 @@ impl Device for CountdownTimers {
             .any(|c| (c.counter.enabled && decoded(c.control)) != c.counter.next.is_some())
         {
             return Err(invalid());
+        }
+        let dials: Vec<(usize, u8, VecDeque<(u64, u8)>)> =
+            serde_json::from_value(value.get("dials").cloned().ok_or_else(invalid)?)
+                .map_err(|_| invalid())?;
+        if dials.len() != self.dials.len()
+            || dials.iter().zip(&self.dials).any(|(saved, d)| saved.0 != d.channel || saved.1 > 3)
+        {
+            return Err(invalid());
+        }
+        for ((_, phase, events), dial) in dials.into_iter().zip(&mut self.dials) {
+            dial.phase = phase;
+            let mut queue = dial.input.events.lock();
+            queue.final_phase = events.back().map_or(phase, |e| e.1);
+            queue.events = events;
         }
         self.channels = channels;
         Ok(())
@@ -258,7 +374,7 @@ mod tests {
     /// The X-T3 kernel's callback timer: 5000 us on channel 6 (0x41eb0 ticks).
     #[test]
     fn a_callback_channel_pulses_its_line_once_per_period_until_stopped() {
-        let mut t = CountdownTimers::new(BASE, &[(6, 47)]).unwrap();
+        let mut t = CountdownTimers::new(BASE, &[(6, 47)], &[]).unwrap();
         let mut host = Lines { now: 1000, ..Default::default() };
         write(&mut t, &mut host, 0x28, 0x10000);
         write(&mut t, &mut host, 0x160, 270000);
@@ -282,15 +398,15 @@ mod tests {
         write(&mut t, &mut host, 0, 0x10000 << 6);
         assert_eq!(read(&mut t, &mut host, 0), 0);
         assert_eq!(t.next_deadline(host.now), None);
-        let mut resumed = CountdownTimers::new(BASE, &[(6, 47)]).unwrap();
+        let mut resumed = CountdownTimers::new(BASE, &[(6, 47)], &[]).unwrap();
         resumed.restore(&saved).unwrap();
         assert_eq!(resumed.next_deadline(host.now), Some(host.now + 270000));
-        assert!(CountdownTimers::new(BASE, &[(6, 48)]).unwrap().restore(&saved).is_err());
+        assert!(CountdownTimers::new(BASE, &[(6, 48)], &[]).unwrap().restore(&saved).is_err());
     }
 
     #[test]
     fn a_channel_in_the_undecoded_configuration_keeps_its_last_writes() {
-        let mut t = CountdownTimers::new(BASE, &[(4, 45)]).unwrap();
+        let mut t = CountdownTimers::new(BASE, &[(4, 45)], &[]).unwrap();
         let mut host = Lines::default();
         write(&mut t, &mut host, 0x20, 0x100d);
         write(&mut t, &mut host, 0x140, 0x8000_0000);
@@ -307,9 +423,58 @@ mod tests {
         assert!(cx.refusal().is_some());
     }
 
+    /// The X-T3 rear dial reader: channel 2, control 0x100d, count 0x8000_0000.
+    #[test]
+    fn a_dial_channel_counts_quadrature_edges_while_running_in_the_external_count_configuration() {
+        let dial = DialWiring { channel: 2, phase_ticks: 10, rest_phase: 0 };
+        let mut t = CountdownTimers::new(BASE, &[(2, 43)], &[dial]).unwrap();
+        let input = t.dial_input(2).unwrap();
+        assert!(t.dial_input(4).is_none());
+        let mut host = Lines { now: 100, ..Default::default() };
+        // Edges before the reader configures the channel move the pads but count nothing.
+        input.queue_edges(100, 1).unwrap();
+        assert_eq!(t.next_deadline(100), Some(110));
+        host.now = 110;
+        t.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(t.next_deadline(110), None);
+        write(&mut t, &mut host, 0x18, 0x100d);
+        write(&mut t, &mut host, 0x120, 0x8000_0000);
+        write(&mut t, &mut host, 0x124, 0x8000_0000);
+        write(&mut t, &mut host, 0, 0x40004);
+        assert_eq!(read(&mut t, &mut host, 0x120), 0x8000_0000);
+        input.queue_edges(110, 3).unwrap();
+        host.now = 125;
+        assert_eq!(read(&mut t, &mut host, 0x120), 0x8000_0001);
+        host.now = 140;
+        assert_eq!(read(&mut t, &mut host, 0x120), 0x8000_0003);
+        input.queue_edges(140, -2).unwrap();
+        let saved = t.save();
+        let mut resumed =
+            CountdownTimers::new(BASE, &[(2, 43)], &[DialWiring { channel: 2, phase_ticks: 10, rest_phase: 0 }])
+                .unwrap();
+        resumed.restore(&saved).unwrap();
+        assert_eq!(resumed.next_deadline(140), Some(150));
+        host.now = 160;
+        assert_eq!(read(&mut resumed, &mut host, 0x120), 0x8000_0001);
+        // No interrupt: the reader polls the count.
+        assert!(host.edges.is_empty());
+        // Stopped, the count holds.
+        write(&mut resumed, &mut host, 0, 0x40000);
+        resumed.dial_input(2).unwrap().queue_edges(160, 1).unwrap();
+        host.now = 200;
+        assert_eq!(read(&mut resumed, &mut host, 0x120), 0x8000_0001);
+        // A dial channel with an edge field other than the reader's refuses.
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        resumed.write(&mut cx, BASE + 0x18, 4, 0x1005);
+        assert!(cx.refusal().is_some());
+        assert!(CountdownTimers::new(BASE, &[], &[DialWiring { channel: 16, phase_ticks: 1, rest_phase: 0 }]).is_err());
+        assert!(CountdownTimers::new(BASE, &[], &[DialWiring { channel: 2, phase_ticks: 0, rest_phase: 0 }]).is_err());
+        assert!(CountdownTimers::new(BASE, &[(2, 43)], &[]).unwrap().restore(&saved).is_err());
+    }
+
     #[test]
     fn words_outside_the_bank_and_bad_routes_are_refused() {
-        let mut t = CountdownTimers::new(BASE, &[]).unwrap();
+        let mut t = CountdownTimers::new(BASE, &[], &[]).unwrap();
         let mut host = Lines::default();
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         t.read(&mut cx, BASE + 0x80, 4);
@@ -317,10 +482,10 @@ mod tests {
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         t.write(&mut cx, BASE + 0x161, 1, 0);
         assert!(cx.refusal().is_some());
-        assert!(CountdownTimers::new(BASE, &[(16, 47)]).is_err());
-        assert!(CountdownTimers::new(BASE, &[(1, 47), (1, 48)]).is_err());
+        assert!(CountdownTimers::new(BASE, &[(16, 47)], &[]).is_err());
+        assert!(CountdownTimers::new(BASE, &[(1, 47), (1, 48)], &[]).is_err());
         assert_eq!(
-            CountdownTimers::new(BASE, &[]).unwrap().windows(),
+            CountdownTimers::new(BASE, &[], &[]).unwrap().windows(),
             [(BASE, BASE + 0x50), (BASE + 0x100, BASE + 0x200)]
         );
     }

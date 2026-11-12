@@ -54,6 +54,7 @@ pub struct Devices {
     pub log: Vec<Record>,
     prior_records: usize,
     pins: Option<fujimod_emulator_ip::socionext::gpio::SharedPins>,
+    dials: BTreeMap<String, fujimod_emulator_devices::parts::encoder_input::EncoderInput>,
     adc: Option<(usize, Arc<Mutex<Adc>>)>,
     xpp_adc: Option<Arc<Mutex<fujimod_emulator_xpp::adc::Converter>>>,
     usb: Option<Arc<Mutex<Dwc3>>>,
@@ -191,6 +192,12 @@ impl Devices {
             .unwrap()
             .set_input(port, pin, high);
         Ok(())
+    }
+    pub fn dial(
+        &self,
+        name: &str,
+    ) -> Result<&fujimod_emulator_devices::parts::encoder_input::EncoderInput, String> {
+        self.dials.get(name).ok_or_else(|| format!("No XP4 command dial named {name}"))
     }
     pub fn gpio_registers(&self) -> Option<Vec<[u32; 8]>> {
         let pins = self.pins.as_ref()?.lock().unwrap();
@@ -561,8 +568,24 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
-    pub fn countdown_timers(&mut self, base: u64, routes: &[(usize, u32)]) -> Result<(), String> {
-        let model = fujimod_emulator_xp4_io::countdown_timers::CountdownTimers::new(base, routes)?;
+    pub fn countdown_timers(
+        &mut self,
+        base: u64,
+        routes: &[(usize, u32)],
+        dials: &[crate::definition::CountdownDial],
+    ) -> Result<(), String> {
+        use fujimod_emulator_xp4_io::countdown_timers::{CountdownTimers, DialWiring};
+        let wiring: Vec<_> = dials
+            .iter()
+            .map(|d| DialWiring { channel: d.channel, phase_ticks: d.phase_ticks, rest_phase: d.rest_phase })
+            .collect();
+        let model = CountdownTimers::new(base, routes, &wiring)?;
+        for d in dials {
+            if d.name.is_empty() || self.dials.contains_key(&d.name) {
+                return Err("Invalid XP4 countdown dial name".into());
+            }
+            self.dials.insert(d.name.clone(), model.dial_input(d.channel).ok_or("Unwired XP4 countdown dial")?);
+        }
         let windows = model.windows();
         if windows
             .iter()
@@ -733,6 +756,7 @@ impl Devices {
             log: vec![],
             prior_records: 0,
             pins: None,
+            dials: BTreeMap::new(),
             adc: None,
             xpp_adc: None,
             usb: None,
@@ -862,6 +886,7 @@ impl Devices {
             log: Vec::new(),
             prior_records: 0,
             pins: None,
+            dials: BTreeMap::new(),
             adc: None,
             xpp_adc: None,
             usb: None,
