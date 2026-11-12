@@ -144,7 +144,7 @@ with a zero-length packet. Fujifilm-specific parts:
 | Upload ObjectInfo | vendor operation `0x900C`, params `0, 0, 0`; ObjectInfo with format `0xF802`, the RAF size and file name `FUP_FILE.dat` | libfuji `lib/fuji_usb.c` `fuji_send_raf`, `fuji_send_object_info_ex`; `lib/fujiptp.h` |
 | Upload data | vendor operation `0x900D`, no params, the whole RAF | same |
 | Conversion profile | device property `0xD185`, read with GetDevicePropValue after the upload and written with SetDevicePropValue | libfuji `fuji_process_raf`; `lib/fujiptp.h` `PTP_DPC_FUJI_RawConvProfile` |
-| Start conversion | device property `0xD183` set to UINT16 `0` | libfuji `fuji_process_raf`; `PTP_DPC_FUJI_StartRawConversion` |
+| Start conversion | device property `0xD183` set to UINT16 `1`; `0` is a draft, which an X100VI (firmware 1.31) developed at 3888 × 2592 for every L 3:2 job | libfuji `fuji_process_raf` ("Set to 1 to get full resolution JPEGs"; it sends 0); fujicli `fujicore/src/features/render/manager.rs` sends `!draft` |
 | Result | a new object handle in GetObjectHandles(`0xFFFFFFFF`, 0, 0), downloaded with GetObject, then DeleteObject | libfuji `fuji_process_raf` |
 | Mode check | DeviceInfo lists `0xD183` and `0xD185` | libfuji reads USB mode `0xD16E` = 6 for RAW CONV. |
 | Profile layout | UINT16 word count, UINT8 length and UTF-16 IOP code, zero padding to `0x201`, then one UINT32 per property | libfuji `fp/src/d185.c` `fp_parse_d185`, `fp_create_d185` |
@@ -177,8 +177,8 @@ Not yet confirmed on a camera:
   libfuji. The manifest's Exif ColorSpace (`0xa001`) shows whether the camera
   honored it. A code it refuses is recorded as `unsupported` without
   converting.
-- libfuji comments that `0xD183` = 1 gives full-resolution JPEGs, but it
-  sends 0. The manifest's frame size shows which this is.
+- That `0xD183` = 1 gives the profile's image size. The manifest's frame
+  size shows it.
 - That USB CARD READER is PTP, not USB mass storage, on each body.
 - Whether a loaded RAF converts more than once. `--upload-each` is the
   fallback if the second job on a RAF produces no image.
