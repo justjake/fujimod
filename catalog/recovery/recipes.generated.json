@@ -4201,7 +4201,21 @@
             "what": "Use the card-supplied setup metadata without reset-stage NOR initialization"
           }
         ]
-      }
+      },
+      "internal_flash_ram_edits": [
+        {
+          "address": 9592,
+          "old": 3036679424,
+          "new": 335544424,
+          "what": "Take the update's retained-metadata path in the reset stage instead of its cold path with a serial NOR probe"
+        },
+        {
+          "address": 10788,
+          "old": 303921152,
+          "new": 3573751839,
+          "what": "Keep bit 2 of the power-on reason, which the preloaded selector otherwise clears and the OS power gate requires"
+        }
+      ]
     },
     "cold_start": null,
     "file_api": null,

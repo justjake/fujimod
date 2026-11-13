@@ -8,6 +8,7 @@ pub use card_boot::CardBoot;
 mod template {
     include!(concat!(env!("OUT_DIR"), "/xp5_sd_loader.rs"));
 }
+mod flash_stub;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Operation {
@@ -90,6 +91,11 @@ pub struct Setup {
     pub banks: Banks,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub card_boot: Option<CardBoot>,
+    /// Word edits of the RAM image for a startup that keeps the installed flash attached
+    /// (`StartupOptions::internal_flash`). The image selects the reset stage's preloaded mode,
+    /// whose other differences from the update's own selector have to be undone here.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub internal_flash_ram_edits: Vec<image::Edit>,
 }
 fn put64(data: &mut [u8], at: usize, value: u64) -> Result<()> {
     extent(data, at, 8)?;
@@ -193,6 +199,74 @@ pub(crate) fn package_with_storage(
     inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>, success_hold_seconds: u32,
     storage: Option<&[u8]>,
 ) -> Result<Vec<File>> {
+    package_inner(inverted, setup, ram, success_hold_seconds, storage, None)
+}
+
+/// Startup with the installed flash left attached: the card supplies the RAM
+/// image only. The setup prelude initializes and scans the installed flash as
+/// stage one does, and the card-resident setup tables, namespace and unit
+/// cache are not used, so no per-unit storage image is involved.
+///
+/// The loader is bound to a small stub (`flash_stub`) that wakes the cores the boot ROM parks
+/// once the image is complete, which the image's reset stage needs. With
+/// `fallback_wait_seconds`, a failed FFBOOT load (no file, a length or CRC mismatch,
+/// a read error) also waits that long and then continues the stock boot from the installed
+/// flash instead of halting.
+pub(crate) fn package_internal_flash(
+    inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_seconds: u32,
+    fallback_wait_seconds: Option<u32>,
+) -> Result<Vec<File>> {
+    let mut setup = setup.clone();
+    let ram_edits = std::mem::take(&mut setup.internal_flash_ram_edits);
+    setup.card_boot = None;
+    setup.banks = Banks {
+        copies: Vec::new(),
+        edits: Vec::new(),
+    };
+    package_inner(
+        inverted,
+        &setup,
+        Some(ram),
+        success_hold_seconds,
+        None,
+        Some(InternalFlash {
+            fallback_wait_seconds,
+            ram_edits,
+        }),
+    )
+}
+
+/// How an internal-flash startup differs from a card-resident one.
+#[derive(Clone)]
+struct InternalFlash {
+    fallback_wait_seconds: Option<u32>,
+    /// Word edits of the RAM image, checked against it after the reset-copy comparison.
+    ram_edits: Vec<image::Edit>,
+}
+
+/// Apply checked word edits to the RAM image: every old word must match, none may repeat or
+/// touch the preloaded selector, and nothing changes unless all of them pass.
+fn edit_ram(ram: &mut [u8], edits: &[image::Edit], selector: usize) -> Result<()> {
+    let mut addresses = std::collections::BTreeSet::new();
+    for edit in edits {
+        require(
+            edit.address.is_multiple_of(4)
+                && !(selector..selector + 8).contains(&edit.address)
+                && addresses.insert(edit.address)
+                && word(ram, edit.address)? == edit.old,
+            "XP5 RAM edit differs from source",
+        )?;
+    }
+    for edit in edits {
+        put(ram, edit.address, edit.new)?;
+    }
+    Ok(())
+}
+
+fn package_inner(
+    inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>, success_hold_seconds: u32,
+    storage: Option<&[u8]>, internal_flash: Option<InternalFlash>,
+) -> Result<Vec<File>> {
     let prefix = setup.verify(inverted)?;
     let copied_end = setup.base + setup.low_length as u64;
     // XP5 raw-entry SRAM reserves its upper workspace for the boot service.
@@ -209,6 +283,18 @@ pub(crate) fn package_with_storage(
     let mut program = template::IMAGE.to_vec();
     let header_at = program.len();
     program.extend_from_slice(extent(&prefix, 0, header_size)?);
+    let stub_at = if internal_flash.is_some() {
+        require(
+            ram.is_some() && storage.is_none() && setup.card_boot.is_none(),
+            "The internal-flash startup stub needs a startup without card-resident setup",
+        )?;
+        let at = (program.len() + 15) & !15;
+        program.resize(at, 0);
+        program.extend_from_slice(flash_stub::IMAGE);
+        Some(at)
+    } else {
+        None
+    };
     let mut resident_end = setup
         .banks
         .end(setup.low_length, (workspace - setup.base) as usize)?;
@@ -314,7 +400,14 @@ pub(crate) fn package_with_storage(
         // two billion iterations per second, 2,048 units take >= 1.024 s.
         u64::from(success_hold_seconds) * 2_048,
     )?;
-    put64(&mut program, cfg + 200, u64::from(ram.is_none()))?;
+    put64(
+        &mut program,
+        cfg + 200,
+        u64::from(ram.is_none() || internal_flash.is_some()),
+    )?;
+    if let (Some(at), Some(flash)) = (stub_at, &internal_flash) {
+        flash_stub::install(&mut program, address, at, setup, flash.fallback_wait_seconds)?;
+    }
     let restore = template::XP5_SETUP_RETURN_BRANCH;
     require(
         word(&program, restore)? == 0x14000000,
@@ -368,6 +461,9 @@ pub(crate) fn package_with_storage(
             reset == ram[..setup.reset_copy_size],
             "XP5 reset copy differs beyond preloaded selector",
         )?;
+        if let Some(flash) = &internal_flash {
+            edit_ram(&mut ram, &flash.ram_edits, setup.selector)?;
+        }
         require(
             word(&prefix, setup.bootstrap_offset + 36)?
                 == branch(call, setup.initializer.address as u64, true)?,
@@ -586,6 +682,7 @@ mod tests {
                 edits: vec![],
             },
             card_boot: None,
+            internal_flash_ram_edits: vec![],
         };
         let mut ram = data[0x40000..].to_vec();
         put64(&mut ram, 0x40, 0).unwrap();
@@ -640,6 +737,276 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn internal_flash_startup_probes_flash_like_stage_one_and_drops_card_resident_tables() {
+        let (data, mut s, ram) = fixture();
+        let plain = s.clone();
+        s.banks = Banks {
+            copies: vec![banks::Copy {
+                source_offset: 0x1000,
+                destination_offset: 0x20000,
+                size: 16,
+                sha256: fujimod_firmware::sha256(&data[0x1000..0x1010]),
+            }],
+            edits: vec![],
+        };
+        let source = 0xc000 + template::XP5_SETUP_CONFIGURATION + 200;
+        let flag = |raw: &[u8]| u64::from_le_bytes(raw[source..source + 8].try_into().unwrap());
+        let card = package(&data, &s, Some(ram.clone()), 0).unwrap();
+        let flash = package_internal_flash(&data, &s, ram.clone(), 0, None).unwrap();
+        assert_eq!(
+            flash.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(),
+            ["marble_init.bin", "ffboot.bin"]
+        );
+        assert_eq!(flash[1].bytes, ram);
+        assert_eq!((flag(&card[0].bytes), flag(&flash[0].bytes)), (0, 1));
+        // The card start relocates the setup tables into SRAM; the flash start does not.
+        assert_eq!(&card[0].bytes[0x20000..0x20010], &data[0x1000..0x1010]);
+        assert!(flash[0].bytes.len() < 0x20000);
+        // Against a card start with no extras, the flash-probe word differs, and so do the
+        // stub's binding (checked in the next test).
+        let bare = package(&data, &plain, Some(ram), 0).unwrap();
+        assert_eq!(bare[1].bytes, flash[1].bytes);
+        assert_eq!(flag(&bare[0].bytes), 0);
+    }
+
+    #[test]
+    fn internal_flash_applies_the_recipes_ram_edits_checked_and_in_the_crc() {
+        let (data, s, ram) = fixture();
+        let edit = |address: usize, old: u32| image::Edit {
+            address,
+            old,
+            new: 0x1400_0068,
+            what: "branch to the retained-metadata path".into(),
+        };
+        let with = |edits: Vec<image::Edit>| {
+            let mut setup = s.clone();
+            setup.internal_flash_ram_edits = edits;
+            setup
+        };
+        let plain = package_internal_flash(&data, &s, ram.clone(), 0, None).unwrap();
+        let edited =
+            package_internal_flash(&data, &with(vec![edit(0x100, 0xffff_ffff)]), ram.clone(), 0, None)
+                .unwrap();
+        let mut expected = ram.clone();
+        put(&mut expected, 0x100, 0x1400_0068).unwrap();
+        assert_eq!(edited[1].bytes, expected);
+        assert_eq!(plain[1].bytes, ram);
+        let request = 0xc000 + template::SETUP_SD_REQUEST;
+        assert_eq!(word(&edited[0].bytes, request + 16).unwrap(), crate::xp4::crc32(&expected));
+        assert_ne!(
+            word(&edited[0].bytes, request + 16).unwrap(),
+            word(&plain[0].bytes, request + 16).unwrap()
+        );
+        assert_eq!(edited[0].bytes.len(), plain[0].bytes.len());
+        // A card start does not use them.
+        let card = package(&data, &with(vec![edit(0x100, 0xffff_ffff)]), Some(ram.clone()), 0).unwrap();
+        assert_eq!(card[1].bytes, ram);
+        // A changed old word, a repeat or the selector refuses.
+        for edits in [
+            vec![edit(0x100, 0x1234_5678)],
+            vec![edit(0x100, 0xffff_ffff), edit(0x100, 0xffff_ffff)],
+            vec![edit(s.selector, 0)],
+        ] {
+            assert!(package_internal_flash(&data, &with(edits), ram.clone(), 0, None).is_err());
+        }
+    }
+
+    #[test]
+    fn ram_edits_change_nothing_unless_every_one_passes() {
+        let mut ram = vec![0xff; 0x20];
+        let edit = |address: usize, old: u32| image::Edit {
+            address,
+            old,
+            new: 0,
+            what: "edit".into(),
+        };
+        let before = ram.clone();
+        assert!(edit_ram(&mut ram, &[edit(0, 0xffff_ffff), edit(4, 1)], 0x40).is_err());
+        assert_eq!(ram, before);
+        assert!(edit_ram(&mut ram, &[edit(2, 0xffff_ffff)], 0x40).is_err());
+        assert!(edit_ram(&mut ram, &[edit(0x20, 0xffff_ffff)], 0x40).is_err());
+        edit_ram(&mut ram, &[edit(0, 0xffff_ffff), edit(8, 0xffff_ffff)], 0x40).unwrap();
+        assert_eq!(&ram[..12], &[0, 0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn boot_files_never_include_the_update_and_internal_flash_takes_no_unit_storage() {
+        use crate::StartupOptions;
+        let (data, s, _) = fixture();
+        let update = fujimod_firmware::invert(&data);
+        let mut recipe = crate::Recipe::bundled("x100vi-131").unwrap().unwrap();
+        recipe.source_size = update.len();
+        recipe.source_sha256 = fujimod_firmware::sha256(&update);
+        recipe.updater = None;
+        recipe.plan = Some(image::Plan {
+            size: 0x1000,
+            entry: 0,
+            regions: vec![image::Region {
+                name: "reset".into(),
+                address: 0,
+                source: Source {
+                    dat_offset: 0x40000,
+                    size: 0x1000,
+                    compression: image::Compression::Raw,
+                    decoded_size: 0x1000,
+                    sha256: fujimod_firmware::sha256(&data[0x40000..0x41000]),
+                    initialized_prefix: None,
+                },
+            }],
+            bss: vec![],
+            edits: vec![image::Edit {
+                address: 0x40,
+                old: 1,
+                new: 0,
+                what: "preloaded selector".into(),
+            }],
+        });
+        recipe.xp5 = Some(s);
+        let options = StartupOptions {
+            internal_flash: true,
+            ..StartupOptions::default()
+        };
+        let names = |files: &[File]| files.iter().map(|f| f.name.clone()).collect::<Vec<_>>();
+        let everything = recipe.build_startup_with_options(&update, options).unwrap();
+        assert_eq!(names(&everything), ["marble_init.bin", "ffboot.bin", "FPUPDATE.DAT"]);
+        let boot = recipe.build_boot_files(&update, options).unwrap();
+        assert_eq!(names(&boot), ["marble_init.bin", "ffboot.bin"]);
+        assert_eq!(boot[0].bytes, everything[0].bytes);
+        assert_eq!(boot[1].bytes, everything[1].bytes);
+        assert!(recipe.build_startup_with_storage(&update, &[0; 8], options).is_err());
+        let mut stage_one = recipe.clone();
+        stage_one.generation = crate::Generation::Xp4;
+        assert!(stage_one.build_boot_files(&update, options).is_err());
+    }
+
+    #[test]
+    fn the_stub_wakes_the_parked_cores_and_binds_the_fallback_only_on_request() {
+        let (data, s, ram) = fixture();
+        let address = s.base + 0xc000;
+        let stub = (template::IMAGE.len() + 0x800 + 15) & !15;
+        let params = 0xc000 + stub + flash_stub::STUB_PARAMS;
+        let release = flash_stub::locate_release(template::IMAGE).unwrap();
+        let fail = flash_stub::locate_fail(template::IMAGE, address).unwrap();
+        let gate = (s.gate_offset - 0x800) as usize;
+        let field = |raw: &[u8], n: usize| {
+            u64::from_le_bytes(raw[params + 8 * n..params + 8 * n + 8].try_into().unwrap())
+        };
+        let zero_gate = branch(
+            s.base + gate as u64,
+            address + template::A64_BOOT_ZERO_GATE as u64,
+            false,
+        )
+        .unwrap();
+        // The unpatched loader image for comparison: the plain card start of this fixture.
+        let reference = package(&data, &s, Some(ram.clone()), 0).unwrap();
+        for wait in [None, Some(7), Some(0)] {
+            let files = package_internal_flash(&data, &s, ram.clone(), 0, wait).unwrap();
+            let raw = &files[0].bytes;
+            assert_eq!(files[1].bytes, ram);
+            assert!(raw.len() <= 0x38800);
+            // The readiness `sev` goes to the stub, which returns to the instruction after it.
+            assert_eq!(
+                word(raw, 0xc000 + release).unwrap(),
+                branch(
+                    address + release as u64,
+                    address + (stub + flash_stub::RELEASE_ENTRY) as u64,
+                    false
+                )
+                .unwrap()
+            );
+            assert_eq!(field(raw, 8), address + release as u64 + 4);
+            // The stub is the assembled image plus its parameters.
+            let mut image = raw[0xc000 + stub..0xc000 + stub + flash_stub::IMAGE.len()].to_vec();
+            image[flash_stub::STUB_PARAMS..flash_stub::STUB_PARAMS + 0x48].fill(0);
+            let mut expected = flash_stub::IMAGE.to_vec();
+            expected[flash_stub::STUB_PARAMS..flash_stub::STUB_PARAMS + 0x48].fill(0);
+            assert_eq!(image, expected);
+            // Changes against the reference are the stub's bindings and nothing else.
+            let mut changed = (0..reference[0].bytes.len())
+                .step_by(4)
+                .filter(|&at| {
+                    at < 0xc000 + template::IMAGE.len() + 0x800
+                        && word(&reference[0].bytes, at).unwrap() != word(raw, at).unwrap()
+                })
+                .collect::<Vec<_>>();
+            let source = 0xc000 + template::XP5_SETUP_CONFIGURATION + 200;
+            changed.retain(|&at| at != source);
+            // The bootstrap's gate is the loader's own in every build.
+            assert_eq!(word(raw, gate).unwrap(), zero_gate);
+            assert_eq!(field(raw, 1), address + template::A64_BOOT_READY as u64);
+            match wait {
+                None => {
+                    assert_eq!(changed, vec![0xc000 + release]);
+                    for n in [0, 2, 3, 4, 5, 6, 7] {
+                        assert_eq!(field(raw, n), 0, "{n}");
+                    }
+                }
+                Some(wait) => {
+                    assert_eq!(changed, vec![0xc000 + release, 0xc000 + fail]);
+                    assert_eq!(
+                        word(raw, 0xc000 + fail).unwrap(),
+                        branch(
+                            address + fail as u64,
+                            address + (stub + flash_stub::FAIL_ENTRY) as u64,
+                            false
+                        )
+                        .unwrap()
+                    );
+                    assert_eq!(field(raw, 0), address + template::SETUP_SD_PROGRESS as u64);
+                    assert_eq!(field(raw, 2), s.delay.address as u64);
+                    assert_eq!(
+                        field(raw, 4),
+                        s.flash.aperture + (s.reset_dat - s.prefix.dat_offset) as u64
+                    );
+                    assert_eq!(field(raw, 5), s.reset_copy_size as u64);
+                    assert_eq!((field(raw, 6), field(raw, 7)), (u64::from(wait), 1_000_000));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_stub_refuses_a_loader_it_was_not_written_for() {
+        let address = 0xff80c000;
+        assert!(flash_stub::verify_loader(template::IMAGE, address).is_ok());
+        let fail = flash_stub::locate_fail(template::IMAGE, address).unwrap();
+        let initialize = template::SETUP_SD_INITIALIZE;
+        let mutate = |at: usize, value: u32| {
+            let mut loader = template::IMAGE.to_vec();
+            put(&mut loader, at, value).unwrap();
+            loader
+        };
+        // The failure routine no longer waits for an interrupt; the frame no longer saves x25.
+        assert!(flash_stub::verify_loader(&mutate(fail + 20, 0xd503201f), address).is_err());
+        assert!(flash_stub::verify_loader(&mutate(initialize, 0xa9bb7bfd), address).is_err());
+        let save = (initialize..template::SETUP_SD_PHY_IMEM)
+            .step_by(4)
+            .find(|&at| word(template::IMAGE, at).unwrap() == 0xa9046bf9)
+            .unwrap();
+        assert!(flash_stub::verify_loader(&mutate(save, 0xd503201f), address).is_err());
+        // SP moves inside the function (sub sp, sp, #0x10).
+        assert!(flash_stub::verify_loader(&mutate(save, 0xd10043ff), address).is_err());
+        // The readiness publication is not where the stub expects it.
+        let release = flash_stub::locate_release(template::IMAGE).unwrap();
+        assert!(flash_stub::locate_release(&mutate(release, 0xd503201f)).is_err());
+        assert!(flash_stub::locate_release(&mutate(release - 4, 0xb5000321)).is_err());
+        // A second caller outside setup_sd_initialize (a `bl fail` from the first word).
+        let call = 0x94000000 | (((fail as i64) / 4) as u32 & 0x03ff_ffff);
+        assert!(flash_stub::verify_loader(&mutate(0, call), address).is_err());
+        // The progress block is not where the routine records (the loader runs page-aligned).
+        assert!(flash_stub::verify_loader(template::IMAGE, address + 0x10).is_err());
+    }
+
+    #[test]
+    fn the_fallback_refuses_a_reset_image_outside_the_flash_window() {
+        let (data, mut s, ram) = fixture();
+        assert!(package_internal_flash(&data, &s, ram.clone(), 0, Some(1)).is_ok());
+        s.flash.window_mask = 0xffff_f000;
+        assert!(package_internal_flash(&data, &s, ram.clone(), 0, None).is_ok());
+        assert!(package_internal_flash(&data, &s, ram, 0, Some(1)).is_err());
+    }
+
     #[test]
     fn success_hold_is_optional_and_changes_only_its_configuration() {
         let (data, s, ram) = fixture();

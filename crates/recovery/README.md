@@ -174,7 +174,28 @@ optional runtime binding initializes the card and serves checked descriptor
 reads from that namespace; it uses the card’s retained training data and
 does not initialize the serial NOR controller.
 
-`sd-boot-v1-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
+`sd-boot-v1-ram-startup FIRMWARE DAT NEW_DIRECTORY [--fallback-wait-seconds N]` (XP5) writes only
+the two files the boot ROM and the loader read, `marble_init.bin` and `ffboot.bin`, and never the
+update. The installed flash stays attached: the prelude initializes and scans it as
+`sd-boot-v1-stage-one` does, the card carries only the RAM image, and the card-resident setup
+tables, namespace and unit cache are not used, so no unit storage image is involved and none of
+the unit's data reaches the output (`StartupOptions::internal_flash` and `Recipe::build_boot_files`
+are the library forms). Without that option, a recipe that carries a card-resident setup (X100VI
+1.31) refuses to build a startup without a unit storage image. A recipe's
+`internal_flash_ram_edits` are applied to the image (and covered by the CRC the loader checks).
+
+The compiled loader is not changed for this. A small hand-written stub
+(`assets/sd-boot-v1-xp5-flash-stub.S`, assembled by `assets/build-sd-boot-v1-xp5-flash-stub.sh`
+with any AArch64 assembler) is appended to it and bound by redirecting a few loader words, each
+checked first (`src/xp5/flash_stub.rs`): once the image is complete it wakes the cores the boot ROM
+parks, which the image's preloaded reset stage expects to be awake. With `--fallback-wait-seconds N`
+it also replaces the loader's halt on a failed load (no file, a length or CRC mismatch, a
+read error): it waits N seconds, puts the stock reset image back at RAM 0 if FFBOOT had begun to
+overwrite it, and lets the stock bootstrap go on, which then starts the installed firmware. A
+failure that is not a load failure (the request check, an unexpected exception level or MMU state)
+still halts.
+
+`sd-boot-v1-startup`, `sd-boot-v1-ram-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
 green using a counted loop before continuing. Each second requests 2,048 units
 of 1,000,000 four-NOP iterations, allowing up to two billion iterations per
