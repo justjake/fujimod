@@ -397,11 +397,20 @@ fn register_with_resources(
                 .any(|k| {
                     !matches!(
                         k.as_str(),
-                        "input_irqs" | "feedback" | "initial_outputs" | "initial_inputs"
+                        "input_irqs" | "feedback" | "initial_outputs" | "initial_inputs" | "pad_model"
                     )
                 })
             {
                 return Err("unknown GPIO option".into());
+            }
+            if let Some(model) = window.options.get("pad_model") {
+                if window.kind != "gpio" {
+                    return Err("pad_model belongs on the gpio window".into());
+                }
+                let model: fujimod_emulator_devices::xp5::pins::PadModel =
+                    serde_json::from_value(serde_json::to_value(model).map_err(|e| e.to_string())?)
+                        .map_err(|e| format!("GPIO pad_model: {e}"))?;
+                resources.pins.lock().unwrap().pad_model = model;
             }
             let feedback = window
                 .options
