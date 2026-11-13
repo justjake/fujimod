@@ -6,7 +6,7 @@ use fujimod_emulator_devices::parts::card_contacts::Contacts;
 use fujimod_emulator_devices::parts::sd_card::faults::{DataDirection, DataFault};
 use fujimod_emulator_devices::parts::sd_card::{Card, Options as CardOptions};
 use fujimod_emulator_devices::test_host::ram::Ram;
-use fujimod_emulator_ip::sdhci::host::{InitializationFault, Options, Protocol, SdHost};
+use fujimod_emulator_ip::sdhci::host::{InitializationFault, Options, Protocol, SdHost, SlotName};
 
 const BASE: u64 = 0x12000000;
 
@@ -27,6 +27,7 @@ fn polled_host(high_speed: bool) -> (SdHost, Ram) {
             clock_ticks: 2,
             rca: 7,
             ram_bytes: 0x10000,
+            name: SlotName::MemoryCard,
             initialization_fault: InitializationFault::None,
             high_speed,
             ram_banks: vec![],

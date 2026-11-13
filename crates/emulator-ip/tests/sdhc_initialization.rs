@@ -3,7 +3,9 @@ use fujimod_emulator_devices::bus::InterruptLine;
 use fujimod_emulator_devices::parts::card_contacts::Contacts;
 use fujimod_emulator_devices::parts::sd_card::{Card, Options as CardOptions};
 use fujimod_emulator_devices::test_host::ram::{Effect, Ram};
-use fujimod_emulator_ip::sdhci::host::{InitializationFault, Options, Protocol, SdHost, Wiring};
+use fujimod_emulator_ip::sdhci::host::{
+    InitializationFault, Options, Protocol, SdHost, SlotName, Wiring,
+};
 
 const BASE: u64 = 0x12000000;
 const IRQ: u32 = 5;
@@ -16,6 +18,7 @@ fn options(protocol: Protocol, initialization_fault: InitializationFault) -> Opt
         clock_ticks: 2,
         rca: 7,
         ram_bytes: 0x4000,
+        name: SlotName::MemoryCard,
         initialization_fault,
         high_speed: false,
         ram_banks: vec![],
