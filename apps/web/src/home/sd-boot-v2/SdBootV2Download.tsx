@@ -21,8 +21,8 @@ import { buildCard } from './build';
 import { SdBootV2Shape } from './SdBootV2Shape';
 import './sd-card.css';
 
-/** The recipes list holds 72 files; seven are pinned to C1–C7 in the Q menu. */
-const recipeCapacity = 72;
+/** The recipes list holds 255 files; seven are pinned to C1–C7 in the Q menu. */
+const recipeCapacity = 255;
 
 function Check(props: {
   checked: boolean;
