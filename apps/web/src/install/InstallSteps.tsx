@@ -90,83 +90,105 @@ export function InstallSteps(props: {
     </For>
   );
   return (
-    <Steps>
-      <Show when={v2()}>
-        <Step title="Check camera firmware version">
-          <p>
-            Turn off camera, remove and re-insert the battery, then turn on camera while holding
-            DISP/BACK. FujiMod requires{' '}
-            <For each={props.cameras}>
-              {(camera, index) => (
-                <>
-                  {index() ? ', ' : ''}
-                  <strong>
-                    <em>{camera.name}</em>
-                  </strong>
-                </>
-              )}
-            </For>
-            .
-          </p>
-        </Step>
-      </Show>
-      <Step title={installable() ? 'Download the files' : 'Download the SD card files'}>
-        <p class="install-disclaimer">
-          <strong>
-            <em>No custom firmware is completely safe</em>. FujiMod is tested in our emulator and
-            spot-checked on real camera hardware before each release, and we believe SD card dual
-            boot is very low risk. We still do not guarantee this software for any purpose expressed
-            or implied.
-          </strong>
-        </p>
-        <p>
-          <a href="/recovery/">Recovery tools</a> are available in the very unlikely event this
-          bricks your camera.
-        </p>
-        {props.download}
-      </Step>
-      <Step title="Copy them to a FAT32 SD card">
-        <p>
-          Unzip onto the SD card’s top level: <FileList files={props.files} />.
-        </p>
-        <details class="install-format">
-          <summary>
-            Format an SD card as FAT32. The camera’s permanent built-in software does not support
-            boot from exFAT
-          </summary>
-          <FormatGuide />
-        </details>
-      </Step>
-      <Step title={installable() ? 'Try it from the SD card first' : 'Boot from the SD card'}>
-        <p>
-          <BatteryCycleIcon />
-          Insert the SD card. Switch the camera OFF, then remove and reinsert the battery. This
-          guarantees the camera is fully off even if you use HIGH PERFORMANCE.
-        </p>
-        <p>
-          Hold these only while turning the power switch on. Once the switch is in the ON position,
-          release them. The screen lights while the SD card starts:
-        </p>
-        {combos('sd')}
-        <Show when={error()}>
-          <p class="install-error" role="alert">
-            {error()}
-          </p>
+    <>
+      <Steps>
+        <Show when={v2()}>
+          <Step title="Check camera firmware version">
+            <p>
+              Turn off camera, remove and re-insert the battery, then turn on camera while holding
+              DISP/BACK. FujiMod requires{' '}
+              <For each={props.cameras}>
+                {(camera, index) => (
+                  <>
+                    {index() ? ', ' : ''}
+                    <strong>
+                      <em>{camera.name}</em>
+                    </strong>
+                  </>
+                )}
+              </For>
+              .
+            </p>
+          </Step>
         </Show>
-        <p>
-          {installable()
-            ? 'Shoot as you normally would until you’re satisfied.'
-            : 'Power on normally to start stock firmware.'}
-        </p>
-      </Step>
-      <Show when={v2()}>
-        <Step title="Check FujiMod is running">
+        <Step title={installable() ? 'Download the files' : 'Download the SD card files'}>
+          <p class="install-disclaimer">
+            <strong>
+              <em>No custom firmware is completely safe</em>. FujiMod is tested in our emulator and
+              spot-checked on real camera hardware before each release, and we believe SD card dual
+              boot is very low risk. We still do not guarantee this software for any purpose
+              expressed or implied.
+            </strong>
+          </p>
           <p>
-            You should see FujiMod on the LCD screen in the top-left corner. This overlay can be
-            disabled in <strong>SET-UP → DEVTOOLS → BUILD OVERLAY</strong>.
+            <a href="/recovery/">Recovery tools</a> are available in the very unlikely event this
+            bricks your camera.
+          </p>
+          {props.download}
+        </Step>
+        <Step title="Copy them to a FAT32 SD card">
+          <p>
+            Unzip onto the SD card’s top level: <FileList files={props.files} />.
+          </p>
+          <details class="install-format">
+            <summary>
+              Format an SD card as FAT32. The camera’s permanent built-in software does not support
+              boot from exFAT
+            </summary>
+            <FormatGuide />
+          </details>
+        </Step>
+        <Step title={installable() ? 'Try it from the SD card first' : 'Boot from the SD card'}>
+          <p>
+            Insert the SD card. Switch the camera OFF, then remove and reinsert the battery{' '}
+            <BatteryCycleIcon />. This guarantees the camera is fully off even if you use HIGH
+            PERFORMANCE.
+          </p>
+          <p>
+            Hold these only while turning the power switch on. Once the switch is in the ON
+            position, release them. The screen lights while the SD card starts:
+          </p>
+          {combos('sd')}
+          <Show when={error()}>
+            <p class="install-error" role="alert">
+              {error()}
+            </p>
+          </Show>
+          <p>
+            {installable()
+              ? 'Shoot as you normally would until you’re satisfied.'
+              : 'Power on normally to start stock firmware.'}
           </p>
         </Step>
-        <Step title="Start FujiMod without holding buttons">
+        <Show when={v2()}>
+          <Step title="Check FujiMod is running">
+            <p>
+              You should see FujiMod on the LCD screen in the top-left corner. This overlay can be
+              disabled in <strong>SET-UP → DEVTOOLS → BUILD OVERLAY</strong>.
+            </p>
+          </Step>
+        </Show>
+        <Show when={installable()}>
+          <Step title="Install it">
+            <p>
+              Switch the camera OFF, then remove and reinsert the battery <BatteryCycleIcon />.
+            </p>
+            <p>
+              Hold these only while turning the power switch on. Once the switch is in the ON
+              position, release them, then follow the camera’s firmware update prompts:
+            </p>
+            {combos('firmware_update')}
+          </Step>
+          <Step title="Hide the FujiMod overlay">
+            <p>
+              Optional: choose <strong>SET-UP → DEVTOOLS → BUILD OVERLAY → OFF</strong>.
+            </p>
+          </Step>
+        </Show>
+      </Steps>
+      <Show when={v2()}>
+        <aside class="install-aside">
+          <h3>Start FujiMod without holding buttons</h3>
           <p>To avoid needing to hold these buttons when starting the camera:</p>
           <ul class="install-options">
             <li>
@@ -179,29 +201,23 @@ export function InstallSteps(props: {
               <strong>SET-UP → FUJIMOD SET-UP → BOOT SETUP</strong> → choose{' '}
               <strong>AUTOMATIC</strong>. This modifies the camera firmware to automatically boot{' '}
               <code>{props.loader}</code> from the SD card if present. Modifying firmware is risky,
-              so a complete backup will be performed first.
+              so a complete backup will be performed first.{' '}
+              <em>
+                If you change SD cards or remove FUJIMOD files, your camera will start the original
+                firmware.
+              </em>
             </li>
           </ul>
-        </Step>
+        </aside>
+        <aside class="install-aside">
+          <h3>Remove FujiMod</h3>
+          <p>
+            Make sure <strong>SET-UP → FUJIMOD SET-UP → BOOT SETUP</strong> is set to{' '}
+            <strong>MANUAL</strong>. Then, delete <code>FFBOOT.BIN</code> and{' '}
+            <code>{props.loader}</code> from the SD card.
+          </p>
+        </aside>
       </Show>
-      <Show when={installable()}>
-        <Step title="Install it">
-          <p>
-            <BatteryCycleIcon />
-            Switch the camera OFF, then remove and reinsert the battery.
-          </p>
-          <p>
-            Hold these only while turning the power switch on. Once the switch is in the ON
-            position, release them, then follow the camera’s firmware update prompts:
-          </p>
-          {combos('firmware_update')}
-        </Step>
-        <Step title="Hide the FujiMod overlay">
-          <p>
-            Optional: choose <strong>SET-UP → DEVTOOLS → BUILD OVERLAY → OFF</strong>.
-          </p>
-        </Step>
-      </Show>
-    </Steps>
+    </>
   );
 }
