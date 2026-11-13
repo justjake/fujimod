@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 from commit import Failure, Repository
-from sync import load_conflicts, resolve, sync
+from sync import follows_superproject, load_conflicts, resolve, sync
 
 
 def run(*arguments: str, cwd: Path) -> str:
@@ -181,6 +181,8 @@ def test_a_pinned_submodule_follows_the_new_pin_unless_it_holds_work(
     pin(pins[1])
     sync(Repository(shared))
     assert run("git", "rev-parse", "HEAD", cwd=shared / "lib").strip() == pins[1]
+    assert follows_superproject(Repository(shared / "lib"))
+    assert not follows_superproject(Repository(shared))
 
     (shared / "lib" / "v.txt").write_text("local work")
     pin(pins[2])
