@@ -49,6 +49,17 @@
   },
   "analog_levels": null,
   "boot": {
+    "service": {
+      "hold": [
+        {
+          "id": "selector_up_button"
+        },
+        {
+          "id": "shutter_button",
+          "stage": "full"
+        }
+      ]
+    },
     "sd": {
       "hold": [
         {
