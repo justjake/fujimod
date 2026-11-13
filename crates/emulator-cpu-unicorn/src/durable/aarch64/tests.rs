@@ -34,7 +34,7 @@ fn registers_simd_and_system_state_resume_in_a_fresh_engine() {
     let library = library();
     let (bytes, expected) = {
         let cpu = processor(&library);
-        put32(&cpu, Register::Pstate, 0x3cd).unwrap();
+        put32(&cpu, Register::Pstate, 0x3c5).unwrap();
         put64(&cpu, Register::Sp, 0x1800).unwrap();
         for index in 0..31u8 {
             put64(&cpu, Register::X(index), 0x100 + u64::from(index) * 8).unwrap();
@@ -76,7 +76,7 @@ fn registers_simd_and_system_state_resume_in_a_fresh_engine() {
 fn invalid_architecture_fails_import_without_changing_the_receiver() {
     let library = library();
     let cpu = processor(&library);
-    put32(&cpu, Register::Pstate, 0x3cd).unwrap();
+    put32(&cpu, Register::Pstate, 0x3c5).unwrap();
     let original = state(&cpu);
     for corrupt in 0..3 {
         let mut document: Document<Architecture> = decode(&original).unwrap();
@@ -93,4 +93,31 @@ fn invalid_architecture_fails_import_without_changing_the_receiver() {
     }
     let a7 = library.open(Model::CortexA7, 1 << 20).unwrap();
     assert!(a7.import_snapshot(&original).is_err());
+}
+
+#[test]
+fn exception_levels_above_el1_refuse_capture_and_import() {
+    let library = library();
+    for pstate in [0x3c8, 0x3cc, 0x3cd] {
+        let cpu = processor(&library);
+        put32(&cpu, Register::Pstate, pstate).unwrap();
+        assert!(
+            cpu.snapshot(None).unwrap().export().is_err(),
+            "PSTATE {pstate:#x} captured"
+        );
+    }
+    let cpu = processor(&library);
+    put32(&cpu, Register::Pstate, 0x3c5).unwrap();
+    let original = state(&cpu);
+    let mut document: Document<Architecture> = decode(&original).unwrap();
+    for pstate in [0x3c8, 0x3cc, 0x3cd] {
+        {
+            let Architecture::ArmV8A(saved) = &mut document.architecture else {
+                unreachable!()
+            };
+            saved.pstate = pstate;
+        }
+        let bytes = encode(&document).unwrap();
+        assert!(cpu.import_snapshot(&bytes).is_err());
+    }
 }

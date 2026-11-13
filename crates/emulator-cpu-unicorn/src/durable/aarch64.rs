@@ -54,9 +54,11 @@ fn vector(cpu: &Core, index: u8) -> Result<[u8; 16], String> {
 
 impl State {
     pub(super) fn capture(cpu: &Core, _context: &Context) -> Result<Self, String> {
+        let pstate = scalar(cpu, Register::Pstate)? as u32;
+        check_level(pstate)?;
         Ok(Self {
             midr: scalar(cpu, system(MIDR))? as u32,
-            pstate: scalar(cpu, Register::Pstate)? as u32,
+            pstate,
             registers: array((0..31u8).map(|index| scalar(cpu, Register::X(index))))?,
             sp: scalar(cpu, Register::Sp)?,
             pc: scalar(cpu, Register::Pc)?,
@@ -70,9 +72,7 @@ impl State {
         if self.midr != scalar(cpu, system(MIDR))? as u32 {
             return Err("CPU snapshot architectural identity differs".into());
         }
-        if self.pstate & 0x12 != 0 {
-            return Err("invalid ARMv8-A snapshot processor mode".into());
-        }
+        check_level(self.pstate)?;
         Ok(())
     }
     pub(super) fn install(&self, cpu: &Core) -> Result<(), String> {
@@ -100,4 +100,13 @@ impl State {
         put64(cpu, Register::Pc, self.pc)?;
         cpu.invalidate_code(None)
     }
+}
+fn check_level(pstate: u32) -> Result<(), String> {
+    if pstate & 0x12 != 0 {
+        return Err("invalid ARMv8-A snapshot processor mode".into());
+    }
+    if ((pstate >> 2) & 3) > 1 {
+        return Err("durable ARMv8-A state is only implemented at EL0 and EL1".into());
+    }
+    Ok(())
 }
