@@ -131,7 +131,7 @@ export function InstallSteps(props: {
         </p>
         <details class="install-format">
           <summary>
-            Format an SD card as FAT32. The camera's permanent built-in software does not support
+            Format an SD card as FAT32. The camera’s permanent built-in software does not support
             boot from exFAT
           </summary>
           <FormatGuide />
